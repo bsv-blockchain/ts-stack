@@ -62,9 +62,9 @@ export class KnexSessionManager implements AsyncSessionManager {
     await this.knex<TableAuthSession>(AUTH_SESSION_TABLE)
       .where({ sessionNonce: session.sessionNonce })
       .where(function () {
-        void this.where('lastUpdate', '<', session.lastUpdate)
+        this.where('lastUpdate', '<', session.lastUpdate)
           .orWhere(function () {
-            void this.where('lastUpdate', '=', session.lastUpdate)
+            this.where('lastUpdate', '=', session.lastUpdate)
               .where('isAuthenticated', session.isAuthenticated)
             applyNullableMatch(this, 'peerNonce', session.peerNonce)
             applyNullableMatch(this, 'peerIdentityKey', session.peerIdentityKey)
@@ -150,7 +150,14 @@ export class KnexSessionManager implements AsyncSessionManager {
   }
 
   private mergeNullableBoolean (column: string, value: boolean | number | null | undefined): Knex.Raw {
-    const incoming = value == null ? null : (value === true || value === 1 ? 1 : 0)
+    let incoming: 0 | 1 | null
+    if (value == null) {
+      incoming = null
+    } else if (value === true || value === 1) {
+      incoming = 1
+    } else {
+      incoming = 0
+    }
     return this.knex.raw(
       'case when ?? = 1 or ? = 1 then 1 when ?? is null and ? is null then null else 0 end',
       [column, incoming, column, incoming]
@@ -181,6 +188,9 @@ function applyNullableMatch (
   column: string,
   value: string | boolean | undefined
 ): void {
-  if (value == null) void query.whereNull(column)
-  else void query.where(column, value)
+  if (value == null) {
+    query.whereNull(column)
+  } else {
+    query.where(column, value)
+  }
 }
