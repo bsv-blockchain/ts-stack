@@ -101,7 +101,9 @@ async function run (): Promise<void> {
   renderResult(JSON.stringify(window.__VERIFAST_RESULT__, null, 2))
 }
 
-run().catch((error) => {
+try {
+  await run()
+} catch (error) {
   window.__VERIFAST_ERROR__ = error instanceof Error ? error.stack ?? error.message : String(error)
   renderResult(window.__VERIFAST_ERROR__)
-})
+}

@@ -100,7 +100,7 @@ export default class BdkVerifier implements BdkVerifierInterface {
     )
     const customFlagValues = params.verifyFlags === undefined
       ? []
-      : Array<number>(params.tx.inputs.length).fill(mapVerifyFlags(params.verifyFlags))
+      : new Array<number>(params.tx.inputs.length).fill(mapVerifyFlags(params.verifyFlags))
     const extendedTXBytes = params.tx.toEF()
 
     // The bundled ABI copies each complete JS array into WASM linear memory
