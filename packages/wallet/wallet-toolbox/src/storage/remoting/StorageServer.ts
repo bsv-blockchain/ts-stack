@@ -12,7 +12,7 @@ import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
 import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
-import { SyncChunk } from '../../sdk/WalletStorage.interfaces'
+import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
@@ -101,6 +101,9 @@ export class StorageServer {
     // consumer embeds a response in an HTML context.
     this.app.set('json escape', true)
     this.app.use(express.json({ limit: '30mb' }))
+    // Authentication must see the exact binary body bytes, so parse octet
+    // streams before the auth middleware just as JSON is parsed above.
+    this.app.use(express.raw({ type: 'application/octet-stream', limit: '8mb' }))
 
     // This allows the API to be used everywhere when CORS is enforced
     this.app.use((req, res, next) => {
@@ -139,6 +142,28 @@ export class StorageServer {
         })
       )
     }
+
+    this.app.put(
+      '/action-batch/:batchId/blob/:digest',
+      async (req: Request, res: Response) => {
+        try {
+          const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
+          const auth: AuthId = {
+            identityKey: req.auth.identityKey,
+            userId: user.userId
+          }
+          const batchId = String(req.params.batchId)
+          const digest = String(req.params.digest)
+          const body = req.body
+          if (!(body instanceof Uint8Array)) throw new TypeError('binary action batch body required')
+          await this.storage.putActionBatchBlob(auth, { batchId, digest, bytes: body })
+          res.status(200).json({ uploaded: true })
+        } catch (error: unknown) {
+          const json = WalletError.unknownToJson(error)
+          res.status(400).json(JSON.parse(json))
+        }
+      }
+    )
 
     // A single POST endpoint for JSON-RPC:
     this.app.post('/', async (req: Request, res: Response) => {

@@ -28,6 +28,19 @@ import {
   UpdateProvenTxReqWithNewProvenTxResult,
   WalletStorageProvider
 } from '../../sdk/WalletStorage.interfaces'
+import {
+  AbortActionBatchResult,
+  ActionBatchManifest,
+  BeginActionBatchArgs,
+  BeginActionBatchResult,
+  CommitActionBatchResult,
+  ExtendActionBatchArgs,
+  ExtendActionBatchResult,
+  PrepareActionBatchCommitResult,
+  PutActionBatchBlobArgs,
+  RenewActionBatchResult,
+  StorageCapabilities
+} from '../../sdk/ActionBatch.interfaces'
 import { TableSettings } from '../schema/tables/TableSettings'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { WalletServices } from '../../sdk/WalletServices.interfaces'
@@ -190,6 +203,52 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async processAction (auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
     return await this.rpcCall<StorageProcessActionResults>('processAction', [auth, args])
+  }
+
+  async getCapabilities (): Promise<StorageCapabilities> {
+    return await this.rpcCall<StorageCapabilities>('getCapabilities', [])
+  }
+
+  async beginActionBatch (auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
+    return await this.rpcCall<BeginActionBatchResult>('beginActionBatch', [auth, args])
+  }
+
+  async extendActionBatch (auth: AuthId, args: ExtendActionBatchArgs): Promise<ExtendActionBatchResult> {
+    return await this.rpcCall<ExtendActionBatchResult>('extendActionBatch', [auth, args])
+  }
+
+  async renewActionBatch (auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
+    return await this.rpcCall<RenewActionBatchResult>('renewActionBatch', [auth, batchId])
+  }
+
+  async prepareActionBatchCommit (
+    auth: AuthId,
+    manifest: ActionBatchManifest
+  ): Promise<PrepareActionBatchCommitResult> {
+    return await this.rpcCall<PrepareActionBatchCommitResult>('prepareActionBatchCommit', [auth, manifest])
+  }
+
+  async putActionBatchBlob (auth: AuthId, args: PutActionBatchBlobArgs): Promise<void> {
+    const baseUrl = this.endpointUrl.endsWith('/') ? this.endpointUrl.slice(0, -1) : this.endpointUrl
+    const url = `${baseUrl}/action-batch/${encodeURIComponent(args.batchId)}/blob/${encodeURIComponent(args.digest)}`
+    const bytes = args.bytes instanceof Uint8Array ? args.bytes : Uint8Array.from(args.bytes)
+    const response = await this.authClient.fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: bytes
+    })
+    if (!response.ok) {
+      const details = (await response.text()).slice(0, 512)
+      throw new Error(`WalletStorageClient putActionBatchBlob: network error ${response.status} ${response.statusText}: ${details}`)
+    }
+  }
+
+  async commitActionBatch (auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
+    return await this.rpcCall<CommitActionBatchResult>('commitActionBatch', [auth, manifest])
+  }
+
+  async abortActionBatch (auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
+    return await this.rpcCall<AbortActionBatchResult>('abortActionBatch', [auth, batchId])
   }
 
   /**

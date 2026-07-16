@@ -438,3 +438,22 @@ export function upgradeAllStoresV1 (db: IDBPDatabase<StorageIdbSchema>): void {
   if (!names.contains('monitor_events')) upgradeMonitorEvents(db)
   if (!names.contains('sync_states')) upgradeSyncStates(db)
 }
+
+/** Internal, non-synchronized action-batch state added in schema version 2. */
+export function upgradeActionBatchStoresV2 (db: IDBPDatabase<StorageIdbSchema>): void {
+  const names = db.objectStoreNames
+  if (!names.contains('action_batches')) {
+    const batches = db.createObjectStore('action_batches', { keyPath: 'actionBatchId', autoIncrement: true })
+    batches.createIndex('userId', 'userId')
+    batches.createIndex('batchId', 'batchId', { unique: true })
+    batches.createIndex('expiresAt', 'expiresAt')
+  }
+  if (!names.contains('action_batch_outputs')) {
+    const outputs = db.createObjectStore('action_batch_outputs', { keyPath: 'outputId' })
+    outputs.createIndex('actionBatchId', 'actionBatchId')
+  }
+  if (!names.contains('action_batch_blobs')) {
+    const blobs = db.createObjectStore('action_batch_blobs', { keyPath: ['actionBatchId', 'digest'] })
+    blobs.createIndex('actionBatchId', 'actionBatchId')
+  }
+}

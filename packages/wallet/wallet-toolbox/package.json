@@ -25,9 +25,10 @@
     "BRC100"
   ],
   "scripts": {
-    "test": "npm run build && jest --testPathIgnorePatterns=man.test.ts",
+    "test": "npm run build && jest --testPathIgnorePatterns='man.test.ts|bench.test.ts'",
     "test:watch": "npm run build && jest --testPathIgnorePatterns=man.test.ts --watch",
-    "test:coverage": "npm run build && jest --testPathIgnorePatterns=man.test.ts --coverage",
+    "test:coverage": "npm run build && jest --testPathIgnorePatterns='man.test.ts|bench.test.ts' --coverage",
+    "bench:action-batch": "npm run build && jest --runInBand --runTestsByPath benchmarks/action-batch.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "lint": "ts-standard --fix src/**/*.ts",
     "lint:ci": "ts-standard src/**/*.ts",
     "build": "tsc --build",

@@ -14,7 +14,8 @@ import {
   matchesTransactionPartial,
   matchesTxLabelMapPartial,
   matchesTxLabelPartial,
-  upgradeAllStoresV1
+  upgradeAllStoresV1,
+  upgradeActionBatchStoresV2
 } from './idbHelpers'
 import { ListActionsResult, ListOutputsResult, Validation } from '@bsv/sdk'
 import {
@@ -36,6 +37,7 @@ import {
   TableTxLabelMap,
   TableUser
 } from './schema/tables'
+import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
 import { verifyOneOrNone } from '../utility/utilityHelpers'
 import { StorageAdminStats, StorageProvider, StorageProviderOptions } from './StorageProvider'
 import { StorageIdbSchema } from './schema/StorageIdbSchema'
@@ -71,6 +73,7 @@ import {
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './methods/managedChange'
+import { selectCanonicalChange } from './methods/actionPlanning'
 
 export interface StorageIdbOptions extends StorageProviderOptions {}
 
@@ -120,6 +123,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     super(options)
     this.dbName = `wallet-toolbox-${this.chain}net`
   }
+
+  protected override supportsActionBatchPersistence (): boolean { return true }
 
   /**
    * This method must be called at least once before any other method accesses the database,
@@ -193,9 +198,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB (storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 1, {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 2, {
       upgrade (db) {
         upgradeAllStoresV1(db)
+        upgradeActionBatchStoresV2(db)
         if (!db.objectStoreNames.contains('settings')) {
           if (storageName == null || storageName === '' || storageIdentityKey == null || storageIdentityKey === '') {
             throw new WERR_INVALID_OPERATION('migrate must be called before first access')
@@ -256,7 +262,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     excludeSending: boolean,
     transactionId: number
   ): Promise<TableOutput | undefined> {
-    const dbTrx = this.toDbTrx(['outputs', 'transactions', 'proven_txs', 'proven_tx_reqs'], 'readwrite')
+    const dbTrx = this.toDbTrx(
+      ['outputs', 'transactions', 'proven_txs', 'proven_tx_reqs', 'action_batch_outputs'],
+      'readwrite'
+    )
     try {
       const txStatus: TransactionStatus[] = ['completed', 'unproven']
       if (!excludeSending) txStatus.push('sending')
@@ -269,33 +278,13 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         noScript: true,
         trx: dbTrx
       }
-      const outputs = (await this.findOutputs(args)).filter(isAutoSpendableChangeOutput)
-      let output: TableOutput | undefined
-      let scores: Array<{ output: TableOutput, score: number }> = []
-      for (const o of outputs) {
-        if (exactSatoshis != null && exactSatoshis !== 0 && o.satoshis === exactSatoshis) {
-          output = o
-          break
-        }
-        const score = o.satoshis - targetSatoshis
-        scores.push({ output: o, score })
+      const reservationStore = dbTrx.objectStore('action_batch_outputs')
+      if (reservationStore.get == null) throw new WERR_INTERNAL('IndexedDB action_batch_outputs store does not support get')
+      const outputs: TableOutput[] = []
+      for (const candidate of (await this.findOutputs(args)).filter(isAutoSpendableChangeOutput)) {
+        if (await reservationStore.get(candidate.outputId) == null) outputs.push(candidate)
       }
-      if (output == null) {
-        // sort scores increasing by score property
-        scores = scores.sort((a, b) => a.score - b.score)
-        // find the first score that is greater than or equal to 0
-        const o = scores.find(s => s.score >= 0)
-        if (o != null) {
-          // stage 2 satisfied (minimally funded)
-          output = o.output
-        } else if (scores.length > 0) {
-          // stage 3 satisfied (minimally under-funded)
-          output = (scores.at(-1) as { output: TableOutput, score: number }).output
-        } else {
-          // no available funding outputs
-          output = undefined
-        }
-      }
+      const output = selectCanonicalChange(outputs, targetSatoshis, exactSatoshis)
       if (output != null) {
         // mark output as spent by transactionId
         await this.updateOutput(output.outputId, { spendable: false, spentBy: transactionId }, dbTrx)
@@ -1090,6 +1079,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   allStores: string[] = [
+    'action_batches',
+    'action_batch_outputs',
+    'action_batch_blobs',
     'certificates',
     'certificate_fields',
     'commissions',
@@ -1106,6 +1098,140 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     'tx_labels_map',
     'users'
   ]
+
+  override async insertActionBatch (batch: TableActionBatch, trx?: TrxToken): Promise<number> {
+    const tx = this.toDbTrx(['action_batches'], 'readwrite', trx)
+    const { actionBatchId: _actionBatchId, ...withoutId } = batch
+    const entity = batch.actionBatchId === 0 ? withoutId as TableActionBatch : batch
+    const store = tx.objectStore('action_batches')
+    if (store.add == null) throw new WERR_INTERNAL('IndexedDB action_batches store does not support add')
+    const id = await store.add(entity)
+    batch.actionBatchId = Number(id)
+    if (trx == null) await tx.done
+    return Number(id)
+  }
+
+  override async findActionBatch (userId: number, batchId: string, trx?: TrxToken): Promise<TableActionBatch | undefined> {
+    const tx = this.toDbTrx(['action_batches'], 'readonly', trx)
+    const index = tx.objectStore('action_batches').index('batchId')
+    if (index.get == null) throw new WERR_INTERNAL('IndexedDB action_batches batchId index does not support get')
+    const batch = await index.get(batchId)
+    if (trx == null) await tx.done
+    return batch?.userId === userId ? batch : undefined
+  }
+
+  override async findExpiredActionBatches (now: Date, trx?: TrxToken): Promise<TableActionBatch[]> {
+    const tx = this.toDbTrx(['action_batches'], 'readonly', trx)
+    const store = tx.objectStore('action_batches')
+    if (store.getAll == null) throw new WERR_INTERNAL('IndexedDB action_batches store does not support getAll')
+    const rows = await store.getAll()
+    if (trx == null) await tx.done
+    return rows.filter(r =>
+      (r.status === 'active' || r.status === 'prepared') &&
+      (r.expiresAt.getTime() <= now.getTime() || r.hardExpiresAt.getTime() <= now.getTime())
+    )
+  }
+
+  override async updateActionBatch (
+    actionBatchId: number,
+    update: Partial<TableActionBatch>,
+    trx?: TrxToken
+  ): Promise<number> {
+    const tx = this.toDbTrx(['action_batches'], 'readwrite', trx)
+    const store = tx.objectStore('action_batches')
+    if (store.get == null || store.put == null) {
+      throw new WERR_INTERNAL('IndexedDB action_batches store does not support get and put')
+    }
+    const batch = await store.get(actionBatchId)
+    if (batch == null) {
+      if (trx == null) await tx.done
+      return 0
+    }
+    await store.put({ ...batch, ...update, updated_at: new Date() })
+    if (trx == null) await tx.done
+    return 1
+  }
+
+  override async deleteActionBatch (actionBatchId: number, trx?: TrxToken): Promise<void> {
+    const tx = this.toDbTrx(['action_batches'], 'readwrite', trx)
+    const store = tx.objectStore('action_batches')
+    if (store.delete == null) throw new WERR_INTERNAL('IndexedDB action_batches store does not support delete')
+    await store.delete(actionBatchId)
+    if (trx == null) await tx.done
+  }
+
+  override async reserveActionBatchOutputs (reservations: TableActionBatchOutput[], trx?: TrxToken): Promise<void> {
+    if (reservations.length === 0) return
+    const tx = this.toDbTrx(['action_batch_outputs'], 'readwrite', trx)
+    const store = tx.objectStore('action_batch_outputs')
+    if (store.add == null) throw new WERR_INTERNAL('IndexedDB action_batch_outputs store does not support add')
+    for (const reservation of reservations) await store.add(reservation)
+    if (trx == null) await tx.done
+  }
+
+  override async findActionBatchOutputIds (actionBatchId: number, trx?: TrxToken): Promise<number[]> {
+    const tx = this.toDbTrx(['action_batch_outputs'], 'readonly', trx)
+    const index = tx.objectStore('action_batch_outputs').index('actionBatchId')
+    if (index.getAll == null) throw new WERR_INTERNAL('IndexedDB action_batch_outputs index does not support getAll')
+    const rows = await index.getAll(actionBatchId)
+    if (trx == null) await tx.done
+    return rows.map(r => r.outputId)
+  }
+
+  override async findReservedActionBatchOutputIds (outputIds: number[], trx?: TrxToken): Promise<number[]> {
+    const tx = this.toDbTrx(['action_batch_outputs'], 'readonly', trx)
+    const store = tx.objectStore('action_batch_outputs')
+    if (store.get == null) throw new WERR_INTERNAL('IndexedDB action_batch_outputs store does not support get')
+    const reserved: number[] = []
+    for (const outputId of outputIds) if (await store.get(outputId) != null) reserved.push(outputId)
+    if (trx == null) await tx.done
+    return reserved
+  }
+
+  override async deleteActionBatchOutputReservations (actionBatchId: number, trx?: TrxToken): Promise<void> {
+    const tx = this.toDbTrx(['action_batch_outputs'], 'readwrite', trx)
+    const store = tx.objectStore('action_batch_outputs')
+    const index = store.index('actionBatchId')
+    if (index.getAllKeys == null || store.delete == null) {
+      throw new WERR_INTERNAL('IndexedDB action_batch_outputs store does not support indexed deletion')
+    }
+    const keys = await index.getAllKeys(actionBatchId)
+    for (const key of keys) await store.delete(key)
+    if (trx == null) await tx.done
+  }
+
+  override async putActionBatchBlobRecord (blob: TableActionBatchBlob, trx?: TrxToken): Promise<void> {
+    const tx = this.toDbTrx(['action_batch_blobs'], 'readwrite', trx)
+    const store = tx.objectStore('action_batch_blobs')
+    if (store.put == null) throw new WERR_INTERNAL('IndexedDB action_batch_blobs store does not support put')
+    await store.put(blob)
+    if (trx == null) await tx.done
+  }
+
+  override async findActionBatchBlobRecord (
+    actionBatchId: number,
+    digest: string,
+    trx?: TrxToken
+  ): Promise<TableActionBatchBlob | undefined> {
+    const tx = this.toDbTrx(['action_batch_blobs'], 'readonly', trx)
+    const store = tx.objectStore('action_batch_blobs')
+    if (store.get == null) throw new WERR_INTERNAL('IndexedDB action_batch_blobs store does not support get')
+    const blob = await store.get([actionBatchId, digest])
+    if (trx == null) await tx.done
+    return blob
+  }
+
+  override async deleteActionBatchBlobRecords (actionBatchId: number, trx?: TrxToken): Promise<void> {
+    const tx = this.toDbTrx(['action_batch_blobs'], 'readwrite', trx)
+    const store = tx.objectStore('action_batch_blobs')
+    const index = store.index('actionBatchId')
+    if (index.getAllKeys == null || store.delete == null) {
+      throw new WERR_INTERNAL('IndexedDB action_batch_blobs store does not support indexed deletion')
+    }
+    const keys = await index.getAllKeys(actionBatchId)
+    for (const key of keys) await store.delete(key)
+    if (trx == null) await tx.done
+  }
 
   /**
    * @param scope

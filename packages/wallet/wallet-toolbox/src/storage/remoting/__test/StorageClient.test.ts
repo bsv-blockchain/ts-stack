@@ -1,10 +1,11 @@
-import { Beef, CreateActionArgs, P2PKH, PublicKey, SignActionArgs, WalletLoggerInterface } from '@bsv/sdk'
+import { Beef, CreateActionArgs, P2PKH, PublicKey, SignActionArgs, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup, TestWalletOnly } from '../../../../test/utils/TestUtilsWalletStorage'
 import { wait } from '../../../utility/utilityHelpers'
 import { WalletLogger } from '../../../WalletLogger'
 import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
 import { StorageClient } from '../StorageClient'
 import { WalletError } from '../../../sdk/WalletError'
+import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../utility/actionBatchDigest'
 
 describe('StorageClient tests', () => {
   jest.setTimeout(99999999)
@@ -76,7 +77,45 @@ describe('StorageClient tests', () => {
     }
 
     const cr = await wallet.createAction(createArgs)
-    expect(cr.txid === '4f428a93c43c2d120204ecdc06f7916be8a5f4542cc8839a0fd79bd1b44582f3')
+    expect(cr.txid).toBe('4f428a93c43c2d120204ecdc06f7916be8a5f4542cc8839a0fd79bd1b44582f3')
+    const sent = await wallet.createAction({
+      description: 'commit repeatable action batch',
+      options: { sendWith: [cr.txid!] }
+    })
+    expect(sent.sendWithResults).toHaveLength(1)
+  })
+
+  test('1b authenticated binary action batch blob upload', async () => {
+    const firstAction = Validation.validateCreateActionArgs({
+      description: 'stage binary action batch blob',
+      outputs: [{
+        satoshis: 1,
+        lockingScript: '51',
+        outputDescription: 'binary upload test output'
+      }],
+      options: { noSend: true }
+    })
+    const batchId = `binary-${Date.now()}`
+    const begun = await client.storage.beginActionBatch({ batchId, firstAction })
+    const bytes = Array.from({ length: 64 * 1024 }, (_, index) => index & 0xff)
+    const dependencyBeefDigest = actionBatchBlobDigest(bytes)
+    const withoutDigest = {
+      batchId,
+      actions: [],
+      dependencyBeefDigest,
+      sendWith: [],
+      isDelayed: true
+    }
+    const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    const prepared = await client.storage.prepareActionBatchCommit(manifest)
+    expect(prepared.missingDigests).toEqual([dependencyBeefDigest])
+
+    await client.storage.putActionBatchBlob({ batchId, digest: dependencyBeefDigest, bytes })
+    const batch = await server.setup.activeStorage.findActionBatch(server.setup.userId, begun.batchId)
+    expect(batch).toBeDefined()
+    const blob = await server.setup.activeStorage.findActionBatchBlobRecord(batch!.actionBatchId, dependencyBeefDigest)
+    expect(blob?.bytes).toHaveLength(bytes.length)
+    await client.storage.abortActionBatch(batchId)
   })
 
   test('1a error createAction', async () => {

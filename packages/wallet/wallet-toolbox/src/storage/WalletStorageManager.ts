@@ -481,6 +481,38 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
+  async getCapabilities (): Promise<sdk.StorageCapabilities> {
+    return await this.runAsReader(async () => await this.getActive().getCapabilities())
+  }
+
+  async beginActionBatch (args: sdk.BeginActionBatchArgs): Promise<sdk.BeginActionBatchResult> {
+    return await this.runAsWriter(async writer => await writer.beginActionBatch(await this.getAuth(true), args))
+  }
+
+  async extendActionBatch (args: sdk.ExtendActionBatchArgs): Promise<sdk.ExtendActionBatchResult> {
+    return await this.runAsWriter(async writer => await writer.extendActionBatch(await this.getAuth(true), args))
+  }
+
+  async renewActionBatch (batchId: string): Promise<sdk.RenewActionBatchResult> {
+    return await this.runAsWriter(async writer => await writer.renewActionBatch(await this.getAuth(true), batchId))
+  }
+
+  async prepareActionBatchCommit (manifest: sdk.ActionBatchManifest): Promise<sdk.PrepareActionBatchCommitResult> {
+    return await this.runAsWriter(async writer => await writer.prepareActionBatchCommit(await this.getAuth(true), manifest))
+  }
+
+  async putActionBatchBlob (args: sdk.PutActionBatchBlobArgs): Promise<void> {
+    return await this.runAsWriter(async writer => await writer.putActionBatchBlob(await this.getAuth(true), args))
+  }
+
+  async commitActionBatch (manifest: sdk.ActionBatchManifest): Promise<sdk.CommitActionBatchResult> {
+    return await this.runAsWriter(async writer => await writer.commitActionBatch(await this.getAuth(true), manifest))
+  }
+
+  async abortActionBatch (batchId: string): Promise<sdk.AbortActionBatchResult> {
+    return await this.runAsWriter(async writer => await writer.abortActionBatch(await this.getAuth(true), batchId))
+  }
+
   async insertCertificate (certificate: TableCertificate): Promise<number> {
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)

@@ -118,7 +118,7 @@ interface Deadline {
 function createDeadline (timeoutMs: number, controller?: AbortController): Deadline {
   let expired = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  const promise = new Promise<never>((_, reject) => {
+  const promise = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       expired = true
       try { controller?.abort() } catch { /* noop */ }
@@ -470,7 +470,7 @@ export default class LookupResolver {
 
     type Event = { kind: 'answer', answer: LookupAnswer } | { kind: 'done' } | { kind: 'soft' }
     const queue: Event[] = []
-    let waiter: ((v: void) => void) | null = null
+    let waiter: (() => void) | null = null
     const push = (e: Event): void => {
       queue.push(e)
       if (waiter !== null) {
@@ -529,11 +529,13 @@ export default class LookupResolver {
     })
 
     try {
-      while (completedHosts < hostCount) {
+      for (;;) {
+        if (completedHosts >= hostCount) break
         if (queue.length === 0) {
           await new Promise<void>((resolve) => { waiter = resolve })
         }
-        const e = queue.shift() as Event
+        const e = queue.shift()
+        if (e == null) continue
         if (e.kind === 'answer') {
           const added = mergeAnswer(e.answer)
           if (firstResponseAt === null) {

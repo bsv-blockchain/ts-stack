@@ -32,7 +32,7 @@ const PARSE_BATCH_SIZE = 32
 async function yieldToEventLoop (): Promise<void> {
   const sched = (globalThis as any).scheduler
   if (sched != null && typeof sched.yield === 'function') {
-    return await sched.yield()
+    return sched.yield()
   }
   return await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
@@ -314,7 +314,10 @@ export class IdentityClient {
         name: contact.name,
         identityKey: contact.identityKey
       }
-      return entries.every(([k, v]) => typeof bag[k] === 'string' && (bag[k] as string).toLowerCase() === v.toLowerCase())
+      return entries.every(([k, v]) => {
+        const candidate = bag[k]
+        return typeof candidate === 'string' && candidate.toLowerCase() === v.toLowerCase()
+      })
     })
   }
 

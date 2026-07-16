@@ -21,9 +21,10 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
   const CHANGE_SCRIPT = '76a914aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa88ac'
 
   // Minimal manager instance; the underlying wallet is never called by the method under test.
-  const wpm = new WalletPermissionsManager({} as never, 'admin') as unknown as {
+  const underlyingWallet: never = Object.create(null)
+  const wpm: {
     verifyRequestedOutputsPresent: (tx: Transaction, args: { outputs?: Array<{ lockingScript: string, satoshis: number, outputDescription: string }> }) => void
-  }
+  } = new WalletPermissionsManager(underlyingWallet, 'admin') as never
 
   const txWithOutputs = (outs: Array<{ hex: string, satoshis: number }>): Transaction => {
     const tx = new Transaction()
@@ -31,7 +32,7 @@ describe('WalletPermissionsManager output verification (GHSA-36f9-7rg5-cpf8)', (
     return tx
   }
 
-  const requested = (outs: Array<{ hex: string, satoshis: number }>) =>
+  const requested = (outs: Array<{ hex: string, satoshis: number }>): { outputs: Array<{ lockingScript: string, satoshis: number, outputDescription: string }> } =>
     ({ outputs: outs.map(o => ({ lockingScript: o.hex, satoshis: o.satoshis, outputDescription: 'pay' })) })
 
   test('0 accepts when every requested output is present (extra change + randomized order)', () => {

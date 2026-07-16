@@ -6,6 +6,19 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Add automatically negotiated, in-memory planning for dependent `noSend` workloads. Capable
+  storage providers reserve funding once, perform middle action planning and signing without
+  persistence round trips, and atomically commit the complete workspace on `sendWith`. Existing
+  BRC-100 arguments and results are unchanged, and providers without `actionBatch: 1` retain the
+  legacy path. SQLite, MySQL/Knex, IndexedDB, authenticated remote clients, browser, and mobile
+  builds share the same capability contract.
+- Add leased per-output batch reservations, expiry cleanup, adaptive pool extension, idempotent
+  manifest commits, inline content-addressed blobs up to 4 MiB, and authenticated binary uploads
+  in provider-sized chunks with four-way bounded concurrency for larger batches. Broadcast remains
+  outside the atomic persistence transaction.
+- Add a retained workload benchmark covering 1, 10, 50, and 250 actions across dependent,
+  independent, mixed-input, and two-step signing models, four script sizes, and 25/100/250 ms
+  storage latency. Run it with `pnpm --filter @bsv/wallet-toolbox bench:action-batch`.
 - Release prep for `2.4.2`: transaction-pipeline, BEEF fetching, and binary transport
   performance improvements described below, published in lockstep for Node, browser, and mobile.
 - Transaction pipeline performance: reuse parsed BEEF through `createAction`/`signAction`, retain

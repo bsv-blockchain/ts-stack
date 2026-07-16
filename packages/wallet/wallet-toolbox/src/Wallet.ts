@@ -104,6 +104,7 @@ import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
 import { getResultBeef } from './signer/methods/resultBeef'
 import type { ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { ActionBatchController, ActionBatchMode } from './signer/actionBatch/ActionBatchWorkspace'
 
 /**
  * The preferred means of constructing a `Wallet` is with a `WalletArgs` instance.
@@ -199,6 +200,12 @@ export interface WalletArgs {
    * `(log?: string | WalletLoggerInterface) => new WalletLogger(log)`
    */
   makeLogger?: MakeWalletLogger
+  /**
+   * Internal Wallet Toolbox optimization policy. `auto` negotiates the optional
+   * action-batch storage capability; `legacy` always uses per-action storage.
+   * This does not change the BRC-100 wallet interface.
+   */
+  actionBatchMode?: ActionBatchMode
 }
 
 function isWalletSigner (args: WalletArgs | WalletSigner): args is WalletSigner {
@@ -250,6 +257,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   makeLogger?: MakeWalletLogger
 
   pendingSignActions: Record<string, PendingSignAction>
+  readonly actionBatch: ActionBatchController
 
   /**
    * For repeatability testing, set to an array of random numbers from [0..1).
@@ -301,6 +309,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     this.identityKey = this.keyDeriver.identityKey
 
     this.pendingSignActions = {}
+    this.actionBatch = new ActionBatchController(this, args.actionBatchMode ?? 'auto')
 
     this.userParty = `user ${this.getClientChangeKeyPair().publicKey}`
     this.beef = new BeefParty([this.userParty])
@@ -312,6 +321,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   }
 
   async destroy (): Promise<void> {
+    await this.actionBatch.abort()
     await this.storage.destroy()
     if (this.privilegedKeyManager != null) this.privilegedKeyManager.destroyKey()
   }
@@ -480,7 +490,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
   ): Promise<ListActionsResult> {
     Validation.validateOriginator(originator)
     const { vargs } = this.validateAuthAndArgs(args, Validation.validateListActionsArgs)
-    const r = await this.storage.listActions(vargs)
+    const storageArgs = this.actionBatch.hasWorkspace ? { ...vargs, limit: 10000, offset: 0 } : vargs
+    const r = this.actionBatch.overlayListActions(await this.storage.listActions(storageArgs), vargs)
     // Implement security policy to block customInstructions from output results.
     for (const action of r.actions) {
       if (action.outputs != null) {
@@ -505,7 +516,11 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.autoKnownTxids && !vargs.knownTxids) {
       vargs.knownTxids = this.getKnownTxids()
     }
-    const r = await this.storage.listOutputs(vargs)
+    const storageArgs = this.actionBatch.hasWorkspace && vargs.basket !== specOpWalletBalance &&
+      !vargs.tags.includes(specOpWalletBalance)
+      ? { ...vargs, limit: 10000, offset: 0 }
+      : vargs
+    const r = this.actionBatch.overlayListOutputs(await this.storage.listOutputs(storageArgs), vargs)
     if (r.BEEF != null) {
       this.beef.mergeBeefFromParty(this.storageParty, asArray(r.BEEF))
       r.BEEF = this.verifyReturnedTxidOnlyBEEF(r.BEEF)
@@ -948,14 +963,15 @@ export class Wallet implements WalletInterface, ProtoWallet {
     Validation.validateOriginator(originator)
 
     const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateSignActionArgs)
+    const prior = this.pendingSignActions[args.reference]
+    if (!prior) { throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.') }
     // createAction options are merged with undefined signAction options before validation...
     const r = await signAction(this, auth, args)
 
     if (!vargs.isDelayed) throwIfAnyUnsuccessfulSignActions(r)
 
-    const prior = this.pendingSignActions[args.reference]
-    if (!prior) { throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.') }
     if (r.tx != null) r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, prior.args.options?.knownTxids, getResultBeef(r))
+    delete this.pendingSignActions[args.reference]
 
     return r
   }
@@ -983,6 +999,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     Validation.validateOriginator(originator)
 
     this.validateAuthAndArgs(args, Validation.validateAbortActionArgs)
+    if (this.actionBatch.ownsReference(args.reference)) {
+      await this.actionBatch.abort()
+      return { aborted: true }
+    }
     const r = await this.storage.abortAction(args)
     return r
   }
