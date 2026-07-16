@@ -616,6 +616,10 @@ async function validateRequiredInputs (
     userId,
     xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout }))
   )
+  const preloadedOutputIds = Object.values(preloadedOutputsByOutpoint).map(output => output.outputId)
+  if ((await storage.findReservedActionBatchOutputIds(preloadedOutputIds)).length > 0) {
+    throw new WERR_INVALID_PARAMETER('inputs', 'outputs not reserved by an active action batch')
+  }
 
   const inputsByTxid: Record<string, XValidCreateActionInput[]> = {}
   for (const input of xinputs) {
@@ -756,6 +760,10 @@ async function validateNoSendChange (
         {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'unique. Duplicates are not allowed.')}
       r.push(output)
     }
+  }
+
+  if ((await storage.findReservedActionBatchOutputIds(r.map(output => output.outputId))).length > 0) {
+    throw new WERR_INVALID_PARAMETER('noSendChange', 'outputs not reserved by an active action batch')
   }
 
   return r

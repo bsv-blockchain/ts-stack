@@ -81,8 +81,8 @@ function outputFromBeef (
     purpose: '',
     type: 'custom',
     txid: outpoint.txid,
-    lockingScript: output.lockingScript.toBinary(),
-    sourceTransaction: transaction.toUint8Array(),
+    lockingScript: undefined,
+    sourceTransaction: undefined,
     created_at: now,
     updated_at: now
   }
@@ -109,6 +109,17 @@ function resolveInputOutput (
     (() => { throw new WERR_INVALID_PARAMETER('inputBEEF', `proof data for ${key}`) })()
 }
 
+export function plannerOutputLockingScript (
+  state: ActionBatchPlannerState,
+  output: PlannerOutput
+): number[] {
+  if (output.lockingScript != null) return asArray(output.lockingScript)
+  if (output.txid == null) throw new WERR_INTERNAL('batch planner output is missing txid')
+  const script = state.sharedBeef.findTxid(output.txid)?.tx?.outputs[output.vout]?.lockingScript
+  if (script == null) throw new WERR_INTERNAL(`batch planner output ${output.txid}.${output.vout} is missing its script`)
+  return script.toBinary()
+}
+
 function sdkInputFromExplicit (
   state: ActionBatchPlannerState,
   input: Validation.ValidCreateActionInput,
@@ -123,7 +134,7 @@ function sdkInputFromExplicit (
     sourceTxid: verifyTruthy(output.txid),
     sourceVout: output.vout,
     sourceSatoshis: output.satoshis,
-    sourceLockingScript: asString(verifyTruthy(output.lockingScript)),
+    sourceLockingScript: asString(plannerOutputLockingScript(state, output)),
     sourceTransaction: isSignAction ? sourceTransactionFor(state, output) : undefined,
     unlockingScriptLength: input.unlockingScriptLength,
     providedBy,
@@ -146,7 +157,7 @@ function sdkInputFromFunding (
     sourceTxid: verifyTruthy(output.txid),
     sourceVout: output.vout,
     sourceSatoshis: output.satoshis,
-    sourceLockingScript: asString(verifyTruthy(output.lockingScript)),
+    sourceLockingScript: asString(plannerOutputLockingScript(state, output)),
     sourceTransaction: isSignAction ? sourceTransactionFor(state, output) : undefined,
     unlockingScriptLength: 107,
     providedBy: 'storage',
@@ -346,7 +357,6 @@ export function stageTransactionOutputs (
 ): void {
   const now = new Date()
   for (const output of dcr.outputs) {
-    const transactionOutput = tx.outputs[output.vout]
     const isChange = output.providedBy === 'storage' && output.purpose === 'change'
     const staged: PlannerOutput = {
       outputId: -(state.staged.size + 1),
@@ -367,7 +377,7 @@ export function stageTransactionOutputs (
       derivationPrefix: isChange ? dcr.derivationPrefix : undefined,
       derivationSuffix: output.derivationSuffix,
       customInstructions: output.customInstructions,
-      lockingScript: transactionOutput.lockingScript.toBinary(),
+      lockingScript: undefined,
       created_at: now,
       updated_at: now
     }

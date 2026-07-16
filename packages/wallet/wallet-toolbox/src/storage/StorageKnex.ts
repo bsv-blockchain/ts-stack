@@ -272,6 +272,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return row == null ? undefined : this.validateEntity(row, ['expiresAt', 'hardExpiresAt'])
   }
 
+  override async findActionBatchForUpdate (
+    userId: number,
+    batchId: string,
+    trx: TrxToken
+  ): Promise<TableActionBatch | undefined> {
+    const row = await this.toDb(trx)<TableActionBatch>('action_batches')
+      .where({ userId, batchId })
+      .forUpdate()
+      .first()
+    return row == null ? undefined : this.validateEntity(row, ['expiresAt', 'hardExpiresAt'])
+  }
+
   override async findExpiredActionBatches (now: Date, trx?: TrxToken): Promise<TableActionBatch[]> {
     const rows = await this.toDb(trx)<TableActionBatch>('action_batches')
       .whereIn('status', ['active', 'prepared'])
@@ -1339,6 +1351,28 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byOutpoint
   }
 
+  override async findOutputsByOutpointsForUpdate (
+    userId: number,
+    outpoints: Array<{ txid: string, vout: number }>,
+    trx: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    const byOutpoint: Record<string, TableOutput> = {}
+    if (outpoints.length < 1) return byOutpoint
+    const outpointSet = new Set(outpoints.map(o => `${o.txid}.${o.vout}`))
+    const rows = await this.toDb(trx)<TableOutput>('outputs')
+      .where('userId', userId)
+      .whereIn('txid', [...new Set(outpoints.map(o => o.txid))])
+      .whereIn('vout', [...new Set(outpoints.map(o => o.vout))])
+      .select('*')
+      .forUpdate()
+    const filteredRows = rows.filter(r => outpointSet.has(`${String(r.txid)}.${String(r.vout)}`))
+    for (const row of this.validateEntities(filteredRows, undefined, ['spendable', 'change'])) {
+      await this.validateOutputScript(row, trx)
+      byOutpoint[`${String(row.txid)}.${String(row.vout)}`] = row
+    }
+    return byOutpoint
+  }
+
   override async findOrInsertOutputBasketsBulk (
     userId: number,
     names: string[],
@@ -1443,6 +1477,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           })
           .whereIn('t.status', status)
           .select('o.*')
+          .forUpdate()
 
       let output: TableOutput | undefined
 

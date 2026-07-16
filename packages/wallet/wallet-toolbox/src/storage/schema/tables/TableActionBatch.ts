@@ -10,6 +10,7 @@ export interface TableActionBatch extends EntityTimeStamp {
   expiresAt: Date
   hardExpiresAt: Date
   manifestDigest?: string
+  uploadDigests?: string
   result?: string
 }
 

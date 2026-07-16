@@ -7,6 +7,7 @@ import { _tu, TestWalletNoSetup } from '../test/utils/TestUtilsWalletStorage'
 interface ActualResult {
   mode: 'batch' | 'legacy'
   actions: number
+  scriptBytes: number
   actionMs: number
   planningMs: number
   signingValidationMs: number
@@ -38,7 +39,7 @@ interface ModelResult {
 const actionCounts = [1, 10, 50, 250]
 const scriptSizes = [1024, 64 * 1024, 1024 * 1024, 4 * 1024 * 1024]
 const latencies = [25, 100, 250]
-const workloads: ModelResult['workload'][] = ['dependent', 'independent', 'mixed-explicit', 'two-step']
+const workloads: Array<ModelResult['workload']> = ['dependent', 'independent', 'mixed-explicit', 'two-step']
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
 function modeledResults (): ModelResult[] {
@@ -93,8 +94,14 @@ function jsonRpcRequestBytes (method: string, value: unknown): number {
   }, true)).length
 }
 
-async function measureActual (mode: ActualResult['mode'], actions: number): Promise<ActualResult> {
-  const ctx: TestWalletNoSetup = await _tu.createLegacyWalletSQLiteCopy(`actionBatchBench-${mode}-${actions}`)
+async function measureActual (
+  mode: ActualResult['mode'],
+  actions: number,
+  scriptBytes = 1024
+): Promise<ActualResult> {
+  const ctx: TestWalletNoSetup = await _tu.createLegacyWalletSQLiteCopy(
+    `actionBatchBench-${mode}-${actions}-${scriptBytes}`
+  )
   const wallet = mode === 'batch'
     ? ctx.wallet
     : new Wallet({
@@ -172,9 +179,9 @@ async function measureActual (mode: ActualResult['mode'], actions: number): Prom
     try { return await planner(action) } finally { planningMs += performance.now() - start }
   })
   const postBeef = ctx.services.postBeef.bind(ctx.services)
-  jest.spyOn(ctx.services, 'postBeef').mockImplementation(async (...postArgs) => {
+  jest.spyOn(ctx.services, 'postBeef').mockImplementation(async (beef, txids, logger) => {
     const start = performance.now()
-    try { return await postBeef(...postArgs) } finally { broadcastMs += performance.now() - start }
+    try { return await postBeef(beef, txids, logger) } finally { broadcastMs += performance.now() - start }
   })
 
   const cpuStart = process.cpuUsage()
@@ -183,8 +190,9 @@ async function measureActual (mode: ActualResult['mode'], actions: number): Prom
   let change: string[] = []
   try {
     for (let i = 0; i < actions; i++) {
-      const result = await wallet.createAction(args(change, 1024))
-      txids.push(result.txid!)
+      const result = await wallet.createAction(args(change, scriptBytes))
+      if (result.txid == null) throw new Error('benchmark action did not return a txid')
+      txids.push(result.txid)
       change = result.noSendChange ?? []
       peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed)
     }
@@ -196,6 +204,7 @@ async function measureActual (mode: ActualResult['mode'], actions: number): Prom
     return {
       mode,
       actions,
+      scriptBytes,
       actionMs,
       planningMs,
       signingValidationMs: Math.max(0, actionMs - planningMs),
@@ -224,6 +233,10 @@ describe('retained action batch benchmark', () => {
       actual.push(await measureActual('legacy', actions))
       actual.push(await measureActual('batch', actions))
     }
+    for (const scriptBytes of scriptSizes.slice(1)) {
+      actual.push(await measureActual('legacy', 1, scriptBytes))
+      actual.push(await measureActual('batch', 1, scriptBytes))
+    }
     const modeled = modeledResults()
     const acceptance = modeled.find(result => result.workload === 'dependent' && result.actions === 250 &&
       result.scriptBytes === 1024 && result.latencyMs === 100)
@@ -235,6 +248,10 @@ describe('retained action batch benchmark', () => {
     })
     const batch250 = actual.find(result => result.mode === 'batch' && result.actions === 250)
     expect(batch250?.rpcCount).toBe(2)
+    const batch4MiB = actual.find(result => result.mode === 'batch' && result.actions === 1 &&
+      result.scriptBytes === 4 * 1024 * 1024)
+    expect(batch4MiB?.rpcCount).toBeGreaterThan(3)
+    expect(batch4MiB?.uploadedBytes).toBeGreaterThan(4 * 1024 * 1024)
     const modeledAcceptance = modeled.filter(result => result.workload === 'dependent' &&
       result.actions === 250 && result.latencyMs === 100 &&
       (result.scriptBytes === 1024 || result.scriptBytes === 4 * 1024 * 1024))

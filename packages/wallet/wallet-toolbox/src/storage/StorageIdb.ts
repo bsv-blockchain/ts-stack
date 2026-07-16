@@ -1113,11 +1113,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 
   override async findActionBatch (userId: number, batchId: string, trx?: TrxToken): Promise<TableActionBatch | undefined> {
     const tx = this.toDbTrx(['action_batches'], 'readonly', trx)
-    const index = tx.objectStore('action_batches').index('batchId')
-    if (index.get == null) throw new WERR_INTERNAL('IndexedDB action_batches batchId index does not support get')
-    const batch = await index.get(batchId)
+    const index = tx.objectStore('action_batches').index('userId_batchId')
+    if (index.get == null) throw new WERR_INTERNAL('IndexedDB action_batches userId_batchId index does not support get')
+    const batch = await index.get([userId, batchId])
     if (trx == null) await tx.done
-    return batch?.userId === userId ? batch : undefined
+    return batch
   }
 
   override async findExpiredActionBatches (now: Date, trx?: TrxToken): Promise<TableActionBatch[]> {

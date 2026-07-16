@@ -91,10 +91,12 @@ import {
   commitActionBatch as commitBatch,
   extendActionBatch as extendBatch,
   getActionBatchCapabilities,
-  prepareActionBatchCommit as prepareBatchCommit,
-  putActionBatchBlob as putBatchBlob,
   renewActionBatch as renewBatch
 } from './methods/actionBatch'
+import {
+  prepareActionBatchCommit as prepareBatchCommit,
+  putActionBatchBlob as putBatchBlob
+} from './methods/actionBatchBlobs'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -160,6 +162,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async insertActionBatch (batch: TableActionBatch, trx?: TrxToken): Promise<number> { throw new WERR_NOT_IMPLEMENTED() }
   async findActionBatch (userId: number, batchId: string, trx?: TrxToken): Promise<TableActionBatch | undefined> { throw new WERR_NOT_IMPLEMENTED() }
+  async findActionBatchForUpdate (
+    userId: number,
+    batchId: string,
+    trx: TrxToken
+  ): Promise<TableActionBatch | undefined> {
+    return await this.findActionBatch(userId, batchId, trx)
+  }
+
   async findExpiredActionBatches (now: Date, trx?: TrxToken): Promise<TableActionBatch[]> { throw new WERR_NOT_IMPLEMENTED() }
   async updateActionBatch (actionBatchId: number, update: Partial<TableActionBatch>, trx?: TrxToken): Promise<number> { throw new WERR_NOT_IMPLEMENTED() }
   async deleteActionBatch (actionBatchId: number, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
@@ -169,7 +179,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   ): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
 
   async findActionBatchOutputIds (actionBatchId: number, trx?: TrxToken): Promise<number[]> { throw new WERR_NOT_IMPLEMENTED() }
-  async findReservedActionBatchOutputIds (outputIds: number[], trx?: TrxToken): Promise<number[]> { throw new WERR_NOT_IMPLEMENTED() }
+  async findReservedActionBatchOutputIds (_outputIds: number[], _trx?: TrxToken): Promise<number[]> { return [] }
   async deleteActionBatchOutputReservations (actionBatchId: number, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
   async putActionBatchBlobRecord (blob: TableActionBatchBlob, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
   async findActionBatchBlobRecord (
@@ -245,6 +255,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (o?.txid !== undefined && o.vout !== undefined) byOutpoint[`${o.txid}.${o.vout}`] = o
     }
     return byOutpoint
+  }
+
+  async findOutputsByOutpointsForUpdate (
+    userId: number,
+    outpoints: Array<{ txid: string, vout: number }>,
+    trx: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    return await this.findOutputsByOutpoints(userId, outpoints, trx)
   }
 
   async findOrInsertOutputBasketsBulk (

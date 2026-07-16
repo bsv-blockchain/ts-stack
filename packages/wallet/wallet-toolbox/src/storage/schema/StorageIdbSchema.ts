@@ -26,7 +26,7 @@ export interface StorageIdbSchema {
     value: TableActionBatch
     indexes: {
       userId: number
-      batchId: string
+      userId_batchId: [number, string]
       expiresAt: Date
     }
   }

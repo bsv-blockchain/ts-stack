@@ -118,6 +118,23 @@ describe('StorageIdb tests', () => {
     }
   })
 
+  test('action batch ids are unique within a user, not across users', async () => {
+    const storage = await makeStorage()
+    try {
+      const firstUserId = await insertUser(storage)
+      const secondUserId = await insertUser(storage, '03'.repeat(33))
+      const first = makeActionBatch(firstUserId, 'shared-batch-id')
+      const second = makeActionBatch(secondUserId, 'shared-batch-id')
+      await storage.insertActionBatch(first)
+      await storage.insertActionBatch(second)
+
+      expect(await storage.findActionBatch(firstUserId, first.batchId)).toMatchObject({ userId: firstUserId })
+      expect(await storage.findActionBatch(secondUserId, second.batchId)).toMatchObject({ userId: secondUserId })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
   test.skip('1', async () => {
     // TODO: THIS TEST PASSES WHEN Describe is run alone, but fails to exit cleanly when run with `npm run test`
     if (Setup.noEnv('test')) return
@@ -173,13 +190,13 @@ async function seedSpendableOutputHeldByFailedTx (
   return { userId, basketId, holderTxId, outputId }
 }
 
-async function insertUser (storage: StorageIdb): Promise<number> {
+async function insertUser (storage: StorageIdb, identityKey = '02'.repeat(33)): Promise<number> {
   const now = new Date()
   const user: TableUser = {
     created_at: now,
     updated_at: now,
     userId: 0,
-    identityKey: '02'.repeat(33),
+    identityKey,
     activeStorage: '42'.repeat(32)
   }
   return await storage.insertUser(user)

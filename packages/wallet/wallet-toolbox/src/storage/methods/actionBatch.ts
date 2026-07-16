@@ -1,7 +1,6 @@
 import {
   Beef,
   Script,
-  Transaction,
   Validation
 } from '@bsv/sdk'
 import {
@@ -14,8 +13,6 @@ import {
   CommitActionBatchResult,
   ExtendActionBatchArgs,
   ExtendActionBatchResult,
-  PrepareActionBatchCommitResult,
-  PutActionBatchBlobArgs,
   RenewActionBatchResult,
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
@@ -23,14 +20,11 @@ import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { ProvenTxReqStatus, TransactionStatus } from '../../sdk/types'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
-import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
-import { actionBatchBlobDigest, verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest'
-import { beefForTxids } from '../../utility/beefForTxids'
-import { verifyUnlockScripts } from '../../signer/methods/completeSignedTransaction'
+import { verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest'
 import { validateStorageFeeModel } from '../StorageProvider'
 import type { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
-import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from '../schema/tables/TableActionBatch'
+import { TableActionBatch, TableActionBatchOutput } from '../schema/tables/TableActionBatch'
 import { TableCommission } from '../schema/tables/TableCommission'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
@@ -41,12 +35,17 @@ import { parseTxScriptOffsets } from '../../utility/parseTxScriptOffsets'
 import { shareReqsWithWorld } from './processAction'
 import { transactionSize } from './utils'
 import { selectCanonicalChange } from './actionPlanning'
+import {
+  ACTION_BATCH_MAX_BLOB_BYTES,
+  ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
+  ACTION_BATCH_MAX_INLINE_BYTES,
+  validateActionBatchInlinePayload
+} from './actionBatchBlobs'
+import { validateManifestActions } from './actionBatchValidation'
+import type { ValidatedBatchAction } from './actionBatchValidation'
 
 export const ACTION_BATCH_LEASE_MS = 15 * 60 * 1000
 export const ACTION_BATCH_HARD_LIFETIME_MS = 60 * 60 * 1000
-export const ACTION_BATCH_MAX_INLINE_BYTES = 4 * 1024 * 1024
-export const ACTION_BATCH_MAX_BLOB_BYTES = 8 * 1024 * 1024
-export const ACTION_BATCH_MAX_CONCURRENT_UPLOADS = 4
 const INITIAL_RESERVATION_LIMIT = 8
 const INITIAL_EXTRA_OUTPUTS = 3
 const MAX_RESERVED_HEADROOM = 64
@@ -70,6 +69,11 @@ function activeExpiry (batch: TableActionBatch, now = new Date()): boolean {
     batch.hardExpiresAt.getTime() <= now.getTime()
 }
 
+function canExpire (batch: TableActionBatch, now = new Date()): boolean {
+  return (batch.status === 'active' || batch.status === 'prepared') &&
+    (batch.expiresAt.getTime() <= now.getTime() || batch.hardExpiresAt.getTime() <= now.getTime())
+}
+
 async function releaseBatchState (
   storage: StorageProvider,
   batch: TableActionBatch,
@@ -82,11 +86,18 @@ async function releaseBatchState (
 }
 
 export async function cleanupExpiredActionBatches (storage: StorageProvider): Promise<number> {
-  const expired = await storage.findExpiredActionBatches(new Date())
+  const now = new Date()
+  const expired = await storage.findExpiredActionBatches(now)
+  let released = 0
   for (const batch of expired) {
-    await storage.transaction(async trx => await releaseBatchState(storage, batch, 'expired', trx))
+    await storage.transaction(async trx => {
+      const current = await storage.findActionBatchForUpdate(batch.userId, batch.batchId, trx)
+      if (current == null || !canExpire(current, now)) return
+      await releaseBatchState(storage, current, 'expired', trx)
+      released++
+    })
   }
-  return expired.length
+  return released
 }
 
 async function availableManagedChange (
@@ -216,6 +227,21 @@ async function reserveOutputs (
   const now = new Date()
   const unique = [...new Map(outputs.map(output => [output.outputId, output])).values()]
   const reserve = async (transaction: TrxToken): Promise<void> => {
+    const outpoints = unique.map(output => {
+      if (output.txid == null) throw new WERR_INVALID_OPERATION('action batch output is missing its txid')
+      return { txid: output.txid, vout: output.vout }
+    })
+    const current = await storage.findOutputsByOutpointsForUpdate(
+      batch.userId,
+      outpoints,
+      transaction
+    )
+    for (const output of unique) {
+      const stored = output.txid == null ? undefined : current[`${output.txid}.${output.vout}`]
+      if (stored == null || !stored.spendable || stored.spentBy != null) {
+        throw new WERR_INVALID_OPERATION('one or more action batch outputs are no longer spendable')
+      }
+    }
     const conflicts = await storage.findReservedActionBatchOutputIds(unique.map(output => output.outputId), transaction)
     if (conflicts.length > 0) throw new WERR_INVALID_OPERATION('one or more action batch outputs were concurrently reserved')
     await storage.reserveActionBatchOutputs(unique.map(output => ({
@@ -242,7 +268,7 @@ async function makeFundingResult (
     if (args.isSignAction && args.includeAllSourceTransactions) {
       copy.sourceTransaction = await storage.getRawTxOfKnownValidTransaction(output.txid)
     }
-    if (!args.options.returnTXIDOnly && output.txid != null && beef.findTxid(output.txid) == null) {
+    if (output.txid != null && beef.findTxid(output.txid) == null) {
       beef.mergeBeef(await storage.getBeefForTransaction(output.txid, {
         knownTxids: args.options.knownTxids,
         ignoreServices: true
@@ -250,7 +276,7 @@ async function makeFundingResult (
     }
     result.push(copy)
   }
-  return { outputs: result, beef: args.options.returnTXIDOnly ? undefined : beef.toUint8Array() }
+  return { outputs: result, beef: beef.toUint8Array() }
 }
 
 function newBatch (userId: number, batchId: string): TableActionBatch {
@@ -295,7 +321,13 @@ export async function beginActionBatch (
     await storage.insertActionBatch(batch, trx)
     await reserveOutputs(storage, batch, [...fixedOutputs, ...funding], trx)
   })
-  const fundingResult = await makeFundingResult(storage, args.firstAction, [...funding, ...fixedOutputs])
+  let fundingResult: Awaited<ReturnType<typeof makeFundingResult>>
+  try {
+    fundingResult = await makeFundingResult(storage, args.firstAction, [...funding, ...fixedOutputs])
+  } catch (error) {
+    await storage.transaction(async trx => await releaseBatchState(storage, batch, 'aborted', trx))
+    throw error
+  }
   const explicitIds = new Set(fixedOutputs.map(output => output.outputId))
   return {
     batchId: batch.batchId,
@@ -314,16 +346,6 @@ export async function beginActionBatch (
 
 function requireLiveBatch (batch: TableActionBatch | undefined): TableActionBatch {
   if (batch == null || activeExpiry(batch)) throw new WERR_INVALID_OPERATION('action batch is not active')
-  return batch
-}
-
-function requireUploadableBatch (batch: TableActionBatch | undefined): TableActionBatch {
-  if (batch == null || batch.status === 'committed' || batch.status === 'aborted') {
-    throw new WERR_INVALID_OPERATION('action batch is not uploadable')
-  }
-  if (batch.hardExpiresAt.getTime() <= Date.now()) {
-    throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
-  }
   return batch
 }
 
@@ -351,8 +373,9 @@ export async function extendActionBatch (
     Date.now() + ACTION_BATCH_LEASE_MS
   ))
   await storage.transaction(async trx => {
-    await reserveOutputs(storage, batch, [...funding, ...explicit], trx)
-    await storage.updateActionBatch(batch.actionBatchId, { expiresAt }, trx)
+    const current = requireLiveBatch(await storage.findActionBatchForUpdate(userId, args.batchId, trx))
+    await reserveOutputs(storage, current, [...funding, ...explicit], trx)
+    await storage.updateActionBatch(current.actionBatchId, { expiresAt }, trx)
   })
   const fundingShape = argsToFundingShape(args.includeSourceTransactions)
   const fundingResult = await makeFundingResult(storage, fundingShape, [...funding, ...explicit])
@@ -384,260 +407,20 @@ export async function renewActionBatch (
   batchId: string
 ): Promise<RenewActionBatchResult> {
   const userId = verifyId(auth.userId)
-  const batch = requireLiveBatch(await storage.findActionBatch(userId, batchId))
-  const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
-  await storage.updateActionBatch(batch.actionBatchId, { expiresAt })
-  return { expiresAt: expiresAt.toISOString() }
-}
-
-function manifestDigests (manifest: ActionBatchManifest): string[] {
-  const inline = manifest.inlineBlobs ?? {}
-  const logicalDigests = manifest.actions
-    .filter(action => action.rawTx == null)
-    .map(action => action.rawTxDigest)
-    .filter((digest): digest is string => digest != null)
-  if (manifest.dependencyBeef == null && manifest.dependencyBeefDigest != null &&
-    inline[manifest.dependencyBeefDigest] == null) logicalDigests.push(manifest.dependencyBeefDigest)
-  for (const action of manifest.actions) {
-    for (const digest of action.lockingScriptDigests ?? []) {
-      if (digest != null && inline[digest] == null) logicalDigests.push(digest)
-    }
-  }
-  return [...new Set(logicalDigests.flatMap(digest => {
-    if (inline[digest] != null) return []
-    return manifest.blobChunks?.[digest] ?? [digest]
-  }))]
-}
-
-export async function prepareActionBatchCommit (
-  storage: StorageProvider,
-  auth: AuthId,
-  manifest: ActionBatchManifest
-): Promise<PrepareActionBatchCommitResult> {
-  if (!verifyActionBatchManifestDigest(manifest)) throw new WERR_INVALID_PARAMETER('manifest.digest', 'valid')
-  const userId = verifyId(auth.userId)
-  const batch = requireUploadableBatch(await storage.findActionBatch(userId, manifest.batchId))
-  if (batch.manifestDigest != null && batch.manifestDigest !== manifest.digest) {
-    throw new WERR_INVALID_OPERATION('action batch was already prepared with a different manifest')
-  }
-  const missingDigests: string[] = []
-  for (const digest of manifestDigests(manifest)) {
-    if (await storage.findActionBatchBlobRecord(batch.actionBatchId, digest) == null) missingDigests.push(digest)
-  }
-  await storage.updateActionBatch(batch.actionBatchId, {
-    status: batch.status === 'expired' ? 'expired' : 'prepared',
-    manifestDigest: manifest.digest
+  return await storage.transaction(async trx => {
+    const batch = requireLiveBatch(await storage.findActionBatchForUpdate(userId, batchId, trx))
+    const expiresAt = new Date(Math.min(batch.hardExpiresAt.getTime(), Date.now() + ACTION_BATCH_LEASE_MS))
+    await storage.updateActionBatch(batch.actionBatchId, { expiresAt }, trx)
+    return { expiresAt: expiresAt.toISOString() }
   })
-  return {
-    missingDigests,
-    maxBlobBytes: ACTION_BATCH_MAX_BLOB_BYTES,
-    maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS
-  }
-}
-
-export async function putActionBatchBlob (
-  storage: StorageProvider,
-  auth: AuthId,
-  args: PutActionBatchBlobArgs
-): Promise<void> {
-  const userId = verifyId(auth.userId)
-  const batch = requireUploadableBatch(await storage.findActionBatch(userId, args.batchId))
-  const bytes = asArray(args.bytes)
-  if (bytes.length > ACTION_BATCH_MAX_BLOB_BYTES) throw new WERR_INVALID_PARAMETER('bytes', 'within provider blob limit')
-  if (actionBatchBlobDigest(bytes) !== args.digest) throw new WERR_INVALID_PARAMETER('digest', 'match bytes')
-  const now = new Date()
-  await storage.putActionBatchBlobRecord({
-    actionBatchBlobId: 0,
-    actionBatchId: batch.actionBatchId,
-    digest: args.digest,
-    bytes,
-    created_at: now,
-    updated_at: now
-  })
-}
-
-async function resolveManifestBytes (
-  storage: StorageProvider,
-  batch: TableActionBatch,
-  inline: number[] | Uint8Array | undefined,
-  digest: string | undefined,
-  name: string,
-  chunkDigests?: string[]
-): Promise<number[]> {
-  if (inline != null) {
-    const bytes = asArray(inline)
-    if (digest != null && actionBatchBlobDigest(bytes) !== digest) throw new WERR_INVALID_PARAMETER(name, 'match digest')
-    return bytes
-  }
-  if (digest == null) throw new WERR_INVALID_PARAMETER(name, 'inline bytes or digest')
-  if (chunkDigests != null) {
-    if (chunkDigests.length === 0) throw new WERR_INVALID_PARAMETER(name, 'one or more blob chunks')
-    const chunks: number[][] = []
-    let totalBytes = 0
-    for (const chunkDigest of chunkDigests) {
-      const chunk = await storage.findActionBatchBlobRecord(batch.actionBatchId, chunkDigest)
-      if (chunk == null) throw new WERR_INVALID_OPERATION(`missing action batch blob ${chunkDigest}`)
-      if (actionBatchBlobDigest(chunk.bytes) !== chunkDigest) {
-        throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${chunkDigest}`)
-      }
-      chunks.push(chunk.bytes)
-      totalBytes += chunk.bytes.length
-    }
-    const bytes = new Array<number>(totalBytes)
-    let offset = 0
-    for (const chunk of chunks) {
-      for (let index = 0; index < chunk.length; index++) bytes[offset++] = chunk[index]
-    }
-    if (actionBatchBlobDigest(bytes) !== digest) throw new WERR_INVALID_PARAMETER(name, 'chunks matching digest')
-    return bytes
-  }
-  const blob = await storage.findActionBatchBlobRecord(batch.actionBatchId, digest)
-  if (blob == null) throw new WERR_INVALID_OPERATION(`missing action batch blob ${digest}`)
-  if (actionBatchBlobDigest(blob.bytes) !== digest) throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${digest}`)
-  return blob.bytes
-}
-
-interface ValidatedBatchAction {
-  action: ActionBatchCommitAction
-  tx: Transaction
-  rawTx: number[]
-  inputBeef: number[]
-}
-
-async function materializeActionScripts (
-  storage: StorageProvider,
-  batch: TableActionBatch,
-  manifest: ActionBatchManifest,
-  action: ActionBatchCommitAction
-): Promise<ActionBatchCommitAction> {
-  if (action.lockingScriptDigests == null) return action
-  if (action.lockingScriptDigests.length !== action.plan.outputs.length) {
-    throw new WERR_INVALID_PARAMETER('lockingScriptDigests', 'align with planned outputs')
-  }
-  const scripts: string[] = []
-  for (let index = 0; index < action.plan.outputs.length; index++) {
-    const digest = action.lockingScriptDigests[index]
-    scripts.push(digest == null
-      ? action.plan.outputs[index].lockingScript
-      : asString(await resolveManifestBytes(
-        storage,
-        batch,
-        manifest.inlineBlobs?.[digest],
-        digest,
-        `locking script ${index}`,
-        manifest.blobChunks?.[digest]
-      )))
-  }
-  return {
-    ...action,
-    plan: {
-      ...action.plan,
-      outputs: action.plan.outputs.map((output, index) => ({ ...output, lockingScript: scripts[index] }))
-    },
-    metadata: {
-      ...action.metadata,
-      outputs: action.metadata.outputs.map((output, index) => ({ ...output, lockingScript: scripts[index] }))
-    }
-  }
-}
-
-async function validateManifestActions (
-  storage: StorageProvider,
-  batch: TableActionBatch,
-  manifest: ActionBatchManifest
-): Promise<{ actions: ValidatedBatchAction[], dependencyBeef: number[] }> {
-  const dependencyBeef = await resolveManifestBytes(
-    storage,
-    batch,
-    manifest.dependencyBeef ?? (manifest.dependencyBeefDigest == null
-      ? undefined
-      : manifest.inlineBlobs?.[manifest.dependencyBeefDigest]),
-    manifest.dependencyBeefDigest,
-    'dependencyBeef',
-    manifest.dependencyBeefDigest == null ? undefined : manifest.blobChunks?.[manifest.dependencyBeefDigest]
-  )
-  const beef = dependencyBeef.length === 0 ? new Beef() : Beef.fromBinary(dependencyBeef)
-  const batchTxids = new Set(manifest.actions.map(action => action.txid))
-  const seenTxids = new Set<string>()
-  const spentOutpoints = new Set<string>()
-  const actions: ValidatedBatchAction[] = []
-  for (const compactAction of manifest.actions) {
-    const action = await materializeActionScripts(storage, batch, manifest, compactAction)
-    if (seenTxids.has(action.txid)) throw new WERR_INVALID_PARAMETER('actions', 'unique txids')
-    if (action.reference !== action.plan.reference) throw new WERR_INVALID_PARAMETER('reference', 'match plan')
-    const rawTx = await resolveManifestBytes(
-      storage,
-      batch,
-      action.rawTx ?? (action.rawTxDigest == null ? undefined : manifest.inlineBlobs?.[action.rawTxDigest]),
-      action.rawTxDigest,
-      `rawTx ${action.txid}`,
-      action.rawTxDigest == null ? undefined : manifest.blobChunks?.[action.rawTxDigest]
-    )
-    const tx = Transaction.fromBinary(rawTx)
-    if (tx.id('hex') !== action.txid) throw new WERR_INVALID_PARAMETER('txid', 'match raw transaction')
-    if (tx.version !== action.plan.version || tx.lockTime !== action.plan.lockTime) {
-      throw new WERR_INVALID_PARAMETER('transaction', 'match planned version and lockTime')
-    }
-    if (tx.inputs.length !== action.plan.inputs.length || tx.outputs.length !== action.plan.outputs.length) {
-      throw new WERR_INVALID_PARAMETER('transaction', 'match planned input and output counts')
-    }
-    for (const planned of action.plan.inputs) {
-      const input = tx.inputs[planned.vin]
-      if (input == null || input.sourceTXID !== planned.sourceTxid || input.sourceOutputIndex !== planned.sourceVout) {
-        throw new WERR_INVALID_PARAMETER('inputs', 'match planned transaction outpoints')
-      }
-    }
-    for (const input of tx.inputs) {
-      const sourceTxid = input.sourceTXID
-      if (sourceTxid == null) throw new WERR_INVALID_PARAMETER('input.sourceTXID', 'valid')
-      const outpoint = `${sourceTxid}.${input.sourceOutputIndex}`
-      if (spentOutpoints.has(outpoint)) throw new WERR_INVALID_PARAMETER('actions', `not double spend ${outpoint}`)
-      spentOutpoints.add(outpoint)
-      if (batchTxids.has(sourceTxid) && !seenTxids.has(sourceTxid)) {
-        throw new WERR_INVALID_PARAMETER('actions', 'topologically ordered')
-      }
-    }
-    let inputSatoshis = 0
-    for (const planned of action.plan.inputs) inputSatoshis += planned.sourceSatoshis
-    const outputSatoshis = tx.outputs.reduce(
-      (sum, output) => sum + Validation.validateSatoshis(output.satoshis, 'transaction output satoshis'),
-      0
-    )
-    const feePaid = inputSatoshis - outputSatoshis
-    const feeRate = validateStorageFeeModel(storage.feeModel).value ?? 0
-    if (feePaid < Math.ceil(rawTx.length * feeRate / 1000)) {
-      throw new WERR_INVALID_PARAMETER('transaction fee', 'meet the active storage fee model')
-    }
-    for (let i = 0; i < action.metadata.outputs.length; i++) {
-      const requested = action.metadata.outputs[i]
-      const planned = action.plan.outputs[i]
-      const transactionOutput = planned == null ? undefined : tx.outputs[planned.vout]
-      if (planned == null || transactionOutput == null || requested.satoshis !== planned.satoshis ||
-        (requested.lockingScript !== '' && requested.lockingScript !== planned.lockingScript) ||
-        transactionOutput.satoshis !== planned.satoshis || transactionOutput.lockingScript.toHex() !== planned.lockingScript) {
-        throw new WERR_INVALID_PARAMETER('outputs', 'match requested outputs')
-      }
-    }
-    const inputBeef = asArray(beefForTxids(
-      beef,
-      action.plan.inputs.map(input => input.sourceTxid)
-    ).toUint8Array())
-    beef.mergeRawTx(rawTx)
-    seenTxids.add(action.txid)
-    actions.push({ action, tx, rawTx, inputBeef })
-  }
-  for (const { action } of actions) verifyUnlockScripts(action.txid, beef)
-  if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
-    throw new WERR_INVALID_PARAMETER('manifest', 'valid dependency graph')
-  }
-  return { actions, dependencyBeef }
 }
 
 async function reacquireManifestInputs (
   storage: StorageProvider,
   userId: number,
   batch: TableActionBatch,
-  validated: { actions: ValidatedBatchAction[] }
+  validated: { actions: ValidatedBatchAction[] },
+  trx: TrxToken
 ): Promise<void> {
   if (batch.hardExpiresAt.getTime() <= Date.now()) {
     throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
@@ -651,40 +434,38 @@ async function reacquireManifestInputs (
       providedBy: input.providedBy
     }])).values()]
 
-  await storage.transaction(async trx => {
-    await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
-    const stored = await storage.findOutputsByOutpoints(userId, outpoints, trx)
-    const outputs: TableOutput[] = []
-    for (const outpoint of outpoints) {
-      const key = `${outpoint.txid}.${outpoint.vout}`
-      const output = stored[key]
-      if (output == null) {
-        if (outpoint.providedBy === 'storage' || outpoint.providedBy === 'you-and-storage') {
-          throw new WERR_INVALID_OPERATION(`reserved input ${key} is no longer available`)
-        }
-        continue
+  await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
+  const stored = await storage.findOutputsByOutpoints(userId, outpoints, trx)
+  const outputs: TableOutput[] = []
+  for (const outpoint of outpoints) {
+    const key = `${outpoint.txid}.${outpoint.vout}`
+    const output = stored[key]
+    if (output == null) {
+      if (outpoint.providedBy === 'storage' || outpoint.providedBy === 'you-and-storage') {
+        throw new WERR_INVALID_OPERATION(`reserved input ${key} is no longer available`)
       }
-      if (!output.spendable || output.spentBy != null) {
-        throw new WERR_INVALID_OPERATION(`input ${key} is no longer spendable`)
-      }
-      outputs.push(output)
+      continue
     }
-    const conflicts = await storage.findReservedActionBatchOutputIds(outputs.map(output => output.outputId), trx)
-    if (conflicts.length > 0) {
-      throw new WERR_INVALID_OPERATION('one or more expired action batch inputs were reserved elsewhere')
+    if (!output.spendable || output.spentBy != null) {
+      throw new WERR_INVALID_OPERATION(`input ${key} is no longer spendable`)
     }
-    const now = new Date()
-    await storage.reserveActionBatchOutputs(outputs.map(output => ({
-      actionBatchId: batch.actionBatchId,
-      outputId: output.outputId,
-      created_at: now,
-      updated_at: now
-    })), trx)
-    await storage.updateActionBatch(batch.actionBatchId, {
-      status: 'active',
-      expiresAt: new Date(Math.min(batch.hardExpiresAt.getTime(), now.getTime() + ACTION_BATCH_LEASE_MS))
-    }, trx)
-  })
+    outputs.push(output)
+  }
+  const conflicts = await storage.findReservedActionBatchOutputIds(outputs.map(output => output.outputId), trx)
+  if (conflicts.length > 0) {
+    throw new WERR_INVALID_OPERATION('one or more expired action batch inputs were reserved elsewhere')
+  }
+  const now = new Date()
+  await storage.reserveActionBatchOutputs(outputs.map(output => ({
+    actionBatchId: batch.actionBatchId,
+    outputId: output.outputId,
+    created_at: now,
+    updated_at: now
+  })), trx)
+  await storage.updateActionBatch(batch.actionBatchId, {
+    status: 'active',
+    expiresAt: new Date(Math.min(batch.hardExpiresAt.getTime(), now.getTime() + ACTION_BATCH_LEASE_MS))
+  }, trx)
 }
 
 function transactionStatuses (action: ActionBatchCommitAction): { tx: TransactionStatus, req: ProvenTxReqStatus } {
@@ -844,19 +625,43 @@ async function persistManifestAtomically (
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
   validated: { actions: ValidatedBatchAction[], dependencyBeef: number[] }
-): Promise<void> {
-  const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(batch.actionBatchId))
-  await storage.transaction(async trx => {
+): Promise<{ batch: TableActionBatch, alreadyCommitted: boolean }> {
+  return await storage.transaction(async trx => {
+    const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
+    if (current == null) throw new WERR_INVALID_OPERATION('action batch was not found')
+    if (current.status === 'committed') {
+      if (current.manifestDigest !== manifest.digest) {
+        throw new WERR_INVALID_OPERATION('batch committed with another manifest')
+      }
+      return { batch: current, alreadyCommitted: true }
+    }
+    if (current.status === 'aborted') throw new WERR_INVALID_OPERATION('aborted action batch cannot be committed')
+    if (current.manifestDigest != null && current.manifestDigest !== manifest.digest) {
+      throw new WERR_INVALID_OPERATION('batch prepared with another manifest')
+    }
+    const needsReacquire = current.status === 'expired' || activeExpiry(current)
+    if (needsReacquire) {
+      if (current.hardExpiresAt.getTime() <= Date.now()) {
+        throw new WERR_INVALID_OPERATION('action batch hard lifetime has expired')
+      }
+      await reacquireManifestInputs(storage, userId, current, validated, trx)
+    } else {
+      requireLiveBatch(current)
+    }
+    const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
     const stagedByOutpoint = new Map<string, TableOutput>()
     for (const action of validated.actions) {
       await persistAction(storage, userId, action, reservedOutputIds, stagedByOutpoint, trx)
     }
-    await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
-    await storage.deleteActionBatchBlobRecords(batch.actionBatchId, trx)
-    await storage.updateActionBatch(batch.actionBatchId, {
+    await storage.deleteActionBatchOutputReservations(current.actionBatchId, trx)
+    await storage.deleteActionBatchBlobRecords(current.actionBatchId, trx)
+    await storage.updateActionBatch(current.actionBatchId, {
       status: 'committed',
       manifestDigest: manifest.digest
     }, trx)
+    current.status = 'committed'
+    current.manifestDigest = manifest.digest
+    return { batch: current, alreadyCommitted: false }
   })
 }
 
@@ -869,7 +674,15 @@ async function completeCommittedBatch (
 ): Promise<CommitActionBatchResult> {
   if (batch.result != null) {
     const saved = JSON.parse(batch.result) as CommitActionBatchResult
-    return { ...saved, alreadyCommitted: true }
+    return {
+      batchId: saved.batchId,
+      manifestDigest: saved.manifestDigest,
+      committedTxids: saved.committedTxids,
+      alreadyCommitted: true,
+      sendWithResults: saved.sendWithResults,
+      notDelayedResults: saved.notDelayedResults,
+      log: saved.log
+    }
   }
   const { swr, ndr } = await shareReqsWithWorld(storage, userId, manifest.sendWith, manifest.isDelayed)
   const result: CommitActionBatchResult = {
@@ -884,13 +697,11 @@ async function completeCommittedBatch (
   return result
 }
 
-export async function commitActionBatch (
+async function commitActionBatchOnce (
   storage: StorageProvider,
-  auth: AuthId,
+  userId: number,
   manifest: ActionBatchManifest
 ): Promise<CommitActionBatchResult> {
-  if (!verifyActionBatchManifestDigest(manifest)) throw new WERR_INVALID_PARAMETER('manifest.digest', 'valid')
-  const userId = verifyId(auth.userId)
   const batch = await storage.findActionBatch(userId, manifest.batchId)
   if (batch == null) throw new WERR_INVALID_OPERATION('action batch was not found')
   if (batch.status === 'committed') {
@@ -907,11 +718,48 @@ export async function commitActionBatch (
     throw new WERR_INVALID_OPERATION('batch prepared with another manifest')
   }
   const validated = await validateManifestActions(storage, batch, manifest)
-  if (needsReacquire) await reacquireManifestInputs(storage, userId, batch, validated)
-  await persistManifestAtomically(storage, userId, batch, manifest, validated)
-  batch.status = 'committed'
-  batch.manifestDigest = manifest.digest
-  return await completeCommittedBatch(storage, userId, batch, manifest, false)
+  const persisted = await persistManifestAtomically(storage, userId, batch, manifest, validated)
+  return await completeCommittedBatch(
+    storage,
+    userId,
+    persisted.batch,
+    manifest,
+    persisted.alreadyCommitted
+  )
+}
+
+interface ActiveBatchCommit {
+  digest: string
+  promise: Promise<CommitActionBatchResult>
+}
+
+const activeBatchCommits = new WeakMap<StorageProvider, Map<string, ActiveBatchCommit>>()
+
+export async function commitActionBatch (
+  storage: StorageProvider,
+  auth: AuthId,
+  manifest: ActionBatchManifest
+): Promise<CommitActionBatchResult> {
+  validateActionBatchInlinePayload(manifest)
+  if (!verifyActionBatchManifestDigest(manifest)) throw new WERR_INVALID_PARAMETER('manifest.digest', 'valid')
+  const userId = verifyId(auth.userId)
+  let commits = activeBatchCommits.get(storage)
+  if (commits == null) {
+    commits = new Map()
+    activeBatchCommits.set(storage, commits)
+  }
+  const key = `${userId}:${manifest.batchId}`
+  const active = commits.get(key)
+  if (active != null) {
+    if (active.digest !== manifest.digest) {
+      throw new WERR_INVALID_OPERATION('action batch commit is active with another manifest')
+    }
+    return await active.promise
+  }
+  const promise = commitActionBatchOnce(storage, userId, manifest)
+    .finally(() => { commits?.delete(key) })
+  commits.set(key, { digest: manifest.digest, promise })
+  return await promise
 }
 
 export async function abortActionBatch (
@@ -920,9 +768,11 @@ export async function abortActionBatch (
   batchId: string
 ): Promise<AbortActionBatchResult> {
   const userId = verifyId(auth.userId)
-  const batch = await storage.findActionBatch(userId, batchId)
-  if (batch == null || batch.status === 'aborted') return { aborted: true }
-  if (batch.status === 'committed') return { aborted: false }
-  await storage.transaction(async trx => await releaseBatchState(storage, batch, 'aborted', trx))
-  return { aborted: true }
+  return await storage.transaction(async trx => {
+    const batch = await storage.findActionBatchForUpdate(userId, batchId, trx)
+    if (batch == null || batch.status === 'aborted') return { aborted: true }
+    if (batch.status === 'committed') return { aborted: false }
+    await releaseBatchState(storage, batch, 'aborted', trx)
+    return { aborted: true }
+  })
 }

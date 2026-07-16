@@ -83,9 +83,11 @@ pnpm --filter @bsv/wallet-toolbox bench:action-batch
 ```
 
 It records planning, signing and validation, storage RPCs, database transactions,
-request bytes, commit and broadcast time, CPU, and incremental peak heap. Its model
-covers dependent, independent, explicit-input, and two-step signing workloads at
-1, 10, 50, and 250 actions; 1 KiB, 64 KiB, 1 MiB, and 4 MiB scripts; and 25, 100,
-and 250 ms storage RTT. Production rollout should additionally track reservation
+request bytes, commit and broadcast time, CPU, and incremental peak heap. Physical
+SQLite runs compare 1, 10, 50, and 250 action chains at 1 KiB and exercise each
+larger script size with a real action, including the 4 MiB upload path. Its complete
+model covers dependent, independent, explicit-input, and two-step signing workloads
+at every action count; 1 KiB, 64 KiB, 1 MiB, and 4 MiB scripts; and 25, 100, and
+250 ms storage RTT. Production rollout should additionally track reservation
 conflicts, extensions, expiries, commit retries, upload deduplication, commit
 duration, and broadcaster review outcomes by provider type.

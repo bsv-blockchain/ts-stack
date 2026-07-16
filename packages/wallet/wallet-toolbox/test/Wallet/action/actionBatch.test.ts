@@ -6,6 +6,7 @@ import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
 import { cleanupExpiredActionBatches } from '../../../src/storage/methods/actionBatch'
 import { specOpWalletBalance } from '../../../src/sdk/types'
 import type { ActionBatchManifest } from '../../../src/sdk/ActionBatch.interfaces'
+import { maxPossibleSatoshis } from '../../../src/storage/methods/generateChange'
 
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
@@ -34,6 +35,25 @@ function feePaid (atomicBeef: number[], txid: string): number {
   const inputs = transaction.inputs.reduce((sum, input) => sum + (input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis ?? 0), 0)
   const outputs = transaction.outputs.reduce((sum, output) => sum + output.satoshis, 0)
   return inputs - outputs
+}
+
+async function captureCommitManifest (
+  ctx: TestWalletNoSetup,
+  txids: string[],
+  description: string
+): Promise<ActionBatchManifest> {
+  let captured: ActionBatchManifest | undefined
+  const marker = `capture ${description}`
+  jest.spyOn(ctx.storage, 'commitActionBatch').mockImplementationOnce(async manifest => {
+    captured = manifest
+    throw new Error(marker)
+  })
+  await expect(ctx.wallet.createAction({
+    description,
+    options: { sendWith: txids, acceptDelayedBroadcast: false }
+  })).rejects.toThrow(marker)
+  if (captured == null) throw new Error('commit manifest was not captured')
+  return captured
 }
 
 describe('in-memory action batch workspace', () => {
@@ -121,7 +141,10 @@ describe('in-memory action batch workspace', () => {
       }]
     })
     const listed = await ctx.wallet.listOutputs({ basket: 'funding basket', include: 'locking scripts' })
-    expect(listed.outputs.some(output => output.outpoint.startsWith(`${staged.txid}.`))).toBe(true)
+    expect(listed.outputs).toContainEqual(expect.objectContaining({
+      outpoint: expect.stringMatching(`^${staged.txid}\\.`),
+      lockingScript: '7551'
+    }))
     const balanceAfter = await ctx.wallet.listOutputs({ basket: specOpWalletBalance })
     expect(balanceAfter.totalOutputs).toBeLessThan(balanceBefore.totalOutputs)
   })
@@ -178,6 +201,38 @@ describe('in-memory action batch workspace', () => {
     expect(legacyProcess).not.toHaveBeenCalled()
     await ctx.wallet.createAction({ description: 'Commit two-step batch', options: { sendWith: [signed.txid!] } })
     expect(commit).toHaveBeenCalledTimes(1)
+    expect(commit.mock.calls[0][0].actions[0].plan.inputs.every(input => input.sourceTransaction == null)).toBe(true)
+  })
+
+  test('first-action returnTXIDOnly retains internal proof data through commit', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction({
+      ...actionArgs(),
+      options: { ...actionArgs().options, returnTXIDOnly: true }
+    })
+    expect(staged.txid).toBeDefined()
+    expect(staged.tx).toBeUndefined()
+    await expect(ctx.wallet.createAction({
+      description: 'Commit returnTXIDOnly batch',
+      options: { sendWith: [staged.txid!] }
+    })).resolves.toBeDefined()
+  })
+
+  test('maxPossibleSatoshis output is adjusted and committed atomically', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction({
+      outputs: [{
+        satoshis: maxPossibleSatoshis,
+        lockingScript: '51',
+        outputDescription: 'maximum available batch output'
+      }],
+      description: 'Plan maximum available output',
+      options: { noSend: true, randomizeOutputs: false }
+    })
+    await expect(ctx.wallet.createAction({
+      description: 'Commit maximum available output',
+      options: { sendWith: [staged.txid!] }
+    })).resolves.toBeDefined()
   })
 
   test('staged custom inputs are resolved locally without reserving them', async () => {
@@ -300,19 +355,14 @@ describe('in-memory action batch workspace', () => {
   })
 
   test('atomic validation rejects duplicate spends across staged actions', async () => {
-    let captured: ActionBatchManifest | undefined
-    jest.spyOn(ctx.storage, 'commitActionBatch').mockImplementationOnce(async manifest => {
-      captured = manifest
-      throw new Error('captured manifest before persistence')
-    })
     ctx.wallet.randomVals = randomVals
     const firstResult = await ctx.wallet.createAction(actionArgs())
     const secondResult = await ctx.wallet.createAction(actionArgs())
-    await expect(ctx.wallet.createAction({
-      description: 'Capture duplicate-spend validation manifest',
-      options: { sendWith: [firstResult.txid!, secondResult.txid!] }
-    })).rejects.toThrow('captured manifest before persistence')
-    if (captured == null) throw new Error('commit manifest was not captured')
+    const captured = await captureCommitManifest(
+      ctx,
+      [firstResult.txid!, secondResult.txid!],
+      'Capture duplicate-spend validation manifest'
+    )
 
     const first = captured.actions[0]
     const second = captured.actions[1]
@@ -320,7 +370,6 @@ describe('in-memory action batch workspace', () => {
     if (firstRaw == null) throw new Error('captured manifest did not inline its first transaction')
     const duplicateRaw = Uint8Array.from(firstRaw)
     duplicateRaw[duplicateRaw.length - 4] = 1
-    const duplicateSpend = Transaction.fromBinary(duplicateRaw)
     const duplicateTxid = Transaction.fromBinary(duplicateRaw).id('hex')
     const duplicateDigest = actionBatchBlobDigest(duplicateRaw)
     const actions = [first, {
@@ -342,18 +391,13 @@ describe('in-memory action batch workspace', () => {
   })
 
   test('atomic validation rejects a raw transaction with an invalidated signature', async () => {
-    let captured: ActionBatchManifest | undefined
-    jest.spyOn(ctx.storage, 'commitActionBatch').mockImplementationOnce(async manifest => {
-      captured = manifest
-      throw new Error('captured signature-validation manifest')
-    })
     ctx.wallet.randomVals = randomVals
     const staged = await ctx.wallet.createAction(actionArgs())
-    await expect(ctx.wallet.createAction({
-      description: 'Capture signature-validation manifest',
-      options: { sendWith: [staged.txid!] }
-    })).rejects.toThrow('captured signature-validation manifest')
-    if (captured == null) throw new Error('commit manifest was not captured')
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture signature-validation manifest'
+    )
 
     const action = captured.actions[0]
     const originalRaw = action.rawTxDigest == null ? undefined : captured.inlineBlobs?.[action.rawTxDigest]
@@ -377,6 +421,172 @@ describe('in-memory action batch workspace', () => {
     const { digest: _digest, ...semanticManifest } = withoutDigest
     const invalid = { ...semanticManifest, digest: actionBatchManifestDigest(semanticManifest) }
     await expect(ctx.storage.commitActionBatch(invalid)).rejects.toBeDefined()
+  })
+
+  test('atomic validation derives fees from proven source outputs', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture source-value validation manifest'
+    )
+    const actions = captured.actions.map((action, actionIndex) => actionIndex === 0
+      ? {
+          ...action,
+          plan: {
+            ...action.plan,
+            inputs: action.plan.inputs.map((input, inputIndex) => inputIndex === 0
+              ? { ...input, sourceSatoshis: input.sourceSatoshis + 1_000_000 }
+              : input)
+          }
+        }
+      : action)
+    const { digest: _digest, ...withoutDigest } = { ...captured, actions }
+    const invalid = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('match proven source outputs')
+  })
+
+  test('atomic validation rejects ambiguous input mappings', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture input-mapping validation manifest'
+    )
+    const actions = captured.actions.map((action, actionIndex) => actionIndex === 0
+      ? {
+          ...action,
+          plan: {
+            ...action.plan,
+            inputs: action.plan.inputs.map((input, inputIndex) => inputIndex === 0
+              ? { ...input, vin: 1 }
+              : input)
+          }
+        }
+      : action)
+    const { digest: _digest, ...withoutDigest } = { ...captured, actions }
+    const invalid = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('complete sequential vin mappings')
+  })
+
+  test('atomic validation cannot reclassify wallet funding as a caller input', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture input-classification validation manifest'
+    )
+    const actions = captured.actions.map((action, actionIndex) => actionIndex === 0
+      ? {
+          ...action,
+          plan: {
+            ...action.plan,
+            inputs: action.plan.inputs.map((input, inputIndex) => inputIndex === 0
+              ? { ...input, providedBy: 'you' as const }
+              : input)
+          }
+        }
+      : action)
+    const { digest: _digest, ...withoutDigest } = { ...captured, actions }
+    const invalid = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('represent every caller-provided input')
+  })
+
+  test('atomic validation requires unique action references', async () => {
+    ctx.wallet.randomVals = randomVals
+    const first = await ctx.wallet.createAction(actionArgs())
+    const second = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [first.txid!, second.txid!],
+      'Capture reference validation manifest'
+    )
+    const duplicateReference = captured.actions[0].reference
+    const actions = captured.actions.map((action, actionIndex) => actionIndex === 1
+      ? {
+          ...action,
+          reference: duplicateReference,
+          plan: { ...action.plan, reference: duplicateReference }
+        }
+      : action)
+    const { digest: _digest, ...withoutDigest } = { ...captured, actions }
+    const invalid = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('unique references')
+  })
+
+  test('atomic validation rejects altered requested-output metadata', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture output-metadata validation manifest'
+    )
+    const actions = captured.actions.map((action, actionIndex) => actionIndex === 0
+      ? {
+          ...action,
+          metadata: {
+            ...action.metadata,
+            outputs: action.metadata.outputs.map((output, outputIndex) => outputIndex === 0
+              ? { ...output, basket: 'altered basket' }
+              : output)
+          }
+        }
+      : action)
+    const { digest: _digest, ...withoutDigest } = { ...captured, actions }
+    const invalid = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('match planned requested outputs')
+  })
+
+  test('atomic validation binds commissions to the active storage policy', async () => {
+    ctx.activeStorage.commissionSatoshis = 5
+    ctx.activeStorage.commissionPubKeyHex = ctx.identityKey
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture commission validation manifest'
+    )
+    const actions = captured.actions.map(action => ({
+      ...action,
+      plan: {
+        ...action.plan,
+        outputs: action.plan.outputs.map(output => output.purpose === 'storage-commission'
+          ? { ...output, satoshis: output.satoshis + 1 }
+          : output)
+      }
+    }))
+    const { digest: _digest, ...withoutDigest } = { ...captured, actions }
+    const invalid = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('active storage commission')
+    await expect(ctx.storage.commitActionBatch(captured)).resolves.toBeDefined()
+  })
+
+  test('concurrent identical commits persist and broadcast exactly once', async () => {
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    const captured = await captureCommitManifest(
+      ctx,
+      [staged.txid!],
+      'Capture concurrent-commit manifest'
+    )
+    const broadcast = jest.spyOn(ctx.activeStorage, 'attemptToPostReqsToNetwork')
+    const [first, second] = await Promise.all([
+      ctx.storage.commitActionBatch(captured),
+      ctx.storage.commitActionBatch(captured)
+    ])
+    expect(second.manifestDigest).toBe(first.manifestDigest)
+    expect(second.committedTxids).toEqual(first.committedTxids)
+    expect([first.alreadyCommitted, second.alreadyCommitted].sort()).toEqual([false, true])
+    const persisted = await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: staged.txid }
+    })
+    expect(persisted).toHaveLength(1)
+    expect(broadcast).toHaveBeenCalledTimes(1)
   })
 
   test('abort releases reservations and removes staged views', async () => {

@@ -1,6 +1,7 @@
 import { Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { cleanupExpiredActionBatches } from '../methods/actionBatch'
+import { ACTION_BATCH_MAX_INLINE_BYTES } from '../methods/actionBatchBlobs'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
 
 function firstAction () {
@@ -38,6 +39,16 @@ describe('action batch reservations', () => {
     expect(second.reservedOutputs.length).toBeLessThanOrEqual(4)
     await ctx.storage.abortActionBatch(first.batchId)
     await ctx.storage.abortActionBatch(second.batchId)
+  })
+
+  test('legacy noSendChange cannot consume an output reserved by another workspace', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'legacy-reservation-guard', firstAction: firstAction() })
+    const reserved = begun.reservedOutputs[0]
+    expect(reserved).toBeDefined()
+    const args = firstAction()
+    args.options.noSendChange = [{ txid: reserved.txid!, vout: reserved.vout }]
+    await expect(ctx.storage.createAction(args)).rejects.toThrow('active action batch')
+    await ctx.storage.abortActionBatch(begun.batchId)
   })
 
   test('renewal extends the lease without crossing the hard lifetime', async () => {
@@ -86,7 +97,55 @@ describe('action batch reservations', () => {
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('expired')
   })
 
-  test('blob staging rejects digest mismatches and accepts idempotent duplicates', async () => {
+  test('expiry cleanup rechecks a batch that was renewed after the candidate scan', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'renew-during-cleanup', firstAction: firstAction() })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    expect(batch).toBeDefined()
+    await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 60_000) })
+    const findExpired = ctx.activeStorage.findExpiredActionBatches.bind(ctx.activeStorage)
+    jest.spyOn(ctx.activeStorage, 'findExpiredActionBatches').mockImplementationOnce(async now => {
+      const candidates = await findExpired(now)
+      await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, {
+        expiresAt: new Date(Date.now() + 60_000)
+      })
+      return candidates
+    })
+
+    expect(await cleanupExpiredActionBatches(ctx.activeStorage)).toBe(0)
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).not.toHaveLength(0)
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('active')
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('begin failure releases reservations created before dependency hydration', async () => {
+    jest.spyOn(ctx.activeStorage, 'getBeefForTransaction').mockRejectedValueOnce(new Error('dependency hydration failed'))
+    await expect(ctx.storage.beginActionBatch({
+      batchId: 'begin-hydration-failure',
+      firstAction: firstAction()
+    })).rejects.toThrow('dependency hydration failed')
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, 'begin-hydration-failure')
+    expect(batch?.status).toBe('aborted')
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(0)
+  })
+
+  test('begin atomically rejects funding spent after candidate selection', async () => {
+    const findForUpdate = ctx.activeStorage.findOutputsByOutpointsForUpdate.bind(ctx.activeStorage)
+    jest.spyOn(ctx.activeStorage, 'findOutputsByOutpointsForUpdate').mockImplementationOnce(async (...args) => {
+      const outputs = await findForUpdate(...args)
+      return Object.fromEntries(Object.entries(outputs).map(([outpoint, output]) => [
+        outpoint,
+        { ...output, spendable: false, spentBy: 1 }
+      ]))
+    })
+
+    await expect(ctx.storage.beginActionBatch({
+      batchId: 'concurrently-spent-funding',
+      firstAction: firstAction()
+    })).rejects.toThrow('no longer spendable')
+    expect(await ctx.activeStorage.findActionBatch(ctx.userId, 'concurrently-spent-funding')).toBeUndefined()
+  })
+
+  test('blob staging accepts only prepared manifest digests and idempotent duplicates', async () => {
     const begun = await ctx.storage.beginActionBatch({ batchId: 'blob-batch', firstAction: firstAction() })
     const bytes = [1, 2, 3, 4]
     await expect(ctx.storage.putActionBatchBlob({
@@ -95,6 +154,23 @@ describe('action batch reservations', () => {
       bytes
     })).rejects.toBeDefined()
     const digest = actionBatchBlobDigest(bytes)
+    await expect(ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes }))
+      .rejects.toThrow('prepared action batch manifest')
+    const withoutDigest = {
+      batchId: begun.batchId,
+      actions: [],
+      dependencyBeefDigest: digest,
+      sendWith: [],
+      isDelayed: true
+    }
+    const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await ctx.storage.prepareActionBatchCommit(manifest)
+    const unrequestedBytes = [5, 6, 7]
+    await expect(ctx.storage.putActionBatchBlob({
+      batchId: begun.batchId,
+      digest: actionBatchBlobDigest(unrequestedBytes),
+      bytes: unrequestedBytes
+    })).rejects.toThrow('prepared action batch manifest')
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
@@ -117,6 +193,37 @@ describe('action batch reservations', () => {
       missingDigests: [dependencyBeefDigest]
     })
     await expect(ctx.storage.commitActionBatch(manifest)).rejects.toThrow(`missing action batch blob ${dependencyBeefDigest}`)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('commit rejects a manifest without signed actions', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'empty-manifest', firstAction: firstAction() })
+    const withoutDigest = {
+      batchId: begun.batchId,
+      actions: [],
+      dependencyBeef: [],
+      sendWith: [],
+      isDelayed: true
+    }
+    const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.commitActionBatch(manifest)).rejects.toThrow('at least one signed action')
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('prepare rejects payloads above the advertised inline limit', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'oversized-inline', firstAction: firstAction() })
+    const bytes = new Uint8Array(ACTION_BATCH_MAX_INLINE_BYTES + 1)
+    const dependencyBeefDigest = actionBatchBlobDigest(bytes)
+    const withoutDigest = {
+      batchId: begun.batchId,
+      actions: [],
+      dependencyBeefDigest,
+      inlineBlobs: { [dependencyBeefDigest]: bytes },
+      sendWith: [],
+      isDelayed: true
+    }
+    const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.prepareActionBatchCommit(manifest)).rejects.toThrow('inline payload within provider limit')
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 })

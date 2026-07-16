@@ -28,6 +28,7 @@ import {
   addPlannerOutputs,
   mergePlannerBeef,
   planAction,
+  plannerOutputLockingScript,
   stageTransactionOutputs
 } from './ActionBatchPlanner'
 import { beefForTxids } from '../../utility/beefForTxids'
@@ -186,8 +187,8 @@ class ActionBatchWorkspace {
       })
       .map(([outpoint, output]) => ({
         satoshis: output.satoshis,
-        lockingScript: args.includeLockingScripts && output.lockingScript != null
-          ? asString(output.lockingScript)
+        lockingScript: args.includeLockingScripts
+          ? asString(plannerOutputLockingScript(this.state, output))
           : undefined,
         spendable: true,
         customInstructions: args.includeCustomInstructions ? output.customInstructions : undefined,
@@ -333,6 +334,7 @@ class ActionBatchWorkspace {
     const compactPlan: StorageCreateActionResult = {
       ...prior.dcr,
       inputBeef: undefined,
+      inputs: prior.dcr.inputs.map(input => ({ ...input, sourceTransaction: undefined })),
       outputs: prior.dcr.outputs.map(output => ({ ...output, lockingScript: '' }))
     }
     const action: ActionBatchCommitAction = {

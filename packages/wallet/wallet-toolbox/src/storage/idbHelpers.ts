@@ -445,7 +445,7 @@ export function upgradeActionBatchStoresV2 (db: IDBPDatabase<StorageIdbSchema>):
   if (!names.contains('action_batches')) {
     const batches = db.createObjectStore('action_batches', { keyPath: 'actionBatchId', autoIncrement: true })
     batches.createIndex('userId', 'userId')
-    batches.createIndex('batchId', 'batchId', { unique: true })
+    batches.createIndex('userId_batchId', ['userId', 'batchId'], { unique: true })
     batches.createIndex('expiresAt', 'expiresAt')
   }
   if (!names.contains('action_batch_outputs')) {
