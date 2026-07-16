@@ -45,6 +45,12 @@ async function timeCase (
   return performance.now() - start
 }
 
+async function timeOperation (operation: () => Promise<unknown>): Promise<number> {
+  const start = performance.now()
+  for (let i = 0; i < ITERATIONS; i++) await operation()
+  return performance.now() - start
+}
+
 async function main (): Promise<void> {
   const corpus = (await buildCorpus()).filter(({ expected }) => expected)
   const verifier = new BdkVerifier()
@@ -95,6 +101,26 @@ async function main (): Promise<void> {
   for (const result of comparisons) {
     console.log(`${result.name}: JS ${result.pureJs.p95Ms.toFixed(1)}, BDK ${result.bdkWasm.p95Ms.toFixed(1)}`)
   }
+
+  const diagnosticTx = corpus[0].tx
+  const directSamples: number[] = []
+  const orchestrationSamples: number[] = []
+  const noOpVerifier = { verifyScripts: async (): Promise<boolean> => true }
+  for (let sample = 0; sample < SAMPLES; sample++) {
+    directSamples.push(await timeOperation(async () => await verifier.verifyScripts({
+      tx: diagnosticTx,
+      blockHeight: 943816,
+      consensus: true
+    })))
+    orchestrationSamples.push(await timeOperation(async () => await diagnosticTx.verify(
+      'scripts only', undefined, undefined, noOpVerifier
+    )))
+  }
+  const direct = summarize(directSamples, 1)
+  const orchestration = summarize(orchestrationSamples, 1)
+  console.log('\n1-input P2PKH diagnostic lanes:')
+  console.log(`BDK adapter direct: ${direct.medianMs.toFixed(1)} ms (${direct.inputsPerSecond.toFixed(0)} inputs/s)`)
+  console.log(`SDK verify + no-op backend: ${orchestration.medianMs.toFixed(1)} ms (${orchestration.inputsPerSecond.toFixed(0)} inputs/s)`)
 
   if (process.env.VERIFAST_JSON === '1') console.log(JSON.stringify(comparisons))
 }

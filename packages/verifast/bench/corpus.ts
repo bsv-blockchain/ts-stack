@@ -63,7 +63,9 @@ async function scriptTx (lockingASM: string, unlockingASM = ''): Promise<Transac
 }
 
 function corruptUnlockingScript (tx: Transaction, inputIndex: number): void {
-  const bytes = tx.inputs[inputIndex].unlockingScript!.toBinary()
+  const unlockingScript = tx.inputs[inputIndex].unlockingScript
+  if (unlockingScript === undefined) throw new Error('cannot corrupt a missing unlocking script')
+  const bytes = unlockingScript.toBinary()
   bytes[Math.max(1, Math.floor(bytes.length / 2))] ^= 1
   tx.inputs[inputIndex].unlockingScript = Script.fromBinary(bytes)
 }

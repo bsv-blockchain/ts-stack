@@ -66,6 +66,28 @@ async function buildTx (inputCount = 1): Promise<Transaction> {
 }
 
 describe('BdkVerifier', () => {
+  it('uses the bulk-copy ABI when the module provides it', async () => {
+    const calls: MockCall[] = []
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifyScript = () => { throw new Error('legacy vector ABI should not be called') }
+    module.VerifyScriptArray = (extendedTX, utxoHeights, blockHeight, consensus, customFlags) => {
+      calls.push({ extendedTX, utxoHeights, blockHeight, consensus, customFlags })
+      return { domain: 0, code: 0 }
+    }
+    const tx = await buildTx(2)
+    const verifier = new BdkVerifier(async () => module)
+
+    await expect(verifier.verifyScripts({ tx, blockHeight: 800000, consensus: true }))
+      .resolves.toBe(true)
+    expect(calls).toEqual([{
+      extendedTX: tx.toEF(),
+      utxoHeights: [777, 777],
+      blockHeight: 800000,
+      consensus: true,
+      customFlags: []
+    }])
+  })
+
   it('marshals EF, heights, and one custom flag word per input', async () => {
     const calls: MockCall[] = []
     const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, calls))
@@ -121,7 +143,9 @@ describe('BdkVerifier', () => {
     const calls: MockCall[] = []
     const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, calls))
     const tx = await buildTx()
-    delete tx.inputs[0].sourceTransaction!.merklePath
+    const sourceTransaction = tx.inputs[0].sourceTransaction
+    if (sourceTransaction === undefined) throw new Error('test transaction is missing its source')
+    delete sourceTransaction.merklePath
     await verifier.verifyScripts({ tx, blockHeight: 1, consensus: true })
     expect(calls[0].utxoHeights).toEqual([943816])
   })

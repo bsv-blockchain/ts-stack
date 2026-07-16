@@ -5,8 +5,9 @@ describe('bundled BDK WASM in Node', () => {
   it('loads without a caller-supplied factory and returns structured results', async () => {
     const verifier = new BdkVerifier()
     const corpus = await buildCorpus()
-    const valid = corpus.find(({ name }) => name === 'p2pkh-1in-valid')!
-    const invalid = corpus.find(({ name }) => name === 'p2pkh-corrupt-signature')!
+    const valid = corpus.find(({ name }) => name === 'p2pkh-1in-valid')
+    const invalid = corpus.find(({ name }) => name === 'p2pkh-corrupt-signature')
+    if (valid === undefined || invalid === undefined) throw new Error('required corpus vectors are missing')
 
     await expect(verifier.verifyScriptsDetailed({
       tx: valid.tx,

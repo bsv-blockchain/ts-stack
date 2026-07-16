@@ -65,8 +65,11 @@ Chronicle bits. Unknown names throw instead of being ignored.
 The bundled module is built from BDK 1.2.2 plus `bitcoin-sv` commit
 `879fc8b42168dd0e608dafd51b39c6dabad37d4d`, Emscripten 4.0.23, Boost 1.85.0,
 and OpenSSL 3.4.0. BDK's `module/typesbdk/wasm/build.sh` downloads hashed inputs,
-performs a clean build, and validates a real mainnet P2PKH spend plus a corrupt
-signature before installing the artifacts.
+performs a clean build, runs libsecp256k1's verified, non-verified, and exhaustive
+WASM tests, and validates a real mainnet P2PKH spend plus a corrupt signature
+before installing the artifacts. The production curve configuration uses the
+wasm32-friendly 32-bit-limb backend, the largest bundled verification precompute
+window, and a converged Binaryen optimization pass.
 
 The VeriFast suite then checks nine deterministic positive and negative vectors
 against both the SDK interpreter and BDK in Node and Chrome.
@@ -82,7 +85,9 @@ pnpm --filter @bsv/verifast bench
 The benchmark reports median and p95 end-to-end `Transaction.verify` time over
 multiple samples. It deliberately includes EF serialization, WASM boundary
 cost, and BDK parsing; results should be measured on the deployment hardware,
-and the BDK backend should not be assumed faster for every script shape.
+and the BDK backend should not be assumed faster for every script shape. On the
+retained M3 Max baseline it is 16-20x faster in Node and 12-14x faster in Chrome
+for P2PKH transactions, while pure TypeScript remains faster for trivial scripts.
 
 The retained Apple M3 Max Node and Chrome baseline is in
 `bench/results/2026-07-15-m3-max.md`.

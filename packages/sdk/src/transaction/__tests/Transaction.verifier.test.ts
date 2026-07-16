@@ -51,6 +51,21 @@ describe('Transaction.verify with a pluggable verifier', () => {
     expect(result).toBe(true)
   })
 
+  it('does not hash an already-linked transaction graph for scripts-only verification', async () => {
+    const tx = await buildValidTx()
+    const sourceTransaction = tx.inputs[0].sourceTransaction as Transaction
+    tx.inputs[0].sourceTXID = sourceTransaction.id('hex')
+    const txId = jest.spyOn(tx, 'id')
+    const sourceId = jest.spyOn(sourceTransaction, 'id')
+
+    await expect(tx.verify('scripts only', undefined, undefined, {
+      verifyScripts: async () => true
+    })).resolves.toBe(true)
+
+    expect(txId).not.toHaveBeenCalled()
+    expect(sourceId).not.toHaveBeenCalled()
+  })
+
   it('propagates a verifier throw (strict, no fallback)', async () => {
     const tx = await buildValidTx()
     const verifier: BdkVerifierInterface = {

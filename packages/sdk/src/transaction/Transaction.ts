@@ -1009,34 +1009,40 @@ export default class Transaction {
     memoryLimit?: number,
     verifier?: BdkVerifierInterface
   ): Promise<boolean> {
-    this.materializeSourceTXIDs()
+    const scriptsOnly = chainTracker === 'scripts only'
+    if (!scriptsOnly) this.materializeSourceTXIDs()
     const verifiedTxids = new Set<string>()
+    const verifiedTransactions = new Set<Transaction>()
     const txQueue: Transaction[] = [this]
-    const queuedTxids = new Set<string>([this.id('hex')])
+    const queuedTxids = new Set<string>()
+    if (!scriptsOnly) queuedTxids.add(this.id('hex'))
+    const queuedTransactions = new Set<Transaction>(txQueue)
     let queueIndex = 0
 
     while (queueIndex < txQueue.length) {
       const tx = txQueue[queueIndex++]
-      const txid = tx.id('hex')
-      if (txid != null && txid !== '' && verifiedTxids.has(txid)) {
+      let txid: string | undefined
+      const getTxid = (): string => {
+        txid ??= tx.id('hex')
+        return txid
+      }
+      if (scriptsOnly ? verifiedTransactions.has(tx) : verifiedTxids.has(getTxid())) {
         continue
       }
 
       // If the transaction has a valid merkle path, verification is complete.
       if (typeof tx.merklePath === 'object') {
-        if (chainTracker === 'scripts only') {
-          if (txid != null) {
-            verifiedTxids.add(txid)
-          }
+        if (scriptsOnly) {
+          verifiedTransactions.add(tx)
           continue
         } else {
-          const proofValid = await tx.merklePath.verify(txid, chainTracker)
+          const proofValid = await tx.merklePath.verify(getTxid(), chainTracker)
           // If the proof is valid, no need to verify inputs.
           if (proofValid) {
-            verifiedTxids.add(txid)
+            verifiedTxids.add(getTxid())
             continue
           } else {
-            throw new Error(`Invalid merkle path for transaction ${txid}`)
+            throw new Error(`Invalid merkle path for transaction ${getTxid()}`)
           }
         }
       }
@@ -1052,7 +1058,7 @@ export default class Transaction {
         await cpTx.fee(feeModel)
         if (tx.getFee() < cpTx.getFee()) {
           throw new Error(
-            `Verification failed because the transaction ${txid} has an insufficient fee and has not been mined.`
+            `Verification failed because the transaction ${getTxid()} has an insufficient fee and has not been mined.`
           )
         }
       }
@@ -1065,21 +1071,29 @@ export default class Transaction {
         const input = tx.inputs[i]
         if (typeof input.sourceTransaction !== 'object') {
           throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
+            `Verification failed because the input at index ${i} of transaction ${getTxid()} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
           )
         }
         if (typeof input.unlockingScript !== 'object') {
           throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
+            `Verification failed because the input at index ${i} of transaction ${getTxid()} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
           )
         }
         const sourceOutput =
           input.sourceTransaction.outputs[input.sourceOutputIndex]
         inputTotal += sourceOutput.satoshis ?? 0
 
-        const sourceTxid = input.sourceTransaction.id('hex')
-        if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
-          txQueue.push(input.sourceTransaction)
+        const sourceTransaction = input.sourceTransaction
+        const sourceTxid = scriptsOnly && input.sourceTXID !== undefined
+          ? input.sourceTXID
+          : sourceTransaction.id('hex')
+        if (scriptsOnly) {
+          if (!verifiedTransactions.has(sourceTransaction) && !queuedTransactions.has(sourceTransaction)) {
+            txQueue.push(sourceTransaction)
+            queuedTransactions.add(sourceTransaction)
+          }
+        } else if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
+          txQueue.push(sourceTransaction)
           queuedTxids.add(sourceTxid)
         }
 
@@ -1141,7 +1155,8 @@ export default class Transaction {
         return false
       }
 
-      verifiedTxids.add(txid)
+      if (scriptsOnly) verifiedTransactions.add(tx)
+      else verifiedTxids.add(getTxid())
     }
 
     return true

@@ -53,13 +53,21 @@ export interface BdkWasmModule {
     consensus: boolean,
     customFlags: EmbindVector<number>
   ) => BdkVerificationResult
+  /** Bulk-copy ABI available in the bundled optimized module. */
+  VerifyScriptArray?: (
+    extendedTX: number[],
+    utxoHeights: number[],
+    blockHeight: number,
+    consensus: boolean,
+    customFlags: number[]
+  ) => BdkVerificationResult
 }
 
 /** Async factory that loads/instantiates the BDK WASM module. */
 export type BdkWasmFactory = () => Promise<BdkWasmModule>
 
-function toVector<T> (ctor: EmbindVectorCtor<T>, values: T[]): EmbindVector<T> {
-  const vec = new ctor()
+function toVector<T> (Vector: EmbindVectorCtor<T>, values: T[]): EmbindVector<T> {
+  const vec = new Vector()
   for (const value of values) vec.push_back(value)
   return vec
 }
@@ -93,8 +101,22 @@ export default class BdkVerifier implements BdkVerifierInterface {
     const customFlagValues = params.verifyFlags === undefined
       ? []
       : Array<number>(params.tx.inputs.length).fill(mapVerifyFlags(params.verifyFlags))
+    const extendedTXBytes = params.tx.toEF()
 
-    const extendedTX = toVector(bdk.VectorUInt8, params.tx.toEF())
+    // The bundled ABI copies each complete JS array into WASM linear memory
+    // with TypedArray#set. Keep the vector path for callers using an older or
+    // custom BDK module, but avoid hundreds of JS/WASM calls per transaction.
+    if (bdk.VerifyScriptArray !== undefined) {
+      return bdk.VerifyScriptArray(
+        extendedTXBytes,
+        heights,
+        params.blockHeight,
+        params.consensus,
+        customFlagValues
+      )
+    }
+
+    const extendedTX = toVector(bdk.VectorUInt8, extendedTXBytes)
     const utxoHeights = toVector(bdk.VectorInt32, heights)
     const customFlags = toVector(bdk.VectorUInt32, customFlagValues)
 
