@@ -405,20 +405,62 @@ describe('LookupResolver completeness-aware hold (default query())', () => {
     return res.outputs.length
   }
 
-  it('self-corrects: first default query() is latency-first, second returns the complete set', async () => {
+  it('returns the complete set on the very FIRST default query() — cold start waits for unknown hosts', async () => {
     const resolver = makeResolver({
       [fastHost]: { delayMs: 150, outputs: fastOutputs },
       [slowHost]: { delayMs: 400, outputs: slowOutputs }
     })
 
-    // Cold start: no completeness history, so nothing holds the first emission.
-    // The fast host's partial view wins — documented latency-first behavior.
-    expect(await defaultQuery(resolver, 0)).toBe(2)
-
-    // The detached scoring saw BOTH hosts settle (2/40 vs 40/40). The very next
-    // default query holds its first emission for the known-more-complete host.
+    // Cold start: no completeness history for either host, so query() treats
+    // both as potentially complete and waits for every host to settle before
+    // answering — merged result, not the fast host's partial view.
+    expect(await defaultQuery(resolver, 0)).toBe(40)
     expect(await defaultQuery(resolver, 1)).toBe(40)
     expect(await defaultQuery(resolver, 2)).toBe(40)
+  })
+
+  it('trained: skips the wait when the host that already answered is known-complete', async () => {
+    // Here the COMPLETE host is the fast one. After training, a pending
+    // known-incomplete host must NOT hold the first emission — the fast path
+    // stays fast once evidence says waiting buys nothing.
+    const completeFast = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: slowOutputs }, // fast AND complete
+      [slowHost]: { delayMs: 900, outputs: fastOutputs } // slow AND partial
+    })
+    await defaultQuery(completeFast, 0) // train: fast→1.0, slow→0.05
+
+    let settled = false
+    const p = completeFast
+      .query({ service: 'ls_kvstore', query: { fastpath: true } })
+      .then((res) => { settled = true; return res })
+    // Advance past fast host + grace but NOT past the slow host: the query
+    // must already have resolved — no hold for a known-worse host.
+    await jest.advanceTimersByTimeAsync(400)
+    expect(settled).toBe(true)
+    expect((await p).outputs.length).toBe(40)
+    await jest.advanceTimersByTimeAsync(2000) // let the slow host settle
+  })
+
+  it('bare query$() cold start stays latency-first (streaming consumers get partials immediately)', async () => {
+    const resolver = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+
+    const emissions: LookupAnswerProgress[] = []
+    const p = (async () => {
+      for await (const partial of resolver.query$({ service: 'ls_kvstore', query: {} })) {
+        emissions.push({ ...partial, outputs: partial.outputs.slice() })
+      }
+    })()
+    await jest.advanceTimersByTimeAsync(3000)
+    await p
+
+    // First emission arrives post-grace with only the fast host's data; the
+    // final emission carries the complete merge.
+    expect(emissions[0].outputs.length).toBe(2)
+    expect(emissions[emissions.length - 1].isFinal).toBe(true)
+    expect(emissions[emissions.length - 1].outputs.length).toBe(40)
   })
 
   it('trains the completeness EMA correctly even though query() closes the iterator early', async () => {

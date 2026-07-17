@@ -66,6 +66,17 @@ export interface LookupQueryOptions {
    * to let the originating overlay operator know about a stale advertisement.
    */
   onUnreachableHost?: (info: UnreachableHostInfo) => void
+  /**
+   * When true, the first emission is additionally held for in-flight hosts with
+   * NO completeness track record (treated as potentially complete), so a
+   * cold-start query waits for every unknown host to settle — bounded by the
+   * per-host timeout — and returns the merged best answer instead of racing to
+   * the first response. Defaults to `true` for {@link LookupResolver.query}
+   * (a blocking call whose contract is "the answer") and `false` for
+   * {@link LookupResolver.query$} (streaming consumers want partials
+   * immediately; the `isFinal` emission is always the complete merge).
+   */
+  holdForUnknownHosts?: boolean
 }
 
 /** Info supplied to onUnreachableHost callbacks. */
@@ -430,15 +441,20 @@ export default class LookupResolver {
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
-    // Existing fast-but-narrow contract: return at the first cumulative emission
-    // (the post-grace aggregate, or the final emission when every host settles
-    // before the grace window). When a host with a materially better completeness
-    // track record is still in flight at grace expiry, the first emission is held
-    // for it (bounded by the per-host timeout) — accuracy beats latency once we
-    // have evidence. Callers wanting progressive enrichment use query$().
+    // Return at the first cumulative emission (the post-grace aggregate, or the
+    // final emission when every host settles before the grace window). When a
+    // host that could return materially more complete results is still in
+    // flight at grace expiry — a known-more-complete host, or (by default for
+    // this blocking API) a host with no track record yet — the first emission
+    // is held for it, bounded by the per-host timeout. Accuracy beats latency:
+    // a cold start waits and merges rather than racing to the first answer.
+    // Callers wanting progressive enrichment use query$().
     // Take only the first emission, then explicitly close the iterator so the
     // generator's `finally` block runs and clears any outstanding timers.
-    const iter = this.query$(question, timeout, options)[Symbol.asyncIterator]()
+    const iter = this.query$(question, timeout, {
+      ...options,
+      holdForUnknownHosts: options?.holdForUnknownHosts ?? true
+    })[Symbol.asyncIterator]()
     let last: LookupAnswerProgress | null = null
     try {
       const { value, done } = await iter.next()
@@ -533,6 +549,7 @@ export default class LookupResolver {
     const graceMs = options?.graceMs ?? 80
     const softTimeoutMs = options?.softTimeoutMs
     const onUnreachableHost = options?.onUnreachableHost
+    const holdForUnknownHosts = options?.holdForUnknownHosts ?? false
 
     const hostCount = rankedHosts.length
     const outputsMap = new Map<string, { beef: number[], context?: number[], outputIndex: number }>()
@@ -654,15 +671,16 @@ export default class LookupResolver {
       return added
     }
 
-    // Completeness-aware hold: when the grace window closes but a host with a
-    // materially better completeness track record than every host that has
+    // Completeness-aware hold: when the grace window closes but a host that
+    // could return materially more complete results than every host that has
     // answered so far is still in flight, the first emission is held until that
     // host settles. The wait is bounded by the per-host timeout — a held host
     // that hangs gets killed by it, the 'done' event fires, and the hold lifts.
     // This is what turns the completeness EMA into more complete default
     // query() results rather than a write-only statistic. Hosts with no
-    // completeness history never trigger a hold, so cold-start behavior remains
-    // latency-first.
+    // completeness history trigger a hold only when `holdForUnknownHosts` is
+    // set (query() sets it by default; bare query$ stays latency-first so
+    // streaming consumers get partials immediately).
     let holdingForCompleteness = false
     const shouldHoldForCompleteness = (): boolean => {
       let baseline = 0
@@ -673,7 +691,7 @@ export default class LookupResolver {
       }
       for (const host of rankedHosts) {
         if (settledHosts.has(host)) continue
-        if (this.hostReputation.worthWaitingFor(host, baseline)) return true
+        if (this.hostReputation.worthWaitingFor(host, baseline, holdForUnknownHosts)) return true
       }
       return false
     }

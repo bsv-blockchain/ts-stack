@@ -112,18 +112,29 @@ export class HostReputationTracker {
   }
 
   /**
-   * True when `host` has a track record of materially more complete answers than
-   * `baselineCompleteness` (the best completeness among hosts that have already
-   * answered the current query) and is not so slow that waiting is unreasonable.
-   * Used by the resolver to decide whether a query's first emission should be
-   * held until this host settles. Hosts with no completeness history never
-   * trigger a hold — cold-start behavior stays latency-first.
+   * True when waiting for `host` could materially improve on `baselineCompleteness`
+   * (the best completeness among hosts that have already answered the current
+   * query) and the host is not so slow that waiting is unreasonable. Used by the
+   * resolver to decide whether a query's first emission should be held until
+   * this host settles.
+   *
+   * A host with no completeness track record is treated per `awaitUnknown`:
+   * - `false` (query$ default): never wait — streaming consumers get partials
+   *   immediately and cold-start behavior stays latency-first.
+   * - `true` (query() default): treat the unobserved host as potentially fully
+   *   complete (optimistic 1.0), so a cold-start blocking query waits for every
+   *   unknown host to settle — and merges the best of what arrives — instead of
+   *   racing to the first answer. Note 1.0 only clears the margin when
+   *   `baselineCompleteness` is itself materially below complete: once some
+   *   answered host is near-complete, unknowns are not worth waiting for.
    */
-  worthWaitingFor (host: string, baselineCompleteness: number): boolean {
+  worthWaitingFor (host: string, baselineCompleteness: number, awaitUnknown: boolean = false): boolean {
     const entry = this.stats.get(host)
-    if (entry == null || entry.avgCompleteness === null) return false
-    if ((entry.avgLatencyMs ?? DEFAULT_LATENCY_MS) > ACCURACY_LATENCY_TOLERANCE_MS) return false
-    return entry.avgCompleteness >= baselineCompleteness + HOLD_COMPLETENESS_MARGIN
+    const completeness = entry?.avgCompleteness ?? null
+    if (completeness === null && !awaitUnknown) return false
+    if ((entry?.avgLatencyMs ?? DEFAULT_LATENCY_MS) > ACCURACY_LATENCY_TOLERANCE_MS) return false
+    const potential = completeness ?? 1
+    return potential >= baselineCompleteness + HOLD_COMPLETENESS_MARGIN
   }
 
   recordFailure (host: string, reason?: unknown): void {
