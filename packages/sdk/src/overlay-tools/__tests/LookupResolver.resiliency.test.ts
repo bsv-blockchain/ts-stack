@@ -503,6 +503,46 @@ describe('LookupResolver completeness-aware hold (default query())', () => {
     expect(await defaultQuery(resolver2, 1)).toBe(2)
   })
 
+  it('releases the hold mid-query when the held host settles while a third host is still pending', async () => {
+    // Three hosts: fast-partial answers first, the known-complete host FAILS at
+    // 400ms while a slow straggler is still in flight. The hold must lift on
+    // the complete host's settlement (the 'done' event) and emit what has
+    // arrived — not keep waiting for the straggler, which has no completeness
+    // track record advantage.
+    const straggler = 'https://overlay-eu-1.bsvb.tech'
+    const trainer = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+    await defaultQuery(trainer, 0) // train: slow→1.0, fast→0.05
+
+    const { lookup } = makeFacilitator({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, throws: new Error('host offline') },
+      [straggler]: { delayMs: 2500, outputs: fastOutputs }
+    })
+    const resolver = new LookupResolver({
+      facilitator: { lookup },
+      hostOverrides: { ls_kvstore: [fastHost, slowHost, straggler] }
+    })
+
+    let settled = false
+    const p = resolver
+      .query({ service: 'ls_kvstore', query: { threeHosts: true } }, 5000, {
+        // Focus this test on the trained hold: without unknown-host waiting,
+        // the straggler (no track record) cannot extend the hold.
+        holdForUnknownHosts: false
+      })
+      .then((res) => { settled = true; return res })
+
+    // At 500ms: fast answered (150), complete host failed (400) → hold lifted
+    // via the 'done' path; straggler (2500) still pending and must not matter.
+    await jest.advanceTimersByTimeAsync(600)
+    expect(settled).toBe(true)
+    expect((await p).outputs.length).toBe(2)
+    await jest.advanceTimersByTimeAsync(3000) // let the straggler settle
+  })
+
   it('soft timeout overrides the completeness hold', async () => {
     const resolver = makeResolver({
       [fastHost]: { delayMs: 150, outputs: fastOutputs },
