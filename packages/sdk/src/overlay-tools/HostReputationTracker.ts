@@ -36,6 +36,13 @@ const FAILURE_BACKOFF_GRACE = 2
 const ACCURACY_LATENCY_TOLERANCE_MS = 10_000
 /** Score weight: how much completeness shifts the score (in latency-equivalent ms). */
 const COMPLETENESS_SCORE_WEIGHT_MS = 1200
+/**
+ * Minimum completeness-EMA advantage an in-flight host must hold over the best
+ * already-answered host before a query delays its first emission to wait for it.
+ * Wide enough to ignore EMA noise between comparably-complete hosts; the
+ * production failure mode this targets separates by far more (~1.0 vs ~0.4).
+ */
+const HOLD_COMPLETENESS_MARGIN = 0.15
 const STORAGE_KEY = 'bsvsdk_overlay_host_reputation_v2'
 const LEGACY_STORAGE_KEY_V1 = 'bsvsdk_overlay_host_reputation_v1'
 
@@ -102,6 +109,21 @@ export class HostReputationTracker {
         COMPLETENESS_SMOOTHING_FACTOR * ratio
     }
     this.saveToStorage()
+  }
+
+  /**
+   * True when `host` has a track record of materially more complete answers than
+   * `baselineCompleteness` (the best completeness among hosts that have already
+   * answered the current query) and is not so slow that waiting is unreasonable.
+   * Used by the resolver to decide whether a query's first emission should be
+   * held until this host settles. Hosts with no completeness history never
+   * trigger a hold — cold-start behavior stays latency-first.
+   */
+  worthWaitingFor (host: string, baselineCompleteness: number): boolean {
+    const entry = this.stats.get(host)
+    if (entry == null || entry.avgCompleteness === null) return false
+    if ((entry.avgLatencyMs ?? DEFAULT_LATENCY_MS) > ACCURACY_LATENCY_TOLERANCE_MS) return false
+    return entry.avgCompleteness >= baselineCompleteness + HOLD_COMPLETENESS_MARGIN
   }
 
   recordFailure (host: string, reason?: unknown): void {

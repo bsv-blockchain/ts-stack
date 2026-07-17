@@ -364,3 +364,140 @@ describe('LookupResolver resilience', () => {
     expect(snap?.backoffUntil).toBe(0)
   })
 })
+
+// --------------------------------------------------------------------------
+// Completeness-aware hold: the production GlobalKVStore shape. A consumer
+// calling plain query() (no options — exactly what GlobalKVStore does) must
+// converge to the complete result set, not the fast host's partial view.
+// --------------------------------------------------------------------------
+
+describe('LookupResolver completeness-aware hold (default query())', () => {
+  const fastHost = 'https://overlay-ap-1.bsvb.tech'
+  const slowHost = 'https://overlay-us-1.bsvb.tech'
+
+  const manyBeefs = Array.from({ length: 40 }, (_, i) => makeBeef(100 + i))
+  const fastOutputs = manyBeefs.slice(0, 2).map((beef, i) => ({ beef, outputIndex: i }))
+  const slowOutputs = manyBeefs.map((beef, i) => ({ beef, outputIndex: i }))
+
+  beforeEach(() => {
+    getOverlayHostReputationTracker().reset()
+    jest.useFakeTimers()
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  const makeResolver = (scripts: Record<string, HostScript>): LookupResolver => {
+    const { lookup } = makeFacilitator(scripts)
+    return new LookupResolver({
+      facilitator: { lookup },
+      hostOverrides: { ls_kvstore: [fastHost, slowHost] }
+    })
+  }
+
+  const defaultQuery = async (resolver: LookupResolver, i: number): Promise<number> => {
+    const p = resolver.query({ service: 'ls_kvstore', query: { i } })
+    // Advance past both hosts' latencies AND the per-host timeout so every
+    // settlement (and the detached completeness scoring) lands.
+    await jest.advanceTimersByTimeAsync(3000)
+    const res = await p
+    return res.outputs.length
+  }
+
+  it('self-corrects: first default query() is latency-first, second returns the complete set', async () => {
+    const resolver = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+
+    // Cold start: no completeness history, so nothing holds the first emission.
+    // The fast host's partial view wins — documented latency-first behavior.
+    expect(await defaultQuery(resolver, 0)).toBe(2)
+
+    // The detached scoring saw BOTH hosts settle (2/40 vs 40/40). The very next
+    // default query holds its first emission for the known-more-complete host.
+    expect(await defaultQuery(resolver, 1)).toBe(40)
+    expect(await defaultQuery(resolver, 2)).toBe(40)
+  })
+
+  it('trains the completeness EMA correctly even though query() closes the iterator early', async () => {
+    // Regression guard: scoring used to run in the generator finally, which
+    // fires at the first emission — before the slow host settles. The fast host
+    // was then measured against itself (2/2 = ratio 1.0) and trained to perfect
+    // completeness while the slow host was never scored at all.
+    const resolver = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+
+    await defaultQuery(resolver, 0)
+
+    const tracker = getOverlayHostReputationTracker()
+    const fastSnap = tracker.snapshot(fastHost)
+    const slowSnap = tracker.snapshot(slowHost)
+    expect(slowSnap?.avgCompleteness).toBeCloseTo(1.0)
+    expect(fastSnap?.avgCompleteness).toBeCloseTo(2 / 40)
+  })
+
+  it('releases the hold when the more-complete host fails, returning what arrived', async () => {
+    const resolver = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+    await defaultQuery(resolver, 0) // train
+
+    // The complete host goes down. The hold must lift when it settles (fails),
+    // not hang, and the caller gets the fast host's partial view.
+    const resolver2 = new LookupResolver({
+      facilitator: {
+        lookup: makeFacilitator({
+          [fastHost]: { delayMs: 150, outputs: fastOutputs },
+          [slowHost]: { delayMs: 400, throws: new Error('host offline') }
+        }).lookup
+      },
+      hostOverrides: { ls_kvstore: [fastHost, slowHost] }
+    })
+    expect(await defaultQuery(resolver2, 1)).toBe(2)
+  })
+
+  it('soft timeout overrides the completeness hold', async () => {
+    const resolver = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+    await defaultQuery(resolver, 0) // train
+
+    // Caller explicitly asks to bail out early — the hold must not override an
+    // explicit latency budget.
+    const p = resolver.query(
+      { service: 'ls_kvstore', query: { soft: true } },
+      undefined,
+      { softTimeoutMs: 200 }
+    )
+    await jest.advanceTimersByTimeAsync(3000)
+    const res = await p
+    expect(res.outputs.length).toBe(2)
+  })
+
+  it('query$() first emission is held for the trained more-complete host', async () => {
+    const resolver = makeResolver({
+      [fastHost]: { delayMs: 150, outputs: fastOutputs },
+      [slowHost]: { delayMs: 400, outputs: slowOutputs }
+    })
+    await defaultQuery(resolver, 0) // train
+
+    const emissions: LookupAnswerProgress[] = []
+    const p = (async () => {
+      for await (const partial of resolver.query$({ service: 'ls_kvstore', query: { s: 1 } })) {
+        emissions.push({ ...partial, outputs: partial.outputs.slice() })
+      }
+    })()
+    await jest.advanceTimersByTimeAsync(3000)
+    await p
+
+    // No partial 2-output emission leaks out before the complete host lands.
+    expect(emissions[0].outputs.length).toBe(40)
+    expect(emissions[emissions.length - 1].isFinal).toBe(true)
+  })
+})

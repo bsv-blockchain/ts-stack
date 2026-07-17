@@ -432,7 +432,10 @@ export default class LookupResolver {
   ): Promise<LookupAnswer> {
     // Existing fast-but-narrow contract: return at the first cumulative emission
     // (the post-grace aggregate, or the final emission when every host settles
-    // before the grace window). Callers wanting progressive enrichment use query$().
+    // before the grace window). When a host with a materially better completeness
+    // track record is still in flight at grace expiry, the first emission is held
+    // for it (bounded by the per-host timeout) — accuracy beats latency once we
+    // have evidence. Callers wanting progressive enrichment use query$().
     // Take only the first emission, then explicitly close the iterator so the
     // generator's `finally` block runs and clears any outstanding timers.
     const iter = this.query$(question, timeout, options)[Symbol.asyncIterator]()
@@ -545,11 +548,12 @@ export default class LookupResolver {
     // observed in production where the fast-but-incomplete host wins out.
     interface HostResult { host: string, uniqueCount: number, succeeded: boolean }
     const hostResults: HostResult[] = []
-    const perAnswerHostKeys = new Map<LookupAnswer, { host: string, hostKeys: Set<string> }>()
+    const settledHosts = new Set<string>()
 
     type Event =
       | { kind: 'answer', answer: LookupAnswer, host: string }
       | { kind: 'done' }
+      | { kind: 'grace' }
       | { kind: 'soft' }
     const queue: Event[] = []
     let waiter: ((v: void) => void) | null = null
@@ -562,20 +566,25 @@ export default class LookupResolver {
       }
     }
 
+    const hostSettlements: Array<Promise<void>> = []
     for (const host of rankedHosts) {
-      this.lookupHostWithTracking(host, question, timeout)
+      const settlement = this.lookupHostWithTracking(host, question, timeout)
         .then((answer) => {
           if (answer?.type === 'output-list' && Array.isArray(answer.outputs)) {
-            // Track host_keys here (in the .then, where we know the host) so
-            // mergeAnswer's added-flag stays clean. Empty result also counts —
-            // a 0-count means the host successfully returned no data, distinct
-            // from completeness-zero (returned fewer than peers).
+            // Count this host's unique outputs here (not in mergeAnswer) so the
+            // completeness tally is correct even when the consumer closes the
+            // iterator before this answer would have merged. Empty result also
+            // counts — a 0-count means the host successfully returned no data,
+            // distinct from completeness-zero (returned fewer than peers).
+            const now = Date.now()
             const hostKeys = new Set<string>()
-            perAnswerHostKeys.set(answer, { host, hostKeys })
+            for (const output of answer.outputs) {
+              const txId = this.resolveTxIdForOutput(output, now)
+              if (txId !== null) hostKeys.add(`${txId}.${output.outputIndex}`)
+            }
+            hostResults.push({ host, uniqueCount: hostKeys.size, succeeded: true })
             if (answer.outputs.length > 0) {
               push({ kind: 'answer', answer, host })
-            } else {
-              hostResults.push({ host, uniqueCount: 0, succeeded: true })
             }
           } else {
             hostResults.push({ host, uniqueCount: 0, succeeded: false })
@@ -595,10 +604,30 @@ export default class LookupResolver {
           }
         })
         .finally(() => {
+          settledHosts.add(host)
           completedHosts++
           push({ kind: 'done' })
         })
+      hostSettlements.push(settlement)
     }
+
+    // Retrospective accuracy scoring, detached from the generator lifecycle on
+    // purpose: query() closes the iterator at the first emission, long before
+    // slow hosts settle. Scoring in the generator's own cleanup would see only
+    // the fast hosts — the fast-but-incomplete host would be measured against
+    // itself (ratio 1.0) and the completeness EMA would train backwards. Every
+    // settlement is bounded by the per-host timeout, so this always runs.
+    void Promise.all(hostSettlements).then(() => {
+      const peerMaxUnique = hostResults.reduce(
+        (max, r) => (r.succeeded && r.uniqueCount > max ? r.uniqueCount : max),
+        0
+      )
+      for (const r of hostResults) {
+        if (r.succeeded) {
+          this.hostReputation.recordAnswer(r.host, r.uniqueCount, peerMaxUnique)
+        }
+      }
+    }).catch(() => { /* settlement handlers never throw */ })
 
     let softTimer: ReturnType<typeof setTimeout> | null = null
     if (typeof softTimeoutMs === 'number' && softTimeoutMs >= 0) {
@@ -612,27 +641,41 @@ export default class LookupResolver {
     const mergeAnswer = (answer: LookupAnswer): boolean => {
       let added = false
       const now = Date.now()
-      const perHost = perAnswerHostKeys.get(answer)
       for (const output of answer.outputs) {
         const txId = this.resolveTxIdForOutput(output, now)
         if (txId === null) continue
         const uniqKey = `${txId}.${output.outputIndex}`
-        if (perHost !== undefined) perHost.hostKeys.add(uniqKey)
         if (!outputsMap.has(uniqKey)) {
           outputsMap.set(uniqKey, output)
           txIds.push(txId)
           added = true
         }
       }
-      if (perHost !== undefined) {
-        // Push (or replace) this host's result so it's available for the
-        // retrospective recordAnswer pass once all hosts settle.
-        const existing = hostResults.findIndex((r) => r.host === perHost.host)
-        const entry = { host: perHost.host, uniqueCount: perHost.hostKeys.size, succeeded: true }
-        if (existing >= 0) hostResults[existing] = entry
-        else hostResults.push(entry)
-      }
       return added
+    }
+
+    // Completeness-aware hold: when the grace window closes but a host with a
+    // materially better completeness track record than every host that has
+    // answered so far is still in flight, the first emission is held until that
+    // host settles. The wait is bounded by the per-host timeout — a held host
+    // that hangs gets killed by it, the 'done' event fires, and the hold lifts.
+    // This is what turns the completeness EMA into more complete default
+    // query() results rather than a write-only statistic. Hosts with no
+    // completeness history never trigger a hold, so cold-start behavior remains
+    // latency-first.
+    let holdingForCompleteness = false
+    const shouldHoldForCompleteness = (): boolean => {
+      let baseline = 0
+      for (const r of hostResults) {
+        if (!r.succeeded) continue
+        const c = this.hostReputation.snapshot(r.host)?.avgCompleteness
+        if (typeof c === 'number' && c > baseline) baseline = c
+      }
+      for (const host of rankedHosts) {
+        if (settledHosts.has(host)) continue
+        if (this.hostReputation.worthWaitingFor(host, baseline)) return true
+      }
+      return false
     }
 
     const snapshot = (isFinal: boolean): LookupAnswerProgress => ({
@@ -657,19 +700,36 @@ export default class LookupResolver {
             if (!graceFired && graceMs > 0) {
               graceTimer = setTimeout(() => {
                 graceFired = true
-                push({ kind: 'soft' })
+                push({ kind: 'grace' })
               }, graceMs)
             } else {
               graceFired = true
             }
           }
           if (graceFired && added) {
-            emittedOnce = true
-            yield snapshot(false)
+            if (emittedOnce || !shouldHoldForCompleteness()) {
+              holdingForCompleteness = false
+              emittedOnce = true
+              yield snapshot(false)
+            } else {
+              holdingForCompleteness = true
+            }
+          }
+        } else if (e.kind === 'grace') {
+          if (!emittedOnce) {
+            if (shouldHoldForCompleteness()) {
+              holdingForCompleteness = true
+            } else {
+              emittedOnce = true
+              yield snapshot(false)
+            }
           }
         } else if (e.kind === 'soft') {
+          // Soft timeout is an explicit "bail out early" request from the
+          // caller — it overrides a completeness hold.
           if (!emittedOnce) {
             graceFired = true
+            holdingForCompleteness = false
             emittedOnce = true
             yield snapshot(false)
           }
@@ -678,27 +738,21 @@ export default class LookupResolver {
             break
           }
         } else if (e.kind === 'done') {
-          // continue loop; final emission happens after the loop
+          // A held-for host may have just settled (answered empty, failed, or
+          // timed out). Re-check; if nothing better remains in flight, release
+          // the held first emission. When this was the last host, skip — the
+          // loop exits and the final emission covers it.
+          if (holdingForCompleteness && !emittedOnce && completedHosts < hostCount && !shouldHoldForCompleteness()) {
+            holdingForCompleteness = false
+            emittedOnce = true
+            yield snapshot(false)
+          }
         }
       }
       yield snapshot(true)
     } finally {
       if (graceTimer !== null) clearTimeout(graceTimer)
       if (softTimer !== null) clearTimeout(softTimer)
-      // Retrospective accuracy scoring: compare each host's unique contribution
-      // against the largest peer result and update reputation. A consistently
-      // higher-completeness host (e.g. overlay-us-1 returning 40 outputs vs
-      // ap-1 returning 2) earns a score bonus that outweighs latency,
-      // self-correcting the bias bug observed in production.
-      const peerMaxUnique = hostResults.reduce(
-        (max, r) => (r.succeeded && r.uniqueCount > max ? r.uniqueCount : max),
-        0
-      )
-      for (const r of hostResults) {
-        if (r.succeeded) {
-          this.hostReputation.recordAnswer(r.host, r.uniqueCount, peerMaxUnique)
-        }
-      }
     }
   }
 
