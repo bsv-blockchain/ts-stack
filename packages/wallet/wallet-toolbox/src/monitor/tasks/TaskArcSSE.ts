@@ -257,7 +257,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       req.status = r.status
       req.apiHistory = r.history
       req.provenTxId = r.provenTxId
-      req.notified = true
+      if (r.notify != null) req.apiNotify = r.notify
+      req.notified = r.notified ?? true
       await req.updateStorageDynamicProperties(this.storage)
 
       this.monitor.callOnProvenTransaction({

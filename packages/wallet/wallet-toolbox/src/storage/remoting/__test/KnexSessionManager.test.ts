@@ -87,10 +87,13 @@ describe('KnexSessionManager', () => {
       peerNonce: 'peer-stale',
       lastUpdate: 925
     })
+    const queryErrors: unknown[] = []
+    knexA.on('query-error', error => queryErrors.push(error))
     await managerA.updateSession(stale)
     await managerA.removeSession(stale)
 
     await expect(managerA.getSession('session-nonce')).resolves.toEqual(authenticated)
+    expect(queryErrors).toEqual([])
 
     await managerB.removeSession(authenticated)
     await expect(managerA.getSession('session-nonce')).resolves.toBeUndefined()

@@ -46,6 +46,7 @@ const RUN_BASKET = `storage-e2e-${RUN_ID}`
 const CEILING_BATCHES = parseBatches(process.env.STORAGE_E2E_CEILING_BATCHES ?? '2,4,8')
 const LOAD_REPEATS = integerEnv('STORAGE_E2E_LOAD_REPEATS', 1, 1, 10)
 const REQUIRED_USER_UTXOS = requiredUserUtxos()
+const ACTION_PAGE_SIZE = 1000
 
 interface Stats {
   count: number
@@ -280,6 +281,24 @@ async function withTimeout<T> (description: string, operation: Promise<T>): Prom
   } finally {
     if (timer != null) clearTimeout(timer)
   }
+}
+
+async function listRunActionStatuses (item: TestWallet, pendingTxids: string[]): Promise<Map<string, string>> {
+  const statuses = new Map<string, string>()
+  const unresolved = new Set(pendingTxids)
+  let offset = 0
+  while (unresolved.size > 0) {
+    const result = await withTimeout(
+      `Storage listActions wallet ${item.index} offset ${offset}`,
+      item.wallet.listActions({ labels: [RUN_LABEL], limit: ACTION_PAGE_SIZE, offset })
+    )
+    for (const action of result.actions) {
+      if (unresolved.delete(action.txid)) statuses.set(action.txid, action.status)
+    }
+    offset += result.actions.length
+    if (result.actions.length === 0 || offset >= result.totalActions) break
+  }
+  return statuses
 }
 
 async function forEachWithConcurrency<T> (items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
@@ -598,12 +617,13 @@ async function waitForProofs (): Promise<ProofObservation[]> {
     }
     const storageStatuses = new Map<string, string>()
     await Promise.all([root, ...users].map(async item => {
+      const walletPendingTxids = pendingTransactions
+        .filter(transaction => transaction.walletIndex === item.index)
+        .map(transaction => transaction.txid)
+      if (walletPendingTxids.length === 0) return
       try {
-        const result = await withTimeout(
-          `Storage listActions wallet ${item.index}`,
-          item.wallet.listActions({ labels: [RUN_LABEL], limit: 1000 })
-        )
-        for (const action of result.actions) storageStatuses.set(action.txid, action.status)
+        const statuses = await listRunActionStatuses(item, walletPendingTxids)
+        for (const [txid, status] of statuses) storageStatuses.set(txid, status)
       } catch (error: unknown) {
         for (const transaction of pendingTransactions.filter(transaction => transaction.walletIndex === item.index)) {
           const observation = observations.get(transaction.txid)

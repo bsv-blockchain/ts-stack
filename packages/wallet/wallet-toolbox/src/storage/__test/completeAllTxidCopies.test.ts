@@ -40,6 +40,7 @@ describe('proof completion fan-out', () => {
       expect(transactions).toHaveLength(2)
       expect(transactions.every(transaction => transaction.status === 'completed')).toBe(true)
       expect(transactions.every(transaction => transaction.provenTxId === result.provenTxId)).toBe(true)
+      expect(result.notified).toBe(true)
 
       // Recreate the production drift after the proof already exists. A later
       // Monitor proof event must heal the omitted local transaction as well.
@@ -54,6 +55,7 @@ describe('proof completion fan-out', () => {
       expect(transactions.every(transaction => transaction.status === 'completed')).toBe(true)
       const savedReq = (await activeStorage.findProvenTxReqs({ partial: { txid } }))[0]
       expect(JSON.parse(savedReq.notify).transactionIds).toEqual([first.transactionId, second.transactionId])
+      expect(savedReq.notified).toBe(true)
     } finally {
       await ctx.storage.destroy()
     }

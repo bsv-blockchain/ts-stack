@@ -840,36 +840,39 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     // transaction rows share a txid but race while merging the JSON notify
     // list, so a last-writer-wins update can omit one local copy. A valid proof
     // is authoritative for every local transaction with this txid: discover
-    // them from the indexed transaction table and heal both the durable notify
-    // set and any row that did not receive the original completion update.
-    const transactions = await this.findTransactions({ partial: { txid: args.txid } })
-    const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
-    let notificationSetChanged = false
-    for (const transaction of transactions) {
-      if (!knownNotificationIds.has(transaction.transactionId)) {
-        req.addNotifyTransactionId(transaction.transactionId)
-        knownNotificationIds.add(transaction.transactionId)
-        notificationSetChanged = true
+    // them from the indexed transaction table and atomically heal both the
+    // durable notify set and any row that missed the original completion.
+    await this.transaction(async trx => {
+      await req.refreshFromStorage(this, trx)
+      const transactions = await this.findTransactions({ partial: { txid: args.txid }, trx })
+      const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
+      for (const transaction of transactions) {
+        if (!knownNotificationIds.has(transaction.transactionId)) {
+          req.addNotifyTransactionId(transaction.transactionId)
+          knownNotificationIds.add(transaction.transactionId)
+        }
       }
-    }
-    const transactionIdsNeedingProof = transactions
-      .filter(transaction => transaction.status !== 'completed' || transaction.provenTxId !== proven.provenTxId)
-      .map(transaction => transaction.transactionId)
-    if (transactionIdsNeedingProof.length > 0) {
-      await notifyTransactionsOfProof(
+      const transactionIdsNeedingProof = transactions
+        .filter(transaction => transaction.status !== 'completed' || transaction.provenTxId !== proven.provenTxId)
+        .map(transaction => transaction.transactionId)
+      const updatesSucceeded = await notifyTransactionsOfProof(
         transactionIdsNeedingProof,
         proven.provenTxId,
         note => req.addHistoryNote(note),
-        async () => { await req.updateStorageDynamicProperties(this) },
-        async (id, update) => { await this.updateTransaction(id, update) }
+        async (id, update) => { await this.updateTransaction(id, update, trx) }
       )
-    } else if (notificationSetChanged) {
-      await req.updateStorageDynamicProperties(this)
-    }
+      const completedTransactions = await this.findTransactions({ partial: { txid: args.txid }, trx })
+      req.notified = updatesSucceeded && completedTransactions.every(transaction =>
+        transaction.status === 'completed' && transaction.provenTxId === proven.provenTxId
+      )
+      await req.updateStorageDynamicProperties(this, trx)
+    })
     const r: UpdateProvenTxReqWithNewProvenTxResult = {
       status: req.status,
       history: req.apiHistory,
-      provenTxId: proven.provenTxId
+      provenTxId: proven.provenTxId,
+      notified: req.notified,
+      notify: req.apiNotify
     }
     return r
   }

@@ -124,8 +124,9 @@ export async function getProofs (
 
     const req = new EntityProvenTxReq(reqApi)
 
-    if (Number.isInteger(req.provenTxId)) {
-      log += `Already linked to provenTxId ${req.provenTxId}.\n`
+    const existingProvenTxId = req.provenTxId
+    if (existingProvenTxId != null && Number.isInteger(existingProvenTxId)) {
+      log += `Already linked to provenTxId ${existingProvenTxId}.\n`
       req.notified = false
       req.status = 'completed'
       await req.updateStorageDynamicProperties(task.storage)
@@ -135,11 +136,8 @@ export async function getProofs (
 
     log += '\n'
 
-    let reqIsValid = false
-    if (req.rawTx) {
-      const txid = asString(doubleSha256BE(req.rawTx))
-      if (txid === req.txid) reqIsValid = true
-    }
+    const txid = asString(doubleSha256BE(req.rawTx))
+    const reqIsValid = txid === req.txid
 
     if (!reqIsValid) {
       log += ' rawTx doesn\'t hash to txid. status => invalid.\n'
@@ -177,9 +175,6 @@ export async function getProofs (
 
     const since = new Date()
 
-    let r: GetMerklePathResult
-    let ptx: EntityProvenTx | undefined
-
     // External services will try multiple providers until one returns a proof,
     // or they all fail.
     // There may also be an array of proofs to consider when a transaction
@@ -195,13 +190,13 @@ export async function getProofs (
     // When all received proofs fail, force a bump to the next service provider and try
     // one more time.
     //
-    r = await task.monitor.services.getMerklePath(req.txid)
+    const r: GetMerklePathResult = await task.monitor.services.getMerklePath(req.txid)
     if ((r.header != null) && r.header.height > maxAcceptableHeight) {
       // Ignore proofs from bleeding edge of new blocks as these are the most often re-orged.
       log += ` ignoring possible proof from very new block at height ${r.header.height} ${r.header.hash}\n`
       continue
     }
-    ptx = await EntityProvenTx.fromReq(
+    const ptx: EntityProvenTx | undefined = await EntityProvenTx.fromReq(
       req,
       r,
       countsAsAttempt && req.status !== 'nosend',
@@ -231,7 +226,8 @@ export async function getProofs (
       req.status = r.status
       req.apiHistory = r.history
       req.provenTxId = r.provenTxId
-      req.notified = true
+      if (r.notify != null) req.apiNotify = r.notify
+      req.notified = r.notified ?? true
 
       task.monitor.callOnProvenTransaction({
         txid,

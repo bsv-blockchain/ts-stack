@@ -62,8 +62,12 @@ export class KnexSessionManager implements AsyncSessionManager {
     await this.knex<TableAuthSession>(AUTH_SESSION_TABLE)
       .where({ sessionNonce: session.sessionNonce })
       .where(function () {
+        // Knex query builders are thenable, but these calls only build the
+        // surrounding delete predicate; they do not start standalone queries.
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         this.where('lastUpdate', '<', session.lastUpdate)
           .orWhere(function () {
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             this.where('lastUpdate', '=', session.lastUpdate)
               .where('isAuthenticated', session.isAuthenticated)
             applyNullableMatch(this, 'peerNonce', session.peerNonce)
@@ -111,16 +115,27 @@ export class KnexSessionManager implements AsyncSessionManager {
     const updated = await this.updateIfCurrentOrNewer(row)
     if (updated > 0) return
 
+    // A zero-row update can mean either that this write is stale or that the
+    // database reports no changed rows for an idempotent update. Avoid an
+    // expected duplicate-key failure in both cases; insert only when the nonce
+    // is genuinely absent.
+    const existing = await this.knex<TableAuthSession>(AUTH_SESSION_TABLE)
+      .where({ sessionNonce: row.sessionNonce })
+      .first('lastUpdate')
+    if (existing != null) {
+      // A concurrent insert may have appeared after the first update. Retry if
+      // our state is still current enough to advance or merge that new row.
+      if (existing.lastUpdate <= row.lastUpdate) await this.updateIfCurrentOrNewer(row)
+      return
+    }
+
     try {
       await this.knex<TableAuthSession>(AUTH_SESSION_TABLE).insert(row)
     } catch (error: unknown) {
       // Another replica may have inserted this nonce between our update and
-      // insert. Confirm the conflict is that expected race, then retry the
-      // monotonic update; otherwise preserve the original database failure.
-      const existing = await this.knex<TableAuthSession>(AUTH_SESSION_TABLE)
-        .where({ sessionNonce: row.sessionNonce })
-        .first('sessionNonce')
-      if (existing == null) throw error
+      // insert. Retry only known duplicate-key races; preserve every other
+      // database failure for the caller.
+      if (!isDuplicateKeyError(error)) throw error
       await this.updateIfCurrentOrNewer(row)
     }
   }
@@ -189,8 +204,19 @@ function applyNullableMatch (
   value: string | boolean | undefined
 ): void {
   if (value == null) {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     query.whereNull(column)
   } else {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     query.where(column, value)
   }
+}
+
+function isDuplicateKeyError (error: unknown): boolean {
+  if (typeof error !== 'object' || error == null) return false
+  const databaseError = error as { code?: unknown, errno?: unknown }
+  return databaseError.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+    databaseError.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    databaseError.code === 'ER_DUP_ENTRY' ||
+    databaseError.errno === 1062
 }
