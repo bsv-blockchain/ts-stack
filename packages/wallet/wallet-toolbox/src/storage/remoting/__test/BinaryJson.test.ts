@@ -76,7 +76,25 @@ describe('binary JSON-RPC encoding', () => {
     expect(value).toEqual({ data: 'plain', items: [1, 2] })
   })
 
-  it('negotiates compact binary without breaking the first request to a legacy server', async () => {
+  it('rejects malformed base64 tags instead of silently corrupting bytes', () => {
+    expect(() => decodeBinaryJsonValue({ $bsvBinary: BINARY_ENCODING, data: '!!!=' })).toThrow('Invalid base64')
+    expect(() => parseJsonRpc(`{"bytes":{"$bsvBinary":"${BINARY_ENCODING}","data":"A==="}}`)).toThrow('Invalid base64')
+  })
+
+  it('decodes deeply nested values without recursive stack overflow', () => {
+    const root: Record<string, any> = {}
+    let current = root
+    for (let i = 0; i < 10000; i++) {
+      current.next = {}
+      current = current.next
+    }
+    current.bytes = { $bsvBinary: BINARY_ENCODING, data: 'AQID' }
+
+    expect(() => decodeBinaryJsonValue(root)).not.toThrow()
+    expect(current.bytes).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  it('keeps requests legacy-safe by default across mixed-version server instances', async () => {
     const requests: string[] = []
     const fetch = async (_input: string, init?: RequestInit): Promise<Response> => {
       requests.push(String(init?.body))
@@ -94,8 +112,28 @@ describe('binary JSON-RPC encoding', () => {
     const second = await rpcCall('second', [{ bytes: new Uint8Array([4, 5, 6]) }])
 
     expect(JSON.parse(requests[0]).params[0].bytes).toEqual([1, 2, 3])
-    expect(requests[1]).toContain(`"$bsvBinary":"${BINARY_ENCODING}"`)
+    expect(JSON.parse(requests[1]).params[0].bytes).toEqual([4, 5, 6])
     expect(first.bytes).toEqual(new Uint8Array([1, 2, 3]))
     expect(second.bytes).toEqual(new Uint8Array([2, 2, 3]))
+  })
+
+  it('compacts requests only after support is advertised and explicitly enabled', async () => {
+    const requests: string[] = []
+    const fetch = async (_input: string, init?: RequestInit): Promise<Response> => {
+      requests.push(String(init?.body))
+      return new Response('{"jsonrpc":"2.0","id":1,"result":{}}', {
+        headers: { [BINARY_ENCODING_HEADER]: BINARY_ENCODING }
+      })
+    }
+    const wallet = Object.create(null) as WalletInterface
+    const client = new StorageClient(wallet, 'https://storage.example', { binaryRequests: true })
+    Reflect.set(client, 'authClient', { fetch })
+    const rpcCall = Reflect.get(client, 'rpcCall').bind(client)
+
+    await rpcCall('first', [{ bytes: new Uint8Array([1, 2, 3]) }])
+    await rpcCall('second', [{ bytes: new Uint8Array([4, 5, 6]) }])
+
+    expect(JSON.parse(requests[0]).params[0].bytes).toEqual([1, 2, 3])
+    expect(requests[1]).toContain(`"$bsvBinary":"${BINARY_ENCODING}"`)
   })
 })

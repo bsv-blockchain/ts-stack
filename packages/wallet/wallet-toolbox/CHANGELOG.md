@@ -16,6 +16,12 @@ attention to changes that materially alter behavior or extend functionality.
 - Negotiate compact base64 JSON-RPC binary values across Node, browser, and mobile clients while
   preserving numeric-array requests and responses for old servers and clients. A 1 MiB payload is
   62.7% smaller on the wire than legacy byte-array JSON.
+- Treat non-finite ancestor-fetch concurrency values as the safe default instead of silently
+  returning incomplete BEEF, reject malformed binary JSON base64, and decode deeply nested JSON
+  iteratively so hostile input cannot overflow the JavaScript call stack.
+- Keep binary JSON-RPC requests in the legacy numeric-array format by default so rolling deployments
+  cannot route a negotiated request to an older server instance. Homogeneous endpoints can opt in to
+  compact requests with `StorageClientOptions.binaryRequests`; compact responses remain negotiated.
 
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.

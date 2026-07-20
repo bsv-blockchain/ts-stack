@@ -36,7 +36,10 @@ export async function getBeefForTransaction (
   const knownTxids = new Set(options.knownTxids ?? [])
   const scheduled = new Set<string>([txid])
   let frontier: Array<{ txid: string, depth: number }> = [{ txid, depth: 0 }]
-  const concurrency = Math.max(1, Math.min(32, options.maxConcurrency ?? 8))
+  const requestedConcurrency = options.maxConcurrency ?? 8
+  const concurrency = Number.isFinite(requestedConcurrency)
+    ? Math.max(1, Math.min(32, Math.floor(requestedConcurrency)))
+    : 8
 
   while (frontier.length > 0) {
     const current = frontier.filter(item => beef.findTxid(item.txid) == null)

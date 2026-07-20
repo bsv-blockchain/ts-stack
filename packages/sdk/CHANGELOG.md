@@ -240,6 +240,13 @@ All notable changes to this project will be documented in this file. The format 
 - Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
   serialization when public transaction-list state changes.
 - Invalidate every transaction serialization cache when adding outputs, not only the hash cache.
+- Make Atomic BEEF extraction compute the exact dependency closure regardless of parsed transaction
+  order, reject unrelated incoming Atomic BEEF data, and keep BEEF validity synchronized with nested
+  transaction mutations. Duplicate transaction IDs and invalid BUMP indexes now fail validation
+  deterministically instead of being accepted or throwing.
+- Detect direct mutation of public transaction fields before reusing serialized bytes, hashes, or
+  transaction IDs, and do not expose the mutable internal transaction-hash cache.
+- Invalidate BEEF serialization and proof indexes after in-place mutation of a nested BUMP.
 
 - Release prep for `2.1.7`: fix `Brc29RemittanceModule` settlement acceptance to always use the
   `wallet payment` internalization protocol. The deprecated

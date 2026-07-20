@@ -70,6 +70,25 @@ export default class Transaction {
   private rawBytesCache?: Uint8Array
   private hexCache?: string
   private activeSignatureHashCache?: SignatureHashCache
+  private rawCacheState?: {
+    version: number
+    lockTime: number
+    inputs: Array<{
+      ref: TransactionInput
+      sourceTXID: string | undefined
+      sourceTransactionId: string | undefined
+      sourceOutputIndex: number
+      sequence: number | undefined
+      unlockingScript: TransactionInput['unlockingScript']
+      unlockingScriptBytes: Uint8Array | undefined
+    }>
+    outputs: Array<{
+      ref: TransactionOutput
+      satoshis: number | undefined
+      lockingScript: TransactionOutput['lockingScript']
+      lockingScriptBytes: Uint8Array
+    }>
+  }
 
   /**
    * Returns the transaction-wide signature hash cache active during signing.
@@ -158,6 +177,7 @@ export default class Transaction {
         throw new Error(`Transaction with TXID ${b.atomicTxid} not found in BEEF data.`)
       }
     }
+    if (!b.isAtomic(txid)) throw new Error('Atomic BEEF contains unrelated transaction data.')
     return tx
   }
 
@@ -171,6 +191,7 @@ export default class Transaction {
       if (b.atomicTxid == null) throw new Error('beef must conform to BRC-95 and must contain the subject txid.')
       throw new Error(`Transaction with TXID ${b.atomicTxid} not found in BEEF data.`)
     }
+    if (!b.isAtomic(txid)) throw new Error('Atomic BEEF contains unrelated transaction data.')
     return tx
   }
 
@@ -346,6 +367,7 @@ export default class Transaction {
     const br = new ReaderUint8Array(rawBytes)
     const tx = Transaction.fromReaderInternal(br, true)
     tx.rawBytesCache = rawBytes
+    tx.captureSerializationState()
     return tx
   }
 
@@ -358,6 +380,7 @@ export default class Transaction {
     const tx = Transaction.fromReaderInternal(br, true)
     if (!br.eof()) throw new Error('Serialized transaction contains trailing data')
     tx.rawBytesCache = bin
+    tx.captureSerializationState()
     return tx
   }
 
@@ -374,6 +397,7 @@ export default class Transaction {
     const tx = Transaction.fromReaderInternal(br, true)
     tx.rawBytesCache = rawBytes
     tx.hexCache = toHex(rawBytes)
+    tx.captureSerializationState()
     return tx
   }
 
@@ -424,6 +448,71 @@ export default class Transaction {
     this.cachedIdHex = undefined
     this.rawBytesCache = undefined
     this.hexCache = undefined
+    this.rawCacheState = undefined
+  }
+
+  private sourceTransactionId (input: TransactionInput): string | undefined {
+    return input.sourceTXID == null ? input.sourceTransaction?.id('hex') : undefined
+  }
+
+  private captureSerializationState (): void {
+    this.rawCacheState = {
+      version: this.version,
+      lockTime: this.lockTime,
+      inputs: this.inputs.map(ref => ({
+        ref,
+        sourceTXID: ref.sourceTXID,
+        sourceTransactionId: this.sourceTransactionId(ref),
+        sourceOutputIndex: ref.sourceOutputIndex,
+        sequence: ref.sequence,
+        unlockingScript: ref.unlockingScript,
+        unlockingScriptBytes: ref.unlockingScript?.toUint8Array()
+      })),
+      outputs: this.outputs.map(ref => ({
+        ref,
+        satoshis: ref.satoshis,
+        lockingScript: ref.lockingScript,
+        lockingScriptBytes: ref.lockingScript.toUint8Array()
+      }))
+    }
+  }
+
+  private serializationCacheMatchesState (): boolean {
+    const cached = this.rawCacheState
+    if (
+      this.rawBytesCache == null ||
+      cached == null ||
+      cached.version !== this.version ||
+      cached.lockTime !== this.lockTime ||
+      cached.inputs.length !== this.inputs.length ||
+      cached.outputs.length !== this.outputs.length
+    ) return false
+
+    for (let i = 0; i < this.inputs.length; i++) {
+      const input = this.inputs[i]
+      const state = cached.inputs[i]
+      if (
+        state.ref !== input ||
+        state.sourceTXID !== input.sourceTXID ||
+        state.sourceTransactionId !== this.sourceTransactionId(input) ||
+        state.sourceOutputIndex !== input.sourceOutputIndex ||
+        state.sequence !== input.sequence ||
+        state.unlockingScript !== input.unlockingScript ||
+        state.unlockingScriptBytes !== input.unlockingScript?.toUint8Array()
+      ) return false
+    }
+
+    for (let i = 0; i < this.outputs.length; i++) {
+      const output = this.outputs[i]
+      const state = cached.outputs[i]
+      if (
+        state.ref !== output ||
+        state.satoshis !== output.satoshis ||
+        state.lockingScript !== output.lockingScript ||
+        state.lockingScriptBytes !== output.lockingScript.toUint8Array()
+      ) return false
+    }
+    return true
   }
 
   /**
@@ -729,7 +818,11 @@ export default class Transaction {
   }
 
   private getSerializedBytes (): Uint8Array {
-    this.rawBytesCache ??= this.buildSerializedBytes()
+    if (!this.serializationCacheMatchesState()) {
+      this.invalidateSerializationCaches()
+      this.rawBytesCache = this.buildSerializedBytes()
+      this.captureSerializationState()
+    }
     return this.rawBytesCache
   }
 
@@ -826,10 +919,8 @@ export default class Transaction {
    * @returns {string} - The hexadecimal string representation of the transaction.
    */
   toHex (): string {
-    if (this.hexCache != null) {
-      return this.hexCache
-    }
     const bytes = this.getSerializedBytes()
+    if (this.hexCache != null) return this.hexCache
     const hex = toHex(bytes)
     this.hexCache = hex
     return hex
@@ -860,11 +951,12 @@ export default class Transaction {
    * @returns {string | number[]} - The hash of the transaction in the specified format.
    */
   hash (enc?: 'hex'): number[] | string {
-    this.cachedHash ??= hash256(this.getSerializedBytes())
+    const bytes = this.getSerializedBytes()
+    this.cachedHash ??= hash256(bytes)
     if (enc === 'hex') {
       return toHex(this.cachedHash)
     }
-    return this.cachedHash
+    return Array.from(this.cachedHash)
   }
 
   /**
@@ -887,6 +979,9 @@ export default class Transaction {
    * @returns {string | number[]} - The ID of the transaction in the specified format.
    */
   id (enc?: 'hex'): number[] | string {
+    // Validate public mutable transaction state before consulting either ID
+    // cache. getSerializedBytes() clears both when any signed field changed.
+    this.getSerializedBytes()
     if (enc === 'hex' && this.cachedIdHex != null) return this.cachedIdHex
     const id = [...(this.hash() as number[])]
     id.reverse()

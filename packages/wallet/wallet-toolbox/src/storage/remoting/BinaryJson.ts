@@ -33,6 +33,20 @@ function toBase64 (bytes: Uint8Array): string {
 }
 
 function fromBase64 (base64: string): Uint8Array {
+  if (base64.length % 4 !== 0) throw new TypeError('Invalid base64 binary JSON value')
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  const contentLength = base64.length - padding
+  for (let i = 0; i < contentLength; i++) {
+    if (!BASE64.includes(base64[i])) throw new TypeError('Invalid base64 binary JSON value')
+  }
+  for (let i = contentLength; i < base64.length; i++) {
+    if (base64[i] !== '=') throw new TypeError('Invalid base64 binary JSON value')
+  }
+  if (
+    (padding === 1 && (BASE64.indexOf(base64[contentLength - 1]) & 3) !== 0) ||
+    (padding === 2 && (BASE64.indexOf(base64[contentLength - 1]) & 15) !== 0)
+  ) throw new TypeError('Invalid base64 binary JSON value')
+
   const BufferCtor = getBufferCtor()
   if (BufferCtor != null) {
     const buffer = BufferCtor.from(base64, 'base64')
@@ -44,7 +58,6 @@ function fromBase64 (base64: string): Uint8Array {
     // primitive and avoids an attacker-controlled JavaScript loop bound.
     return Uint8Array.from(binary, character => character.charCodeAt(0))
   }
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
   const bytes = new Uint8Array(Math.floor(base64.length * 3 / 4) - padding)
   let offset = 0
   for (let i = 0; i < base64.length; i += 4) {
@@ -89,10 +102,21 @@ export function binaryJsonReviver (_key: string, value: unknown): unknown {
 
 export function decodeBinaryJsonValue (value: unknown): unknown {
   if (isTaggedBinary(value)) return fromBase64(value.data)
-  if (Array.isArray(value)) return value.map(decodeBinaryJsonValue)
-  if (value != null && typeof value === 'object') {
-    for (const [key, child] of Object.entries(value)) {
-      ;(value as Record<string, unknown>)[key] = decodeBinaryJsonValue(child)
+  if (value == null || typeof value !== 'object') return value
+
+  // JSON can be nested far more deeply than the JavaScript call stack. Walk it
+  // iteratively so an authenticated peer cannot turn binary decoding into a
+  // recursion overflow.
+  const stack: object[] = [value]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (current == null) continue
+    for (const [key, child] of Object.entries(current)) {
+      if (isTaggedBinary(child)) {
+        ;(current as Record<string, unknown>)[key] = fromBase64(child.data)
+      } else if (child != null && typeof child === 'object') {
+        stack.push(child)
+      }
     }
   }
   return value

@@ -4,7 +4,7 @@ import {
 } from '@bsv/sdk'
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { logWalletError } from '../../WalletLogger'
-import { StorageClientBase } from './StorageClientBase'
+import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
 import { BINARY_ENCODING, BINARY_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
 
 /**
@@ -22,8 +22,8 @@ import { BINARY_ENCODING, BINARY_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc
  * For details of the API implemented, follow the "See also" link for the `WalletStorageProvider` interface.
  */
 export class StorageClient extends StorageClientBase {
-  constructor (wallet: WalletInterface, endpointUrl: string) {
-    super(wallet, endpointUrl)
+  constructor (wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
+    super(wallet, endpointUrl, options)
   }
 
   /// ///////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ export class StorageClient extends StorageClientBase {
         response = await this.authClient.fetch(this.endpointUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', [BINARY_ENCODING_HEADER]: BINARY_ENCODING },
-          body: stringifyJsonRpc(body, this.serverSupportsBinary)
+          body: stringifyJsonRpc(body, this.binaryRequests && this.serverSupportsBinary)
         })
       } catch (error_: unknown) {
         logWalletError(error_, logger, 'error requesting remote service')
