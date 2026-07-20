@@ -5,7 +5,7 @@ import {
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { logWalletError } from '../../WalletLogger'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
-import { BINARY_ENCODING, BINARY_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
 
 /**
  * `StorageClient` implements the `WalletStorageProvider` interface which allows it to
@@ -56,10 +56,15 @@ export class StorageClient extends StorageClientBase {
 
       let response: Response
       try {
+        const requestUsesBinary = this.binaryRequests && this.serverSupportsBinary
         response = await this.authClient.fetch(this.endpointUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', [BINARY_ENCODING_HEADER]: BINARY_ENCODING },
-          body: stringifyJsonRpc(body, this.binaryRequests && this.serverSupportsBinary)
+          headers: {
+            'Content-Type': 'application/json',
+            [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
+            ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {})
+          },
+          body: stringifyJsonRpc(body, requestUsesBinary)
         })
       } catch (error_: unknown) {
         logWalletError(error_, logger, 'error requesting remote service')
@@ -70,8 +75,9 @@ export class StorageClient extends StorageClientBase {
         throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
       }
 
-      if (response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING) this.serverSupportsBinary = true
-      const json = parseJsonRpc(await response.text())
+      const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+      if (responseUsesBinary) this.serverSupportsBinary = true
+      const json = parseJsonRpc(await response.text(), responseUsesBinary)
       if (json.error) {
         logWalletError(json.error, logger, 'error from remote service')
         const werr = WalletErrorFromJson(json.error)

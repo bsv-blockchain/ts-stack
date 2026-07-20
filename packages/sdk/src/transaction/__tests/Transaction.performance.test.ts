@@ -268,6 +268,25 @@ describe('transaction pipeline scalability', () => {
     expect(beef.isValid()).toBe(false)
   })
 
+  it('round-trips direct input-field mutation after lazy BEEF parsing', () => {
+    const beef = Beef.fromBinaryView(makeDeepChain(1).toBEEFBytes())
+    const newest = beef.txs.at(-1)?.tx
+    if (newest == null) throw new Error('Expected newest transaction')
+    const initialBytes = newest.toUint8Array()
+    const initialTxid = newest.id('hex')
+
+    newest.inputs[0].sequence = 0xfffffffe
+
+    const serialized = beef.toUint8Array()
+    const reparsed = Beef.fromBinary(serialized).txs.at(-1)?.tx
+    if (reparsed == null) throw new Error('Expected reparsed transaction')
+
+    expect(newest.toUint8Array()).not.toEqual(initialBytes)
+    expect(newest.id('hex')).not.toBe(initialTxid)
+    expect(reparsed.inputs[0].sequence).toBe(0xfffffffe)
+    expect(reparsed.id('hex')).toBe(newest.id('hex'))
+  })
+
   it('does not expose the mutable transaction hash cache', () => {
     const tx = makeDeepChain(0)
     const expected = tx.id('hex')

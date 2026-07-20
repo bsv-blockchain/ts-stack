@@ -17,7 +17,7 @@ import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
-import { BINARY_ENCODING, BINARY_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
 
 export interface WalletStorageServerOptions {
   port: number
@@ -143,9 +143,10 @@ export class StorageServer {
     // A single POST endpoint for JSON-RPC:
     this.app.post('/', async (req: Request, res: Response) => {
       const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+      const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
       if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
       const { jsonrpc, method, id } = req.body
-      const params = decodeBinaryJsonValue(req.body.params) as any[]
+      const params = (requestUsesBinary ? decodeBinaryJsonValue(req.body.params) : req.body.params) as any[]
       const sendRpc = (payload: unknown, status: number = 200): Response => {
         res.set('X-Content-Type-Options', 'nosniff')
         // Normalize with the negotiated binary replacer, then let Express emit

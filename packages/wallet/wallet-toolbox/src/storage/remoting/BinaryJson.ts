@@ -1,7 +1,9 @@
 export const BINARY_ENCODING_HEADER = 'X-BSV-Binary-Encoding'
+export const BINARY_REQUEST_ENCODING_HEADER = 'X-BSV-Binary-Request-Encoding'
 export const BINARY_ENCODING = 'base64'
 
 const TAG = '$bsvBinary'
+const ESCAPED = 'escaped'
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
 function getBufferCtor (): any {
@@ -75,19 +77,40 @@ function fromBase64 (base64: string): Uint8Array {
 
 function isTaggedBinary (value: unknown): value is { [TAG]: typeof BINARY_ENCODING, data: string } {
   return value != null && typeof value === 'object' &&
-    (value as any)[TAG] === BINARY_ENCODING && typeof (value as any).data === 'string'
+    (value as any)[TAG] === BINARY_ENCODING && typeof (value as any).data === 'string' &&
+    Object.keys(value).length === 2
 }
 
 function isBufferJson (value: unknown): value is { type: 'Buffer', data: number[] } {
   return value != null && typeof value === 'object' &&
-    (value as any).type === 'Buffer' && Array.isArray((value as any).data)
+    (value as any).type === 'Buffer' && Array.isArray((value as any).data) &&
+    Object.keys(value).length === 2
 }
 
-export function binaryJsonReplacer (_key: string, value: unknown): unknown {
+function isEscapedJson (value: unknown): value is { [TAG]: typeof ESCAPED, entries: Array<[string, unknown]> } {
+  return value != null && typeof value === 'object' &&
+    (value as any)[TAG] === ESCAPED && Array.isArray((value as any).entries) &&
+    Object.keys(value).length === 2 &&
+    (value as any).entries.every((entry: unknown) =>
+      Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'string'
+    )
+}
+
+function escapeJsonObject (value: object): unknown {
+  return { [TAG]: ESCAPED, entries: Object.entries(value) }
+}
+
+export function binaryJsonReplacer (this: Record<string, unknown>, key: string, value: unknown): unknown {
   if (value instanceof Uint8Array) return { [TAG]: BINARY_ENCODING, data: toBase64(value) }
-  // Buffer.toJSON runs before a JSON replacer. Recognize that representation so
-  // Node storage backends receive the same compact transport as Uint8Array.
-  if (isBufferJson(value)) return { [TAG]: BINARY_ENCODING, data: toBase64(Uint8Array.from(value.data)) }
+  if (value == null || typeof value !== 'object') return value
+  // Buffer.toJSON runs before a JSON replacer, but the holder still contains
+  // the original Buffer. Literal Buffer-JSON objects must remain ordinary data.
+  if (isBufferJson(value)) {
+    const original = this[key]
+    if (original instanceof Uint8Array) return { [TAG]: BINARY_ENCODING, data: toBase64(original) }
+    return escapeJsonObject(value)
+  }
+  if (isTaggedBinary(value) || isEscapedJson(value)) return escapeJsonObject(value)
   return value
 }
 
@@ -97,7 +120,9 @@ export function legacyBinaryJsonReplacer (_key: string, value: unknown): unknown
 }
 
 export function binaryJsonReviver (_key: string, value: unknown): unknown {
-  return isTaggedBinary(value) ? fromBase64(value.data) : value
+  if (isTaggedBinary(value)) return fromBase64(value.data)
+  if (isEscapedJson(value)) return Object.fromEntries(value.entries)
+  return value
 }
 
 export function decodeBinaryJsonValue (value: unknown): unknown {
@@ -107,25 +132,30 @@ export function decodeBinaryJsonValue (value: unknown): unknown {
   // JSON can be nested far more deeply than the JavaScript call stack. Walk it
   // iteratively so an authenticated peer cannot turn binary decoding into a
   // recursion overflow.
-  const stack: object[] = [value]
+  const decoded = isEscapedJson(value) ? Object.fromEntries(value.entries) : value
+  const stack: object[] = [decoded]
   while (stack.length > 0) {
     const current = stack.pop()
     if (current == null) continue
     for (const [key, child] of Object.entries(current)) {
       if (isTaggedBinary(child)) {
         ;(current as Record<string, unknown>)[key] = fromBase64(child.data)
+      } else if (isEscapedJson(child)) {
+        const restored = Object.fromEntries(child.entries)
+        ;(current as Record<string, unknown>)[key] = restored
+        stack.push(restored)
       } else if (child != null && typeof child === 'object') {
         stack.push(child)
       }
     }
   }
-  return value
+  return decoded
 }
 
 export function stringifyJsonRpc (value: unknown, binary: boolean): string {
   return JSON.stringify(value, binary ? binaryJsonReplacer : legacyBinaryJsonReplacer)
 }
 
-export function parseJsonRpc (text: string): any {
-  return JSON.parse(text, binaryJsonReviver)
+export function parseJsonRpc (text: string, binary: boolean = false): any {
+  return binary ? JSON.parse(text, binaryJsonReviver) : JSON.parse(text)
 }
