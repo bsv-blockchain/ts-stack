@@ -37,8 +37,13 @@ export class TaskReviewStatus extends WalletMonitorTask {
 
     const agedLimit = new Date(Date.now() - this.agedMsecs)
     const r = await this.storage.runAsStorageProvider(async sp => {
-      const r = await sp.reviewStatus({ agedLimit })
-      return r
+      // Reconcile completed-but-unnotified proof requests first. This path
+      // restores failed transaction bookkeeping before completion; the generic
+      // reviewStatus SQL repair cannot reconstruct that state after changing a
+      // failed row directly to completed.
+      const reconciliation = await sp.reconcileCompletedProvenTxReqs()
+      const review = await sp.reviewStatus({ agedLimit })
+      return { log: reconciliation.log + review.log }
     })
 
     if (r.log.length > 0) log += `${r.log}`

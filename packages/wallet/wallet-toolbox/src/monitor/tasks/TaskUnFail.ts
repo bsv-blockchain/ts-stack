@@ -1,5 +1,3 @@
-import { Transaction } from '@bsv/sdk'
-
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { TableProvenTxReq } from '../../storage/schema/tables'
@@ -68,16 +66,13 @@ export class TaskUnFail extends WalletMonitorTask {
       log += `reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
       const r = await this.monitor.services.getMerklePath(req.txid)
       if (r.merklePath != null) {
-        // 1. set the req status to 'unmined'
-        req.status = 'unmined'
-        req.attempts = 0
         log += 'unfailed. status is now \'unmined\'\n'
         log += await this.unfailReq(req, indent + 2)
       } else {
         req.status = 'invalid'
         log += 'returned to status \'invalid\'\n'
+        await req.updateStorageDynamicProperties(this.storage)
       }
-      await req.updateStorageDynamicProperties(this.storage)
     }
     return { log }
   }
@@ -92,57 +87,8 @@ export class TaskUnFail extends WalletMonitorTask {
    * @returns
    */
   async unfailReq (req: EntityProvenTxReq, indent: number): Promise<string> {
-    let log = ''
-
-    const services = this.monitor.services
-
-    const txIds = req.notify.transactionIds || []
-    for (const id of txIds) {
-      const bsvtx = Transaction.fromBinary(req.rawTx)
-      await this.storage.runAsStorageProvider(async sp => {
-        const spk = sp
-        const tx = await sp.findTransactionById(id, undefined, true)
-        if (tx == null) {
-          log += ' '.repeat(indent) + `transaction ${id} was not found\n`
-          return
-        }
-        await sp.updateTransaction(tx.transactionId, { status: 'unproven' })
-        tx.status = 'unproven'
-        log += ' '.repeat(indent) + `transaction ${id} status is now 'unproven'\n`
-        let vin = -1
-        for (const bi of bsvtx.inputs) {
-          vin++
-          const is = await sp.findOutputs({
-            partial: { userId: tx.userId, txid: bi.sourceTXID!, vout: bi.sourceOutputIndex }
-          })
-          if (is.length === 1) {
-            const oi = is[0]
-            log +=
-              ' '.repeat(indent + 2) +
-              `input ${vin} matched to output ${oi.outputId} updated spentBy ${tx.transactionId}\n`
-            await sp.updateOutput(oi.outputId, { spendable: false, spentBy: tx.transactionId })
-          } else {
-            log += ' '.repeat(indent + 2) + `input ${vin} not matched to user's outputs\n`
-          }
-        }
-        const outputs = await sp.findOutputs({ partial: { userId: tx.userId, transactionId: tx.transactionId } })
-        for (const o of outputs) {
-          await spk.validateOutputScript(o)
-          if (o.lockingScript == null) {
-            log += ' '.repeat(indent + 2) + `output ${o.outputId} does not have a valid locking script\n`
-          } else {
-            const isUtxo = await services.isUtxo(o)
-            if (isUtxo === o.spendable) {
-              log += ' '.repeat(indent + 2) + `output ${o.outputId} unchanged\n`
-            } else {
-              log += ' '.repeat(indent + 2) + `output ${o.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
-              await sp.updateOutput(o.outputId, { spendable: isUtxo })
-            }
-          }
-        }
-      })
-    }
-
-    return log
+    return await this.storage.runAsStorageProvider(async sp =>
+      await sp.unfailTransactionsForProof(req, indent, { status: 'unmined', attempts: 0 })
+    )
   }
 }

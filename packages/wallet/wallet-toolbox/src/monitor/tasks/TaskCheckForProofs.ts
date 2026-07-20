@@ -136,8 +136,11 @@ export async function getProofs (
 
     log += '\n'
 
-    const txid = asString(doubleSha256BE(req.rawTx))
-    const reqIsValid = txid === req.txid
+    let reqIsValid = false
+    if (req.rawTx != null) {
+      const txid = asString(doubleSha256BE(req.rawTx))
+      reqIsValid = txid === req.txid
+    }
 
     if (!reqIsValid) {
       log += ' rawTx doesn\'t hash to txid. status => invalid.\n'
