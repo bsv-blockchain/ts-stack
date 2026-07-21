@@ -1,13 +1,13 @@
 import { Response } from 'express'
 import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
-import type { MessageBoxContext } from '../context.js'
+import { knex } from '../runtimeDeps.js'
 
 export interface RegisterDeviceRequest extends AuthRequest {
   body: {
     fcmToken: string
     deviceId?: string
-    platform?: string
+    platform?: string // 'ios' | 'android' | 'web'
   }
 }
 
@@ -63,95 +63,93 @@ export interface RegisterDeviceRequest extends AuthRequest {
  *         description: Internal server error
  */
 
-export function createRegisterDeviceRoute (
-  ctx: Pick<MessageBoxContext, 'knex'>
-) {
-  const { knex } = ctx
+export default {
+  type: 'post',
+  path: '/registerDevice',
+  func: async (req: RegisterDeviceRequest, res: Response): Promise<Response> => {
+    try {
+      Logger.log('[DEBUG] Processing device registration request')
 
-  return {
-    type: 'post',
-    path: '/registerDevice',
-    func: async (req: RegisterDeviceRequest, res: Response): Promise<Response> => {
-      try {
-        Logger.log('[DEBUG] Processing device registration request')
-
-        const identityKey = req.auth?.identityKey
-        if (identityKey == null) {
-          Logger.log('[DEBUG] Authentication required for device registration')
-          return res.status(401).json({
-            status: 'error',
-            code: 'ERR_AUTHENTICATION_REQUIRED',
-            description: 'Authentication required.'
-          })
-        }
-
-        const { fcmToken, deviceId, platform } = req.body
-
-        if (fcmToken == null || typeof fcmToken !== 'string' || fcmToken.trim() === '') {
-          Logger.log('[DEBUG] Invalid FCM token provided')
-          return res.status(400).json({
-            status: 'error',
-            code: 'ERR_INVALID_FCM_TOKEN',
-            description: 'fcmToken is required and must be a non-empty string.'
-          })
-        }
-
-        const validPlatforms = ['ios', 'android', 'web']
-        if (platform != null && !validPlatforms.includes(platform)) {
-          Logger.log('[DEBUG] Invalid platform provided')
-          return res.status(400).json({
-            status: 'error',
-            code: 'ERR_INVALID_PLATFORM',
-            description: 'platform must be one of: ios, android, web'
-          })
-        }
-
-        try {
-          const now = new Date()
-          const [deviceRegistrationId] = await knex('device_registrations')
-            .insert({
-              identity_key: identityKey,
-              fcm_token: fcmToken.trim(),
-              device_id: deviceId?.trim() ?? null,
-              platform: platform ?? null,
-              created_at: now,
-              updated_at: now,
-              active: true,
-              last_used: now
-            })
-            .onConflict('fcm_token')
-            .merge({
-              identity_key: identityKey,
-              device_id: deviceId?.trim() ?? null,
-              platform: platform ?? null,
-              updated_at: now,
-              active: true,
-              last_used: now
-            })
-
-          Logger.log(`[DEBUG] Device registered successfully: ${identityKey} with token ending in ...${fcmToken.slice(-10)}`)
-
-          return res.status(200).json({
-            status: 'success',
-            message: 'Device registered successfully for push notifications',
-            deviceId: deviceRegistrationId
-          })
-        } catch (dbError: any) {
-          Logger.error('[ERROR] Database error during device registration:', dbError)
-          return res.status(500).json({
-            status: 'error',
-            code: 'ERR_DATABASE_ERROR',
-            description: 'Failed to register device.'
-          })
-        }
-      } catch (error) {
-        Logger.error('[ERROR] Internal Server Error in registerDevice:', error)
-        return res.status(500).json({
+      // Validate authentication
+      const identityKey = req.auth?.identityKey
+      if (identityKey == null) {
+        Logger.log('[DEBUG] Authentication required for device registration')
+        return res.status(401).json({
           status: 'error',
-          code: 'ERR_INTERNAL',
-          description: 'An internal error has occurred.'
+          code: 'ERR_AUTHENTICATION_REQUIRED',
+          description: 'Authentication required.'
         })
       }
+
+      const { fcmToken, deviceId, platform } = req.body
+
+      // Validate required fields
+      if (fcmToken == null || typeof fcmToken !== 'string' || fcmToken.trim() === '') {
+        Logger.log('[DEBUG] Invalid FCM token provided')
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_FCM_TOKEN',
+          description: 'fcmToken is required and must be a non-empty string.'
+        })
+      }
+
+      // Validate platform if provided
+      const validPlatforms = ['ios', 'android', 'web']
+      if (platform != null && !validPlatforms.includes(platform)) {
+        Logger.log('[DEBUG] Invalid platform provided')
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_PLATFORM',
+          description: 'platform must be one of: ios, android, web'
+        })
+      }
+
+      try {
+        // Insert or update device registration
+        const now = new Date()
+        const [deviceRegistrationId] = await knex('device_registrations')
+          .insert({
+            identity_key: identityKey,
+            fcm_token: fcmToken.trim(),
+            device_id: deviceId?.trim() ?? null,
+            platform: platform ?? null,
+            created_at: now,
+            updated_at: now,
+            active: true,
+            last_used: now
+          })
+          .onConflict('fcm_token')
+          .merge({
+            identity_key: identityKey, // Update identity key in case token was reassigned
+            device_id: deviceId?.trim() ?? null,
+            platform: platform ?? null,
+            updated_at: now,
+            active: true,
+            last_used: now
+          })
+
+        Logger.log(`[DEBUG] Device registered successfully: ${identityKey} with token ending in ...${fcmToken.slice(-10)}`)
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'Device registered successfully for push notifications',
+          deviceId: deviceRegistrationId
+        })
+      } catch (dbError: any) {
+        Logger.error('[ERROR] Database error during device registration:', dbError)
+        return res.status(500).json({
+          status: 'error',
+          code: 'ERR_DATABASE_ERROR',
+          description: 'Failed to register device.'
+        })
+      }
+    } catch (error) {
+      Logger.error('[ERROR] Internal Server Error in registerDevice:', error)
+      return res.status(500).json({
+        status: 'error',
+        code: 'ERR_INTERNAL',
+        description: 'An internal error has occurred.'
+      })
     }
   }
 }

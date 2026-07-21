@@ -1,21 +1,30 @@
-import type { Knex } from 'knex'
 import { getFirebaseMessaging } from '../config/firebase.js'
 import { Logger } from './logger.js'
 import { PubKeyHex } from '@bsv/sdk'
+import { knex } from '../runtimeDeps.js'
 
+/**
+ * FCM Payload interface
+ */
 export interface FCMPayload {
   title: string
   messageId: string
   originator?: string
 }
 
+/**
+ * FCM notification result
+ */
 export interface SendNotificationResult {
   success: boolean
   error?: string
 }
 
-export async function sendFCMNotification (
-  knex: Knex,
+/**
+ * Send FCM push notification to all registered devices for a recipient
+ * Looks up FCM tokens from device_registrations table and sends to all active devices
+ */
+export async function sendFCMNotification(
   recipient: PubKeyHex,
   payload: FCMPayload
 ): Promise<SendNotificationResult> {
@@ -23,6 +32,7 @@ export async function sendFCMNotification (
     Logger.log(`[DEBUG] Attempting to send FCM notification to ${recipient}`)
     Logger.log('[DEBUG] Payload:', payload)
 
+    // Look up all active FCM tokens for this recipient
     const deviceRegistrations = await knex('device_registrations')
       .where({
         identity_key: recipient,
@@ -37,6 +47,7 @@ export async function sendFCMNotification (
 
     Logger.log(`[DEBUG] Found ${deviceRegistrations.length} active device(s) for ${recipient}`)
 
+    // Send notification to all registered devices
     const sendPromises = deviceRegistrations.map(async (device) => {
       try {
         Logger.log(`[DEBUG] Sending to ${device.platform ?? 'unknown'} device: ${device.device_id ?? 'unknown'}`)
@@ -52,6 +63,7 @@ export async function sendFCMNotification (
             title: payload.title,
             body: payload.messageId
           },
+          // Android configuration for headless service
           android: {
             priority: 'high',
             data: {
@@ -59,25 +71,30 @@ export async function sendFCMNotification (
               originator: payload.originator || 'unknown'
             }
           },
+          // iOS configuration for mutable content and Notification Service Extension
           apns: {
             headers: {
-              'apns-push-type': 'alert',
-              'apns-priority': '10'
+              'apns-push-type': 'alert', // required for iOS 13+
+              'apns-priority': '10',     // deliver immediately
+              // optional: 'apns-topic': '<your app bundle id>'  // FCM fills this automatically
             },
             payload: {
               aps: {
                 'mutable-content': 1,
-                alert: {
+                alert: {                 // include an alert so NSE can modify it
                   title: payload.title,
-                  body: payload.messageId
-                }
+                  body: payload.messageId,
+                },
+                // do NOT set 'content-available': 1 unless you also want background fetch
               },
+              // custom keys your NSE can read:
               messageId: payload.messageId,
-              originator: payload.originator ?? 'unknown'
-            }
-          }
+              originator: payload.originator ?? 'unknown',
+            },
+          },
         })
 
+        // Update last_used timestamp on successful send
         await knex('device_registrations')
           .where('fcm_token', device.fcm_token)
           .update({
@@ -89,6 +106,7 @@ export async function sendFCMNotification (
       } catch (error) {
         Logger.error(`[FCM ERROR] Failed to send to token ${device.fcm_token.slice(-10)}:`, error)
 
+        // Mark token as inactive if it's invalid
         if (error instanceof Error && (
           error.message.includes('registration-token-not-registered') ||
           error.message.includes('invalid-registration-token')
@@ -112,6 +130,7 @@ export async function sendFCMNotification (
 
     Logger.log(`[DEBUG] FCM notification results: ${successCount} successful, ${failureCount} failed`)
 
+    // Consider it successful if at least one device received the notification
     if (successCount > 0) {
       return { success: true }
     } else {

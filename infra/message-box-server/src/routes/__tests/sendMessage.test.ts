@@ -1,18 +1,22 @@
 /* eslint-env jest */
-import { createSendMessageRoute, calculateMessagePrice, Message, SendMessageRequest } from '../sendMessage.js'
+import sendMessage, { calculateMessagePrice, Message, SendMessageRequest } from '../sendMessage.js'
 import mockKnex from 'mock-knex'
 import { Response } from 'express'
 import type { Tracker } from 'mock-knex'
+import knexLib from 'knex'
+import knexConfig from '../../../knexfile.js'
+import { bindMessageBoxRuntime } from '../../runtimeDeps.js'
 import { Logger } from '../../utils/logger.js'
 import axios from 'axios'
 import type { AxiosInstance as AxiosInstanceType } from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
-import { createTestContext, createTestKnex } from './testContext.js'
 
 global.fetch = jest.fn()
 
-const knex = createTestKnex()
-const sendMessage = createSendMessageRoute(createTestContext(knex))
+const testKnex = (knexLib as any).default?.(knexConfig.development) ??
+  (knexLib as any)(knexConfig.development)
+bindMessageBoxRuntime({ knex: testKnex })
+const knex = sendMessage.knex
 let queryTracker: Tracker
 let axiosMock: AxiosMockAdapter
 
