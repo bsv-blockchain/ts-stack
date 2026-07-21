@@ -537,6 +537,17 @@ export class WalletPermissionsManager implements WalletInterface {
 
   private readonly pactEstablishedCache: Map<string, number> = new Map()
 
+  /**
+   * Parsed BEEF bundles keyed by the raw BEEF array of a `listOutputs`
+   * result, so token scans parse each bundle once instead of once per output.
+   * `null` records a bundle that failed to parse. WeakMap-keyed so entries
+   * are released with their results.
+   */
+  private readonly parsedBeefCache = new WeakMap<number[] | Uint8Array, Beef | null>()
+
+  /** Counts token-field decrypts so long scans can periodically yield. */
+  private tokenFieldDecryptCount = 0
+
   /** How long a cached permission remains valid (5 minutes). */
   private static readonly CACHE_TTL_MS = 5 * 60 * 1000
   /** Window during which freshly granted permissions are auto-allowed (except spending). */
@@ -2319,7 +2330,44 @@ export class WalletPermissionsManager implements WalletInterface {
     return ciphertext
   }
 
+  /**
+   * Extracts a transaction from a `listOutputs` result's BEEF bundle, parsing
+   * the bundle only once per result. Calling
+   * `Transaction.fromBEEF(result.BEEF, txid)` per output re-parses the entire
+   * bundle every time — O(n²) in the number of outputs — which can block the
+   * caller's thread (in browser wallets, the UI) for seconds on large
+   * permission baskets.
+   */
+  private transactionFromResultBeef (result: { BEEF?: number[] | Uint8Array }, txid: string): Transaction {
+    const beef = result.BEEF
+    if (beef != null) {
+      let parsed = this.parsedBeefCache.get(beef)
+      if (parsed === undefined) {
+        try {
+          parsed = Beef.fromBinary(beef)
+        } catch {
+          parsed = null
+        }
+        this.parsedBeefCache.set(beef, parsed)
+      }
+      // findAtomicTransaction (not findTxid().tx) matches fromBEEF exactly:
+      // it attaches merkle paths and sourceTransaction ancestry, which token
+      // consumers rely on when re-serializing via tx.toBEEF().
+      const tx = parsed?.findAtomicTransaction(txid)
+      if (tx != null) return tx
+    }
+    // Preserve the original behavior (including throwing) for bundles the
+    // fast path can't serve.
+    return Transaction.fromBEEF(beef ?? [], txid)
+  }
+
   private async decryptPermissionTokenField (ciphertext: number[]): Promise<number[]> {
+    // Field decrypts run in tight loops over every token in a basket; yield a
+    // macrotask periodically so large scans don't starve the caller's event
+    // loop (in browser wallets, that means blocking rendering and input).
+    if (++this.tokenFieldDecryptCount % 8 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
     try {
       const { plaintext } = await this.underlying.decrypt(
         {
@@ -2500,7 +2548,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (dec?.fields == null || dec.fields.length < 6) continue
 
@@ -2572,7 +2620,7 @@ export class WalletPermissionsManager implements WalletInterface {
       for (const out of result.outputs) {
         if (seen.has(out.outpoint)) continue
         const [txid, vout] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[vout].lockingScript)
         if (dec?.fields == null || dec.fields.length < 6) continue
 
@@ -2630,7 +2678,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (!dec?.fields || dec.fields.length < 3) continue
 
@@ -2683,7 +2731,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (!dec?.fields || dec.fields.length < 6) continue
         const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
@@ -2743,7 +2791,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndexStr] = out.outpoint.split('.')
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[Number(outputIndexStr)].lockingScript)
         if (!dec?.fields || dec.fields.length < 2) continue
         const domainRaw = dec.fields[0]
@@ -3346,7 +3394,7 @@ export class WalletPermissionsManager implements WalletInterface {
     for (const out of result.outputs) {
       if (seen.has(out.outpoint)) continue
       const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const tx = this.transactionFromResultBeef(result, txid)
       const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
       if (!dec?.fields || dec.fields.length < 6) continue
       const f = await this.decryptProtocolTokenFields(dec.fields)
@@ -3424,7 +3472,7 @@ export class WalletPermissionsManager implements WalletInterface {
       for (const out of result.outputs) {
         if (seen.has(out.outpoint)) continue
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (!dec?.fields || dec.fields.length < 3) continue
         const [domainRaw, expiryRaw, basketRaw] = dec.fields
@@ -3490,7 +3538,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const tokens: PermissionToken[] = []
     for (const out of result.outputs) {
       const [txid, outputIndexStr] = out.outpoint.split('.')
-      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const tx = this.transactionFromResultBeef(result, txid)
       const dec = PushDrop.decode(tx.outputs[Number(outputIndexStr)].lockingScript)
       if (!dec?.fields || dec.fields.length < 2) continue
       const [domainRaw, amtRaw] = dec.fields
@@ -3575,7 +3623,7 @@ export class WalletPermissionsManager implements WalletInterface {
     for (const out of result.outputs) {
       if (seen.has(out.outpoint)) continue
       const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const tx = this.transactionFromResultBeef(result, txid)
       const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
       if (!dec?.fields || dec.fields.length < 6) continue
       const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
