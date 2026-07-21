@@ -21,10 +21,10 @@ export interface BannedRecord {
 /**
  * BanService provides a persistent ban list stored in MongoDB.
  *
- * When the Janitor or an admin removes a SHIP/SLAP token, the associated
- * domain or outpoint can be added to the ban list. The BanAwareLookupWrapper
- * checks this list before admitting new outputs, preventing GASP from
- * re-syncing previously removed stale tokens.
+ * When the Janitor or an admin removes a token, its outpoint can be added to
+ * the ban list. SHIP/SLAP records may additionally ban the advertised domain.
+ * Ban-aware topic and lookup wrappers prevent GASP from re-syncing evicted
+ * records.
  */
 export class BanService {
   private readonly bans: Collection<BannedRecord>

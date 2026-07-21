@@ -75,6 +75,17 @@ describe('BanAwareTopicManager', () => {
     expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('banned outpoint'))
   })
 
+  it('should enforce outpoint eviction for non-discovery topics such as Apps', async () => {
+    const appsManager = new BanAwareTopicManager(mockWrapped, mockBanService, 'tm_apps', mockLogger)
+    mockBanService.isOutpointBanned.mockResolvedValueOnce(true).mockResolvedValue(false)
+
+    const result = await appsManager.identifyAdmissibleOutputs([1], [])
+
+    expect(result.outputsToAdmit).toEqual([1])
+    expect(mockBanService.isOutpointBanned).toHaveBeenCalledWith('ad-txid', 0)
+    expect(mockBanService.isDomainBanned).not.toHaveBeenCalled()
+  })
+
   it('should remove outputs whose advertised domain is banned', async () => {
     mockBanService.isDomainBanned.mockResolvedValueOnce(true).mockResolvedValue(false)
 

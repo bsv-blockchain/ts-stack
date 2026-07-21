@@ -11,8 +11,8 @@ import { PushDrop, Utils, LookupQuestion } from '@bsv/sdk'
 import { BanService } from './BanService.js'
 
 /**
- * Wraps a SHIP or SLAP LookupService to intercept outputAdmittedByTopic calls
- * and block outputs whose domain or outpoint appears in the persistent ban list.
+ * Wraps a LookupService to intercept outputAdmittedByTopic calls and block
+ * persistently evicted outpoints. SHIP and SLAP additionally support domains.
  *
  * This prevents GASP from re-syncing stale or banned tokens that were previously
  * removed by the Janitor or an admin.
@@ -24,7 +24,7 @@ export class BanAwareLookupWrapper implements LookupService {
   constructor (
     private readonly wrapped: LookupService,
     private readonly banService: BanService,
-    private readonly protocol: 'SHIP' | 'SLAP',
+    private readonly protocol: string,
     private readonly logger: typeof console = console
   ) {
     this.admissionMode = wrapped.admissionMode
@@ -48,7 +48,7 @@ export class BanAwareLookupWrapper implements LookupService {
       // Try to parse the domain from PushDrop fields and check domain ban
       try {
         const result = PushDrop.decode(lockingScript)
-        if (result.fields.length >= 3) {
+        if ((this.protocol === 'SHIP' || this.protocol === 'SLAP') && result.fields.length >= 3) {
           const domain = Utils.toUTF8(result.fields[2])
           if (await this.banService.isDomainBanned(domain)) {
             this.logger.log(`[BAN] Blocked banned domain ${domain} from ${this.protocol} (${txid}.${outputIndex})`)

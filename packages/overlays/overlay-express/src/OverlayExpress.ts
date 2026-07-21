@@ -785,22 +785,18 @@ export default class OverlayExpress {
     this.logger.log(chalk.green('Engine has been configured.'))
   }
 
-  /** Wrap SHIP/SLAP managers and services with ban-aware filters if BanService is configured. */
+  /** Wrap every configured topic and lookup service with persistent outpoint-eviction filters. */
   private wrapBanAwareServices (): void {
     if (this.banService === undefined) return
-    for (const key of ['tm_ship', 'tm_slap'] as const) {
-      if (this.managers[key] !== undefined) {
-        const label = key === 'tm_ship' ? 'SHIP' : 'SLAP'
-        this.managers[key] = new BanAwareTopicManager(this.managers[key], this.banService, label, this.logger)
-        this.logger.log(chalk.blue(`${label} topic manager wrapped with ban-aware filter.`))
-      }
+    for (const [key, manager] of Object.entries(this.managers)) {
+      const label = key === 'tm_ship' ? 'SHIP' : key === 'tm_slap' ? 'SLAP' : key
+      this.managers[key] = new BanAwareTopicManager(manager, this.banService, label, this.logger)
+      this.logger.log(chalk.blue(`${label} topic manager wrapped with ban-aware filter.`))
     }
-    for (const key of ['ls_ship', 'ls_slap'] as const) {
-      if (this.services[key] !== undefined) {
-        const label = key === 'ls_ship' ? 'SHIP' : 'SLAP'
-        this.services[key] = new BanAwareLookupWrapper(this.services[key], this.banService, label, this.logger)
-        this.logger.log(chalk.blue(`${label} lookup service wrapped with ban-aware filter.`))
-      }
+    for (const [key, service] of Object.entries(this.services)) {
+      const label = key === 'ls_ship' ? 'SHIP' : key === 'ls_slap' ? 'SLAP' : key
+      this.services[key] = new BanAwareLookupWrapper(service, this.banService, label, this.logger)
+      this.logger.log(chalk.blue(`${label} lookup service wrapped with ban-aware filter.`))
     }
   }
 
@@ -2100,9 +2096,15 @@ export default class OverlayExpress {
     this.app.post('/admin/remove-token', checkAdminAuth as any, (req, res) => {
       ; (async () => {
         try {
-          const { txid, outputIndex, service, ban, banDomain: shouldBanDomain } = req.body
+          const { txid, outputIndex, service, ban, banDomain: shouldBanDomain, reason, operator } = req.body
           if (typeof txid !== 'string' || typeof outputIndex !== 'number') {
             return res.status(400).json({ status: 'error', message: 'txid (string) and outputIndex (number) are required' })
+          }
+          if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
+            return res.status(400).json({ status: 'error', message: 'reason must be a string of at most 500 characters' })
+          }
+          if (operator !== undefined && (typeof operator !== 'string' || operator.length > 130)) {
+            return res.status(400).json({ status: 'error', message: 'operator must be a string of at most 130 characters' })
           }
 
           // Look up domain before eviction if needed for banning
@@ -2114,7 +2116,7 @@ export default class OverlayExpress {
           await this.evictFromServices(engine, txid, outputIndex, service)
 
           if (ban === true && this.banService !== undefined) {
-            await this.banService.banOutpoint(txid, outputIndex, 'Manually removed by admin', removedDomain)
+            await this.banService.banOutpoint(txid, outputIndex, reason ?? 'Topical Eviction by overlay operator', removedDomain, operator)
           }
 
           if (shouldBanDomain === true && typeof removedDomain === 'string' && this.banService !== undefined) {

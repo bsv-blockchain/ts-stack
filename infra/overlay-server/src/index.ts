@@ -31,6 +31,8 @@ import {
     createAnyLookupService,
     AppsTopicManager,
     createAppsLookupService,
+    KVStoreTopicManager,
+    createKVStoreLookupService,
     DIDTopicManager,
     createDIDLookupService,
     WalletConfigTopicManager,
@@ -336,6 +338,10 @@ const main = async () => {
     // Apps
     server.configureTopicManager('tm_apps', new AppsTopicManager())
     server.configureLookupServiceWithMongo('ls_apps', createAppsLookupService)
+
+    // Global key/value records used by wallet-signed catalogue reviews.
+    server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
+    server.configureLookupServiceWithMongo('ls_kvstore', createKVStoreLookupService)
 
     // DID
     server.configureTopicManager('tm_did', new DIDTopicManager())

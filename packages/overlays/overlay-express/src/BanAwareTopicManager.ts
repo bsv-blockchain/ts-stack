@@ -3,14 +3,14 @@ import { AdmittanceInstructions, PushDrop, Transaction, Utils } from '@bsv/sdk'
 import { BanService } from './BanService.js'
 
 /**
- * Filters banned SHIP or SLAP advertisement outputs before the overlay engine
- * admits them into topic storage.
+ * Filters persistently evicted outpoints before any overlay topic manager
+ * admits them again. SHIP and SLAP additionally support domain bans.
  */
 export class BanAwareTopicManager implements TopicManager {
   constructor (
     private readonly wrapped: TopicManager,
     private readonly banService: BanService,
-    private readonly protocol: 'SHIP' | 'SLAP',
+    private readonly protocol: string,
     private readonly logger: typeof console = console
   ) {}
 
@@ -44,7 +44,7 @@ export class BanAwareTopicManager implements TopicManager {
 
       try {
         const result = PushDrop.decode(output.lockingScript)
-        if (result.fields.length >= 3 && Utils.toUTF8(result.fields[0]) === this.protocol) {
+        if ((this.protocol === 'SHIP' || this.protocol === 'SLAP') && result.fields.length >= 3 && Utils.toUTF8(result.fields[0]) === this.protocol) {
           const domain = Utils.toUTF8(result.fields[2])
           if (await this.banService.isDomainBanned(domain)) {
             this.logger.log(`[BAN] Blocked banned domain ${domain} from ${this.protocol} topic admittance (${txid}.${outputIndex})`)

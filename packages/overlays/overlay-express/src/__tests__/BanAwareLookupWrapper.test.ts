@@ -82,6 +82,26 @@ describe('BanAwareLookupWrapper', () => {
       expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('[BAN]'))
     })
 
+    it('should enforce outpoint eviction for non-discovery services such as Apps', async () => {
+      const appsWrapper = new BanAwareLookupWrapper(mockWrapped, mockBanService, 'ls_apps', mockLogger)
+      mockBanService.isOutpointBanned.mockResolvedValue(true)
+
+      const payload: OutputAdmittedByTopic = {
+        mode: 'locking-script',
+        txid: 'evicted-app-txid',
+        outputIndex: 0,
+        topic: 'tm_apps',
+        satoshis: 1,
+        lockingScript: new Script()
+      }
+
+      await appsWrapper.outputAdmittedByTopic(payload)
+
+      expect(mockBanService.isOutpointBanned).toHaveBeenCalledWith('evicted-app-txid', 0)
+      expect(mockBanService.isDomainBanned).not.toHaveBeenCalled()
+      expect(mockWrapped.outputAdmittedByTopic).not.toHaveBeenCalled()
+    })
+
     it('should block a banned domain parsed from PushDrop fields', async () => {
       mockBanService.isOutpointBanned.mockResolvedValue(false)
       mockBanService.isDomainBanned.mockResolvedValue(true)
