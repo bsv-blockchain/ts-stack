@@ -62,6 +62,7 @@ describe('in-memory action batch workspace', () => {
 
   beforeEach(async () => {
     ctx = await _tu.createLegacyWalletSQLiteCopy(expect.getState().currentTestName ?? 'actionBatch')
+    _tu.mockPostServicesAsSuccess([ctx])
   })
 
   afterEach(async () => {
@@ -394,10 +395,13 @@ describe('in-memory action batch workspace', () => {
     })).rejects.toThrow('simulated broadcaster outage')
 
     const firstManifest = commit.mock.calls[0][0]
-    await expect(ctx.wallet.createAction({
+    const retried = await ctx.wallet.createAction({
       description: 'Retry commit after simulated broadcaster failure',
       options: { sendWith: [staged.txid!], acceptDelayedBroadcast: false }
-    })).rejects.toMatchObject({ code: 'WERR_REVIEW_ACTIONS' })
+    })
+    expect(retried.sendWithResults).toEqual([
+      expect.objectContaining({ txid: staged.txid, status: 'unproven' })
+    ])
     expect(commit.mock.calls[1][0].digest).toBe(firstManifest.digest)
     const persisted = await ctx.activeStorage.findTransactions({ partial: { userId: ctx.userId, txid: staged.txid } })
     expect(persisted).toHaveLength(1)

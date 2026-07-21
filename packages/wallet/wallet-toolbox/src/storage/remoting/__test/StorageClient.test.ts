@@ -158,6 +158,7 @@ describe('StorageClient tests', () => {
 
 async function createStorageServer (): Promise<{ setup: TestWalletNoSetup, server: StorageServer }> {
   const setup = await _tu.createLegacyWalletSQLiteCopy('StorageClientTest')
+  _tu.mockPostServicesAsSuccess([setup])
 
   const options: WalletStorageServerOptions = {
     port: Number(8042),
