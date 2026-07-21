@@ -81,6 +81,47 @@ for the default-basket invariant, automatic funding policy, and supported
 
 The codebase has detailed JSDoc annotations throughout — these will surface inline in editors like VS Code.
 
+### Horizontal Storage scaling
+
+`StorageServer` uses an in-process BRC-103 session manager by default. Before
+running multiple processes or replicas behind a non-sticky load balancer, use
+the shared Knex implementation against the same migrated wallet database:
+
+```typescript
+import {
+  KnexSessionManager,
+  StorageKnex,
+  StorageServer
+} from '@bsv/wallet-toolbox'
+
+const storage = new StorageKnex(storageOptions)
+await storage.migrate(storageName, storageIdentityKey)
+await storage.makeAvailable()
+
+const sessionManager = new KnexSessionManager(storage.knex, {
+  ttlMs: 24 * 60 * 60 * 1000
+})
+
+const server = new StorageServer(storage, {
+  port: 3000,
+  wallet,
+  monetize: false,
+  sessionManager,
+  logRpcRequests: false
+})
+server.start()
+```
+
+Every replica must share the same database and session TTL. Run
+`sessionManager.pruneExpiredSessions()` from one scheduled maintenance worker;
+reads exclude expired rows even before they are physically pruned. Once every
+replica uses the shared manager, authenticated requests no longer require
+client-IP or cookie affinity.
+
+Run `StorageKnex.migrate(...)` before constructing the manager during an
+upgrade. `makeAvailable()` validates and loads an already-migrated database; it
+does not apply schema changes.
+
 ## Development
 
 ```bash

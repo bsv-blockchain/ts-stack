@@ -23,6 +23,22 @@ attention to changes that materially alter behavior or extend functionality.
   cannot route a negotiated request to an older server instance. Homogeneous endpoints can opt in to
   compact requests with `StorageClientOptions.binaryRequests`; compact responses remain negotiated.
 
+- Release prep for `2.4.2`: add a Knex-backed async BRC-103 session manager,
+  the shared-session schema migration, and `StorageServer.sessionManager`
+  injection so authenticated requests can move safely between replicas without
+  sticky routing. Session writes reject stale cross-replica state, expire after
+  a configurable TTL, and support explicit pruning. Also add an opt-out that
+  skips both per-RPC logging and request-parameter serialization, and add a
+  `monitor_events.created_at` index for production proof-latency correlation.
+  Declare the runtime `body-parser` and `dotenv` imports explicitly;
+  `auth-express-middleware@2.1.1` likewise declares its `mime-types` runtime
+  import so strict package managers do not fail when loading the built packages.
+
+- Release prep for `2.4.2`: proof completion now discovers every local
+   transaction row sharing the proven txid, repairs notification-set drift from
+   concurrent multi-user `internalizeAction` calls, and idempotently completes
+   any local copy omitted by a last-writer-wins notification update.
+
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.
   Only complete BRC-29 signer metadata is eligible; custom rows remain visible

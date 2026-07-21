@@ -3,15 +3,33 @@ import { sdk, Services, sha256Hash, wait } from '../../src/index.all'
 import { _tu, TestSetup1Wallet } from '../utils/TestUtilsWalletStorage'
 
 const includeTestChaintracks = false
+const utxoScriptHash = 'bcbbc3d0585130e1cc39359e1e797a6fe4ee08f8128da1968b309590717770fb'
+const utxoTxid = 'e4154d8ab6993addc9b8705318cc8e971dfc0780e233038ecf44c601229d93ce'
 
-// Stub chaintracks fetch so the getChainTracker test doesn't depend on the live chaintracks
-// endpoint. Other requests (WhatsOnChain etc.) fall through to the real fetch.
+// Stub the fixed responses these contract tests exercise. Live provider checks belong in the
+// environment-gated/manual suites; ordinary CI must not depend on public service availability.
 const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
     const url = typeof input === 'string' ? input : input?.url ?? ''
     if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
       return { ok: true, status: 200, json: async () => ({ status: 'success', value: 950000 }) } as any
+    }
+    if (url.includes(`/v1/bsv/main/script/${utxoScriptHash}/unspent/all`)) {
+      return new Response(
+        JSON.stringify({
+          script: utxoScriptHash,
+          result: [{
+            height: 800000,
+            tx_pos: 0,
+            tx_hash: utxoTxid,
+            value: 1,
+            isSpentInMempoolTx: false,
+            status: 'confirmed'
+          }]
+        }),
+        { status: 200, statusText: 'OK', headers: { 'Content-Type': 'application/json' } }
+      )
     }
     return realFetch(input, init)
   }) as any

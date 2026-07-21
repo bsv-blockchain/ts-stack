@@ -26,10 +26,13 @@ export STORAGE_E2E_TARGET_URL=https://storage.babbage.systems
 export STORAGE_E2E_USER_COUNT=3
 export STORAGE_E2E_USER_OFFSET=0
 export STORAGE_E2E_USER_FUNDING_SATS=400
+export STORAGE_E2E_FUNDING_BATCH_SIZE=6
 export STORAGE_E2E_TX_COUNT=3
 export STORAGE_E2E_CEILING_BATCHES=2,4,8
 export STORAGE_E2E_LOAD_REPEATS=1
 export STORAGE_E2E_MULTI_USER_ROUNDS=1
+export STORAGE_E2E_PROOF_POLL_MS=5000
+export STORAGE_E2E_PROOF_REQUEST_TIMEOUT_MS=30000
 export STORAGE_E2E_EVIDENCE_FILE=/tmp/storage-e2e-evidence.json
 
 cd packages/wallet/wallet-toolbox
@@ -48,12 +51,15 @@ pnpm exec jest --runTestsByPath \
 | `STORAGE_E2E_USER_OFFSET` | `0` | Offset added to deterministic child derivation indexes; use a new offset to isolate a load run from prior wallet state. |
 | `STORAGE_E2E_TX_COUNT` | `3` | Transactions in each fixed-size write case. |
 | `STORAGE_E2E_OUTPUT_SATS` | `100` | Sats in each explicit test output. |
-| `STORAGE_E2E_USER_FUNDING_SATS` | `400` | Sats in each independent BRC-29 funding UTXO. |
+| `STORAGE_E2E_USER_FUNDING_SATS` | `400` | Sats in each independent BRC-29 funding UTXO; must be at least `OUTPUT_SATS + 300` so one BRC-29 input covers its unlocking fee. |
+| `STORAGE_E2E_FUNDING_BATCH_SIZE` | `6` | Maximum BRC-29 outputs in one setup transaction; bounds transaction size and coin-selection pressure. A fragmented root may still need consolidation or a fresh funding input. |
 | `STORAGE_E2E_MULTI_USER_ROUNDS` | `1` | Full `createAction` rounds run concurrently across the derived identities. |
 | `STORAGE_E2E_CEILING_BATCHES` | `2,4,8` | Transaction counts for single-identity and sharded phase load. |
 | `STORAGE_E2E_LOAD_REPEATS` | `1` | Repetitions per phase-load batch size; use at least 3 for comparison runs. |
 | `STORAGE_E2E_PROOF_TIMEOUT_MS` | `2700000` | Maximum wait for mining and Monitor reconciliation. |
 | `STORAGE_E2E_PROOF_POLL_MS` | `30000` | Arcade and Storage polling interval. |
+| `STORAGE_E2E_PROOF_REQUEST_TIMEOUT_MS` | `30000` | Per-request limit so an unresponsive proof or Storage call cannot stall the whole run. |
+| `STORAGE_E2E_PROOF_ARCADE_CONCURRENCY` | `8` | Bounded concurrency for independent Arcade proof observations. |
 | `STORAGE_E2E_EVIDENCE_FILE` | unset | Optional mode-0600 JSON evidence artifact. |
 
 ## What counts as passing
@@ -65,6 +71,10 @@ HTTP timing alone is not enough. A run passes only if every transaction created 
 - is returned by the originating wallet's authenticated `listActions` call with status `completed`.
 
 That final condition is the externally observable proof that Monitor updated production Storage. Operators may additionally correlate the emitted txids against Monitor logs and the `proven_tx_reqs`/`proven_txs` rows for deployment-level evidence.
+
+The proof loop reads `listActions` once per wallet per poll, rather than once per transaction, and observes independent Arcade txids with bounded concurrency. Each evidence row records the first poll that observed an Arcade proof, the first poll that observed Storage `completed`, and convergence time from broadcast. Those timestamps have `STORAGE_E2E_PROOF_POLL_MS` resolution; use database timestamps when sub-poll proof-ingestion latency matters.
+
+No-send txids are added to evidence as soon as `createAction` returns, before the batch is merged or submitted. If a later transaction in the same preparation batch fails, the partial work remains visible to the next same-run recovery instead of becoming an untracked `nosend` residue.
 
 ## Throughput methodology
 
@@ -103,3 +113,4 @@ Increase only one dimension at a time, record client location and deployed image
 - An Arcade `REJECTED` SSE event is not necessarily terminal. Production has emitted `REJECTED` and later `SEEN_MULTIPLE_NODES` for the same txid. Releasing that transaction's inputs on the first event creates false double-spend pressure and invalidates later TPS samples; the Monitor must retain the reservation until proof/rebroadcast processing reaches an authoritative result.
 - Storage's default output query includes unproven outputs. The harness preflight therefore correlates output parents with completed actions and asks the configured UTXO service to confirm each outpoint before funding or load; a raw wallet balance alone is not a safe load-test prerequisite.
 - Deployment topology and database pool size can become ceilings outside this repository. Capture the replica count, process model, CPU/memory use, and connection-pool configuration alongside production load results before tuning them.
+- Proof observers must not become the bottleneck they are measuring. Keep Arcade concurrency bounded, fetch Storage action state once per wallet per interval, and retain per-request timeouts so one hung dependency is reported on the next poll instead of freezing the run.

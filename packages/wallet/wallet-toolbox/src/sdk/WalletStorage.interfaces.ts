@@ -471,6 +471,10 @@ export interface UpdateProvenTxReqWithNewProvenTxResult {
   status: ProvenTxReqStatus
   history: string
   provenTxId: number
+  /** Final durable notification state, when supplied by the storage implementation. */
+  notified?: boolean
+  /** Final durable notification payload, when supplied by the storage implementation. */
+  notify?: string
   log?: string
 }
 

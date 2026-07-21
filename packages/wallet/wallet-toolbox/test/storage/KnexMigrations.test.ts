@@ -1,5 +1,11 @@
 import { _tu } from '../utils/TestUtilsWalletStorage'
-import { KnexMigrations, StorageKnex, wait } from '../../src/index.all'
+import {
+  AUTH_SESSION_MIGRATION,
+  KnexMigrations,
+  MONITOR_CREATED_AT_INDEX_MIGRATION,
+  StorageKnex,
+  wait
+} from '../../src/index.all'
 import { Knex } from 'knex'
 
 describe('KnexMigrations tests', () => {
@@ -117,6 +123,46 @@ describe('KnexMigrations tests', () => {
         expect(Boolean(byStatus[status].wasBroadcast)).toBe(false)
         expect(byStatus[status].rebroadcastAttempts).toBe(0)
       }
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('4 creates shared sessions and the monitor checkpoint index', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratesessions.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+
+    try {
+      await knex.schema.createTable('monitor_events', table => {
+        table.increments('id')
+        table.string('event', 64).notNullable()
+        table.timestamp('created_at').notNullable()
+      })
+
+      const source = new KnexMigrations('test', 'session migration test', '1'.repeat(64), 1000)
+      const authMigration = await source.getMigration(AUTH_SESSION_MIGRATION)
+      const monitorMigration = await source.getMigration(MONITOR_CREATED_AT_INDEX_MIGRATION)
+      await authMigration.up(knex)
+      await monitorMigration.up(knex)
+
+      await expect(knex.schema.hasTable('auth_sessions')).resolves.toBe(true)
+      const indexes = await knex('sqlite_master')
+        .where({ type: 'index' })
+        .whereIn('name', [
+          'idx_auth_sessions_identity_updated',
+          'idx_auth_sessions_expires',
+          'idx_monitor_events_created_at'
+        ])
+        .pluck('name')
+      expect(indexes.sort()).toEqual([
+        'idx_auth_sessions_expires',
+        'idx_auth_sessions_identity_updated',
+        'idx_monitor_events_created_at'
+      ])
+
+      await monitorMigration.down?.(knex)
+      await authMigration.down?.(knex)
+      await expect(knex.schema.hasTable('auth_sessions')).resolves.toBe(false)
     } finally {
       await knex.destroy()
     }

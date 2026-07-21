@@ -26,6 +26,13 @@ export interface WalletStorageServerOptions {
   calculateRequestPrice?: (req: Request) => number | Promise<number>
   adminIdentityKeys?: string[]
   makeLogger?: MakeWalletLogger
+  /**
+   * Shared BRC-103 session storage for multi-process or multi-replica servers.
+   * Defaults to the auth middleware's in-process SessionManager.
+   */
+  sessionManager?: AuthMiddlewareOptions['sessionManager']
+  /** Emit one JSON log record for each authenticated RPC. Default: true. */
+  logRpcRequests?: boolean
 }
 
 export class StorageServer {
@@ -37,6 +44,8 @@ export class StorageServer {
   private readonly calculateRequestPrice?: (req: Request) => number | Promise<number>
   private readonly adminIdentityKeys?: string[]
   private readonly makeLogger?: MakeWalletLogger
+  private readonly sessionManager?: AuthMiddlewareOptions['sessionManager']
+  private readonly logRpcRequests: boolean
 
   constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
@@ -46,6 +55,8 @@ export class StorageServer {
     this.calculateRequestPrice = options.calculateRequestPrice
     this.adminIdentityKeys = options.adminIdentityKeys
     this.makeLogger = options.makeLogger
+    this.sessionManager = options.sessionManager
+    this.logRpcRequests = options.logRpcRequests ?? true
 
     if (options['logShortReqs']) {
       this.setupShortReqLogging()
@@ -130,6 +141,7 @@ export class StorageServer {
     const options: AuthMiddlewareOptions = {
       wallet: this.wallet as WalletInterface
     }
+    if (this.sessionManager != null) options.sessionManager = this.sessionManager
     this.app.use(createAuthMiddleware(options))
     if (this.monetize) {
       this.app.use(
@@ -158,17 +170,19 @@ export class StorageServer {
         return sendRpc({ error: { code: -32600, message: 'Invalid Request' } }, 400)
       }
 
-      const logObj = {
-        source: 'StorageServer POST handler',
-        method,
-        id,
-        user: req.auth.identityKey,
-        params: JSON.stringify(params || '').slice(0, 256)
+      let logObj: Record<string, unknown> | undefined
+      if (this.logRpcRequests) {
+        logObj = {
+          source: 'StorageServer POST handler',
+          method,
+          id,
+          user: req.auth.identityKey,
+          params: JSON.stringify(params || '').slice(0, 256)
+        }
+        const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
+        if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
+        console.log(JSON.stringify(logObj))
       }
-      const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
-      if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
-
-      console.log(JSON.stringify(logObj))
 
       try {
         // Dispatch the method call:
@@ -181,9 +195,11 @@ export class StorageServer {
           // Find user
           switch (method) {
             case 'destroy': {
-              logObj['result'] = undefined
-              logObj['comment'] = 'IGNORED'
-              console.log(JSON.stringify(logObj))
+              if (logObj != null) {
+                logObj.result = undefined
+                logObj.comment = 'IGNORED'
+                console.log(JSON.stringify(logObj))
+              }
               return sendRpc({ jsonrpc: '2.0', result: undefined, id })
             }
             case 'getSettings':
