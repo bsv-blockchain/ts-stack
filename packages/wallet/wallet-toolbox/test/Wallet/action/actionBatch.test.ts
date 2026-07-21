@@ -63,6 +63,7 @@ describe('in-memory action batch workspace', () => {
   beforeEach(async () => {
     ctx = await _tu.createLegacyWalletSQLiteCopy(expect.getState().currentTestName ?? 'actionBatch')
     _tu.mockPostServicesAsSuccess([ctx])
+    jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight: async () => true } as any)
     jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
   })
 

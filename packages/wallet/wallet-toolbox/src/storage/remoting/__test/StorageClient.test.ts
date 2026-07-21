@@ -159,6 +159,7 @@ describe('StorageClient tests', () => {
 async function createStorageServer (): Promise<{ setup: TestWalletNoSetup, server: StorageServer }> {
   const setup = await _tu.createLegacyWalletSQLiteCopy('StorageClientTest')
   _tu.mockPostServicesAsSuccess([setup])
+  jest.spyOn(setup.services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight: async () => true } as any)
   jest.spyOn(setup.activeStorage, 'getServices').mockReturnValue(setup.services)
 
   const options: WalletStorageServerOptions = {
