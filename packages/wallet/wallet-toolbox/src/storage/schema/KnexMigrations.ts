@@ -6,6 +6,9 @@ import { StorageKnex } from '../StorageKnex'
 import { WalletError } from '../../sdk/WalletError'
 import { WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
 
+export const AUTH_SESSION_MIGRATION = '2026-07-14-001 add shared auth sessions'
+export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor created index'
+
 interface Migration {
   up: (knex: Knex) => Promise<void>
   down?: (knex: Knex) => Promise<void>
@@ -72,6 +75,39 @@ export class KnexMigrations implements MigrationSource<string> {
       } else {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+      }
+    }
+
+    migrations[AUTH_SESSION_MIGRATION] = {
+      async up (knex) {
+        await knex.schema.createTable('auth_sessions', table => {
+          table.string('sessionNonce', 64).primary()
+          table.string('peerNonce', 64).nullable()
+          table.string('peerIdentityKey', 130).nullable()
+          table.boolean('isAuthenticated').notNullable()
+          table.bigInteger('lastUpdate').notNullable()
+          table.boolean('certificatesRequired').nullable()
+          table.boolean('certificatesValidated').nullable()
+          table.bigInteger('expiresAt').notNullable()
+          table.index(['peerIdentityKey', 'lastUpdate'], 'idx_auth_sessions_identity_updated')
+          table.index('expiresAt', 'idx_auth_sessions_expires')
+        })
+      },
+      async down (knex) {
+        await knex.schema.dropTable('auth_sessions')
+      }
+    }
+
+    migrations[MONITOR_CREATED_AT_INDEX_MIGRATION] = {
+      async up (knex) {
+        await knex.schema.alterTable('monitor_events', table => {
+          table.index('created_at', 'idx_monitor_events_created_at')
+        })
+      },
+      async down (knex) {
+        await knex.schema.alterTable('monitor_events', table => {
+          table.dropIndex('created_at', 'idx_monitor_events_created_at')
+        })
       }
     }
 

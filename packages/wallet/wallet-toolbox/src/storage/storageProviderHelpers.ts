@@ -107,25 +107,26 @@ export async function mergeInputsIntoBeef (
  * Notify each transaction that a proof has been found.
  * Mutates `req` history notes in place.
  *
- * The `addNote` and `flushNotes` callbacks avoid coupling this helper to a
- * specific entity type.
+ * The `addNote` callback avoids coupling this helper to a specific entity type.
+ * Returns false if any transaction update failed so callers can retain the
+ * request for later status repair.
  */
 export async function notifyTransactionsOfProof (
   ids: number[],
   provenTxId: number,
   addNote: (note: ReqHistoryNote) => void,
-  flushNotes: () => Promise<void>,
   updateTransaction: (id: number, update: { provenTxId: number, status: 'completed' }) => Promise<unknown>
-): Promise<void> {
-  if (ids.length === 0) return
+): Promise<boolean> {
+  let allUpdatesSucceeded = true
   for (const id of ids) {
     try {
       await updateTransaction(id, { provenTxId, status: 'completed' })
       addNote({ what: 'notifyTxOfProof', transactionId: id })
     } catch (error_: unknown) {
+      allUpdatesSucceeded = false
       const { code, description } = WalletError.fromUnknown(error_)
       addNote({ what: 'notifyTxOfProofError', id, provenTxId, code, description })
     }
   }
-  await flushNotes()
+  return allUpdatesSucceeded
 }

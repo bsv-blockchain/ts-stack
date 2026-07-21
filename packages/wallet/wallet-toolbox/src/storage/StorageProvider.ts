@@ -12,7 +12,8 @@ import {
   AbortActionArgs,
   Validation,
   WalletLoggerInterface,
-  ChainTracker
+  ChainTracker,
+  Transaction
 } from '@bsv/sdk'
 import { classifyReqStatus, mergeInputsIntoBeef, mergeInputBeefs, notifyTransactionsOfProof } from './storageProviderHelpers'
 import { getBeefForTransaction } from './methods/getBeefForTransaction'
@@ -804,10 +805,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (req.provenTxId != null && req.provenTxId > 0) {
       // Someone beat us to it, grab what we need for results...
       proven = new EntityProvenTx(verifyOne(await this.findProvenTxs({ partial: { txid: args.txid } })))
+      if (req.status !== 'completed' || req.provenTxId !== proven.provenTxId) {
+        req.status = 'completed'
+        req.provenTxId = proven.provenTxId
+        await req.updateStorageDynamicProperties(this)
+      }
     } else {
-      let isNew: boolean
-      ;({ proven, isNew } = await this.transaction(async trx => {
-        const { proven: api, isNew } = await this.findOrInsertProvenTx(
+      proven = await this.transaction(async trx => {
+        const { proven: api } = await this.findOrInsertProvenTx(
           {
             created_at: new Date(),
             updated_at: new Date(),
@@ -822,31 +827,249 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           },
           trx
         )
-        proven = new EntityProvenTx(api)
-        if (isNew) {
+        const found = new EntityProvenTx(api)
+        if (req.status !== 'completed' || req.provenTxId !== found.provenTxId) {
           req.status = 'completed'
-          req.provenTxId = proven.provenTxId
+          req.provenTxId = found.provenTxId
           await req.updateStorageDynamicProperties(this, trx)
-          // upate the transaction notifications outside of storage transaction....
         }
-        return { proven, isNew }
-      }))
-      if (isNew) {
-        await notifyTransactionsOfProof(
-          req.notify.transactionIds ?? [],
-          proven.provenTxId,
-          note => req.addHistoryNote(note),
-          async () => { await req.updateStorageDynamicProperties(this) },
-          async (id, update) => { await this.updateTransaction(id, update) }
-        )
-      }
+        return found
+      })
     }
+
+    await this.reconcileProvenTxReqTransactions(req, proven)
+
     const r: UpdateProvenTxReqWithNewProvenTxResult = {
       status: req.status,
       history: req.apiHistory,
-      provenTxId: proven.provenTxId
+      provenTxId: proven.provenTxId,
+      notified: req.notified,
+      notify: req.apiNotify
     }
     return r
+  }
+
+  /**
+   * Reconcile completed proof requests whose transaction fan-out previously
+   * failed or whose durable notification state drifted.
+   *
+   * This is called by TaskReviewStatus so a completed request with
+   * `notified = false` is retried and can become eligible for normal purge.
+   */
+  async reconcileCompletedProvenTxReqs (): Promise<{ log: string }> {
+    let log = ''
+    const reqs = await this.findProvenTxReqs({
+      partial: { status: 'completed', notified: false }
+    })
+
+    for (const reqApi of reqs) {
+      const req = new EntityProvenTxReq(reqApi)
+      if (req.provenTxId == null || req.provenTxId <= 0) {
+        log += `completed req ${req.id} cannot reconcile without provenTxId\n`
+        continue
+      }
+
+      const provenApi = verifyOneOrNone(await this.findProvenTxs({
+        partial: { provenTxId: req.provenTxId }
+      }))
+      if (provenApi == null) {
+        log += `completed req ${req.id} cannot reconcile missing provenTx ${req.provenTxId}\n`
+        continue
+      }
+
+      await this.reconcileProvenTxReqTransactions(req, new EntityProvenTx(provenApi))
+      if (req.notified) log += `completed req ${req.id} transaction notifications reconciled\n`
+    }
+
+    return { log }
+  }
+
+  /**
+   * Restore every failed local copy of a transaction before proof completion.
+   * Also heals the request's notification set from the authoritative txid
+   * lookup so TaskUnFail cannot omit a local copy after notification drift.
+   */
+  async unfailTransactionsForProof (
+    req: EntityProvenTxReq,
+    indent = 0,
+    requestUpdate?: Pick<TableProvenTxReqDynamics, 'status' | 'attempts'>
+  ): Promise<string> {
+    const transactions = await this.findTransactions({
+      partial: { txid: req.txid },
+      noRawTx: true
+    })
+    const transactionsToRepair = transactions.filter(transaction =>
+      requestUpdate != null || transaction.status === 'failed'
+    )
+    // Proof completion is the hot path. If no failed transaction needs repair,
+    // notification reconciliation below will perform the required atomic work;
+    // avoid an otherwise empty refresh/write transaction here.
+    if (transactionsToRepair.length === 0 && requestUpdate == null) return ''
+
+    // Refresh only after deciding recovery is required, while the caller has
+    // not yet applied an intended request transition. TaskUnFail passes that
+    // transition separately so it is persisted atomically with bookkeeping.
+    await req.refreshFromStorage(this)
+    const preparedTransactionIds = new Set(transactionsToRepair.map(transaction => transaction.transactionId))
+    const outputVerdicts = new Map<number, boolean | undefined>()
+    const bsvtx = transactionsToRepair.length > 0 ? Transaction.fromBinary(req.rawTx) : undefined
+
+    // UTXO checks can call external services. Complete every check before
+    // opening the write transaction so network latency never holds DB locks.
+    if (transactionsToRepair.length > 0) {
+      const services = this.getServices()
+      for (const transaction of transactionsToRepair) {
+        const outputs = await this.findOutputs({
+          partial: { userId: transaction.userId, transactionId: transaction.transactionId }
+        })
+        for (const output of outputs) {
+          const outputId = verifyId(output.outputId)
+          await this.validateOutputScript(output)
+          outputVerdicts.set(
+            outputId,
+            output.lockingScript == null ? undefined : await services.isUtxo(output)
+          )
+        }
+      }
+    }
+
+    return await this.transaction(async trx => {
+      let log = ''
+      await req.refreshFromStorage(this, trx)
+      const currentTransactions = await this.findTransactions({
+        partial: { txid: req.txid },
+        noRawTx: true,
+        trx
+      })
+      const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
+
+      if (requestUpdate != null) {
+        req.status = requestUpdate.status
+        req.attempts = requestUpdate.attempts
+      }
+
+      for (const tx of currentTransactions) {
+        if (!knownNotificationIds.has(tx.transactionId)) {
+          req.addNotifyTransactionId(tx.transactionId)
+          knownNotificationIds.add(tx.transactionId)
+        }
+        const shouldRepair = requestUpdate != null || tx.status === 'failed'
+        if (!shouldRepair) continue
+        if (bsvtx == null || !preparedTransactionIds.has(tx.transactionId)) {
+          throw new WERR_INTERNAL(`Transaction ${tx.transactionId} changed while preparing proof recovery.`)
+        }
+
+        await this.updateTransaction(tx.transactionId, { status: 'unproven' }, trx)
+        log += ' '.repeat(indent) + `transaction ${tx.transactionId} status is now 'unproven'\n`
+
+        let vin = -1
+        for (const input of bsvtx.inputs) {
+          vin++
+          const sourceTXID = input.sourceTXID
+          if (sourceTXID == null) {
+            log += ' '.repeat(indent + 2) + `input ${vin} has no source transaction id\n`
+            continue
+          }
+          const outputs = await this.findOutputs({
+            partial: {
+              userId: tx.userId,
+              txid: sourceTXID,
+              vout: input.sourceOutputIndex
+            },
+            trx
+          })
+          if (outputs.length === 1) {
+            const output = outputs[0]
+            log += ' '.repeat(indent + 2) +
+              `input ${vin} matched to output ${output.outputId} updated spentBy ${tx.transactionId}\n`
+            await this.updateOutput(
+              verifyId(output.outputId),
+              { spendable: false, spentBy: tx.transactionId },
+              trx
+            )
+          } else {
+            log += ' '.repeat(indent + 2) + `input ${vin} not matched to user's outputs\n`
+          }
+        }
+
+        const outputs = await this.findOutputs({
+          partial: { userId: tx.userId, transactionId: tx.transactionId },
+          trx
+        })
+        for (const output of outputs) {
+          const outputId = verifyId(output.outputId)
+          if (!outputVerdicts.has(outputId)) {
+            throw new WERR_INTERNAL(`Output ${outputId} changed while preparing proof recovery.`)
+          }
+          const isUtxo = outputVerdicts.get(outputId)
+          if (isUtxo == null) {
+            log += ' '.repeat(indent + 2) + `output ${output.outputId} does not have a valid locking script\n`
+          } else if (isUtxo === output.spendable) {
+            log += ' '.repeat(indent + 2) + `output ${output.outputId} unchanged\n`
+          } else {
+            log += ' '.repeat(indent + 2) +
+              `output ${output.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
+            await this.updateOutput(outputId, { spendable: isUtxo }, trx)
+          }
+        }
+      }
+
+      await req.updateStorageDynamicProperties(this, trx)
+      return log
+    })
+  }
+
+  private async reconcileProvenTxReqTransactions (
+    req: EntityProvenTxReq,
+    proven: EntityProvenTx
+  ): Promise<void> {
+    // A transaction can be internalized concurrently by several users. Their
+    // transaction rows share a txid but race while merging the JSON notify
+    // list, so a last-writer-wins update can omit one local copy. A valid proof
+    // is authoritative for every local transaction with this txid: discover
+    // them from the indexed transaction table and atomically heal both the
+    // durable notify set and any row that missed the original completion.
+    // Keep the clean proof-completion path identical to the normal notification
+    // transaction. Only leave it when failed rows require external UTXO checks,
+    // which must run without an open transaction.
+    let repairAttempts = 0
+    for (;;) {
+      const needsRepair = await this.transaction(async trx => {
+        await req.refreshFromStorage(this, trx)
+        const transactions = await this.findTransactions({ partial: { txid: req.txid }, trx })
+        if (transactions.some(transaction => transaction.status === 'failed')) return true
+
+        const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
+        for (const transaction of transactions) {
+          if (!knownNotificationIds.has(transaction.transactionId)) {
+            req.addNotifyTransactionId(transaction.transactionId)
+            knownNotificationIds.add(transaction.transactionId)
+          }
+        }
+        const transactionIdsNeedingProof = transactions
+          .filter(transaction => transaction.status !== 'completed' || transaction.provenTxId !== proven.provenTxId)
+          .map(transaction => transaction.transactionId)
+        const updatesSucceeded = await notifyTransactionsOfProof(
+          transactionIdsNeedingProof,
+          proven.provenTxId,
+          note => req.addHistoryNote(note),
+          async (id, update) => { await this.updateTransaction(id, update, trx) }
+        )
+        const completedTransactions = await this.findTransactions({ partial: { txid: req.txid }, trx })
+        req.notified = updatesSucceeded && completedTransactions.every(transaction =>
+          transaction.status === 'completed' && transaction.provenTxId === proven.provenTxId
+        )
+        await req.updateStorageDynamicProperties(this, trx)
+        return false
+      })
+
+      if (!needsRepair) return
+      if (repairAttempts >= 2) {
+        throw new WERR_INTERNAL(`Transactions for ${req.txid} repeatedly changed to failed during proof recovery.`)
+      }
+      repairAttempts++
+      await this.unfailTransactionsForProof(req)
+    }
   }
 
   /**
