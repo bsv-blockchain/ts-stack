@@ -177,6 +177,7 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       await r.query({ service: 'ls_test', query: {} })
+      ;((r as any).hostReputation as HostReputationTracker).flush()
       // Reputation data should have been written to the store
       expect(store.size).toBeGreaterThan(0)
     })
@@ -673,7 +674,7 @@ describe('LookupResolver – additional coverage', () => {
       // into backoff just because we asked a question it didn't have data for.
       mockFacilitator.lookup.mockResolvedValue({
         type: 'freeform',
-        data: 'some free data'
+        result: 'some free data'
       })
 
       const r = new LookupResolver({
@@ -690,7 +691,9 @@ describe('LookupResolver – additional coverage', () => {
       const tracker: HostReputationTracker = (r as any).hostReputation
       const snap = tracker.snapshot('https://weird.host')
       expect(snap?.totalFailures).toBe(0)
-      expect(snap?.totalSuccesses).toBeGreaterThan(0)
+      // Freeform is neutral: it must neither penalize the host nor clear a
+      // concurrent availability backoff by recording a success.
+      expect(snap?.totalSuccesses).toBe(0)
       expect(snap?.backoffUntil).toBe(0)
     })
 
