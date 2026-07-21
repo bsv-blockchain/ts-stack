@@ -1,11 +1,12 @@
 /* eslint-env jest */
-import listMessages from '../listMessages.js'
+import { createListMessagesRoute } from '../listMessages.js'
 import mockKnex, { Tracker } from 'mock-knex'
 import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
+import { createTestContext, createTestKnex } from './testContext.js'
 
-// Ensure proper handling of mock-knex
-const knex = listMessages.knex
+const knex = createTestKnex()
+const listMessages = createListMessagesRoute(createTestContext(knex))
 let queryTracker: Tracker
 
 // Define Mock Express Response Object

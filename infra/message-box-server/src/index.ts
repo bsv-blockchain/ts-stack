@@ -1,36 +1,25 @@
 /**
- * @file index.ts
- * @description
- * Main entry point for the MessageBox Server.
- *
- * Responsibilities:
- * - Initializes environment variables and config
- * - Creates HTTP and WebSocket servers
- * - Boots authentication and route handlers
- * - Sets up database migrations after a short delay
- * - Emits and handles real-time message events over WebSocket
- *
- * Exports:
- * - `start()` for programmatic bootstrapping
- * - `http` and `io` server instances
- * - `HTTP_PORT` and `ROUTING_PREFIX` for external reference
+ * Binary entry: env → context → mount → listen.
+ * For in-process mounting, import from compose.js instead.
  */
 
 import * as dotenv from 'dotenv'
-import { app, appReady, getWallet, knex } from './app.js'
-import { spawn } from 'child_process'
 import { createServer } from 'http'
-import { PublicKey } from '@bsv/sdk'
-import { Logger, log } from './utils/logger.js'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
-import { AuthSocketServer } from '@bsv/authsocket'
 import * as crypto from 'crypto'
+import {
+  createMessageBoxContext,
+  createMessageBoxApp,
+  mountMessageBoxRoutes,
+  attachMessageBoxWebSockets
+} from './compose.js'
+import { createKnexFromEnv, createWalletFromEnv } from './app.js'
+import { Logger, log } from './utils/logger.js'
 import { initializeFirebase } from './config/firebase.js'
-(global.self as any) = { crypto }
+;(global.self as any) = { crypto }
 
 dotenv.config()
 
-// Load environment variables
 const {
   NODE_ENV = 'development',
   PORT,
@@ -39,15 +28,12 @@ const {
   ROUTING_PREFIX = ''
 } = process.env
 
-// if (NODE_ENV === 'development' || process.env.LOGGING_ENABLED === 'true') {
-//   Logger.enable()
-// }
 Logger.enable()
-// Determine which port to listen on
+
 const parsedPort = Number(PORT)
 const parsedEnvPort = Number(process.env.HTTP_PORT)
 
-const HTTP_PORT: number = NODE_ENV !== 'development'
+export const HTTP_PORT: number = NODE_ENV !== 'development'
   ? 3000
   : !Number.isNaN(parsedPort) && parsedPort > 0
     ? parsedPort
@@ -55,312 +41,69 @@ const HTTP_PORT: number = NODE_ENV !== 'development'
       ? parsedEnvPort
       : 8080
 
-// Ensure private key is available before proceeding
+export const ROUTING_PREFIX_VALUE = ROUTING_PREFIX
+
 if (SERVER_PRIVATE_KEY === undefined || SERVER_PRIVATE_KEY === null || SERVER_PRIVATE_KEY.trim() === '') {
   throw new Error('SERVER_PRIVATE_KEY is not defined in the environment variables.')
 }
 
-// Initialize Firebase Admin (only when ENABLE_FIREBASE=true)
 initializeFirebase()
 
-// Create HTTP server
-/* eslint-disable @typescript-eslint/no-misused-promises */
-const http = createServer(app)
+const knex = createKnexFromEnv()
+const app = createMessageBoxApp()
 
-// WebSocket setup (only if enabled)
-// Held in a const container so the exported binding is never reassigned.
-const ioRef: { current: AuthSocketServer | null } = { current: null }
+const ioRef: { current: ReturnType<typeof attachMessageBoxWebSockets> } = { current: null }
+export const http = createServer(app)
 
-/**
- * @function start
- * @description
- * Initializes the WebSocket server with identity-key-based authentication
- * and attaches all supported event handlers for:
- * - `sendMessage`
- * - `joinRoom`
- * - `leaveRoom`
- * - `disconnect`
- *
- * Only runs if `ENABLE_WEBSOCKETS` is set to `true` in the environment.
- *
- * @returns {Promise<void>} Resolves once WebSocket listeners are fully attached.
- */
-export const start = async (): Promise<void> => {
-  await appReady
+export { ioRef as io, ROUTING_PREFIX }
 
-  if (ENABLE_WEBSOCKETS.toLowerCase() === 'true') {
-    Logger.log('[WEBSOCKET] Initializing WebSocket support...')
-    ioRef.current = new AuthSocketServer(http, {
-      wallet: await getWallet(),
-      cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
-      }
-    })
+export async function start (): Promise<void> {
+  const wallet = await createWalletFromEnv()
+  const ctx = createMessageBoxContext({
+    wallet,
+    knex,
+    routingPrefix: ROUTING_PREFIX,
+    enableWebSockets: ENABLE_WEBSOCKETS.toLowerCase() === 'true'
+  })
 
-    // Map to store authenticated identity keys
-    const authenticatedSockets = new Map<string, string>()
-
-    ioRef.current.on('connection', (socket) => {
-      Logger.log('[WEBSOCKET] New connection established.')
-
-      // Handle immediate authentication if identityKey is available
-      if (typeof socket.identityKey === 'string' && socket.identityKey.trim() !== '') {
-        try {
-          const parsedIdentityKey = PublicKey.fromString(socket.identityKey)
-          Logger.log('[DEBUG] Parsed WebSocket Identity Key Successfully:', parsedIdentityKey.toString())
-
-          authenticatedSockets.set(socket.id, parsedIdentityKey.toString())
-          Logger.log('[WEBSOCKET] Identity key stored for socket ID:', socket.id)
-
-          // Send confirmation immediately if identity key is provided on connection
-          void socket.emit('authenticationSuccess', { status: 'success' })
-        } catch (error) {
-          Logger.error('[ERROR] Failed to parse WebSocket identity key:', error)
-        }
-      } else {
-        // Wait for 'authenticated' event if identityKey was not in handshake
-        Logger.warn('[WARN] WebSocket connection received without identity key. Waiting for authentication...')
-
-        let identityKeyHandled = false
-
-        const authListener = async (data: { identityKey?: string }): Promise<void> => {
-          if (identityKeyHandled) return
-
-          Logger.log('[WEBSOCKET] Received authentication data:', data)
-
-          if (data !== null && data !== undefined && typeof data.identityKey === 'string' && data.identityKey.trim().length > 0) {
-            try {
-              const parsedIdentityKey = PublicKey.fromString(data.identityKey)
-              Logger.log('[DEBUG] Retrieved and parsed Identity Key after connection:', parsedIdentityKey.toString())
-
-              authenticatedSockets.set(socket.id, parsedIdentityKey.toString())
-              Logger.log('[WEBSOCKET] Stored authenticated Identity Key for socket ID:', socket.id)
-
-              identityKeyHandled = true
-
-              Logger.log(`New authenticated WebSocket connection from: ${authenticatedSockets.get(socket.id) ?? 'unknown'}`)
-
-              // Emit authentication success message
-              await socket.emit('authenticationSuccess', { status: 'success' }).catch(error => {
-                Logger.error('[WEBSOCKET ERROR] Failed to send authentication success event:', error)
-              })
-            } catch (error) {
-              Logger.error('[ERROR] Failed to parse Identity Key from authenticated event:', error)
-              await socket.emit('authenticationFailed', { reason: 'Invalid identity key format' })
-            }
-          } else {
-            Logger.warn('[WARN] Invalid or missing identity key in authentication event.')
-            await socket.emit('authenticationFailed', { reason: 'Missing identity key' })
-          }
-        }
-
-        // Ensure `authListener` is used properly
-        socket.on('authenticated', authListener)
-      }
-
-      // Handle sendMessage over WebSocket
-      socket.on(
-        'sendMessage',
-        async (data: { roomId: string, message: { messageId: string, recipient: string, body: string } }): Promise<void> => {
-          if (typeof data !== 'object' || data == null) {
-            Logger.error('[WEBSOCKET ERROR] Invalid data object received.')
-            await socket.emit('messageFailed', { reason: 'Invalid data object' })
-            return
-          }
-
-          const { roomId, message } = data
-
-          if (!authenticatedSockets.has(socket.id)) {
-            Logger.warn('[WEBSOCKET] Unauthorized attempt to send a message.')
-            await socket.emit('paymentFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
-            return
-          }
-
-          Logger.log(`[WEBSOCKET] Processing sendMessage for room: ${roomId}`)
-
-          try {
-            if (typeof roomId !== 'string' || roomId.trim() === '') {
-              Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
-              await socket.emit('messageFailed', { reason: 'Invalid room ID' })
-              return
-            }
-
-            if (typeof message !== 'object' || message == null) {
-              Logger.error('[WEBSOCKET ERROR] Invalid message object:', message)
-              await socket.emit('messageFailed', { reason: 'Invalid message object' })
-              return
-            }
-
-            if (typeof message.body !== 'string' || message.body.trim() === '') {
-              Logger.error('[WEBSOCKET ERROR] Invalid message body:', message.body)
-              await socket.emit('messageFailed', { reason: 'Invalid message body' })
-              return
-            }
-
-            Logger.log(`[WEBSOCKET] Acknowledging message ${message.messageId} to sender.`)
-
-            const ackPayload = {
-              status: 'success',
-              messageId: message.messageId
-            }
-
-            Logger.log(`[WEBSOCKET] Emitting ack event: sendMessageAck-${roomId}`)
-
-            socket.emit(`sendMessageAck-${roomId}`, ackPayload).catch((error) => {
-              Logger.error(`[WEBSOCKET ERROR] Failed to emit sendMessageAck-${roomId}:`, error)
-            })
-
-            // Store message in the database just like HTTP sendMessage route
-            try {
-              const parts = roomId.split('-')
-              const messageBoxType = parts.length > 1 ? parts[1] : 'default'
-
-              Logger.log(`[WEBSOCKET] Parsed messageBoxType: ${messageBoxType}`)
-              Logger.log(`[WEBSOCKET] Attempting to store message for recipient: ${message.recipient}, box type: ${messageBoxType}`)
-
-              let messageBox = await knex('messageBox')
-                .where({ identityKey: message.recipient, type: messageBoxType })
-                .first()
-
-              if (messageBox === null || messageBox === undefined) {
-                Logger.log('[WEBSOCKET] messageBox not found. Creating new messageBox.')
-                await knex('messageBox').insert({
-                  identityKey: message.recipient,
-                  type: messageBoxType,
-                  created_at: new Date(),
-                  updated_at: new Date()
-                })
-              }
-
-              messageBox = await knex('messageBox')
-                .where({ identityKey: message.recipient, type: messageBoxType })
-                .select('messageBoxId')
-                .first()
-
-              const messageBoxId = messageBox?.messageBoxId ?? null
-
-              if (messageBoxId === null || messageBoxId === undefined) {
-                Logger.warn('[WEBSOCKET WARNING] messageBoxId is null — message may not be stored correctly!')
-              } else {
-                Logger.log(`[WEBSOCKET] Resolved messageBoxId: ${String(messageBoxId)}`)
-              }
-
-              const senderKey = authenticatedSockets.get(socket.id) ?? null
-
-              const insertResult = await knex('messages')
-                .insert({
-                  messageId: message.messageId,
-                  messageBoxId,
-                  sender: senderKey,
-                  recipient: message.recipient,
-                  body: message.body,
-                  created_at: new Date(),
-                  updated_at: new Date()
-                })
-                .onConflict('messageId')
-                .ignore()
-
-              if (insertResult.length === 0) {
-                Logger.warn('[WEBSOCKET WARNING] Message insert was ignored due to conflict (duplicate messageId?)')
-              } else {
-                Logger.log('[WEBSOCKET] Message successfully stored in DB.')
-              }
-            } catch (dbError) {
-              Logger.error('[WEBSOCKET ERROR] Failed to store message in DB:', dbError)
-              await socket.emit('messageFailed', { reason: 'Failed to store message' })
-              return
-            }
-
-            if (ioRef.current === null) {
-              Logger.error('[WEBSOCKET ERROR] io is null, cannot emit message.')
-              return
-            }
-            Logger.log(`[WEBSOCKET] Emitting message to room ${roomId}`)
-            ioRef.current.emit(`sendMessage-${roomId}`, {
-              sender: authenticatedSockets.get(socket.id),
-              messageId: message.messageId,
-              body: message.body
-            })
-          } catch (error) {
-            Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler:', error)
-            await socket.emit('messageFailed', { reason: 'Unexpected error occurred' })
-          }
-        }
-      )
-
-      // Handle joining/leaving rooms
-      socket.on('joinRoom', async (roomId: string) => {
-        if (!authenticatedSockets.has(socket.id)) {
-          Logger.warn('[WEBSOCKET] Unauthorized attempt to join a room.')
-          await socket.emit('joinFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
-          return
-        }
-
-        if (roomId == null || typeof roomId !== 'string' || roomId.trim() === '') {
-          Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
-          await socket.emit('joinFailed', { reason: 'Invalid room ID' })
-          return
-        }
-
-        Logger.log(`[WEBSOCKET] User ${socket.id} joined room ${roomId}`)
-        await socket.emit('joinedRoom', { roomId })
-      })
-
-      socket.on('leaveRoom', async (roomId: string) => {
-        if (!authenticatedSockets.has(socket.id)) {
-          Logger.warn('[WEBSOCKET] Unauthorized attempt to leave a room.')
-          await socket.emit('leaveFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
-          return
-        }
-
-        if (roomId == null || roomId === '' || typeof roomId !== 'string' || roomId.trim() === '') {
-          Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
-          await socket.emit('leaveFailed', { reason: 'Invalid room ID' })
-          return
-        }
-
-        Logger.log(`[WEBSOCKET] User ${socket.id} left room ${roomId}`)
-        await socket.emit('leftRoom', { roomId })
-      })
-
-      // Clean up on disconnect
-      socket.on('disconnect', (reason: string) => {
-        Logger.log(`[WEBSOCKET] Disconnected: ${reason}`)
-        authenticatedSockets.delete(socket.id)
-      })
-    })
-  }
+  mountMessageBoxRoutes(app, ctx)
+  ioRef.current = attachMessageBoxWebSockets(http, ctx)
 }
 
-// Export for testing and CLI use.
-// `ioRef` is a const container; the live WebSocket server is at `ioRef.current`.
-export { ioRef as io, http, HTTP_PORT, ROUTING_PREFIX }
+// Re-export composable API for consumers who import the package entry
+export {
+  createMessageBoxContext,
+  createMessageBoxApp,
+  mountMessageBoxRoutes,
+  attachMessageBoxWebSockets
+} from './compose.js'
+export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
 
-// Only run server if not in test mode
 if (NODE_ENV !== 'test') {
   const tracer = trace.getTracer('@bsv/messagebox-server')
-  http.listen(HTTP_PORT, () => {
-    log.info({ operation: 'listen', outcome: 'ok', port: HTTP_PORT }, 'MessageBox listening')
 
-      // Run DB migrations immediately, no delay needed with container healthchecks
-      ; tracer.startActiveSpan('messagebox.migrate', async (span) => {
-        const startedAt = Date.now()
-        try {
-          await knex.migrate.latest()
-          span.setStatus({ code: SpanStatusCode.OK })
-          log.info({ operation: 'migrate', outcome: 'ok', duration_ms: Date.now() - startedAt }, 'migrations applied')
-        } catch (error) {
-          span.recordException(error as Error)
-          span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message })
-          log.error({ operation: 'migrate', outcome: 'error', err: error }, '[STARTUP ERROR] migrations failed')
-        } finally {
-          span.end()
-        }
+  start()
+    .then(() => {
+      http.listen(HTTP_PORT, () => {
+        log.info({ operation: 'listen', outcome: 'ok', port: HTTP_PORT }, 'MessageBox listening')
+
+        tracer.startActiveSpan('messagebox.migrate', async (span) => {
+          const startedAt = Date.now()
+          try {
+            await knex.migrate.latest()
+            span.setStatus({ code: SpanStatusCode.OK })
+            log.info({ operation: 'migrate', outcome: 'ok', duration_ms: Date.now() - startedAt }, 'migrations applied')
+          } catch (error) {
+            span.recordException(error as Error)
+            span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message })
+            log.error({ operation: 'migrate', outcome: 'error', err: error }, '[STARTUP ERROR] migrations failed')
+          } finally {
+            span.end()
+          }
+        })
       })
-  })
-
-  start().catch(error => {
-    log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
-  })
+    })
+    .catch(error => {
+      log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
+    })
 }

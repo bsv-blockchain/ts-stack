@@ -1,5 +1,5 @@
 /* eslint-env jest */
-import sendMessage, { calculateMessagePrice, Message, SendMessageRequest } from '../sendMessage.js'
+import { createSendMessageRoute, calculateMessagePrice, Message, SendMessageRequest } from '../sendMessage.js'
 import mockKnex from 'mock-knex'
 import { Response } from 'express'
 import type { Tracker } from 'mock-knex'
@@ -7,10 +7,12 @@ import { Logger } from '../../utils/logger.js'
 import axios from 'axios'
 import type { AxiosInstance as AxiosInstanceType } from 'axios'
 import AxiosMockAdapter from 'axios-mock-adapter'
+import { createTestContext, createTestKnex } from './testContext.js'
 
 global.fetch = jest.fn()
 
-const knex = sendMessage.knex
+const knex = createTestKnex()
+const sendMessage = createSendMessageRoute(createTestContext(knex))
 let queryTracker: Tracker
 let axiosMock: AxiosMockAdapter
 

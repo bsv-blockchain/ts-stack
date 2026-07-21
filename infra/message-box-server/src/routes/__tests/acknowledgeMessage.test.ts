@@ -1,9 +1,11 @@
 /* eslint-env jest */
-import acknowledgeMessage, { AcknowledgeRequest } from '../acknowledgeMessage.js'
+import { createAcknowledgeMessageRoute, AcknowledgeRequest } from '../acknowledgeMessage.js'
 import mockKnex, { Tracker } from 'mock-knex'
 import { Response } from 'express'
+import { createTestContext, createTestKnex } from './testContext.js'
 
-const knex = acknowledgeMessage.knex
+const knex = createTestKnex()
+const acknowledgeMessage = createAcknowledgeMessageRoute(createTestContext(knex))
 let queryTracker: Tracker
 
 // Define Mock Express Response Object
