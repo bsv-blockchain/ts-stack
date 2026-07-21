@@ -368,6 +368,7 @@ describe('HostReputationTracker – additional coverage', () => {
       const t1 = new HostReputationTracker(kv)
       t1.recordSuccess('https://persist.com', 200)
       t1.recordFailure('https://persist.com', 'oops')
+      t1.flush()
 
       // A new tracker with the same store should load the persisted data
       const t2 = new HostReputationTracker(kv)
@@ -452,6 +453,58 @@ describe('HostReputationTracker – additional coverage', () => {
       expect(() => t.recordSuccess('https://host.com', 100)).not.toThrow()
     })
 
+    it('batches many mutations into one persistence write', () => {
+      let writes = 0
+      const values = new Map<string, string>()
+      const t = new HostReputationTracker({
+        get: (key) => values.get(key) ?? null,
+        set: (key, value) => {
+          writes++
+          values.set(key, value)
+        }
+      })
+
+      for (let i = 0; i < 50; i++) t.recordSuccess('https://busy.host', i)
+      expect(writes).toBe(0)
+      t.flush()
+      expect(writes).toBe(1)
+    })
+
+    it('bounds persisted reputation to the newest 256 hosts', () => {
+      const kv = makeStore()
+      const t = new HostReputationTracker(kv)
+      for (let i = 0; i < 300; i++) t.recordSuccess(`https://host-${i}.com`, i)
+      t.flush()
+
+      const stored = JSON.parse(kv.store.get('bsvsdk_overlay_host_reputation_v3')!)
+      expect(Object.keys(stored)).toHaveLength(256)
+      expect(stored['https://host-299.com']).toBeDefined()
+      expect(stored['https://host-0.com']).toBeUndefined()
+    })
+
+    it('expires reputation entries older than 30 days when loading', () => {
+      const now = Date.now()
+      const entry = (host: string, lastUpdatedAt: number): Record<string, unknown> => ({
+        host,
+        totalSuccesses: 1,
+        totalFailures: 0,
+        consecutiveFailures: 0,
+        avgLatencyMs: 10,
+        lastLatencyMs: 10,
+        backoffUntil: 0,
+        lastUpdatedAt
+      })
+      const kv = makeStore({
+        bsvsdk_overlay_host_reputation_v3: JSON.stringify({
+          'https://expired.com': entry('https://expired.com', now - 31 * 24 * 60 * 60 * 1000),
+          'https://fresh.com': entry('https://fresh.com', now)
+        })
+      })
+      const t = new HostReputationTracker(kv)
+      expect(t.snapshot('https://expired.com')).toBeUndefined()
+      expect(t.snapshot('https://fresh.com')).toBeDefined()
+    })
+
     it('constructs without store when no store is provided and no localStorage', () => {
       // In Jest/Node environment, globalThis.localStorage is not defined
       const t = new HostReputationTracker(undefined)
@@ -490,10 +543,11 @@ describe('HostReputationTracker – additional coverage', () => {
 
       const t = new HostReputationTracker()
       t.recordSuccess('https://ls-test.com', 300)
+      t.flush()
 
-      // Data should have been persisted to the mock localStorage
-      expect(mockStore.has('bsvsdk_overlay_host_reputation_v1')).toBe(true)
-      const stored = JSON.parse(mockStore.get('bsvsdk_overlay_host_reputation_v1')!)
+      // Data should have been persisted to the bounded v3 schema.
+      expect(mockStore.has('bsvsdk_overlay_host_reputation_v3')).toBe(true)
+      const stored = JSON.parse(mockStore.get('bsvsdk_overlay_host_reputation_v3')!)
       expect(stored['https://ls-test.com']).toBeDefined()
     })
 

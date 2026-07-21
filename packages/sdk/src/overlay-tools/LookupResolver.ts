@@ -25,10 +25,7 @@ export interface LookupQuestion {
   query: unknown
 }
 
-/**
- * How the Overlay Services Engine responds to a Lookup Question.
- * It may comprise either an output list or a freeform response from the Lookup Service.
- */
+/** An aggregatable output-list answer returned by the resolver. */
 export type LookupAnswer =
   | {
     type: 'output-list'
@@ -40,6 +37,15 @@ export type LookupAnswer =
       txid?: string
     }>
   }
+
+/** A valid non-aggregatable response returned by a lookup service. */
+export interface LookupFreeformAnswer {
+  type: 'freeform'
+  result: unknown
+}
+
+/** Responses a facilitator may return before the resolver aggregates them. */
+export type LookupFacilitatorAnswer = LookupAnswer | LookupFreeformAnswer
 
 /**
  * Per-call options for {@link LookupResolver.query} and {@link LookupResolver.query$}.
@@ -59,6 +65,44 @@ export interface LookupQueryOptions {
    *    then continues yielding late-host enrichments until the iterator is broken or final emission.
    */
   softTimeoutMs?: number
+  /**
+   * Fired when a SLAP-advertised host fails (network error, timeout, malformed
+   * response). The resolver itself does not email or escalate — downstream
+   * consumers (e.g. overlay-express) wire this up to the BSVA notification API
+   * to let the originating overlay operator know about a stale advertisement.
+   */
+  onUnreachableHost?: (info: UnreachableHostInfo) => void | Promise<void>
+  /**
+   * Minimum interval between unreachable notifications for the same host and
+   * service. Defaults to 60 seconds to prevent notification storms. Set to 0
+   * to disable deduplication.
+   */
+  unreachableHostNotificationCooldownMs?: number
+  /**
+   * Compatibility alias for `waitForAllHosts`. Prefer `waitForAllHosts` in new
+   * code. `waitForAllHosts` takes precedence when both are supplied.
+   */
+  holdForUnknownHosts?: boolean
+  /**
+   * Wait for every queried host to settle before the first emission. This is
+   * the default for `query()` because generic output cardinality is not proof
+   * of freshness or authority. It defaults to `false` for progressive
+   * `query$()` consumers. `holdForUnknownHosts` remains as a compatibility
+   * alias; `waitForAllHosts` takes precedence when both are supplied.
+   */
+  waitForAllHosts?: boolean
+}
+
+/** Info supplied to onUnreachableHost callbacks. */
+export interface UnreachableHostInfo {
+  /** Host URL that failed. */
+  host: string
+  /** Lookup service that was being queried when the failure occurred. */
+  service: string
+  /** Error message from the facilitator. */
+  error: string
+  /** SLAP tracker URL that advertised this host, if known. */
+  advertisedBy?: string
 }
 
 /**
@@ -104,6 +148,58 @@ export const DEFAULT_TESTNET_SLAP_TRACKERS: string[] = [
 ]
 
 const MAX_TRACKER_WAIT_TIME = 5000
+const DEFAULT_LOOKUP_TIMEOUT = 2000
+const DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS = 60_000
+const MAX_NOTIFICATION_DEDUP_ENTRIES = 512
+
+export type LookupHTTPErrorKind = 'semantic' | 'availability'
+
+/** An HTTP failure with enough classification for reputation handling. */
+export class LookupHTTPError extends Error {
+  readonly status: number
+  readonly kind: LookupHTTPErrorKind
+
+  constructor (status: number, kind: LookupHTTPErrorKind, statusText?: string) {
+    const detail = typeof statusText === 'string' && statusText.trim().length > 0
+      ? ` ${statusText.trim()}`
+      : ''
+    super(`Failed to facilitate lookup (HTTP ${status}${detail})`)
+    this.name = 'LookupHTTPError'
+    this.status = status
+    this.kind = kind
+  }
+}
+
+/** True when an HTTP response rejects this query without proving host outage. */
+function isSemanticLookupRejection (err: unknown): boolean {
+  return err instanceof LookupHTTPError && err.kind === 'semantic'
+}
+
+function isByteArray (value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+}
+
+function isLookupOutput (value: unknown): value is LookupAnswer['outputs'][number] {
+  if (typeof value !== 'object' || value === null) return false
+  const output = value as Record<string, unknown>
+  if (!isByteArray(output.beef) || output.beef.length === 0) return false
+  if (!Number.isInteger(output.outputIndex) || (output.outputIndex as number) < 0) return false
+  if (output.context !== undefined && !isByteArray(output.context)) return false
+  if (output.txid !== undefined && (typeof output.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(output.txid))) return false
+  return true
+}
+
+function isOutputListAnswer (value: unknown): value is LookupAnswer {
+  if (typeof value !== 'object' || value === null) return false
+  const answer = value as Record<string, unknown>
+  return answer.type === 'output-list' && Array.isArray(answer.outputs) && answer.outputs.every(isLookupOutput)
+}
+
+function isFreeformAnswer (value: unknown): value is LookupFreeformAnswer {
+  if (typeof value !== 'object' || value === null) return false
+  const answer = value as Record<string, unknown>
+  return answer.type === 'freeform' && Object.prototype.hasOwnProperty.call(answer, 'result')
+}
 
 /** A wall-clock deadline that rejects after `timeoutMs`, optionally aborting a controller. */
 interface Deadline {
@@ -118,7 +214,7 @@ interface Deadline {
 function createDeadline (timeoutMs: number, controller?: AbortController): Deadline {
   let expired = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  const promise = new Promise<never>((_, reject) => {
+  const promise = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       expired = true
       try { controller?.abort() } catch { /* noop */ }
@@ -218,7 +314,7 @@ export interface OverlayLookupFacilitator {
     url: string,
     question: LookupQuestion,
     timeout?: number
-  ) => Promise<LookupAnswer>
+  ) => Promise<LookupFacilitatorAnswer>
 }
 
 export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
@@ -240,7 +336,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     url: string,
     question: LookupQuestion,
     timeout: number = 2000
-  ): Promise<LookupAnswer> {
+  ): Promise<LookupFacilitatorAnswer> {
     if (!url.startsWith('https:') && !this.allowHTTP) {
       throw new Error(
         'HTTPS facilitator can only use URLs that start with "https:"'
@@ -272,7 +368,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     url: string,
     question: LookupQuestion,
     signal: AbortSignal | undefined
-  ): Promise<LookupAnswer> {
+  ): Promise<LookupFacilitatorAnswer> {
     const fco: RequestInit = {
       method: 'POST',
       headers: {
@@ -283,7 +379,16 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       signal
     }
     const response: Response = await this.fetchClient(`${url}/lookup`, fco)
-    if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
+    if (!response.ok) {
+      // 408/429 are availability/backpressure signals. Other 4xx responses
+      // reject this request but do not prove that the host is unavailable, so
+      // they remain distinguishable and neutral for availability reputation.
+      const kind: LookupHTTPErrorKind =
+        response.status < 400 || response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500
+          ? 'availability'
+          : 'semantic'
+      throw new LookupHTTPError(response.status, kind, response.statusText)
+    }
     if (isOctetStream(response.headers.get('content-type'))) {
       return await this.parseOctetStreamLookup(response)
     }
@@ -353,6 +458,14 @@ export default class LookupResolver {
   private readonly txMemo: Map<string, { txId: string, expiresAt: number }>
   private readonly txMemoTtlMs: number
 
+  /**
+   * Records which SLAP tracker most recently advertised each host. Used to
+   * attach `advertisedBy` to onUnreachableHost callbacks so downstream
+   * notification consumers know which tracker has a stale advertisement.
+   */
+  private readonly advertisedBy: Map<string, string>
+  private readonly lastUnreachableNotificationAt: Map<string, number>
+
   constructor (config: LookupResolverConfig = {}) {
     this.networkPreset = config.networkPreset ?? 'mainnet'
     this.facilitator = config.facilitator ?? new HTTPSOverlayLookupFacilitator(undefined, this.networkPreset === 'local')
@@ -379,6 +492,8 @@ export default class LookupResolver {
     this.hostsCache = new Map()
     this.hostsInFlight = new Map()
     this.txMemo = new Map()
+    this.advertisedBy = new Map()
+    this.lastUnreachableNotificationAt = new Map()
   }
 
   /**
@@ -393,12 +508,17 @@ export default class LookupResolver {
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
-    // Existing fast-but-narrow contract: return at the first cumulative emission
-    // (the post-grace aggregate, or the final emission when every host settles
-    // before the grace window). Callers wanting progressive enrichment use query$().
+    // A generic resolver cannot prove that a larger answer is fresher or more
+    // authoritative. The blocking API therefore waits for every bounded host
+    // settlement by default and merges the valid outputs. Callers that prefer
+    // first-response latency can opt out with waitForAllHosts: false; callers
+    // wanting progressive enrichment use query$().
     // Take only the first emission, then explicitly close the iterator so the
     // generator's `finally` block runs and clears any outstanding timers.
-    const iter = this.query$(question, timeout, options)[Symbol.asyncIterator]()
+    const iter = this.query$(question, timeout, {
+      ...options,
+      waitForAllHosts: options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? true
+    })[Symbol.asyncIterator]()
     let last: LookupAnswerProgress | null = null
     try {
       const { value, done } = await iter.next()
@@ -451,16 +571,56 @@ export default class LookupResolver {
       )
     }
 
-    const rankedHosts = this.prepareHostsForQuery(
-      competentHosts,
-      `lookup service ${question.service}`
-    )
+    // Self-healing: if every cached host has slid into backoff (warm cache went
+    // stale-by-failure rather than by age), evict the cache and re-discover via
+    // SLAP — the network may have rotated healthy hosts in. Only applies to
+    // SLAP-eligible services (no overrides, not local, not ls_slap itself).
+    let rankedHosts: string[]
+    try {
+      rankedHosts = this.prepareHostsForQuery(
+        competentHosts,
+        `lookup service ${question.service}`
+      )
+    } catch (err) {
+      const isSlapEligible =
+        question.service !== 'ls_slap' &&
+        this.hostOverrides[question.service] == null &&
+        this.networkPreset !== 'local'
+      if (!isSlapEligible) throw err
+      this.hostsCache.delete(question.service)
+      // Recovery discovery differs from the normal first-nonempty path: keep
+      // listening until a tracker advertises at least one host that is not in
+      // backoff, or every tracker settles.
+      const fresh = await this.refreshHosts(question.service, true)
+      if (this.additionalHosts[question.service]?.length > 0) {
+        const extra = this.additionalHosts[question.service]
+        const seen = new Set(fresh)
+        for (const h of extra) if (!seen.has(h)) fresh.push(h)
+      }
+      if (fresh.length < 1) {
+        throw new Error(
+          `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
+        )
+      }
+      // Re-rank — if SLAP returned the same hosts and they're all still in
+      // backoff, propagate the original error.
+      rankedHosts = this.prepareHostsForQuery(
+        fresh,
+        `lookup service ${question.service}`
+      )
+    }
     if (rankedHosts.length < 1) {
       throw new Error(`All competent hosts for ${question.service} are temporarily unavailable due to backoff.`)
     }
 
     const graceMs = options?.graceMs ?? 80
     const softTimeoutMs = options?.softTimeoutMs
+    const onUnreachableHost = options?.onUnreachableHost
+    const requestedNotificationCooldownMs = options?.unreachableHostNotificationCooldownMs
+    const notificationCooldownMs = typeof requestedNotificationCooldownMs === 'number' && Number.isFinite(requestedNotificationCooldownMs) && requestedNotificationCooldownMs >= 0
+      ? requestedNotificationCooldownMs
+      : DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS
+    const waitForAllHosts = options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false
 
     const hostCount = rankedHosts.length
     const outputsMap = new Map<string, { beef: number[], context?: number[], outputIndex: number }>()
@@ -468,9 +628,13 @@ export default class LookupResolver {
     let completedHosts = 0
     let firstResponseAt: number | null = null
 
-    type Event = { kind: 'answer', answer: LookupAnswer } | { kind: 'done' } | { kind: 'soft' }
+    type Event =
+      | { kind: 'answer', answer: LookupAnswer }
+      | { kind: 'done' }
+      | { kind: 'grace' }
+      | { kind: 'soft' }
     const queue: Event[] = []
-    let waiter: ((v: void) => void) | null = null
+    let waiter: (() => void) | null = null
     const push = (e: Event): void => {
       queue.push(e)
       if (waiter !== null) {
@@ -481,13 +645,31 @@ export default class LookupResolver {
     }
 
     for (const host of rankedHosts) {
-      this.lookupHostWithTracking(host, question, timeout)
+      void this.lookupHostWithTracking(host, question, timeout)
         .then((answer) => {
-          if (answer?.type === 'output-list' && Array.isArray(answer.outputs) && answer.outputs.length > 0) {
-            push({ kind: 'answer', answer })
+          if (isOutputListAnswer(answer) && answer.outputs.length > 0) push({ kind: 'answer', answer })
+        })
+        .catch((err) => {
+          if (!isSemanticLookupRejection(err) && typeof onUnreachableHost === 'function') {
+            const notificationKey = `${question.service}\u0000${host}`
+            const now = Date.now()
+            const lastNotificationAt = this.lastUnreachableNotificationAt.get(notificationKey) ?? Number.NEGATIVE_INFINITY
+            if (now - lastNotificationAt < notificationCooldownMs) return
+            if (this.lastUnreachableNotificationAt.size >= MAX_NOTIFICATION_DEDUP_ENTRIES) {
+              this.evictOldest(this.lastUnreachableNotificationAt)
+            }
+            this.lastUnreachableNotificationAt.set(notificationKey, now)
+            try {
+              const callbackResult = onUnreachableHost({
+                host,
+                service: question.service,
+                error: err instanceof Error ? err.message : String(err),
+                advertisedBy: this.advertisedBy.get(host)
+              })
+              void Promise.resolve(callbackResult).catch(() => { /* consumer callback is isolated */ })
+            } catch { /* never let a consumer callback break the query */ }
           }
         })
-        .catch(() => { /* tracked already */ })
         .finally(() => {
           completedHosts++
           push({ kind: 'done' })
@@ -529,7 +711,8 @@ export default class LookupResolver {
     })
 
     try {
-      while (completedHosts < hostCount) {
+      while (true) {
+        if (completedHosts >= hostCount) break
         if (queue.length === 0) {
           await new Promise<void>((resolve) => { waiter = resolve })
         }
@@ -541,17 +724,28 @@ export default class LookupResolver {
             if (!graceFired && graceMs > 0) {
               graceTimer = setTimeout(() => {
                 graceFired = true
-                push({ kind: 'soft' })
+                push({ kind: 'grace' })
               }, graceMs)
             } else {
               graceFired = true
             }
           }
           if (graceFired && added) {
-            emittedOnce = true
-            yield snapshot(false)
+            if (emittedOnce || !waitForAllHosts) {
+              emittedOnce = true
+              yield snapshot(false)
+            }
+          }
+        } else if (e.kind === 'grace') {
+          if (!emittedOnce) {
+            if (!waitForAllHosts) {
+              emittedOnce = true
+              yield snapshot(false)
+            }
           }
         } else if (e.kind === 'soft') {
+          // Soft timeout is an explicit "bail out early" request from the
+          // caller — it overrides a completeness hold.
           if (!emittedOnce) {
             graceFired = true
             emittedOnce = true
@@ -562,7 +756,8 @@ export default class LookupResolver {
             break
           }
         } else if (e.kind === 'done') {
-          // continue loop; final emission happens after the loop
+          // Continue until every bounded settlement completes. The final
+          // snapshot below is the first emission when waitForAllHosts is set.
         }
       }
       yield snapshot(true)
@@ -618,8 +813,8 @@ export default class LookupResolver {
   /**
    * Actually resolves competent hosts from SLAP trackers and updates cache.
    */
-  private async refreshHosts (service: string): Promise<string[]> {
-    const hosts = await this.findCompetentHosts(service)
+  private async refreshHosts (service: string, requireAvailable: boolean = false): Promise<string[]> {
+    const hosts = await this.findCompetentHosts(service, requireAvailable)
     const expiresAt = Date.now() + this.hostsTtlMs
 
     // bounded cache with simple FIFO eviction
@@ -661,7 +856,7 @@ export default class LookupResolver {
    * @param service Service for which competent hosts are to be returned
    * @returns Array of hosts competent for resolving queries
    */
-  private async findCompetentHosts (service: string): Promise<string[]> {
+  private async findCompetentHosts (service: string, requireAvailable: boolean = false): Promise<string[]> {
     const query: LookupQuestion = {
       service: 'ls_slap',
       query: { service }
@@ -683,9 +878,21 @@ export default class LookupResolver {
       for (const tracker of trackerHosts) {
         this.lookupHostWithTracking(tracker, query, MAX_TRACKER_WAIT_TIME)
           .then((answer) => {
-            const hosts = this.extractHostsFromAnswer(answer, service)
-            for (const h of hosts) allHosts.add(h)
-            if (!resolved && allHosts.size > 0) {
+            const hosts = isOutputListAnswer(answer) ? this.extractHostsFromAnswer(answer, service) : []
+            for (const h of hosts) {
+              if (!allHosts.has(h)) {
+                allHosts.add(h)
+                // First-seen attribution: the tracker that surfaced this host
+                // gets credit, used by onUnreachableHost callbacks.
+                this.advertisedBy.set(h, tracker)
+              }
+            }
+            const now = Date.now()
+            const foundAvailable = [...allHosts].some((host) => {
+              const backoffUntil = this.hostReputation.snapshot(host)?.backoffUntil ?? 0
+              return backoffUntil <= now
+            })
+            if (!resolved && allHosts.size > 0 && (!requireAvailable || foundAvailable)) {
               resolved = true
               resolve([...allHosts])
             }
@@ -761,27 +968,43 @@ export default class LookupResolver {
     host: string,
     question: LookupQuestion,
     timeout?: number
-  ): Promise<LookupAnswer> {
+  ): Promise<LookupFacilitatorAnswer> {
     const startedAt = Date.now()
+    const effectiveTimeout = typeof timeout === 'number' && Number.isFinite(timeout) && timeout >= 0
+      ? timeout
+      : DEFAULT_LOOKUP_TIMEOUT
+    const deadline = createDeadline(effectiveTimeout)
+    // The Promise constructor converts a synchronous throw from a non-conforming
+    // custom facilitator into a rejection while preserving immediate invocation.
+    // Awaiting here would bypass the wall-clock deadline below.
+    const lookupPromise = new Promise<LookupFacilitatorAnswer>((resolve) => {
+      resolve(this.facilitator.lookup(host, question, timeout))
+    })
+    lookupPromise.catch(() => { /* deadline may win while custom facilitator settles later */ })
+
+    let answer: LookupFacilitatorAnswer
     try {
-      const answer = await this.facilitator.lookup(host, question, timeout)
-      const latency = Date.now() - startedAt
-      const isValid =
-        typeof answer === 'object' &&
-        answer !== null &&
-        answer.type === 'output-list' &&
-        Array.isArray((answer).outputs)
-
-      if (isValid) {
-        this.hostReputation.recordSuccess(host, latency)
-      } else {
-        this.hostReputation.recordFailure(host, 'Invalid lookup response')
-      }
-
-      return answer
+      answer = await Promise.race([lookupPromise, deadline.promise])
     } catch (err) {
-      this.hostReputation.recordFailure(host, err)
-      throw err
+      const normalized = normalizeLookupError(err, deadline.didTimeOut())
+      if (!isSemanticLookupRejection(err)) this.hostReputation.recordFailure(host, normalized)
+      throw isSemanticLookupRejection(err) ? err : normalized
+    } finally {
+      deadline.cancel()
     }
+
+    if (isOutputListAnswer(answer)) {
+      this.hostReputation.recordSuccess(host, Date.now() - startedAt)
+      return answer
+    }
+
+    // A valid freeform response is neutral: it proves this request reached the
+    // service, but it must not erase an availability backoff established by a
+    // concurrent failing request and cannot contribute to output aggregation.
+    if (isFreeformAnswer(answer)) return answer
+
+    const malformed = new Error('Malformed lookup response')
+    this.hostReputation.recordFailure(host, malformed)
+    throw malformed
   }
 }
