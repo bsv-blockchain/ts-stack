@@ -543,7 +543,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * `null` records a bundle that failed to parse. WeakMap-keyed so entries
    * are released with their results.
    */
-  private readonly parsedBeefCache = new WeakMap<number[], Beef | null>()
+  private readonly parsedBeefCache = new WeakMap<number[] | Uint8Array, Beef | null>()
 
   /** Counts token-field decrypts so long scans can periodically yield. */
   private tokenFieldDecryptCount = 0
@@ -2338,7 +2338,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * caller's thread (in browser wallets, the UI) for seconds on large
    * permission baskets.
    */
-  private transactionFromResultBeef (result: { BEEF?: number[] }, txid: string): Transaction {
+  private transactionFromResultBeef (result: { BEEF?: number[] | Uint8Array }, txid: string): Transaction {
     const beef = result.BEEF
     if (beef != null) {
       let parsed = this.parsedBeefCache.get(beef)
