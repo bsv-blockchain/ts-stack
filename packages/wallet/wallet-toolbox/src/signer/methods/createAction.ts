@@ -20,6 +20,7 @@ import {
 import { completeSignedTransaction, verifyUnlockScripts } from './completeSignedTransaction'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INTERNAL } from '../../sdk/WERR_errors'
+import { setResultBeef } from './resultBeef'
 
 export interface CreateActionResultX extends CreateActionResult {
   txid?: TXIDHexString
@@ -55,7 +56,12 @@ export async function createAction (
 
     r.txid = prior.tx.id('hex')
     const beef = new Beef()
-    if (prior.dcr.inputBeef != null) beef.mergeBeef(prior.dcr.inputBeef)
+    if (prior.dcr.inputBeef != null) {
+      const inputBeef = prior.dcr.inputBeef instanceof Uint8Array
+        ? Beef.fromBinaryView(prior.dcr.inputBeef)
+        : Beef.fromBinary(prior.dcr.inputBeef)
+      beef.mergeBeef(inputBeef)
+    }
     beef.mergeTransaction(prior.tx)
     logger?.log('merged beef')
 
@@ -63,6 +69,8 @@ export async function createAction (
     logger?.log('verified unlock scripts')
 
     r.noSendChange = prior.dcr.noSendChangeOutputVouts?.map(vout => `${r.txid}.${vout}`)
+    beef.atomicTxid = r.txid
+    setResultBeef(r, beef)
     if (!vargs.options.returnTXIDOnly) r.tx = beef.toBinaryAtomic(r.txid)
   }
 
@@ -112,15 +120,15 @@ function makeSignableTransactionResult (
   return r
 }
 
-function makeSignableTransactionBeef (tx: Transaction, inputBEEF: number[]): number[] {
+function makeSignableTransactionBeef (tx: Transaction, inputBEEF: number[] | Uint8Array): number[] {
   // This is a special case beef for transaction signing.
   // We only need the transaction being signed, and for each input, the raw source transaction.
   const beef = new Beef()
   for (const input of tx.inputs) {
     if (input.sourceTransaction == null) { throw new WERR_INTERNAL('Every signableTransaction input must have a sourceTransaction') }
-    beef.mergeRawTx(input.sourceTransaction.toBinary())
+    beef.mergeRawTx(input.sourceTransaction.toUint8Array())
   }
-  beef.mergeRawTx(tx.toBinary())
+  beef.mergeRawTx(tx.toUint8Array())
   return beef.toBinaryAtomic(tx.id('hex'))
 }
 
@@ -154,7 +162,7 @@ export async function processAction (
     isDelayed: vargs.isDelayed,
     reference: (prior != null) ? prior.reference : undefined,
     txid: (prior != null) ? prior.tx.id('hex') : undefined,
-    rawTx: (prior != null) ? prior.tx.toBinary() : undefined,
+    rawTx: (prior != null) ? prior.tx.toUint8Array() : undefined,
     sendWith: vargs.isSendWith ? vargs.options.sendWith : [],
     logger: vargs.logger
   }

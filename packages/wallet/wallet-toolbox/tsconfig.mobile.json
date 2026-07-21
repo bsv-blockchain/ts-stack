@@ -14,7 +14,10 @@
     "noImplicitAny": false,
     "declaration": true,
     "declarationMap": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "paths": {
+      "@bsv/sdk": ["../../sdk/dist/types/mod.d.ts"]
+    }
   },
   "files": [
     "src/index.mobile.ts"

@@ -57,6 +57,14 @@ export class WriterUint8Array {
     return this.buffer.subarray(0, this.pos)
   }
 
+  /** Ensures room for `additionalBytes` without changing the written length. */
+  reserve (additionalBytes: number): void {
+    if (!Number.isSafeInteger(additionalBytes) || additionalBytes < 0) {
+      throw new RangeError('WriterUint8Array reserve requires a non-negative safe integer')
+    }
+    this.ensureCapacity(additionalBytes)
+  }
+
   private ensureCapacity (needed: number): void {
     if (this.pos + needed > this.capacity) {
       let newCapacity = this.capacity * 2

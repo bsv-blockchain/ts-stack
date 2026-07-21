@@ -102,6 +102,7 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIE
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
+import { getResultBeef } from './signer/methods/resultBeef'
 import type { ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 
 /**
@@ -858,9 +859,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return beef
   }
 
-  verifyReturnedTxidOnlyAtomicBEEF (beef: AtomicBEEF, knownTxids?: string[]): AtomicBEEF {
+  verifyReturnedTxidOnlyAtomicBEEF (beef: AtomicBEEF, knownTxids?: string[], parsedBeef?: Beef): AtomicBEEF {
     if (this.returnTxidOnly) return beef
-    const b = Beef.fromBinary(beef)
+    const b = parsedBeef ?? Beef.fromBinary(beef)
     if (!b.atomicTxid) throw new WERR_INTERNAL()
     return this.verifyReturnedTxidOnly(b, knownTxids).toBinaryAtomic(b.atomicTxid)
   }
@@ -922,12 +923,11 @@ export class Wallet implements WalletInterface, ProtoWallet {
       const r = await createAction(this, auth, vargs)
       logger?.log('action created')
 
-      if (r.tx != null) {
-        this.beef.mergeBeefFromParty(this.storageParty, asArray(r.tx))
-      }
+      const resultBeef = getResultBeef(r)
+      if (r.tx != null) this.beef.mergeBeefFromParty(this.storageParty, resultBeef ?? r.tx)
 
       if (r.tx != null) {
-        r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, args.options?.knownTxids)
+        r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, args.options?.knownTxids, resultBeef)
         logger?.log('verify returned AtomicBEEF')
       }
 
@@ -955,7 +955,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const prior = this.pendingSignActions[args.reference]
     if (!prior) { throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.') }
-    if (r.tx != null) r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, prior.args.options?.knownTxids)
+    if (r.tx != null) r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, prior.args.options?.knownTxids, getResultBeef(r))
 
     return r
   }

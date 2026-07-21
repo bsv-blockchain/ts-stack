@@ -1,5 +1,6 @@
 import { WalletInterface } from '@bsv/sdk'
-import { StorageClientBase } from './StorageClientBase'
+import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
 
 /**
  * `StorageClient` (mobile variant) implements the `WalletStorageProvider` interface which allows it to
@@ -14,8 +15,8 @@ import { StorageClientBase } from './StorageClientBase'
  * For details of the API implemented, follow the "See also" link for the `WalletStorageProvider` interface.
  */
 export class StorageClient extends StorageClientBase {
-  constructor (wallet: WalletInterface, endpointUrl: string) {
-    super(wallet, endpointUrl)
+  constructor (wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
+    super(wallet, endpointUrl, options)
   }
 
   /// ///////////////////////////////////////////////////////////////////////////
@@ -39,10 +40,15 @@ export class StorageClient extends StorageClientBase {
 
       let response: Response
       try {
+        const requestUsesBinary = this.binaryRequests && this.serverSupportsBinary
         response = await this.authClient.fetch(this.endpointUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          headers: {
+            'Content-Type': 'application/json',
+            [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
+            ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {})
+          },
+          body: stringifyJsonRpc(body, requestUsesBinary)
         })
       } catch (error_: unknown) {
         throw error_
@@ -52,7 +58,9 @@ export class StorageClient extends StorageClientBase {
         throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
       }
 
-      const json = await response.json()
+      const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+      if (responseUsesBinary) this.serverSupportsBinary = true
+      const json = parseJsonRpc(await response.text(), responseUsesBinary)
       if (json.error) {
         const { code, message, data } = json.error
         const err = new Error(`RPC Error: ${message}`)

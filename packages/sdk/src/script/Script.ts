@@ -113,9 +113,17 @@ export default class Script {
    * @example
    * const script = Script.fromBinary([0x76, 0xa9, ...])
    */
-  static fromBinary (bin: number[]): Script {
+  static fromBinary (bin: number[] | Uint8Array): Script {
     const rawBytes = Uint8Array.from(bin)
     return new Script([], rawBytes, undefined, false)
+  }
+
+  /**
+   * Constructs a lazily parsed script over an existing byte view without a copy.
+   * The caller must not mutate `bin` while the script is in use.
+   */
+  static fromBinaryView (bin: Uint8Array): Script {
+    return new Script([], bin, undefined, false)
   }
 
   /**

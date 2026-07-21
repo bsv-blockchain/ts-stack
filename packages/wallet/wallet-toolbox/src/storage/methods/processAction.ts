@@ -333,9 +333,10 @@ async function validateCommitNewTxToStorageArgs (
   params: StorageProcessActionArgs
 ): Promise<ValidCommitNewTxToStorageArgs> {
   if (!params.reference || !params.txid || (params.rawTx == null)) { throw new WERR_INVALID_OPERATION('One or more expected params are undefined.') }
+  const rawTx = asArray(params.rawTx)
   let tx: BsvTransaction
   try {
-    tx = BsvTransaction.fromBinary(params.rawTx)
+    tx = BsvTransaction.fromBinary(rawTx)
   } catch (_parseError: unknown) {
     throw new WERR_INVALID_OPERATION('Parsing serialized transaction failed.')
   }
@@ -346,7 +347,7 @@ async function validateCommitNewTxToStorageArgs (
          Ensure that the transaction meets the rules for being a finalized
          which can be found at https://wiki.bitcoinsv.io/index.php/NLocktime_and_nSequence`)
   }
-  const txScriptOffsets = parseTxScriptOffsets(params.rawTx)
+  const txScriptOffsets = parseTxScriptOffsets(rawTx)
   const transaction = verifyOne(
     await storage.findTransactions({
       partial: { userId, reference: params.reference }
@@ -376,7 +377,7 @@ async function validateCommitNewTxToStorageArgs (
     if (!commissionValid) { throw new WERR_INVALID_OPERATION('Transaction did not include an output to cover service fee.') }
   }
 
-  const req = EntityProvenTxReq.fromTxid(params.txid, params.rawTx, transaction.inputBEEF)
+  const req = EntityProvenTxReq.fromTxid(params.txid, rawTx, transaction.inputBEEF)
   req.addNotifyTransactionId(transactionId)
 
   // "Processing" a transaction is the final step of creating a new one.
@@ -397,7 +398,7 @@ async function validateCommitNewTxToStorageArgs (
   const vargs: ValidCommitNewTxToStorageArgs = {
     reference: params.reference,
     txid: params.txid,
-    rawTx: params.rawTx,
+    rawTx,
     isSendWith: !!params.sendWith && params.sendWith.length > 0,
     isDelayed: params.isDelayed,
     isNoSend: params.isNoSend,

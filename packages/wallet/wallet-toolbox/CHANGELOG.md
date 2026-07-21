@@ -6,6 +6,23 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Release prep for `2.4.2`: transaction-pipeline, BEEF fetching, and binary transport
+  performance improvements described below, published in lockstep for Node, browser, and mobile.
+- Transaction pipeline performance: reuse parsed BEEF through `createAction`/`signAction`, retain
+  typed bytes internally until persistence compatibility boundaries, and avoid reparsing Atomic
+  BEEF during internalization and broadcast preparation.
+- Fetch independent BEEF ancestor frontiers and allocated-change proofs with bounded concurrency,
+  deterministic merge order, Set-based deduplication, and configurable `maxConcurrency`.
+- Negotiate compact base64 JSON-RPC binary values across Node, browser, and mobile clients while
+  preserving numeric-array requests and responses for old servers and clients. A 1 MiB payload is
+  62.7% smaller on the wire than legacy byte-array JSON.
+- Treat non-finite ancestor-fetch concurrency values as the safe default instead of silently
+  returning incomplete BEEF, reject malformed binary JSON base64, and decode deeply nested JSON
+  iteratively so hostile input cannot overflow the JavaScript call stack.
+- Keep binary JSON-RPC requests in the legacy numeric-array format by default so rolling deployments
+  cannot route a negotiated request to an older server instance. Homogeneous endpoints can opt in to
+  compact requests with `StorageClientOptions.binaryRequests`; compact responses remain negotiated.
+
 - Release prep for `2.4.2`: add a Knex-backed async BRC-103 session manager,
   the shared-session schema migration, and `StorageServer.sessionManager`
   injection so authenticated requests can move safely between replicas without
@@ -18,9 +35,9 @@ attention to changes that materially alter behavior or extend functionality.
   import so strict package managers do not fail when loading the built packages.
 
 - Release prep for `2.4.2`: proof completion now discovers every local
-  transaction row sharing the proven txid, repairs notification-set drift from
-  concurrent multi-user `internalizeAction` calls, and idempotently completes
-  any local copy omitted by a last-writer-wins notification update.
+   transaction row sharing the proven txid, repairs notification-set drift from
+   concurrent multi-user `internalizeAction` calls, and idempotently completes
+   any local copy omitted by a last-writer-wins notification update.
 
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.

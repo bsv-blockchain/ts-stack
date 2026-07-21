@@ -112,8 +112,8 @@ export class BeefParty extends Beef {
    * @param party
    * @param beef
    */
-  mergeBeefFromParty (party: string, beef: number[] | Beef): void {
-    const b: Beef = Array.isArray(beef) ? Beef.fromBinary(beef) : beef
+  mergeBeefFromParty (party: string, beef: number[] | Uint8Array | Beef): void {
+    const b: Beef = beef instanceof Beef ? beef : Beef.fromBinary(beef)
     const knownTxids = b.getValidTxids()
     this.mergeBeef(b)
     this.addKnownTxidsForParty(party, knownTxids)

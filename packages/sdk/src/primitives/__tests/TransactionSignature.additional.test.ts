@@ -95,6 +95,48 @@ describe('TransactionSignature – additional coverage', () => {
   })
 
   describe('formatBip143 – cache', () => {
+    it.each([
+      TransactionSignature.SIGHASH_ALL | TransactionSignature.SIGHASH_FORKID,
+      TransactionSignature.SIGHASH_SINGLE | TransactionSignature.SIGHASH_FORKID,
+      TransactionSignature.SIGHASH_ALL
+    ])('keeps preimages byte-identical when allInputs replaces otherInputs for scope %i', scope => {
+      const allInputs = [
+        { sourceTXID: '11'.repeat(32), sourceOutputIndex: 1, sequence: 1 },
+        { sourceTXID: '22'.repeat(32), sourceOutputIndex: 2, sequence: 2 },
+        { sourceTXID: '33'.repeat(32), sourceOutputIndex: 3, sequence: 3 }
+      ]
+      const params = makeParams({
+        sourceTXID: allInputs[1].sourceTXID,
+        sourceOutputIndex: allInputs[1].sourceOutputIndex,
+        inputSequence: allInputs[1].sequence,
+        inputIndex: 1,
+        otherInputs: [allInputs[0], allInputs[2]],
+        outputs: [
+          { lockingScript: new LockingScript(), satoshis: 100 },
+          { lockingScript: new LockingScript(), satoshis: 200 }
+        ],
+        scope
+      })
+
+      expect(TransactionSignature.formatBytes({ ...params, allInputs })).toEqual(TransactionSignature.formatBytes(params))
+    })
+
+    it('keeps the explicit current-input parameters authoritative with allInputs', () => {
+      const allInputs = [
+        { sourceTXID: '11'.repeat(32), sourceOutputIndex: 1, sequence: 1 },
+        { sourceTXID: 'ff'.repeat(32), sourceOutputIndex: 9, sequence: 9 }
+      ]
+      const params = makeParams({
+        sourceTXID: '22'.repeat(32),
+        sourceOutputIndex: 2,
+        inputSequence: 2,
+        inputIndex: 1,
+        otherInputs: [allInputs[0]]
+      })
+
+      expect(TransactionSignature.formatBip143({ ...params, allInputs })).toEqual(TransactionSignature.formatBip143(params))
+    })
+
     it('uses cached hashPrevouts and hashSequence on second call', () => {
       const params = makeParams()
       const cache: SignatureHashCache = {}

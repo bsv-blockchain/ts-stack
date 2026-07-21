@@ -227,7 +227,7 @@ export interface StorageCreateTransactionSdkInput {
   /**
    *
    */
-  sourceTransaction?: number[]
+  sourceTransaction?: number[] | Uint8Array
   unlockingScriptLength: number
   providedBy: StorageProvidedBy
   type: string
@@ -245,7 +245,7 @@ export interface StorageCreateTransactionSdkOutput extends Validation.ValidCreat
 }
 
 export interface StorageCreateActionResult {
-  inputBeef?: number[]
+  inputBeef?: number[] | Uint8Array
   inputs: StorageCreateTransactionSdkInput[]
   outputs: StorageCreateTransactionSdkOutput[]
   noSendChangeOutputVouts?: number[]
@@ -262,7 +262,7 @@ export interface StorageProcessActionArgs {
   isDelayed: boolean
   reference?: string
   txid?: string
-  rawTx?: number[]
+  rawTx?: number[] | Uint8Array
   sendWith: string[]
   logger?: WalletLoggerInterface
 }
@@ -373,7 +373,9 @@ export interface StorageGetBeefOptions {
   /** list of txids to be included as txidOnly if referenced. Validity is known to caller. */
   knownTxids?: string[]
   /** optional. If defined, raw transactions and merkle paths required by txid are merged to this instance and returned. Otherwise a new Beef is constructed and returned. */
-  mergeToBeef?: Beef | number[]
+  mergeToBeef?: Beef | number[] | Uint8Array
+  /** Maximum independent ancestor lookups to perform concurrently. Defaults to 8. */
+  maxConcurrency?: number
   /** optional. Default is false. `storage` is used for raw transaction and merkle proof lookup */
   ignoreStorage?: boolean
   /** optional. Default is false. `getServices` is used for raw transaction and merkle proof lookup */

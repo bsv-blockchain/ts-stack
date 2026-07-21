@@ -7,7 +7,7 @@ import ScriptChunk from './ScriptChunk.js'
 import { minimallyEncode } from '../primitives/utils.js'
 import ScriptEvaluationError from './ScriptEvaluationError.js'
 import * as Hash from '../primitives/Hash.js'
-import TransactionSignature, { SignatureHashCache } from '../primitives/TransactionSignature.js'
+import TransactionSignature, { type SignatureHashCache } from '../primitives/TransactionSignature.js'
 import PublicKey from '../primitives/PublicKey.js'
 import { verify } from '../primitives/ECDSA.js'
 import TransactionInput from '../transaction/TransactionInput.js'
@@ -132,6 +132,7 @@ export default class Spend {
   lockingScript: LockingScript
   transactionVersion: number
   otherInputs: TransactionInput[]
+  allInputs?: TransactionInput[]
   outputs: TransactionOutput[]
   inputIndex: number
   unlockingScript: UnlockingScript
@@ -153,7 +154,8 @@ export default class Spend {
   executedOpCount: number
   returningFromConditional: boolean
 
-  private sigHashCache: SignatureHashCache
+  private readonly sigHashCache: SignatureHashCache
+  private readonly ownsSigHashCache: boolean
 
   /**
    * @constructor
@@ -196,6 +198,7 @@ export default class Spend {
     lockingScript: LockingScript
     transactionVersion: number
     otherInputs: TransactionInput[]
+    allInputs?: TransactionInput[]
     outputs: TransactionOutput[]
     unlockingScript: UnlockingScript
     inputSequence: number
@@ -204,6 +207,11 @@ export default class Spend {
     memoryLimit?: number
     isRelaxed?: boolean
     verifyFlags?: string | string[]
+    /**
+     * Cache shared across Spend instances for one immutable transaction pass.
+     * A supplied cache is externally owned and is not cleared by reset().
+     */
+    sigHashCache?: SignatureHashCache
   }) {
     this.sourceTXID = params.sourceTXID
     this.sourceOutputIndex = params.sourceOutputIndex
@@ -211,6 +219,7 @@ export default class Spend {
     this.lockingScript = params.lockingScript
     this.transactionVersion = params.transactionVersion
     this.otherInputs = params.otherInputs
+    this.allInputs = params.allInputs
     this.outputs = params.outputs
     this.inputIndex = params.inputIndex
     this.unlockingScript = params.unlockingScript
@@ -234,7 +243,8 @@ export default class Spend {
     this.altStackMem = 0
     this.executedOpCount = 0
     this.returningFromConditional = false
-    this.sigHashCache = { hashOutputsSingle: new Map() }
+    this.ownsSigHashCache = params.sigHashCache == null
+    this.sigHashCache = params.sigHashCache ?? { hashOutputsSingle: new Map() }
     this.reset()
   }
 
@@ -318,6 +328,12 @@ export default class Spend {
   }
 
   reset (): void {
+    if (this.ownsSigHashCache) {
+      delete this.sigHashCache.hashPrevouts
+      delete this.sigHashCache.hashSequence
+      delete this.sigHashCache.hashOutputsAll
+      this.sigHashCache.hashOutputsSingle?.clear()
+    }
     this.context = 'UnlockingScript'
     this.programCounter = 0
     this.lastCodeSeparator = null
@@ -329,7 +345,6 @@ export default class Spend {
     this.altStackMem = 0
     this.executedOpCount = 0
     this.returningFromConditional = false
-    this.sigHashCache = { hashOutputsSingle: new Map() }
   }
 
   private ensureStackMem (additional: number): void {
@@ -578,6 +593,7 @@ export default class Spend {
       sourceSatoshis: this.sourceSatoshis,
       transactionVersion: this.transactionVersion,
       otherInputs: this.otherInputs,
+      allInputs: this.allInputs,
       outputs: this.outputs,
       inputIndex: this.inputIndex,
       subscript,
@@ -880,11 +896,11 @@ export default class Spend {
           break
         case OP.OP_ELSE:
           if (this.ifStack.length === 0) this.scriptEvaluationError('OP_ELSE requires a preceeding OP_IF.')
-          if (this.hasExplicitFlags() && this.isAfterGenesis() && this.elseStack.at(-1)) {
+          if (this.hasExplicitFlags() && this.isAfterGenesis() && this.elseStack.at(-1) === true) {
             this.scriptEvaluationError('OP_ELSE may only be used once for each OP_IF or OP_NOTIF after Genesis.')
           }
           this.elseStack[this.elseStack.length - 1] = true
-          this.ifStack[this.ifStack.length - 1] = !this.ifStack.at(-1)
+          this.ifStack[this.ifStack.length - 1] = this.ifStack.at(-1) !== true
           break
         case OP.OP_ENDIF:
           if (this.ifStack.length === 0) this.scriptEvaluationError('OP_ENDIF requires a preceeding OP_IF.')
@@ -1465,6 +1481,7 @@ export default class Spend {
    * }
    */
   validate (): boolean {
+    this.reset()
     if (this.shouldEnforceSigPushOnly() && !this.unlockingScript.isPushOnly()) {
       this.scriptEvaluationError(
         'Unlocking scripts can only contain push operations, and no other opcodes.'
@@ -1481,7 +1498,6 @@ export default class Spend {
       this.scriptEvaluationError('P2SH unlocking scripts can only contain push operations.')
     }
 
-    this.reset()
     this.runScript('UnlockingScript')
     const stackAfterUnlockingScript = this.stack.map(item => item.slice())
 

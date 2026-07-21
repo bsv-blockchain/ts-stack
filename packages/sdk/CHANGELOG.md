@@ -216,13 +216,37 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Release prep for `2.1.8`: transaction, BEEF, signature-hash, and deep-graph
+  performance improvements described below.
+- Add explicit zero-copy `Uint8Array` transaction/BEEF parsing APIs, lazy raw-transaction
+  materialization, and `Transaction.toBEEFBytes()` for correctly typed BEEF output.
+- Add a reproducible multi-megabyte transaction pipeline benchmark.
+
 ### Changed
 
+- Make transaction signing/verification share BIP143 hash components, replace recursive
+  spend-chain traversal with iterative work queues, and use indexed O(V+E) BEEF graph operations.
+- Keep copy-safe parsing as the default while eliminating intermediate boxed-byte and script copies.
+
 ### Deprecated
+
+- Deprecate `Transaction.toBEEFUint8Array()`, whose historical runtime value is a `number[]`,
+  in favor of `Transaction.toBEEFBytes()`. The legacy behavior remains unchanged for compatibility.
 
 ### Removed
 
 ### Fixed
+
+- Fix raw `BeefTx` transaction IDs to use canonical display byte order and invalidate cached BEEF
+  serialization when public transaction-list state changes.
+- Invalidate every transaction serialization cache when adding outputs, not only the hash cache.
+- Make Atomic BEEF extraction compute the exact dependency closure regardless of parsed transaction
+  order, reject unrelated incoming Atomic BEEF data, and keep BEEF validity synchronized with nested
+  transaction mutations. Duplicate transaction IDs and invalid BUMP indexes now fail validation
+  deterministically instead of being accepted or throwing.
+- Detect direct mutation of public transaction fields before reusing serialized bytes, hashes, or
+  transaction IDs, and do not expose the mutable internal transaction-hash cache.
+- Invalidate BEEF serialization and proof indexes after in-place mutation of a nested BUMP.
 
 - Release prep for `2.1.7`: fix `Brc29RemittanceModule` settlement acceptance to always use the
   `wallet payment` internalization protocol. The deprecated

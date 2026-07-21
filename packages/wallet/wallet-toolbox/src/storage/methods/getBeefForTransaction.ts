@@ -3,7 +3,6 @@ import { StorageProvider } from '../StorageProvider'
 import { ProvenOrRawTx, StorageGetBeefOptions } from '../../sdk/WalletStorage.interfaces'
 import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 import { WERR_INVALID_MERKLE_ROOT, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
-import { asBsvSdkTx, verifyTruthy } from '../../utility/utilityHelpers'
 
 /**
  * Creates a `Beef` to support the validity of a transaction identified by its `txid`.
@@ -28,16 +27,57 @@ export async function getBeefForTransaction (
   txid: string,
   options: StorageGetBeefOptions
 ): Promise<Beef> {
-  const beef =
-    // deserialize mergeToBeef if it is an array
-    Array.isArray(options.mergeToBeef)
+  const beef = options.mergeToBeef instanceof Beef
+    ? options.mergeToBeef
+    : options.mergeToBeef != null
       ? Beef.fromBinary(options.mergeToBeef)
-      : // otherwise if undefined create a new Beef
-        options.mergeToBeef || new Beef()
+      : new Beef()
 
-  await mergeBeefForTransactionRecurse(beef, storage, txid, options, 0)
+  const knownTxids = new Set(options.knownTxids ?? [])
+  const scheduled = new Set<string>([txid])
+  let frontier: Array<{ txid: string, depth: number }> = [{ txid, depth: 0 }]
+  const requestedConcurrency = options.maxConcurrency ?? 8
+  const concurrency = Number.isFinite(requestedConcurrency)
+    ? Math.max(1, Math.min(32, Math.floor(requestedConcurrency)))
+    : 8
+
+  while (frontier.length > 0) {
+    const current = frontier.filter(item => beef.findTxid(item.txid) == null)
+    const resolved = await mapWithConcurrency(current, concurrency, async item =>
+      await resolveBeefForTransaction(storage, item.txid, options, knownTxids, item.depth)
+    )
+
+    const next: Array<{ txid: string, depth: number }> = []
+    for (let i = 0; i < resolved.length; i++) {
+      const result = resolved[i]
+      beef.mergeBeef(result.beef)
+      for (const dependency of result.dependencies) {
+        if (!scheduled.has(dependency) && beef.findTxid(dependency) == null) {
+          scheduled.add(dependency)
+          next.push({ txid: dependency, depth: current[i].depth + 1 })
+        }
+      }
+    }
+    frontier = next
+  }
 
   return beef
+}
+
+async function mapWithConcurrency<T, R> (
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let cursor = 0
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor++
+      results[index] = await mapper(values[index])
+    }
+  }))
+  return results
 }
 
 /**
@@ -55,20 +95,22 @@ async function getProvenOrRawTxFromServices (
   return { proven: por.proven?.toApi(), rawTx: por.rawTx }
 }
 
-async function mergeBeefForTransactionRecurse (
-  beef: Beef,
+async function resolveBeefForTransaction (
   storage: StorageProvider,
   txid: string,
   options: StorageGetBeefOptions,
+  knownTxids: Set<string>,
   recursionDepth: number
-): Promise<Beef> {
+): Promise<{ beef: Beef, dependencies: string[] }> {
   const maxDepth = storage.maxRecursionDepth
   if (maxDepth && maxDepth <= recursionDepth) { throw new WERR_INVALID_OPERATION(`Maximum BEEF depth exceeded. Limit is ${storage.maxRecursionDepth}`) }
 
-  if (options.knownTxids?.includes(txid)) {
+  const beef = new Beef()
+
+  if (knownTxids.has(txid)) {
     // This txid is one of the txids the caller claims to already know are valid...
     beef.mergeTxidOnly(txid)
-    return beef
+    return { beef, dependencies: [] }
   }
 
   if (!options.ignoreStorage) {
@@ -84,7 +126,7 @@ async function mergeBeefForTransactionRecurse (
       options.chainTracker,
       options.skipInvalidProofs
     )
-    if (knownBeef != null) return knownBeef
+    if (knownBeef != null) return { beef: knownBeef, dependencies: [] }
   }
 
   if (options.ignoreServices) { throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`) }
@@ -116,23 +158,13 @@ async function mergeBeefForTransactionRecurse (
     if (r.proven != null) {
       beef.mergeRawTx(r.proven.rawTx)
       beef.mergeBump(mp)
-      return beef
+      return { beef, dependencies: [] }
     }
   }
 
   if (r.rawTx == null) throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`)
 
   // merge the raw transaction and recurse over its inputs.
-  beef.mergeRawTx(r.rawTx)
-  // recurse inputs
-  const tx = asBsvSdkTx(r.rawTx)
-  for (const input of tx.inputs) {
-    const inputTxid = verifyTruthy(input.sourceTXID)
-    if (beef.findTxid(inputTxid) == null) {
-      // Only if the txid is not already in the list of beef transactions.
-      await mergeBeefForTransactionRecurse(beef, storage, inputTxid, options, recursionDepth + 1)
-    }
-  }
-
-  return beef
+  const beefTx = beef.mergeRawTx(r.rawTx)
+  return { beef, dependencies: beefTx.inputTxids }
 }

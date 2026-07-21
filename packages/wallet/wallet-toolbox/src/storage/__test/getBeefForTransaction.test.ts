@@ -121,6 +121,57 @@ describe('getBeefForTransaction tests', () => {
     }
   })
 
+  test('resolves a wide ancestor frontier with bounded concurrency and deterministic output', async () => {
+    const ps = new ProtoStorage('main')
+    ps.maxRecursionDepth = 3
+    ps.gbo.maxConcurrency = 4
+
+    const rawByTxid = new Map<string, number[]>()
+    const sources: Transaction[] = []
+    for (let i = 0; i < 12; i++) {
+      const source = new Transaction()
+      source.addOutput({ satoshis: 100 + i, lockingScript: Script.fromHex('51') })
+      rawByTxid.set(source.id('hex'), source.toBinary())
+      sources.push(source)
+    }
+    const root = new Transaction()
+    for (const source of sources) {
+      root.addInput({
+        sourceTXID: source.id('hex'),
+        sourceOutputIndex: 0,
+        unlockingScript: new Script(),
+        sequence: 0xffffffff
+      })
+    }
+    root.addOutput({ satoshis: 1, lockingScript: Script.fromHex('51') })
+    rawByTxid.set(root.id('hex'), root.toBinary())
+
+    const services = ps.getServices()
+    let active = 0
+    let maxActive = 0
+    services.getRawTx = jest.fn().mockImplementation(async (txid: string): Promise<GetRawTxResult> => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      active--
+      return { txid, rawTx: rawByTxid.get(txid), name: 'mock' }
+    })
+    services.getMerklePath = jest.fn().mockResolvedValue({ name: 'mock' })
+
+    const first = await ps.getBeefForTxid(root.id('hex'))
+    const firstBytes = first.toBinary()
+    const second = await ps.getBeefForTxid(root.id('hex'))
+
+    expect(maxActive).toBe(4)
+    expect(first.txs).toHaveLength(rawByTxid.size)
+    expect(new Set(first.txs.map(tx => tx.txid))).toEqual(new Set(rawByTxid.keys()))
+    expect(second.toBinary()).toEqual(firstBytes)
+
+    ps.gbo.maxConcurrency = Number.NaN
+    const invalidConcurrency = await ps.getBeefForTxid(root.id('hex'))
+    expect(invalidConcurrency.txs).toHaveLength(rawByTxid.size)
+  })
+
   test.skip('1 obtain atomic beef hex for txid', async () => {
     const ps = new ProtoStorage('main')
     const txid = '4cefbe79926d6ef2cc727d8faccac186d9bb141f170411dd75bc6329f428f5a4'

@@ -155,7 +155,9 @@ export function buildSignableTransaction (
         sourceTXID: storageInput.sourceTxid,
         sourceOutputIndex: storageInput.sourceVout,
         sourceTransaction: (storageInput.sourceTransaction != null)
-          ? Transaction.fromBinary(storageInput.sourceTransaction)
+          ? storageInput.sourceTransaction instanceof Uint8Array
+            ? Transaction.fromBinaryView(storageInput.sourceTransaction)
+            : Transaction.fromBinary(storageInput.sourceTransaction)
           : undefined,
         unlockingScript: new Script(),
         sequence: 0xffffffff
