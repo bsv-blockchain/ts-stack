@@ -253,9 +253,9 @@ export class Arcade {
     const txidSet = new Set(txids)
     const prepared = txids.map(txid => {
       try {
-        // Use the already-parsed bundle: Transaction.fromBEEF(beef.toBinary(),
-        // txid) re-parsed the entire bundle once per txid — O(n²).
-        // findAtomicTransaction links the sourceTransactions toHexEF needs.
+        // Extract each transaction from the shared parsed bundle.
+        // findAtomicTransaction attaches the source-transaction ancestry
+        // required by the EF serialization below.
         const tx = beef.findAtomicTransaction(txid)
         if (tx == null) throw new Error(`transaction ${txid} not found in beef`)
         const dependencies = tx.inputs

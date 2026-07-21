@@ -301,6 +301,28 @@ describe('Arcade broadcaster', () => {
       expect(rawTx.startsWith(BEEF_V2_PREFIX)).toBe(false)
     })
 
+    test('reconstructs EF from a bundle parsed from binary (no pre-linked ancestry)', async () => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClient(
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: '', status: 202, txStatus: 'RECEIVED' } },
+        captured
+      )
+      const arc = new Arcade('https://arcade.example', { httpClient: http })
+      const { beef, spendTxid } = buildBeef()
+      // A wire/storage bundle arrives as binary: its transactions carry no
+      // sourceTransaction links until ancestry is attached during extraction.
+      const rehydrated = Beef.fromBinary(beef.toBinary())
+
+      const r = await arc.postBeef(rehydrated, [spendTxid])
+
+      expect(r.status).toBe('success')
+      expect(captured).toHaveLength(1)
+      const rawTx = (captured[0].options.data as { rawTx: string }).rawTx
+      expect(rawTx).toContain(EF_MARKER)
+      expect(rawTx.startsWith(BEEF_V1_PREFIX)).toBe(false)
+      expect(rawTx.startsWith(BEEF_V2_PREFIX)).toBe(false)
+    })
+
     test('standard ARC still posts BEEF (regression guard for the non-arcade path)', async () => {
       const captured: CapturedRequest[] = []
       const http = mockHttpClient(
