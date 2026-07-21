@@ -542,12 +542,15 @@ describe('LookupResolver adversarial review regressions', () => {
     const semanticHost = 'https://semantic-http.host'
     const unavailableHost = 'https://availability-http.host'
     const callback = jest.fn()
-    const fetchClient = jest.fn(async (url: string) => ({
-      ok: false,
-      status: url.startsWith(semanticHost) ? 401 : 429,
-      statusText: url.startsWith(semanticHost) ? 'Unauthorized' : 'Too Many Requests',
-      headers: { get: () => 'application/json' }
-    }))
+    const fetchClient = jest.fn(async (url: string) => {
+      const isSemanticHost = new URL(url).origin === semanticHost
+      return {
+        ok: false,
+        status: isSemanticHost ? 401 : 429,
+        statusText: isSemanticHost ? 'Unauthorized' : 'Too Many Requests',
+        headers: { get: () => 'application/json' }
+      }
+    })
     const facilitator = new HTTPSOverlayLookupFacilitator(fetchClient as unknown as typeof fetch, true)
     const semanticResolver = new LookupResolver({
       facilitator,

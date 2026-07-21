@@ -974,12 +974,12 @@ export default class LookupResolver {
       ? timeout
       : DEFAULT_LOOKUP_TIMEOUT
     const deadline = createDeadline(effectiveTimeout)
-    let lookupPromise: Promise<LookupFacilitatorAnswer>
-    try {
-      lookupPromise = Promise.resolve(this.facilitator.lookup(host, question, timeout))
-    } catch (err) {
-      lookupPromise = Promise.reject(err)
-    }
+    // The Promise constructor converts a synchronous throw from a non-conforming
+    // custom facilitator into a rejection while preserving immediate invocation.
+    // Awaiting here would bypass the wall-clock deadline below.
+    const lookupPromise = new Promise<LookupFacilitatorAnswer>((resolve) => {
+      resolve(this.facilitator.lookup(host, question, timeout))
+    })
     lookupPromise.catch(() => { /* deadline may win while custom facilitator settles later */ })
 
     let answer: LookupFacilitatorAnswer
