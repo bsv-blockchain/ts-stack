@@ -2350,7 +2350,10 @@ export class WalletPermissionsManager implements WalletInterface {
         }
         this.parsedBeefCache.set(beef, parsed)
       }
-      const tx = parsed?.findTxid(txid)?.tx
+      // findAtomicTransaction (not findTxid().tx) matches fromBEEF exactly:
+      // it attaches merkle paths and sourceTransaction ancestry, which token
+      // consumers rely on when re-serializing via tx.toBEEF().
+      const tx = parsed?.findAtomicTransaction(txid)
       if (tx != null) return tx
     }
     // Preserve the original behavior (including throwing) for bundles the

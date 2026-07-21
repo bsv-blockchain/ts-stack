@@ -249,12 +249,15 @@ export class Arcade {
       notes: []
     }
     const nn = (): { name: string, when: string } => ({ name: this.name, when: new Date().toISOString() })
-    const beefBin = beef.toBinary()
 
     const txidSet = new Set(txids)
     const prepared = txids.map(txid => {
       try {
-        const tx = Transaction.fromBEEF(beefBin, txid)
+        // Use the already-parsed bundle: Transaction.fromBEEF(beef.toBinary(),
+        // txid) re-parsed the entire bundle once per txid — O(n²).
+        // findAtomicTransaction links the sourceTransactions toHexEF needs.
+        const tx = beef.findAtomicTransaction(txid)
+        if (tx == null) throw new Error(`transaction ${txid} not found in beef`)
         const dependencies = tx.inputs
           .map(input => input.sourceTXID ?? input.sourceTransaction?.id('hex'))
           .filter((sourceTxid): sourceTxid is string => sourceTxid != null && sourceTxid !== txid && txidSet.has(sourceTxid))
