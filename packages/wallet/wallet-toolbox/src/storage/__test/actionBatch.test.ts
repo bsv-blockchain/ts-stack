@@ -1,7 +1,10 @@
 import { Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { cleanupExpiredActionBatches } from '../methods/actionBatch'
-import { ACTION_BATCH_MAX_INLINE_BYTES } from '../methods/actionBatchBlobs'
+import {
+  ACTION_BATCH_MAX_CHUNKS_PER_BLOB,
+  ACTION_BATCH_MAX_INLINE_BYTES
+} from '../methods/actionBatchBlobs'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
 
 function firstAction () {
@@ -198,6 +201,29 @@ describe('action batch reservations', () => {
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
     expect((await ctx.activeStorage.findActionBatchBlobRecord(batch!.actionBatchId, digest))?.bytes).toEqual(bytes)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('commit rejects an excessive logical blob chunk list before assembly', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'excessive-chunks', firstAction: firstAction() })
+    const chunk = [7]
+    const chunkDigest = actionBatchBlobDigest(chunk)
+    const chunks = Array(ACTION_BATCH_MAX_CHUNKS_PER_BLOB + 1).fill(chunkDigest)
+    const dependencyBeefDigest = actionBatchBlobDigest(chunks.map(() => chunk[0]))
+    const withoutDigest = {
+      batchId: begun.batchId,
+      actions: [],
+      dependencyBeefDigest,
+      blobChunks: { [dependencyBeefDigest]: chunks },
+      sendWith: [],
+      isDelayed: true
+    }
+    const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+
+    await ctx.storage.prepareActionBatchCommit(manifest)
+    await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest: chunkDigest, bytes: chunk })
+    await expect(ctx.storage.commitActionBatch(manifest))
+      .rejects.toThrow(`at most ${ACTION_BATCH_MAX_CHUNKS_PER_BLOB} blob chunks`)
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 

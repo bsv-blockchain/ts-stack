@@ -10,6 +10,10 @@ import { validateStorageFeeModel } from '../StorageProvider'
 import type { TableActionBatch } from '../schema/tables/TableActionBatch'
 import { maxPossibleSatoshis } from './generateChange'
 import { lockScriptWithKeyOffsetFromPubKey } from './offsetKey'
+import {
+  ACTION_BATCH_MAX_CHUNKS_PER_BLOB,
+  ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES
+} from './actionBatchBlobs'
 
 export interface ValidatedBatchAction {
   action: ActionBatchCommitAction
@@ -36,6 +40,9 @@ async function resolveManifestBytes (
   if (digest == null) throw new WERR_INVALID_PARAMETER(name, 'inline bytes or digest')
   if (chunkDigests != null) {
     if (chunkDigests.length === 0) throw new WERR_INVALID_PARAMETER(name, 'one or more blob chunks')
+    if (chunkDigests.length > ACTION_BATCH_MAX_CHUNKS_PER_BLOB) {
+      throw new WERR_INVALID_PARAMETER(name, `at most ${ACTION_BATCH_MAX_CHUNKS_PER_BLOB} blob chunks`)
+    }
     const chunks: number[][] = []
     let totalBytes = 0
     for (const chunkDigest of chunkDigests) {
@@ -44,8 +51,11 @@ async function resolveManifestBytes (
       if (actionBatchBlobDigest(chunk.bytes) !== chunkDigest) {
         throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${chunkDigest}`)
       }
-      chunks.push(chunk.bytes)
       totalBytes += chunk.bytes.length
+      if (totalBytes > ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES) {
+        throw new WERR_INVALID_PARAMETER(name, 'assembled bytes within provider limit')
+      }
+      chunks.push(chunk.bytes)
     }
     const bytes = new Array<number>(totalBytes)
     let offset = 0

@@ -12,6 +12,8 @@ import type { StorageProvider } from '../StorageProvider'
 import type { TableActionBatch } from '../schema/tables/TableActionBatch'
 
 export const ACTION_BATCH_MAX_BLOB_BYTES = 8 * 1024 * 1024
+export const ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES = 64 * 1024 * 1024
+export const ACTION_BATCH_MAX_CHUNKS_PER_BLOB = 64
 export const ACTION_BATCH_MAX_CONCURRENT_UPLOADS = 4
 export const ACTION_BATCH_MAX_INLINE_BYTES = 4 * 1024 * 1024
 
