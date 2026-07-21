@@ -39,6 +39,14 @@ function scanInputTxids (rawTx: Uint8Array): string[] {
   return scanRawTransaction(new ReaderUint8Array(rawTx)).inputTxids
 }
 
+function sameTxids (a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 /**
  * A single bitcoin transaction associated with a `Beef` validity proof set.
  *
@@ -121,19 +129,29 @@ export default class BeefTx {
   }
 
   /**
-   * Synchronizes a lazily parsed transaction after mutation through the normal
-   * Transaction APIs. Returns true when its serialized bytes changed.
+   * Synchronizes a nested transaction after mutation through the normal
+   * Transaction APIs. Returns true when its serialized identity or dependencies
+   * changed.
    *
    * @internal
    */
   syncRawTxFromTransaction (): boolean {
-    if (this._tx == null || this._rawTx == null) return false
+    if (this._tx == null) return false
     const bytes = this._tx.toUint8Array()
-    if (bytes === this._rawTx) return false
-    this._rawTx = bytes
-    this._txid = undefined
+    if (this._rawTx != null) {
+      if (bytes === this._rawTx) return false
+      this._rawTx = bytes
+      this._txid = this._tx.id('hex')
+      this.updateInputTxids()
+      return true
+    }
+
+    const txid = this._tx.id('hex')
+    const txidChanged = this._txid != null && this._txid !== txid
+    const previousInputTxids = this.inputTxids
+    this._txid = txid
     this.updateInputTxids()
-    return true
+    return txidChanged || !sameTxids(previousInputTxids, this.inputTxids)
   }
 
   /**

@@ -17,7 +17,13 @@ import { StorageCreateActionResult, StorageProcessActionResults } from '../../sd
 import { WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
-import { isListActionsSpecOp, specOpWalletBalance, specOpWalletManagedUtxos } from '../../sdk/types'
+import {
+  isListActionsSpecOp,
+  specOpFailedActions,
+  specOpNoSendActions,
+  specOpWalletBalance,
+  specOpWalletManagedUtxos
+} from '../../sdk/types'
 import {
   actionBatchBlobDigest,
   actionBatchManifestDigest
@@ -107,7 +113,9 @@ class ActionBatchWorkspace {
     persisted: ListActionsResult,
     args: Validation.ValidListActionsArgs
   ): ListActionsResult {
-    const ordinaryLabels = args.labels.filter(label => !isListActionsSpecOp(label))
+    if (args.labels.includes(specOpFailedActions)) return persisted
+    const controlLabels = new Set(args.labels.includes(specOpNoSendActions) ? ['abort'] : [])
+    const ordinaryLabels = args.labels.filter(label => !isListActionsSpecOp(label) && !controlLabels.has(label))
     const staged = this.actions
       .filter(action => {
         if (ordinaryLabels.length === 0) return true
@@ -485,7 +493,8 @@ class ActionBatchWorkspace {
 
 export class ActionBatchController {
   private workspace?: ActionBatchWorkspace
-  private capabilities?: Promise<StorageCapabilities['actionBatch'] | undefined>
+  private readonly capabilities = new Map<string, Promise<StorageCapabilities['actionBatch'] | undefined>>()
+  private serial: Promise<void> = Promise.resolve()
 
   constructor (private readonly wallet: Wallet, readonly mode: ActionBatchMode) {}
 
@@ -499,12 +508,23 @@ export class ActionBatchController {
     return this.workspace?.overlayListOutputs(persisted, args) ?? persisted
   }
 
+  private async runExclusive<T> (operation: () => Promise<T>): Promise<T> {
+    const run = this.serial.then(operation)
+    this.serial = run.then(() => {}, () => {})
+    return await run
+  }
+
   private async negotiate (): Promise<StorageCapabilities['actionBatch'] | undefined> {
     if (this.mode === 'legacy') return undefined
-    this.capabilities ??= this.wallet.storage.getCapabilities()
-      .then(capabilities => capabilities.actionBatch?.version === 1 ? capabilities.actionBatch : undefined)
-      .catch(() => undefined)
-    return await this.capabilities
+    const activeStore = this.wallet.storage.getActiveStore()
+    let capabilities = this.capabilities.get(activeStore)
+    if (capabilities == null) {
+      capabilities = this.wallet.storage.getCapabilities()
+        .then(result => result.actionBatch?.version === 1 ? result.actionBatch : undefined)
+        .catch(() => undefined)
+      this.capabilities.set(activeStore, capabilities)
+    }
+    return await capabilities
   }
 
   private async begin (args: Validation.ValidCreateActionArgs): Promise<ActionBatchWorkspace | undefined> {
@@ -521,40 +541,44 @@ export class ActionBatchController {
   }
 
   async plan (args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
-    if (!args.isNewTx) return undefined
-    let workspace = this.workspace
-    let beganWorkspace = false
-    if (workspace == null) {
-      if (!args.isNoSend) return undefined
-      workspace = await this.begin(args)
-      if (workspace == null) return undefined
-      beganWorkspace = true
-    }
-    try {
-      return await workspace.plan(args)
-    } catch (error) {
-      if (beganWorkspace) {
-        await workspace.abort()
-        this.workspace = undefined
+    return await this.runExclusive(async () => {
+      if (!args.isNewTx) return undefined
+      let workspace = this.workspace
+      let beganWorkspace = false
+      if (workspace == null) {
+        if (!args.isNoSend) return undefined
+        workspace = await this.begin(args)
+        if (workspace == null) return undefined
+        beganWorkspace = true
       }
-      throw error
-    }
+      try {
+        return await workspace.plan(args)
+      } catch (error) {
+        if (beganWorkspace) {
+          await workspace.abort()
+          this.workspace = undefined
+        }
+        throw error
+      }
+    })
   }
 
   async process (
     prior: PendingSignAction | undefined,
     args: Validation.ValidProcessActionArgs
   ): Promise<StorageProcessActionResults | undefined> {
-    const workspace = this.workspace
-    if (workspace == null) return undefined
-    if (prior != null) workspace.stage(prior, args)
-    const shouldCommit = args.isSendWith || (prior != null && !args.isNoSend)
-    if (!shouldCommit) return { sendWithResults: [] }
-    const sendWith = [...args.options.sendWith]
-    if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) sendWith.push(prior.tx.id('hex'))
-    const result = await workspace.commit(sendWith, args.isDelayed)
-    this.workspace = undefined
-    return result
+    return await this.runExclusive(async () => {
+      const workspace = this.workspace
+      if (workspace == null) return undefined
+      if (prior != null) workspace.stage(prior, args)
+      const shouldCommit = args.isSendWith || (prior != null && !args.isNoSend)
+      if (!shouldCommit) return { sendWithResults: [] }
+      const sendWith = [...args.options.sendWith]
+      if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) sendWith.push(prior.tx.id('hex'))
+      const result = await workspace.commit(sendWith, args.isDelayed)
+      this.workspace = undefined
+      return result
+    })
   }
 
   ownsReference (reference: string): boolean {
@@ -562,9 +586,11 @@ export class ActionBatchController {
   }
 
   async abort (): Promise<boolean> {
-    if (this.workspace == null) return false
-    await this.workspace.abort()
-    this.workspace = undefined
-    return true
+    return await this.runExclusive(async () => {
+      if (this.workspace == null) return false
+      await this.workspace.abort()
+      this.workspace = undefined
+      return true
+    })
   }
 }

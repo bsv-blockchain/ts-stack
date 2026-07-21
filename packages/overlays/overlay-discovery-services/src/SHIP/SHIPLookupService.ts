@@ -27,13 +27,6 @@ export class SHIPLookupService implements LookupService {
     const topicSupported = Utils.toUTF8(result.fields[3])
     if (shipIdentifier !== 'SHIP') return
 
-    // Check for duplicates before storing
-    const isDuplicate = await this.storage.hasDuplicateRecord(identityKey, domain, topicSupported)
-    if (isDuplicate) {
-      console.log(`🚢 Skipping duplicate SHIP record: ${domain} / ${topicSupported}`)
-      return
-    }
-
     await this.storage.storeSHIPRecord(txid, outputIndex, identityKey, domain, topicSupported)
   }
 

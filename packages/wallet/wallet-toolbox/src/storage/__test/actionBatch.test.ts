@@ -128,6 +128,29 @@ describe('action batch reservations', () => {
     expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(0)
   })
 
+  test('extension hydration failure does not leak new reservations', async () => {
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'extension-hydration-failure',
+      firstAction: firstAction()
+    })
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    const before = await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)
+    const hydrate = jest.spyOn(ctx.activeStorage, 'getBeefForTransaction')
+      .mockRejectedValueOnce(new Error('dependency hydration failed'))
+
+    await expect(ctx.storage.extendActionBatch({
+      batchId: begun.batchId,
+      targetSatoshis: 1,
+      requestedOutputs: 1,
+      explicitOutpoints: [],
+      includeSourceTransactions: false
+    })).rejects.toThrow('dependency hydration failed')
+
+    expect(hydrate).toHaveBeenCalled()
+    expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toEqual(before)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
   test('begin atomically rejects funding spent after candidate selection', async () => {
     const findForUpdate = ctx.activeStorage.findOutputsByOutpointsForUpdate.bind(ctx.activeStorage)
     jest.spyOn(ctx.activeStorage, 'findOutputsByOutpointsForUpdate').mockImplementationOnce(async (...args) => {

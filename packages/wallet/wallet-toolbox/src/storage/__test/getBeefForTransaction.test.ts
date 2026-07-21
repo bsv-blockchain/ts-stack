@@ -166,6 +166,10 @@ describe('getBeefForTransaction tests', () => {
     expect(first.txs).toHaveLength(rawByTxid.size)
     expect(new Set(first.txs.map(tx => tx.txid))).toEqual(new Set(rawByTxid.keys()))
     expect(second.toBinary()).toEqual(firstBytes)
+
+    ps.gbo.maxConcurrency = Number.NaN
+    const invalidConcurrency = await ps.getBeefForTxid(root.id('hex'))
+    expect(invalidConcurrency.txs).toHaveLength(rawByTxid.size)
   })
 
   test.skip('1 obtain atomic beef hex for txid', async () => {

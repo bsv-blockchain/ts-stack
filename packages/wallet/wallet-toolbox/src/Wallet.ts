@@ -1215,9 +1215,11 @@ export class Wallet implements WalletInterface, ProtoWallet {
   async listNoSendActions (args: ListActionsArgs, abort = false): Promise<ListActionsResult> {
     const { vargs } = this.validateAuthAndArgs(args, Validation.validateListActionsArgs)
     vargs.labels.push(specOpNoSendActions)
-    if (abort) vargs.labels.push('abort')
-    const r = await this.storage.listActions(vargs)
-    return r
+    if (abort) {
+      await this.actionBatch.abort()
+      vargs.labels.push('abort')
+    }
+    return await this.listActions(vargs)
   }
 
   /**

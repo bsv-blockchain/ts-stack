@@ -146,10 +146,6 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         case 'SEEN_MULTIPLE_NODES': {
           if (['unsent', 'sending', 'callback', 'invalid'].includes(req.status)) {
             const wasInvalid = req.status === 'invalid'
-            req.status = 'unmined'
-            if (wasInvalid) req.attempts = 0
-            req.wasBroadcast = true
-            req.addHistoryNote(note)
             if (wasInvalid) {
               // Restore transaction state, re-reserve wallet inputs, and verify
               // output spendability using the established unfail repair path.
@@ -159,6 +155,12 @@ export class TaskArcadeSSE extends WalletMonitorTask {
                 await sp.updateTransactionsStatus(req.notify.transactionIds ?? [], 'unproven')
               })
             }
+            // Apply event state after recovery because the recovery helper
+            // refreshes the entity from storage before its atomic update.
+            req.status = 'unmined'
+            if (wasInvalid) req.attempts = 0
+            req.wasBroadcast = true
+            req.addHistoryNote(note)
             await req.updateStorageDynamicProperties(this.storage)
             log += `  req ${req.id} => unmined\n`
           }
@@ -168,10 +170,10 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         case 'MINED':
         case 'IMMUTABLE': {
           if (req.status === 'invalid') {
+            log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
             req.status = 'unmined'
             req.attempts = 0
             req.wasBroadcast = true
-            log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
           }
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
@@ -257,7 +259,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       req.status = r.status
       req.apiHistory = r.history
       req.provenTxId = r.provenTxId
-      req.notified = true
+      if (r.notify != null) req.apiNotify = r.notify
+      req.notified = r.notified ?? true
       await req.updateStorageDynamicProperties(this.storage)
 
       this.monitor.callOnProvenTransaction({

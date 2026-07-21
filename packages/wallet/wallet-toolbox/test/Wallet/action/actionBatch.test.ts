@@ -112,6 +112,39 @@ describe('in-memory action batch workspace', () => {
     expect(persisted.totalActions).toBe(10)
   })
 
+  test('concurrent planning shares one workspace without reusing inputs', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    ctx.wallet.randomVals = randomVals
+
+    const planned = await Promise.all([
+      ctx.wallet.createAction(actionArgs()),
+      ctx.wallet.createAction(actionArgs())
+    ])
+    const txids = planned.map(action => action.txid!)
+
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(new Set(txids).size).toBe(2)
+    await expect(ctx.wallet.createAction({
+      description: 'Commit concurrently planned actions',
+      options: { sendWith: txids }
+    })).resolves.toBeDefined()
+  })
+
+  test('noSend listing includes staged actions and abort releases their workspace', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+
+    const listed = await ctx.wallet.listNoSendActions({ labels: [] })
+    expect(listed.actions).toContainEqual(expect.objectContaining({ txid: staged.txid, status: 'nosend' }))
+    expect((await ctx.wallet.listFailedActions({ labels: [] })).actions)
+      .not.toContainEqual(expect.objectContaining({ txid: staged.txid }))
+
+    await ctx.wallet.listNoSendActions({ labels: [] }, true)
+    const begun = await begin.mock.results[0].value
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('aborted')
+  })
+
   test('independent actions extend confirmed-input runway before exhaustion', async () => {
     const extend = jest.spyOn(ctx.storage, 'extendActionBatch')
     ctx.wallet.randomVals = randomVals
@@ -281,6 +314,20 @@ describe('in-memory action batch workspace', () => {
     expect(legacyProcess).toHaveBeenCalledTimes(2)
   })
 
+  test('capabilities are negotiated once for each active provider', async () => {
+    const activeStore = jest.spyOn(ctx.storage, 'getActiveStore').mockReturnValue('provider-a')
+    const capabilities = jest.spyOn(ctx.storage, 'getCapabilities')
+    ctx.wallet.randomVals = randomVals
+
+    await ctx.wallet.createAction(actionArgs())
+    await ctx.wallet.listNoSendActions({ labels: [] }, true)
+    activeStore.mockReturnValue('provider-b')
+    await ctx.wallet.createAction(actionArgs())
+    await ctx.wallet.listNoSendActions({ labels: [] }, true)
+
+    expect(capabilities).toHaveBeenCalledTimes(2)
+  })
+
   test('first-action pool exhaustion aborts the workspace and releases reservations', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     ctx.wallet.randomVals = randomVals
@@ -304,11 +351,13 @@ describe('in-memory action batch workspace', () => {
     await ctx.activeStorage.updateActionBatch(batch!.actionBatchId, { expiresAt: new Date(Date.now() - 1) })
     await cleanupExpiredActionBatches(ctx.activeStorage)
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('expired')
+    const lockInputs = jest.spyOn(ctx.activeStorage, 'findOutputsByOutpointsForUpdate')
 
     await expect(ctx.wallet.createAction({
       description: 'Commit after lease expiry',
       options: { sendWith: [staged.txid!] }
     })).resolves.toBeDefined()
+    expect(lockInputs).toHaveBeenCalled()
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
   })
 

@@ -6,6 +6,7 @@ import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
 import { StorageClient } from '../StorageClient'
 import { WalletError } from '../../../sdk/WalletError'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../utility/actionBatchDigest'
+import { KnexSessionManager } from '../KnexSessionManager'
 
 describe('StorageClient tests', () => {
   jest.setTimeout(99999999)
@@ -51,6 +52,7 @@ describe('StorageClient tests', () => {
     const storageClient = client.storage.getActive() as StorageClient
     const u = await storageClient.findOrInsertUser(server.setup.identityKey)
     expect(u).toBeTruthy()
+    expect(capturedLogs.some(line => line.includes('StorageServer POST handler'))).toBe(false)
   })
 
   test('1 repeatable createAction', async () => {
@@ -161,6 +163,8 @@ async function createStorageServer (): Promise<{ setup: TestWalletNoSetup, serve
     port: Number(8042),
     wallet: setup.wallet,
     monetize: false,
+    logRpcRequests: false,
+    sessionManager: new KnexSessionManager(setup.activeStorage.knex),
     adminIdentityKeys: [],
     calculateRequestPrice: async () => {
       return 0 // Monetize your server here! Price is in satoshis.

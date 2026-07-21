@@ -31,10 +31,13 @@ const USER_COUNT = integerEnv('STORAGE_E2E_USER_COUNT', 3, 2, 20)
 const USER_OFFSET = integerEnv('STORAGE_E2E_USER_OFFSET', 0, 0, 1000000)
 const TX_COUNT = integerEnv('STORAGE_E2E_TX_COUNT', 3, 1, 100)
 const OUTPUT_SATS = integerEnv('STORAGE_E2E_OUTPUT_SATS', 100, 1, 100000)
-const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPUT_SATS + 200, 1000000)
+const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPUT_SATS + 300, 1000000)
+const FUNDING_BATCH_SIZE = integerEnv('STORAGE_E2E_FUNDING_BATCH_SIZE', 6, 1, 100)
 const MULTI_USER_ROUNDS = integerEnv('STORAGE_E2E_MULTI_USER_ROUNDS', 1, 1, 20)
 const PROOF_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_TIMEOUT_MS', 45 * 60 * 1000, 60 * 1000, 4 * 60 * 60 * 1000)
 const PROOF_POLL_MS = integerEnv('STORAGE_E2E_PROOF_POLL_MS', 30 * 1000, 5000, 5 * 60 * 1000)
+const PROOF_REQUEST_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_REQUEST_TIMEOUT_MS', 30 * 1000, 1000, 5 * 60 * 1000)
+const PROOF_ARCADE_CONCURRENCY = integerEnv('STORAGE_E2E_PROOF_ARCADE_CONCURRENCY', 8, 1, 32)
 const RAW_REQUEST_COUNT = integerEnv('STORAGE_E2E_READ_COUNT', 30, 1, 1000)
 const EVIDENCE_FILE = process.env.STORAGE_E2E_EVIDENCE_FILE
 const RUN_ID = process.env.STORAGE_E2E_RUN_ID ?? new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
@@ -43,6 +46,7 @@ const RUN_BASKET = `storage-e2e-${RUN_ID}`
 const CEILING_BATCHES = parseBatches(process.env.STORAGE_E2E_CEILING_BATCHES ?? '2,4,8')
 const LOAD_REPEATS = integerEnv('STORAGE_E2E_LOAD_REPEATS', 1, 1, 10)
 const REQUIRED_USER_UTXOS = requiredUserUtxos()
+const ACTION_PAGE_SIZE = 1000
 
 interface Stats {
   count: number
@@ -109,8 +113,11 @@ interface ProofObservation {
   arcadeStatus?: string
   blockHeight?: number
   arcadeProof: boolean
+  arcadeProofObservedAt?: string
   storageStatus?: string
+  storageCompletedObservedAt?: string
   completedAt?: string
+  convergenceMs?: number
   error?: string
 }
 
@@ -135,10 +142,14 @@ const evidence: {
     txCount: TX_COUNT,
     outputSats: OUTPUT_SATS,
     userFundingSats: USER_FUNDING_SATS,
+    fundingBatchSize: FUNDING_BATCH_SIZE,
     requiredUserUtxos: REQUIRED_USER_UTXOS,
     multiUserRounds: MULTI_USER_ROUNDS,
     ceilingBatches: CEILING_BATCHES,
-    loadRepeats: LOAD_REPEATS
+    loadRepeats: LOAD_REPEATS,
+    proofPollMs: PROOF_POLL_MS,
+    proofRequestTimeoutMs: PROOF_REQUEST_TIMEOUT_MS,
+    proofArcadeConcurrency: PROOF_ARCADE_CONCURRENCY
   },
   metrics: {},
   transactions: [],
@@ -166,6 +177,7 @@ function parseBatches (value: string): number[] {
 
 function requiredUserUtxos (): number[] {
   const required = Array.from({ length: USER_COUNT }, () => MULTI_USER_ROUNDS)
+  required[0] += TX_COUNT * 4
   const transactionsPerSingleIdentity = CEILING_BATCHES.reduce((sum, count) => sum + count, 0) * LOAD_REPEATS
   required[0] += transactionsPerSingleIdentity
 
@@ -257,6 +269,49 @@ function errorMessage (error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+async function withTimeout<T> (description: string, operation: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${description} timed out after ${PROOF_REQUEST_TIMEOUT_MS}ms`)), PROOF_REQUEST_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timer != null) clearTimeout(timer)
+  }
+}
+
+async function listRunActionStatuses (item: TestWallet, pendingTxids: string[]): Promise<Map<string, string>> {
+  const statuses = new Map<string, string>()
+  const unresolved = new Set(pendingTxids)
+  let offset = 0
+  while (unresolved.size > 0) {
+    const result = await withTimeout(
+      `Storage listActions wallet ${item.index} offset ${offset}`,
+      item.wallet.listActions({ labels: [RUN_LABEL], limit: ACTION_PAGE_SIZE, offset })
+    )
+    for (const action of result.actions) {
+      if (unresolved.delete(action.txid)) statuses.set(action.txid, action.status)
+    }
+    offset += result.actions.length
+    if (result.actions.length === 0 || offset >= result.totalActions) break
+  }
+  return statuses
+}
+
+async function forEachWithConcurrency<T> (items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let next = 0
+  const run = async (): Promise<void> => {
+    while (next < items.length) {
+      const item = items[next++]
+      await worker(item)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run))
+}
+
 function deriveUserKey (userIndex: number): PrivateKey {
   const rootKey = PrivateKey.fromHex(ROOT_KEY_HEX)
   return new CachedKeyDeriver(rootKey).derivePrivateKey(
@@ -309,10 +364,13 @@ function track (txid: string | undefined, test: string, walletIndex: number): st
 }
 
 async function fundUsers (): Promise<string | undefined> {
-  const inventories = await Promise.all(users.map(async user => ({
-    user,
-    outputs: (await user.wallet.listOutputs({ basket: 'default', limit: 10000 })).totalOutputs
-  })))
+  const inventories = await Promise.all(users.map(async user => {
+    const listed = await user.wallet.listOutputs({ basket: 'default', limit: 10000 })
+    return {
+      user,
+      outputs: listed.outputs.filter(output => output.satoshis >= USER_FUNDING_SATS).length
+    }
+  }))
   const shortages = inventories.map(({ user, outputs }) => ({
     user,
     count: Math.max(0, REQUIRED_USER_UTXOS[user.index - 1] - outputs)
@@ -340,52 +398,58 @@ async function fundUsers (): Promise<string | undefined> {
   }
   console.log(`[setup] provisioning ${payments.length} independent UTXOs; required=${JSON.stringify(REQUIRED_USER_UTXOS)}`)
 
-  const created = await root.wallet.createAction({
-    description: `${RUN_LABEL} fund users`.slice(0, 50),
-    labels: [RUN_LABEL],
-    outputs: payments.map((payment, index) => ({
-      lockingScript: payment.lockingScript,
-      satoshis: USER_FUNDING_SATS,
-      outputDescription: `fund e2e user ${payment.user.index} output ${index + 1}`.slice(0, 50),
-      tags: [RUN_LABEL]
-    })),
-    options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-  })
-
-  const txid = track(created.txid, 'setup-user-funding', root.index)
-  if (created.tx == null) throw new Error('User funding did not return Atomic BEEF')
-  const fundingBeef = created.tx
-
-  const paymentsByUser = new Map<number, Array<{ payment: typeof payments[number], outputIndex: number }>>()
-  payments.forEach((payment, outputIndex) => {
-    const group = paymentsByUser.get(payment.user.index) ?? []
-    group.push({ payment, outputIndex })
-    paymentsByUser.set(payment.user.index, group)
-  })
-
-  await Promise.all([...paymentsByUser.values()].map(async group => {
-    const { wallet } = group[0].payment.user
-    await wallet.internalizeAction({
-      tx: fundingBeef,
-      outputs: group.map(({ payment, outputIndex }) => {
-        const derivationPrefix = payment.template.params.derivationPrefix
-        const derivationSuffix = payment.template.params.derivationSuffix
-        if (derivationPrefix == null || derivationSuffix == null) throw new Error(`Missing BRC-29 derivation for output ${outputIndex}`)
-        return {
-          outputIndex,
-          protocol: 'wallet payment' as const,
-          paymentRemittance: {
-            derivationPrefix,
-            derivationSuffix,
-            senderIdentityKey: root.wallet.identityKey
-          }
-        }
-      }),
-      description: `${RUN_LABEL} funding`.slice(0, 50),
-      labels: [RUN_LABEL]
+  let firstTxid: string | undefined
+  for (let offset = 0; offset < payments.length; offset += FUNDING_BATCH_SIZE) {
+    const batch = payments.slice(offset, offset + FUNDING_BATCH_SIZE)
+    const batchNumber = Math.floor(offset / FUNDING_BATCH_SIZE) + 1
+    const created = await root.wallet.createAction({
+      description: `${RUN_LABEL} fund users ${batchNumber}`.slice(0, 50),
+      labels: [RUN_LABEL],
+      outputs: batch.map((payment, index) => ({
+        lockingScript: payment.lockingScript,
+        satoshis: USER_FUNDING_SATS,
+        outputDescription: `fund e2e user ${payment.user.index} output ${offset + index + 1}`.slice(0, 50),
+        tags: [RUN_LABEL]
+      })),
+      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
     })
-  }))
-  return txid
+
+    const txid = track(created.txid, `setup-user-funding-${batchNumber}`, root.index)
+    firstTxid ??= txid
+    if (created.tx == null) throw new Error(`User funding batch ${batchNumber} did not return Atomic BEEF`)
+    const fundingBeef = created.tx
+
+    const paymentsByUser = new Map<number, Array<{ payment: typeof payments[number], outputIndex: number }>>()
+    batch.forEach((payment, outputIndex) => {
+      const group = paymentsByUser.get(payment.user.index) ?? []
+      group.push({ payment, outputIndex })
+      paymentsByUser.set(payment.user.index, group)
+    })
+
+    await Promise.all([...paymentsByUser.values()].map(async group => {
+      const { wallet } = group[0].payment.user
+      await wallet.internalizeAction({
+        tx: fundingBeef,
+        outputs: group.map(({ payment, outputIndex }) => {
+          const derivationPrefix = payment.template.params.derivationPrefix
+          const derivationSuffix = payment.template.params.derivationSuffix
+          if (derivationPrefix == null || derivationSuffix == null) throw new Error(`Missing BRC-29 derivation for output ${outputIndex}`)
+          return {
+            outputIndex,
+            protocol: 'wallet payment' as const,
+            paymentRemittance: {
+              derivationPrefix,
+              derivationSuffix,
+              senderIdentityKey: root.wallet.identityKey
+            }
+          }
+        }),
+        description: `${RUN_LABEL} funding ${batchNumber}`.slice(0, 50),
+        labels: [RUN_LABEL]
+      })
+    }))
+  }
+  return firstTxid
 }
 
 async function assertConfirmedSpendableState (wallets: TestWallet[], context: string): Promise<void> {
@@ -412,7 +476,7 @@ async function assertConfirmedSpendableState (wallets: TestWallet[], context: st
     let nextCandidate = 0
     let confirmed = 0
     const worker = async (): Promise<void> => {
-      while (nextCandidate < networkCandidates.length && problems.length === 0) {
+      while (nextCandidate < networkCandidates.length) {
         const output = networkCandidates[nextCandidate++]
         const network = await item.services.getUtxoStatus(
           item.services.hashOutputScript(output.lockingScript ?? ''),
@@ -465,6 +529,7 @@ async function createNoSendBatch (wallet: TestWallet, count: number, test: strin
     })
     if (result.tx == null) throw new Error(`${test} transaction ${i + 1} did not return Atomic BEEF`)
     if (result.txid == null || result.txid === '') throw new Error(`${test} transaction ${i + 1} did not return a txid`)
+    track(result.txid, test, wallet.index)
     created.push({ txid: result.txid, beef: Beef.fromBinary(result.tx), wallet, elapsedMs: Date.now() - started })
   }
   return created
@@ -526,14 +591,8 @@ async function broadcastConcurrentlyAndReconcile (
   }
 }
 
-async function actionStatus (tracked: TrackedTransaction): Promise<string | undefined> {
-  const wallet = tracked.walletIndex === root.index ? root : users.find(user => user.index === tracked.walletIndex)
-  if (wallet == null) return undefined
-  const result = await wallet.wallet.listActions({ labels: [RUN_LABEL], limit: 1000 })
-  return result.actions.find(action => action.txid === tracked.txid)?.status
-}
-
 async function waitForProofs (): Promise<ProofObservation[]> {
+  const transactions = new Map(evidence.transactions.map(transaction => [transaction.txid, transaction]))
   const pending = new Set(evidence.transactions.map(transaction => transaction.txid))
   const observations = new Map<string, ProofObservation>()
   for (const transaction of evidence.transactions) {
@@ -547,30 +606,63 @@ async function waitForProofs (): Promise<ProofObservation[]> {
 
   const started = Date.now()
   while (pending.size > 0 && Date.now() - started < PROOF_TIMEOUT_MS) {
-    for (const txid of [...pending]) {
-      const transaction = evidence.transactions.find(item => item.txid === txid)
-      const observation = observations.get(txid)
-      if (transaction == null || observation == null) throw new Error(`Missing evidence for ${txid}`)
+    const pendingTransactions = [...pending].map(txid => {
+      const transaction = transactions.get(txid)
+      if (transaction == null) throw new Error(`Missing transaction evidence for ${txid}`)
+      return transaction
+    })
+    for (const transaction of pendingTransactions) {
+      const observation = observations.get(transaction.txid)
+      if (observation != null) observation.error = undefined
+    }
+    const storageStatuses = new Map<string, string>()
+    await Promise.all([root, ...users].map(async item => {
+      const walletPendingTxids = pendingTransactions
+        .filter(transaction => transaction.walletIndex === item.index)
+        .map(transaction => transaction.txid)
+      if (walletPendingTxids.length === 0) return
+      try {
+        const statuses = await listRunActionStatuses(item, walletPendingTxids)
+        for (const [txid, status] of statuses) storageStatuses.set(txid, status)
+      } catch (error: unknown) {
+        for (const transaction of pendingTransactions.filter(transaction => transaction.walletIndex === item.index)) {
+          const observation = observations.get(transaction.txid)
+          if (observation != null) observation.error = `Storage: ${errorMessage(error)}`
+        }
+      }
+    }))
+
+    await forEachWithConcurrency(pendingTransactions, PROOF_ARCADE_CONCURRENCY, async transaction => {
+      const observation = observations.get(transaction.txid)
+      if (observation == null) throw new Error(`Missing proof observation for ${transaction.txid}`)
       try {
         const arcadeService = root.services.arcade
         if (arcadeService == null) throw new Error('Arcade is not configured')
-        const arcade = await arcadeService.getTxData(txid)
+        const arcade = await withTimeout(`Arcade getTxData ${transaction.txid}`, arcadeService.getTxData(transaction.txid))
         observation.arcadeStatus = arcade.txStatus
         observation.blockHeight = arcade.blockHeight === 0 ? undefined : arcade.blockHeight
         observation.arcadeProof = (arcade.txStatus === 'MINED' || arcade.txStatus === 'IMMUTABLE') && arcade.merklePath != null && arcade.merklePath !== ''
+        if (observation.arcadeProof && observation.arcadeProofObservedAt == null) {
+          observation.arcadeProofObservedAt = new Date().toISOString()
+        }
       } catch (error: unknown) {
-        observation.error = `Arcade: ${errorMessage(error)}`
+        const arcadeError = `Arcade: ${errorMessage(error)}`
+        observation.error = observation.error == null ? arcadeError : `${observation.error}; ${arcadeError}`
       }
-      try {
-        observation.storageStatus = await actionStatus(transaction)
-      } catch (error: unknown) {
-        observation.error = `Storage: ${errorMessage(error)}`
+
+      const storageStatus = storageStatuses.get(transaction.txid)
+      if (storageStatus != null) observation.storageStatus = storageStatus
+      if (observation.storageStatus === 'completed' && observation.storageCompletedObservedAt == null) {
+        observation.storageCompletedObservedAt = new Date().toISOString()
       }
       if (observation.arcadeProof && observation.storageStatus === 'completed') {
-        observation.completedAt = new Date().toISOString()
-        pending.delete(txid)
+        if (observation.completedAt == null) {
+          observation.completedAt = new Date().toISOString()
+          observation.convergenceMs = Date.parse(observation.completedAt) - Date.parse(transaction.broadcastAt)
+        }
+        pending.delete(transaction.txid)
       }
-    }
+    })
 
     const statusCounts: Record<string, number> = {}
     for (const observation of observations.values()) {
@@ -712,17 +804,18 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   })
 
   test(`2a sequential Storage writes (${TX_COUNT})`, async () => {
+    const writer = users[0]
     const timings: number[] = []
     for (let i = 0; i < TX_COUNT; i++) {
       const started = Date.now()
-      const result = await root.wallet.createAction({
+      const result = await writer.wallet.createAction({
         description: `${RUN_LABEL} sequential ${i + 1}`.slice(0, 50),
         labels: [RUN_LABEL],
-        outputs: [output(root, `sequential ${i + 1}`)],
+        outputs: [output(writer, `sequential ${i + 1}`)],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       timings.push(Date.now() - started)
-      track(result.txid, '2a-sequential', root.index)
+      track(result.txid, '2a-sequential', writer.index)
     }
     const stats = calcStats(timings)
     evidence.metrics.sequentialWrites = { ...stats, transactionsPerSecond: throughput(TX_COUNT, timings.reduce((sum, n) => sum + n, 0)) }
@@ -730,7 +823,7 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   })
 
   test(`2b concurrent Arcade submission with Storage reconciliation (${TX_COUNT})`, async () => {
-    const result = await broadcastConcurrentlyAndReconcile([root], TX_COUNT, '2b-concurrent')
+    const result = await broadcastConcurrentlyAndReconcile([users[0]], TX_COUNT, '2b-concurrent')
     evidence.metrics.concurrentWrites = batchMetrics(result)
     console.log(`[write:concurrent] ${JSON.stringify(evidence.metrics.concurrentWrites)}`)
     expect(result.txids).toHaveLength(TX_COUNT)
@@ -764,28 +857,29 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
       transactionsPerSecond: throughput(results.length, wallMs)
     }
     console.log(`[write:multi-user] ${JSON.stringify(evidence.metrics.multiUserWrites)}`)
-    expect(results).toHaveLength(USER_COUNT)
+    expect(results).toHaveLength(USER_COUNT * MULTI_USER_ROUNDS)
   })
 
   test(`3a sequential Arcade-token ingestion (${TX_COUNT})`, async () => {
+    const writer = users[0]
     const timings: number[] = []
     for (let i = 0; i < TX_COUNT; i++) {
       const started = Date.now()
-      const result = await root.wallet.createAction({
+      const result = await writer.wallet.createAction({
         description: `${RUN_LABEL} sse sequential ${i + 1}`.slice(0, 50),
         labels: [RUN_LABEL],
-        outputs: [output(root, `sse sequential ${i + 1}`)],
+        outputs: [output(writer, `sse sequential ${i + 1}`)],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       timings.push(Date.now() - started)
-      track(result.txid, '3a-sse-sequential', root.index)
+      track(result.txid, '3a-sse-sequential', writer.index)
     }
     evidence.metrics.sseSequential = calcStats(timings)
     expect(timings).toHaveLength(TX_COUNT)
   })
 
   test(`3b concurrent Arcade-token ingestion (${TX_COUNT})`, async () => {
-    const result = await broadcastConcurrentlyAndReconcile([root], TX_COUNT, '3b-sse-concurrent')
+    const result = await broadcastConcurrentlyAndReconcile([users[0]], TX_COUNT, '3b-sse-concurrent')
     evidence.metrics.sseConcurrent = batchMetrics(result)
     expect(result.txids).toHaveLength(TX_COUNT)
   })

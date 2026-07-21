@@ -1,9 +1,10 @@
-import { Beef } from '../Beef'
+import { ATOMIC_BEEF, Beef } from '../Beef'
 import BeefTx from '../BeefTx'
 import MerklePath from '../MerklePath'
 import Transaction from '../Transaction'
 import Script from '../../script/Script'
 import UnlockingScript from '../../script/UnlockingScript'
+import { toArray, WriterUint8Array } from '../../primitives/utils'
 
 function makeDeepChain (depth: number): Transaction {
   let tx = new Transaction()
@@ -38,6 +39,35 @@ function makeChild (source: Transaction, satoshis: number): Transaction {
   })
   tx.addOutput({ lockingScript: Script.fromHex('51'), satoshis })
   return tx
+}
+
+function makeProvenTransaction (satoshis: number, sibling: string, blockHeight: number = 1): Transaction {
+  const tx = new Transaction()
+  tx.addOutput({ lockingScript: Script.fromHex('51'), satoshis })
+  tx.merklePath = new MerklePath(blockHeight, [[
+    { offset: 0, hash: tx.id('hex'), txid: true },
+    { offset: 1, hash: sibling }
+  ]])
+  return tx
+}
+
+function makeMultiInputChild (sources: Transaction[], satoshis: number): Transaction {
+  const tx = new Transaction()
+  for (const source of sources) {
+    tx.addInput({
+      sourceTransaction: source,
+      sourceOutputIndex: 0,
+      unlockingScript: UnlockingScript.fromHex('')
+    })
+  }
+  tx.addOutput({ lockingScript: Script.fromHex('51'), satoshis })
+  return tx
+}
+
+function serializeWithoutSorting (beef: Beef): Uint8Array {
+  const writer = new WriterUint8Array()
+  beef.toWriter(writer)
+  return writer.toUint8Array()
 }
 
 describe('transaction pipeline scalability', () => {
@@ -102,6 +132,201 @@ describe('transaction pipeline scalability', () => {
 
     expect(linked.id('hex')).toBe(tx.id('hex'))
     expect(linked.inputs[0].sourceTransaction).toBeDefined()
+  })
+
+  it('retains required ancestors when extracting Atomic BEEF from parsed out-of-order data', () => {
+    const anchor = makeProvenTransaction(2, 'ab'.repeat(32))
+    const child = makeChild(anchor, 1)
+    const beef = new Beef()
+    const anchorBeefTx = beef.mergeRawTx(anchor.toUint8Array())
+    const childBeefTx = beef.mergeRawTx(child.toUint8Array())
+    if (anchor.merklePath == null) throw new Error('Expected anchor proof')
+    beef.mergeBump(anchor.merklePath)
+    beef.txs = [childBeefTx, anchorBeefTx]
+
+    const parsed = Beef.fromBinaryView(serializeWithoutSorting(beef))
+    const atomic = Beef.fromBinary(parsed.toUint8ArrayAtomic(child.id('hex')))
+
+    expect(atomic.txs.map(tx => tx.txid)).toEqual([anchor.id('hex'), child.id('hex')])
+    expect(atomic.isValid()).toBe(true)
+  })
+
+  it('excludes unrelated transactions and remaps proofs during Atomic BEEF extraction', () => {
+    const unrelated = makeProvenTransaction(10, 'cd'.repeat(32))
+    const anchor = makeProvenTransaction(2, 'ab'.repeat(32))
+    const child = makeChild(anchor, 1)
+    const beef = new Beef()
+    beef.mergeRawTx(unrelated.toUint8Array())
+    if (unrelated.merklePath == null) throw new Error('Expected unrelated proof')
+    beef.mergeBump(unrelated.merklePath)
+    beef.mergeRawTx(anchor.toUint8Array())
+    if (anchor.merklePath == null) throw new Error('Expected anchor proof')
+    beef.mergeBump(anchor.merklePath)
+    beef.mergeRawTx(child.toUint8Array())
+
+    const atomic = Beef.fromBinary(beef.toUint8ArrayAtomic(child.id('hex')))
+
+    expect(atomic.txs.map(tx => tx.txid)).toEqual([anchor.id('hex'), child.id('hex')])
+    expect(atomic.bumps).toHaveLength(1)
+    expect(atomic.txs[0].bumpIndex).toBe(0)
+    expect(atomic.isValid()).toBe(true)
+  })
+
+  it('extracts a branching shared-ancestor closure once from shuffled BEEF', () => {
+    const firstAnchor = makeProvenTransaction(8, 'ab'.repeat(32), 1)
+    const secondAnchor = makeProvenTransaction(7, 'cd'.repeat(32), 2)
+    const middle = makeMultiInputChild([firstAnchor, secondAnchor], 6)
+    const subject = makeMultiInputChild([middle, firstAnchor], 5)
+    const unrelated = makeProvenTransaction(4, 'ef'.repeat(32), 3)
+    const beef = new Beef()
+    const transactions = [subject, unrelated, middle, secondAnchor, firstAnchor]
+    beef.txs = transactions.map(tx => BeefTx.fromRawTx(tx.toUint8Array()))
+    for (const anchor of [unrelated, secondAnchor, firstAnchor]) {
+      if (anchor.merklePath == null) throw new Error('Expected proof')
+      beef.bumps.push(anchor.merklePath)
+    }
+    beef.txs[1].bumpIndex = 0
+    beef.txs[3].bumpIndex = 1
+    beef.txs[4].bumpIndex = 2
+
+    const parsed = Beef.fromBinaryView(serializeWithoutSorting(beef))
+    const atomic = Beef.fromBinaryView(parsed.toUint8ArrayAtomic(subject.id('hex')))
+    const expected = [firstAnchor, secondAnchor, middle, subject].map(tx => tx.id('hex'))
+
+    expect(new Set(atomic.txs.map(tx => tx.txid))).toEqual(new Set(expected))
+    expect(atomic.txs).toHaveLength(expected.length)
+    expect(atomic.bumps).toHaveLength(2)
+    expect(atomic.isAtomic()).toBe(true)
+    expect(atomic.isValid()).toBe(true)
+  })
+
+  it('rejects incoming Atomic BEEF containing unrelated transactions', () => {
+    const unrelated = makeProvenTransaction(10, 'cd'.repeat(32))
+    const anchor = makeProvenTransaction(2, 'ab'.repeat(32))
+    const child = makeChild(anchor, 1)
+    const beef = new Beef()
+    for (const tx of [unrelated, anchor, child]) beef.mergeRawTx(tx.toUint8Array())
+    if (unrelated.merklePath == null || anchor.merklePath == null) throw new Error('Expected proofs')
+    beef.mergeBump(unrelated.merklePath)
+    beef.mergeBump(anchor.merklePath)
+    beef.sortTxs()
+
+    const writer = new WriterUint8Array()
+    writer.writeUInt32LE(ATOMIC_BEEF)
+    writer.writeReverse(toArray(child.id('hex'), 'hex'))
+    beef.toWriter(writer)
+
+    const bytes = writer.toUint8Array()
+    expect(Beef.fromBinary(bytes).isValid()).toBe(false)
+    expect(() => Transaction.fromAtomicBEEF(bytes)).toThrow('unrelated transaction data')
+    expect(() => Transaction.fromAtomicBEEFView(bytes)).toThrow('unrelated transaction data')
+  })
+
+  it.each([
+    ['parsed', (): Beef => Beef.fromBinaryView(makeDeepChain(1).toBEEFBytes())],
+    ['constructed', (): Beef => {
+      const beef = new Beef()
+      beef.mergeTransaction(makeDeepChain(1))
+      return beef
+    }]
+  ])('synchronizes nested transaction mutation before answering validity for %s BEEF', (_kind, makeBeef) => {
+    const beef = makeBeef()
+    expect(beef.isValid()).toBe(true)
+    const proven = beef.txs.find(tx => tx.hasProof)?.tx
+    if (proven == null) throw new Error('Expected proven transaction')
+
+    proven.addOutput({ lockingScript: Script.fromHex('51'), satoshis: 0 })
+    const validBeforeSerialization = beef.isValid()
+
+    expect(validBeforeSerialization).toBe(false)
+    beef.toUint8Array()
+    expect(beef.isValid()).toBe(validBeforeSerialization)
+  })
+
+  it('invalidates transaction and nested BEEF caches after direct public-field mutation', () => {
+    const proven = makeProvenTransaction(3, 'ab'.repeat(32))
+    const beef = new Beef()
+    beef.mergeTransaction(proven)
+
+    const initialBytes = proven.toUint8Array()
+    const initialHex = proven.toHex()
+    const initialTxid = proven.id('hex')
+    expect(beef.isValid()).toBe(true)
+
+    // These fields are intentionally public API. Cache correctness cannot rely
+    // exclusively on callers using addOutput()/fee()/sign().
+    proven.version++
+    proven.lockTime++
+    proven.outputs[0].satoshis = 4
+    proven.outputs[0].lockingScript = Script.fromHex('5151')
+
+    expect(proven.toUint8Array()).not.toEqual(initialBytes)
+    expect(proven.toHex()).not.toBe(initialHex)
+    expect(proven.id('hex')).not.toBe(initialTxid)
+    expect(beef.isValid()).toBe(false)
+    beef.toUint8Array()
+    expect(beef.isValid()).toBe(false)
+  })
+
+  it('round-trips direct input-field mutation after lazy BEEF parsing', () => {
+    const beef = Beef.fromBinaryView(makeDeepChain(1).toBEEFBytes())
+    const newest = beef.txs.at(-1)?.tx
+    if (newest == null) throw new Error('Expected newest transaction')
+    const initialBytes = newest.toUint8Array()
+    const initialTxid = newest.id('hex')
+
+    newest.inputs[0].sequence = 0xfffffffe
+
+    const serialized = beef.toUint8Array()
+    const reparsed = Beef.fromBinary(serialized).txs.at(-1)?.tx
+    if (reparsed == null) throw new Error('Expected reparsed transaction')
+
+    expect(newest.toUint8Array()).not.toEqual(initialBytes)
+    expect(newest.id('hex')).not.toBe(initialTxid)
+    expect(reparsed.inputs[0].sequence).toBe(0xfffffffe)
+    expect(reparsed.id('hex')).toBe(newest.id('hex'))
+  })
+
+  it('does not expose the mutable transaction hash cache', () => {
+    const tx = makeDeepChain(0)
+    const expected = tx.id('hex')
+    const hash = tx.hash() as number[]
+    hash.fill(0)
+    expect(tx.id('hex')).toBe(expected)
+  })
+
+  it('invalidates BEEF serialization and proof lookup after nested BUMP mutation', () => {
+    const proven = makeProvenTransaction(1, 'ab'.repeat(32))
+    const beef = new Beef()
+    beef.mergeTransaction(proven)
+    const txid = proven.id('hex')
+    const initialBytes = beef.toUint8Array()
+
+    expect(beef.findBump(txid)).toBeDefined()
+    beef.bumps[0].path[0][0].hash = 'cd'.repeat(32)
+
+    expect(beef.findBump(txid)).toBeUndefined()
+    expect(beef.toUint8Array()).not.toEqual(initialBytes)
+    expect(beef.isValid()).toBe(false)
+  })
+
+  it('rejects duplicate transaction IDs and invalid bump indexes without throwing', () => {
+    const proven = makeProvenTransaction(1, 'ab'.repeat(32))
+    if (proven.merklePath == null) throw new Error('Expected proof')
+
+    const duplicate = new Beef()
+    duplicate.bumps = [proven.merklePath]
+    duplicate.txs = [
+      BeefTx.fromRawTx(proven.toUint8Array(), 0),
+      BeefTx.fromRawTx(proven.toUint8Array(), 0)
+    ]
+    expect(Beef.fromBinary(serializeWithoutSorting(duplicate)).isValid()).toBe(false)
+
+    const invalidBump = new Beef()
+    invalidBump.txs = [BeefTx.fromRawTx(proven.toUint8Array(), 99)]
+    const parsed = Beef.fromBinary(serializeWithoutSorting(invalidBump))
+    expect(() => parsed.isValid()).not.toThrow()
+    expect(parsed.isValid()).toBe(false)
   })
 
   it('keeps copy-safe parsing separate from explicit zero-copy parsing', () => {

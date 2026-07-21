@@ -722,22 +722,29 @@ export default class OverlayExpress {
     const knex = this.ensureKnex()
 
     if (autoConfigureShipSlap) {
+      const mongoDb = this.ensureMongo()
+      const shipStorage = new DiscoveryServices.SHIPStorage(mongoDb)
+      const slapStorage = new DiscoveryServices.SLAPStorage(mongoDb)
+
+      // Run the one-time discovery migration before the engine can accept
+      // traffic, so a failed unique-index build is a visible startup failure.
+      await shipStorage.ensureIndexes()
+      await slapStorage.ensureIndexes()
+
       this.configureTopicManager('tm_ship', new DiscoveryServices.SHIPTopicManager())
       this.configureTopicManager('tm_slap', new DiscoveryServices.SLAPTopicManager())
-      this.configureLookupServiceWithMongo('ls_ship', (db) => {
-        const storage = new DiscoveryServices.SHIPStorage(db)
-        const storageForLookup = this.banService === undefined
-          ? storage
-          : new BanAwareSHIPStorage(storage, this.banService, this.logger)
-        return new DiscoveryServices.SHIPLookupService(storageForLookup as any)
-      })
-      this.configureLookupServiceWithMongo('ls_slap', (db) => {
-        const storage = new DiscoveryServices.SLAPStorage(db)
-        const storageForLookup = this.banService === undefined
-          ? storage
-          : new BanAwareSLAPStorage(storage, this.banService, this.logger)
-        return new DiscoveryServices.SLAPLookupService(storageForLookup as any)
-      })
+
+      const shipStorageForLookup = this.banService === undefined
+        ? shipStorage
+        : new BanAwareSHIPStorage(shipStorage, this.banService, this.logger)
+      const slapStorageForLookup = this.banService === undefined
+        ? slapStorage
+        : new BanAwareSLAPStorage(slapStorage, this.banService, this.logger)
+
+      this.services.ls_ship = new DiscoveryServices.SHIPLookupService(shipStorageForLookup as any)
+      this.services.ls_slap = new DiscoveryServices.SLAPLookupService(slapStorageForLookup as any)
+      this.logger.log(chalk.blue('Configured lookup service ls_ship with MongoDB'))
+      this.logger.log(chalk.blue('Configured lookup service ls_slap with MongoDB'))
     }
 
     this.wrapBanAwareServices()

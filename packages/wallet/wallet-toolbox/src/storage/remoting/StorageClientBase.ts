@@ -53,6 +53,15 @@ import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 
+export interface StorageClientOptions {
+  /**
+   * Send compact tagged binary request values after the server advertises
+   * support. Leave disabled during rolling deployments where an endpoint may
+   * still route requests to legacy server instances.
+   */
+  binaryRequests?: boolean
+}
+
 /**
  * Abstract base class shared by `StorageClient` and `StorageMobile`.
  *
@@ -65,13 +74,15 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected readonly authClient: AuthFetch
   protected nextId = 1
   protected serverSupportsBinary = false
+  protected readonly binaryRequests: boolean
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: TableSettings
 
-  constructor (wallet: WalletInterface, endpointUrl: string) {
+  constructor (wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     this.authClient = new AuthFetch(wallet)
     this.endpointUrl = endpointUrl
+    this.binaryRequests = options.binaryRequests === true
   }
 
   /**

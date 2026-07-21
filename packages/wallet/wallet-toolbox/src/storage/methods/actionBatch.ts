@@ -368,6 +368,8 @@ export async function extendActionBatch (
   const explicitByOutpoint = await storage.findOutputsByOutpoints(userId, args.explicitOutpoints)
   const explicit = Object.values(explicitByOutpoint)
     .filter(output => !alreadyReserved.includes(output.outputId))
+  const fundingShape = argsToFundingShape(args.includeSourceTransactions)
+  const fundingResult = await makeFundingResult(storage, fundingShape, [...funding, ...explicit])
   const expiresAt = new Date(Math.min(
     batch.hardExpiresAt.getTime(),
     Date.now() + ACTION_BATCH_LEASE_MS
@@ -377,8 +379,6 @@ export async function extendActionBatch (
     await reserveOutputs(storage, current, [...funding, ...explicit], trx)
     await storage.updateActionBatch(current.actionBatchId, { expiresAt }, trx)
   })
-  const fundingShape = argsToFundingShape(args.includeSourceTransactions)
-  const fundingResult = await makeFundingResult(storage, fundingShape, [...funding, ...explicit])
   return {
     expiresAt: expiresAt.toISOString(),
     reservedOutputs: fundingResult.outputs.filter(output => funding.some(candidate => candidate.outputId === output.outputId)),
@@ -434,8 +434,8 @@ async function reacquireManifestInputs (
       providedBy: input.providedBy
     }])).values()]
 
+  const stored = await storage.findOutputsByOutpointsForUpdate(userId, outpoints, trx)
   await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
-  const stored = await storage.findOutputsByOutpoints(userId, outpoints, trx)
   const outputs: TableOutput[] = []
   for (const outpoint of outpoints) {
     const key = `${outpoint.txid}.${outpoint.vout}`
