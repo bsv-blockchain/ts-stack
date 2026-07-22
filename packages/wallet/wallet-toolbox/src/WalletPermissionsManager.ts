@@ -517,6 +517,15 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly permissionCache: Map<string, { expiry: number, cachedAt: number }> = new Map()
   private readonly recentGrants: Map<string, number> = new Map()
 
+  /**
+   * Token mints currently being written on-chain, keyed by permission cache
+   * key. A granted permission is only cached once its token finishes minting
+   * (network seconds); ensures arriving in that window await the in-flight
+   * mint instead of re-prompting the user for a permission they just granted.
+   * Stored promises never reject.
+   */
+  private readonly mintsInFlight: Map<string, Promise<void>> = new Map()
+
   private readonly manifestCache: Map<
   string,
   {
@@ -883,33 +892,52 @@ export class WalletPermissionsManager implements WalletInterface {
     this.activeRequests.delete(params.requestID)
 
     // 3) If `ephemeral !== true`, we create or renew an on-chain token
-    if (!params.ephemeral) {
-      const request = matching.request as PermissionRequest
-      if (request.renewal) {
-        // renewal => spend the old token, produce a new one
-        await this.renewPermissionOnChain(
-          request.previousToken!,
-          request,
-          params.expiry || 0, // default: never expires
-          params.amount
-        )
-      } else {
-        // brand-new permission token
-        await this.createPermissionOnChain(
-          request,
-          params.expiry || 0, // default: never expires
-          params.amount
-        )
-      }
-    }
-
     // Only cache non-ephemeral permissions
     // Ephemeral permissions should not be cached as they are one-time authorizations
     if (!params.ephemeral) {
+      const request = matching.request as PermissionRequest
       const expiry = params.expiry || 0 // default: never expires
-      const key = this.buildRequestKey(matching.request as PermissionRequest)
+      const key = this.buildRequestKey(request)
+
+      // Several first-contact prompts for the same permission can stack up
+      // before any token exists (e.g. one per usage type). Granting them all
+      // should yield ONE token: if an identical non-renewal grant just minted
+      // (or is minting), don't mint a duplicate. Spending authorizations are
+      // excluded — their tokens carry amounts, so every grant is honored.
+      const duplicateOfRecentGrant =
+        !request.renewal &&
+        request.type !== 'spending' &&
+        (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
+
+      if (duplicateOfRecentGrant) {
+        const inFlight = this.mintsInFlight.get(key)
+        if (inFlight != null) await inFlight
+      } else {
+        const mint = request.renewal
+          ? this.renewPermissionOnChain(
+            request.previousToken!,
+            request,
+            expiry,
+            params.amount
+          )
+          : this.createPermissionOnChain(
+            request,
+            expiry,
+            params.amount
+          )
+        // Publish the in-flight mint so concurrent ensures for the same
+        // permission wait for it instead of re-prompting (stored promise
+        // never rejects; failures still propagate to this caller below).
+        this.mintsInFlight.set(key, mint.then(() => {}, () => {}))
+        try {
+          await mint
+        } finally {
+          this.mintsInFlight.delete(key)
+        }
+      }
+
       this.cachePermission(key, expiry)
-      this.markRecentGrant(matching.request as PermissionRequest)
+      this.markRecentGrant(request)
     }
   }
 
@@ -1239,6 +1267,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
     const cacheKey = this.buildRequestKey({ type: 'protocol', originator, privileged, protocolID, counterparty })
     if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
+    if (await this.settledAfterInFlightMint(cacheKey)) return true
 
     // 4) Attempt to find a valid token in the internal basket
     const token = await this.findProtocolToken(
@@ -1294,6 +1323,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
     const cacheKey = this.buildRequestKey({ type: 'basket', originator, basket })
     if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
+    if (await this.settledAfterInFlightMint(cacheKey)) return true
 
     const token = await this.findBasketToken(originator, basket, true, lookupValues)
     if (token == null) {
@@ -1362,6 +1392,9 @@ export class WalletPermissionsManager implements WalletInterface {
       return true
     }
     if (this.isRecentlyGranted(cacheKey)) {
+      return true
+    }
+    if (await this.settledAfterInFlightMint(cacheKey)) {
       return true
     }
 
@@ -1439,6 +1472,9 @@ export class WalletPermissionsManager implements WalletInterface {
     }
     const cacheKey = this.buildRequestKey({ type: 'spending', originator, spending: { satoshis } })
     if (this.isPermissionCached(cacheKey)) {
+      return true
+    }
+    if (await this.settledAfterInFlightMint(cacheKey)) {
       return true
     }
     const token = await this.findSpendingToken(originator, lookupValues)
@@ -4815,6 +4851,19 @@ export class WalletPermissionsManager implements WalletInterface {
     if (basket === 'default') return true
     if (basket.startsWith('admin')) return true
     return false
+  }
+
+  /**
+   * If a token mint for this permission is in flight (the user just granted
+   * it), waits for the mint to settle and reports whether the permission is
+   * now satisfied — sparing the user a duplicate prompt for a grant they
+   * already made moments ago.
+   */
+  private async settledAfterInFlightMint (cacheKey: string): Promise<boolean> {
+    const inFlight = this.mintsInFlight.get(cacheKey)
+    if (inFlight == null) return false
+    await inFlight
+    return this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)
   }
 
   /**
