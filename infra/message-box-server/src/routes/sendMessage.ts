@@ -14,8 +14,6 @@
  */
 
 import { Response } from 'express'
-import knexConfig from '../../knexfile.js'
-import * as knexLib from 'knex'
 import {
   AtomicBEEF,
   Base64String,
@@ -32,24 +30,9 @@ import { Logger, log } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { sendFCMNotification } from '../utils/sendFCMNotification.js'
 import { getRecipientFee, getServerDeliveryFee, shouldUseFCMDelivery } from '../utils/messagePermissions.js'
+import { runtimeDeps, getWallet } from '../runtimeDeps.js'
 
-// Determine the environment (default to development)
-const { NODE_ENV = 'development', SERVER_PRIVATE_KEY } = process.env
-
-/**
- * Knex instance connected based on environment (development, production, or staging).
- */
-const knex: knexLib.Knex =
-  (knexLib as any).default?.(
-    NODE_ENV === 'production' || NODE_ENV === 'staging'
-      ? knexConfig.production
-      : knexConfig.development
-  ) ??
-  (knexLib as any)(
-    NODE_ENV === 'production' || NODE_ENV === 'staging'
-      ? knexConfig.production
-      : knexConfig.development
-  )
+const { SERVER_PRIVATE_KEY } = process.env
 
 // Type definition for the incoming message format
 export interface Message {
@@ -177,7 +160,7 @@ export function calculateMessagePrice(message: string, priority: boolean = false
 export default {
   type: 'post',
   path: '/sendMessage',
-  knex,
+  get knex () { return runtimeDeps.knex },
   summary: "Use this route to send a message to a recipient's message box.",
   parameters: {
     message: {
@@ -296,9 +279,9 @@ export default {
       // Ensure messageBox exists for each recipient
       const boxType = message.messageBox.trim()
       for (const r of recipientsTrimmed) {
-        const existing = await knex('messageBox').where({ identityKey: r, type: boxType }).first()
+        const existing = await runtimeDeps.knex('messageBox').where({ identityKey: r, type: boxType }).first()
         if (!existing) {
-          await knex('messageBox').insert({
+          await runtimeDeps.knex('messageBox').insert({
             identityKey: r, type: boxType, created_at: new Date(), updated_at: new Date()
           })
         }
@@ -352,7 +335,6 @@ export default {
           }
           const serverDeliveryOutput = payment.outputs[0]
           try {
-            const { getWallet } = await import('../app.js')
             const wallet = await getWallet()
             const internalizeResult = await wallet.internalizeAction({
               tx: payment.tx,
@@ -473,7 +455,7 @@ export default {
       // ---------- Store messages (one per recipient) ----------
       const results: Array<{ recipient: string; messageId: string }> = []
       for (const { recipient: r } of feeRows) {
-        const mb = await knex('messageBox')
+        const mb = await runtimeDeps.knex('messageBox')
           .where({ identityKey: r, type: boxType })
           .select('messageBoxId')
           .first()
@@ -498,7 +480,7 @@ export default {
         }
 
         try {
-          await knex('messages')
+          await runtimeDeps.knex('messages')
             .insert({
               messageId: perRecipientMessageId,
               messageBoxId: mb?.messageBoxId ?? null,

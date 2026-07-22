@@ -37,6 +37,7 @@ import type { WalletInterface } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { setupSwagger } from './swagger.js'
+import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import * as crypto from 'crypto'
 (global.self as any) = { crypto }
 
@@ -99,6 +100,7 @@ export async function initializeWallet (): Promise<void> {
     storageUrl: WALLET_STORAGE_URL
   })
 
+  bindMessageBoxRuntime({ knex, wallet: _wallet })
   _resolveReady()
 }
 

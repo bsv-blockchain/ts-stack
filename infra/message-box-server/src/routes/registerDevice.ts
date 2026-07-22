@@ -1,24 +1,7 @@
 import { Response } from 'express'
-import knexConfig from '../../knexfile.js'
-import * as knexLib from 'knex'
 import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
-
-// Determine the environment (default to development)
-const { NODE_ENV = 'development' } = process.env
-
-/**
- * Knex instance connected based on environment (development, production, or staging).
- */
-const knex: knexLib.Knex = (knexLib as any).default?.(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-) ?? (knexLib as any)(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-)
+import { runtimeDeps } from '../runtimeDeps.js'
 
 export interface RegisterDeviceRequest extends AuthRequest {
   body: {
@@ -124,7 +107,7 @@ export default {
       try {
         // Insert or update device registration
         const now = new Date()
-        const [deviceRegistrationId] = await knex('device_registrations')
+        const [deviceRegistrationId] = await runtimeDeps.knex('device_registrations')
           .insert({
             identity_key: identityKey,
             fcm_token: fcmToken.trim(),

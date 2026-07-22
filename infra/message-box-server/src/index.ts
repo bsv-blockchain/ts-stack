@@ -364,3 +364,12 @@ if (NODE_ENV !== 'test') {
     log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
   })
 }
+
+// Composable API for embedding (standalone boot above is unchanged)
+export {
+  createMessageBoxContext,
+  createMessageBoxApp,
+  mountMessageBoxRoutes,
+  attachMessageBoxWebSockets
+} from './compose.js'
+export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
