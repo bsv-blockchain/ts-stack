@@ -3,12 +3,12 @@
  * Standalone binary continues to use index.ts → app.ts as before.
  */
 import express, {
-  type Express,
-  type Request as ExpressRequest,
-  type Response,
-  type NextFunction,
-  type RequestHandler,
-  Router
+	type Express,
+	type Request as ExpressRequest,
+	type Response,
+	type NextFunction,
+	type RequestHandler,
+	Router
 } from 'express'
 import bodyParser from 'body-parser'
 import type { Server as HttpServer } from 'node:http'
@@ -28,14 +28,8 @@ export type { MessageBoxContext, CreateMessageBoxContextOptions } from './contex
 
 type HttpMethod = 'get' | 'post' | 'put' | 'delete'
 
-type WsAck = (response: {
-  status: 'success' | 'error'
-  message?: string
-  messageId?: string
-}) => void
-
 export function createMessageBoxApp (): Express {
-  return express()
+	return express()
 }
 
 /**
@@ -43,210 +37,306 @@ export function createMessageBoxApp (): Express {
  * Auth/payment middleware apply only to this router (not the parent app).
  */
 export function mountMessageBoxRoutes (app: Express, ctx: MessageBoxContext): void {
-  bindMessageBoxRuntime({ knex: ctx.knex, wallet: ctx.wallet })
+	bindMessageBoxRuntime({ knex: ctx.knex, wallet: ctx.wallet })
 
-  const router = Router()
-  router.use(bodyParser.json({ limit: '1gb', type: 'application/json' }))
-  router.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*')
-    res.header('Access-Control-Allow-Headers', '*')
-    res.header('Access-Control-Allow-Methods', '*')
-    res.header('Access-Control-Expose-Headers', '*')
-    res.header('Access-Control-Allow-Private-Network', 'true')
-    if (req.method === 'OPTIONS') {
-      res.sendStatus(200)
-    } else {
-      next()
-    }
-  })
+	const router = Router()
+	router.use(bodyParser.json({ limit: '1gb', type: 'application/json' }))
+	router.use((req, res, next) => {
+		res.header('Access-Control-Allow-Origin', '*')
+		res.header('Access-Control-Allow-Headers', '*')
+		res.header('Access-Control-Allow-Methods', '*')
+		res.header('Access-Control-Expose-Headers', '*')
+		res.header('Access-Control-Allow-Private-Network', 'true')
+		if (req.method === 'OPTIONS') {
+			res.sendStatus(200)
+		} else {
+			next()
+		}
+	})
 
-  if (ctx.enableSwagger) {
-    setupSwagger(app)
-  }
+	if (ctx.enableSwagger) {
+		setupSwagger(app)
+	}
 
-  preAuth.forEach((route) => {
-    router[route.type as HttpMethod](
-      route.path,
-      route.func as unknown as (req: ExpressRequest, res: Response, next: NextFunction) => void
-    )
-  })
+	preAuth.forEach((route) => {
+		router[route.type as HttpMethod](
+			route.path,
+			route.func as unknown as (req: ExpressRequest, res: Response, next: NextFunction) => void
+		)
+	})
 
-  router.use(
-    createAuthMiddleware({
-      wallet: ctx.wallet,
-      logger: ctx.logger
-    })
-  )
+	router.use(
+		createAuthMiddleware({
+			wallet: ctx.wallet,
+			logger: ctx.logger
+		})
+	)
 
-  router.use(
-    createPaymentMiddleware({
-      wallet: ctx.wallet,
-      calculateRequestPrice: async (req) =>
-        await Promise.resolve(ctx.calculateRequestPrice(req as unknown as ExpressRequest))
-    })
-  )
+	router.use(
+		createPaymentMiddleware({
+			wallet: ctx.wallet,
+			calculateRequestPrice: async (req) =>
+				await Promise.resolve(ctx.calculateRequestPrice(req as unknown as ExpressRequest))
+		})
+	)
 
-  postAuth.forEach((route) => {
-    const method = route.type as HttpMethod
-    if (route.path === '/sendMessage') {
-      router[method](route.path, sendMessageRoute.func as unknown as RequestHandler)
-    } else {
-      router[method](route.path, route.func as RequestHandler)
-    }
-  })
+	postAuth.forEach((route) => {
+		const method = route.type as HttpMethod
+		if (route.path === '/sendMessage') {
+			router[method](route.path, sendMessageRoute.func as unknown as RequestHandler)
+		} else {
+			router[method](route.path, route.func as RequestHandler)
+		}
+	})
 
-  const prefix = ctx.routingPrefix ?? ''
-  app.use(prefix === '' ? '/' : prefix, router)
-}
-
-function isSocketAuthenticated (identityKey: unknown): identityKey is string {
-  return typeof identityKey === 'string' && identityKey.trim() !== ''
-}
-
-function validateWsSendPayload (payload: unknown): {
-  messageId: string
-  recipient: string
-  body: string | object
-} {
-  if (payload == null || typeof payload !== 'object') {
-    throw new TypeError('Invalid payload format')
-  }
-  const p = payload as Record<string, unknown>
-  if (typeof p.messageId !== 'string' || p.messageId.trim() === '') {
-    throw new TypeError('Invalid or missing messageId')
-  }
-  if (typeof p.recipient !== 'string' || p.recipient.trim() === '') {
-    throw new TypeError('Invalid or missing recipient')
-  }
-  if (typeof p.body !== 'string' && typeof p.body !== 'object') {
-    throw new TypeError('Invalid or missing body')
-  }
-  return {
-    messageId: p.messageId,
-    recipient: p.recipient,
-    body: p.body as string | object
-  }
+	const prefix = ctx.routingPrefix ?? ''
+	app.use(prefix === '' ? '/' : prefix, router)
 }
 
 /**
- * Attach authenticated WebSocket handlers (same behavior as standalone index.ts).
+ * Attach authenticated WebSocket handlers.
+ * Same logic as standalone index.ts start(), with ctx.knex/ctx.wallet
+ * instead of module singletons.
  */
 export function attachMessageBoxWebSockets (
-  httpServer: HttpServer,
-  ctx: MessageBoxContext
+	httpServer: HttpServer,
+	ctx: MessageBoxContext
 ): AuthSocketServer | null {
-  if (!ctx.enableWebSockets) {
-    return null
-  }
+	if (!ctx.enableWebSockets) {
+		return null
+	}
 
-  bindMessageBoxRuntime({ knex: ctx.knex, wallet: ctx.wallet })
+	bindMessageBoxRuntime({ knex: ctx.knex, wallet: ctx.wallet })
 
-  Logger.log('[WEBSOCKET] Initializing WebSocket support...')
+	Logger.log('[WEBSOCKET] Initializing WebSocket support...')
 
-  const io = new AuthSocketServer(httpServer, {
-    wallet: ctx.wallet,
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST']
-    }
-  })
+	const io = new AuthSocketServer(httpServer, {
+		wallet: ctx.wallet,
+		cors: {
+			origin: '*',
+			methods: ['GET', 'POST']
+		}
+	})
 
-  const knex = ctx.knex
+	const authenticatedSockets = new Map<string, string>()
+	const knex = ctx.knex
 
-  io.on('connection', (socket) => {
-    Logger.log('[WEBSOCKET] New connection established.')
+	io.on('connection', (socket) => {
+		Logger.log('[WEBSOCKET] New connection established.')
 
-    if (isSocketAuthenticated(socket.identityKey)) {
-      try {
-        const parsedIdentityKey = PublicKey.fromString(socket.identityKey)
-        Logger.log('[DEBUG] Parsed WebSocket Identity Key Successfully:', parsedIdentityKey.toString())
-        Logger.log('[WEBSOCKET] Identity key stored for socket ID:', socket.id)
-        void socket.join(socket.identityKey)
-        Logger.log(`[WEBSOCKET] Socket joined room: ${socket.identityKey}`)
-        socket.emit('authenticationSuccess', { message: 'WebSocket authentication successful' })
-      } catch (error) {
-        Logger.error('[ERROR] Failed to parse WebSocket identity key:', error)
-        socket.emit('authenticationFailed', { message: 'Invalid identity key format' })
-        socket.disconnect()
-      }
-    } else {
-      Logger.error('[ERROR] WebSocket connection missing identityKey')
-      socket.emit('authenticationFailed', { message: 'Missing identity key' })
-      socket.disconnect()
-    }
+		if (typeof socket.identityKey === 'string' && socket.identityKey.trim() !== '') {
+			try {
+				const parsedIdentityKey = PublicKey.fromString(socket.identityKey)
+				Logger.log('[DEBUG] Parsed WebSocket Identity Key Successfully:', parsedIdentityKey.toString())
 
-    socket.on(
-      'joinRoom',
-      (roomId: string, callback?: WsAck) => {
-        void (async () => {
-          try {
-            if (!isSocketAuthenticated(socket.identityKey)) {
-              Logger.error('[ERROR] joinRoom failed: Socket is not authenticated')
-              callback?.({ status: 'error', message: 'Unauthorized: WebSocket not authenticated' })
-              return
-            }
-            await socket.join(roomId)
-            Logger.log(`[WEBSOCKET] Socket joined room: ${roomId}`)
-            callback?.({ status: 'success' })
-          } catch (error) {
-            Logger.error('[ERROR] Failed to join room:', error)
-            callback?.({ status: 'error', message: 'Failed to join room' })
-          }
-        })()
-      }
-    )
+				authenticatedSockets.set(socket.id, parsedIdentityKey.toString())
+				Logger.log('[WEBSOCKET] Identity key stored for socket ID:', socket.id)
 
-    socket.on(
-      'sendMessage',
-      (roomId: string, payload: unknown, callback?: WsAck) => {
-        void (async () => {
-          try {
-            Logger.log(`[WEBSOCKET] Processing sendMessage for room: ${roomId}`)
-            if (!isSocketAuthenticated(socket.identityKey)) {
-              Logger.error('[ERROR] sendMessage failed: Socket is not authenticated')
-              callback?.({ status: 'error', message: 'Unauthorized: WebSocket not authenticated' })
-              await socket.emit('paymentFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
-              return
-            }
-            const msg = validateWsSendPayload(payload)
+				void socket.emit('authenticationSuccess', { status: 'success' })
+			} catch (error) {
+				Logger.error('[ERROR] Failed to parse WebSocket identity key:', error)
+			}
+		} else {
+			Logger.warn('[WARN] WebSocket connection received without identity key. Waiting for authentication...')
 
-            await socket.emit(`sendMessageAck-${roomId}`, {
-              messageId: msg.messageId,
-              status: 'awaitingConfirmation',
-              recipient: msg.recipient
-            })
+			let identityKeyHandled = false
 
-            await knex('messages').insert({
-              messageId: msg.messageId,
-              sender: socket.identityKey,
-              recipient: msg.recipient,
-              body: typeof msg.body === 'string' ? msg.body : JSON.stringify(msg.body),
-              created_at: new Date()
-            })
+			const authListener = async (data: { identityKey?: string }): Promise<void> => {
+				if (identityKeyHandled) return
 
-            void io.emit(`sendMessage-${roomId}`, {
-              messageId: msg.messageId,
-              sender: socket.identityKey,
-              recipient: msg.recipient,
-              body: msg.body
-            })
+				Logger.log('[WEBSOCKET] Received authentication data:', data)
 
-            callback?.({ status: 'success', messageId: msg.messageId })
-          } catch (error) {
-            Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler:', error)
-            callback?.({
-              status: 'error',
-              message: error instanceof Error ? error.message : 'Unexpected server error'
-            })
-          }
-        })()
-      }
-    )
+				if (data !== null && data !== undefined && typeof data.identityKey === 'string' && data.identityKey.trim().length > 0) {
+					try {
+						const parsedIdentityKey = PublicKey.fromString(data.identityKey)
+						Logger.log('[DEBUG] Retrieved and parsed Identity Key after connection:', parsedIdentityKey.toString())
 
-    socket.on('disconnect', () => {
-      Logger.log(`[WEBSOCKET] Socket disconnected: ${socket.id}`)
-    })
-  })
+						authenticatedSockets.set(socket.id, parsedIdentityKey.toString())
+						Logger.log('[WEBSOCKET] Stored authenticated Identity Key for socket ID:', socket.id)
 
-  return io
+						identityKeyHandled = true
+
+						Logger.log(`New authenticated WebSocket connection from: ${authenticatedSockets.get(socket.id) ?? 'unknown'}`)
+
+						await socket.emit('authenticationSuccess', { status: 'success' }).catch(error => {
+							Logger.error('[WEBSOCKET ERROR] Failed to send authentication success event:', error)
+						})
+					} catch (error) {
+						Logger.error('[ERROR] Failed to parse Identity Key from authenticated event:', error)
+						await socket.emit('authenticationFailed', { reason: 'Invalid identity key format' })
+					}
+				} else {
+					Logger.warn('[WARN] Invalid or missing identity key in authentication event.')
+					await socket.emit('authenticationFailed', { reason: 'Missing identity key' })
+				}
+			}
+
+			socket.on('authenticated', authListener)
+		}
+
+		socket.on(
+			'sendMessage',
+			async (data: { roomId: string, message: { messageId: string, recipient: string, body: string } }): Promise<void> => {
+				if (typeof data !== 'object' || data == null) {
+					Logger.error('[WEBSOCKET ERROR] Invalid data object received.')
+					await socket.emit('messageFailed', { reason: 'Invalid data object' })
+					return
+				}
+
+				const { roomId, message } = data
+
+				if (!authenticatedSockets.has(socket.id)) {
+					Logger.warn('[WEBSOCKET] Unauthorized attempt to send a message.')
+					await socket.emit('paymentFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
+					return
+				}
+
+				Logger.log(`[WEBSOCKET] Processing sendMessage for room: ${roomId}`)
+
+				try {
+					if (typeof roomId !== 'string' || roomId.trim() === '') {
+						Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
+						await socket.emit('messageFailed', { reason: 'Invalid room ID' })
+						return
+					}
+
+					if (typeof message !== 'object' || message == null) {
+						Logger.error('[WEBSOCKET ERROR] Invalid message object:', message)
+						await socket.emit('messageFailed', { reason: 'Invalid message object' })
+						return
+					}
+
+					if (typeof message.body !== 'string' || message.body.trim() === '') {
+						Logger.error('[WEBSOCKET ERROR] Invalid message body:', message.body)
+						await socket.emit('messageFailed', { reason: 'Invalid message body' })
+						return
+					}
+
+					Logger.log(`[WEBSOCKET] Acknowledging message ${message.messageId} to sender.`)
+
+					const ackPayload = {
+						status: 'success',
+						messageId: message.messageId
+					}
+
+					Logger.log(`[WEBSOCKET] Emitting ack event: sendMessageAck-${roomId}`)
+
+					socket.emit(`sendMessageAck-${roomId}`, ackPayload).catch((error) => {
+						Logger.error(`[WEBSOCKET ERROR] Failed to emit sendMessageAck-${roomId}:`, error)
+					})
+
+					try {
+						const parts = roomId.split('-')
+						const messageBoxType = parts.length > 1 ? parts[1] : 'default'
+
+						Logger.log(`[WEBSOCKET] Parsed messageBoxType: ${messageBoxType}`)
+						Logger.log(`[WEBSOCKET] Attempting to store message for recipient: ${message.recipient}, box type: ${messageBoxType}`)
+
+						let messageBox = await knex('messageBox')
+							.where({ identityKey: message.recipient, type: messageBoxType })
+							.first()
+
+						if (messageBox === null || messageBox === undefined) {
+							Logger.log('[WEBSOCKET] messageBox not found. Creating new messageBox.')
+							await knex('messageBox').insert({
+								identityKey: message.recipient,
+								type: messageBoxType,
+								created_at: new Date(),
+								updated_at: new Date()
+							})
+						}
+
+						messageBox = await knex('messageBox')
+							.where({ identityKey: message.recipient, type: messageBoxType })
+							.select('messageBoxId')
+							.first()
+
+						const messageBoxId = messageBox?.messageBoxId ?? null
+
+						if (messageBoxId === null || messageBoxId === undefined) {
+							Logger.warn('[WEBSOCKET WARNING] messageBoxId is null — message may not be stored correctly!')
+						} else {
+							Logger.log(`[WEBSOCKET] Resolved messageBoxId: ${String(messageBoxId)}`)
+						}
+
+						const senderKey = authenticatedSockets.get(socket.id) ?? null
+
+						const insertResult = await knex('messages')
+							.insert({
+								messageId: message.messageId,
+								messageBoxId,
+								sender: senderKey,
+								recipient: message.recipient,
+								body: message.body,
+								created_at: new Date(),
+								updated_at: new Date()
+							})
+							.onConflict('messageId')
+							.ignore()
+
+						if (insertResult.length === 0) {
+							Logger.warn('[WEBSOCKET WARNING] Message insert was ignored due to conflict (duplicate messageId?)')
+						} else {
+							Logger.log('[WEBSOCKET] Message successfully stored in DB.')
+						}
+					} catch (dbError) {
+						Logger.error('[WEBSOCKET ERROR] Failed to store message in DB:', dbError)
+						await socket.emit('messageFailed', { reason: 'Failed to store message' })
+						return
+					}
+
+					Logger.log(`[WEBSOCKET] Emitting message to room ${roomId}`)
+					io.emit(`sendMessage-${roomId}`, {
+						sender: authenticatedSockets.get(socket.id),
+						messageId: message.messageId,
+						body: message.body
+					})
+				} catch (error) {
+					Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler:', error)
+					await socket.emit('messageFailed', { reason: 'Unexpected error occurred' })
+				}
+			}
+		)
+
+		socket.on('joinRoom', async (roomId: string) => {
+			if (!authenticatedSockets.has(socket.id)) {
+				Logger.warn('[WEBSOCKET] Unauthorized attempt to join a room.')
+				await socket.emit('joinFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
+				return
+			}
+
+			if (roomId == null || typeof roomId !== 'string' || roomId.trim() === '') {
+				Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
+				await socket.emit('joinFailed', { reason: 'Invalid room ID' })
+				return
+			}
+
+			Logger.log(`[WEBSOCKET] User ${socket.id} joined room ${roomId}`)
+			await socket.emit('joinedRoom', { roomId })
+		})
+
+		socket.on('leaveRoom', async (roomId: string) => {
+			if (!authenticatedSockets.has(socket.id)) {
+				Logger.warn('[WEBSOCKET] Unauthorized attempt to leave a room.')
+				await socket.emit('leaveFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
+				return
+			}
+
+			if (roomId == null || roomId === '' || typeof roomId !== 'string' || roomId.trim() === '') {
+				Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
+				await socket.emit('leaveFailed', { reason: 'Invalid room ID' })
+				return
+			}
+
+			Logger.log(`[WEBSOCKET] User ${socket.id} left room ${roomId}`)
+			await socket.emit('leftRoom', { roomId })
+		})
+
+		socket.on('disconnect', (reason: string) => {
+			Logger.log(`[WEBSOCKET] Disconnected: ${reason}`)
+			authenticatedSockets.delete(socket.id)
+		})
+	})
+
+	return io
 }
