@@ -26,7 +26,11 @@ function readEnv (name: string): string | undefined {
   return value != null && value.trim() !== '' ? value.trim() : undefined
 }
 
-const stripTrailingSlash = (url: string): string => url.replace(/\/+$/, '')
+const stripTrailingSlash = (url: string): string => {
+  let end = url.length
+  while (end > 0 && url[end - 1] === '/') end--
+  return url.slice(0, end)
+}
 
 /** Arcade broadcaster / ARC endpoint for tstn, or `undefined` when `TSTN_ARCADE_URL` is unset. */
 export function tstnArcadeUrl (): string | undefined {

@@ -22,15 +22,16 @@ export default class SdkWhatsOnChain implements ChainTracker {
   constructor (network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' = 'main', config: WhatsOnChainConfig = {}) {
     const { apiKey, httpClient } = config
     this.network = network
-    this.URL =
-      network === 'ttn'
-        ? 'https://api.woc-ttn.bsvblockchain.tech/v1/bsv/test'
-        : network === 'tstn'
-          // tstn has no WhatsOnChain / explorer service. The instance is constructed for
-          // interface completeness but is not registered as a Services provider, so this URL
-          // is never used for requests.
-          ? ''
-          : `https://api.whatsonchain.com/v1/bsv/${network}`
+    if (network === 'ttn') {
+      this.URL = 'https://api.woc-ttn.bsvblockchain.tech/v1/bsv/test'
+    } else if (network === 'tstn') {
+      // tstn has no WhatsOnChain / explorer service. The instance is constructed for
+      // interface completeness but is not registered as a Services provider, so this URL
+      // is never used for requests.
+      this.URL = ''
+    } else {
+      this.URL = `https://api.whatsonchain.com/v1/bsv/${network}`
+    }
     this.httpClient = httpClient ?? defaultHttpClient()
     this.apiKey = apiKey ?? ''
   }
