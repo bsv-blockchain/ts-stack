@@ -21,10 +21,10 @@ const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
     const url = typeof input === 'string' ? input : input?.url ?? ''
-    if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
+    if (url.includes('/getPresentHeight')) {
       return jsonResponse({ status: 'success', value: 950000 })
     }
-    if (url.includes('chaintracks.babbage.systems/findHeaderHexForHeight')) {
+    if (url.includes('/findHeaderHexForHeight')) {
       const height = Number(new URL(url).searchParams.get('height'))
       if (height === 877599) {
         return jsonResponse({ status: 'success', value: HEADER_877599 })

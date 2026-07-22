@@ -276,18 +276,18 @@ export interface WalletServicesOptions {
    */
   exchangeratesapiKey?: string
   /**
-   * Due to the default use of a free exchangeratesapiKey with low usage limits,
-   * the `ChaintracksService` can act as a request rate multiplier.
+   * Optional ChainTracks endpoint used to source fiat exchange rates.
    *
-   * By default the following endpoint is used:
-   * `https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates`
+   * There is no default: fiat rates via ChainTracks are opt-in. Supply this URL (or an
+   * `exchangeratesapiKey`) to enable fiat exchange rate lookups.
    */
   chaintracksFiatExchangeRatesUrl?: string
   /**
    * Optional Chaintracks client API instance.
-   * Default is a new instance of ChaintracksServiceClient configured to use:
-   * mainnet: `https://mainnet-chaintracks.babbage.systems`
-   * testnet: `https://testnet-chaintracks.babbage.systems`
+   * Default is a new instance of ChaintracksServiceClient pointed at the per-chain Arcade
+   * ChainTracks endpoint (`<arcade-host>/chaintracks/v1`), e.g.
+   * mainnet: `https://arcade-v2-us-1.bsvblockchain.tech/chaintracks/v1`
+   * testnet: `https://arcade-v2-testnet-us-1.bsvblockchain.tech/chaintracks/v1`
    */
   chaintracks?: ChaintracksClientApi
   /**

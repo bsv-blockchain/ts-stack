@@ -21,7 +21,7 @@ const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
     const url = typeof input === 'string' ? input : input?.url ?? ''
-    if (url.includes('chaintracks.babbage.systems/getFiatExchangeRates')) {
+    if (url.includes('/getFiatExchangeRates')) {
       return { ok: true, status: 200, json: async () => CHAINTRACKS_FIAT_RATES_PAYLOAD } as any
     }
     return realFetch(input, init)
@@ -140,6 +140,8 @@ describe('getFiatExchangeRate service tests', () => {
 
   test('5 chaintracks works against the real service without an exchangeratesapi key', async () => {
     const options = Services.createDefaultOptions('main')
+    // No fiat-rates endpoint is configured by default; supply one to exercise the path.
+    options.chaintracksFiatExchangeRatesUrl = 'https://chaintracks.example.test/getFiatExchangeRates'
     options.fiatExchangeRates = {
       timestamp: new Date('2020-01-01T00:00:00.000Z'),
       base: 'USD',

@@ -10,10 +10,10 @@ import { arcadeDefaultUrl, createDefaultWalletServicesOptions } from '../createD
 const ARCADE_URL = 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
 
 describe('Services Arcade wiring', () => {
-  test('arcadeDefaultUrl maps known chains and omits testnet', () => {
+  test('arcadeDefaultUrl maps known chains', () => {
     expect(arcadeDefaultUrl('main')).toBe('https://arcade-v2-us-1.bsvblockchain.tech')
     expect(arcadeDefaultUrl('ttn')).toBe('https://arcade-v2-ttn-us-1.bsvblockchain.tech')
-    expect(arcadeDefaultUrl('test')).toBeUndefined()
+    expect(arcadeDefaultUrl('test')).toBe('https://arcade-v2-testnet-us-1.bsvblockchain.tech')
   })
 
   test('arcadeDefaultUrl for tstn is driven by TSTN_ARCADE_URL', () => {

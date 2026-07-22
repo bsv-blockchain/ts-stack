@@ -5,6 +5,7 @@ import { WalletError } from '../../sdk/WalletError'
 import { wait } from '../../utility/utilityHelpers'
 import { BlockHeader } from '../../sdk/WalletServices.interfaces'
 import { ChaintracksClientApi } from './chaintracks/Api/ChaintracksClientApi'
+import { arcadeDefaultUrl } from '../createDefaultWalletServicesOptions'
 
 export interface ChaintracksChainTrackerOptions {
   maxRetries?: number
@@ -18,8 +19,18 @@ export class ChaintracksChainTracker implements ChainTracker {
 
   constructor (chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions) {
     chain ||= 'main'
-    this.chaintracks =
-      chaintracks ?? new ChaintracksServiceClient(chain, `https://${chain}net-chaintracks.babbage.systems`)
+    if (chaintracks == null) {
+      // Derive the default ChainTracks endpoint from the per-chain Arcade host
+      // (`<arcade-host>/chaintracks/v1`); no hardcoded babbage endpoint.
+      const arcadeHost = arcadeDefaultUrl(chain)
+      if (arcadeHost == null || arcadeHost === '') {
+        throw new Error(
+          `ChaintracksChainTracker: no default ChainTracks endpoint for chain '${chain}'; provide a chaintracks client`
+        )
+      }
+      chaintracks = new ChaintracksServiceClient(chain, `${arcadeHost.replace(/\/+$/, '')}/chaintracks/v1`)
+    }
+    this.chaintracks = chaintracks
     this.cache = {}
     this.options = options || {}
   }
