@@ -32,8 +32,6 @@ import { sendFCMNotification } from '../utils/sendFCMNotification.js'
 import { getRecipientFee, getServerDeliveryFee, shouldUseFCMDelivery } from '../utils/messagePermissions.js'
 import { runtimeDeps, getWallet } from '../runtimeDeps.js'
 
-const { SERVER_PRIVATE_KEY } = process.env
-
 // Type definition for the incoming message format
 export interface Message {
   // Back-compat: accept 'recipient' (string or array) AND new 'recipients' (array)
@@ -75,11 +73,6 @@ export interface SendMessageRequest extends AuthRequest {
     message?: Message
     payment?: Payment
   }
-}
-
-// Validate critical server-side secret
-if (SERVER_PRIVATE_KEY == null || SERVER_PRIVATE_KEY.trim() === '') {
-  throw new Error('SERVER_PRIVATE_KEY is not defined in the environment variables.')
 }
 
 /**

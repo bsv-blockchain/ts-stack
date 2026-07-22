@@ -1,9 +1,21 @@
 import pino from 'pino'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const pkg = require(join(process.cwd(), 'package.json')) as { name: string; version: string }
+// Resolve package.json relative to this module (source and compiled layouts)
+// instead of process.cwd() so embedded hosts can import us from any cwd.
+let pkg: { name: string; version: string } = {
+  name: '@bsv/messagebox-server',
+  version: '0.0.0'
+}
+for (const candidate of ['../../package.json', '../../../package.json']) {
+  try {
+    pkg = require(candidate) as { name: string; version: string }
+    break
+  } catch {
+    // try next layout
+  }
+}
 
 // Structured pino logger. @opentelemetry/instrumentation-pino (loaded by
 // telemetry.ts) injects trace_id/span_id into every record, and records are
