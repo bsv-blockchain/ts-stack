@@ -170,9 +170,9 @@ const NETWORK_IDS: Record<BdkNetwork, number> = {
   tstn: 5
 }
 
-function toVector<T> (Vector: EmbindVectorCtor<T>, values: ArrayLike<T>): EmbindVector<T> {
+function toVector<T> (Vector: EmbindVectorCtor<T>, values: Iterable<T>): EmbindVector<T> {
   const vec = new Vector()
-  for (let index = 0; index < values.length; index++) vec.push_back(values[index])
+  for (const value of values) vec.push_back(value)
   return vec
 }
 

@@ -124,8 +124,9 @@ async function main (): Promise<void> {
     }, scriptSize >= 1024 * 1024 ? 3 : 15)
     tx.toEFBinary()
     const cached = measureSync(() => { tx.toEFBinary() }, scriptSize >= 1024 * 1024 ? 100 : 1000)
+    const scriptLabel = `${Math.round(scriptSize / 1024)} KiB`.padStart(8)
     console.log(
-      `${`${Math.round(scriptSize / 1024)} KiB`.padStart(8)}  ${String(tx.toEFBinary().byteLength).padStart(9)}  ` +
+      `${scriptLabel}  ${String(tx.toEFBinary().byteLength).padStart(9)}  ` +
       `${legacy.toFixed(3).padStart(13)}  ${typed.toFixed(3).padStart(10)}  ` +
       `${cached.toFixed(4).padStart(12)}  ${(legacy / typed).toFixed(2).padStart(8)}x`
     )
