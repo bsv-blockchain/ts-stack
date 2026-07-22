@@ -135,6 +135,34 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
     expect(mints()).toBe(2) // one failed attempt + one success
   })
 
+  it('a grant deduped against a mint that then FAILS falls through and mints its own token', async () => {
+    let rejectMint!: (e: Error) => void
+    const gate = new Promise<never>((_, reject) => { rejectMint = reject })
+    const originalCreateAction = underlying.createAction.getMockImplementation()
+    underlying.createAction
+      .mockImplementationOnce(async () => await gate) // mint 1: will fail
+      .mockImplementation(originalCreateAction!) // subsequent mints succeed
+
+    // Two stacked prompts for the same permission.
+    const ensure1 = ensureProto('generic')
+    const ensure2 = ensureProto('signing')
+    await new Promise(r => setTimeout(r, 20))
+    expect(promptCount).toBe(2)
+
+    // Grant #1 starts a mint that will fail; grant #2 dedups against it.
+    const grant1 = manager.grantPermission({ requestID: requestIDs[0] })
+    await new Promise(r => setTimeout(r, 10))
+    const grant2 = manager.grantPermission({ requestID: requestIDs[1] })
+    await new Promise(r => setTimeout(r, 10))
+
+    rejectMint(new Error('mint 1 failed'))
+    await expect(grant1).rejects.toThrow('mint 1 failed')
+    // Grant #2 must not piggyback on the failure: it mints its own token.
+    await expect(grant2).resolves.toBeUndefined()
+    expect(mints()).toBe(2)
+    await Promise.all([ensure1, ensure2])
+  })
+
   it('spending authorizations are excluded from grant-dedup', async () => {
     const spendingRequest = {
       type: 'spending',

@@ -904,15 +904,21 @@ export class WalletPermissionsManager implements WalletInterface {
       // should yield ONE token: if an identical non-renewal grant just minted
       // (or is minting), don't mint a duplicate. Spending authorizations are
       // excluded — their tokens carry amounts, so every grant is honored.
-      const duplicateOfRecentGrant =
+      let skipDuplicateMint =
         !request.renewal &&
         request.type !== 'spending' &&
         (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
 
-      if (duplicateOfRecentGrant) {
+      if (skipDuplicateMint) {
         const inFlight = this.mintsInFlight.get(key)
-        if (inFlight != null) await inFlight
-      } else {
+        if (inFlight != null) {
+          await inFlight
+          // The awaited mint may have failed; only skip if it landed.
+          skipDuplicateMint = this.isPermissionCached(key) || this.isRecentlyGranted(key)
+        }
+      }
+
+      if (!skipDuplicateMint) {
         const mint = request.renewal
           ? this.renewPermissionOnChain(
             request.previousToken!,
@@ -1266,8 +1272,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (!privileged && this.isWhitelistedCounterpartyProtocol(counterparty, protocolID)) return true
 
     const cacheKey = this.buildRequestKey({ type: 'protocol', originator, privileged, protocolID, counterparty })
-    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
-    if (await this.settledAfterInFlightMint(cacheKey)) return true
+    if (await this.hasRecentOrPendingGrant(cacheKey)) return true
 
     // 4) Attempt to find a valid token in the internal basket
     const token = await this.findProtocolToken(
@@ -1322,8 +1327,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (!this.isBasketUsageRequired(usageType)) return true
 
     const cacheKey = this.buildRequestKey({ type: 'basket', originator, basket })
-    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
-    if (await this.settledAfterInFlightMint(cacheKey)) return true
+    if (await this.hasRecentOrPendingGrant(cacheKey)) return true
 
     const token = await this.findBasketToken(originator, basket, true, lookupValues)
     if (token == null) {
@@ -1388,13 +1392,7 @@ export class WalletPermissionsManager implements WalletInterface {
       privileged,
       certificate: { verifier, certType, fields }
     })
-    if (this.isPermissionCached(cacheKey)) {
-      return true
-    }
-    if (this.isRecentlyGranted(cacheKey)) {
-      return true
-    }
-    if (await this.settledAfterInFlightMint(cacheKey)) {
+    if (await this.hasRecentOrPendingGrant(cacheKey)) {
       return true
     }
 
@@ -1471,10 +1469,10 @@ export class WalletPermissionsManager implements WalletInterface {
       return true
     }
     const cacheKey = this.buildRequestKey({ type: 'spending', originator, spending: { satoshis } })
-    if (this.isPermissionCached(cacheKey)) {
-      return true
-    }
-    if (await this.settledAfterInFlightMint(cacheKey)) {
+    // Spending keys are amount-scoped. The recent-grant window this adds sits
+    // inside the pre-existing permissionCache window grantPermission already
+    // wrote for spending, so accounting exposure is unchanged.
+    if (await this.hasRecentOrPendingGrant(cacheKey)) {
       return true
     }
     const token = await this.findSpendingToken(originator, lookupValues)
@@ -4854,12 +4852,13 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   /**
-   * If a token mint for this permission is in flight (the user just granted
-   * it), waits for the mint to settle and reports whether the permission is
-   * now satisfied — sparing the user a duplicate prompt for a grant they
-   * already made moments ago.
+   * Whether the permission is satisfied without consulting on-chain tokens:
+   * cached, recently granted, or — when the user just granted it and its
+   * token is still minting — after the in-flight mint settles. Spares the
+   * user a duplicate prompt for a grant they already made moments ago.
    */
-  private async settledAfterInFlightMint (cacheKey: string): Promise<boolean> {
+  private async hasRecentOrPendingGrant (cacheKey: string): Promise<boolean> {
+    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
     const inFlight = this.mintsInFlight.get(cacheKey)
     if (inFlight == null) return false
     await inFlight
