@@ -138,7 +138,10 @@ if (NODE_ENV !== 'test') {
 export {
   createMessageBoxContext,
   createMessageBoxApp,
-  mountMessageBoxRoutes,
+  bindMessageBoxRuntime,
+  registerMessageBoxPreAuthRoutes,
+  registerMessageBoxPostAuthRoutes,
   attachMessageBoxWebSockets
 } from './compose.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
+export type { MessageBoxRouter } from './compose.js'

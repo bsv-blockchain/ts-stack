@@ -1,6 +1,6 @@
 /**
  * Injectable knex/wallet for route handlers.
- * Binary entry and mountMessageBoxRoutes call bindMessageBoxRuntime before serving.
+ * Binary entry and embed hosts call bindMessageBoxRuntime before serving.
  */
 import type { Knex } from 'knex'
 import type { WalletInterface } from '@bsv/sdk'

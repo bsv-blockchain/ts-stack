@@ -10,68 +10,47 @@ import express, {
 	type RequestHandler,
 	Router
 } from 'express'
-import bodyParser from 'body-parser'
 import type { Server as HttpServer } from 'node:http'
 import { PublicKey } from '@bsv/sdk'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { AuthSocketServer } from '@bsv/authsocket'
 import { preAuth, postAuth } from './routes/index.js'
 import sendMessageRoute from './routes/sendMessage.js'
-import { setupSwagger } from './swagger.js'
 import { Logger } from './utils/logger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import type { MessageBoxContext } from './context.js'
 
 export { createMessageBoxContext } from './context.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
+export { bindMessageBoxRuntime } from './runtimeDeps.js'
 
 type HttpMethod = 'get' | 'post' | 'put' | 'delete'
+
+/** Express app or router — embed mounts pieces on whichever it owns. */
+export type MessageBoxRouter = Express | Router
 
 export function createMessageBoxApp (): Express {
 	return express()
 }
 
-/**
- * Mount messagebox HTTP routes on an Express app.
- * Auth/payment middleware apply only to this router (not the parent app).
- */
-export function mountMessageBoxRoutes (app: Express, ctx: MessageBoxContext): void {
-	bindMessageBoxRuntime({ knex: ctx.knex, wallet: ctx.wallet })
-
-	const router = Router()
-	router.use(bodyParser.json({ limit: '1gb', type: 'application/json' }))
-	router.use((req, res, next) => {
-		res.header('Access-Control-Allow-Origin', '*')
-		res.header('Access-Control-Allow-Headers', '*')
-		res.header('Access-Control-Allow-Methods', '*')
-		res.header('Access-Control-Expose-Headers', '*')
-		res.header('Access-Control-Allow-Private-Network', 'true')
-		if (req.method === 'OPTIONS') {
-			res.sendStatus(200)
-		} else {
-			next()
-		}
-	})
-
-	if (ctx.enableSwagger) {
-		setupSwagger(app)
-	}
-
+export function registerMessageBoxPreAuthRoutes (
+	router: MessageBoxRouter,
+	routingPrefix: string = ''
+): void {
 	preAuth.forEach((route) => {
 		router[route.type as HttpMethod](
-			route.path,
+			`${routingPrefix}${route.path}`,
 			route.func as unknown as (req: ExpressRequest, res: Response, next: NextFunction) => void
 		)
 	})
+}
 
-	router.use(
-		createAuthMiddleware({
-			wallet: ctx.wallet,
-			logger: ctx.logger
-		})
-	)
-
+/** Payment middleware (after auth) + postAuth route handlers. */
+export function registerMessageBoxPostAuthRoutes (
+	router: MessageBoxRouter,
+	ctx: Pick<MessageBoxContext, 'wallet' | 'calculateRequestPrice'>,
+	routingPrefix: string = ''
+): void {
 	router.use(
 		createPaymentMiddleware({
 			wallet: ctx.wallet,
@@ -83,14 +62,11 @@ export function mountMessageBoxRoutes (app: Express, ctx: MessageBoxContext): vo
 	postAuth.forEach((route) => {
 		const method = route.type as HttpMethod
 		if (route.path === '/sendMessage') {
-			router[method](route.path, sendMessageRoute.func as unknown as RequestHandler)
+			router[method](`${routingPrefix}${route.path}`, sendMessageRoute.func as unknown as RequestHandler)
 		} else {
-			router[method](route.path, route.func as RequestHandler)
+			router[method](`${routingPrefix}${route.path}`, route.func as RequestHandler)
 		}
 	})
-
-	const prefix = ctx.routingPrefix ?? ''
-	app.use(prefix === '' ? '/' : prefix, router)
 }
 
 /**
