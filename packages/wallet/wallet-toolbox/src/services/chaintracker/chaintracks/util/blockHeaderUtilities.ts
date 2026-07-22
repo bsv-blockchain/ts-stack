@@ -491,6 +491,7 @@ export function genesisHeader (chain: Chain): BlockHeader {
       }
     case 'test':
     case 'ttn':
+    case 'tstn':
       return {
         version: 1,
         previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
