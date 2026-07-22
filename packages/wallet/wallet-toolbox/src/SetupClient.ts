@@ -23,6 +23,8 @@ import { Monitor } from './monitor/Monitor'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { Wallet } from './Wallet'
 import { Chain } from './sdk/types'
+import { WERR_INVALID_OPERATION } from './sdk/WERR_errors'
+import { defaultStorageUrl } from './services/createDefaultWalletServicesOptions'
 import { randomBytesHex } from './utility/utilityHelpers'
 import { StorageClient } from './storage/remoting/StorageClient'
 
@@ -92,7 +94,10 @@ export abstract class SetupClient {
     privilegedKeyGetter?: () => Promise<PrivateKey>
   }): Promise<Wallet> {
     const chain = args.chain
-    const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
+    const endpointUrl = args.storageUrl || defaultStorageUrl(chain)
+    if (endpointUrl == null) {
+      throw new WERR_INVALID_OPERATION(`chain '${chain}' has no default wallet-storage URL; provide storageUrl explicitly`)
+    }
     const rootKey = PrivateKey.fromHex(args.rootKeyHex)
     const keyDeriver = new CachedKeyDeriver(rootKey)
     const storage = new WalletStorageManager(keyDeriver.identityKey)
@@ -119,7 +124,12 @@ export abstract class SetupClient {
   static async createWalletClient (args: SetupClientWalletClientArgs): Promise<SetupWalletClient> {
     const wo = await SetupClient.createWallet(args)
 
-    const endpointUrl = args.endpointUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
+    const endpointUrl = args.endpointUrl || defaultStorageUrl(args.chain)
+    if (endpointUrl == null) {
+      throw new WERR_INVALID_OPERATION(
+        `chain '${args.chain}' has no default wallet-storage URL; provide endpointUrl explicitly`
+      )
+    }
 
     const client = new StorageClient(wo.wallet, endpointUrl)
     await wo.storage.addWalletStorageProvider(client)

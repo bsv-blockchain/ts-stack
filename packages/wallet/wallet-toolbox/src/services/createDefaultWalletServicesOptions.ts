@@ -157,3 +157,23 @@ export function arcDefaultUrl (chain: Chain): string {
 export function arcGorillaPoolUrl (chain: Chain): string | undefined {
   return chain === 'main' ? 'https://arc.gorillapool.io' : undefined
 }
+
+/**
+ * Default wallet-storage (`StorageClient`) endpoint per chain.
+ * Returns undefined for chains without a public default: `tstn` is private/per-deployment,
+ * and `mock`. Callers must then supply an explicit storage URL.
+ */
+export function defaultStorageUrl (chain: Chain): string | undefined {
+  switch (chain) {
+    case 'main':
+      return 'https://store-us-1.bsvb.tech'
+    case 'test':
+      return 'https://store-testnet-us-1.bsvb.tech'
+    case 'ttn':
+      return 'https://store-ttn-us-1.bsvb.tech'
+    case 'tstn':
+      return undefined
+    case 'mock':
+      return undefined
+  }
+}
