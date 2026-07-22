@@ -1682,11 +1682,13 @@ export class WalletPermissionsManager implements WalletInterface {
     const [spendingAuthorization, protocolPermissions, basketAccess, certificateAccess] = await Promise.all([
       (async () => {
         if (groupPermissions.spendingAuthorization == null) return undefined
-        const hasAuth = await this.hasSpendingAuthorization({
-          originator,
-          satoshis: groupPermissions.spendingAuthorization.amount
-        })
-        return hasAuth ? undefined : groupPermissions.spendingAuthorization
+        // A standing authorization is a grant regardless of how much of the
+        // monthly allowance has been used — exhaustion is handled by renewal
+        // at spend time. Checking remaining headroom here re-requests (and,
+        // if approved, re-mints) spending after any monthly usage.
+        const { normalized, lookupValues } = this.prepareOriginator(originator)
+        const token = await this.findSpendingToken(normalized, lookupValues)
+        return token != null ? undefined : groupPermissions.spendingAuthorization
       })(),
       (async () => {
         const protocolChecks = await Promise.all(
