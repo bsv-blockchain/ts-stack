@@ -927,8 +927,12 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     // 2) Reject all matching requests, deleting the entry
+    // Denials carry the canonical machine-readable code so applications can
+    // distinguish user denial from other failures (matches denyActiveRequest).
+    const err: Error & { code?: string } = new Error('Permission denied.')
+    err.code = 'ERR_PERMISSION_DENIED'
     for (const x of matching.pending) {
-      x.reject(new Error('Permission denied.'))
+      x.reject(err)
     }
     this.activeRequests.delete(requestID)
   }
