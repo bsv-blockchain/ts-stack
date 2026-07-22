@@ -79,6 +79,46 @@ interface EmbindVector<T> {
 
 type EmbindVectorCtor<T> = new () => EmbindVector<T>
 
+type BdkVerifyScriptBatchArray = (...args: [
+  extendedTXs: Uint8Array,
+  txOffsets: Uint32Array,
+  utxoHeights: Int32Array,
+  heightOffsets: Uint32Array,
+  blockHeights: Int32Array,
+  consensus: Uint8Array,
+  customFlags: Uint32Array,
+  customFlagOffsets: Uint32Array,
+  network: number
+]) => Int32Array
+
+type BdkVerifySpendArray = (...args: [
+  transaction: Uint8Array,
+  inputIndex: number,
+  lockingScript: Uint8Array,
+  sourceSatoshis: number,
+  utxoHeight: number,
+  blockHeight: number,
+  consensus: boolean,
+  hasCustomFlags: boolean,
+  customFlags: number,
+  network: number
+]) => BdkVerificationResult
+
+type BdkVerifySpendBatchArray = (...args: [
+  transactions: Uint8Array,
+  transactionOffsets: Uint32Array,
+  inputIndices: Uint32Array,
+  lockingScripts: Uint8Array,
+  lockingScriptOffsets: Uint32Array,
+  sourceSatoshis: Float64Array,
+  utxoHeights: Int32Array,
+  blockHeights: Int32Array,
+  consensus: Uint8Array,
+  hasCustomFlags: Uint8Array,
+  customFlags: Uint32Array,
+  network: number
+]) => Int32Array
+
 /** The BDK WASM verifier ABI. New methods remain optional for custom older modules. */
 export interface BdkWasmModule {
   VectorUInt8: EmbindVectorCtor<number>
@@ -106,43 +146,9 @@ export interface BdkWasmModule {
     customFlags: Uint32Array,
     network: number
   ) => BdkVerificationResult
-  VerifyScriptBatchArray?: (
-    extendedTXs: Uint8Array,
-    txOffsets: Uint32Array,
-    utxoHeights: Int32Array,
-    heightOffsets: Uint32Array,
-    blockHeights: Int32Array,
-    consensus: Uint8Array,
-    customFlags: Uint32Array,
-    customFlagOffsets: Uint32Array,
-    network: number
-  ) => Int32Array
-  VerifySpendArray?: (
-    transaction: Uint8Array,
-    inputIndex: number,
-    lockingScript: Uint8Array,
-    sourceSatoshis: number,
-    utxoHeight: number,
-    blockHeight: number,
-    consensus: boolean,
-    hasCustomFlags: boolean,
-    customFlags: number,
-    network: number
-  ) => BdkVerificationResult
-  VerifySpendBatchArray?: (
-    transactions: Uint8Array,
-    transactionOffsets: Uint32Array,
-    inputIndices: Uint32Array,
-    lockingScripts: Uint8Array,
-    lockingScriptOffsets: Uint32Array,
-    sourceSatoshis: Float64Array,
-    utxoHeights: Int32Array,
-    blockHeights: Int32Array,
-    consensus: Uint8Array,
-    hasCustomFlags: Uint8Array,
-    customFlags: Uint32Array,
-    network: number
-  ) => Int32Array
+  VerifyScriptBatchArray?: BdkVerifyScriptBatchArray
+  VerifySpendArray?: BdkVerifySpendArray
+  VerifySpendBatchArray?: BdkVerifySpendBatchArray
 }
 
 /** Async factory that loads/instantiates the BDK WASM module. */
