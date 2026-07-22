@@ -163,6 +163,8 @@ export async function useRoutes (): Promise<void> {
     throw new Error('Wallet is not initialized for auth middleware')
   }
 
+  registerMessageBoxPreAuthRoutes(app, ROUTING_PREFIX)
+
   app.use(
     createAuthMiddleware({
       wallet: _wallet,
@@ -170,7 +172,6 @@ export async function useRoutes (): Promise<void> {
     })
   )
 
-  registerMessageBoxPreAuthRoutes(app, ROUTING_PREFIX)
   registerMessageBoxPostAuthRoutes(app, {
     wallet: _wallet,
     calculateRequestPrice: async (req) => {
