@@ -4,7 +4,7 @@ import Script from './Script.js'
 import BigNumber from '../primitives/BigNumber.js'
 import OP from './OP.js'
 import ScriptChunk from './ScriptChunk.js'
-import { minimallyEncode } from '../primitives/utils.js'
+import { minimallyEncode, toArray, WriterUint8Array } from '../primitives/utils.js'
 import ScriptEvaluationError from './ScriptEvaluationError.js'
 import * as Hash from '../primitives/Hash.js'
 import TransactionSignature, { type SignatureHashCache } from '../primitives/TransactionSignature.js'
@@ -12,6 +12,7 @@ import PublicKey from '../primitives/PublicKey.js'
 import { verify } from '../primitives/ECDSA.js'
 import TransactionInput from '../transaction/TransactionInput.js'
 import TransactionOutput from '../transaction/TransactionOutput.js'
+import type SpendVerifierInterface from './SpendVerifierInterface.js'
 
 // These constants control the current behavior of the interpreter.
 const maxScriptElementSize = 1024 * 1024 * 1024
@@ -1531,6 +1532,62 @@ export default class Spend {
 
     this.requireTruthyTopStack()
     return true
+  }
+
+  /**
+   * Validates this spend with an asynchronous pluggable backend. This is the
+   * native/WASM counterpart to {@link validate}; it does not silently fall back
+   * to the JavaScript interpreter if the backend fails.
+   */
+  async validateWith (verifier: SpendVerifierInterface): Promise<boolean> {
+    return await verifier.verifySpend(this)
+  }
+
+  /**
+   * Serializes the ordinary transaction represented by this Spend. The source
+   * output is intentionally excluded and is supplied separately to a Spend
+   * verifier, avoiding an EF construction and parse for one-input validation.
+   */
+  toTransactionUint8Array (): Uint8Array {
+    const currentInput: TransactionInput = {
+      sourceTXID: this.sourceTXID,
+      sourceOutputIndex: this.sourceOutputIndex,
+      unlockingScript: this.unlockingScript,
+      sequence: this.inputSequence
+    }
+    const inputs = this.allInputs ?? [
+      ...this.otherInputs.slice(0, this.inputIndex),
+      currentInput,
+      ...this.otherInputs.slice(this.inputIndex)
+    ]
+    if (this.inputIndex < 0 || this.inputIndex >= inputs.length) {
+      throw new RangeError('Spend input index is out of range')
+    }
+
+    const writer = new WriterUint8Array()
+    writer.writeUInt32LE(this.transactionVersion)
+    writer.writeVarIntNum(inputs.length)
+    for (let index = 0; index < inputs.length; index++) {
+      const input = index === this.inputIndex ? currentInput : inputs[index]
+      const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+      if (sourceTXID === undefined) throw new Error(`Input ${index} is missing its source transaction ID`)
+      if (input.unlockingScript === undefined) throw new Error(`Input ${index} is missing its unlocking script`)
+      writer.writeReverse(toArray(sourceTXID, 'hex'))
+      writer.writeUInt32LE(input.sourceOutputIndex)
+      const unlockingScript = input.unlockingScript.toUint8Array()
+      writer.writeVarIntNum(unlockingScript.length)
+      writer.write(unlockingScript)
+      writer.writeUInt32LE(input.sequence ?? 0xffffffff)
+    }
+    writer.writeVarIntNum(this.outputs.length)
+    for (const output of this.outputs) {
+      writer.writeUInt64LE(output.satoshis ?? 0)
+      const lockingScript = output.lockingScript.toUint8Array()
+      writer.writeVarIntNum(lockingScript.length)
+      writer.write(lockingScript)
+    }
+    writer.writeUInt32LE(this.lockTime)
+    return writer.toUint8Array()
   }
 
   private runScript (context: 'UnlockingScript' | 'LockingScript'): void {

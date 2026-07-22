@@ -1,9 +1,33 @@
-import { Transaction, Script, P2PKH, PrivateKey, MerklePath } from '@bsv/sdk'
+import { Transaction, Script, P2PKH, PrivateKey, MerklePath, Spend } from '@bsv/sdk'
 
 export interface CorpusEntry {
   name: string
   tx: Transaction
   expected: boolean
+}
+
+/** Reconstruct the same per-input Spend objects used by Transaction.verify. */
+export function spendsForTransaction (tx: Transaction): Spend[] {
+  return tx.inputs.map((input, inputIndex) => {
+    if (input.sourceTransaction === undefined) throw new Error(`Input ${inputIndex} has no source transaction`)
+    if (input.unlockingScript === undefined) throw new Error(`Input ${inputIndex} has no unlocking script`)
+    const sourceOutput = input.sourceTransaction.outputs[input.sourceOutputIndex]
+    if (sourceOutput === undefined) throw new Error(`Input ${inputIndex} references a missing source output`)
+    return new Spend({
+      sourceTXID: input.sourceTXID ?? input.sourceTransaction.id('hex'),
+      sourceOutputIndex: input.sourceOutputIndex,
+      sourceSatoshis: sourceOutput.satoshis ?? 0,
+      lockingScript: sourceOutput.lockingScript,
+      transactionVersion: tx.version,
+      otherInputs: [],
+      allInputs: tx.inputs,
+      outputs: tx.outputs,
+      inputIndex,
+      unlockingScript: input.unlockingScript,
+      inputSequence: input.sequence ?? 0xffffffff,
+      lockTime: tx.lockTime
+    })
+  })
 }
 
 function markMined (tx: Transaction, blockHeight = 800000): void {

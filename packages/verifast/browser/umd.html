@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8"><title>VeriFast UMD integration</title></head>
+  <body>
+    <pre id="result">running</pre>
+    <script src="/src/wasm/bdk-core.umd.js"></script>
+    <script src="/dist/umd/verifast.js"></script>
+    <script>
+      const hex = '010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000'
+      const bytes = new Uint8Array(hex.length / 2)
+      for (let index = 0; index < bytes.length; index++) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
+      new bsvVerifast.BdkVerifier().verifyScriptsFromEF({
+        extendedTransaction: bytes,
+        utxoHeights: [574441],
+        blockHeight: 620940,
+        consensus: true
+      }).then(result => {
+        window.__VERIFAST_UMD_RESULT__ = result
+        document.querySelector('#result').textContent = String(result)
+      }).catch(error => {
+        window.__VERIFAST_UMD_ERROR__ = error.stack || error.message
+      })
+    </script>
+  </body>
+</html>

@@ -4,6 +4,11 @@ const source = new URL('../src/wasm/', import.meta.url)
 const destination = new URL('../dist/src/wasm/', import.meta.url)
 
 await mkdir(destination, { recursive: true })
-for (const file of ['bdk-core.mjs', 'bdk-core.wasm']) {
+for (const file of [
+  'bdk-core.mjs',
+  'bdk-core.wasm',
+  'bdk-core.browser.mjs',
+  'bdk-core.umd.js'
+]) {
   await cp(new URL(file, source), new URL(file, destination))
 }

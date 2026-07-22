@@ -1729,6 +1729,7 @@ export default class Transaction {
     toUint8Array(): Uint8Array 
     toEF(): number[] 
     toEFUint8Array(): Uint8Array 
+    toEFBinary(): Uint8Array
     toHexEF(): string 
     toHex(): string 
     toHexBEEF(): string 
@@ -2260,6 +2261,20 @@ toEFUint8Array(): Uint8Array
 Returns
 
 - The BRC-30 EF representation of the transaction.
+
+#### Method toEFBinary
+
+Converts the transaction to a memoized BRC-30 EF byte array. The returned view
+is reused until transaction or referenced source-output serialization state
+changes and must be treated as immutable; call `.slice()` for a mutable copy.
+
+```ts
+toEFBinary(): Uint8Array
+```
+
+Returns
+
+The cached BRC-30 EF representation.
 
 #### Method toHex
 

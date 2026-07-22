@@ -1,4 +1,4 @@
-import { BdkVerifier } from '../dist/mod.js'
+import { BdkVerifier } from '../mod.browser.js'
 import { buildCorpus } from '../bench/corpus.js'
 
 interface BrowserResult {

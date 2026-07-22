@@ -68,6 +68,7 @@ export default class Transaction {
   private cachedHash?: number[]
   private cachedIdHex?: string
   private rawBytesCache?: Uint8Array
+  private efBytesCache?: Uint8Array
   private hexCache?: string
   private activeSignatureHashCache?: SignatureHashCache
   private rawCacheState?: {
@@ -81,6 +82,10 @@ export default class Transaction {
       sequence: number | undefined
       unlockingScript: TransactionInput['unlockingScript']
       unlockingScriptBytes: Uint8Array | undefined
+      sourceOutput: TransactionOutput | undefined
+      sourceSatoshis: number | undefined
+      sourceLockingScript: TransactionOutput['lockingScript'] | undefined
+      sourceLockingScriptBytes: Uint8Array | undefined
     }>
     outputs: Array<{
       ref: TransactionOutput
@@ -447,6 +452,7 @@ export default class Transaction {
     this.cachedHash = undefined
     this.cachedIdHex = undefined
     this.rawBytesCache = undefined
+    this.efBytesCache = undefined
     this.hexCache = undefined
     this.rawCacheState = undefined
   }
@@ -459,15 +465,22 @@ export default class Transaction {
     this.rawCacheState = {
       version: this.version,
       lockTime: this.lockTime,
-      inputs: this.inputs.map(ref => ({
-        ref,
-        sourceTXID: ref.sourceTXID,
-        sourceTransactionId: this.sourceTransactionId(ref),
-        sourceOutputIndex: ref.sourceOutputIndex,
-        sequence: ref.sequence,
-        unlockingScript: ref.unlockingScript,
-        unlockingScriptBytes: ref.unlockingScript?.toUint8Array()
-      })),
+      inputs: this.inputs.map(ref => {
+        const sourceOutput = ref.sourceTransaction?.outputs[ref.sourceOutputIndex]
+        return {
+          ref,
+          sourceTXID: ref.sourceTXID,
+          sourceTransactionId: this.sourceTransactionId(ref),
+          sourceOutputIndex: ref.sourceOutputIndex,
+          sequence: ref.sequence,
+          unlockingScript: ref.unlockingScript,
+          unlockingScriptBytes: ref.unlockingScript?.toUint8Array(),
+          sourceOutput,
+          sourceSatoshis: sourceOutput?.satoshis,
+          sourceLockingScript: sourceOutput?.lockingScript,
+          sourceLockingScriptBytes: sourceOutput?.lockingScript.toUint8Array()
+        }
+      }),
       outputs: this.outputs.map(ref => ({
         ref,
         satoshis: ref.satoshis,
@@ -480,7 +493,6 @@ export default class Transaction {
   private serializationCacheMatchesState (): boolean {
     const cached = this.rawCacheState
     if (
-      this.rawBytesCache == null ||
       cached == null ||
       cached.version !== this.version ||
       cached.lockTime !== this.lockTime ||
@@ -491,6 +503,7 @@ export default class Transaction {
     for (let i = 0; i < this.inputs.length; i++) {
       const input = this.inputs[i]
       const state = cached.inputs[i]
+      const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
       if (
         state.ref !== input ||
         state.sourceTXID !== input.sourceTXID ||
@@ -498,7 +511,11 @@ export default class Transaction {
         state.sourceOutputIndex !== input.sourceOutputIndex ||
         state.sequence !== input.sequence ||
         state.unlockingScript !== input.unlockingScript ||
-        state.unlockingScriptBytes !== input.unlockingScript?.toUint8Array()
+        state.unlockingScriptBytes !== input.unlockingScript?.toUint8Array() ||
+        state.sourceOutput !== sourceOutput ||
+        state.sourceSatoshis !== sourceOutput?.satoshis ||
+        state.sourceLockingScript !== sourceOutput?.lockingScript ||
+        state.sourceLockingScriptBytes !== sourceOutput?.lockingScript.toUint8Array()
       ) return false
     }
 
@@ -818,7 +835,7 @@ export default class Transaction {
   }
 
   private getSerializedBytes (): Uint8Array {
-    if (!this.serializationCacheMatchesState()) {
+    if (this.rawBytesCache == null || !this.serializationCacheMatchesState()) {
       this.invalidateSerializationCaches()
       this.rawBytesCache = this.buildSerializedBytes()
       this.captureSerializationState()
@@ -858,7 +875,7 @@ export default class Transaction {
       if (i.unlockingScript == null) {
         throw new Error('unlockingScript is undefined')
       }
-      const scriptBin = i.unlockingScript.toBinary()
+      const scriptBin = i.unlockingScript.toUint8Array()
       writer.writeVarIntNum(scriptBin.length)
       writer.write(scriptBin)
       writer.writeUInt32LE(i.sequence ?? 0xffffffff) // default to max sequence
@@ -868,14 +885,14 @@ export default class Transaction {
       const lockingScriptBin =
         i.sourceTransaction.outputs[
           i.sourceOutputIndex
-        ].lockingScript.toBinary()
+        ].lockingScript.toUint8Array()
       writer.writeVarIntNum(lockingScriptBin.length)
       writer.write(lockingScriptBin)
     }
     writer.writeVarIntNum(this.outputs.length)
     for (const o of this.outputs) {
       writer.writeUInt64LE(o.satoshis ?? 0)
-      const scriptBin = o.lockingScript.toBinary()
+      const scriptBin = o.lockingScript.toUint8Array()
       writer.writeVarIntNum(scriptBin.length)
       writer.write(scriptBin)
     }
@@ -888,20 +905,43 @@ export default class Transaction {
    * @returns {number[]} - The BRC-30 EF representation of the transaction.
    */
   toEF (): number[] {
-    const writer = new Writer()
-    this.writeEF(writer)
-    return writer.toArray()
+    return Array.from(this.getEFBytes())
   }
 
   /**
    * Converts the transaction to a BRC-30 EF format.
    *
+   * @remarks This is an alias for {@link toEFBinary}. The returned view is
+   * memoized for verifier hot paths and must be treated as immutable.
+   *
    * @returns {Uint8Array} - The BRC-30 EF representation of the transaction.
    */
   toEFUint8Array (): Uint8Array {
-    const writer = new WriterUint8Array()
-    this.writeEF(writer)
-    return writer.toUint8Array()
+    return this.toEFBinary()
+  }
+
+  private getEFBytes (): Uint8Array {
+    if (this.efBytesCache == null || !this.serializationCacheMatchesState()) {
+      this.invalidateSerializationCaches()
+      const writer = new WriterUint8Array()
+      this.writeEF(writer)
+      this.efBytesCache = writer.toUint8Array()
+      this.captureSerializationState()
+    }
+    return this.efBytesCache
+  }
+
+  /**
+   * Converts the transaction to a memoized BRC-30 EF byte array.
+   *
+   * @remarks The returned view is reused until transaction or referenced
+   * source-output serialization state changes. Treat it as immutable; call
+   * `.slice()` when an independently mutable copy is required.
+   *
+   * @returns {Uint8Array} The cached BRC-30 EF representation.
+   */
+  toEFBinary (): Uint8Array {
+    return this.getEFBytes()
   }
 
   /**
@@ -910,7 +950,7 @@ export default class Transaction {
    * @returns {string} - The hexadecimal string representation of the transaction EF.
    */
   toHexEF (): string {
-    return toHex(this.toEFUint8Array())
+    return toHex(this.toEFBinary())
   }
 
   /**
