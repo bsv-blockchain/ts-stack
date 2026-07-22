@@ -3,16 +3,16 @@ import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
 let pkg: { name: string; version: string } = {
-	name: '@bsv/messagebox-server',
-	version: '0.0.0'
+  name: '@bsv/messagebox-server',
+  version: '0.0.0'
 }
 for (const candidate of ['../../package.json', '../../../package.json']) {
-	try {
-		pkg = require(candidate) as { name: string; version: string }
-		break
-	} catch {
-		// try next layout
-	}
+  try {
+    pkg = require(candidate) as { name: string; version: string }
+    break
+  } catch {
+    // try next layout
+  }
 }
 
 // Structured pino logger. @opentelemetry/instrumentation-pino (loaded by
