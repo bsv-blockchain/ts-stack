@@ -47,9 +47,10 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
         return ChaintracksStorageNoDb.mainData
       case 'test':
       case 'ttn':
+      case 'tstn':
         return ChaintracksStorageNoDb.testData
       default:
-        throw new WERR_INVALID_PARAMETER('chain', `'main', 'test', or 'ttn'. '${this.chain}' is unsupported.`)
+        throw new WERR_INVALID_PARAMETER('chain', `'main', 'test', 'ttn', or 'tstn'. '${this.chain}' is unsupported.`)
     }
   }
 

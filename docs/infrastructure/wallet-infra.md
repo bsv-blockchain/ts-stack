@@ -55,13 +55,20 @@ None; HTTP JSON-RPC only.
 | NODE_ENV | No | `development` or `production` |
 | HTTP_PORT | No | Express server port (default: 8081, use 8081 if nginx enabled on 8080) |
 | ENABLE_NGINX | No | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false) |
-| BSV_NETWORK | No | Target blockchain network (`main`, `test`, `ttn`, or `mock`) |
+| BSV_NETWORK | No | Target blockchain network (`main`, `test`, `ttn`, `tstn`, or `mock`) |
 | SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
 | KNEX_DB_CONNECTION | Yes | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`) |
 | COMMISSION_FEE | No | Optional commission fee in satoshis per request (default: 0) |
 | COMMISSION_PUBLIC_KEY | No | Public key to receive commission payments (if COMMISSION_FEE > 0) |
 | FEE_MODEL | No | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`) |
 | TAAL_API_KEY | No | API key used by the default Arc/Taal service configuration (optional) |
+| TSTN_ARCADE_URL | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
+| TSTN_CHAINTRACKS_URL | No | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted. |
+
+> `tstn` (Teranode Scaling Test Net) runs only Arcade and ChainTracks — it has no
+> WhatsOnChain / block-explorer service. Its endpoints are private and are read from the
+> environment at runtime rather than hardcoded, so `TSTN_ARCADE_URL` (and optionally
+> `TSTN_CHAINTRACKS_URL`) must be set whenever `BSV_NETWORK=tstn`.
 
 The reference `infra/wallet-infra` entrypoint currently wires only the default
 wallet-toolbox `Services.createDefaultOptions(chain)` path, plus `TAAL_API_KEY`

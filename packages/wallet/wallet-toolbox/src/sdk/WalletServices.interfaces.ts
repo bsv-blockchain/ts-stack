@@ -335,6 +335,7 @@ export interface WalletServicesOptions {
    * Default is undefined (Arcade disabled; ARC providers used as before).
    * mainnet:   `https://arcade-v2-us-1.bsvblockchain.tech`
    * teratest:  `https://arcade-v2-ttn-us-1.bsvblockchain.tech`
+   * tstn:      supplied at runtime via the `TSTN_ARCADE_URL` environment variable (not public)
    */
   arcadeUrl?: string
   /**
