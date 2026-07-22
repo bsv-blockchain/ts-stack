@@ -1,6 +1,6 @@
 import { Logger } from './logger.js'
 import { PubKeyHex } from '@bsv/sdk'
-import { knex } from '../runtimeDeps.js'
+import { runtimeDeps } from '../runtimeDeps.js'
 
 /**
  * Fee calculation result structure
@@ -19,7 +19,7 @@ export interface FeeCalculationResult {
  */
 export async function getServerDeliveryFee(messageBox: string): Promise<number> {
   try {
-    const serverFee = await knex('server_fees')
+    const serverFee = await runtimeDeps.knex('server_fees')
       .where({ message_box: messageBox })
       .select('delivery_fee')
       .first()
@@ -45,7 +45,7 @@ export async function getRecipientFee(
 
     // First try sender-specific permission
     if (sender != null) {
-      const senderSpecific = await knex('message_permissions')
+      const senderSpecific = await runtimeDeps.knex('message_permissions')
         .where({
           recipient: String(recipient),
           sender: String(sender),
@@ -60,7 +60,7 @@ export async function getRecipientFee(
     }
 
     // Fallback to box-wide default
-    const boxWideDefault = await knex('message_permissions')
+    const boxWideDefault = await runtimeDeps.knex('message_permissions')
       .where({
         recipient: String(recipient),
         sender: null, // Box-wide default
@@ -75,7 +75,7 @@ export async function getRecipientFee(
 
     // Auto-create box-wide default if none exists
     const defaultFee = getSmartDefaultFee(String(messageBox))
-    await knex('message_permissions').insert({
+    await runtimeDeps.knex('message_permissions').insert({
       recipient: String(recipient),
       sender: null,
       message_box: String(messageBox),
@@ -118,7 +118,7 @@ export async function setMessagePermission(
     const now = new Date()
 
     // Use upsert (insert or update)
-    await knex('message_permissions')
+    await runtimeDeps.knex('message_permissions')
       .insert({
         recipient,
         sender,

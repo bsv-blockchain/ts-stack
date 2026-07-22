@@ -2,7 +2,7 @@ import { Response } from 'express'
 import { PublicKey } from '@bsv/sdk'
 import { Logger } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
-import { knex } from '../../runtimeDeps.js'
+import { runtimeDeps } from '../../runtimeDeps.js'
 
 export interface GetPermissionRequest extends AuthRequest {
   query: {
@@ -100,7 +100,7 @@ export default {
         whereClause.sender = null
       }
 
-      const permission = await knex('message_permissions')
+      const permission = await runtimeDeps.knex('message_permissions')
         .where(whereClause)
         .select('recipient_fee', 'created_at', 'updated_at')
         .first()

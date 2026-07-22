@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
-import { knex } from '../runtimeDeps.js'
+import { runtimeDeps } from '../runtimeDeps.js'
 
 export interface RegisteredDevice {
   id: number
@@ -34,7 +34,7 @@ export default {
 
       try {
         // Query devices for the authenticated user
-        const devices = await knex('device_registrations')
+        const devices = await runtimeDeps.knex('device_registrations')
           .select([
             'id',
             'device_id as deviceId',

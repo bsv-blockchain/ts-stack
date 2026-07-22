@@ -3,7 +3,6 @@ import { PublicKey } from '@bsv/sdk'
 import { Logger } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { setMessagePermission } from '../../utils/messagePermissions.js'
-import { knex } from '../../runtimeDeps.js'
 
 export interface SetPermissionRequestType extends AuthRequest {
   body: {

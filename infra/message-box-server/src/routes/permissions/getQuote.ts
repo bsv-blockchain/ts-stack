@@ -3,7 +3,6 @@ import { PublicKey } from '@bsv/sdk'
 import { Logger, log } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { getRecipientFee, getServerDeliveryFee } from '../../utils/messagePermissions.js'
-import { knex } from '../../runtimeDeps.js'
 
 export interface GetQuoteRequest extends AuthRequest {
   query: {

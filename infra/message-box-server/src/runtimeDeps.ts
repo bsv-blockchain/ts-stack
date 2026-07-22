@@ -5,20 +5,25 @@
 import type { Knex } from 'knex'
 import type { WalletInterface } from '@bsv/sdk'
 
-export let knex: Knex
-export let wallet: WalletInterface | undefined
+/** Bound before serving; routes read knex/wallet from here. */
+export const runtimeDeps: {
+  knex: Knex
+  wallet?: WalletInterface
+} = {
+  knex: null as unknown as Knex
+}
 
 export function bindMessageBoxRuntime (deps: {
   knex: Knex
   wallet?: WalletInterface
 }): void {
-  knex = deps.knex
-  wallet = deps.wallet
+  runtimeDeps.knex = deps.knex
+  runtimeDeps.wallet = deps.wallet
 }
 
 export async function getWallet (): Promise<WalletInterface> {
-  if (wallet == null) {
+  if (runtimeDeps.wallet == null) {
     throw new Error('Wallet is not initialized')
   }
-  return wallet
+  return runtimeDeps.wallet
 }

@@ -12,7 +12,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { log } from '../utils/logger.js'
-import { knex } from '../runtimeDeps.js'
+import { runtimeDeps } from '../runtimeDeps.js'
 
 /**
  * @interface ListMessagesRequest
@@ -85,7 +85,7 @@ interface ListMessagesRequest extends AuthRequest {
 export default {
   type: 'post',
   path: '/listMessages',
-  get knex () { return knex },
+  get knex () { return runtimeDeps.knex },
   summary: 'Use this route to list messages from your messageBox.',
   parameters: {
     messageBox: 'The name of the messageBox you would like to list messages from.'
@@ -146,7 +146,7 @@ export default {
       }
 
       // Find the messageBox ID for this user
-      const [messageBoxRecord] = await knex('messageBox')
+      const [messageBoxRecord] = await runtimeDeps.knex('messageBox')
         .where({
           identityKey: req.auth?.identityKey,
           type: messageBox
@@ -162,7 +162,7 @@ export default {
       }
 
       // Retrieve all messages associated with the messageBox
-      const messages = await knex('messages')
+      const messages = await runtimeDeps.knex('messages')
         .where({
           recipient: req.auth?.identityKey,
           messageBoxId: messageBoxRecord.messageBoxId

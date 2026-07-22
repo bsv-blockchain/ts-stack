@@ -11,7 +11,7 @@
 
 import { Request, Response } from 'express'
 import { Logger } from '../utils/logger.js'
-import { knex } from '../runtimeDeps.js'
+import { runtimeDeps } from '../runtimeDeps.js'
 
 /**
  * @interface AcknowledgeRequest
@@ -70,7 +70,7 @@ export interface AcknowledgeRequest extends Request {
 export default {
   type: 'post',
   path: '/acknowledgeMessage',
-  get knex () { return knex },
+  get knex () { return runtimeDeps.knex },
   summary: 'Use this route to acknowledge a message has been received',
   parameters: {
     messageIds: ['3301']
@@ -121,7 +121,7 @@ export default {
       }
 
       // Delete acknowledged messages for this recipient from the database
-      const deleted = await knex('messages')
+      const deleted = await runtimeDeps.knex('messages')
         .where({ recipient: req.auth.identityKey })
         .whereIn('messageId', Array.isArray(messageIds) ? messageIds : [messageIds])
         .del()

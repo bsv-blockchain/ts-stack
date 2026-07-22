@@ -30,7 +30,7 @@ import { Logger, log } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { sendFCMNotification } from '../utils/sendFCMNotification.js'
 import { getRecipientFee, getServerDeliveryFee, shouldUseFCMDelivery } from '../utils/messagePermissions.js'
-import { knex, getWallet } from '../runtimeDeps.js'
+import { runtimeDeps, getWallet } from '../runtimeDeps.js'
 
 const { SERVER_PRIVATE_KEY } = process.env
 
@@ -160,7 +160,7 @@ export function calculateMessagePrice(message: string, priority: boolean = false
 export default {
   type: 'post',
   path: '/sendMessage',
-  get knex () { return knex },
+  get knex () { return runtimeDeps.knex },
   summary: "Use this route to send a message to a recipient's message box.",
   parameters: {
     message: {
@@ -279,9 +279,9 @@ export default {
       // Ensure messageBox exists for each recipient
       const boxType = message.messageBox.trim()
       for (const r of recipientsTrimmed) {
-        const existing = await knex('messageBox').where({ identityKey: r, type: boxType }).first()
+        const existing = await runtimeDeps.knex('messageBox').where({ identityKey: r, type: boxType }).first()
         if (!existing) {
-          await knex('messageBox').insert({
+          await runtimeDeps.knex('messageBox').insert({
             identityKey: r, type: boxType, created_at: new Date(), updated_at: new Date()
           })
         }
@@ -455,7 +455,7 @@ export default {
       // ---------- Store messages (one per recipient) ----------
       const results: Array<{ recipient: string; messageId: string }> = []
       for (const { recipient: r } of feeRows) {
-        const mb = await knex('messageBox')
+        const mb = await runtimeDeps.knex('messageBox')
           .where({ identityKey: r, type: boxType })
           .select('messageBoxId')
           .first()
@@ -480,7 +480,7 @@ export default {
         }
 
         try {
-          await knex('messages')
+          await runtimeDeps.knex('messages')
             .insert({
               messageId: perRecipientMessageId,
               messageBoxId: mb?.messageBoxId ?? null,
