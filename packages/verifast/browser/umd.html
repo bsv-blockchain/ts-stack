@@ -10,7 +10,11 @@
       const bytes = new Uint8Array(hex.length / 2)
       for (let index = 0; index < bytes.length; index++) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
       try {
-        const result = await new window.bsvVerifast.BdkVerifier().verifyScriptsFromEF({
+        const verifier = new window.bsvVerifast.BdkVerifier()
+        if (verifier.isReady()) throw new Error('VeriFast must remain lazy before preload')
+        await verifier.preload()
+        if (!verifier.isReady()) throw new Error('VeriFast did not report ready after preload')
+        const result = await verifier.verifyScriptsFromEF({
           extendedTransaction: bytes,
           utxoHeights: [574441],
           blockHeight: 620940,

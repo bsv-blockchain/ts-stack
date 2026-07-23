@@ -1,5 +1,13 @@
 import type Transaction from './Transaction.js'
 
+/** Parameters shared by script-verifier routing and execution. */
+export interface BdkVerifyScriptsParams {
+  tx: Transaction
+  blockHeight: number
+  consensus: boolean
+  verifyFlags?: string | string[]
+}
+
 /**
  * A pluggable backend that verifies ALL input scripts of a single transaction.
  *
@@ -9,14 +17,16 @@ import type Transaction from './Transaction.js'
  */
 export default interface BdkVerifierInterface {
   /**
+   * Optionally decide whether this backend should handle the transaction now.
+   * Returning false preserves the SDK's synchronous JavaScript interpreter path.
+   * Implementations can use this to avoid waiting for a cold optional backend.
+   */
+  shouldVerifyScripts?: (params: BdkVerifyScriptsParams) => boolean
+
+  /**
    * Verify all input scripts of `params.tx`.
    * @returns Promise resolving true if every input script is valid, false otherwise.
    * @throws If the backend itself fails (load error, marshalling error, unavailable).
    */
-  verifyScripts: (params: {
-    tx: Transaction
-    blockHeight: number
-    consensus: boolean
-    verifyFlags?: string | string[]
-  }) => Promise<boolean>
+  verifyScripts: (params: BdkVerifyScriptsParams) => Promise<boolean>
 }

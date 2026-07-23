@@ -6,7 +6,11 @@ supports Node ESM, CommonJS, browser/worker ESM, and classic-script/UMD clients.
 ## Transaction verification
 
 The validated WASM module is bundled and loaded lazily. Keep one verifier for a
-stream or batch so module initialization is paid once.
+stream or batch so module initialization is paid once. Transaction integration
+defaults to adaptive routing: a cold module never delays verification, scripts
+strictly larger than 100 bytes and scripts containing `CHECKSIG` or
+`CHECKMULTISIG` variants use WASM once it is ready, and smaller non-cryptographic
+scripts retain the SDK's JavaScript interpreter.
 
 ```ts
 import { Transaction } from '@bsv/sdk'
@@ -15,8 +19,17 @@ import { BdkVerifier } from '@bsv/verifast'
 const verifier = new BdkVerifier()
 const tx = Transaction.fromEF(extendedFormatBytes)
 
+// Start this during application or wallet initialization when first-call WASM
+// performance matters. Auto routing otherwise warms in the background.
+await verifier.preload()
 const valid = await tx.verify('scripts only', undefined, undefined, verifier)
 ```
+
+`isReady()` is synchronous, so latency-sensitive code can inspect readiness
+without awaiting initialization. Adaptive selection happens before backend
+execution; after WASM is selected, errors remain strict and never retry through
+the JavaScript interpreter. Use `{ mode: 'always' }` when every call must await
+and use WASM regardless of script shape or cold-start state.
 
 When EF bytes are already available, bypass transaction serialization entirely:
 
@@ -45,6 +58,7 @@ const valid = await spend.validateWith(verifier)
 const sameVerdict = await verifier.verifySpend(spend)
 ```
 
+`validateWith` applies the same adaptive policy as transaction verification.
 The Spend path serializes an ordinary transaction and supplies the active
 source output separately, so it does not construct or parse EF ancestry.
 Explicit `Spend.verifyFlags` are preserved; otherwise BDK calculates flags from
@@ -104,10 +118,11 @@ const verifier = new BdkVerifier(async () => await createMyBdkModule())
 
 ## Verdicts and diagnostics
 
-Boolean methods return `true` for BDK domain `0` and `false` for script or DoS
+Direct boolean methods return `true` for BDK domain `0` and `false` for script or DoS
 failures (domains `1` and `2`). BDK exception responses, malformed results, and
 unknown ABI domains throw `BdkVerificationError`; loading and marshalling errors
-also propagate. The adapter never silently falls back to the TypeScript
+also propagate. Automatic SDK/Spend routing may decline the backend before it
+starts; the selected backend itself never silently falls back to the TypeScript
 interpreter.
 
 Detailed methods return the underlying `{ domain, code }` pair:

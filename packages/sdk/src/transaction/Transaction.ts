@@ -1038,6 +1038,7 @@ export default class Transaction {
    * @param chainTracker - An instance of ChainTracker, a Bitcoin block header tracker. If the value is set to 'scripts only', headers will not be verified. If not provided then the default chain tracker will be used.
    * @param feeModel - An instance of FeeModel, a fee model to use for fee calculation. If not provided then the default fee model will be used.
    * @param memoryLimit - The maximum memory in bytes usage allowed for script evaluation. If not provided then the default memory limit will be used.
+   * @param verifier - An optional asynchronous script backend. Adaptive backends may decline before execution to preserve the JavaScript path.
    *
    * @returns Whether the transaction is valid according to the rules of SPV.
    *
@@ -1103,6 +1104,14 @@ export default class Transaction {
         }
       }
 
+      const verifierParams = {
+        tx,
+        blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
+        consensus: true
+      } as const
+      const useVerifier = verifier !== undefined &&
+        (verifier.shouldVerifyScripts?.(verifierParams) ?? true)
+
       // Verify each input transaction and evaluate the spend events.
       // Also, keep a total of the input amounts for later.
       let inputTotal = 0
@@ -1139,7 +1148,7 @@ export default class Transaction {
 
         input.sourceTXID ??= sourceTxid
 
-        if (verifier === undefined) {
+        if (!useVerifier) {
           const spend = new Spend({
             sourceTXID: input.sourceTXID,
             sourceOutputIndex: input.sourceOutputIndex,
@@ -1164,17 +1173,13 @@ export default class Transaction {
         }
       }
 
-      // When a pluggable verifier is configured, hand the whole transaction to it
-      // once (BDK operates at whole-tx granularity). Strict: its verdict is
-      // authoritative and any thrown error propagates (no JS fallback).
-      if (verifier !== undefined) {
+      // When the selected pluggable verifier accepts the transaction, hand the
+      // whole transaction to it once. Its verdict is authoritative and any
+      // thrown error propagates (no post-selection JavaScript fallback).
+      if (useVerifier) {
         // A tx reaching here has no merkle proof (mined txs short-circuit above),
         // so its source UTXO mined-height is unobtainable -> post-Chronicle fallback.
-        const scriptsValid = await verifier.verifyScripts({
-          tx,
-          blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
-          consensus: true
-        })
+        const scriptsValid = await verifier.verifyScripts(verifierParams)
         if (!scriptsValid) {
           return false
         }

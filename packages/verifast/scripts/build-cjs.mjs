@@ -15,7 +15,6 @@ const BDK_FLAG_BITS = Object.freeze({
   SIGHASH_FORKID: 65536, GENESIS: 262144, UTXO_AFTER_GENESIS: 524288,
   CHRONICLE: 1048576, UTXO_AFTER_CHRONICLE: 2097152
 })
-
 class BdkVerificationError extends Error {
   constructor (result) {
     super(\`BDK verification failed in domain \${result.domain} with code \${result.code}\`)
@@ -54,11 +53,54 @@ function normalizeError (error) {
 class BdkVerifier {
   constructor (...args) {
     this.args = args
+    const options = typeof args[0] === 'function' ? (args[1] || {}) : (args[0] || {})
+    this.mode = options.mode || 'auto'
+    if (this.mode !== 'auto' && this.mode !== 'always') {
+      throw new RangeError("mode must be either 'auto' or 'always'")
+    }
+    const scriptByteThreshold = options.scriptByteThreshold ?? 100
+    if (!Number.isSafeInteger(scriptByteThreshold) || scriptByteThreshold < 0) {
+      throw new RangeError('scriptByteThreshold must be a non-negative safe integer')
+    }
   }
 
   getInstance () {
-    this.instance ||= load().then(({ BdkVerifier }) => new BdkVerifier(...this.args))
+    this.instance ||= load().then(({ BdkVerifier }) => {
+      this.resolvedInstance = new BdkVerifier(...this.args)
+      return this.resolvedInstance
+    })
     return this.instance
+  }
+
+  preload () {
+    return this.getInstance().then(instance => instance.preload())
+  }
+
+  isReady () {
+    return this.resolvedInstance?.isReady() || false
+  }
+
+  schedulePreparation (prepare) {
+    if (this.resolvedInstance !== undefined || this.instance !== undefined || this.preparationScheduled) return
+    this.preparationScheduled = true
+    setTimeout(() => {
+      this.preparationScheduled = false
+      void this.getInstance().then(prepare).catch(() => {})
+    }, 0)
+  }
+
+  shouldVerifyScripts (params) {
+    if (this.mode === 'always') return true
+    if (this.resolvedInstance !== undefined) return this.resolvedInstance.shouldVerifyScripts(params)
+    this.schedulePreparation(instance => { instance.shouldVerifyScripts(params) })
+    return false
+  }
+
+  shouldVerifySpend (spend) {
+    if (this.mode === 'always') return true
+    if (this.resolvedInstance !== undefined) return this.resolvedInstance.shouldVerifySpend(spend)
+    this.schedulePreparation(instance => { instance.shouldVerifySpend(spend) })
+    return false
   }
 }
 

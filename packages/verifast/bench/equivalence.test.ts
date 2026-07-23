@@ -3,7 +3,7 @@ import { buildCorpus, spendsForTransaction } from './corpus.js'
 
 describe('JS Spend vs real BDK WASM equivalence', () => {
   it('agrees on every deterministic positive and negative vector', async () => {
-    const verifier = new BdkVerifier()
+    const verifier = new BdkVerifier({ mode: 'always' })
     const corpus = await buildCorpus()
 
     for (const { name, tx, expected } of corpus) {
@@ -24,7 +24,7 @@ describe('JS Spend vs real BDK WASM equivalence', () => {
   })
 
   it('agrees with every individual SDK Spend verdict in the corpus', async () => {
-    const verifier = new BdkVerifier()
+    const verifier = new BdkVerifier({ mode: 'always' })
     const corpus = await buildCorpus()
 
     for (const { name, tx } of corpus) {

@@ -1,7 +1,9 @@
-import { Transaction, Script, P2PKH, PrivateKey, MerklePath, Spend } from '@bsv/sdk'
+import { Transaction, Script, P2PKH, PrivateKey, MerklePath, Spend, OP } from '@bsv/sdk'
 import BdkVerifier, {
   BdkErrorDomain,
   BdkVerificationError,
+  DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD,
+  isVeriFastCandidateScript,
   type BdkVerificationResult,
   type BdkWasmModule
 } from '../BdkVerifier.js'
@@ -65,7 +67,121 @@ async function buildTx (inputCount = 1): Promise<Transaction> {
   return tx
 }
 
+function spendForInput (tx: Transaction, inputIndex = 0): Spend {
+  const input = tx.inputs[inputIndex]
+  const source = input.sourceTransaction
+  if (source === undefined || input.unlockingScript === undefined) throw new Error('missing fixture source data')
+  const sourceOutput = source.outputs[input.sourceOutputIndex]
+  return new Spend({
+    sourceTXID: input.sourceTXID ?? source.id('hex'),
+    sourceOutputIndex: input.sourceOutputIndex,
+    sourceSatoshis: sourceOutput.satoshis ?? 0,
+    lockingScript: sourceOutput.lockingScript,
+    transactionVersion: tx.version,
+    otherInputs: [],
+    allInputs: tx.inputs,
+    outputs: tx.outputs,
+    inputIndex,
+    unlockingScript: input.unlockingScript,
+    inputSequence: input.sequence ?? 0xffffffff,
+    lockTime: tx.lockTime
+  })
+}
+
 describe('BdkVerifier', () => {
+  it('selects scripts over 100 bytes and signature opcodes without scanning pushed data', () => {
+    const script = (bytes: Uint8Array): Script => Script.fromBinaryView(bytes)
+
+    expect(DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD).toBe(100)
+    expect(isVeriFastCandidateScript(script(new Uint8Array(100).fill(OP.OP_TRUE)))).toBe(false)
+    expect(isVeriFastCandidateScript(script(new Uint8Array(101).fill(OP.OP_TRUE)))).toBe(true)
+    for (const opcode of [
+      OP.OP_CHECKSIG,
+      OP.OP_CHECKSIGVERIFY,
+      OP.OP_CHECKMULTISIG,
+      OP.OP_CHECKMULTISIGVERIFY
+    ]) {
+      expect(isVeriFastCandidateScript(script(Uint8Array.of(opcode)))).toBe(true)
+    }
+    expect(isVeriFastCandidateScript(script(Uint8Array.of(1, OP.OP_CHECKSIG)))).toBe(false)
+  })
+
+  it('loads once through preload and reports synchronous readiness', async () => {
+    let factoryCalls = 0
+    const verifier = new BdkVerifier(async () => {
+      factoryCalls++
+      return makeMockModule({ domain: 0, code: 0 }, [])
+    })
+
+    expect(verifier.isReady()).toBe(false)
+    await Promise.all([verifier.preload(), verifier.preload()])
+    expect(verifier.isReady()).toBe(true)
+    expect(factoryCalls).toBe(1)
+  })
+
+  it('keeps a cold eligible transaction on JS, then selects WASM when ready', async () => {
+    const tx = await buildTx()
+    let resolveModule: (module: BdkWasmModule) => void = () => {}
+    const pendingModule = new Promise<BdkWasmModule>(resolve => { resolveModule = resolve })
+    let wasmCalls = 0
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifyScriptArray = () => {
+      wasmCalls++
+      return { domain: 0, code: 0 }
+    }
+    let factoryCalls = 0
+    const verifier = new BdkVerifier(async () => {
+      factoryCalls++
+      return await pendingModule
+    })
+
+    await expect(tx.verify('scripts only', undefined, undefined, verifier)).resolves.toBe(true)
+    expect(verifier.isReady()).toBe(false)
+    expect(factoryCalls).toBe(0)
+    expect(wasmCalls).toBe(0)
+
+    resolveModule(module)
+    await verifier.preload()
+    await expect(tx.verify('scripts only', undefined, undefined, verifier)).resolves.toBe(true)
+    expect(verifier.isReady()).toBe(true)
+    expect(wasmCalls).toBe(1)
+  })
+
+  it('allows strict always mode to select the backend before it is warm', async () => {
+    const verifier = new BdkVerifier(
+      async () => makeMockModule({ domain: 0, code: 0 }, []),
+      { mode: 'always' }
+    )
+    expect(verifier.shouldVerifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })).toBe(true)
+    expect(verifier.isReady()).toBe(false)
+  })
+
+  it('rejects invalid adaptive routing options', () => {
+    expect(() => new BdkVerifier({ scriptByteThreshold: -1 })).toThrow(RangeError)
+    expect(() => new BdkVerifier({ scriptByteThreshold: 1.5 })).toThrow(RangeError)
+  })
+
+  it('applies the same cold-fallback and warm-selection policy to Spend.validateWith', async () => {
+    const spend = spendForInput(await buildTx())
+    let resolveModule: (module: BdkWasmModule) => void = () => {}
+    const pendingModule = new Promise<BdkWasmModule>(resolve => { resolveModule = resolve })
+    let wasmCalls = 0
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifySpendArray = () => {
+      wasmCalls++
+      return { domain: 0, code: 0 }
+    }
+    const verifier = new BdkVerifier(async () => await pendingModule)
+
+    await expect(spend.validateWith(verifier)).resolves.toBe(true)
+    expect(wasmCalls).toBe(0)
+
+    resolveModule(module)
+    await verifier.preload()
+    await expect(spend.validateWith(verifier)).resolves.toBe(true)
+    expect(wasmCalls).toBe(1)
+  })
+
   it('uses the bulk-copy ABI when the module provides it', async () => {
     const calls: MockCall[] = []
     const module = makeMockModule({ domain: 0, code: 0 }, [])
@@ -249,22 +365,9 @@ describe('BdkVerifier', () => {
     const tx = await buildTx()
     const input = tx.inputs[0]
     const source = input.sourceTransaction
-    if (source === undefined || input.unlockingScript === undefined) throw new Error('missing fixture source data')
+    if (source === undefined) throw new Error('missing fixture source data')
     const sourceOutput = source.outputs[input.sourceOutputIndex]
-    const spend = new Spend({
-      sourceTXID: input.sourceTXID ?? source.id('hex'),
-      sourceOutputIndex: input.sourceOutputIndex,
-      sourceSatoshis: sourceOutput.satoshis ?? 0,
-      lockingScript: sourceOutput.lockingScript,
-      transactionVersion: tx.version,
-      otherInputs: [],
-      allInputs: tx.inputs,
-      outputs: tx.outputs,
-      inputIndex: 0,
-      unlockingScript: input.unlockingScript,
-      inputSequence: input.sequence ?? 0xffffffff,
-      lockTime: tx.lockTime
-    })
+    const spend = spendForInput(tx)
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     let calls = 0
     module.VerifySpendArray = (transaction, inputIndex, lockingScript, sourceSatoshis, utxoHeight, blockHeight, consensus, hasFlags, flags, network) => {

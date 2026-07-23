@@ -6,5 +6,11 @@ import type Spend from './Spend.js'
  * synchronous {@link Spend.validate} interpreter remains unchanged.
  */
 export default interface SpendVerifierInterface {
+  /**
+   * Optionally decide whether this backend should handle the Spend now.
+   * Returning false preserves the existing synchronous JavaScript validator.
+   */
+  shouldVerifySpend?: (spend: Spend) => boolean
+
   verifySpend: (spend: Spend) => Promise<boolean>
 }

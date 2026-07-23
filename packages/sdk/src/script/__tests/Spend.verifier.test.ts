@@ -46,6 +46,25 @@ describe('Spend verifier integration', () => {
     await expect(spend.validateWith({ verifySpend: async () => { throw failure } })).rejects.toBe(failure)
   })
 
+  it('uses the JavaScript validator when an adaptive backend declines', async () => {
+    const { spend } = await buildSpend()
+    const verifySpend = jest.fn(async () => false)
+    const shouldVerifySpend = jest.fn(() => false)
+
+    await expect(spend.validateWith({ shouldVerifySpend, verifySpend })).resolves.toBe(true)
+    expect(shouldVerifySpend).toHaveBeenCalledWith(spend)
+    expect(verifySpend).not.toHaveBeenCalled()
+  })
+
+  it('keeps a selected adaptive backend authoritative', async () => {
+    const { spend } = await buildSpend()
+    const failure = new Error('selected backend failed')
+    await expect(spend.validateWith({
+      shouldVerifySpend: () => true,
+      verifySpend: async () => { throw failure }
+    })).rejects.toBe(failure)
+  })
+
   it('inserts the active input at its exact index when only otherInputs are supplied', () => {
     const sources = [0, 1, 2].map(index => {
       const source = new Transaction()

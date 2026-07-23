@@ -41,6 +41,18 @@ const cjs = require('@bsv/verifast')
 
 for (const [name, api] of [['ESM', esm], ['CommonJS', cjs]]) {
   const verifier = new api.BdkVerifier()
+  assert.equal(verifier.isReady(), false, `${name} lazy readiness`)
+  assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), false, `${name} cold P2PKH fallback`)
+  await verifier.preload()
+  assert.equal(verifier.isReady(), true, `${name} preloaded readiness`)
+  assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), true, `${name} P2PKH auto selection`)
+  const sourceLock = source.outputs[input.sourceOutputIndex].lockingScript
+  source.outputs[input.sourceOutputIndex].lockingScript = Script.fromBinaryView(new Uint8Array(100).fill(0x51))
+  assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), false, `${name} 100-byte boundary`)
+  source.outputs[input.sourceOutputIndex].lockingScript = Script.fromBinaryView(new Uint8Array(101).fill(0x51))
+  assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), true, `${name} 101-byte boundary`)
+  source.outputs[input.sourceOutputIndex].lockingScript = sourceLock
+  assert.equal(await tx.verify('scripts only', undefined, undefined, verifier), true, `${name} SDK auto route`)
   assert.equal(await verifier.verifyScripts({ tx, blockHeight: 800000, consensus: true }), true, name)
   assert.equal(await verifier.verifyScriptsFromEF({
     extendedTransaction: tx.toEFBinary(),

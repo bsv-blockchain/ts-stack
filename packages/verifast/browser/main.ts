@@ -55,6 +55,12 @@ async function timeVerification (tx: Awaited<ReturnType<typeof buildCorpus>>[num
 async function run (): Promise<void> {
   const verifier = new BdkVerifier()
   const corpus = await buildCorpus()
+  if (verifier.isReady()) throw new Error('VeriFast must remain lazy before preload')
+  await verifier.preload()
+  if (!verifier.isReady()) throw new Error('VeriFast did not report ready after preload')
+  if (!verifier.shouldVerifyScripts({ tx: corpus[0].tx, blockHeight: 943816, consensus: true })) {
+    throw new Error('Warm P2PKH did not select VeriFast')
+  }
   const vectors: BrowserResult['vectors'] = []
   for (const { name, tx, expected } of corpus) {
     const js = await verdict(async () => await tx.verify('scripts only'))

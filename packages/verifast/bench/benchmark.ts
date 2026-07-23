@@ -53,7 +53,7 @@ async function timeOperation (operation: () => Promise<unknown>): Promise<number
 
 async function main (): Promise<void> {
   const corpus = (await buildCorpus()).filter(({ expected }) => expected)
-  const verifier = new BdkVerifier()
+  const verifier = new BdkVerifier({ mode: 'always' })
 
   // Instantiate WASM and JIT both paths before collecting samples.
   await corpus[0].tx.verify('scripts only')

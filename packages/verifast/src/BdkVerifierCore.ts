@@ -1,4 +1,4 @@
-import type { Spend, Transaction } from '@bsv/sdk'
+import { OP, type Script, type Spend, type Transaction } from '@bsv/sdk'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
 import { mapVerifyFlags } from './flags.js'
 
@@ -34,6 +34,8 @@ export interface BdkVerifyParams {
   verifyFlags?: string | string[]
 }
 
+export type BdkVerifierMode = 'auto' | 'always'
+
 export interface BdkVerifyFromEFParams {
   extendedTransaction: Uint8Array
   utxoHeights: readonly number[] | Int32Array
@@ -56,11 +58,45 @@ export interface BdkSpendBatchItem extends BdkVerifySpendOptions {
 
 export interface BdkVerifierOptions {
   network?: BdkNetwork
+  /**
+   * `auto` uses WASM only when it is ready and a source locking script is
+   * signature-bearing or larger than `scriptByteThreshold`. `always` preserves
+   * strict eager backend selection for callers that require it.
+   */
+  mode?: BdkVerifierMode
+  /** Script byte length above which auto mode selects WASM. Defaults to 100. */
+  scriptByteThreshold?: number
   maxBatchItems?: number
   maxBatchBytes?: number
   defaultUtxoHeight?: number
   defaultBlockHeight?: number
   defaultConsensus?: boolean
+}
+
+/** Default auto-routing boundary; scripts strictly larger than this use WASM. */
+export const DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD = 100
+
+const SIGNATURE_OPS = new Set<number>([
+  OP.OP_CHECKSIG,
+  OP.OP_CHECKSIGVERIFY,
+  OP.OP_CHECKMULTISIG,
+  OP.OP_CHECKMULTISIGVERIFY
+])
+
+/**
+ * Returns true when a locking script belongs to a workload class with a proven
+ * WASM advantage: more than the byte threshold or an executed signature opcode.
+ * Pushed data is not scanned as opcodes, avoiding false positives.
+ */
+export function isVeriFastCandidateScript (
+  script: Script,
+  scriptByteThreshold: number = DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD
+): boolean {
+  if (!Number.isSafeInteger(scriptByteThreshold) || scriptByteThreshold < 0) {
+    throw new RangeError('scriptByteThreshold must be a non-negative safe integer')
+  }
+  if (script.toUint8Array().byteLength > scriptByteThreshold) return true
+  return script.chunks.some(chunk => SIGNATURE_OPS.has(chunk.op))
 }
 
 /** Raised when BDK reports an exception domain, malformed result, or unknown ABI domain. */
@@ -234,7 +270,10 @@ function verdict (result: BdkVerificationResult): boolean {
 export default class BdkVerifierCore implements BdkVerifierInterface {
   private module: BdkWasmModule | undefined
   private loading: Promise<BdkWasmModule> | undefined
+  private preloadScheduled = false
   private readonly network: number
+  private readonly mode: BdkVerifierMode
+  private readonly scriptByteThreshold: number
   private readonly maxBatchItems: number
   private readonly maxBatchBytes: number
   private readonly defaultUtxoHeight: number
@@ -246,11 +285,19 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
     options: BdkVerifierOptions = {}
   ) {
     this.network = NETWORK_IDS[options.network ?? 'main']
+    this.mode = options.mode ?? 'auto'
+    this.scriptByteThreshold = options.scriptByteThreshold ?? DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD
     this.maxBatchItems = options.maxBatchItems ?? 256
     this.maxBatchBytes = options.maxBatchBytes ?? 32 * 1024 * 1024
     this.defaultUtxoHeight = options.defaultUtxoHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
     this.defaultBlockHeight = options.defaultBlockHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
     this.defaultConsensus = options.defaultConsensus ?? true
+    if (this.mode !== 'auto' && this.mode !== 'always') {
+      throw new RangeError("mode must be either 'auto' or 'always'")
+    }
+    if (!Number.isSafeInteger(this.scriptByteThreshold) || this.scriptByteThreshold < 0) {
+      throw new RangeError('scriptByteThreshold must be a non-negative safe integer')
+    }
     if (!Number.isSafeInteger(this.maxBatchItems) || this.maxBatchItems < 1) {
       throw new RangeError('maxBatchItems must be a positive safe integer')
     }
@@ -266,6 +313,52 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
       return module
     })
     return await this.loading
+  }
+
+  /** Load and instantiate the optional backend before latency-sensitive work. */
+  async preload (): Promise<void> {
+    await this.getModule()
+  }
+
+  /** True only after the WASM module has finished loading successfully. */
+  isReady (): boolean {
+    return this.module !== undefined
+  }
+
+  private schedulePreload (): void {
+    if (this.module !== undefined || this.loading !== undefined || this.preloadScheduled) return
+    this.preloadScheduled = true
+    setTimeout(() => {
+      this.preloadScheduled = false
+      void this.preload().catch(() => {})
+    }, 0)
+  }
+
+  private prepareCandidate (): boolean {
+    if (this.mode === 'always') return true
+    if (this.isReady()) return true
+    // Auto mode never waits on cold WASM. A later eligible call can use the
+    // completed load, while this call keeps the exact JavaScript path.
+    this.schedulePreload()
+    return false
+  }
+
+  /** Selection hook consumed by Transaction.verify without coupling the SDK to this package. */
+  shouldVerifyScripts (params: BdkVerifyParams): boolean {
+    if (this.mode === 'always') return true
+    const candidate = params.tx.inputs.some(input => {
+      const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
+      return sourceOutput !== undefined &&
+        isVeriFastCandidateScript(sourceOutput.lockingScript, this.scriptByteThreshold)
+    })
+    return candidate && this.prepareCandidate()
+  }
+
+  /** Selection hook consumed by Spend.validateWith. */
+  shouldVerifySpend (spend: Spend): boolean {
+    if (this.mode === 'always') return true
+    return isVeriFastCandidateScript(spend.lockingScript, this.scriptByteThreshold) &&
+      this.prepareCandidate()
   }
 
   private transactionParams (params: BdkVerifyParams): BdkVerifyFromEFParams {

@@ -1536,10 +1536,12 @@ export default class Spend {
 
   /**
    * Validates this spend with an asynchronous pluggable backend. This is the
-   * native/WASM counterpart to {@link validate}; it does not silently fall back
-   * to the JavaScript interpreter if the backend fails.
+   * native/WASM counterpart to {@link validate}. An adaptive backend may decline
+   * the Spend before execution, in which case the existing JavaScript validator
+   * is used. Once selected, backend errors remain authoritative and propagate.
    */
   async validateWith (verifier: SpendVerifierInterface): Promise<boolean> {
+    if (verifier.shouldVerifySpend?.(this) === false) return this.validate()
     return await verifier.verifySpend(this)
   }
 

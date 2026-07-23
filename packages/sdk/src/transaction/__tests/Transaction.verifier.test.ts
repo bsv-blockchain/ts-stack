@@ -51,6 +51,36 @@ describe('Transaction.verify with a pluggable verifier', () => {
     expect(result).toBe(true)
   })
 
+  it('preserves the JavaScript path when an adaptive verifier declines before execution', async () => {
+    const tx = await buildValidTx()
+    const verifyScripts = jest.fn(async () => false)
+    const shouldVerifyScripts = jest.fn(() => false)
+
+    await expect(tx.verify('scripts only', undefined, undefined, {
+      shouldVerifyScripts,
+      verifyScripts
+    })).resolves.toBe(true)
+
+    expect(shouldVerifyScripts).toHaveBeenCalledTimes(1)
+    expect(shouldVerifyScripts).toHaveBeenCalledWith({
+      tx,
+      blockHeight: 943816,
+      consensus: true
+    })
+    expect(verifyScripts).not.toHaveBeenCalled()
+  })
+
+  it('keeps a selected adaptive verifier authoritative', async () => {
+    const tx = await buildValidTx()
+    const failure = new Error('selected backend failed')
+    const verifier: BdkVerifierInterface = {
+      shouldVerifyScripts: () => true,
+      verifyScripts: async () => { throw failure }
+    }
+
+    await expect(tx.verify('scripts only', undefined, undefined, verifier)).rejects.toBe(failure)
+  })
+
   it('does not hash an already-linked transaction graph for scripts-only verification', async () => {
     const tx = await buildValidTx()
     const sourceTransaction = tx.inputs[0].sourceTransaction as Transaction
