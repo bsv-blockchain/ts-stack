@@ -196,17 +196,29 @@ function chooseReservationPool (
   targetSatoshis: number,
   limit: number,
   extras: number,
-  fillLimit: boolean
+  fillLimit: boolean,
+  planningCosts: {
+    firstChangeCost: number
+    marginalInputFee: number
+  }
 ): TableOutput[] {
-  const remaining = [...candidates]
+  const remaining = candidates
+    .filter(output => output.satoshis > planningCosts.marginalInputFee)
   const chosen: TableOutput[] = []
-  let deficit = targetSatoshis
+  // A reservation is useful to generateChangeSdk only after it also covers
+  // the marginal funding-input fee and leaves an economically viable first
+  // change output. Without this buffer, a tiny target repeatedly selects dust
+  // that satisfies the nominal deficit but can never close the real plan.
+  let deficit = targetSatoshis + planningCosts.firstChangeCost
   while (deficit > 0 && chosen.length < limit) {
-    const output = selectCanonicalChange(remaining, deficit)
+    const output = selectCanonicalChange(
+      remaining,
+      deficit + planningCosts.marginalInputFee
+    )
     if (output == null) break
     chosen.push(output)
     remaining.splice(remaining.indexOf(output), 1)
-    deficit -= output.satoshis
+    deficit -= output.satoshis - planningCosts.marginalInputFee
   }
   const desiredCount = fillLimit ? limit : Math.min(limit, chosen.length + extras)
   while (remaining.length > 0 && chosen.length < desiredCount) {
@@ -216,6 +228,26 @@ function chooseReservationPool (
     remaining.splice(remaining.indexOf(output), 1)
   }
   return chosen
+}
+
+function reservationPlanningCosts (
+  storage: StorageProvider,
+  basket: TableOutputBasket
+): { firstChangeCost: number, marginalInputFee: number } {
+  const satsPerKb = validateStorageFeeModel(storage.feeModel).value ?? 0
+  const minimumSpendSize = transactionSize([107], [25])
+  const minimumSpendFee = Math.ceil(minimumSpendSize * satsPerKb / 1000)
+  const dustFloor = Math.max(1, minimumSpendFee * 2)
+  const marginalInputSize = transactionSize([107], []) - transactionSize([], [])
+  const marginalOutputSize = transactionSize([], [25]) - transactionSize([], [])
+  const desiredFirstChange = Math.max(
+    dustFloor,
+    Math.max(1, Math.round(basket.minimumDesiredUTXOValue / 4))
+  )
+  return {
+    firstChangeCost: desiredFirstChange + Math.ceil(marginalOutputSize * satsPerKb / 1000),
+    marginalInputFee: Math.ceil(marginalInputSize * satsPerKb / 1000)
+  }
 }
 
 async function reserveOutputs (
@@ -315,7 +347,14 @@ export async function beginActionBatch (
   )
   const fixedOutputs = [...explicit.outputs, ...noSendChange.outputs]
   const requiredCapacity = Math.max(0, INITIAL_RESERVATION_LIMIT - fixedOutputs.length)
-  const funding = chooseReservationPool(available, target, requiredCapacity, INITIAL_EXTRA_OUTPUTS, false)
+  const funding = chooseReservationPool(
+    available,
+    target,
+    requiredCapacity,
+    INITIAL_EXTRA_OUTPUTS,
+    false,
+    reservationPlanningCosts(storage, changeBasket)
+  )
   const batch = newBatch(userId, args.batchId)
   await storage.transaction(async trx => {
     await storage.insertActionBatch(batch, trx)
@@ -364,7 +403,14 @@ export async function extendActionBatch (
     Math.max(0, args.requestedOutputs),
     Math.max(0, MAX_RESERVED_HEADROOM - alreadyReserved.length)
   )
-  const funding = chooseReservationPool(available, Math.max(1, args.targetSatoshis), requestedCount, 0, true)
+  const funding = chooseReservationPool(
+    available,
+    Math.max(1, args.targetSatoshis),
+    requestedCount,
+    0,
+    true,
+    reservationPlanningCosts(storage, basket)
+  )
   const explicitByOutpoint = await storage.findOutputsByOutpoints(userId, args.explicitOutpoints)
   const explicit = Object.values(explicitByOutpoint)
     .filter(output => !alreadyReserved.includes(output.outputId))

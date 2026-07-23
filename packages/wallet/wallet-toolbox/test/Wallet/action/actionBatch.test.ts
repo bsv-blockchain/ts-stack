@@ -7,6 +7,11 @@ import { cleanupExpiredActionBatches } from '../../../src/storage/methods/action
 import { specOpWalletBalance } from '../../../src/sdk/types'
 import type { ActionBatchManifest } from '../../../src/sdk/ActionBatch.interfaces'
 import { maxPossibleSatoshis } from '../../../src/storage/methods/generateChange'
+import {
+  additionalFundingTarget,
+  fundingRunwayExtension
+} from '../../../src/signer/actionBatch/ActionBatchWorkspace'
+import { WERR_INSUFFICIENT_FUNDS } from '../../../src/sdk/WERR_errors'
 
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
@@ -162,6 +167,24 @@ describe('in-memory action batch workspace', () => {
     const secondRequest = (await ctx.activeStorage.findProvenTxReqs({ partial: { txid: txids[1] } }))[0]
     expect(secondRequest.inputBEEF).toBeDefined()
     expect(Beef.fromBinary(secondRequest.inputBEEF!).findTxid(txids[0])).toBeUndefined()
+  })
+
+  test('extension accounting requests only the incremental shortfall', () => {
+    expect(additionalFundingTarget(new WERR_INSUFFICIENT_FUNDS(31_596, 6))).toBe(6)
+  })
+
+  test('runway accounting credits unconsumed reserved inputs by count and value', () => {
+    expect(fundingRunwayExtension(4, 1, 5_000, [{ satoshis: 1_500 }])).toEqual({
+      nextRunwayTarget: 8,
+      requestedOutputs: 7,
+      targetSatoshis: 38_500
+    })
+    expect(fundingRunwayExtension(
+      4,
+      1,
+      5_000,
+      Array.from({ length: 8 }, () => ({ satoshis: 5_000 }))
+    )).toBeUndefined()
   })
 
   test('staged outputs and balance are coherent before commit', async () => {

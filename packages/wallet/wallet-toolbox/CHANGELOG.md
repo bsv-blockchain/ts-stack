@@ -16,6 +16,11 @@ attention to changes that materially alter behavior or extend functionality.
   manifest commits, inline content-addressed blobs up to 4 MiB, and authenticated binary uploads
   in provider-sized chunks with four-way bounded concurrency for larger batches. Broadcast remains
   outside the atomic persistence transaction.
+- Make batch funding converge on fragmented wallets at production fee rates. Reservation targets
+  include the fee and viable-change overhead of an added input, reactive extensions request only
+  the remaining shortfall, and EWMA runway extensions subtract unconsumed reserved funding without
+  compounding after empty or partial responses. The regression runs 16 independent actions through
+  both the in-process and authenticated remote-storage paths and commits the complete batch.
 - Add a retained workload benchmark covering 1, 10, 50, and 250 actions across dependent,
   independent, mixed-input, and two-step signing models, four script sizes, and 25/100/250 ms
   storage latency. Run it with `pnpm --filter @bsv/wallet-toolbox bench:action-batch`.

@@ -1,5 +1,4 @@
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
-import { WERR_INSUFFICIENT_FUNDS } from '../../../src/sdk/WERR_errors'
 import { verifyOne } from '../../../src/utility/utilityHelpers'
 
 /**
@@ -72,7 +71,7 @@ async function fragmentWallet (ctx: TestWalletNoSetup): Promise<number[]> {
 describe('action batch funding on a fragmented wallet', () => {
   jest.setTimeout(300000)
 
-  test('batch mode: un-chained noSend sequence of 16 must not exhaust funding (currently fails)', async () => {
+  test('batch mode: un-chained noSend sequence of 16 selects viable funding and commits', async () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('fragmentedBatchFunding', 'auto')
     try {
       await mockChain(ctx)
@@ -89,27 +88,36 @@ describe('action batch funding on a fragmented wallet', () => {
       expect(healthy.length).toBeGreaterThanOrEqual(1)
       expect(total).toBeGreaterThan(100000)
 
-      // Diagnostic capture of the extend loop (targetSatoshis/requestedOutputs)
-      const extendCalls: Array<{ targetSatoshis: number, requestedOutputs: number }> = []
+      // Capture extension requests and the funding candidates they return.
+      const extendCalls: Array<{
+        targetSatoshis: number
+        requestedOutputs: number
+        reservedSatoshis: number[]
+      }> = []
       const origExtend = ctx.storage.extendActionBatch.bind(ctx.storage)
       jest.spyOn(ctx.storage, 'extendActionBatch').mockImplementation(async (args: any) => {
-        extendCalls.push({ targetSatoshis: args.targetSatoshis, requestedOutputs: args.requestedOutputs })
-        return await origExtend(args)
+        const result = await origExtend(args)
+        extendCalls.push({
+          targetSatoshis: args.targetSatoshis,
+          requestedOutputs: args.requestedOutputs,
+          reservedSatoshis: result.reservedOutputs.map(output => output.satoshis)
+        })
+        return result
       })
 
       const txids: string[] = []
-      try {
-        for (let i = 0; i < 16; i++) {
-          const result = await ctx.wallet.createAction(noSendArgs(i))
-          txids.push(result.txid!)
-        }
-      } finally {
-        // Surface the diagnostic trail whether or not the run failed.
-        // eslint-disable-next-line no-console
-        console.log(`staged ${txids.length}/16 on wallet holding ${total} sats (${dust.length} dust, ${healthy.length} healthy outputs); extend sequence: ${JSON.stringify(extendCalls)}`)
+      for (let i = 0; i < 16; i++) {
+        const result = await ctx.wallet.createAction(noSendArgs(i))
+        txids.push(result.txid!)
       }
-
       expect(txids).toHaveLength(16)
+      expect(extendCalls.flatMap(call => call.reservedSatoshis).some(satoshis => satoshis >= 1000)).toBe(true)
+      expect(extendCalls.every(call => call.targetSatoshis <= total)).toBe(true)
+      const commit = await ctx.wallet.createAction({
+        description: 'commit fragmented batch sequence',
+        options: { sendWith: txids, acceptDelayedBroadcast: false }
+      })
+      expect(commit.sendWithResults).toHaveLength(16)
     } finally {
       await ctx.wallet.destroy()
     }
@@ -136,6 +144,32 @@ describe('action batch funding on a fragmented wallet', () => {
         options: { sendWith: txids, acceptDelayedBroadcast: false }
       })
       expect(commit.sendWithResults).toHaveLength(16)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('fee-negative dust is not reserved after the fee rate rises', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('fragmentedBatchFeeRise', 'auto')
+    try {
+      await mockChain(ctx)
+      ctx.wallet.randomVals = [...randomVals]
+      const sats = await fragmentWallet(ctx)
+      expect(sats.filter(satoshis => satoshis < 100).length).toBeGreaterThanOrEqual(50)
+
+      ctx.activeStorage.feeModel = { model: 'sat/kb', value: 500 }
+      const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+      const staged = await ctx.wallet.createAction(noSendArgs(0))
+      const begun = await begin.mock.results[0].value
+      expect(begun.reservedOutputs).not.toHaveLength(0)
+      expect(begun.reservedOutputs.every(output => output.satoshis >= 100)).toBe(true)
+      if (staged.txid == null) throw new Error('staged batch action is missing its txid')
+
+      const commit = await ctx.wallet.createAction({
+        description: 'commit batch after fee-rate increase',
+        options: { sendWith: [staged.txid], acceptDelayedBroadcast: false }
+      })
+      expect(commit.sendWithResults).toHaveLength(1)
     } finally {
       await ctx.wallet.destroy()
     }

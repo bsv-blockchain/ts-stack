@@ -55,6 +55,38 @@ function mergeUnique (values: string[]): string[] {
   return [...new Set(values)]
 }
 
+export function additionalFundingTarget (error: WERR_INSUFFICIENT_FUNDS): number {
+  return error.moreSatoshisNeeded
+}
+
+export function fundingRunwayExtension (
+  runwayTarget: number,
+  ewmaConfirmedInputs: number,
+  ewmaConfirmedSatoshis: number,
+  availableConfirmed: Array<{ satoshis: number }>
+): { nextRunwayTarget: number, requestedOutputs: number, targetSatoshis: number } | undefined {
+  const availableConfirmedCount = availableConfirmed.length
+  const availableConfirmedSatoshis = availableConfirmed
+    .reduce((sum, output) => sum + output.satoshis, 0)
+  const predictedByInputs = availableConfirmedCount / Math.max(1, ewmaConfirmedInputs)
+  const predictedBySatoshis = ewmaConfirmedSatoshis > 0
+    ? availableConfirmedSatoshis / ewmaConfirmedSatoshis
+    : Number.POSITIVE_INFINITY
+  if (Math.min(predictedByInputs, predictedBySatoshis) >= 2) return undefined
+  const nextRunwayTarget = Math.min(64, runwayTarget * 2)
+  return {
+    nextRunwayTarget,
+    requestedOutputs: Math.max(
+      1,
+      Math.ceil(nextRunwayTarget * ewmaConfirmedInputs) - availableConfirmedCount
+    ),
+    targetSatoshis: Math.max(
+      1,
+      nextRunwayTarget * ewmaConfirmedSatoshis - availableConfirmedSatoshis
+    )
+  }
+}
+
 function makePlannerState (
   begin: BeginActionBatchResult,
   firstAction: Validation.ValidCreateActionArgs
@@ -88,6 +120,7 @@ class ActionBatchWorkspace {
 
   private ewmaConfirmedInputs = 1
   private ewmaConfirmedSatoshis = 0
+  private hasConfirmedSample = false
   private runwayTarget = 4
   private extension?: Promise<void>
   private renewal?: Promise<void>
@@ -269,7 +302,7 @@ class ActionBatchWorkspace {
     requestedOutputs: number,
     explicitOutpoints: Array<{ txid: string, vout: number }>,
     includeSourceTransactions: boolean
-  ): Promise<void> {
+  ): Promise<{ outputCount: number, satoshis: number }> {
     const extension = await this.wallet.storage.extendActionBatch({
       batchId: this.batchId,
       targetSatoshis: Math.max(1, Math.ceil(targetSatoshis)),
@@ -279,6 +312,10 @@ class ActionBatchWorkspace {
     })
     this.mergeExtension(extension)
     this.expiresAt = Date.parse(extension.expiresAt)
+    return {
+      outputCount: extension.reservedOutputs.length,
+      satoshis: extension.reservedOutputs.reduce((sum, output) => sum + output.satoshis, 0)
+    }
   }
 
   private async renewIfNeeded (): Promise<void> {
@@ -308,7 +345,10 @@ class ActionBatchWorkspace {
         break
       } catch (error) {
         if (!(error instanceof WERR_INSUFFICIENT_FUNDS) || attempt === 4) throw error
-        const target = Math.max(error.totalSatoshisNeeded, error.moreSatoshisNeeded)
+        // generateChangeSdk has already credited every unconsumed reservation
+        // supplied by planFunding. Only the reported shortfall is additional;
+        // requesting totalSatoshisNeeded here double-counts the held pool.
+        const target = additionalFundingTarget(error)
         const requested = Math.min(64, 2 ** (attempt + 3))
         await this.extend(target, requested, [], args.isSignAction)
       }
@@ -324,6 +364,12 @@ class ActionBatchWorkspace {
       .filter((output): output is NonNullable<typeof output> => output != null)
     if (confirmed.length === 0) return
     const satoshis = confirmed.reduce((sum, output) => sum + output.satoshis, 0)
+    if (!this.hasConfirmedSample) {
+      this.ewmaConfirmedInputs = confirmed.length
+      this.ewmaConfirmedSatoshis = satoshis
+      this.hasConfirmedSample = true
+      return
+    }
     this.ewmaConfirmedInputs = 0.5 * confirmed.length + 0.5 * this.ewmaConfirmedInputs
     this.ewmaConfirmedSatoshis = 0.5 * satoshis + 0.5 * this.ewmaConfirmedSatoshis
   }
@@ -370,16 +416,26 @@ class ActionBatchWorkspace {
 
   private scheduleExtensionIfNeeded (): void {
     if (this.extension != null) return
-    const availableConfirmed = [...this.state.reserved.keys()].filter(outpoint => !this.state.consumed.has(outpoint)).length
-    const predictedActions = availableConfirmed / Math.max(1, this.ewmaConfirmedInputs)
-    if (predictedActions >= 2) return
-    this.runwayTarget = Math.min(64, this.runwayTarget * 2)
-    const requestedOutputs = Math.max(
-      1,
-      Math.ceil(this.runwayTarget * this.ewmaConfirmedInputs) - availableConfirmed
+    const availableConfirmed = [...this.state.reserved.entries()]
+      .filter(([outpoint]) => !this.state.consumed.has(outpoint))
+    const request = fundingRunwayExtension(
+      this.runwayTarget,
+      this.ewmaConfirmedInputs,
+      this.ewmaConfirmedSatoshis,
+      availableConfirmed.map(([, output]) => output)
     )
-    const targetSatoshis = Math.max(1, this.runwayTarget * this.ewmaConfirmedSatoshis)
-    this.extension = this.extend(targetSatoshis, requestedOutputs, [], false)
+    if (request == null) return
+    this.extension = this.extend(request.targetSatoshis, request.requestedOutputs, [], false)
+      .then(added => {
+        // A failed or partial extension must not geometrically inflate the
+        // next request against a runway that the wallet never acquired.
+        if (
+          added.outputCount >= request.requestedOutputs &&
+          added.satoshis >= request.targetSatoshis
+        ) {
+          this.runwayTarget = request.nextRunwayTarget
+        }
+      })
       .catch(() => {})
       .finally(() => { this.extension = undefined })
   }

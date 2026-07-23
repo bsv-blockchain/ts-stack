@@ -47,8 +47,20 @@ can use unreserved outputs normally. A uniqueness constraint prevents one output
 from belonging to two active batches.
 
 The initial reservation includes at most three extra candidates and never more
-than eight outputs. Extensions retain at most 64 outputs of headroom and use the
-same exact, least-over, then largest-under selection policy as normal funding.
+than eight outputs. Its canonical funding target includes the marginal P2PKH
+input fee and enough value to recover an economically viable first change output,
+so a low basket minimum cannot repeatedly select inputs that satisfy the nominal
+deficit but cost too much to use.
+
+Extensions retain at most 64 outputs of headroom and use the same exact,
+least-over, then largest-under selection policy as normal funding. Retry targets
+are incremental shortfalls: the planner credits the value and count of every
+unconsumed reserved output before asking for more. Confirmed inputs already used
+by staged transactions remain reserved until commit but are not credited as
+available funding. Proactive EWMA requests likewise subtract the unconsumed pool,
+initialize from the first complete sample, and increase geometric runway only
+when the provider fulfills both the requested count and value. Empty or partial
+extensions therefore cannot compound a target against unchanged wallet state.
 Leases last 15 minutes with a 60-minute hard lifetime. Long-running workspaces
 renew near 80% of the lease; commit may atomically reacquire an expired reservation
 when no conflicting spend or reservation occurred. Commit, abort, wallet

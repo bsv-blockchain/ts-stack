@@ -1,6 +1,6 @@
 import { Beef, CreateActionArgs, P2PKH, PublicKey, SignActionArgs, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup, TestWalletOnly } from '../../../../test/utils/TestUtilsWalletStorage'
-import { wait } from '../../../utility/utilityHelpers'
+import { verifyOne, wait } from '../../../utility/utilityHelpers'
 import { WalletLogger } from '../../../WalletLogger'
 import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
 import { StorageClient } from '../StorageClient'
@@ -153,6 +153,64 @@ describe('StorageClient tests', () => {
       const e = WalletError.fromUnknown(eu)
       expect(e.code).toBe('WERR_REVIEW_ACTIONS')
     }
+  })
+
+  test('2 fragmented-wallet batch funding converges and commits across the remote boundary', async () => {
+    const basket = verifyOne(await server.setup.activeStorage.findOutputBaskets({
+      partial: { userId: server.setup.userId, name: 'default' }
+    }))
+    await server.setup.activeStorage.updateOutputBasket(basket.basketId, {
+      numberOfDesiredUTXOs: 144,
+      minimumDesiredUTXOValue: 40
+    })
+    server.setup.activeStorage.feeModel = { model: 'sat/kb', value: 100 }
+
+    for (let i = 0; i < 20; i++) {
+      await server.setup.wallet.createAction({
+        description: `remote fragmentation churn ${i}`,
+        outputs: [{
+          satoshis: 1,
+          lockingScript: '7551',
+          outputDescription: 'remote churn output'
+        }],
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      })
+    }
+
+    const spendable = await server.setup.activeStorage.findOutputs({
+      partial: {
+        userId: server.setup.userId,
+        basketId: basket.basketId,
+        change: true,
+        spendable: true
+      }
+    })
+    expect(spendable.filter(output => output.satoshis < 100).length).toBeGreaterThanOrEqual(50)
+    expect(spendable.some(output => output.satoshis >= 1000)).toBe(true)
+
+    client.wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
+    const extend = jest.spyOn(client.storage, 'extendActionBatch')
+    const txids: string[] = []
+    for (let i = 0; i < 16; i++) {
+      const staged = await client.wallet.createAction({
+        description: `remote fragmented batch action ${i}`,
+        outputs: [{
+          satoshis: 1,
+          lockingScript: '7551',
+          outputDescription: 'remote workload output'
+        }],
+        options: { noSend: true, randomizeOutputs: false }
+      })
+      if (staged.txid == null) throw new Error('remote batch action is missing its txid')
+      txids.push(staged.txid)
+    }
+    expect(extend).toHaveBeenCalled()
+
+    const committed = await client.wallet.createAction({
+      description: 'commit remote fragmented batch sequence',
+      options: { sendWith: txids, acceptDelayedBroadcast: false }
+    })
+    expect(committed.sendWithResults).toHaveLength(16)
   })
 })
 
