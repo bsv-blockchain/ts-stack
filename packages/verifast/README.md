@@ -1,76 +1,235 @@
 # @bsv/verifast
 
-Optional C++/WASM (BSV [BDK](https://github.com/bitcoin-sv/bdk)) backend for
-transaction script verification with `@bsv/sdk`.
+Real BSV BDK script verification in WebAssembly for `@bsv/sdk`. One package
+supports Node ESM, CommonJS, browser/worker ESM, and classic-script/UMD clients.
 
-## Why
+## Transaction verification
 
-`@bsv/sdk` verifies transactions with a pure-TypeScript script interpreter
-(`Spend`). For high-throughput verification you can offload script checks to the
-BSV BDK engine compiled to WASM. This package implements the SDK's
-`BdkVerifierInterface` and plugs into `Transaction.verify`:
+The validated WASM module is bundled and loaded lazily. Keep one verifier for a
+stream or batch so module initialization is paid once. Transaction integration
+defaults to adaptive routing: a cold module never delays verification, scripts
+strictly larger than 100 bytes and scripts containing `CHECKSIG` or
+`CHECKMULTISIG` variants use WASM once it is ready, and smaller non-cryptographic
+scripts retain the SDK's JavaScript interpreter.
+
+Version-1 automatic routing is limited to canonical P2PKH spends and uses
+BDK's policy lane so LOW_S, MINIMALDATA, CLEANSTACK, and related interpreter
+strictness remain timing-independent. Calls with an explicit SDK script-memory
+limit stay on the JavaScript interpreter because this WASM ABI cannot enforce
+that limit.
 
 ```ts
 import { Transaction } from '@bsv/sdk'
 import { BdkVerifier } from '@bsv/verifast'
-import createBdkModule from './wasm/bdk-core.mjs' // your build
 
-const verifier = new BdkVerifier(async () => await createBdkModule())
+const verifier = new BdkVerifier()
+const tx = Transaction.fromEF(extendedFormatBytes)
 
-// 4th arg routes script verification through BDK instead of the JS interpreter.
-const ok = await tx.verify('scripts only', undefined, undefined, verifier)
+// Start this during application or wallet initialization when first-call WASM
+// performance matters. Auto routing otherwise warms in the background.
+await verifier.preload()
+const valid = await tx.verify('scripts only', undefined, undefined, verifier)
 ```
 
-Strict: the backend's verdict is authoritative; load/marshalling failures throw
-(no silent fallback to the JS interpreter).
+`isReady()` is synchronous, so latency-sensitive code can inspect readiness
+without awaiting initialization. Adaptive selection happens before backend
+execution; after WASM is selected, errors remain strict and never retry through
+the JavaScript interpreter. Use `{ mode: 'always' }` when every call must await
+and use WASM regardless of script shape or cold-start state.
 
-## How it hooks in
+When EF bytes are already available, bypass transaction serialization entirely:
 
-`Transaction.verify(chainTracker, feeModel, memoryLimit, verifier?)` gained an
-optional 4th argument (an object implementing `BdkVerifierInterface`). When
-present, the per-input `Spend` loop is skipped and the whole transaction is handed
-to the backend once — BDK operates at whole-transaction granularity, not per input.
-
-## Supplying the WASM artifact
-
-This package ships **no** `.wasm`. The artifact in the BDK repo
-(`module/typesbdk/wasm/bdk-core.{mjs,wasm}`) is a smoke-test stub whose
-verification logic is unvalidated. Build a real one from the BDK C++ source
-(emscripten + boost 1.85 + openssl 3.4) — see the BDK repo
-`module/typesbdk/examples/README.md` — and drop the outputs into
-`src/wasm/bdk-core.mjs` and `src/wasm/bdk-core.wasm` (both gitignored).
-
-The BDK WASM exposes:
-
-```
-VerifyScript(extendedTX: VectorUInt8, utxoHeights: VectorInt32,
-             blockHeight: int32, consensus: bool, customFlags: VectorUInt32) -> int
+```ts
+const valid = await verifier.verifyScriptsFromEF({
+  extendedTransaction: efBytes,
+  utxoHeights: [800000],
+  blockHeight: 943816,
+  consensus: true
+})
 ```
 
-`BdkVerifier` marshals `tx.toEF()`, per-input source UTXO heights
-(`merklePath.blockHeight`, else `943816`), and a flag bitfield (see
-`src/flags.ts`), then frees the embind vectors.
+`Transaction.toEFBinary()` memoizes a typed EF representation and automatically
+invalidates it when transaction or referenced source-output state changes.
+Treat that returned view as immutable and call `.slice()` when independently
+mutable bytes are required. `toEFUint8Array()` is an equivalent typed alias;
+legacy `toEF()` continues to return `number[]`. Script changes should use the
+SDK's mutation methods or replace `script.chunks`; mutating a returned
+`ScriptChunk` object in place bypasses the Script layer's serialization-cache
+invalidation.
 
-## Scripts
+## Spend and batch verification
+
+Call the same backend from code that already constructs SDK `Spend` objects:
+
+```ts
+const valid = await spend.validateWith(verifier)
+// Equivalent direct form:
+const sameVerdict = await verifier.verifySpend(spend)
+```
+
+`validateWith` applies the same adaptive policy as transaction verification.
+The Spend path serializes an ordinary transaction and supplies the active
+source output separately, so it does not construct or parse EF ancestry.
+Explicit `Spend.verifyFlags` are preserved; otherwise BDK calculates flags from
+the configured network and heights.
+
+Packed batch methods cross the JS/WASM boundary once per bounded chunk:
+
+```ts
+const txVerdicts = await verifier.verifyScriptsBatchFromEF(items)
+const spendVerdicts = await verifier.verifySpendsBatch(
+  spends.map(spend => ({ spend }))
+)
+```
+
+On machines with enough logical cores, batches of at least 32 items can use a
+fixed pool of up to four workers. Workers are created lazily and are never used
+for a single verification. Explicitly warm the batch lane before a
+latency-sensitive workload:
+
+```ts
+const verifier = new BdkVerifier({ batchWorkers: 4 })
+await verifier.preloadBatch()
+const verdicts = await verifier.verifyScriptsBatchFromEF(items)
+```
+
+The main instance generates libsecp256k1's 1 MiB W15 verification tables once.
+Workers import that snapshot instead of regenerating it. `SharedArrayBuffer` is
+used opportunistically when available; ordinary structured cloning remains the
+browser-compatible fallback and does not require cross-origin isolation. Call
+`dispose()` when a short-lived verifier no longer needs its warm pool. Disposal
+is final; later calls reject instead of silently creating new workers.
+
+The default limits are 256 items and 32 MiB of input data per chunk and can be
+lowered with `maxBatchItems` and `maxBatchBytes`. Packing principally reduces
+marshalling and orchestration overhead; ECDSA remains the dominant cost for
+large signature-heavy batches.
+
+## Generic cryptography and SDK integration
+
+The same compact module exposes generic, direct-byte secp256k1 operations:
+
+```ts
+const signature = await verifier.signDigest(privateKey32, digest32)
+const valid = await verifier.verifyDigest(publicKey, digest32, signature)
+const verdicts = await verifier.verifyDigestBatch(items)
+const publicKey = await verifier.publicKeyFromPrivate(privateKey32)
+const sharedPoint = await verifier.multiplyPublicKey(publicKey, scalar32)
+const tweakedPublic = await verifier.tweakPublicKeyAdd(publicKey, tweak32)
+const tweakedPrivate = await verifier.tweakPrivateKeyAdd(privateKey32, tweak32)
+```
+
+These operations accept and return `Uint8Array` values without JSON, `number[]`,
+or per-item JS/WASM calls. Importing and constructing the default verifier also
+registers a warm-only optional backend with `@bsv/sdk`. Existing synchronous
+primitive APIs do not change. Existing asynchronous wallet, BRC-42, P2PKH, and
+authentication composition uses a supported WASM operation only after the
+module is ready; the current call retains JavaScript while a cold module warms
+in the background. Scalar-only private BRC-42 derivation deliberately remains
+in TypeScript because it is already faster than a WASM boundary.
+
+## Networks
+
+Select a network once when constructing the verifier:
+
+```ts
+const verifier = new BdkVerifier({ network: 'ttn' })
+```
+
+Supported names are `main`, `test`, `stn`, `regtest`, `tstn`, and TeraTestNet
+under `ttn`, `teratestnet`, or the commonly used `terratestnet` spelling.
+TeraTestNet and Tera Scaling Test Network (`tstn`) have distinct BDK network
+IDs and activation parameters.
+
+## Runtime formats
+
+Package conditional exports select Node or browser glue automatically:
+
+```js
+// Node ESM
+import { BdkVerifier } from '@bsv/verifast'
+
+// Node CommonJS; methods remain asynchronous
+const { BdkVerifier } = require('@bsv/verifast')
+```
+
+Browser ESM contains no Node imports and works in window and worker targets.
+For classic scripts, load `dist/src/wasm/bdk-core.umd.js`, then
+`dist/umd/verifast.js`; the slim classic loader locates
+`dist/src/wasm/bdk-core.umd.wasm`. The wrapper uses SDK types without rebundling
+the SDK implementation. Worker scheduling and its internal table-snapshot ABI
+remain in the full ESM/worker artifact, so the classic path ships only the
+public typed verifier and cryptography APIs. The build rejects a complete
+classic-script payload over 300,000 bytes, counting both loaders and WASM; the
+current payload is 298,567 bytes.
+
+An optional custom WASM factory remains supported:
+
+```ts
+const verifier = new BdkVerifier(async () => await createMyBdkModule())
+```
+
+## Verdicts and diagnostics
+
+Direct boolean methods return `true` for BDK domain `0` and `false` for script or DoS
+failures (domains `1` and `2`). BDK exception responses, malformed results, and
+unknown ABI domains throw `BdkVerificationError`; loading and marshalling errors
+also propagate. Automatic SDK/Spend routing may decline the backend before it
+starts; the selected backend itself never silently falls back to the TypeScript
+interpreter.
+
+Detailed methods return the underlying `{ domain, code }` pair:
+
+```ts
+const result = await verifier.verifyScriptsDetailed({
+  tx,
+  blockHeight: 943816,
+  consensus: true
+})
+```
+
+Flag names map directly to the pinned BSV `script_flags.h`, including
+`MINIMALIF`, `NULLFAIL`, compressed-key, Genesis, and Chronicle bits. Unknown
+names throw rather than being ignored.
+
+## Reproducibility and validation
+
+The bundled module is built from BDK 1.2.2 at `bitcoin-sv/bdk` commit
+`6d1e8092e8a9917d2544cddc9e20c6dc38242d93`, plus `bitcoin-sv` commit
+`879fc8b42168dd0e608dafd51b39c6dabad37d4d`, Emscripten 4.0.23, and Boost
+1.85.0. The verifier-only target does not link OpenSSL. The main and classic
+WASM binaries have SHA-256 hashes
+`35bb36ee9732ff0432ca3b194f69b132aa4d555ba81fc28c6d922b38cd914189` and
+`a840c115b4f9297d33423712983ee95e294adf1056a946dd27c94f93253ceb75`;
+the build verifies every pinned generated artifact before copying it. BDK's
+`module/typesbdk/wasm/build.sh` verifies pinned inputs, performs a clean build,
+runs libsecp256k1's verified, non-verified, and exhaustive WASM tests, then
+validates the vector, typed, transaction-batch, Spend, and Spend-batch ABIs
+through all three loaders.
 
 ```bash
-pnpm --filter @bsv/verifast test       # unit tests (mock wasm) — no artifact needed
-pnpm --filter @bsv/verifast build      # emit dist/ (src only)
-pnpm --filter @bsv/verifast typecheck  # full type check (src + tests)
-pnpm --filter @bsv/verifast bench      # inputs/sec; BDK path runs only if a wasm is present
+pnpm --filter @bsv/verifast typecheck
+pnpm --filter @bsv/verifast build
+pnpm --filter @bsv/verifast test
+pnpm --filter @bsv/verifast test:consumers
+pnpm --filter @bsv/verifast bench
+pnpm --filter @bsv/verifast bench:batch
+pnpm --filter @bsv/verifast bench:crypto
+pnpm --filter @bsv/verifast bench:warmup
 ```
 
-`bench/equivalence.test.ts` asserts the BDK backend agrees with the pure-JS
-interpreter across the corpus; it auto-skips when no wasm is present.
+The deterministic corpus compares positive and negative SDK-interpreter
+verdicts with real BDK WASM for whole transactions and individual Spend objects.
+Consumer tests execute the built package through Node ESM, CommonJS, browser
+ESM, and browser UMD rather than substituting mocks.
 
-> Note: tests/benchmarks resolve `@bsv/sdk` to the **local** monorepo source (via a
-> jest `moduleNameMapper` / tsx) so the new `verify(verifier)` signature is visible
-> despite the repo-wide `@bsv/sdk` version pin. See the design spec's "Monorepo
-> linkage constraint" section.
-
-## Caveats to confirm against a real build
-
-- The `extendedTX` format is assumed to be the BSV EF (BRC-30) emitted by `tx.toEF()`.
-- The flag bit values in `src/flags.ts` follow canonical bsv ordering; confirm against
-  the BDK headers. The equivalence corpus is the guard.
-- `BDK_SUCCESS` is assumed to be `1`; confirm the success return code.
+On the retained Apple M3 Max baseline, BDK is 16–20x faster in Node and 12–15x
+faster in Chrome for P2PKH transactions; TypeScript remains faster for trivial
+non-cryptographic scripts. Generic signing and verification measured 28.3x and
+19.1x faster. Existing `ProtoWallet` signing and verification measured 26.0x
+and 16.8x faster, while public and symmetric BRC-42 derivation measured 2.9x and
+9.3x faster. A packed 250-signature batch fell from 224.1 ms in SDK JavaScript
+to 12.1 ms in one WASM instance and 3.34 ms across four warm workers. A real
+250-transaction dependent graph verified 3.61x faster across four workers.
+Typed and cached serialization materially improves large-EF workloads. See
+`bench/results/` for commands, environment, hashes, and full measurements.

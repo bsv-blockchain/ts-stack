@@ -94,6 +94,24 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     }
   }
 
+  async derivePublicKeyAsync (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf: boolean = false
+  ): Promise<PublicKey> {
+    const cacheKey = this.generateCacheKey(
+      'derivePublicKey', protocolID, keyID, counterparty, forSelf
+    )
+    const cachedValue = this.cacheGet(cacheKey)
+    if (cachedValue !== undefined) return cachedValue as PublicKey
+    const result = await this.keyDeriver.derivePublicKeyAsync(
+      protocolID, keyID, counterparty, forSelf
+    )
+    this.cacheSet(cacheKey, result)
+    return result
+  }
+
   /**
    * Derives a private key based on protocol ID, key ID, and counterparty.
    * Caches the result for future calls with the same parameters.
@@ -165,6 +183,23 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       this.cacheSet(cacheKey, result)
       return result
     }
+  }
+
+  async deriveSymmetricKeyAsync (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ): Promise<SymmetricKey> {
+    const cacheKey = this.generateCacheKey(
+      'deriveSymmetricKey', protocolID, keyID, counterparty
+    )
+    const cachedValue = this.cacheGet(cacheKey)
+    if (cachedValue !== undefined) return cachedValue as SymmetricKey
+    const result = await this.keyDeriver.deriveSymmetricKeyAsync(
+      protocolID, keyID, counterparty
+    )
+    this.cacheSet(cacheKey, result)
+    return result
   }
 
   /**
