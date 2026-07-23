@@ -20,24 +20,21 @@
 
 import * as dotenv from 'dotenv'
 import express, {
-  Express,
-  Request as ExpressRequest,
-  Response,
-  NextFunction,
-  RequestHandler
+  Express
 } from 'express'
 import bodyParser from 'body-parser'
-import { preAuth, postAuth } from './routes/index.js'
 import { Logger } from './utils/logger.js'
-import sendMessageRoute from './routes/sendMessage.js'
 import { Setup } from '@bsv/wallet-toolbox'
 import knexLib, { Knex } from 'knex'
 import knexConfig from '../knexfile.js'
 import type { WalletInterface } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { setupSwagger } from './swagger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
+import {
+  registerMessageBoxPreAuthRoutes,
+  registerMessageBoxPostAuthRoutes
+} from './compose.js'
 import * as crypto from 'crypto'
 (global.self as any) = { crypto }
 
@@ -166,6 +163,8 @@ export async function useRoutes (): Promise<void> {
     throw new Error('Wallet is not initialized for auth middleware')
   }
 
+  registerMessageBoxPreAuthRoutes(app, ROUTING_PREFIX)
+
   app.use(
     createAuthMiddleware({
       wallet: _wallet,
@@ -173,38 +172,13 @@ export async function useRoutes (): Promise<void> {
     })
   )
 
-  app.use(
-    createPaymentMiddleware({
-      wallet: _wallet,
-      calculateRequestPrice: async (req: Request) => {
-        if (req.url.includes('/sendMessage')) {
-          // TODO: Configure a custom price calculation as needed.
-        }
-        return 0
+  registerMessageBoxPostAuthRoutes(app, {
+    wallet: _wallet,
+    calculateRequestPrice: async (req) => {
+      if (req.url.includes('/sendMessage')) {
+        // TODO: Configure a custom price calculation as needed.
       }
-    })
-  )
-
-  // Register pre-authentication routes (no auth required)
-  preAuth.forEach((route) => {
-    app[route.type as 'get' | 'post' | 'put' | 'delete'](
-      `${String(ROUTING_PREFIX)}${String(route.path)}`,
-      route.func as unknown as (req: ExpressRequest, res: Response, next: NextFunction) => void
-    )
-  })
-
-  // Register post-authentication routes (requires auth header)
-  postAuth.forEach((route) => {
-    if (route.path === '/sendMessage') {
-      app[route.type as 'get' | 'post' | 'put' | 'delete'](
-        `${ROUTING_PREFIX}${route.path}`,
-        sendMessageRoute.func as unknown as RequestHandler
-      )
-    } else {
-      app[route.type as 'get' | 'post' | 'put' | 'delete'](
-        `${ROUTING_PREFIX}${route.path}`,
-        route.func as RequestHandler
-      )
+      return 0
     }
-  })
+  }, ROUTING_PREFIX)
 }

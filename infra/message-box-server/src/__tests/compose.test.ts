@@ -3,7 +3,8 @@ import knexLib from 'knex'
 import {
   createMessageBoxContext,
   createMessageBoxApp,
-  mountMessageBoxRoutes
+  registerMessageBoxPreAuthRoutes,
+  registerMessageBoxPostAuthRoutes
 } from '../compose.js'
 
 describe('compose API', () => {
@@ -11,7 +12,7 @@ describe('compose API', () => {
     expect(() => createMessageBoxContext({} as any)).toThrow(/wallet/)
   })
 
-  it('mountMessageBoxRoutes attaches without throwing', () => {
+  it('register pre/post auth routes attach without throwing', () => {
     const knexConfig = { client: 'mysql2', connection: {}, useNullAsDefault: true }
     const knex = (knexLib as any).default?.(knexConfig) ?? (knexLib as any)(knexConfig)
     const wallet = {
@@ -24,7 +25,10 @@ describe('compose API', () => {
       enableSwagger: false,
       enableWebSockets: false
     })
-    expect(() => { mountMessageBoxRoutes(app, ctx) }).not.toThrow()
+    expect(() => {
+      registerMessageBoxPreAuthRoutes(app)
+      registerMessageBoxPostAuthRoutes(app, ctx)
+    }).not.toThrow()
     expect(typeof app.use).toBe('function')
   })
 })
