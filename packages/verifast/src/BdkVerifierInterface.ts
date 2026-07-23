@@ -5,6 +5,7 @@ export interface BdkVerifyScriptsParams {
   blockHeight: number
   consensus: boolean
   verifyFlags?: string | string[]
+  memoryLimit?: number
 }
 
 /**

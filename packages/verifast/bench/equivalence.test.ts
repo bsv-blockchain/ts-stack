@@ -14,7 +14,13 @@ describe('JS Spend vs real BDK WASM equivalence', () => {
         // The SDK's Spend path throws ScriptEvaluationError for invalid scripts;
         // BDK reports the same verdict through its structured error domain.
       }
-      const bdkResult = await tx.verify('scripts only', undefined, undefined, verifier)
+      let bdkResult = false
+      try {
+        bdkResult = await tx.verify('scripts only', undefined, undefined, verifier)
+      } catch {
+        // Transaction.verify attributes a rejected backend verdict to the
+        // offending transaction, matching the interpreter's throw contract.
+      }
       expect({ name, jsResult, bdkResult }).toEqual({
         name,
         jsResult: expected,

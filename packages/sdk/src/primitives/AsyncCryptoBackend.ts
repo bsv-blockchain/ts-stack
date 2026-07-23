@@ -17,6 +17,32 @@ export interface DigestVerification {
   signature: Uint8Array
 }
 
+/** True when a caller supplied the canonical 32-byte digest representation. */
+export function isAsyncCryptoDigest (digest: readonly number[]): boolean {
+  return digest.length === 32 &&
+    digest.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 0xff)
+}
+
+/**
+ * Reject malformed output from an optional cryptography backend before it can
+ * be interpreted as key or signature material.
+ */
+export function validateAsyncCryptoBytes (
+  operation: AsyncCryptoOperation,
+  value: Uint8Array,
+  expectedLength?: number
+): Uint8Array {
+  if (!(value instanceof Uint8Array)) {
+    throw new TypeError(`${operation} returned a non-byte result`)
+  }
+  if (expectedLength !== undefined && value.length !== expectedLength) {
+    throw new Error(
+      `${operation} returned ${value.length} bytes; expected ${expectedLength}`
+    )
+  }
+  return value
+}
+
 /**
  * Optional high-performance implementation of generic secp256k1 primitives.
  *

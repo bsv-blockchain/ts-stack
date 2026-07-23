@@ -34,7 +34,7 @@ function createNodeWorker (): WorkerAdapter {
     },
     onMessage: handler => {
       worker.on('message', (response: BdkWorkerResponse) => {
-        activeRequests--
+        if (activeRequests > 0) activeRequests--
         if (activeRequests === 0) worker.unref()
         handler(response)
       })
@@ -44,6 +44,12 @@ function createNodeWorker (): WorkerAdapter {
         activeRequests = 0
         worker.unref()
         handler(error instanceof Error ? error : new Error(String(error)))
+      })
+    },
+    onExit: handler => {
+      worker.on('exit', code => {
+        activeRequests = 0
+        handler(new Error(`BDK worker exited unexpectedly with code ${code}`))
       })
     },
     terminate: () => { void worker.terminate() }
@@ -65,7 +71,7 @@ function createNodeWorkerPool (
     Math.max(1, Math.min(4, Math.floor(availableParallelism() / 4)))
   if (workerCount <= 1) return undefined
   return new BdkWorkerScheduler(
-    () => new BdkWorkerPool(workerCount, createNodeWorker),
+    onFailure => new BdkWorkerPool(workerCount, createNodeWorker, onFailure),
     options
   )
 }

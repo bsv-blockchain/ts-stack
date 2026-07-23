@@ -32,16 +32,16 @@ async function buildValidTx (): Promise<Transaction> {
 }
 
 describe('Transaction.verify with a pluggable verifier', () => {
-  it('routes to the verifier and returns its false result, bypassing Spend', async () => {
+  it('routes to the verifier and attributes its false result to the transaction', async () => {
     const tx = await buildValidTx()
     let called = 0
     const verifier: BdkVerifierInterface = {
       verifyScripts: async () => { called++; return false }
     }
     // Pure-JS would return true; verifier says false -> proves bypass + routing.
-    const result = await tx.verify('scripts only', undefined, undefined, verifier)
+    await expect(tx.verify('scripts only', undefined, undefined, verifier))
+      .rejects.toThrow(`Script verification failed for transaction ${tx.id('hex')}`)
     expect(called).toBe(1)
-    expect(result).toBe(false)
   })
 
   it('returns true when the verifier approves', async () => {
@@ -65,7 +65,7 @@ describe('Transaction.verify with a pluggable verifier', () => {
     expect(shouldVerifyScripts).toHaveBeenCalledWith({
       tx,
       blockHeight: 943816,
-      consensus: true
+      consensus: false
     })
     expect(verifyScripts).not.toHaveBeenCalled()
   })
@@ -79,6 +79,29 @@ describe('Transaction.verify with a pluggable verifier', () => {
     }
 
     await expect(tx.verify('scripts only', undefined, undefined, verifier)).rejects.toBe(failure)
+  })
+
+  it('bypasses a backend that cannot enforce an explicit memory limit', async () => {
+    const tx = await buildValidTx()
+    const verifyScripts = jest.fn(async () => false)
+
+    await expect(tx.verify('scripts only', undefined, 1024, {
+      verifyScripts
+    })).resolves.toBe(true)
+    expect(verifyScripts).not.toHaveBeenCalled()
+
+    const capableVerifier: BdkVerifierInterface = {
+      supportsMemoryLimit: true,
+      verifyScripts: jest.fn(async () => true)
+    }
+    await expect(tx.verify('scripts only', undefined, 1024, capableVerifier))
+      .resolves.toBe(true)
+    expect(capableVerifier.verifyScripts).toHaveBeenCalledWith({
+      tx,
+      blockHeight: 943816,
+      consensus: false,
+      memoryLimit: 1024
+    })
   })
 
   it('does not hash an already-linked transaction graph for scripts-only verification', async () => {
@@ -152,5 +175,23 @@ describe('Transaction.verify with a pluggable verifier', () => {
       verifyScripts: async () => true,
       verifyScriptsBatch: async () => []
     })).rejects.toThrow('invalid batch result count')
+  })
+
+  it('attributes a failed graph-batch verdict to the offending transaction', async () => {
+    const middle = await buildValidTx()
+    const tip = new Transaction()
+    tip.addInput({
+      sourceTransaction: middle,
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_TRUE')
+    })
+    tip.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
+
+    await expect(tip.verify('scripts only', undefined, undefined, {
+      verifyScripts: async () => true,
+      verifyScriptsBatch: async () => [true, false]
+    })).rejects.toThrow(
+      `Script verification failed for transaction ${middle.id('hex')}`
+    )
   })
 })

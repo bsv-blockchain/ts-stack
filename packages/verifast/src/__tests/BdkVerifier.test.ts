@@ -3,6 +3,7 @@ import BdkVerifier, {
   BdkErrorDomain,
   BdkVerificationError,
   DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD,
+  isStandardP2PKHScript,
   isVeriFastCandidateScript,
   type BdkVerificationResult,
   type BdkWasmModule
@@ -117,6 +118,8 @@ describe('BdkVerifier', () => {
       expect(isVeriFastCandidateScript(script(Uint8Array.of(opcode)))).toBe(true)
     }
     expect(isVeriFastCandidateScript(script(Uint8Array.of(1, OP.OP_CHECKSIG)))).toBe(false)
+    expect(isStandardP2PKHScript(new P2PKH().lock(new PrivateKey(42).toAddress()))).toBe(true)
+    expect(isStandardP2PKHScript(Script.fromASM('OP_CHECKSIG'))).toBe(false)
   })
 
   it('loads once through preload and reports synchronous readiness', async () => {
@@ -130,6 +133,42 @@ describe('BdkVerifier', () => {
     await Promise.all([verifier.preload(), verifier.preload()])
     expect(verifier.isReady()).toBe(true)
     expect(factoryCalls).toBe(1)
+  })
+
+  it('retries after a transient main-module load failure', async () => {
+    let attempts = 0
+    const verifier = new BdkVerifier(async () => {
+      attempts++
+      if (attempts === 1) throw new Error('transient load failure')
+      return makeMockModule({ domain: 0, code: 0 }, [])
+    })
+
+    await expect(verifier.preload()).rejects.toThrow('transient load failure')
+    await expect(verifier.preload()).resolves.toBeUndefined()
+    expect(verifier.isReady()).toBe(true)
+    expect(attempts).toBe(2)
+  })
+
+  it('makes disposal final', async () => {
+    const verifier = new BdkVerifier(
+      async () => makeMockModule({ domain: 0, code: 0 }, []),
+      { registerAsDefault: false }
+    )
+    const tx = await buildTx()
+    await verifier.preload()
+    verifier.dispose()
+
+    expect(verifier.isReady()).toBe(false)
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: false
+    })).toBe(false)
+    await expect(verifier.verifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: false
+    })).rejects.toThrow('disposed')
   })
 
   it('keeps a cold eligible transaction on JS, then selects WASM when ready', async () => {
@@ -167,6 +206,41 @@ describe('BdkVerifier', () => {
     )
     expect(verifier.shouldVerifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })).toBe(true)
     expect(verifier.isReady()).toBe(false)
+  })
+
+  it('keeps non-standard version-1 scripts and custom memory limits on JavaScript', async () => {
+    const tx = await buildTx()
+    const verifier = new BdkVerifier(async () =>
+      makeMockModule({ domain: 0, code: 0 }, [])
+    )
+    await verifier.preload()
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: false
+    })).toBe(true)
+
+    const source = tx.inputs[0].sourceTransaction
+    if (source === undefined) throw new Error('missing fixture source')
+    source.outputs[0].lockingScript = Script.fromASM('OP_CHECKSIG')
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: false
+    })).toBe(false)
+
+    tx.version = 2
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: true
+    })).toBe(true)
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: true,
+      memoryLimit: 1024
+    })).toBe(false)
   })
 
   it('rejects invalid adaptive routing options', () => {
@@ -391,7 +465,7 @@ describe('BdkVerifier', () => {
       expect(sourceSatoshis).toBe(sourceOutput.satoshis)
       expect(utxoHeight).toBe(943816)
       expect(blockHeight).toBe(943816)
-      expect(consensus).toBe(true)
+      expect(consensus).toBe(false)
       expect(hasFlags).toBe(false)
       expect(flags).toBe(0)
       expect(network).toBe(0)
@@ -401,5 +475,19 @@ describe('BdkVerifier', () => {
     await expect(verifier.verifySpend(spend)).resolves.toBe(true)
     await expect(spend.validateWith(verifier)).resolves.toBe(true)
     expect(calls).toBe(2)
+  })
+
+  it('rejects unsafe source satoshi values consistently before packing', async () => {
+    const spend = spendForInput(await buildTx())
+    spend.sourceSatoshis = 1.5
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifySpendArray = () => ({ domain: 0, code: 0 })
+    module.VerifySpendBatchArray = () => new Int32Array()
+    const verifier = new BdkVerifier(async () => module)
+
+    await expect(verifier.verifySpend(spend))
+      .rejects.toThrow('non-negative safe integer')
+    await expect(verifier.verifySpendsBatch([{ spend }]))
+      .rejects.toThrow('non-negative safe integer')
   })
 })

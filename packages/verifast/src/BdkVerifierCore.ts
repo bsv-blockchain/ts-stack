@@ -14,6 +14,7 @@ import { mapVerifyFlags } from './flags.js'
 import {
   DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD,
   POST_CHRONICLE_HEIGHT_FALLBACK,
+  isStandardP2PKHScript,
   isVeriFastCandidateScript,
   type BdkDigestVerification,
   type BdkNetwork,
@@ -83,6 +84,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
   private readonly defaultConsensus: boolean
   private readonly registeredAsDefault: boolean
   private modulePrepared = false
+  private disposed = false
 
   constructor (
     private readonly factory: BdkWasmFactory,
@@ -132,11 +134,19 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
   }
 
   private async getModule (): Promise<BdkWasmModule> {
+    if (this.disposed) throw new Error('BDK verifier has been disposed')
     if (this.module !== undefined) return this.module
-    this.loading ??= this.factory().then((module) => {
-      this.module = module
-      return module
-    })
+    if (this.loading === undefined) {
+      const loading = Promise.resolve().then(async () => await this.factory()).then(module => {
+        if (this.disposed) throw new Error('BDK verifier has been disposed')
+        this.module = module
+        return module
+      })
+      this.loading = loading
+      void loading.finally(() => {
+        if (this.loading === loading) this.loading = undefined
+      }).catch(() => {})
+    }
     return await this.loading
   }
 
@@ -162,12 +172,17 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
 
   /** True only after the WASM module has finished loading successfully. */
   isReady (): boolean {
-    return this.module !== undefined
+    return !this.disposed && this.module !== undefined
   }
 
   /** Stop using this instance as the SDK's optional default backend. */
   dispose (): void {
+    if (this.disposed) return
+    this.disposed = true
     this.workerScheduler?.terminate()
+    this.module = undefined
+    this.loading = undefined
+    this.modulePrepared = false
     if (!this.registeredAsDefault) return
     const registry = backendGlobal()
     if (registry.__bsvSdkAsyncCryptoBackendV1 === this) {
@@ -193,7 +208,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
   }
 
   private schedulePreload (): void {
-    if (this.module !== undefined || this.loading !== undefined || this.preloadScheduled) return
+    if (this.disposed || this.module !== undefined || this.loading !== undefined || this.preloadScheduled) return
     this.preloadScheduled = true
     setTimeout(() => {
       this.preloadScheduled = false
@@ -202,6 +217,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
   }
 
   private prepareCandidate (): boolean {
+    if (this.disposed) return false
     if (this.mode === 'always') return true
     if (this.isReady()) return true
     // Auto mode never waits on cold WASM. A later eligible call can use the
@@ -212,9 +228,20 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
 
   /** Selection hook consumed by Transaction.verify without coupling the SDK to this package. */
   shouldVerifyScripts (params: BdkVerifyParams): boolean {
-    if (this.mode === 'always') return true
-    const candidate = params.tx.inputs.some(input => {
-      const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
+    if (params.memoryLimit !== undefined) return false
+    if (this.mode === 'always') return !this.disposed
+    const sourceOutputs = params.tx.inputs.map(input =>
+      input.sourceTransaction?.outputs[input.sourceOutputIndex]
+    )
+    if (
+      params.tx.version <= 1 &&
+      sourceOutputs.some(output =>
+        output === undefined || !isStandardP2PKHScript(output.lockingScript)
+      )
+    ) {
+      return false
+    }
+    const candidate = sourceOutputs.some(sourceOutput => {
       return sourceOutput !== undefined &&
         isVeriFastCandidateScript(sourceOutput.lockingScript, this.scriptByteThreshold)
     })
@@ -223,13 +250,18 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
 
   /** Selection hook consumed by Spend.validateWith. */
   shouldVerifySpend (spend: Spend): boolean {
-    if (this.mode === 'always') return true
+    if (spend.memoryLimit !== 32000000) return false
+    if (this.mode === 'always') return !this.disposed
+    if (spend.transactionVersion <= 1 && !isStandardP2PKHScript(spend.lockingScript)) return false
     if (this.module !== undefined && this.module.VerifySpendArray === undefined) return false
     return isVeriFastCandidateScript(spend.lockingScript, this.scriptByteThreshold) &&
       this.prepareCandidate()
   }
 
   private transactionParams (params: BdkVerifyParams): BdkVerifyFromEFParams {
+    if (params.memoryLimit !== undefined) {
+      throw new Error('VeriFast cannot enforce a custom script memory limit')
+    }
     return {
       extendedTransaction: params.tx.toEFBinary(),
       utxoHeights: params.tx.inputs.map(
@@ -414,6 +446,9 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
     spend: Spend,
     options: BdkVerifySpendOptions = {}
   ): BdkSpendContext {
+    if (!Number.isSafeInteger(spend.sourceSatoshis) || spend.sourceSatoshis < 0) {
+      throw new RangeError('sourceSatoshis must be a non-negative safe integer')
+    }
     const verifyFlags = options.verifyFlags ?? (spend.verifyFlags === undefined ? undefined : [...spend.verifyFlags])
     return {
       transaction: spend.toTransactionUint8Array(),
@@ -421,7 +456,8 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
       customFlags: verifyFlags === undefined ? undefined : mapVerifyFlags(verifyFlags),
       utxoHeight: options.utxoHeight ?? this.defaultUtxoHeight,
       blockHeight: options.blockHeight ?? this.defaultBlockHeight,
-      consensus: options.consensus ?? this.defaultConsensus
+      consensus: options.consensus ??
+        (spend.transactionVersion <= 1 ? false : this.defaultConsensus)
     }
   }
 

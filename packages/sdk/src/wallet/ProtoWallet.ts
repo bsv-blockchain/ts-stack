@@ -10,7 +10,9 @@ import {
   Point,
   PrivateKey,
   SymmetricKey,
-  readyAsyncCryptoBackend
+  readyAsyncCryptoBackend,
+  isAsyncCryptoDigest,
+  validateAsyncCryptoBytes
 } from '../primitives/index.js'
 import {
   CreateHmacArgs,
@@ -32,7 +34,7 @@ import {
   WalletEncryptArgs,
   WalletEncryptResult
 } from './Wallet.interfaces.js'
-import { constantTimeEquals, toArray, toHex } from '../primitives/utils.js'
+import { constantTimeEquals, toArray } from '../primitives/utils.js'
 
 function keyDeriverOrThrow (keyDeriver?: KeyDeriverApi): KeyDeriverApi {
   return keyDeriver ??
@@ -109,10 +111,16 @@ export class ProtoWallet {
       const rootKey = keyDeriverOrThrow(this.keyDeriver).rootKey
       const backend = readyAsyncCryptoBackend('publicKeyFromPrivate')
       if (backend !== undefined) {
-        const publicKey = await backend.publicKeyFromPrivate(
-          Uint8Array.from(rootKey.toArray('be', 32))
+        const publicKey = validateAsyncCryptoBytes(
+          'publicKeyFromPrivate',
+          await backend.publicKeyFromPrivate(
+            Uint8Array.from(rootKey.toArray('be', 32))
+          ),
+          33
         )
-        return { publicKey: toHex(publicKey) }
+        return {
+          publicKey: PublicKey.fromDER(Array.from(publicKey)).toString()
+        }
       }
       return { publicKey: rootKey.toPublicKey().toString() }
     } else {
@@ -290,14 +298,20 @@ export class ProtoWallet {
       args.counterparty ?? 'anyone'
     )
 
-    const backend = readyAsyncCryptoBackend('signDigest')
-    return {
-      signature: backend === undefined
-        ? ECDSA.sign(new BigNumber(hash), key, true).toDER() as number[]
-        : Array.from(await backend.signDigest(
+    const backend = isAsyncCryptoDigest(hash)
+      ? readyAsyncCryptoBackend('signDigest')
+      : undefined
+    const signature = backend === undefined
+      ? ECDSA.sign(new BigNumber(hash), key, true)
+      : Signature.fromDER(Array.from(validateAsyncCryptoBytes(
+        'signDigest',
+        await backend.signDigest(
           Uint8Array.from(key.toArray('be', 32)),
           Uint8Array.from(hash)
-        ))
+        )
+      )))
+    return {
+      signature: signature.toDER() as number[]
     }
   }
 
@@ -312,13 +326,15 @@ export class ProtoWallet {
       args.hashToDirectlyVerify ?? Hash.sha256(args.data ?? [])
     const key = await derivePublicKey(keyDeriverOrThrow(this.keyDeriver), args)
     const parsedSignature = Signature.fromDER(args.signature)
-    const backend = readyAsyncCryptoBackend('verifyDigest')
+    const backend = isAsyncCryptoDigest(hash)
+      ? readyAsyncCryptoBackend('verifyDigest')
+      : undefined
     const valid = backend === undefined
       ? ECDSA.verify(new BigNumber(hash), parsedSignature, key)
       : await backend.verifyDigest(
         Uint8Array.from(key.encode(true) as number[]),
         Uint8Array.from(hash),
-        Uint8Array.from(args.signature)
+        Uint8Array.from(parsedSignature.toDER() as number[])
       )
 
     if (!valid) {

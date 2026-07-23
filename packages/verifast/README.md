@@ -12,6 +12,12 @@ strictly larger than 100 bytes and scripts containing `CHECKSIG` or
 `CHECKMULTISIG` variants use WASM once it is ready, and smaller non-cryptographic
 scripts retain the SDK's JavaScript interpreter.
 
+Version-1 automatic routing is limited to canonical P2PKH spends and uses
+BDK's policy lane so LOW_S, MINIMALDATA, CLEANSTACK, and related interpreter
+strictness remain timing-independent. Calls with an explicit SDK script-memory
+limit stay on the JavaScript interpreter because this WASM ABI cannot enforce
+that limit.
+
 ```ts
 import { Transaction } from '@bsv/sdk'
 import { BdkVerifier } from '@bsv/verifast'
@@ -46,7 +52,10 @@ const valid = await verifier.verifyScriptsFromEF({
 invalidates it when transaction or referenced source-output state changes.
 Treat that returned view as immutable and call `.slice()` when independently
 mutable bytes are required. `toEFUint8Array()` is an equivalent typed alias;
-legacy `toEF()` continues to return `number[]`.
+legacy `toEF()` continues to return `number[]`. Script changes should use the
+SDK's mutation methods or replace `script.chunks`; mutating a returned
+`ScriptChunk` object in place bypasses the Script layer's serialization-cache
+invalidation.
 
 ## Spend and batch verification
 
@@ -88,7 +97,8 @@ The main instance generates libsecp256k1's 1 MiB W15 verification tables once.
 Workers import that snapshot instead of regenerating it. `SharedArrayBuffer` is
 used opportunistically when available; ordinary structured cloning remains the
 browser-compatible fallback and does not require cross-origin isolation. Call
-`dispose()` when a short-lived verifier no longer needs its warm pool.
+`dispose()` when a short-lived verifier no longer needs its warm pool. Disposal
+is final; later calls reject instead of silently creating new workers.
 
 The default limits are 256 items and 32 MiB of input data per chunk and can be
 lowered with `maxBatchItems` and `maxBatchBytes`. Packing principally reduces
@@ -151,7 +161,7 @@ the SDK implementation. Worker scheduling and its internal table-snapshot ABI
 remain in the full ESM/worker artifact, so the classic path ships only the
 public typed verifier and cryptography APIs. The build rejects a complete
 classic-script payload over 300,000 bytes, counting both loaders and WASM; the
-current payload is 297,505 bytes.
+current payload is 298,567 bytes.
 
 An optional custom WASM factory remains supported:
 
@@ -184,9 +194,14 @@ names throw rather than being ignored.
 
 ## Reproducibility and validation
 
-The bundled module is built from BDK 1.2.2 plus `bitcoin-sv` commit
+The bundled module is built from BDK 1.2.2 at `bitcoin-sv/bdk` commit
+`6d1e8092e8a9917d2544cddc9e20c6dc38242d93`, plus `bitcoin-sv` commit
 `879fc8b42168dd0e608dafd51b39c6dabad37d4d`, Emscripten 4.0.23, and Boost
-1.85.0. The verifier-only target does not link OpenSSL. BDK's
+1.85.0. The verifier-only target does not link OpenSSL. The main and classic
+WASM binaries have SHA-256 hashes
+`35bb36ee9732ff0432ca3b194f69b132aa4d555ba81fc28c6d922b38cd914189` and
+`a840c115b4f9297d33423712983ee95e294adf1056a946dd27c94f93253ceb75`;
+the build verifies every pinned generated artifact before copying it. BDK's
 `module/typesbdk/wasm/build.sh` verifies pinned inputs, performs a clean build,
 runs libsecp256k1's verified, non-verified, and exhaustive WASM tests, then
 validates the vector, typed, transaction-batch, Spend, and Spend-batch ABIs

@@ -32,6 +32,7 @@ function createBrowserWorker (): WorkerAdapter {
     onError: handler => {
       worker.onerror = event => handler(new Error(event.message))
     },
+    onExit: () => {},
     terminate: () => { worker.terminate() }
   }
 }
@@ -53,7 +54,7 @@ function createBrowserWorkerPool (
     Math.max(1, Math.min(4, Math.floor(logicalCores / 4)))
   if (workerCount <= 1) return undefined
   return new BdkWorkerScheduler(
-    () => new BdkWorkerPool(workerCount, createBrowserWorker),
+    onFailure => new BdkWorkerPool(workerCount, createBrowserWorker, onFailure),
     options
   )
 }

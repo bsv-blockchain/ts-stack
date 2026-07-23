@@ -2,6 +2,8 @@ import {
   readyAsyncCryptoBackend,
   registerAsyncCryptoBackend,
   unregisterAsyncCryptoBackend,
+  isAsyncCryptoDigest,
+  validateAsyncCryptoBytes,
   type AsyncCryptoBackend,
   type AsyncCryptoOperation
 } from '../AsyncCryptoBackend'
@@ -39,5 +41,24 @@ describe('optional async cryptography backend', () => {
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }
+  })
+
+  it('recognizes only canonical 32-byte digests', () => {
+    expect(isAsyncCryptoDigest(new Array(32).fill(0))).toBe(true)
+    expect(isAsyncCryptoDigest(new Array(31).fill(0))).toBe(false)
+    expect(isAsyncCryptoDigest([...new Array(31).fill(0), 256])).toBe(false)
+  })
+
+  it('rejects malformed backend byte results', () => {
+    expect(validateAsyncCryptoBytes(
+      'publicKeyFromPrivate',
+      new Uint8Array(33),
+      33
+    )).toHaveLength(33)
+    expect(() => validateAsyncCryptoBytes(
+      'publicKeyFromPrivate',
+      new Uint8Array(32),
+      33
+    )).toThrow('expected 33')
   })
 })

@@ -1064,6 +1064,7 @@ export default class Transaction {
       tx: Transaction
       blockHeight: number
       consensus: boolean
+      memoryLimit?: number
     }> = []
     let queueIndex = 0
 
@@ -1114,9 +1115,11 @@ export default class Transaction {
       const verifierParams = {
         tx,
         blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
-        consensus: true
+        consensus: tx.version > 1,
+        ...(memoryLimit === undefined ? {} : { memoryLimit })
       } as const
       const useVerifier = selectedVerifier !== undefined &&
+        (memoryLimit === undefined || selectedVerifier.supportsMemoryLimit === true) &&
         (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
 
       // Verify each input transaction and evaluate the spend events.
@@ -1217,7 +1220,12 @@ export default class Transaction {
       if (scriptVerdicts.length !== verifierQueue.length) {
         throw new Error('Script verifier returned an invalid batch result count')
       }
-      if (scriptVerdicts.some(valid => !valid)) return false
+      const failedIndex = scriptVerdicts.findIndex(valid => !valid)
+      if (failedIndex >= 0) {
+        throw new Error(
+          `Script verification failed for transaction ${verifierQueue[failedIndex].tx.id('hex')}`
+        )
+      }
     }
 
     return true

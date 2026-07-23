@@ -88,7 +88,13 @@ export function createWorkerRequestHandler (
 ): (request: BdkWorkerRequest) => Promise<void> {
   let modulePromise: Promise<BdkWasmModule> | undefined
   const getModule = async (): Promise<BdkWasmModule> => {
-    modulePromise ??= factory()
+    if (modulePromise === undefined) {
+      const loading = Promise.resolve().then(async () => await factory())
+      modulePromise = loading
+      void loading.catch(() => {
+        if (modulePromise === loading) modulePromise = undefined
+      })
+    }
     return await modulePromise
   }
 

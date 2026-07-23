@@ -35,6 +35,7 @@ export interface BdkVerifyParams {
   blockHeight: number
   consensus: boolean
   verifyFlags?: string | string[]
+  memoryLimit?: number
 }
 
 export type BdkVerifierMode = 'auto' | 'always'
@@ -117,6 +118,17 @@ export function isVeriFastCandidateScript (
   }
   if (script.toUint8Array().byteLength > scriptByteThreshold) return true
   return script.chunks.some(chunk => SIGNATURE_OPS.has(chunk.op))
+}
+
+/** True only for the canonical 25-byte DUP HASH160 PUSH20 EQUALVERIFY CHECKSIG form. */
+export function isStandardP2PKHScript (script: Script): boolean {
+  const bytes = script.toUint8Array()
+  return bytes.byteLength === 25 &&
+    bytes[0] === 0x76 &&
+    bytes[1] === 0xa9 &&
+    bytes[2] === 0x14 &&
+    bytes[23] === 0x88 &&
+    bytes[24] === 0xac
 }
 
 /** Raised when BDK reports an exception domain, malformed result, or unknown ABI domain. */

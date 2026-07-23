@@ -8,7 +8,8 @@ import {
   BigNumber,
   Curve,
   type AsyncCryptoBackend,
-  readyAsyncCryptoBackend
+  readyAsyncCryptoBackend,
+  validateAsyncCryptoBytes
 } from '../primitives/index.js'
 import { WalletProtocol, PubKeyHex } from './Wallet.interfaces.js'
 
@@ -244,16 +245,21 @@ export class KeyDeriver implements KeyDeriverApi {
     if (retrieved !== undefined) {
       return Uint8Array.from(retrieved.encode(true) as number[])
     }
-    const sharedSecret = await backend.multiplyPublicKey(
-      Uint8Array.from(counterparty.encode(true) as number[]),
-      Uint8Array.from(this.rootKey.toArray('be', 32))
+    const sharedSecret = validateAsyncCryptoBytes(
+      'multiplyPublicKey',
+      await backend.multiplyPublicKey(
+        Uint8Array.from(counterparty.encode(true) as number[]),
+        Uint8Array.from(this.rootKey.toArray('be', 32))
+      ),
+      33
     )
+    const sharedSecretPoint = Point.fromDER(Array.from(sharedSecret))
     this.cacheSharedSecret?.(
       this.rootKey,
       counterparty,
-      Point.fromDER(Array.from(sharedSecret))
+      sharedSecretPoint
     )
-    return sharedSecret
+    return Uint8Array.from(sharedSecretPoint.encode(true) as number[])
   }
 
   private async childTweak (
@@ -291,18 +297,28 @@ export class KeyDeriver implements KeyDeriverApi {
     const tweak = await this.childTweak(
       backend, protocolID, keyID, normalizedCounterparty
     )
-    const publicKey = forSelf
-      ? await backend.publicKeyFromPrivate(
+    let publicKey: Uint8Array
+    if (forSelf) {
+      const privateKey = validateAsyncCryptoBytes(
+        'tweakPrivateKeyAdd',
         await backend.tweakPrivateKeyAdd(
           Uint8Array.from(this.rootKey.toArray('be', 32)),
           tweak
-        )
+        ),
+        32
       )
-      : await backend.tweakPublicKeyAdd(
+      publicKey = await backend.publicKeyFromPrivate(privateKey)
+    } else {
+      publicKey = await backend.tweakPublicKeyAdd(
         Uint8Array.from(normalizedCounterparty.encode(true) as number[]),
         tweak
       )
-    return PublicKey.fromDER(Array.from(publicKey))
+    }
+    return PublicKey.fromDER(Array.from(validateAsyncCryptoBytes(
+      forSelf ? 'publicKeyFromPrivate' : 'tweakPublicKeyAdd',
+      publicKey,
+      33
+    )))
   }
 
   async deriveSymmetricKeyAsync (
@@ -323,7 +339,7 @@ export class KeyDeriver implements KeyDeriverApi {
     const tweak = await this.childTweak(
       backend, protocolID, keyID, normalizedCounterparty
     )
-    const [privateKey, publicKey] = await Promise.all([
+    const [privateKeyResult, publicKeyResult] = await Promise.all([
       backend.tweakPrivateKeyAdd(
         Uint8Array.from(this.rootKey.toArray('be', 32)),
         tweak
@@ -333,10 +349,26 @@ export class KeyDeriver implements KeyDeriverApi {
         tweak
       )
     ])
-    const sharedSecret = await backend.multiplyPublicKey(
-      publicKey,
-      privateKey
+    const privateKey = validateAsyncCryptoBytes(
+      'tweakPrivateKeyAdd',
+      privateKeyResult,
+      32
     )
+    const publicKey = validateAsyncCryptoBytes(
+      'tweakPublicKeyAdd',
+      publicKeyResult,
+      33
+    )
+    PublicKey.fromDER(Array.from(publicKey))
+    const sharedSecret = validateAsyncCryptoBytes(
+      'multiplyPublicKey',
+      await backend.multiplyPublicKey(
+        publicKey,
+        privateKey
+      ),
+      33
+    )
+    Point.fromDER(Array.from(sharedSecret))
     return new SymmetricKey(Array.from(sharedSecret.slice(1)))
   }
 

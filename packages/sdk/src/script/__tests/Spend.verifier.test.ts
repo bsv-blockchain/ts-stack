@@ -79,7 +79,9 @@ describe('Spend verifier integration', () => {
     }
     registerScriptVerificationBackend(backend)
     try {
-      expect(spend.validate()).toBe(false)
+      expect(() => spend.validate()).toThrow(
+        'The selected script-verification backend rejected the spend.'
+      )
       expect(backend.shouldVerifySpend).toHaveBeenCalledWith(spend)
       expect(backend.verifySpendSync).toHaveBeenCalledWith(spend)
     } finally {

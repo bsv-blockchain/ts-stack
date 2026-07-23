@@ -8,12 +8,14 @@
   },
   "type": "module",
   "description": "Optional C++/WASM (BDK) transaction script-verification backend for @bsv/sdk",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "main": "dist/cjs/mod.cjs",
   "module": "dist/mod.js",
   "types": "dist/mod.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "exports": {
     ".": {
@@ -34,14 +36,15 @@
     "./wasm/bdk-core.wasm": "./dist/src/wasm/bdk-core.wasm"
   },
   "scripts": {
-    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs && node scripts/check-bundle-size.mjs",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "build": "node scripts/check-artifacts.mjs && node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs && node scripts/check-bundle-size.mjs",
+    "test": "pnpm build && NODE_OPTIONS=--experimental-vm-modules jest && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs",
+    "check:artifacts": "node scripts/check-artifacts.mjs",
     "bench": "tsx bench/benchmark.ts",
     "bench:batch": "node --expose-gc --import tsx bench/batch-benchmark.ts",
     "bench:crypto": "node --import tsx bench/crypto-benchmark.ts",
     "bench:warmup": "node --import tsx bench/warmup-benchmark.ts",
     "test:browser": "pnpm build && node browser/test.mjs",
-    "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node browser/test.mjs",
+    "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs && node browser/test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

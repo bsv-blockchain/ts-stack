@@ -39,7 +39,13 @@ function mapVerifyFlags (verifyFlags) {
 
 let esm
 function load () {
-  esm ||= import('../mod.js')
+  if (esm === undefined) {
+    const loading = import('../mod.js')
+    esm = loading
+    void loading.catch(() => {
+      if (esm === loading) esm = undefined
+    })
+  }
   return esm
 }
 
@@ -56,6 +62,7 @@ class BdkVerifier {
     const options = typeof args[0] === 'function' ? (args[1] || {}) : (args[0] || {})
     this.mode = options.mode || 'auto'
     this.registeredAsDefault = options.registerAsDefault ?? true
+    this.disposed = false
     if (this.mode !== 'auto' && this.mode !== 'always') {
       throw new RangeError("mode must be either 'auto' or 'always'")
     }
@@ -70,10 +77,18 @@ class BdkVerifier {
   }
 
   getInstance () {
-    this.instance ||= load().then(({ BdkVerifier }) => {
-      this.resolvedInstance = new BdkVerifier(...this.args)
-      return this.resolvedInstance
-    })
+    if (this.disposed) return Promise.reject(new Error('BDK verifier has been disposed'))
+    if (this.instance === undefined) {
+      const loading = load().then(({ BdkVerifier }) => {
+        if (this.disposed) throw new Error('BDK verifier has been disposed')
+        this.resolvedInstance = new BdkVerifier(...this.args)
+        return this.resolvedInstance
+      })
+      this.instance = loading
+      void loading.catch(() => {
+        if (this.instance === loading) this.instance = undefined
+      })
+    }
     return this.instance
   }
 
@@ -101,7 +116,11 @@ class BdkVerifier {
   }
 
   dispose () {
+    if (this.disposed) return
+    this.disposed = true
     this.resolvedInstance?.dispose()
+    this.resolvedInstance = undefined
+    this.instance = undefined
     if (globalThis.__bsvSdkAsyncCryptoBackendV1 === this) {
       delete globalThis.__bsvSdkAsyncCryptoBackendV1
     }
@@ -111,7 +130,7 @@ class BdkVerifier {
   }
 
   schedulePreparation (prepare) {
-    if (this.resolvedInstance !== undefined || this.instance !== undefined || this.preparationScheduled) return
+    if (this.disposed || this.resolvedInstance !== undefined || this.instance !== undefined || this.preparationScheduled) return
     this.preparationScheduled = true
     setTimeout(() => {
       this.preparationScheduled = false
@@ -120,6 +139,7 @@ class BdkVerifier {
   }
 
   shouldVerifyScripts (params) {
+    if (this.disposed) return false
     if (this.mode === 'always') return true
     if (this.resolvedInstance !== undefined) return this.resolvedInstance.shouldVerifyScripts(params)
     this.schedulePreparation(instance => { instance.shouldVerifyScripts(params) })
@@ -127,6 +147,7 @@ class BdkVerifier {
   }
 
   shouldVerifySpend (spend) {
+    if (this.disposed) return false
     if (this.mode === 'always') return true
     if (this.resolvedInstance !== undefined) return this.resolvedInstance.shouldVerifySpend(spend)
     this.schedulePreparation(instance => { instance.shouldVerifySpend(spend) })

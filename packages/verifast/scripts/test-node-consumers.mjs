@@ -47,11 +47,14 @@ for (const [name, api] of [['ESM', esm], ['CommonJS', cjs]]) {
   assert.equal(verifier.isReady(), true, `${name} preloaded readiness`)
   assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), true, `${name} P2PKH auto selection`)
   const sourceLock = source.outputs[input.sourceOutputIndex].lockingScript
+  const transactionVersion = tx.version
+  tx.version = 2
   source.outputs[input.sourceOutputIndex].lockingScript = Script.fromBinaryView(new Uint8Array(100).fill(0x51))
   assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), false, `${name} 100-byte boundary`)
   source.outputs[input.sourceOutputIndex].lockingScript = Script.fromBinaryView(new Uint8Array(101).fill(0x51))
   assert.equal(verifier.shouldVerifyScripts({ tx, blockHeight: 800000, consensus: true }), true, `${name} 101-byte boundary`)
   source.outputs[input.sourceOutputIndex].lockingScript = sourceLock
+  tx.version = transactionVersion
   assert.equal(await tx.verify('scripts only', undefined, undefined, verifier), true, `${name} SDK auto route`)
   assert.equal(await verifier.verifyScripts({ tx, blockHeight: 800000, consensus: true }), true, name)
   assert.equal(await verifier.verifyScriptsFromEF({
@@ -64,5 +67,22 @@ for (const [name, api] of [['ESM', esm], ['CommonJS', cjs]]) {
   assert.deepEqual(await verifier.verifySpendsBatch([{ spend }, { spend }]), [true, true], `${name} Spend batch`)
   assert.equal(api.BdkErrorDomain.OK, 0, `${name} enum name`)
   assert.equal(api.BdkErrorDomain[0], 'OK', `${name} enum reverse mapping`)
+  verifier.dispose()
   console.log(`ok - ${name} package export and real WASM verification`)
 }
+
+const workerVerifier = new esm.BdkVerifier({
+  batchWorkers: 2,
+  batchWorkerThreshold: 2,
+  registerAsDefault: false
+})
+await workerVerifier.preloadBatch()
+assert.deepEqual(
+  await workerVerifier.verifySpendsBatch(
+    Array.from({ length: 5 }, () => ({ spend }))
+  ),
+  [true, true, true, true, true],
+  'ESM real Node worker batch'
+)
+workerVerifier.dispose()
+console.log('ok - ESM real Node worker batch')

@@ -1474,13 +1474,11 @@ export default class Spend {
   /**
    * @method validate
    * Validates the spend action by interpreting the locking and unlocking scripts.
-   * @returns {boolean} Returns true if the scripts are valid and the spend is legitimate, otherwise false.
+   * @returns {boolean} Returns true when the spend is valid.
+   * @throws {ScriptEvaluationError} If script validation fails.
    * @example
-   * if (spend.validate()) {
-   *   console.log("Spend is valid!");
-   * } else {
-   *   console.log("Invalid spend!");
-   * }
+   * spend.validate()
+   * console.log("Spend is valid!")
    */
   validate (): boolean {
     const verifier = scriptVerificationBackend()
@@ -1489,7 +1487,12 @@ export default class Spend {
       (verifier.isReady?.() ?? true) &&
       (verifier.shouldVerifySpend?.(this) ?? true)
     ) {
-      return verifier.verifySpendSync(this)
+      if (!verifier.verifySpendSync(this)) {
+        this.scriptEvaluationError(
+          'The selected script-verification backend rejected the spend.'
+        )
+      }
+      return true
     }
     return this.validateJavaScript()
   }

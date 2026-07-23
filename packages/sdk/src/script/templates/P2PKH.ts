@@ -10,7 +10,11 @@ import { sha256 } from '../../primitives/Hash.js'
 import Script from '../Script.js'
 import { computeSignatureScope, resolveSourceDetails, formatPreimage } from './SignatureUtils.js'
 import Signature from '../../primitives/Signature.js'
-import { readyAsyncCryptoBackend } from '../../primitives/AsyncCryptoBackend.js'
+import PublicKey from '../../primitives/PublicKey.js'
+import {
+  readyAsyncCryptoBackend,
+  validateAsyncCryptoBytes
+} from '../../primitives/AsyncCryptoBackend.js'
 
 /**
  * P2PKH (Pay To Public Key Hash) class implementing ScriptTemplate.
@@ -93,12 +97,15 @@ export default class P2PKH implements ScriptTemplate {
         const signingBackend = readyAsyncCryptoBackend('signDigest')
         const rawSignature = signingBackend === undefined
           ? privateKey.sign(preimageHash)
-          : Signature.fromDER(Array.from(await signingBackend.signDigest(
-            Uint8Array.from(privateKey.toArray('be', 32)),
-            // PrivateKey.sign hashes its argument before ECDSA signing.
-            // Preserve that historical double-SHA256 contract when passing a
-            // digest to a backend that signs the supplied bytes directly.
-            Uint8Array.from(sha256(preimageHash))
+          : Signature.fromDER(Array.from(validateAsyncCryptoBytes(
+            'signDigest',
+            await signingBackend.signDigest(
+              Uint8Array.from(privateKey.toArray('be', 32)),
+              // PrivateKey.sign hashes its argument before ECDSA signing.
+              // Preserve that historical double-SHA256 contract when passing a
+              // digest to a backend that signs the supplied bytes directly.
+              Uint8Array.from(sha256(preimageHash))
+            )
           )))
         const sig = new TransactionSignature(
           rawSignature.r,
@@ -109,9 +116,13 @@ export default class P2PKH implements ScriptTemplate {
         const publicKeyBackend = readyAsyncCryptoBackend('publicKeyFromPrivate')
         const pubkeyForScript = publicKeyBackend === undefined
           ? privateKey.toPublicKey().encode(true) as number[]
-          : Array.from(await publicKeyBackend.publicKeyFromPrivate(
-            Uint8Array.from(privateKey.toArray('be', 32))
-          ))
+          : PublicKey.fromDER(Array.from(validateAsyncCryptoBytes(
+            'publicKeyFromPrivate',
+            await publicKeyBackend.publicKeyFromPrivate(
+              Uint8Array.from(privateKey.toArray('be', 32))
+            ),
+            33
+          ))).encode(true) as number[]
         return new UnlockingScript([
           { op: sigForScript.length, data: sigForScript },
           { op: pubkeyForScript.length, data: pubkeyForScript }

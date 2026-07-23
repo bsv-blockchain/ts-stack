@@ -141,6 +141,11 @@ export default class Script {
     this.hexCache = hexCache
   }
 
+  /**
+   * Script chunks. Use the Script mutation methods or assign a replacement
+   * array through this property; mutating returned chunk objects in place
+   * bypasses serialization-cache invalidation.
+   */
   get chunks (): ScriptChunk[] {
     this.ensureParsed()
     return this._chunks

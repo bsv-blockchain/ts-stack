@@ -4,12 +4,14 @@ import {
   ECDSA,
   Hash,
   KeyDeriver,
+  MerklePath,
   P2PKH,
   PrivateKey,
   ProtoWallet,
   Script,
   Signature,
-  Transaction
+  Transaction,
+  TransactionSignature
 } from '@bsv/sdk'
 import BdkVerifier, { BdkErrorDomain } from '../BdkVerifier.js'
 import { buildCorpus, spendsForTransaction } from '../../bench/corpus.js'
@@ -36,6 +38,9 @@ async function p2pkhTransaction (key: PrivateKey): Promise<Transaction> {
     satoshis: 2,
     lockingScript: new P2PKH().lock(key.toAddress())
   })
+  source.merklePath = new MerklePath(777, [
+    [{ offset: 0, hash: source.id('hex'), txid: true }, { offset: 1, duplicate: true }]
+  ])
   const transaction = new Transaction()
   transaction.addInput({
     sourceTransaction: source,
@@ -93,6 +98,89 @@ describe('bundled BDK WASM in Node', () => {
     await expect(verifier.verifySpend(spends[0])).resolves.toBe(true)
     await expect(verifier.verifySpendsBatch(spends.map(spend => ({ spend })))).resolves.toEqual(expected)
     expect(expected.filter(valid => !valid)).toHaveLength(1)
+  })
+
+  it('keeps version-1 strictness identical before and after WASM warm-up', async () => {
+    const source = new Transaction()
+    source.addInput({
+      sourceTXID: '00'.repeat(32),
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_TRUE')
+    })
+    source.addOutput({
+      satoshis: 2,
+      lockingScript: Script.fromASM('OP_DROP OP_TRUE')
+    })
+    source.merklePath = new MerklePath(777, [
+      [{ offset: 0, hash: source.id('hex'), txid: true }, { offset: 1, duplicate: true }]
+    ])
+    const tx = new Transaction()
+    tx.addInput({
+      sourceTransaction: source,
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromBinary([0x4c, 0x01, 0x01])
+    })
+    tx.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
+
+    await expect(tx.verify('scripts only')).rejects.toThrow('not minimally-encoded')
+
+    const verifier = new BdkVerifier({ registerAsDefault: false })
+    await verifier.preload()
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 943816,
+      consensus: false
+    })).toBe(false)
+    await expect(tx.verify('scripts only', undefined, undefined, verifier))
+      .rejects.toThrow('not minimally-encoded')
+
+    await expect(verifier.verifyScripts({
+      tx,
+      blockHeight: 943816,
+      consensus: true
+    })).resolves.toBe(true)
+    await expect(verifier.verifyScripts({
+      tx,
+      blockHeight: 943816,
+      consensus: false
+    })).resolves.toBe(false)
+
+    const highSTx = await p2pkhTransaction(new PrivateKey(42))
+    const unlockingScript = highSTx.inputs[0].unlockingScript
+    if (unlockingScript === undefined) throw new Error('missing signed P2PKH fixture')
+    const chunks = unlockingScript.chunks
+    const signatureBytes = chunks[0].data
+    if (signatureBytes === undefined) throw new Error('missing P2PKH signature')
+    const signature = TransactionSignature.fromChecksigFormat(signatureBytes)
+    const highSignature = new TransactionSignature(
+      signature.r,
+      new Curve().n.sub(signature.s),
+      signature.scope
+    ).toChecksigFormat()
+    unlockingScript.chunks = [
+      { op: highSignature.length, data: highSignature },
+      chunks[1]
+    ]
+
+    await expect(highSTx.verify('scripts only')).rejects.toThrow()
+    expect(verifier.shouldVerifyScripts({
+      tx: highSTx,
+      blockHeight: 943816,
+      consensus: false
+    })).toBe(true)
+    await expect(highSTx.verify('scripts only', undefined, undefined, verifier))
+      .rejects.toThrow(`Script verification failed for transaction ${highSTx.id('hex')}`)
+    await expect(verifier.verifyScripts({
+      tx: highSTx,
+      blockHeight: 943816,
+      consensus: true
+    })).resolves.toBe(false)
+    await expect(verifier.verifyScripts({
+      tx: highSTx,
+      blockHeight: 943816,
+      consensus: false
+    })).resolves.toBe(false)
+    verifier.dispose()
   })
 
   it.each([
