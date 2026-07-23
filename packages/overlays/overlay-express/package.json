@@ -70,10 +70,10 @@
     "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
-    "@bsv/auth-express-middleware": "^2.1.0",
-    "@bsv/overlay": "^2.1.1",
+    "@bsv/auth-express-middleware": "^2.1.1",
+    "@bsv/overlay": "^2.2.0",
     "@bsv/overlay-discovery-services": "^2.1.0",
-    "@bsv/wallet-toolbox-client": "^2.3.3",
+    "@bsv/wallet-toolbox-client": "^2.4.3",
     "body-parser": "^2.3.0",
     "chalk": "^5.6.2",
     "express": "^5.2.1",
@@ -82,7 +82,7 @@
     "uuid": "^14.0.1"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.9"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

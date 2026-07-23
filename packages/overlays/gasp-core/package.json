@@ -64,7 +64,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.9"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

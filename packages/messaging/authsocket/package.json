@@ -59,7 +59,7 @@
   },
   "devDependencies": {
     "@bsv/authsocket-client": "^2.1.0",
-    "@bsv/message-box-client": "^2.2.0",
+    "@bsv/message-box-client": "^2.2.1",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
@@ -74,7 +74,7 @@
     "@bsv/sdk": "workspace:^"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.9"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
