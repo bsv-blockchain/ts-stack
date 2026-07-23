@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { SwcJsMinimizerRspackPlugin } from '@rspack/core'
 
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -15,6 +16,24 @@ export default {
     },
     globalObject: 'globalThis'
   },
-  optimization: { minimize: true },
+  optimization: {
+    minimize: true,
+    minimizer: [
+      new SwcJsMinimizerRspackPlugin({
+        minimizerOptions: {
+          compress: {
+            passes: 3,
+            pure_getters: true
+          },
+          mangle: {
+            toplevel: true
+          },
+          format: {
+            comments: false
+          }
+        }
+      })
+    ]
+  },
   performance: { hints: false }
 }

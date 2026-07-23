@@ -29,4 +29,12 @@ export default interface BdkVerifierInterface {
    * @throws If the backend itself fails (load error, marshalling error, unavailable).
    */
   verifyScripts: (params: BdkVerifyScriptsParams) => Promise<boolean>
+
+  /**
+   * Verify several independent transactions in one backend scheduling pass.
+   * Implementations may use packed native calls and worker-level parallelism.
+   */
+  verifyScriptsBatch?: (
+    params: readonly BdkVerifyScriptsParams[]
+  ) => Promise<boolean[]>
 }

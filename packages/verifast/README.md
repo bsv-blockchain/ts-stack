@@ -73,10 +73,50 @@ const spendVerdicts = await verifier.verifySpendsBatch(
 )
 ```
 
+On machines with enough logical cores, batches of at least 32 items can use a
+fixed pool of up to four workers. Workers are created lazily and are never used
+for a single verification. Explicitly warm the batch lane before a
+latency-sensitive workload:
+
+```ts
+const verifier = new BdkVerifier({ batchWorkers: 4 })
+await verifier.preloadBatch()
+const verdicts = await verifier.verifyScriptsBatchFromEF(items)
+```
+
+The main instance generates libsecp256k1's 1 MiB W15 verification tables once.
+Workers import that snapshot instead of regenerating it. `SharedArrayBuffer` is
+used opportunistically when available; ordinary structured cloning remains the
+browser-compatible fallback and does not require cross-origin isolation. Call
+`dispose()` when a short-lived verifier no longer needs its warm pool.
+
 The default limits are 256 items and 32 MiB of input data per chunk and can be
 lowered with `maxBatchItems` and `maxBatchBytes`. Packing principally reduces
 marshalling and orchestration overhead; ECDSA remains the dominant cost for
 large signature-heavy batches.
+
+## Generic cryptography and SDK integration
+
+The same compact module exposes generic, direct-byte secp256k1 operations:
+
+```ts
+const signature = await verifier.signDigest(privateKey32, digest32)
+const valid = await verifier.verifyDigest(publicKey, digest32, signature)
+const verdicts = await verifier.verifyDigestBatch(items)
+const publicKey = await verifier.publicKeyFromPrivate(privateKey32)
+const sharedPoint = await verifier.multiplyPublicKey(publicKey, scalar32)
+const tweakedPublic = await verifier.tweakPublicKeyAdd(publicKey, tweak32)
+const tweakedPrivate = await verifier.tweakPrivateKeyAdd(privateKey32, tweak32)
+```
+
+These operations accept and return `Uint8Array` values without JSON, `number[]`,
+or per-item JS/WASM calls. Importing and constructing the default verifier also
+registers a warm-only optional backend with `@bsv/sdk`. Existing synchronous
+primitive APIs do not change. Existing asynchronous wallet, BRC-42, P2PKH, and
+authentication composition uses a supported WASM operation only after the
+module is ready; the current call retains JavaScript while a cold module warms
+in the background. Scalar-only private BRC-42 derivation deliberately remains
+in TypeScript because it is already faster than a WASM boundary.
 
 ## Networks
 
@@ -105,12 +145,13 @@ const { BdkVerifier } = require('@bsv/verifast')
 
 Browser ESM contains no Node imports and works in window and worker targets.
 For classic scripts, load `dist/src/wasm/bdk-core.umd.js`, then
-`dist/umd/verifast.js`; both locate the package's single
-`dist/src/wasm/bdk-core.wasm` payload. The wrapper uses SDK types without
-rebundling the SDK implementation. The build rejects a complete classic-script
-payload over 300,000 bytes, counting both loaders and WASM. The Node, browser,
-and UMD loaders are built from the same C++ ABI and their generated WASM
-binaries are required to have identical SHA-256 digests.
+`dist/umd/verifast.js`; the slim classic loader locates
+`dist/src/wasm/bdk-core.umd.wasm`. The wrapper uses SDK types without rebundling
+the SDK implementation. Worker scheduling and its internal table-snapshot ABI
+remain in the full ESM/worker artifact, so the classic path ships only the
+public typed verifier and cryptography APIs. The build rejects a complete
+classic-script payload over 300,000 bytes, counting both loaders and WASM; the
+current payload is 297,505 bytes.
 
 An optional custom WASM factory remains supported:
 
@@ -158,6 +199,8 @@ pnpm --filter @bsv/verifast test
 pnpm --filter @bsv/verifast test:consumers
 pnpm --filter @bsv/verifast bench
 pnpm --filter @bsv/verifast bench:batch
+pnpm --filter @bsv/verifast bench:crypto
+pnpm --filter @bsv/verifast bench:warmup
 ```
 
 The deterministic corpus compares positive and negative SDK-interpreter
@@ -167,7 +210,11 @@ ESM, and browser UMD rather than substituting mocks.
 
 On the retained Apple M3 Max baseline, BDK is 16–20x faster in Node and 12–15x
 faster in Chrome for P2PKH transactions; TypeScript remains faster for trivial
-non-cryptographic scripts. Typed and cached serialization materially improves
-large-EF workloads, while packed signature batches show smaller gains because
-curve verification dominates. See `bench/results/` for commands, environment,
-hashes, and full measurements.
+non-cryptographic scripts. Generic signing and verification measured 28.3x and
+19.1x faster. Existing `ProtoWallet` signing and verification measured 26.0x
+and 16.8x faster, while public and symmetric BRC-42 derivation measured 2.9x and
+9.3x faster. A packed 250-signature batch fell from 224.1 ms in SDK JavaScript
+to 12.1 ms in one WASM instance and 3.34 ms across four warm workers. A real
+250-transaction dependent graph verified 3.61x faster across four workers.
+Typed and cached serialization materially improves large-EF workloads. See
+`bench/results/` for commands, environment, hashes, and full measurements.

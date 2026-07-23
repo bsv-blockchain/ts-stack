@@ -4,7 +4,11 @@ import {
   SymmetricKey,
   Hash,
   Utils,
-  Point
+  Point,
+  BigNumber,
+  Curve,
+  type AsyncCryptoBackend,
+  readyAsyncCryptoBackend
 } from '../primitives/index.js'
 import { WalletProtocol, PubKeyHex } from './Wallet.interfaces.js'
 
@@ -62,6 +66,21 @@ export interface KeyDeriverApi {
     keyID: string,
     counterparty: Counterparty
   ) => SymmetricKey
+
+  /** Asynchronous acceleration lane; synchronous-only implementations may omit it. */
+  derivePublicKeyAsync?: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf?: boolean
+  ) => Promise<PublicKey>
+
+  /** Asynchronous acceleration lane; synchronous-only implementations may omit it. */
+  deriveSymmetricKeyAsync?: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ) => Promise<SymmetricKey>
 
   /**
    * Reveals the shared secret between the root key and the counterparty.
@@ -201,6 +220,124 @@ export class KeyDeriver implements KeyDeriverApi {
     return new SymmetricKey(
       derivedPrivateKey.deriveSharedSecret(derivedPublicKey)?.x?.toArray() ?? []
     )
+  }
+
+  private accelerationBackend (
+    operation: 'tweakPublicKeyAdd' | 'tweakPrivateKeyAdd'
+  ): AsyncCryptoBackend | undefined {
+    const backend = readyAsyncCryptoBackend('multiplyPublicKey')
+    if (
+      backend === undefined ||
+      !backend.supportsCrypto(operation) ||
+      !backend.supportsCrypto('publicKeyFromPrivate')
+    ) {
+      return undefined
+    }
+    return backend
+  }
+
+  private async sharedSecretBytes (
+    backend: AsyncCryptoBackend,
+    counterparty: PublicKey
+  ): Promise<Uint8Array> {
+    const retrieved = this.retrieveCachedSharedSecret?.(this.rootKey, counterparty)
+    if (retrieved !== undefined) {
+      return Uint8Array.from(retrieved.encode(true) as number[])
+    }
+    const sharedSecret = await backend.multiplyPublicKey(
+      Uint8Array.from(counterparty.encode(true) as number[]),
+      Uint8Array.from(this.rootKey.toArray('be', 32))
+    )
+    this.cacheSharedSecret?.(
+      this.rootKey,
+      counterparty,
+      Point.fromDER(Array.from(sharedSecret))
+    )
+    return sharedSecret
+  }
+
+  private async childTweak (
+    backend: AsyncCryptoBackend,
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: PublicKey
+  ): Promise<Uint8Array> {
+    const sharedSecret = await this.sharedSecretBytes(backend, counterparty)
+    const invoiceNumber = Utils.toArray(
+      this.computeInvoiceNumber(protocolID, keyID),
+      'utf8'
+    )
+    const curve = new Curve()
+    return Uint8Array.from(
+      new BigNumber(Hash.sha256hmac(sharedSecret, invoiceNumber))
+        .mod(curve.n)
+        .toArray('be', 32)
+    )
+  }
+
+  async derivePublicKeyAsync (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf: boolean = false
+  ): Promise<PublicKey> {
+    const backend = this.accelerationBackend(
+      forSelf ? 'tweakPrivateKeyAdd' : 'tweakPublicKeyAdd'
+    )
+    if (backend === undefined) {
+      return this.derivePublicKey(protocolID, keyID, counterparty, forSelf)
+    }
+    const normalizedCounterparty = this.normalizeCounterparty(counterparty)
+    const tweak = await this.childTweak(
+      backend, protocolID, keyID, normalizedCounterparty
+    )
+    const publicKey = forSelf
+      ? await backend.publicKeyFromPrivate(
+        await backend.tweakPrivateKeyAdd(
+          Uint8Array.from(this.rootKey.toArray('be', 32)),
+          tweak
+        )
+      )
+      : await backend.tweakPublicKeyAdd(
+        Uint8Array.from(normalizedCounterparty.encode(true) as number[]),
+        tweak
+      )
+    return PublicKey.fromDER(Array.from(publicKey))
+  }
+
+  async deriveSymmetricKeyAsync (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ): Promise<SymmetricKey> {
+    const backend = this.accelerationBackend('tweakPrivateKeyAdd')
+    if (
+      backend === undefined ||
+      !backend.supportsCrypto('tweakPublicKeyAdd')
+    ) {
+      return this.deriveSymmetricKey(protocolID, keyID, counterparty)
+    }
+    const normalizedCounterparty = counterparty === 'anyone'
+      ? this.anyone
+      : this.normalizeCounterparty(counterparty)
+    const tweak = await this.childTweak(
+      backend, protocolID, keyID, normalizedCounterparty
+    )
+    const [privateKey, publicKey] = await Promise.all([
+      backend.tweakPrivateKeyAdd(
+        Uint8Array.from(this.rootKey.toArray('be', 32)),
+        tweak
+      ),
+      backend.tweakPublicKeyAdd(
+        Uint8Array.from(normalizedCounterparty.encode(true) as number[]),
+        tweak
+      )
+    ])
+    const sharedSecret = await backend.multiplyPublicKey(
+      publicKey,
+      privateKey
+    )
+    return new SymmetricKey(Array.from(sharedSecret.slice(1)))
   }
 
   /**

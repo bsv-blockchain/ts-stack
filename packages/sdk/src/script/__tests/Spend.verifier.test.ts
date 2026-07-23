@@ -1,4 +1,8 @@
 import { P2PKH, PrivateKey, Script, Spend, Transaction } from '../../../mod'
+import {
+  registerScriptVerificationBackend,
+  unregisterScriptVerificationBackend
+} from '../../transaction/ScriptVerificationBackend'
 
 async function buildSpend (): Promise<{ spend: Spend, tx: Transaction }> {
   const key = new PrivateKey(42)
@@ -63,6 +67,44 @@ describe('Spend verifier integration', () => {
       shouldVerifySpend: () => true,
       verifySpend: async () => { throw failure }
     })).rejects.toBe(failure)
+  })
+
+  it('uses a registered warm synchronous backend from the compatibility validate API', async () => {
+    const { spend } = await buildSpend()
+    const backend = {
+      verifyScripts: async () => true,
+      verifySpend: async () => true,
+      verifySpendSync: jest.fn(() => false),
+      shouldVerifySpend: jest.fn(() => true)
+    }
+    registerScriptVerificationBackend(backend)
+    try {
+      expect(spend.validate()).toBe(false)
+      expect(backend.shouldVerifySpend).toHaveBeenCalledWith(spend)
+      expect(backend.verifySpendSync).toHaveBeenCalledWith(spend)
+    } finally {
+      unregisterScriptVerificationBackend(backend)
+    }
+  })
+
+  it('keeps compatibility validation on JavaScript while a sync backend is cold', async () => {
+    const { spend } = await buildSpend()
+    const backend = {
+      isReady: jest.fn(() => false),
+      verifyScripts: async () => true,
+      verifySpend: async () => true,
+      verifySpendSync: jest.fn(() => false),
+      shouldVerifySpend: jest.fn(() => true)
+    }
+    registerScriptVerificationBackend(backend)
+    try {
+      expect(spend.validate()).toBe(true)
+      expect(backend.isReady).toHaveBeenCalled()
+      expect(backend.shouldVerifySpend).not.toHaveBeenCalled()
+      expect(backend.verifySpendSync).not.toHaveBeenCalled()
+    } finally {
+      unregisterScriptVerificationBackend(backend)
+    }
   })
 
   it('inserts the active input at its exact index when only otherInputs are supplied', () => {

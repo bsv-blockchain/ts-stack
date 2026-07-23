@@ -9,6 +9,8 @@ import TransactionSignature from '../../primitives/TransactionSignature.js'
 import { sha256 } from '../../primitives/Hash.js'
 import Script from '../Script.js'
 import { computeSignatureScope, resolveSourceDetails, formatPreimage } from './SignatureUtils.js'
+import Signature from '../../primitives/Signature.js'
+import { readyAsyncCryptoBackend } from '../../primitives/AsyncCryptoBackend.js'
 
 /**
  * P2PKH (Pay To Public Key Hash) class implementing ScriptTemplate.
@@ -87,16 +89,29 @@ export default class P2PKH implements ScriptTemplate {
           allInputs: resolved.allInputs
         })
 
-        const rawSignature = privateKey.sign(sha256(preimage))
+        const preimageHash = sha256(preimage)
+        const signingBackend = readyAsyncCryptoBackend('signDigest')
+        const rawSignature = signingBackend === undefined
+          ? privateKey.sign(preimageHash)
+          : Signature.fromDER(Array.from(await signingBackend.signDigest(
+            Uint8Array.from(privateKey.toArray('be', 32)),
+            // PrivateKey.sign hashes its argument before ECDSA signing.
+            // Preserve that historical double-SHA256 contract when passing a
+            // digest to a backend that signs the supplied bytes directly.
+            Uint8Array.from(sha256(preimageHash))
+          )))
         const sig = new TransactionSignature(
           rawSignature.r,
           rawSignature.s,
           signatureScope
         )
         const sigForScript = sig.toChecksigFormat()
-        const pubkeyForScript = privateKey
-          .toPublicKey()
-          .encode(true) as number[]
+        const publicKeyBackend = readyAsyncCryptoBackend('publicKeyFromPrivate')
+        const pubkeyForScript = publicKeyBackend === undefined
+          ? privateKey.toPublicKey().encode(true) as number[]
+          : Array.from(await publicKeyBackend.publicKeyFromPrivate(
+            Uint8Array.from(privateKey.toArray('be', 32))
+          ))
         return new UnlockingScript([
           { op: sigForScript.length, data: sigForScript },
           { op: pubkeyForScript.length, data: pubkeyForScript }

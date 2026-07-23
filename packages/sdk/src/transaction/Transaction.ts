@@ -19,6 +19,7 @@ import type { WalletInterface, DescriptionString5to50Bytes, CreateActionOptions 
 import TransactionSignature, { type SignatureHashCache } from '../primitives/TransactionSignature.js'
 import Random from '../primitives/Random.js'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
+import { scriptVerificationBackend } from './ScriptVerificationBackend.js'
 
 /** Post-Chronicle height used when an input's source UTXO mined-height is unobtainable. */
 const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
@@ -1051,6 +1052,7 @@ export default class Transaction {
     verifier?: BdkVerifierInterface
   ): Promise<boolean> {
     const scriptsOnly = chainTracker === 'scripts only'
+    const selectedVerifier = verifier ?? scriptVerificationBackend()
     if (!scriptsOnly) this.materializeSourceTXIDs()
     const verifiedTxids = new Set<string>()
     const verifiedTransactions = new Set<Transaction>()
@@ -1058,6 +1060,11 @@ export default class Transaction {
     const queuedTxids = new Set<string>()
     if (!scriptsOnly) queuedTxids.add(this.id('hex'))
     const queuedTransactions = new Set<Transaction>(txQueue)
+    const verifierQueue: Array<{
+      tx: Transaction
+      blockHeight: number
+      consensus: boolean
+    }> = []
     let queueIndex = 0
 
     while (queueIndex < txQueue.length) {
@@ -1109,8 +1116,8 @@ export default class Transaction {
         blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
         consensus: true
       } as const
-      const useVerifier = verifier !== undefined &&
-        (verifier.shouldVerifyScripts?.(verifierParams) ?? true)
+      const useVerifier = selectedVerifier !== undefined &&
+        (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
 
       // Verify each input transaction and evaluate the spend events.
       // Also, keep a total of the input amounts for later.
@@ -1165,7 +1172,7 @@ export default class Transaction {
             memoryLimit,
             sigHashCache
           })
-          const spendValid = spend.validate()
+          const spendValid = spend.validateJavaScript()
 
           if (!spendValid) {
             return false
@@ -1179,10 +1186,7 @@ export default class Transaction {
       if (useVerifier) {
         // A tx reaching here has no merkle proof (mined txs short-circuit above),
         // so its source UTXO mined-height is unobtainable -> post-Chronicle fallback.
-        const scriptsValid = await verifier.verifyScripts(verifierParams)
-        if (!scriptsValid) {
-          return false
-        }
+        verifierQueue.push(verifierParams)
       }
 
       // Total the outputs to ensure they don't amount to more than the inputs
@@ -1202,6 +1206,18 @@ export default class Transaction {
 
       if (scriptsOnly) verifiedTransactions.add(tx)
       else verifiedTxids.add(getTxid())
+    }
+
+    if (verifierQueue.length > 0 && selectedVerifier !== undefined) {
+      const scriptVerdicts = selectedVerifier.verifyScriptsBatch === undefined
+        ? await Promise.all(verifierQueue.map(
+          async params => await selectedVerifier.verifyScripts(params)
+        ))
+        : await selectedVerifier.verifyScriptsBatch(verifierQueue)
+      if (scriptVerdicts.length !== verifierQueue.length) {
+        throw new Error('Script verifier returned an invalid batch result count')
+      }
+      if (scriptVerdicts.some(valid => !valid)) return false
     }
 
     return true

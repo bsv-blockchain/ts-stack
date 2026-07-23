@@ -31,7 +31,7 @@ describe('JS Spend vs real BDK WASM equivalence', () => {
       const spends = spendsForTransaction(tx)
       const jsVerdicts = spends.map(spend => {
         try {
-          return spend.validate()
+          return spend.validateJavaScript()
         } catch {
           return false
         }

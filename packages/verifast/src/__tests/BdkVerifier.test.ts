@@ -8,6 +8,17 @@ import BdkVerifier, {
   type BdkWasmModule
 } from '../BdkVerifier.js'
 
+interface TestBackendGlobal {
+  __bsvSdkAsyncCryptoBackendV1?: object
+  __bsvSdkScriptVerificationBackendV1?: object
+}
+
+function clearDefaultBackends (): void {
+  const registry = globalThis as typeof globalThis & TestBackendGlobal
+  delete registry.__bsvSdkAsyncCryptoBackendV1
+  delete registry.__bsvSdkScriptVerificationBackendV1
+}
+
 class MockVector {
   items: number[] = []
   push_back (value: number): void { this.items.push(value) }
@@ -89,6 +100,8 @@ function spendForInput (tx: Transaction, inputIndex = 0): Spend {
 }
 
 describe('BdkVerifier', () => {
+  afterEach(clearDefaultBackends)
+
   it('selects scripts over 100 bytes and signature opcodes without scanning pushed data', () => {
     const script = (bytes: Uint8Array): Script => Script.fromBinaryView(bytes)
 
@@ -150,7 +163,7 @@ describe('BdkVerifier', () => {
   it('allows strict always mode to select the backend before it is warm', async () => {
     const verifier = new BdkVerifier(
       async () => makeMockModule({ domain: 0, code: 0 }, []),
-      { mode: 'always' }
+      { mode: 'always', registerAsDefault: false }
     )
     expect(verifier.shouldVerifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })).toBe(true)
     expect(verifier.isReady()).toBe(false)

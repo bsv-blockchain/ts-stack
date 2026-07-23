@@ -1,199 +1,43 @@
-import type { Script, Spend, Transaction } from '@bsv/sdk'
+import type {
+  AsyncCryptoBackend,
+  AsyncCryptoOperation,
+  Spend
+} from '@bsv/sdk'
+import {
+  decodeResults,
+  flagsForInputCount,
+  packArrays,
+  verdict
+} from './BdkBatch.js'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
 import { mapVerifyFlags } from './flags.js'
+import {
+  DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD,
+  POST_CHRONICLE_HEIGHT_FALLBACK,
+  isVeriFastCandidateScript,
+  type BdkDigestVerification,
+  type BdkNetwork,
+  type BdkSpendBatchItem,
+  type BdkSpendContext,
+  type BdkVerificationResult,
+  type BdkVerifierMode,
+  type BdkVerifierOptions,
+  type BdkVerifyFromEFParams,
+  type BdkVerifyParams,
+  type BdkVerifySpendOptions,
+  type BdkWasmFactory,
+  type BdkWasmModule,
+  type EmbindVector,
+  type EmbindVectorCtor
+} from './BdkVerifierTypes.js'
+import type BdkWorkerScheduler from './workers/BdkWorkerScheduler.js'
+import type {
+  DigestBatchPayload,
+  ScriptBatchPayload,
+  SpendBatchPayload
+} from './workers/BdkWorkerProtocol.js'
 
-/** Height used when an input's source UTXO mined-height is unobtainable (post-Chronicle). */
-export const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
-
-export enum BdkErrorDomain {
-  OK = 0,
-  SCRIPT = 1,
-  DOS = 2,
-  EXCEPTION = 3
-}
-
-export type BdkNetwork =
-  | 'main'
-  | 'test'
-  | 'stn'
-  | 'regtest'
-  | 'ttn'
-  | 'teratestnet'
-  | 'terratestnet'
-  | 'tstn'
-
-export interface BdkVerificationResult {
-  domain: number
-  code: number
-}
-
-export interface BdkVerifyParams {
-  tx: Transaction
-  blockHeight: number
-  consensus: boolean
-  verifyFlags?: string | string[]
-}
-
-export type BdkVerifierMode = 'auto' | 'always'
-
-export interface BdkVerifyFromEFParams {
-  extendedTransaction: Uint8Array
-  utxoHeights: readonly number[] | Int32Array
-  blockHeight: number
-  consensus: boolean
-  verifyFlags?: string | string[]
-  customFlags?: readonly number[] | Uint32Array
-}
-
-export interface BdkVerifySpendOptions {
-  utxoHeight?: number
-  blockHeight?: number
-  consensus?: boolean
-  verifyFlags?: string | string[]
-}
-
-export interface BdkSpendBatchItem extends BdkVerifySpendOptions {
-  spend: Spend
-}
-
-export interface BdkVerifierOptions {
-  network?: BdkNetwork
-  /**
-   * `auto` uses WASM only when it is ready and a source locking script is
-   * signature-bearing or larger than `scriptByteThreshold`. `always` preserves
-   * strict eager backend selection for callers that require it.
-   */
-  mode?: BdkVerifierMode
-  /** Script byte length above which auto mode selects WASM. Defaults to 100. */
-  scriptByteThreshold?: number
-  maxBatchItems?: number
-  maxBatchBytes?: number
-  defaultUtxoHeight?: number
-  defaultBlockHeight?: number
-  defaultConsensus?: boolean
-}
-
-/** Default auto-routing boundary; scripts strictly larger than this use WASM. */
-export const DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD = 100
-
-const SIGNATURE_OPS = new Set<number>([
-  0xac, // OP_CHECKSIG
-  0xad, // OP_CHECKSIGVERIFY
-  0xae, // OP_CHECKMULTISIG
-  0xaf // OP_CHECKMULTISIGVERIFY
-])
-
-/**
- * Returns true when a locking script belongs to a workload class with a proven
- * WASM advantage: more than the byte threshold or an executed signature opcode.
- * Pushed data is not scanned as opcodes, avoiding false positives.
- */
-export function isVeriFastCandidateScript (
-  script: Script,
-  scriptByteThreshold: number = DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD
-): boolean {
-  if (!Number.isSafeInteger(scriptByteThreshold) || scriptByteThreshold < 0) {
-    throw new RangeError('scriptByteThreshold must be a non-negative safe integer')
-  }
-  if (script.toUint8Array().byteLength > scriptByteThreshold) return true
-  return script.chunks.some(chunk => SIGNATURE_OPS.has(chunk.op))
-}
-
-/** Raised when BDK reports an exception domain, malformed result, or unknown ABI domain. */
-export class BdkVerificationError extends Error {
-  constructor (public readonly result: BdkVerificationResult) {
-    super(`BDK verification failed in domain ${result.domain} with code ${result.code}`)
-    this.name = 'BdkVerificationError'
-  }
-}
-
-/** Minimal embind vector surface used by the legacy adapter. */
-interface EmbindVector<T> {
-  push_back: (value: T) => void
-  delete: () => void
-}
-
-type EmbindVectorCtor<T> = new () => EmbindVector<T>
-
-type BdkVerifyScriptBatchArray = (...args: [
-  extendedTXs: Uint8Array,
-  txOffsets: Uint32Array,
-  utxoHeights: Int32Array,
-  heightOffsets: Uint32Array,
-  blockHeights: Int32Array,
-  consensus: Uint8Array,
-  customFlags: Uint32Array,
-  customFlagOffsets: Uint32Array,
-  network: number
-]) => Int32Array
-
-type BdkVerifySpendArray = (...args: [
-  transaction: Uint8Array,
-  inputIndex: number,
-  lockingScript: Uint8Array,
-  sourceSatoshis: number,
-  utxoHeight: number,
-  blockHeight: number,
-  consensus: boolean,
-  hasCustomFlags: boolean,
-  customFlags: number,
-  network: number
-]) => BdkVerificationResult
-
-type BdkVerifySpendBatchArray = (...args: [
-  transactions: Uint8Array,
-  transactionOffsets: Uint32Array,
-  inputIndices: Uint32Array,
-  lockingScripts: Uint8Array,
-  lockingScriptOffsets: Uint32Array,
-  sourceSatoshis: Float64Array,
-  utxoHeights: Int32Array,
-  blockHeights: Int32Array,
-  consensus: Uint8Array,
-  hasCustomFlags: Uint8Array,
-  customFlags: Uint32Array,
-  network: number
-]) => Int32Array
-
-/** The BDK WASM verifier ABI. New methods remain optional for custom older modules. */
-export interface BdkWasmModule {
-  VectorUInt8: EmbindVectorCtor<number>
-  VectorInt32: EmbindVectorCtor<number>
-  VectorUInt32: EmbindVectorCtor<number>
-  VerifyScript: (
-    extendedTX: EmbindVector<number>,
-    utxoHeights: EmbindVector<number>,
-    blockHeight: number,
-    consensus: boolean,
-    customFlags: EmbindVector<number>
-  ) => BdkVerificationResult
-  VerifyScriptArray?: (
-    extendedTX: Uint8Array,
-    utxoHeights: Int32Array,
-    blockHeight: number,
-    consensus: boolean,
-    customFlags: Uint32Array
-  ) => BdkVerificationResult
-  VerifyScriptArrayNetwork?: (
-    extendedTX: Uint8Array,
-    utxoHeights: Int32Array,
-    blockHeight: number,
-    consensus: boolean,
-    customFlags: Uint32Array,
-    network: number
-  ) => BdkVerificationResult
-  VerifyScriptBatchArray?: BdkVerifyScriptBatchArray
-  VerifySpendArray?: BdkVerifySpendArray
-  VerifySpendBatchArray?: BdkVerifySpendBatchArray
-}
-
-/** Async factory that loads/instantiates the BDK WASM module. */
-export type BdkWasmFactory = () => Promise<BdkWasmModule>
-
-interface PackedArrays<T extends Uint8Array | Int32Array | Uint32Array> {
-  values: T
-  offsets: Uint32Array
-}
+export * from './BdkVerifierTypes.js'
 
 const NETWORK_IDS: Record<BdkNetwork, number> = {
   main: 0,
@@ -212,62 +56,20 @@ function toVector<T> (Vector: EmbindVectorCtor<T>, values: Iterable<T>): EmbindV
   return vec
 }
 
-function flagsForInputCount (
-  inputCount: number,
-  verifyFlags?: string | string[],
-  customFlags?: readonly number[] | Uint32Array
-): Uint32Array {
-  if (customFlags !== undefined) {
-    if (customFlags.length !== 0 && customFlags.length !== inputCount) {
-      throw new RangeError('Custom flag count must be zero or match the input count')
-    }
-    return Uint32Array.from(customFlags)
-  }
-  if (verifyFlags === undefined) return new Uint32Array()
-  return new Uint32Array(inputCount).fill(mapVerifyFlags(verifyFlags))
+interface OptionalBackendGlobal {
+  __bsvSdkAsyncCryptoBackendV1?: AsyncCryptoBackend
+  __bsvSdkScriptVerificationBackendV1?: BdkVerifierCore
 }
 
-function packArrays<T extends Uint8Array | Int32Array | Uint32Array> (
-  arrays: readonly T[],
-  make: (length: number) => T
-): PackedArrays<T> {
-  const offsets = new Uint32Array(arrays.length + 1)
-  let length = 0
-  for (let index = 0; index < arrays.length; index++) {
-    length += arrays[index].length
-    if (length > 0xffffffff) throw new RangeError('Packed BDK batch exceeds 4 GiB offset space')
-    offsets[index + 1] = length
-  }
-  const values = make(length)
-  let position = 0
-  for (const array of arrays) {
-    values.set(array, position)
-    position += array.length
-  }
-  return { values, offsets }
-}
-
-function decodeResults (flat: Int32Array, count: number): BdkVerificationResult[] {
-  if (flat.length !== count * 2) {
-    throw new BdkVerificationError({ domain: BdkErrorDomain.EXCEPTION, code: 0 })
-  }
-  return Array.from({ length: count }, (_, index) => ({
-    domain: flat[index * 2],
-    code: flat[index * 2 + 1]
-  }))
-}
-
-function verdict (result: BdkVerificationResult): boolean {
-  if (result.domain === BdkErrorDomain.OK) return true
-  if (result.domain === BdkErrorDomain.SCRIPT || result.domain === BdkErrorDomain.DOS) return false
-  throw new BdkVerificationError(result)
+function backendGlobal (): typeof globalThis & OptionalBackendGlobal {
+  return globalThis as typeof globalThis & OptionalBackendGlobal
 }
 
 /**
  * Shared platform-neutral implementation. Node and browser entry points inject
  * different Emscripten loader glue but use this exact verifier and batch logic.
  */
-export default class BdkVerifierCore implements BdkVerifierInterface {
+export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCryptoBackend {
   private module: BdkWasmModule | undefined
   private loading: Promise<BdkWasmModule> | undefined
   private preloadScheduled = false
@@ -279,10 +81,13 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
   private readonly defaultUtxoHeight: number
   private readonly defaultBlockHeight: number
   private readonly defaultConsensus: boolean
+  private readonly registeredAsDefault: boolean
+  private modulePrepared = false
 
   constructor (
     private readonly factory: BdkWasmFactory,
-    options: BdkVerifierOptions = {}
+    options: BdkVerifierOptions = {},
+    private readonly workerScheduler?: BdkWorkerScheduler
   ) {
     this.network = NETWORK_IDS[options.network ?? 'main']
     this.mode = options.mode ?? 'auto'
@@ -292,6 +97,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
     this.defaultUtxoHeight = options.defaultUtxoHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
     this.defaultBlockHeight = options.defaultBlockHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
     this.defaultConsensus = options.defaultConsensus ?? true
+    this.registeredAsDefault = options.registerAsDefault ?? true
     if (this.mode !== 'auto' && this.mode !== 'always') {
       throw new RangeError("mode must be either 'auto' or 'always'")
     }
@@ -303,6 +109,25 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
     }
     if (!Number.isSafeInteger(this.maxBatchBytes) || this.maxBatchBytes < 1) {
       throw new RangeError('maxBatchBytes must be a positive safe integer')
+    }
+    if (
+      options.batchWorkers !== undefined &&
+      (!Number.isSafeInteger(options.batchWorkers) ||
+        options.batchWorkers < 1 ||
+        options.batchWorkers > 16)
+    ) {
+      throw new RangeError('batchWorkers must be a safe integer from 1 to 16')
+    }
+    if (
+      !Number.isSafeInteger(options.batchWorkerThreshold ?? 32) ||
+      (options.batchWorkerThreshold ?? 32) < 2
+    ) {
+      throw new RangeError('batchWorkerThreshold must be a safe integer of at least 2')
+    }
+    if (this.registeredAsDefault) {
+      const registry = backendGlobal()
+      registry.__bsvSdkAsyncCryptoBackendV1 = this
+      registry.__bsvSdkScriptVerificationBackendV1 = this
     }
   }
 
@@ -317,12 +142,54 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
 
   /** Load and instantiate the optional backend before latency-sensitive work. */
   async preload (): Promise<void> {
-    await this.getModule()
+    const module = await this.getModule()
+    if (this.modulePrepared) return
+    module.PrepareVerification?.()
+    module.PrepareSigning?.()
+    this.modulePrepared = true
+  }
+
+  /**
+   * Warm both the main module and the explicit large-batch worker pool.
+   * Single-item verification never waits for or dispatches through this pool.
+   */
+  async preloadBatch (): Promise<void> {
+    await this.preload()
+    if (this.workerScheduler !== undefined && this.module !== undefined) {
+      await this.workerScheduler.preload(this.module)
+    }
   }
 
   /** True only after the WASM module has finished loading successfully. */
   isReady (): boolean {
     return this.module !== undefined
+  }
+
+  /** Stop using this instance as the SDK's optional default backend. */
+  dispose (): void {
+    this.workerScheduler?.terminate()
+    if (!this.registeredAsDefault) return
+    const registry = backendGlobal()
+    if (registry.__bsvSdkAsyncCryptoBackendV1 === this) {
+      delete registry.__bsvSdkAsyncCryptoBackendV1
+    }
+    if (registry.__bsvSdkScriptVerificationBackendV1 === this) {
+      delete registry.__bsvSdkScriptVerificationBackendV1
+    }
+  }
+
+  supportsCrypto (operation: AsyncCryptoOperation): boolean {
+    const bdk = this.module
+    if (bdk === undefined) return false
+    switch (operation) {
+      case 'signDigest': return bdk.SignDigest !== undefined
+      case 'verifyDigest': return bdk.VerifyDigest !== undefined
+      case 'verifyDigestBatch': return bdk.VerifyDigestBatchArray !== undefined
+      case 'publicKeyFromPrivate': return bdk.PublicKeyFromPrivate !== undefined
+      case 'multiplyPublicKey': return bdk.MultiplyPublicKey !== undefined
+      case 'tweakPublicKeyAdd': return bdk.TweakPublicKeyAdd !== undefined
+      case 'tweakPrivateKeyAdd': return bdk.TweakPrivateKeyAdd !== undefined
+    }
   }
 
   private schedulePreload (): void {
@@ -357,6 +224,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
   /** Selection hook consumed by Spend.validateWith. */
   shouldVerifySpend (spend: Spend): boolean {
     if (this.mode === 'always') return true
+    if (this.module !== undefined && this.module.VerifySpendArray === undefined) return false
     return isVeriFastCandidateScript(spend.lockingScript, this.scriptByteThreshold) &&
       this.prepareCandidate()
   }
@@ -396,11 +264,25 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
       )
     }
 
-    const extendedTX = toVector(bdk.VectorUInt8, params.extendedTransaction)
-    const utxoHeights = toVector(bdk.VectorInt32, heights)
-    const flags = toVector(bdk.VectorUInt32, customFlags)
+    const VectorUInt8 = bdk.VectorUInt8
+    const VectorInt32 = bdk.VectorInt32
+    const VectorUInt32 = bdk.VectorUInt32
+    const verifyScript = bdk.VerifyScript
+    if (
+      VectorUInt8 === undefined ||
+      VectorInt32 === undefined ||
+      VectorUInt32 === undefined ||
+      verifyScript === undefined
+    ) {
+      throw new Error('The loaded BDK module does not support script verification')
+    }
+    const extendedTX = toVector(VectorUInt8, params.extendedTransaction)
+    const utxoHeights = toVector(VectorInt32, heights)
+    const flags = toVector(VectorUInt32, customFlags)
     try {
-      return bdk.VerifyScript(extendedTX, utxoHeights, params.blockHeight, params.consensus, flags)
+      return verifyScript(
+        extendedTX, utxoHeights, params.blockHeight, params.consensus, flags
+      )
     } finally {
       extendedTX.delete()
       utxoHeights.delete()
@@ -446,10 +328,9 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
     return chunks
   }
 
-  private verifyEFChunk (bdk: BdkWasmModule, chunk: readonly BdkVerifyFromEFParams[]): BdkVerificationResult[] {
-    if (bdk.VerifyScriptBatchArray === undefined) {
-      return chunk.map(params => this.verifyFromEFWithModule(bdk, params))
-    }
+  private packEFChunk (
+    chunk: readonly BdkVerifyFromEFParams[]
+  ): ScriptBatchPayload {
     const transactions = packArrays(chunk.map(item => item.extendedTransaction), length => new Uint8Array(length))
     const heightsByItem = chunk.map(item => Int32Array.from(item.utxoHeights))
     const heights = packArrays(heightsByItem, length => new Int32Array(length))
@@ -457,16 +338,34 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
       flagsForInputCount(heightsByItem[index].length, item.verifyFlags, item.customFlags)
     )
     const flags = packArrays(flagsByItem, length => new Uint32Array(length))
+    return {
+      extendedTransactions: transactions.values,
+      transactionOffsets: transactions.offsets,
+      utxoHeights: heights.values,
+      heightOffsets: heights.offsets,
+      blockHeights: Int32Array.from(chunk.map(item => item.blockHeight)),
+      consensus: Uint8Array.from(chunk.map(item => item.consensus ? 1 : 0)),
+      customFlags: flags.values,
+      customFlagOffsets: flags.offsets,
+      network: this.network
+    }
+  }
+
+  private verifyEFChunk (bdk: BdkWasmModule, chunk: readonly BdkVerifyFromEFParams[]): BdkVerificationResult[] {
+    if (bdk.VerifyScriptBatchArray === undefined) {
+      return chunk.map(params => this.verifyFromEFWithModule(bdk, params))
+    }
+    const payload = this.packEFChunk(chunk)
     const flat = bdk.VerifyScriptBatchArray(
-      transactions.values,
-      transactions.offsets,
-      heights.values,
-      heights.offsets,
-      Int32Array.from(chunk.map(item => item.blockHeight)),
-      Uint8Array.from(chunk.map(item => item.consensus ? 1 : 0)),
-      flags.values,
-      flags.offsets,
-      this.network
+      payload.extendedTransactions,
+      payload.transactionOffsets,
+      payload.utxoHeights,
+      payload.heightOffsets,
+      payload.blockHeights,
+      payload.consensus,
+      payload.customFlags,
+      payload.customFlagOffsets,
+      payload.network
     )
     return decodeResults(flat, chunk.length)
   }
@@ -477,6 +376,28 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
 
   async verifyScriptsBatchFromEFDetailed (params: readonly BdkVerifyFromEFParams[]): Promise<BdkVerificationResult[]> {
     if (params.length === 0) return []
+    if (this.workerScheduler?.shouldUse(
+      params.length, async () => await this.preloadBatch()
+    ) === true) {
+      const chunks = this.workerScheduler.parallelChunks(
+        params,
+        item => item.extendedTransaction.byteLength +
+          item.utxoHeights.length * 4 +
+          (item.customFlags?.length ?? 0) * 4
+      )
+      if (chunks.length > 1) {
+        const results = await this.workerScheduler.execute(chunks.map(chunk => ({
+          operation: 'verifyScripts' as const,
+          payload: this.packEFChunk(chunk)
+        })))
+        return results.flatMap((result, index) => {
+          if (!(result instanceof Int32Array)) {
+            throw new Error('BDK script worker returned an invalid result type')
+          }
+          return decodeResults(result, chunks[index].length)
+        })
+      }
+    }
     const bdk = await this.getModule()
     return this.chunkEFParams(params).flatMap(chunk => this.verifyEFChunk(bdk, chunk))
   }
@@ -489,14 +410,10 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
     return (await this.verifyScriptsBatchFromEFDetailed(params)).map(verdict)
   }
 
-  private spendContext (spend: Spend, options: BdkVerifySpendOptions = {}): {
-    transaction: Uint8Array
-    lockingScript: Uint8Array
-    customFlags: number | undefined
-    utxoHeight: number
-    blockHeight: number
-    consensus: boolean
-  } {
+  private spendContext (
+    spend: Spend,
+    options: BdkVerifySpendOptions = {}
+  ): BdkSpendContext {
     const verifyFlags = options.verifyFlags ?? (spend.verifyFlags === undefined ? undefined : [...spend.verifyFlags])
     return {
       transaction: spend.toTransactionUint8Array(),
@@ -539,8 +456,74 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
     return verdict(await this.verifySpendDetailed(spend, options))
   }
 
+  verifySpendSync (spend: Spend, options: BdkVerifySpendOptions = {}): boolean {
+    if (this.module === undefined) {
+      throw new Error('Synchronous Spend verification requires a preloaded BDK module')
+    }
+    return verdict(this.verifySpendWithModule(this.module, spend, options))
+  }
+
+  private packSpendChunk (
+    items: readonly BdkSpendBatchItem[],
+    contexts: readonly BdkSpendContext[]
+  ): SpendBatchPayload {
+    const transactions = packArrays(
+      contexts.map(item => item.transaction),
+      length => new Uint8Array(length)
+    )
+    const lockingScripts = packArrays(
+      contexts.map(item => item.lockingScript),
+      length => new Uint8Array(length)
+    )
+    return {
+      transactions: transactions.values,
+      transactionOffsets: transactions.offsets,
+      inputIndices: Uint32Array.from(items.map(item => item.spend.inputIndex)),
+      lockingScripts: lockingScripts.values,
+      lockingScriptOffsets: lockingScripts.offsets,
+      sourceSatoshis: Float64Array.from(items.map(item => item.spend.sourceSatoshis)),
+      utxoHeights: Int32Array.from(contexts.map(item => item.utxoHeight)),
+      blockHeights: Int32Array.from(contexts.map(item => item.blockHeight)),
+      consensus: Uint8Array.from(contexts.map(item => item.consensus ? 1 : 0)),
+      hasCustomFlags: Uint8Array.from(
+        contexts.map(item => item.customFlags === undefined ? 0 : 1)
+      ),
+      customFlags: Uint32Array.from(contexts.map(item => item.customFlags ?? 0)),
+      network: this.network
+    }
+  }
+
   async verifySpendsBatchDetailed (items: readonly BdkSpendBatchItem[]): Promise<BdkVerificationResult[]> {
     if (items.length === 0) return []
+    const allContexts = items.map(item => this.spendContext(item.spend, item))
+    if (this.workerScheduler?.shouldUse(
+      items.length, async () => await this.preloadBatch()
+    ) === true) {
+      const indexedItems = items.map((item, index) => ({
+        item,
+        context: allContexts[index]
+      }))
+      const chunks = this.workerScheduler.parallelChunks(
+        indexedItems,
+        entry => entry.context.transaction.byteLength +
+          entry.context.lockingScript.byteLength + 32
+      )
+      if (chunks.length > 1) {
+        const results = await this.workerScheduler.execute(chunks.map(chunk => ({
+          operation: 'verifySpends' as const,
+          payload: this.packSpendChunk(
+            chunk.map(entry => entry.item),
+            chunk.map(entry => entry.context)
+          )
+        })))
+        return results.flatMap((result, index) => {
+          if (!(result instanceof Int32Array)) {
+            throw new Error('BDK Spend worker returned an invalid result type')
+          }
+          return decodeResults(result, chunks[index].length)
+        })
+      }
+    }
     const bdk = await this.getModule()
     if (bdk.VerifySpendBatchArray === undefined) {
       return items.map(item => this.verifySpendWithModule(bdk, item.spend, item))
@@ -549,26 +532,25 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
 
     const results: BdkVerificationResult[] = []
     let chunk: BdkSpendBatchItem[] = []
-    let contexts: Array<ReturnType<BdkVerifierCore['spendContext']>> = []
+    let contexts: BdkSpendContext[] = []
     let chunkBytes = 0
 
     const flush = (): void => {
       if (chunk.length === 0) return
-      const transactions = packArrays(contexts.map(item => item.transaction), length => new Uint8Array(length))
-      const lockingScripts = packArrays(contexts.map(item => item.lockingScript), length => new Uint8Array(length))
+      const payload = this.packSpendChunk(chunk, contexts)
       const flat = verifySpendBatch(
-        transactions.values,
-        transactions.offsets,
-        Uint32Array.from(chunk.map(item => item.spend.inputIndex)),
-        lockingScripts.values,
-        lockingScripts.offsets,
-        Float64Array.from(chunk.map(item => item.spend.sourceSatoshis)),
-        Int32Array.from(contexts.map(item => item.utxoHeight)),
-        Int32Array.from(contexts.map(item => item.blockHeight)),
-        Uint8Array.from(contexts.map(item => item.consensus ? 1 : 0)),
-        Uint8Array.from(contexts.map(item => item.customFlags === undefined ? 0 : 1)),
-        Uint32Array.from(contexts.map(item => item.customFlags ?? 0)),
-        this.network
+        payload.transactions,
+        payload.transactionOffsets,
+        payload.inputIndices,
+        payload.lockingScripts,
+        payload.lockingScriptOffsets,
+        payload.sourceSatoshis,
+        payload.utxoHeights,
+        payload.blockHeights,
+        payload.consensus,
+        payload.hasCustomFlags,
+        payload.customFlags,
+        payload.network
       )
       results.push(...decodeResults(flat, chunk.length))
       chunk = []
@@ -576,8 +558,9 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
       chunkBytes = 0
     }
 
-    for (const item of items) {
-      const context = this.spendContext(item.spend, item)
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index]
+      const context = allContexts[index]
       const itemBytes = context.transaction.byteLength + context.lockingScript.byteLength + 32
       if (itemBytes > this.maxBatchBytes) {
         throw new RangeError(`A BDK Spend batch item exceeds maxBatchBytes (${this.maxBatchBytes})`)
@@ -595,5 +578,144 @@ export default class BdkVerifierCore implements BdkVerifierInterface {
 
   async verifySpendsBatch (items: readonly BdkSpendBatchItem[]): Promise<boolean[]> {
     return (await this.verifySpendsBatchDetailed(items)).map(verdict)
+  }
+
+  private requiredCryptoMethod<K extends keyof BdkWasmModule> (
+    bdk: BdkWasmModule,
+    method: K
+  ): NonNullable<BdkWasmModule[K]> {
+    const implementation = bdk[method]
+    if (implementation === undefined) {
+      throw new Error(`The loaded BDK module does not support ${String(method)}`)
+    }
+    return implementation as NonNullable<BdkWasmModule[K]>
+  }
+
+  async signDigest (privateKey: Uint8Array, digest: Uint8Array): Promise<Uint8Array> {
+    const bdk = await this.getModule()
+    return this.requiredCryptoMethod(bdk, 'SignDigest')(privateKey, digest)
+  }
+
+  async verifyDigest (
+    publicKey: Uint8Array,
+    digest: Uint8Array,
+    signature: Uint8Array
+  ): Promise<boolean> {
+    const bdk = await this.getModule()
+    return this.requiredCryptoMethod(bdk, 'VerifyDigest')(
+      publicKey, digest, signature
+    )
+  }
+
+  private packDigestBatch (
+    items: readonly BdkDigestVerification[]
+  ): DigestBatchPayload {
+    const publicKeys = packArrays(
+      items.map(item => item.publicKey),
+      length => new Uint8Array(length)
+    )
+    const signatures = packArrays(
+      items.map(item => item.signature),
+      length => new Uint8Array(length)
+    )
+    const digests = new Uint8Array(items.length * 32)
+    for (let index = 0; index < items.length; index++) {
+      if (items[index].digest.length !== 32) {
+        throw new RangeError('Each digest must contain exactly 32 bytes')
+      }
+      digests.set(items[index].digest, index * 32)
+    }
+    const packedBytes = publicKeys.values.byteLength +
+      signatures.values.byteLength + digests.byteLength
+    if (packedBytes > this.maxBatchBytes) {
+      throw new RangeError(`A digest batch exceeds maxBatchBytes (${this.maxBatchBytes})`)
+    }
+    return {
+      publicKeys: publicKeys.values,
+      publicKeyOffsets: publicKeys.offsets,
+      digests,
+      signatures: signatures.values,
+      signatureOffsets: signatures.offsets
+    }
+  }
+
+  async verifyDigestBatch (
+    items: readonly BdkDigestVerification[]
+  ): Promise<boolean[]> {
+    if (items.length === 0) return []
+    if (this.workerScheduler?.shouldUse(
+      items.length, async () => await this.preloadBatch()
+    ) === true) {
+      const chunks = this.workerScheduler.parallelChunks(
+        items,
+        item => item.publicKey.byteLength +
+          item.digest.byteLength +
+          item.signature.byteLength
+      )
+      if (chunks.length > 1) {
+        const results = await this.workerScheduler.execute(chunks.map(chunk => ({
+          operation: 'verifyDigests' as const,
+          payload: this.packDigestBatch(chunk)
+        })))
+        return results.flatMap((result, index) => {
+          if (!(result instanceof Uint8Array) || result.length !== chunks[index].length) {
+            throw new Error('BDK digest worker returned an invalid result')
+          }
+          return Array.from(result, verdict => verdict === 1)
+        })
+      }
+    }
+    if (items.length > this.maxBatchItems) {
+      const results: boolean[] = []
+      for (let offset = 0; offset < items.length; offset += this.maxBatchItems) {
+        results.push(...await this.verifyDigestBatch(
+          items.slice(offset, offset + this.maxBatchItems)
+        ))
+      }
+      return results
+    }
+    const bdk = await this.getModule()
+    const verifyBatch = this.requiredCryptoMethod(bdk, 'VerifyDigestBatchArray')
+    const payload = this.packDigestBatch(items)
+    const results = verifyBatch(
+      payload.publicKeys,
+      payload.publicKeyOffsets,
+      payload.digests,
+      payload.signatures,
+      payload.signatureOffsets
+    )
+    if (results.length !== items.length) {
+      throw new Error('BDK returned an invalid digest batch result count')
+    }
+    return Array.from(results, result => result === 1)
+  }
+
+  async publicKeyFromPrivate (privateKey: Uint8Array): Promise<Uint8Array> {
+    const bdk = await this.getModule()
+    return this.requiredCryptoMethod(bdk, 'PublicKeyFromPrivate')(privateKey)
+  }
+
+  async multiplyPublicKey (
+    publicKey: Uint8Array,
+    scalar: Uint8Array
+  ): Promise<Uint8Array> {
+    const bdk = await this.getModule()
+    return this.requiredCryptoMethod(bdk, 'MultiplyPublicKey')(publicKey, scalar)
+  }
+
+  async tweakPublicKeyAdd (
+    publicKey: Uint8Array,
+    tweak: Uint8Array
+  ): Promise<Uint8Array> {
+    const bdk = await this.getModule()
+    return this.requiredCryptoMethod(bdk, 'TweakPublicKeyAdd')(publicKey, tweak)
+  }
+
+  async tweakPrivateKeyAdd (
+    privateKey: Uint8Array,
+    tweak: Uint8Array
+  ): Promise<Uint8Array> {
+    const bdk = await this.getModule()
+    return this.requiredCryptoMethod(bdk, 'TweakPrivateKeyAdd')(privateKey, tweak)
   }
 }

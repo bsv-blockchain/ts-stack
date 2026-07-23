@@ -8,7 +8,8 @@ for (const file of [
   'bdk-core.mjs',
   'bdk-core.wasm',
   'bdk-core.browser.mjs',
-  'bdk-core.umd.js'
+  'bdk-core.umd.js',
+  'bdk-core.umd.wasm'
 ]) {
   await cp(new URL(file, source), new URL(file, destination))
 }

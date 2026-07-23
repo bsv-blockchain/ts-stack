@@ -3,6 +3,10 @@ import { buildCorpus } from '../bench/corpus.js'
 
 interface BrowserResult {
   vectors: Array<{ name: string, expected: boolean, js: boolean, bdk: boolean }>
+  workerBatch: {
+    count: number
+    allValid: boolean
+  }
   benchmark: {
     iterations: number
     samples: number
@@ -53,7 +57,11 @@ async function timeVerification (tx: Awaited<ReturnType<typeof buildCorpus>>[num
 }
 
 async function run (): Promise<void> {
-  const verifier = new BdkVerifier()
+  const verifier = new BdkVerifier({
+    batchWorkers: 4,
+    batchWorkerThreshold: 32,
+    registerAsDefault: false
+  })
   const corpus = await buildCorpus()
   if (verifier.isReady()) throw new Error('VeriFast must remain lazy before preload')
   await verifier.preload()
@@ -67,6 +75,13 @@ async function run (): Promise<void> {
     const bdk = await verdict(async () => await tx.verify('scripts only', undefined, undefined, verifier))
     vectors.push({ name, expected, js, bdk })
   }
+  await verifier.preloadBatch()
+  const workerParams = Array.from({ length: 250 }, () => ({
+    tx: corpus[0].tx,
+    blockHeight: 943816,
+    consensus: true
+  }))
+  const workerVerdicts = await verifier.verifyScriptsBatch(workerParams)
 
   const iterations = 50
   const samples = 5
@@ -102,6 +117,10 @@ async function run (): Promise<void> {
 
   window.__VERIFAST_RESULT__ = {
     vectors,
+    workerBatch: {
+      count: workerVerdicts.length,
+      allValid: workerVerdicts.every(Boolean)
+    },
     benchmark: { iterations, samples, cases }
   }
   renderResult(JSON.stringify(window.__VERIFAST_RESULT__, null, 2))

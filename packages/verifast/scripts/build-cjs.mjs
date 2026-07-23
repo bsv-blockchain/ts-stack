@@ -55,12 +55,17 @@ class BdkVerifier {
     this.args = args
     const options = typeof args[0] === 'function' ? (args[1] || {}) : (args[0] || {})
     this.mode = options.mode || 'auto'
+    this.registeredAsDefault = options.registerAsDefault ?? true
     if (this.mode !== 'auto' && this.mode !== 'always') {
       throw new RangeError("mode must be either 'auto' or 'always'")
     }
     const scriptByteThreshold = options.scriptByteThreshold ?? 100
     if (!Number.isSafeInteger(scriptByteThreshold) || scriptByteThreshold < 0) {
       throw new RangeError('scriptByteThreshold must be a non-negative safe integer')
+    }
+    if (this.registeredAsDefault) {
+      globalThis.__bsvSdkAsyncCryptoBackendV1 = this
+      globalThis.__bsvSdkScriptVerificationBackendV1 = this
     }
   }
 
@@ -76,8 +81,33 @@ class BdkVerifier {
     return this.getInstance().then(instance => instance.preload())
   }
 
+  preloadBatch () {
+    return this.getInstance().then(instance => instance.preloadBatch())
+  }
+
   isReady () {
     return this.resolvedInstance?.isReady() || false
+  }
+
+  supportsCrypto (operation) {
+    return this.resolvedInstance?.supportsCrypto(operation) || false
+  }
+
+  verifySpendSync (...args) {
+    if (this.resolvedInstance === undefined) {
+      throw new Error('Synchronous Spend verification requires a preloaded BDK module')
+    }
+    return this.resolvedInstance.verifySpendSync(...args)
+  }
+
+  dispose () {
+    this.resolvedInstance?.dispose()
+    if (globalThis.__bsvSdkAsyncCryptoBackendV1 === this) {
+      delete globalThis.__bsvSdkAsyncCryptoBackendV1
+    }
+    if (globalThis.__bsvSdkScriptVerificationBackendV1 === this) {
+      delete globalThis.__bsvSdkScriptVerificationBackendV1
+    }
   }
 
   schedulePreparation (prepare) {
@@ -109,7 +139,9 @@ for (const method of [
   'verifyScriptsFromEF', 'verifyScriptsBatchDetailed',
   'verifyScriptsBatchFromEFDetailed', 'verifyScriptsBatch',
   'verifyScriptsBatchFromEF', 'verifySpendDetailed', 'verifySpend',
-  'verifySpendsBatchDetailed', 'verifySpendsBatch'
+  'verifySpendsBatchDetailed', 'verifySpendsBatch', 'signDigest',
+  'verifyDigest', 'verifyDigestBatch', 'publicKeyFromPrivate',
+  'multiplyPublicKey', 'tweakPublicKeyAdd', 'tweakPrivateKeyAdd'
 ]) {
   BdkVerifier.prototype[method] = function (...args) {
     return this.getInstance()

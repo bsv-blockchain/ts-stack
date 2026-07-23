@@ -57,6 +57,8 @@ try {
     assert.equal(vector.js, vector.expected, `${vector.name} JS`)
     assert.equal(vector.bdk, vector.expected, `${vector.name} BDK`)
   }
+  assert.equal(state.result.workerBatch.count, 250)
+  assert.equal(state.result.workerBatch.allValid, true)
   assert.equal(state.result.benchmark.cases.length, 3)
   for (const benchmark of state.result.benchmark.cases) {
     assert.ok(Number.isFinite(benchmark.speedup))

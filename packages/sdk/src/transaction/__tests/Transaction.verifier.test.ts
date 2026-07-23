@@ -114,4 +114,43 @@ describe('Transaction.verify with a pluggable verifier', () => {
     await tx.verify('scripts only', undefined, undefined, verifier)
     expect(seenHeight).toBe(943816)
   })
+
+  it('collects an unmined dependency graph into one ordered backend batch', async () => {
+    const middle = await buildValidTx()
+    const tip = new Transaction()
+    tip.addInput({
+      sourceTransaction: middle,
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_TRUE')
+    })
+    tip.addOutput({
+      satoshis: 1,
+      lockingScript: Script.fromASM('OP_TRUE')
+    })
+
+    const verifyScripts = jest.fn(async () => {
+      throw new Error('the graph should use the batch entry point')
+    })
+    const verifyScriptsBatch = jest.fn(async params => params.map(() => true))
+
+    await expect(tip.verify('scripts only', undefined, undefined, {
+      verifyScripts,
+      verifyScriptsBatch
+    })).resolves.toBe(true)
+
+    expect(verifyScripts).not.toHaveBeenCalled()
+    expect(verifyScriptsBatch).toHaveBeenCalledTimes(1)
+    expect(verifyScriptsBatch.mock.calls[0][0].map(({ tx }) => tx)).toEqual([
+      tip,
+      middle
+    ])
+  })
+
+  it('rejects a malformed graph-batch result instead of masking transactions', async () => {
+    const tx = await buildValidTx()
+    await expect(tx.verify('scripts only', undefined, undefined, {
+      verifyScripts: async () => true,
+      verifyScriptsBatch: async () => []
+    })).rejects.toThrow('invalid batch result count')
+  })
 })

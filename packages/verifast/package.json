@@ -30,6 +30,7 @@
       "default": "./dist/umd/verifast.cjs"
     },
     "./wasm/bdk-core.umd.js": "./dist/src/wasm/bdk-core.umd.js",
+    "./wasm/bdk-core.umd.wasm": "./dist/src/wasm/bdk-core.umd.wasm",
     "./wasm/bdk-core.wasm": "./dist/src/wasm/bdk-core.wasm"
   },
   "scripts": {
@@ -37,6 +38,8 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "bench": "tsx bench/benchmark.ts",
     "bench:batch": "node --expose-gc --import tsx bench/batch-benchmark.ts",
+    "bench:crypto": "node --import tsx bench/crypto-benchmark.ts",
+    "bench:warmup": "node --import tsx bench/warmup-benchmark.ts",
     "test:browser": "pnpm build && node browser/test.mjs",
     "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node browser/test.mjs",
     "typecheck": "tsc -p tsconfig.json"

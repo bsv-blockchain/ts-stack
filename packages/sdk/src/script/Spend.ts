@@ -13,6 +13,7 @@ import { verify } from '../primitives/ECDSA.js'
 import TransactionInput from '../transaction/TransactionInput.js'
 import TransactionOutput from '../transaction/TransactionOutput.js'
 import type SpendVerifierInterface from './SpendVerifierInterface.js'
+import { scriptVerificationBackend } from '../transaction/ScriptVerificationBackend.js'
 
 // These constants control the current behavior of the interpreter.
 const maxScriptElementSize = 1024 * 1024 * 1024
@@ -1482,6 +1483,22 @@ export default class Spend {
    * }
    */
   validate (): boolean {
+    const verifier = scriptVerificationBackend()
+    if (
+      verifier?.verifySpendSync !== undefined &&
+      (verifier.isReady?.() ?? true) &&
+      (verifier.shouldVerifySpend?.(this) ?? true)
+    ) {
+      return verifier.verifySpendSync(this)
+    }
+    return this.validateJavaScript()
+  }
+
+  /**
+   * Runs the original TypeScript interpreter explicitly, bypassing any
+   * registered optional backend.
+   */
+  validateJavaScript (): boolean {
     this.reset()
     if (this.shouldEnforceSigPushOnly() && !this.unlockingScript.isPushOnly()) {
       this.scriptEvaluationError(
@@ -1541,7 +1558,7 @@ export default class Spend {
    * is used. Once selected, backend errors remain authoritative and propagate.
    */
   async validateWith (verifier: SpendVerifierInterface): Promise<boolean> {
-    if (verifier.shouldVerifySpend?.(this) === false) return this.validate()
+    if (verifier.shouldVerifySpend?.(this) === false) return this.validateJavaScript()
     return await verifier.verifySpend(this)
   }
 

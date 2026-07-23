@@ -4,7 +4,7 @@ const MAX_CLASSIC_BROWSER_BYTES = 300_000
 const artifacts = [
   new URL('../dist/umd/verifast.js', import.meta.url),
   new URL('../dist/src/wasm/bdk-core.umd.js', import.meta.url),
-  new URL('../dist/src/wasm/bdk-core.wasm', import.meta.url)
+  new URL('../dist/src/wasm/bdk-core.umd.wasm', import.meta.url)
 ]
 
 const sizes = await Promise.all(artifacts.map(async artifact => (await stat(artifact)).size))

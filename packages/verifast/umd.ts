@@ -18,7 +18,7 @@ async function globalFactory (): Promise<import('./src/BdkVerifierCore.js').BdkW
     throw new Error('Load bdk-core.umd.js before constructing the UMD BdkVerifier')
   }
   return await factory({
-    locateFile: (path, prefix) => path.endsWith('.wasm') ? `${prefix}bdk-core.wasm` : `${prefix}${path}`
+    locateFile: (path, prefix) => path.endsWith('.wasm') ? `${prefix}bdk-core.umd.wasm` : `${prefix}${path}`
   })
 }
 
