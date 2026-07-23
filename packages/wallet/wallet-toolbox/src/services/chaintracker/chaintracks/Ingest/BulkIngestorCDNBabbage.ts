@@ -11,7 +11,7 @@ export class BulkIngestorCDNBabbage extends BulkIngestorCDN {
    */
   static createBulkIngestorCDNBabbageOptions (chain: Chain, fetch: ChaintracksFetchApi): BulkIngestorCDNOptions {
     const options: BulkIngestorCDNOptions = {
-      ...BulkIngestorCDN.createBulkIngestorCDNOptions(chain, 'https://cdn.projectbabbage.com/blockheaders/', fetch)
+      ...BulkIngestorCDN.createBulkIngestorCDNOptions(chain, 'https://chaintracks-cdn-us-1.bsvb.tech/', fetch)
     }
     return options
   }

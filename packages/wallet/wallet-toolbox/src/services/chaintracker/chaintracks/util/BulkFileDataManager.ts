@@ -44,7 +44,7 @@ export class BulkFileDataManager {
       maxPerFile: 100000,
       maxRetained: 2,
       fetch: new ChaintracksFetch(),
-      fromKnownSourceUrl: 'https://cdn.projectbabbage.com/blockheaders'
+      fromKnownSourceUrl: 'https://chaintracks-cdn-us-1.bsvb.tech'
     }
   }
 
