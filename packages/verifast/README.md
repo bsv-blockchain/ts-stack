@@ -104,11 +104,13 @@ const { BdkVerifier } = require('@bsv/verifast')
 ```
 
 Browser ESM contains no Node imports and works in window and worker targets.
-For classic scripts, load `dist/wasm/bdk-core.umd.js`, then
+For classic scripts, load `dist/src/wasm/bdk-core.umd.js`, then
 `dist/umd/verifast.js`; both locate the package's single
-`dist/wasm/bdk-core.wasm` payload. The Node, browser, and UMD loaders are built
-from the same C++ ABI and their generated WASM binaries are required to have
-identical SHA-256 digests.
+`dist/src/wasm/bdk-core.wasm` payload. The wrapper uses SDK types without
+rebundling the SDK implementation. The build rejects a complete classic-script
+payload over 300,000 bytes, counting both loaders and WASM. The Node, browser,
+and UMD loaders are built from the same C++ ABI and their generated WASM
+binaries are required to have identical SHA-256 digests.
 
 An optional custom WASM factory remains supported:
 
@@ -142,11 +144,12 @@ names throw rather than being ignored.
 ## Reproducibility and validation
 
 The bundled module is built from BDK 1.2.2 plus `bitcoin-sv` commit
-`879fc8b42168dd0e608dafd51b39c6dabad37d4d`, Emscripten 4.0.23, Boost 1.85.0,
-and OpenSSL 3.4.0. BDK's `module/typesbdk/wasm/build.sh` verifies pinned inputs,
-performs a clean build, runs libsecp256k1's verified, non-verified, and exhaustive
-WASM tests, then validates the vector, typed, transaction-batch, Spend, and
-Spend-batch ABIs through all three loaders.
+`879fc8b42168dd0e608dafd51b39c6dabad37d4d`, Emscripten 4.0.23, and Boost
+1.85.0. The verifier-only target does not link OpenSSL. BDK's
+`module/typesbdk/wasm/build.sh` verifies pinned inputs, performs a clean build,
+runs libsecp256k1's verified, non-verified, and exhaustive WASM tests, then
+validates the vector, typed, transaction-batch, Spend, and Spend-batch ABIs
+through all three loaders.
 
 ```bash
 pnpm --filter @bsv/verifast typecheck

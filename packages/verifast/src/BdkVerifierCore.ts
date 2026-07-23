@@ -1,4 +1,4 @@
-import { OP, type Script, type Spend, type Transaction } from '@bsv/sdk'
+import type { Script, Spend, Transaction } from '@bsv/sdk'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
 import { mapVerifyFlags } from './flags.js'
 
@@ -77,10 +77,10 @@ export interface BdkVerifierOptions {
 export const DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD = 100
 
 const SIGNATURE_OPS = new Set<number>([
-  OP.OP_CHECKSIG,
-  OP.OP_CHECKSIGVERIFY,
-  OP.OP_CHECKMULTISIG,
-  OP.OP_CHECKMULTISIGVERIFY
+  0xac, // OP_CHECKSIG
+  0xad, // OP_CHECKSIGVERIFY
+  0xae, // OP_CHECKMULTISIG
+  0xaf // OP_CHECKMULTISIGVERIFY
 ])
 
 /**

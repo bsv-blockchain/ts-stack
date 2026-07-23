@@ -33,7 +33,7 @@
     "./wasm/bdk-core.wasm": "./dist/src/wasm/bdk-core.wasm"
   },
   "scripts": {
-    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs && node scripts/check-bundle-size.mjs",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "bench": "tsx bench/benchmark.ts",
     "bench:batch": "node --expose-gc --import tsx bench/batch-benchmark.ts",
