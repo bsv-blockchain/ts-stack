@@ -1,24 +1,23 @@
-/**
- * AuthMethodInteractor
- *
- * A base interface/class for client-side logic to interact with a server
- * for a specific Auth Method's flow (start, complete).
- */
+import { WABTransport } from '../WABTransport'
 
 export interface AuthPayload {
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface StartAuthResponse {
   success: boolean
   message?: string
-  data?: any
+  data?: unknown
 }
 
 export interface CompleteAuthResponse {
   success: boolean
   message?: string
   presentationKey?: string
+  /** Preferred explicit continuity signal for newer WAB servers. */
+  accountStatus?: 'new-user' | 'existing-user'
+  /** Compatibility signal accepted from WAB deployments using a boolean. */
+  existingUser?: boolean
 }
 
 /**
@@ -30,6 +29,10 @@ export interface CompleteAuthResponse {
 export abstract class AuthMethodInteractor {
   public abstract methodType: string
 
+  protected preparePayload (payload: AuthPayload): AuthPayload {
+    return payload
+  }
+
   /**
    * Shared POST helper for auth endpoints.
    */
@@ -37,30 +40,40 @@ export abstract class AuthMethodInteractor {
     serverUrl: string,
     endpoint: string,
     presentationKey: string,
-    payload: AuthPayload
+    payload: AuthPayload,
+    transport?: WABTransport,
+    correlationId?: string
   ): Promise<T> {
-    const res = await fetch(`${serverUrl}/auth/${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const client = transport ?? new WABTransport(serverUrl)
+    return await client.request<T>(`/auth/${endpoint}`, {
+      operation: `auth-${endpoint}`,
+      correlationId,
+      body: {
         methodType: this.methodType,
         presentationKey,
-        payload
-      })
+        payload: this.preparePayload(payload)
+      }
     })
-
-    if (!res.ok) {
-      return { success: false, message: `HTTP error ${res.status}` } as T
-    }
-
-    return await res.json()
   }
 
   /**
    * Start the flow (e.g. request an OTP or create a session).
    */
-  public async startAuth (serverUrl: string, presentationKey: string, payload: AuthPayload): Promise<StartAuthResponse> {
-    return await this.postAuth<StartAuthResponse>(serverUrl, 'start', presentationKey, payload)
+  public async startAuth (
+    serverUrl: string,
+    presentationKey: string,
+    payload: AuthPayload,
+    transport?: WABTransport,
+    correlationId?: string
+  ): Promise<StartAuthResponse> {
+    return await this.postAuth<StartAuthResponse>(
+      serverUrl,
+      'start',
+      presentationKey,
+      payload,
+      transport,
+      correlationId
+    )
   }
 
   /**
@@ -69,8 +82,17 @@ export abstract class AuthMethodInteractor {
   public async completeAuth (
     serverUrl: string,
     presentationKey: string,
-    payload: AuthPayload
+    payload: AuthPayload,
+    transport?: WABTransport,
+    correlationId?: string
   ): Promise<CompleteAuthResponse> {
-    return await this.postAuth<CompleteAuthResponse>(serverUrl, 'complete', presentationKey, payload)
+    return await this.postAuth<CompleteAuthResponse>(
+      serverUrl,
+      'complete',
+      presentationKey,
+      payload,
+      transport,
+      correlationId
+    )
   }
 }

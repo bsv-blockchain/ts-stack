@@ -184,6 +184,16 @@
       "require": "./dist/cjs/src/overlay-tools/*.js",
       "types": "./dist/types/src/overlay-tools/*.d.ts"
     },
+    "./telemetry": {
+      "import": "./dist/esm/src/telemetry/index.js",
+      "require": "./dist/cjs/src/telemetry/index.js",
+      "types": "./dist/types/src/telemetry/index.d.ts"
+    },
+    "./telemetry/*": {
+      "import": "./dist/esm/src/telemetry/*.js",
+      "require": "./dist/cjs/src/telemetry/*.js",
+      "types": "./dist/types/src/telemetry/*.d.ts"
+    },
     "./storage": {
       "import": "./dist/esm/src/storage/index.js",
       "require": "./dist/cjs/src/storage/index.js",

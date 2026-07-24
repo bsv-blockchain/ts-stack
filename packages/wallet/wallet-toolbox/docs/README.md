@@ -10,6 +10,7 @@ The documentation is split into various pages, each covering a set of related fu
 - [Services](./services.md) — Support for abstracted external network services.
 - [Monitor](./monitor.md) — Background task manager for wallet action validation and processing.
 - [WAB Shamir](./wab-shamir.md) — Shamir 2-of-3 key recovery system with entropy collection and WAB server integration.
+- [Authentication observability](./authentication-observability.md) — Privacy-safe telemetry, WAB transport hardening, and account-continuity handling.
 
 ## Open API
 

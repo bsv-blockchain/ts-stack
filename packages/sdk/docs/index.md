@@ -65,6 +65,7 @@ Finally, you can deep dive into the details of the interface and types in the re
 - [Messages](./reference/messages.md)
 - [TOTP](./reference/totp.md)
 - [Compatibility](./reference/compat.md)
+- [Telemetry](./telemetry.md)
 
 
 ## Coming Soon™
