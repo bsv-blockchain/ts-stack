@@ -1,5 +1,6 @@
 export { default as Transaction } from './Transaction.js'
-export type { default as BdkVerifierInterface } from './BdkVerifierInterface.js'
+export type { default as BdkVerifierInterface, BdkVerifyScriptsParams } from './BdkVerifierInterface.js'
+export * from './ScriptVerificationBackend.js'
 export { default as MerklePath } from './MerklePath.js'
 export type { default as TransactionInput } from './TransactionInput.js'
 export type { default as TransactionOutput } from './TransactionOutput.js'

@@ -1,9 +1,5 @@
 import pino from 'pino'
-import { createRequire } from 'node:module'
-import { join } from 'node:path'
-
-const require = createRequire(import.meta.url)
-const pkg = require(join(process.cwd(), 'package.json')) as { name: string; version: string }
+import pkg from '../../package.json' with { type: 'json' }
 
 // Structured pino logger. @opentelemetry/instrumentation-pino (loaded by
 // telemetry.ts) injects trace_id/span_id into every record, and records are

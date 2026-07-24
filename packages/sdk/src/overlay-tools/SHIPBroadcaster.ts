@@ -209,8 +209,6 @@ export default class TopicBroadcaster implements Broadcaster {
           }
           return { host, success: true, steak }
         } catch (error) {
-          console.error(error)
-          // Log error if needed
           return { host, success: false, error }
         }
       }

@@ -517,6 +517,15 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly permissionCache: Map<string, { expiry: number, cachedAt: number }> = new Map()
   private readonly recentGrants: Map<string, number> = new Map()
 
+  /**
+   * Token mints currently being written on-chain, keyed by permission cache
+   * key. A granted permission is only cached once its token finishes minting
+   * (network seconds); ensures arriving in that window await the in-flight
+   * mint instead of re-prompting the user for a permission they just granted.
+   * Stored promises never reject.
+   */
+  private readonly mintsInFlight: Map<string, Promise<void>> = new Map()
+
   private readonly manifestCache: Map<
   string,
   {
@@ -536,6 +545,17 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly groupedPermissionFlowTail: Map<string, Promise<void>> = new Map()
 
   private readonly pactEstablishedCache: Map<string, number> = new Map()
+
+  /**
+   * Parsed BEEF bundles keyed by the raw BEEF array of a `listOutputs`
+   * result, so token scans parse each bundle once instead of once per output.
+   * `null` records a bundle that failed to parse. WeakMap-keyed so entries
+   * are released with their results.
+   */
+  private readonly parsedBeefCache = new WeakMap<number[] | Uint8Array, Beef | null>()
+
+  /** Counts token-field decrypts so long scans can periodically yield. */
+  private tokenFieldDecryptCount = 0
 
   /** How long a cached permission remains valid (5 minutes). */
   private static readonly CACHE_TTL_MS = 5 * 60 * 1000
@@ -872,33 +892,58 @@ export class WalletPermissionsManager implements WalletInterface {
     this.activeRequests.delete(params.requestID)
 
     // 3) If `ephemeral !== true`, we create or renew an on-chain token
-    if (!params.ephemeral) {
-      const request = matching.request as PermissionRequest
-      if (request.renewal) {
-        // renewal => spend the old token, produce a new one
-        await this.renewPermissionOnChain(
-          request.previousToken!,
-          request,
-          params.expiry || 0, // default: never expires
-          params.amount
-        )
-      } else {
-        // brand-new permission token
-        await this.createPermissionOnChain(
-          request,
-          params.expiry || 0, // default: never expires
-          params.amount
-        )
-      }
-    }
-
     // Only cache non-ephemeral permissions
     // Ephemeral permissions should not be cached as they are one-time authorizations
     if (!params.ephemeral) {
+      const request = matching.request as PermissionRequest
       const expiry = params.expiry || 0 // default: never expires
-      const key = this.buildRequestKey(matching.request as PermissionRequest)
+      const key = this.buildRequestKey(request)
+
+      // Several first-contact prompts for the same permission can stack up
+      // before any token exists (e.g. one per usage type). Granting them all
+      // should yield ONE token: if an identical non-renewal grant just minted
+      // (or is minting), don't mint a duplicate. Spending authorizations are
+      // excluded — their tokens carry amounts, so every grant is honored.
+      let skipDuplicateMint =
+        !request.renewal &&
+        request.type !== 'spending' &&
+        (this.isPermissionCached(key) || this.isRecentlyGranted(key) || this.mintsInFlight.has(key))
+
+      if (skipDuplicateMint) {
+        const inFlight = this.mintsInFlight.get(key)
+        if (inFlight != null) {
+          await inFlight
+          // The awaited mint may have failed; only skip if it landed.
+          skipDuplicateMint = this.isPermissionCached(key) || this.isRecentlyGranted(key)
+        }
+      }
+
+      if (!skipDuplicateMint) {
+        const mint = request.renewal
+          ? this.renewPermissionOnChain(
+            request.previousToken!,
+            request,
+            expiry,
+            params.amount
+          )
+          : this.createPermissionOnChain(
+            request,
+            expiry,
+            params.amount
+          )
+        // Publish the in-flight mint so concurrent ensures for the same
+        // permission wait for it instead of re-prompting (stored promise
+        // never rejects; failures still propagate to this caller below).
+        this.mintsInFlight.set(key, mint.then(() => {}, () => {}))
+        try {
+          await mint
+        } finally {
+          this.mintsInFlight.delete(key)
+        }
+      }
+
       this.cachePermission(key, expiry)
-      this.markRecentGrant(matching.request as PermissionRequest)
+      this.markRecentGrant(request)
     }
   }
 
@@ -916,8 +961,12 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     // 2) Reject all matching requests, deleting the entry
+    // Denials carry the canonical machine-readable code so applications can
+    // distinguish user denial from other failures (matches denyActiveRequest).
+    const err: Error & { code?: string } = new Error('Permission denied.')
+    err.code = 'ERR_PERMISSION_DENIED'
     for (const x of matching.pending) {
-      x.reject(new Error('Permission denied.'))
+      x.reject(err)
     }
     this.activeRequests.delete(requestID)
   }
@@ -1227,7 +1276,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (!privileged && this.isWhitelistedCounterpartyProtocol(counterparty, protocolID)) return true
 
     const cacheKey = this.buildRequestKey({ type: 'protocol', originator, privileged, protocolID, counterparty })
-    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
+    if (await this.hasRecentOrPendingGrant(cacheKey)) return true
 
     // 4) Attempt to find a valid token in the internal basket
     const token = await this.findProtocolToken(
@@ -1282,7 +1331,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (!this.isBasketUsageRequired(usageType)) return true
 
     const cacheKey = this.buildRequestKey({ type: 'basket', originator, basket })
-    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
+    if (await this.hasRecentOrPendingGrant(cacheKey)) return true
 
     const token = await this.findBasketToken(originator, basket, true, lookupValues)
     if (token == null) {
@@ -1347,10 +1396,7 @@ export class WalletPermissionsManager implements WalletInterface {
       privileged,
       certificate: { verifier, certType, fields }
     })
-    if (this.isPermissionCached(cacheKey)) {
-      return true
-    }
-    if (this.isRecentlyGranted(cacheKey)) {
+    if (await this.hasRecentOrPendingGrant(cacheKey)) {
       return true
     }
 
@@ -1427,7 +1473,10 @@ export class WalletPermissionsManager implements WalletInterface {
       return true
     }
     const cacheKey = this.buildRequestKey({ type: 'spending', originator, spending: { satoshis } })
-    if (this.isPermissionCached(cacheKey)) {
+    // Spending keys are amount-scoped. The recent-grant window this adds sits
+    // inside the pre-existing permissionCache window grantPermission already
+    // wrote for spending, so accounting exposure is unchanged.
+    if (await this.hasRecentOrPendingGrant(cacheKey)) {
       return true
     }
     const token = await this.findSpendingToken(originator, lookupValues)
@@ -1671,11 +1720,13 @@ export class WalletPermissionsManager implements WalletInterface {
     const [spendingAuthorization, protocolPermissions, basketAccess, certificateAccess] = await Promise.all([
       (async () => {
         if (groupPermissions.spendingAuthorization == null) return undefined
-        const hasAuth = await this.hasSpendingAuthorization({
-          originator,
-          satoshis: groupPermissions.spendingAuthorization.amount
-        })
-        return hasAuth ? undefined : groupPermissions.spendingAuthorization
+        // A standing authorization is a grant regardless of how much of the
+        // monthly allowance has been used — exhaustion is handled by renewal
+        // at spend time. Checking remaining headroom here re-requests (and,
+        // if approved, re-mints) spending after any monthly usage.
+        const { normalized, lookupValues } = this.prepareOriginator(originator)
+        const token = await this.findSpendingToken(normalized, lookupValues)
+        return token != null ? undefined : groupPermissions.spendingAuthorization
       })(),
       (async () => {
         const protocolChecks = await Promise.all(
@@ -2319,7 +2370,44 @@ export class WalletPermissionsManager implements WalletInterface {
     return ciphertext
   }
 
+  /**
+   * Extracts a transaction from a `listOutputs` result's BEEF bundle, parsing
+   * the bundle only once per result. Calling
+   * `Transaction.fromBEEF(result.BEEF, txid)` per output re-parses the entire
+   * bundle every time — O(n²) in the number of outputs — which can block the
+   * caller's thread (in browser wallets, the UI) for seconds on large
+   * permission baskets.
+   */
+  private transactionFromResultBeef (result: { BEEF?: number[] | Uint8Array }, txid: string): Transaction {
+    const beef = result.BEEF
+    if (beef != null) {
+      let parsed = this.parsedBeefCache.get(beef)
+      if (parsed === undefined) {
+        try {
+          parsed = Beef.fromBinary(beef)
+        } catch {
+          parsed = null
+        }
+        this.parsedBeefCache.set(beef, parsed)
+      }
+      // findAtomicTransaction (not findTxid().tx) matches fromBEEF exactly:
+      // it attaches merkle paths and sourceTransaction ancestry, which token
+      // consumers rely on when re-serializing via tx.toBEEF().
+      const tx = parsed?.findAtomicTransaction(txid)
+      if (tx != null) return tx
+    }
+    // Preserve the original behavior (including throwing) for bundles the
+    // fast path can't serve.
+    return Transaction.fromBEEF(beef ?? [], txid)
+  }
+
   private async decryptPermissionTokenField (ciphertext: number[]): Promise<number[]> {
+    // Field decrypts run in tight loops over every token in a basket; yield a
+    // macrotask periodically so large scans don't starve the caller's event
+    // loop (in browser wallets, that means blocking rendering and input).
+    if (++this.tokenFieldDecryptCount % 8 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
     try {
       const { plaintext } = await this.underlying.decrypt(
         {
@@ -2500,7 +2588,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (dec?.fields == null || dec.fields.length < 6) continue
 
@@ -2572,7 +2660,7 @@ export class WalletPermissionsManager implements WalletInterface {
       for (const out of result.outputs) {
         if (seen.has(out.outpoint)) continue
         const [txid, vout] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[vout].lockingScript)
         if (dec?.fields == null || dec.fields.length < 6) continue
 
@@ -2630,7 +2718,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (!dec?.fields || dec.fields.length < 3) continue
 
@@ -2683,7 +2771,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (!dec?.fields || dec.fields.length < 6) continue
         const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
@@ -2743,7 +2831,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         const [txid, outputIndexStr] = out.outpoint.split('.')
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[Number(outputIndexStr)].lockingScript)
         if (!dec?.fields || dec.fields.length < 2) continue
         const domainRaw = dec.fields[0]
@@ -3346,7 +3434,7 @@ export class WalletPermissionsManager implements WalletInterface {
     for (const out of result.outputs) {
       if (seen.has(out.outpoint)) continue
       const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const tx = this.transactionFromResultBeef(result, txid)
       const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
       if (!dec?.fields || dec.fields.length < 6) continue
       const f = await this.decryptProtocolTokenFields(dec.fields)
@@ -3424,7 +3512,7 @@ export class WalletPermissionsManager implements WalletInterface {
       for (const out of result.outputs) {
         if (seen.has(out.outpoint)) continue
         const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
+        const tx = this.transactionFromResultBeef(result, txid)
         const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
         if (!dec?.fields || dec.fields.length < 3) continue
         const [domainRaw, expiryRaw, basketRaw] = dec.fields
@@ -3490,7 +3578,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const tokens: PermissionToken[] = []
     for (const out of result.outputs) {
       const [txid, outputIndexStr] = out.outpoint.split('.')
-      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const tx = this.transactionFromResultBeef(result, txid)
       const dec = PushDrop.decode(tx.outputs[Number(outputIndexStr)].lockingScript)
       if (!dec?.fields || dec.fields.length < 2) continue
       const [domainRaw, amtRaw] = dec.fields
@@ -3575,7 +3663,7 @@ export class WalletPermissionsManager implements WalletInterface {
     for (const out of result.outputs) {
       if (seen.has(out.outpoint)) continue
       const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const tx = this.transactionFromResultBeef(result, txid)
       const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
       if (!dec?.fields || dec.fields.length < 6) continue
       const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
@@ -4767,6 +4855,20 @@ export class WalletPermissionsManager implements WalletInterface {
     if (basket === 'default') return true
     if (basket.startsWith('admin')) return true
     return false
+  }
+
+  /**
+   * Whether the permission is satisfied without consulting on-chain tokens:
+   * cached, recently granted, or — when the user just granted it and its
+   * token is still minting — after the in-flight mint settles. Spares the
+   * user a duplicate prompt for a grant they already made moments ago.
+   */
+  private async hasRecentOrPendingGrant (cacheKey: string): Promise<boolean> {
+    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
+    const inFlight = this.mintsInFlight.get(cacheKey)
+    if (inFlight == null) return false
+    await inFlight
+    return this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)
   }
 
   /**

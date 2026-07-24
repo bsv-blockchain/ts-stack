@@ -2,7 +2,13 @@
 import acknowledgeMessage, { AcknowledgeRequest } from '../acknowledgeMessage.js'
 import mockKnex, { Tracker } from 'mock-knex'
 import { Response } from 'express'
+import knexLib from 'knex'
+import knexConfig from '../../../knexfile.js'
+import { bindMessageBoxRuntime } from '../../runtimeDeps.js'
 
+const testKnex = (knexLib as any).default?.(knexConfig.development) ??
+  (knexLib as any)(knexConfig.development)
+bindMessageBoxRuntime({ knex: testKnex })
 const knex = acknowledgeMessage.knex
 let queryTracker: Tracker
 

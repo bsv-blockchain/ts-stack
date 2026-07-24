@@ -67,7 +67,7 @@ export class Services implements WalletServices {
     this.chain = typeof optionsOrChain === 'string' ? optionsOrChain : optionsOrChain.chain
 
     if (this.chain === 'mock') {
-      throw new WERR_INVALID_PARAMETER('chain', '\'main\', \'test\', or \'ttn\'. Use MockServices for \'mock\' chain.')
+      throw new WERR_INVALID_PARAMETER('chain', '\'main\', \'test\', \'ttn\', or \'tstn\'. Use MockServices for \'mock\' chain.')
     }
 
     this.options = typeof optionsOrChain === 'string' ? Services.createDefaultOptions(this.chain) : optionsOrChain
@@ -84,6 +84,11 @@ export class Services implements WalletServices {
 
     const hasBitails = this.chain === 'main' || this.chain === 'test'
 
+    // tstn runs only Arcade + ChainTracks; it has no WhatsOnChain / block-explorer service, so
+    // WhatsOnChain is not registered as a provider on tstn. The WhatsOnChain-only lookups (raw
+    // tx, utxo status, txid status, script-hash history) therefore have no provider on tstn.
+    const hasWhatsOnChain = this.chain !== 'tstn'
+
     if (hasBitails) {
       this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
     }
@@ -95,16 +100,21 @@ export class Services implements WalletServices {
       // prettier-ignore
       this.getMerklePathServices.add({ name: 'Arcade', service: this.arcade.getMerklePath.bind(this.arcade) })
     }
-    // prettier-ignore
-    this.getMerklePathServices
-      .add({ name: 'WhatsOnChain', service: this.whatsonchain.getMerklePath.bind(this.whatsonchain) })
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.getMerklePathServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.getMerklePath.bind(this.whatsonchain) })
+    }
     if (hasBitails && (this.bitails != null)) {
       this.getMerklePathServices.add({ name: 'Bitails', service: this.bitails.getMerklePath.bind(this.bitails) })
     }
 
-    // prettier-ignore
     this.getRawTxServices = new ServiceCollection<GetRawTxService>('getRawTx')
-      .add({ name: 'WhatsOnChain', service: this.whatsonchain.getRawTxResult.bind(this.whatsonchain) })
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.getRawTxServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.getRawTxResult.bind(this.whatsonchain) })
+    }
 
     this.postBeefServices = new ServiceCollection<PostBeefService>('postBeef')
     // Arcade is registered first so it is the primary broadcaster; ARC providers below
@@ -123,21 +133,32 @@ export class Services implements WalletServices {
     if (hasBitails && (this.bitails != null)) {
       this.postBeefServices.add({ name: 'Bitails', service: this.bitails.postBeef.bind(this.bitails) })
     }
-    // prettier-ignore
-    this.postBeefServices
-      .add({ name: 'WhatsOnChain', service: this.whatsonchain.postBeef.bind(this.whatsonchain) })
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.postBeefServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.postBeef.bind(this.whatsonchain) })
+    }
 
-    // prettier-ignore
     this.getUtxoStatusServices = new ServiceCollection<GetUtxoStatusService>('getUtxoStatus')
-      .add({ name: 'WhatsOnChain', service: this.whatsonchain.getUtxoStatus.bind(this.whatsonchain) })
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.getUtxoStatusServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.getUtxoStatus.bind(this.whatsonchain) })
+    }
 
-    // prettier-ignore
     this.getStatusForTxidsServices = new ServiceCollection<GetStatusForTxidsService>('getStatusForTxids')
-      .add({ name: 'WhatsOnChain', service: this.whatsonchain.getStatusForTxids.bind(this.whatsonchain) })
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.getStatusForTxidsServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.getStatusForTxids.bind(this.whatsonchain) })
+    }
 
-    // prettier-ignore
     this.getScriptHashHistoryServices = new ServiceCollection<GetScriptHashHistoryService>('getScriptHashHistory')
-      .add({ name: 'WhatsOnChain', service: this.whatsonchain.getScriptHashHistory.bind(this.whatsonchain) })
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.getScriptHashHistoryServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.getScriptHashHistory.bind(this.whatsonchain) })
+    }
 
     // prettier-ignore
     this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate')

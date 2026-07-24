@@ -19,6 +19,7 @@ import type { WalletInterface, DescriptionString5to50Bytes, CreateActionOptions 
 import TransactionSignature, { type SignatureHashCache } from '../primitives/TransactionSignature.js'
 import Random from '../primitives/Random.js'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
+import { scriptVerificationBackend } from './ScriptVerificationBackend.js'
 
 /** Post-Chronicle height used when an input's source UTXO mined-height is unobtainable. */
 const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
@@ -68,6 +69,7 @@ export default class Transaction {
   private cachedHash?: number[]
   private cachedIdHex?: string
   private rawBytesCache?: Uint8Array
+  private efBytesCache?: Uint8Array
   private hexCache?: string
   private activeSignatureHashCache?: SignatureHashCache
   private rawCacheState?: {
@@ -81,6 +83,10 @@ export default class Transaction {
       sequence: number | undefined
       unlockingScript: TransactionInput['unlockingScript']
       unlockingScriptBytes: Uint8Array | undefined
+      sourceOutput: TransactionOutput | undefined
+      sourceSatoshis: number | undefined
+      sourceLockingScript: TransactionOutput['lockingScript'] | undefined
+      sourceLockingScriptBytes: Uint8Array | undefined
     }>
     outputs: Array<{
       ref: TransactionOutput
@@ -447,6 +453,7 @@ export default class Transaction {
     this.cachedHash = undefined
     this.cachedIdHex = undefined
     this.rawBytesCache = undefined
+    this.efBytesCache = undefined
     this.hexCache = undefined
     this.rawCacheState = undefined
   }
@@ -459,15 +466,22 @@ export default class Transaction {
     this.rawCacheState = {
       version: this.version,
       lockTime: this.lockTime,
-      inputs: this.inputs.map(ref => ({
-        ref,
-        sourceTXID: ref.sourceTXID,
-        sourceTransactionId: this.sourceTransactionId(ref),
-        sourceOutputIndex: ref.sourceOutputIndex,
-        sequence: ref.sequence,
-        unlockingScript: ref.unlockingScript,
-        unlockingScriptBytes: ref.unlockingScript?.toUint8Array()
-      })),
+      inputs: this.inputs.map(ref => {
+        const sourceOutput = ref.sourceTransaction?.outputs[ref.sourceOutputIndex]
+        return {
+          ref,
+          sourceTXID: ref.sourceTXID,
+          sourceTransactionId: this.sourceTransactionId(ref),
+          sourceOutputIndex: ref.sourceOutputIndex,
+          sequence: ref.sequence,
+          unlockingScript: ref.unlockingScript,
+          unlockingScriptBytes: ref.unlockingScript?.toUint8Array(),
+          sourceOutput,
+          sourceSatoshis: sourceOutput?.satoshis,
+          sourceLockingScript: sourceOutput?.lockingScript,
+          sourceLockingScriptBytes: sourceOutput?.lockingScript.toUint8Array()
+        }
+      }),
       outputs: this.outputs.map(ref => ({
         ref,
         satoshis: ref.satoshis,
@@ -480,7 +494,6 @@ export default class Transaction {
   private serializationCacheMatchesState (): boolean {
     const cached = this.rawCacheState
     if (
-      this.rawBytesCache == null ||
       cached == null ||
       cached.version !== this.version ||
       cached.lockTime !== this.lockTime ||
@@ -491,6 +504,7 @@ export default class Transaction {
     for (let i = 0; i < this.inputs.length; i++) {
       const input = this.inputs[i]
       const state = cached.inputs[i]
+      const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
       if (
         state.ref !== input ||
         state.sourceTXID !== input.sourceTXID ||
@@ -498,7 +512,11 @@ export default class Transaction {
         state.sourceOutputIndex !== input.sourceOutputIndex ||
         state.sequence !== input.sequence ||
         state.unlockingScript !== input.unlockingScript ||
-        state.unlockingScriptBytes !== input.unlockingScript?.toUint8Array()
+        state.unlockingScriptBytes !== input.unlockingScript?.toUint8Array() ||
+        state.sourceOutput !== sourceOutput ||
+        state.sourceSatoshis !== sourceOutput?.satoshis ||
+        state.sourceLockingScript !== sourceOutput?.lockingScript ||
+        state.sourceLockingScriptBytes !== sourceOutput?.lockingScript.toUint8Array()
       ) return false
     }
 
@@ -818,7 +836,7 @@ export default class Transaction {
   }
 
   private getSerializedBytes (): Uint8Array {
-    if (!this.serializationCacheMatchesState()) {
+    if (this.rawBytesCache == null || !this.serializationCacheMatchesState()) {
       this.invalidateSerializationCaches()
       this.rawBytesCache = this.buildSerializedBytes()
       this.captureSerializationState()
@@ -858,7 +876,7 @@ export default class Transaction {
       if (i.unlockingScript == null) {
         throw new Error('unlockingScript is undefined')
       }
-      const scriptBin = i.unlockingScript.toBinary()
+      const scriptBin = i.unlockingScript.toUint8Array()
       writer.writeVarIntNum(scriptBin.length)
       writer.write(scriptBin)
       writer.writeUInt32LE(i.sequence ?? 0xffffffff) // default to max sequence
@@ -868,14 +886,14 @@ export default class Transaction {
       const lockingScriptBin =
         i.sourceTransaction.outputs[
           i.sourceOutputIndex
-        ].lockingScript.toBinary()
+        ].lockingScript.toUint8Array()
       writer.writeVarIntNum(lockingScriptBin.length)
       writer.write(lockingScriptBin)
     }
     writer.writeVarIntNum(this.outputs.length)
     for (const o of this.outputs) {
       writer.writeUInt64LE(o.satoshis ?? 0)
-      const scriptBin = o.lockingScript.toBinary()
+      const scriptBin = o.lockingScript.toUint8Array()
       writer.writeVarIntNum(scriptBin.length)
       writer.write(scriptBin)
     }
@@ -888,20 +906,43 @@ export default class Transaction {
    * @returns {number[]} - The BRC-30 EF representation of the transaction.
    */
   toEF (): number[] {
-    const writer = new Writer()
-    this.writeEF(writer)
-    return writer.toArray()
+    return Array.from(this.getEFBytes())
   }
 
   /**
    * Converts the transaction to a BRC-30 EF format.
    *
+   * @remarks This is an alias for {@link toEFBinary}. The returned view is
+   * memoized for verifier hot paths and must be treated as immutable.
+   *
    * @returns {Uint8Array} - The BRC-30 EF representation of the transaction.
    */
   toEFUint8Array (): Uint8Array {
-    const writer = new WriterUint8Array()
-    this.writeEF(writer)
-    return writer.toUint8Array()
+    return this.toEFBinary()
+  }
+
+  private getEFBytes (): Uint8Array {
+    if (this.efBytesCache == null || !this.serializationCacheMatchesState()) {
+      this.invalidateSerializationCaches()
+      const writer = new WriterUint8Array()
+      this.writeEF(writer)
+      this.efBytesCache = writer.toUint8Array()
+      this.captureSerializationState()
+    }
+    return this.efBytesCache
+  }
+
+  /**
+   * Converts the transaction to a memoized BRC-30 EF byte array.
+   *
+   * @remarks The returned view is reused until transaction or referenced
+   * source-output serialization state changes. Treat it as immutable; call
+   * `.slice()` when an independently mutable copy is required.
+   *
+   * @returns {Uint8Array} The cached BRC-30 EF representation.
+   */
+  toEFBinary (): Uint8Array {
+    return this.getEFBytes()
   }
 
   /**
@@ -910,7 +951,7 @@ export default class Transaction {
    * @returns {string} - The hexadecimal string representation of the transaction EF.
    */
   toHexEF (): string {
-    return toHex(this.toEFUint8Array())
+    return toHex(this.toEFBinary())
   }
 
   /**
@@ -998,6 +1039,7 @@ export default class Transaction {
    * @param chainTracker - An instance of ChainTracker, a Bitcoin block header tracker. If the value is set to 'scripts only', headers will not be verified. If not provided then the default chain tracker will be used.
    * @param feeModel - An instance of FeeModel, a fee model to use for fee calculation. If not provided then the default fee model will be used.
    * @param memoryLimit - The maximum memory in bytes usage allowed for script evaluation. If not provided then the default memory limit will be used.
+   * @param verifier - An optional asynchronous script backend. Adaptive backends may decline before execution to preserve the JavaScript path.
    *
    * @returns Whether the transaction is valid according to the rules of SPV.
    *
@@ -1009,34 +1051,47 @@ export default class Transaction {
     memoryLimit?: number,
     verifier?: BdkVerifierInterface
   ): Promise<boolean> {
-    this.materializeSourceTXIDs()
+    const scriptsOnly = chainTracker === 'scripts only'
+    const selectedVerifier = verifier ?? scriptVerificationBackend()
+    if (!scriptsOnly) this.materializeSourceTXIDs()
     const verifiedTxids = new Set<string>()
+    const verifiedTransactions = new Set<Transaction>()
     const txQueue: Transaction[] = [this]
-    const queuedTxids = new Set<string>([this.id('hex')])
+    const queuedTxids = new Set<string>()
+    if (!scriptsOnly) queuedTxids.add(this.id('hex'))
+    const queuedTransactions = new Set<Transaction>(txQueue)
+    const verifierQueue: Array<{
+      tx: Transaction
+      blockHeight: number
+      consensus: boolean
+      memoryLimit?: number
+    }> = []
     let queueIndex = 0
 
     while (queueIndex < txQueue.length) {
       const tx = txQueue[queueIndex++]
-      const txid = tx.id('hex')
-      if (txid != null && txid !== '' && verifiedTxids.has(txid)) {
+      let txid: string | undefined
+      const getTxid = (): string => {
+        txid ??= tx.id('hex')
+        return txid
+      }
+      if (scriptsOnly ? verifiedTransactions.has(tx) : verifiedTxids.has(getTxid())) {
         continue
       }
 
       // If the transaction has a valid merkle path, verification is complete.
       if (typeof tx.merklePath === 'object') {
-        if (chainTracker === 'scripts only') {
-          if (txid != null) {
-            verifiedTxids.add(txid)
-          }
+        if (scriptsOnly) {
+          verifiedTransactions.add(tx)
           continue
         } else {
-          const proofValid = await tx.merklePath.verify(txid, chainTracker)
+          const proofValid = await tx.merklePath.verify(getTxid(), chainTracker)
           // If the proof is valid, no need to verify inputs.
           if (proofValid) {
-            verifiedTxids.add(txid)
+            verifiedTxids.add(getTxid())
             continue
           } else {
-            throw new Error(`Invalid merkle path for transaction ${txid}`)
+            throw new Error(`Invalid merkle path for transaction ${getTxid()}`)
           }
         }
       }
@@ -1052,10 +1107,20 @@ export default class Transaction {
         await cpTx.fee(feeModel)
         if (tx.getFee() < cpTx.getFee()) {
           throw new Error(
-            `Verification failed because the transaction ${txid} has an insufficient fee and has not been mined.`
+            `Verification failed because the transaction ${getTxid()} has an insufficient fee and has not been mined.`
           )
         }
       }
+
+      const verifierParams = {
+        tx,
+        blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
+        consensus: tx.version > 1,
+        ...(memoryLimit === undefined ? {} : { memoryLimit })
+      } as const
+      const useVerifier = selectedVerifier !== undefined &&
+        (memoryLimit === undefined || selectedVerifier.supportsMemoryLimit === true) &&
+        (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
 
       // Verify each input transaction and evaluate the spend events.
       // Also, keep a total of the input amounts for later.
@@ -1065,27 +1130,35 @@ export default class Transaction {
         const input = tx.inputs[i]
         if (typeof input.sourceTransaction !== 'object') {
           throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
+            `Verification failed because the input at index ${i} of transaction ${getTxid()} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
           )
         }
         if (typeof input.unlockingScript !== 'object') {
           throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
+            `Verification failed because the input at index ${i} of transaction ${getTxid()} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
           )
         }
         const sourceOutput =
           input.sourceTransaction.outputs[input.sourceOutputIndex]
         inputTotal += sourceOutput.satoshis ?? 0
 
-        const sourceTxid = input.sourceTransaction.id('hex')
-        if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
-          txQueue.push(input.sourceTransaction)
+        const sourceTransaction = input.sourceTransaction
+        const sourceTxid = scriptsOnly && input.sourceTXID !== undefined
+          ? input.sourceTXID
+          : sourceTransaction.id('hex')
+        if (scriptsOnly) {
+          if (!verifiedTransactions.has(sourceTransaction) && !queuedTransactions.has(sourceTransaction)) {
+            txQueue.push(sourceTransaction)
+            queuedTransactions.add(sourceTransaction)
+          }
+        } else if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
+          txQueue.push(sourceTransaction)
           queuedTxids.add(sourceTxid)
         }
 
         input.sourceTXID ??= sourceTxid
 
-        if (verifier === undefined) {
+        if (!useVerifier) {
           const spend = new Spend({
             sourceTXID: input.sourceTXID,
             sourceOutputIndex: input.sourceOutputIndex,
@@ -1102,7 +1175,7 @@ export default class Transaction {
             memoryLimit,
             sigHashCache
           })
-          const spendValid = spend.validate()
+          const spendValid = spend.validateJavaScript()
 
           if (!spendValid) {
             return false
@@ -1110,20 +1183,13 @@ export default class Transaction {
         }
       }
 
-      // When a pluggable verifier is configured, hand the whole transaction to it
-      // once (BDK operates at whole-tx granularity). Strict: its verdict is
-      // authoritative and any thrown error propagates (no JS fallback).
-      if (verifier !== undefined) {
+      // When the selected pluggable verifier accepts the transaction, hand the
+      // whole transaction to it once. Its verdict is authoritative and any
+      // thrown error propagates (no post-selection JavaScript fallback).
+      if (useVerifier) {
         // A tx reaching here has no merkle proof (mined txs short-circuit above),
         // so its source UTXO mined-height is unobtainable -> post-Chronicle fallback.
-        const scriptsValid = await verifier.verifyScripts({
-          tx,
-          blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
-          consensus: true
-        })
-        if (!scriptsValid) {
-          return false
-        }
+        verifierQueue.push(verifierParams)
       }
 
       // Total the outputs to ensure they don't amount to more than the inputs
@@ -1141,7 +1207,25 @@ export default class Transaction {
         return false
       }
 
-      verifiedTxids.add(txid)
+      if (scriptsOnly) verifiedTransactions.add(tx)
+      else verifiedTxids.add(getTxid())
+    }
+
+    if (verifierQueue.length > 0 && selectedVerifier !== undefined) {
+      const scriptVerdicts = selectedVerifier.verifyScriptsBatch === undefined
+        ? await Promise.all(verifierQueue.map(
+          async params => await selectedVerifier.verifyScripts(params)
+        ))
+        : await selectedVerifier.verifyScriptsBatch(verifierQueue)
+      if (scriptVerdicts.length !== verifierQueue.length) {
+        throw new Error('Script verifier returned an invalid batch result count')
+      }
+      const failedIndex = scriptVerdicts.findIndex(valid => !valid)
+      if (failedIndex >= 0) {
+        throw new Error(
+          `Script verification failed for transaction ${verifierQueue[failedIndex].tx.id('hex')}`
+        )
+      }
     }
 
     return true

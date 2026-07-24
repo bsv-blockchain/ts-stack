@@ -1,24 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
-import knexConfig from '../../../knexfile.js'
-import * as knexLib from 'knex'
 import { Logger } from '../../utils/logger.js'
-
-// Determine the environment (default to development)
-const { NODE_ENV = 'development' } = process.env
-
-/**
- * Knex instance connected based on environment (development, production, or staging).
- */
-const knex: knexLib.Knex = (knexLib as any).default?.(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-) ?? (knexLib as any)(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-)
+import { runtimeDeps } from '../../runtimeDeps.js'
 
 export interface ListPermissionsRequest extends AuthRequest {
   query: {
@@ -164,7 +147,7 @@ export default {
       Logger.log(`[DEBUG] Listing permissions for recipient: ${recipientKey}, messageBox: ${messageBox ?? 'all'}, limit: ${limit}, offset: ${offset}, createdAtOrder: ${sortOrder}`)
 
       // Build base query
-      let query = knex('message_permissions')
+      let query = runtimeDeps.knex('message_permissions')
         .select([
           'sender',
           'message_box',

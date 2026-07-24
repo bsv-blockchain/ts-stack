@@ -88,8 +88,9 @@ async function setupWalletStorageAndMonitor(): Promise<{
     }
     const knex = makeKnex(knexConfig)
 
-    // Select chain from BSV_NETWORK: "main", "test", "ttn" (TeraTestNet), or "mock" (defaults to "main")
-    const allowedChains = ['main', 'test', 'ttn', 'mock'] as const
+    // Select chain from BSV_NETWORK: "main", "test", "ttn" (TeraTestNet),
+    // "tstn" (Teranode Scaling Test Net), or "mock" (defaults to "main")
+    const allowedChains = ['main', 'test', 'ttn', 'tstn', 'mock'] as const
     let chain: (typeof allowedChains)[number] = 'main'
     if (
       typeof BSV_NETWORK === 'string' &&

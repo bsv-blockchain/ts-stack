@@ -1,36 +1,49 @@
-import { existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
 import BdkVerifier from '../src/BdkVerifier.js'
-import { buildCorpus } from './corpus.js'
+import { buildCorpus, spendsForTransaction } from './corpus.js'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const wasmEntry = resolve(here, '../src/wasm/bdk-core.mjs')
-const hasWasm = existsSync(wasmEntry)
+describe('JS Spend vs real BDK WASM equivalence', () => {
+  it('agrees on every deterministic positive and negative vector', async () => {
+    const verifier = new BdkVerifier({ mode: 'always' })
+    const corpus = await buildCorpus()
 
-const maybe = hasWasm ? describe : describe.skip
+    for (const { name, tx, expected } of corpus) {
+      let jsResult = false
+      try {
+        jsResult = await tx.verify('scripts only')
+      } catch {
+        // The SDK's Spend path throws ScriptEvaluationError for invalid scripts;
+        // BDK reports the same verdict through its structured error domain.
+      }
+      let bdkResult = false
+      try {
+        bdkResult = await tx.verify('scripts only', undefined, undefined, verifier)
+      } catch {
+        // Transaction.verify attributes a rejected backend verdict to the
+        // offending transaction, matching the interpreter's throw contract.
+      }
+      expect({ name, jsResult, bdkResult }).toEqual({
+        name,
+        jsResult: expected,
+        bdkResult: expected
+      })
+    }
+  })
 
-maybe('JS Spend vs BdkVerifier equivalence', () => {
-  it('produces identical validity verdicts for every corpus tx', async () => {
-    // @ts-expect-error dynamic import of a user-supplied artifact (not present in CI)
-    const { default: createBdkModule } = await import('../src/wasm/bdk-core.mjs')
-    const verifier = new BdkVerifier(async () => await createBdkModule())
+  it('agrees with every individual SDK Spend verdict in the corpus', async () => {
+    const verifier = new BdkVerifier({ mode: 'always' })
     const corpus = await buildCorpus()
 
     for (const { name, tx } of corpus) {
-      const jsResult = await tx.verify('scripts only')
-      const bdkResult = await tx.verify('scripts only', undefined, undefined, verifier)
-      expect({ name, bdkResult }).toEqual({ name, bdkResult: jsResult })
+      const spends = spendsForTransaction(tx)
+      const jsVerdicts = spends.map(spend => {
+        try {
+          return spend.validateJavaScript()
+        } catch {
+          return false
+        }
+      })
+      const bdkVerdicts = await verifier.verifySpendsBatch(spends.map(spend => ({ spend })))
+      expect({ name, bdkVerdicts }).toEqual({ name, bdkVerdicts: jsVerdicts })
     }
-  })
-})
-
-describe('equivalence harness availability', () => {
-  it('reports whether a real wasm artifact is present', () => {
-    // Always-on sentinel so CI shows the suite ran; logs guidance when skipping.
-    if (!hasWasm) {
-      console.log('[verifast] No src/wasm/bdk-core.mjs — equivalence test skipped. See README to supply a build.')
-    }
-    expect(typeof hasWasm).toBe('boolean')
   })
 })

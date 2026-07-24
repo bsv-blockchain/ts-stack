@@ -269,6 +269,10 @@ export class GoChaintracksServiceClient implements ChaintracksClientApi {
       case 'teratest':
       case 'teratestnet':
         return 'ttn'
+      case 'tstn':
+      case 'teranodescalingtestnet':
+      case 'scalingtestnet':
+        return 'tstn'
       default:
         return this.chain
     }

@@ -367,6 +367,7 @@ describe('SHIPCast', () => {
     })
 
     expect(mockFacilitator.send).toHaveBeenCalled()
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
   })
 
   it('should fail when required specific hosts are not among interested hosts', async () => {
@@ -434,7 +435,7 @@ describe('SHIPCast', () => {
     })
   })
 
-  it('should succeed when all hosts acknowledge all topics (default behavior)', async () => {
+  it('should succeed quietly when one host fails and another acknowledges all topics', async () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
@@ -504,8 +505,11 @@ describe('SHIPCast', () => {
       ]
     })
 
-    // Both hosts acknowledge all topics
+    // One interested host fails while the other acknowledges all topics.
     mockFacilitator.send.mockImplementation(async (host, { topics }) => {
+      if (host === 'https://shiphost1.com') {
+        throw new Error('Host failed')
+      }
       const steak = {}
       for (const topic of topics) {
         steak[topic] = {
@@ -526,7 +530,7 @@ describe('SHIPCast', () => {
     expect(response).toEqual({
       status: 'success',
       txid: testTx.id('hex'),
-      message: 'Sent to 2 Overlay Services hosts.'
+      message: 'Sent to 1 Overlay Services host.'
     })
 
     expect(mockResolver.query).toHaveBeenCalledWith(
@@ -540,6 +544,7 @@ describe('SHIPCast', () => {
     )
 
     expect(mockFacilitator.send).toHaveBeenCalledTimes(2)
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
   })
 
   it('should fail if at least one host does not acknowledge every topic (default behavior)', async () => {

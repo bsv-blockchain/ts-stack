@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
@@ -8,44 +8,70 @@
   },
   "type": "module",
   "description": "Optional C++/WASM (BDK) transaction script-verification backend for @bsv/sdk",
-  "main": "dist/mod.js",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "main": "dist/cjs/mod.cjs",
+  "module": "dist/mod.js",
   "types": "dist/mod.d.ts",
   "files": [
     "dist",
-    "src",
-    "mod.ts",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "exports": {
     ".": {
       "types": "./dist/mod.d.ts",
-      "import": "./dist/mod.js"
-    }
+      "browser": "./dist/mod.browser.js",
+      "import": "./dist/mod.js",
+      "require": "./dist/cjs/mod.cjs",
+      "default": "./dist/mod.js"
+    },
+    "./umd": {
+      "types": "./dist/umd.d.ts",
+      "browser": "./dist/umd/verifast.js",
+      "require": "./dist/umd/verifast.cjs",
+      "default": "./dist/umd/verifast.cjs"
+    },
+    "./wasm/bdk-core.umd.js": "./dist/src/wasm/bdk-core.umd.js",
+    "./wasm/bdk-core.umd.wasm": "./dist/src/wasm/bdk-core.umd.wasm",
+    "./wasm/bdk-core.wasm": "./dist/src/wasm/bdk-core.wasm"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "build": "node scripts/check-artifacts.mjs && node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs && node scripts/check-bundle-size.mjs",
+    "test": "pnpm build && NODE_OPTIONS=--experimental-vm-modules jest && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs",
+    "check:artifacts": "node scripts/check-artifacts.mjs",
     "bench": "tsx bench/benchmark.ts",
+    "bench:batch": "node --expose-gc --import tsx bench/batch-benchmark.ts",
+    "bench:crypto": "node --import tsx bench/crypto-benchmark.ts",
+    "bench:warmup": "node --import tsx bench/warmup-benchmark.ts",
+    "test:browser": "pnpm build && node browser/test.mjs",
+    "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs && node browser/test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.0.0",
+    "@rspack/cli": "^2.0.8",
+    "@rspack/core": "^2.0.8",
     "jest": "^30.0.0",
+    "puppeteer-core": "^24.42.0",
     "ts-jest": "^29.2.0",
     "ts-standard": "^12.0.2",
     "tsx": "^4.22.4",
+    "ts-loader": "^9.6.2",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "vite": "^8.0.16"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.8"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
