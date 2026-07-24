@@ -10,25 +10,8 @@
  */
 
 import { Request, Response } from 'express'
-import knexConfig from '../../knexfile.js'
-import * as knexLib from 'knex'
 import { Logger } from '../utils/logger.js'
-
-// Determine environment and initialize Knex connection
-const { NODE_ENV = 'development' } = process.env
-
-/**
- * Knex instance connected based on environment (development, production, or staging).
- */
-const knex: knexLib.Knex = (knexLib as any).default?.(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-) ?? (knexLib as any)(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-)
+import { runtimeDeps } from '../runtimeDeps.js'
 
 /**
  * @interface AcknowledgeRequest
@@ -87,7 +70,7 @@ export interface AcknowledgeRequest extends Request {
 export default {
   type: 'post',
   path: '/acknowledgeMessage',
-  knex,
+  get knex () { return runtimeDeps.knex },
   summary: 'Use this route to acknowledge a message has been received',
   parameters: {
     messageIds: ['3301']
@@ -138,7 +121,7 @@ export default {
       }
 
       // Delete acknowledged messages for this recipient from the database
-      const deleted = await knex('messages')
+      const deleted = await runtimeDeps.knex('messages')
         .where({ recipient: req.auth.identityKey })
         .whereIn('messageId', Array.isArray(messageIds) ? messageIds : [messageIds])
         .del()

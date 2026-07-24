@@ -10,6 +10,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [ScriptChunk](#interface-scriptchunk) |
 | [ScriptTemplate](#interface-scripttemplate) |
 | [ScriptTemplateUnlock](#interface-scripttemplateunlock) |
+| [SpendVerifierInterface](#interface-spendverifierinterface) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -97,6 +98,21 @@ export default interface ScriptTemplateUnlock {
 ```
 
 See also: [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: SpendVerifierInterface
+
+An asynchronous backend capable of validating a single Spend-shaped input.
+
+```ts
+export default interface SpendVerifierInterface {
+    verifySpend: (spend: Spend) => Promise<boolean>;
+}
+```
+
+See also: [Spend](./script.md#class-spend)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -826,10 +842,12 @@ export default class Spend {
     reset(): void 
     step(): boolean 
     validate(): boolean 
+    validateWith(verifier: SpendVerifierInterface): Promise<boolean>
+    toTransactionUint8Array(): Uint8Array
 }
 ```
 
-See also: [LockingScript](./script.md#class-lockingscript), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
+See also: [LockingScript](./script.md#class-lockingscript), [SpendVerifierInterface](./script.md#interface-spendverifierinterface), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
 
 #### Constructor
 
@@ -919,6 +937,27 @@ if (spend.validate()) {
 } else {
   console.log("Invalid spend!");
 }
+```
+
+#### Method validateWith
+
+Validates this spend with an asynchronous pluggable backend. Backend errors are
+propagated without silently falling back to the JavaScript interpreter.
+
+```ts
+validateWith(verifier: SpendVerifierInterface): Promise<boolean>
+```
+
+See also: [SpendVerifierInterface](./script.md#interface-spendverifierinterface)
+
+#### Method toTransactionUint8Array
+
+Serializes the ordinary transaction represented by this Spend. The source
+output is supplied separately to a Spend verifier, avoiding EF construction
+for one-input validation.
+
+```ts
+toTransactionUint8Array(): Uint8Array
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -1023,4 +1062,3 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ## Enums
 
 ## Variables
-

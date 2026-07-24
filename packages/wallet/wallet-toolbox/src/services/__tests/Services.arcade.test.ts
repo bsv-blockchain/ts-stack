@@ -16,6 +16,20 @@ describe('Services Arcade wiring', () => {
     expect(arcadeDefaultUrl('test')).toBeUndefined()
   })
 
+  test('arcadeDefaultUrl for tstn is driven by TSTN_ARCADE_URL', () => {
+    const prev = process.env.TSTN_ARCADE_URL
+    try {
+      delete process.env.TSTN_ARCADE_URL
+      // No private endpoint hardcoded: undefined until supplied at runtime.
+      expect(arcadeDefaultUrl('tstn')).toBeUndefined()
+      process.env.TSTN_ARCADE_URL = 'https://tstn.example.internal'
+      expect(arcadeDefaultUrl('tstn')).toBe('https://tstn.example.internal')
+    } finally {
+      if (prev === undefined) delete process.env.TSTN_ARCADE_URL
+      else process.env.TSTN_ARCADE_URL = prev
+    }
+  })
+
   test('back-compat: no arcadeUrl → no Arcade provider, broadcaster set unchanged', () => {
     const options = createDefaultWalletServicesOptions('test')
     expect(options.arcadeUrl).toBeUndefined()

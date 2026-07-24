@@ -874,34 +874,31 @@ export class AuthFetch {
       return []
     }
 
-    // 1. object
-    if (typeof body === 'object') {
-      return Utils.toArray(JSON.stringify(body, 'utf8'))
-    }
-
-    // 2. number[]
+    // 1. number[]
     if (Array.isArray(body) && body.every((item) => typeof item === 'number')) {
       return body // Return the array as is
     }
 
-    // 3. string
+    // 2. string
     if (typeof body === 'string') {
       return Utils.toArray(body, 'utf8')
     }
 
-    // 4. ArrayBuffer / TypedArrays
+    // 3. ArrayBuffer / TypedArrays
     if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-      const typedArray = body instanceof ArrayBuffer ? new Uint8Array(body) : new Uint8Array(body.buffer)
+      const typedArray = body instanceof ArrayBuffer
+        ? new Uint8Array(body)
+        : new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
       return Array.from(typedArray)
     }
 
-    // 5. Blob
+    // 4. Blob
     if (body instanceof Blob) {
       const arrayBuffer = await body.arrayBuffer()
       return Array.from(new Uint8Array(arrayBuffer))
     }
 
-    // 6. FormData
+    // 5. FormData
     if (body instanceof FormData) {
       const entries: [string, string][] = []
       body.forEach((value, key) => {
@@ -911,15 +908,18 @@ export class AuthFetch {
       return Utils.toArray(urlEncoded, 'utf8')
     }
 
-    // 7. URLSearchParams
+    // 6. URLSearchParams
     if (body instanceof URLSearchParams) {
       return Utils.toArray(body.toString(), 'utf8')
     }
 
-    // 8. ReadableStream
+    // 7. ReadableStream
     if (body instanceof ReadableStream) {
       throw new TypeError('ReadableStream cannot be directly converted to number[].')
     }
+
+    // 8. Plain object JSON body
+    if (typeof body === 'object') return Utils.toArray(JSON.stringify(body), 'utf8')
 
     // 9. Fallback
     throw new Error('Unsupported body type in this SimplifiedFetch implementation.')

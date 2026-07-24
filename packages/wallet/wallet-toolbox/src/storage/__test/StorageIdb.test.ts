@@ -5,6 +5,7 @@ import { SetupClient } from '../../SetupClient'
 import { StorageIdb } from '../StorageIdb'
 import { StorageProvider, StorageProviderOptions } from '../StorageProvider'
 import { TableOutput, TableOutputBasket, TableTransaction, TableUser } from '../schema/tables'
+import { TableActionBatch } from '../schema/tables/TableActionBatch'
 import 'fake-indexeddb/auto'
 
 describe('StorageIdb tests', () => {
@@ -17,7 +18,7 @@ describe('StorageIdb tests', () => {
     try {
       const r = await storage.migrate(`storageIdbTest-${Date.now()}`, '42'.repeat(32))
       const db = storage.db
-      expect(r).toBe('1')
+      expect(r).toBe('2')
       expect(db).toBeTruthy()
     } finally {
       await resetStorage(storage)
@@ -83,6 +84,57 @@ describe('StorageIdb tests', () => {
     }
   })
 
+  test('action batch stores enforce unique output reservations and retain blobs', async () => {
+    const storage = await makeStorage()
+    try {
+      const userId = await insertUser(storage)
+      const basketId = await insertBasket(storage, userId)
+      const transactionId = await insertTransaction(storage, userId, { status: 'completed', txid: '06'.repeat(32) })
+      const outputId = await insertOutput(storage, userId, transactionId, basketId, {
+        txid: '06'.repeat(32), satoshis: 100
+      })
+      const first = makeActionBatch(userId, 'idb-action-batch-1')
+      const second = makeActionBatch(userId, 'idb-action-batch-2')
+      await storage.insertActionBatch(first)
+      await storage.insertActionBatch(second)
+      expect(first.actionBatchId).not.toBe(second.actionBatchId)
+
+      const now = new Date()
+      await storage.reserveActionBatchOutputs([{
+        actionBatchId: first.actionBatchId, outputId, created_at: now, updated_at: now
+      }])
+      expect(await storage.findReservedActionBatchOutputIds([outputId])).toEqual([outputId])
+      await storage.putActionBatchBlobRecord({
+        actionBatchBlobId: 0,
+        actionBatchId: first.actionBatchId,
+        digest: '07'.repeat(32),
+        bytes: [1, 2, 3],
+        created_at: now,
+        updated_at: now
+      })
+      expect((await storage.findActionBatchBlobRecord(first.actionBatchId, '07'.repeat(32)))?.bytes).toEqual([1, 2, 3])
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('action batch ids are unique within a user, not across users', async () => {
+    const storage = await makeStorage()
+    try {
+      const firstUserId = await insertUser(storage)
+      const secondUserId = await insertUser(storage, '03'.repeat(33))
+      const first = makeActionBatch(firstUserId, 'shared-batch-id')
+      const second = makeActionBatch(secondUserId, 'shared-batch-id')
+      await storage.insertActionBatch(first)
+      await storage.insertActionBatch(second)
+
+      expect(await storage.findActionBatch(firstUserId, first.batchId)).toMatchObject({ userId: firstUserId })
+      expect(await storage.findActionBatch(secondUserId, second.batchId)).toMatchObject({ userId: secondUserId })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
   test.skip('1', async () => {
     // TODO: THIS TEST PASSES WHEN Describe is run alone, but fails to exit cleanly when run with `npm run test`
     if (Setup.noEnv('test')) return
@@ -138,16 +190,30 @@ async function seedSpendableOutputHeldByFailedTx (
   return { userId, basketId, holderTxId, outputId }
 }
 
-async function insertUser (storage: StorageIdb): Promise<number> {
+async function insertUser (storage: StorageIdb, identityKey = '02'.repeat(33)): Promise<number> {
   const now = new Date()
   const user: TableUser = {
     created_at: now,
     updated_at: now,
     userId: 0,
-    identityKey: '02'.repeat(33),
+    identityKey,
     activeStorage: '42'.repeat(32)
   }
   return await storage.insertUser(user)
+}
+
+function makeActionBatch (userId: number, batchId: string): TableActionBatch {
+  const now = new Date()
+  return {
+    actionBatchId: 0,
+    userId,
+    batchId,
+    status: 'active',
+    expiresAt: new Date(now.getTime() + 60_000),
+    hardExpiresAt: new Date(now.getTime() + 120_000),
+    created_at: now,
+    updated_at: now
+  }
 }
 
 async function insertBasket (storage: StorageIdb, userId: number): Promise<number> {

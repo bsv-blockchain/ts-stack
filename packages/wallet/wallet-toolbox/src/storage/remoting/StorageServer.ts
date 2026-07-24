@@ -9,15 +9,86 @@ import { MakeWalletLogger, WalletInterface, WalletLoggerInterface } from '@bsv/s
 import express, { Request, Response } from 'express'
 import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
-import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
-import { SyncChunk } from '../../sdk/WalletStorage.interfaces'
+import { WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
+import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
 import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
+
+const storageRpcMethods = new Set([
+  'abortAction',
+  'abortActionBatch',
+  'adminStats',
+  'beginActionBatch',
+  'commitActionBatch',
+  'createAction',
+  'destroy',
+  'extendActionBatch',
+  'findCertificatesAuth',
+  'findOrInsertSyncStateAuth',
+  'findOrInsertUser',
+  'findOutputBaskets',
+  'findOutputBasketsAuth',
+  'findOutputsAuth',
+  'findProvenTxReqs',
+  'getCapabilities',
+  'getSettings',
+  'getSyncChunk',
+  'insertCertificateAuth',
+  'internalizeAction',
+  'listActions',
+  'listCertificates',
+  'listOutputs',
+  'makeAvailable',
+  'migrate',
+  'prepareActionBatchCommit',
+  'processAction',
+  'processSyncChunk',
+  'relinquishCertificate',
+  'relinquishOutput',
+  'renewActionBatch',
+  'setActive',
+  'updateProvenTxReqWithNewProvenTx'
+])
+
+const authIdRpcMethods = new Set([
+  'abortAction',
+  'abortActionBatch',
+  'beginActionBatch',
+  'commitActionBatch',
+  'createAction',
+  'extendActionBatch',
+  'findCertificatesAuth',
+  'findOrInsertSyncStateAuth',
+  'findOutputBaskets',
+  'findOutputBasketsAuth',
+  'findOutputsAuth',
+  'insertCertificateAuth',
+  'internalizeAction',
+  'listActions',
+  'listCertificates',
+  'listOutputs',
+  'prepareActionBatchCommit',
+  'processAction',
+  'relinquishCertificate',
+  'relinquishOutput',
+  'renewActionBatch',
+  'setActive'
+])
+
+const actionBatchRpcMethods = new Set([
+  'abortActionBatch',
+  'beginActionBatch',
+  'commitActionBatch',
+  'extendActionBatch',
+  'prepareActionBatchCommit',
+  'renewActionBatch'
+])
 
 export interface WalletStorageServerOptions {
   port: number
@@ -31,6 +102,12 @@ export interface WalletStorageServerOptions {
    * Defaults to the auth middleware's in-process SessionManager.
    */
   sessionManager?: AuthMiddlewareOptions['sessionManager']
+  /**
+   * Authenticated request rate limiting. Defaults to 1,000 requests per
+   * identity key per minute. Override the store for shared enforcement across
+   * multiple server processes or replicas.
+   */
+  rateLimit?: Partial<RateLimitOptions>
   /** Emit one JSON log record for each authenticated RPC. Default: true. */
   logRpcRequests?: boolean
 }
@@ -45,6 +122,7 @@ export class StorageServer {
   private readonly adminIdentityKeys?: string[]
   private readonly makeLogger?: MakeWalletLogger
   private readonly sessionManager?: AuthMiddlewareOptions['sessionManager']
+  private readonly rateLimitOptions?: Partial<RateLimitOptions>
   private readonly logRpcRequests: boolean
 
   constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
@@ -56,6 +134,7 @@ export class StorageServer {
     this.adminIdentityKeys = options.adminIdentityKeys
     this.makeLogger = options.makeLogger
     this.sessionManager = options.sessionManager
+    this.rateLimitOptions = options.rateLimit
     this.logRpcRequests = options.logRpcRequests ?? true
 
     if (options['logShortReqs']) {
@@ -112,6 +191,9 @@ export class StorageServer {
     // consumer embeds a response in an HTML context.
     this.app.set('json escape', true)
     this.app.use(express.json({ limit: '30mb' }))
+    // Authentication must see the exact binary body bytes, so parse octet
+    // streams before the auth middleware just as JSON is parsed above.
+    this.app.use(express.raw({ type: 'application/octet-stream', limit: '8mb' }))
 
     // This allows the API to be used everywhere when CORS is enforced
     this.app.use((req, res, next) => {
@@ -143,6 +225,14 @@ export class StorageServer {
     }
     if (this.sessionManager != null) options.sessionManager = this.sessionManager
     this.app.use(createAuthMiddleware(options))
+    const authenticatedRateLimit = rateLimit({
+      windowMs: 60_000,
+      limit: 1_000,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      keyGenerator: (req: Request) => req.auth.identityKey,
+      ...this.rateLimitOptions
+    })
     if (this.monetize) {
       this.app.use(
         createPaymentMiddleware({
@@ -152,8 +242,27 @@ export class StorageServer {
       )
     }
 
+    this.app.put(
+      '/action-batch/:batchId/blob/:digest',
+      authenticatedRateLimit,
+      async (req: Request, res: Response) => {
+        try {
+          const auth = await this.authenticatedAuth(req, true)
+          const batchId = String(req.params.batchId)
+          const digest = String(req.params.digest)
+          const body = req.body
+          if (!(body instanceof Uint8Array)) throw new TypeError('binary action batch body required')
+          await this.storage.putActionBatchBlob(auth, { batchId, digest, bytes: body })
+          res.status(200).json({ uploaded: true })
+        } catch (error: unknown) {
+          const json = WalletError.unknownToJson(error)
+          res.status(400).json(JSON.parse(json))
+        }
+      }
+    )
+
     // A single POST endpoint for JSON-RPC:
-    this.app.post('/', async (req: Request, res: Response) => {
+    this.app.post('/', authenticatedRateLimit, async (req: Request, res: Response) => {
       const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
       const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
       if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
@@ -190,7 +299,17 @@ export class StorageServer {
           // if you wanted to handle certain methods on the server class itself
           // e.g. this['someServerMethod'](params)
           throw new TypeError('Server method dispatch not used in this approach.')
-        } else if (typeof (this.storage as any)[method] === 'function') {
+        } else if (storageRpcMethods.has(method)) {
+          const storageMethod = method === 'findOutputBaskets'
+            ? 'findOutputBasketsAuth'
+            : method
+          if (typeof (this.storage as any)[storageMethod] !== 'function') {
+            return sendRpc({
+              jsonrpc: '2.0',
+              error: { code: -32601, message: `Method not found: ${method}` },
+              id
+            }, 400)
+          }
           // method is on the walletStorage:
           // Find user
           switch (method) {
@@ -221,7 +340,11 @@ export class StorageServer {
               break
             }
             default:
-              await this.validateParam0(params, req)
+              if (authIdRpcMethods.has(method)) {
+                await this.bindAuthenticatedAuth(params, req, actionBatchRpcMethods.has(method))
+              } else {
+                await this.validateParam0(params, req)
+              }
               break
           }
 
@@ -238,7 +361,7 @@ export class StorageServer {
           }
 
           try {
-            const result = await (this.storage as any)[method](...(params || []))
+            const result = await (this.storage as any)[storageMethod](...(params || []))
 
             if (logger != null) {
               logger.groupEnd()
@@ -285,15 +408,43 @@ export class StorageServer {
     })
   }
 
-  private async validateParam0 (params: any, req: Request): Promise<void> {
-    if (typeof params[0] !== 'object' || !params[0]) {
-      params = [{}]
+  private async authenticatedAuth (req: Request, requireActive: boolean): Promise<AuthId> {
+    const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
+    const isActive = user.activeStorage === this.storage.getSettings().storageIdentityKey
+    if (requireActive && !isActive) {
+      throw new WERR_NOT_ACTIVE('action batch methods require the authenticated user\'s active storage provider')
     }
-    if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentiation') }
+    return {
+      identityKey: req.auth.identityKey,
+      userId: user.userId,
+      isActive
+    }
+  }
+
+  private async bindAuthenticatedAuth (params: any[], req: Request, requireActive: boolean): Promise<void> {
+    if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
+    const claimed = typeof params[0] === 'object' && params[0] != null ? params[0] : {}
+    if (claimed.identityKey != null && claimed.identityKey !== req.auth.identityKey) {
+      throw new WERR_UNAUTHORIZED('identityKey does not match authentication')
+    }
+    const auth = await this.authenticatedAuth(req, requireActive)
+    params[0] = {
+      ...claimed,
+      ...auth,
+      reqAuthUserId: auth.userId
+    }
+  }
+
+  private async validateParam0 (params: any[], req: Request): Promise<void> {
+    if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
+    if (typeof params[0] !== 'object' || !params[0]) {
+      params[0] = {}
+    }
+    if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentication') }
     // console.log('looking up user with identityKey:', req.auth.identityKey)
     const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
     params[0].reqAuthUserId = user.userId
-    if (params[0].identityKey) params[0].userId = user.userId
+    if (params[0].identityKey || params[0].userId != null) params[0].userId = user.userId
   }
 
   server: any

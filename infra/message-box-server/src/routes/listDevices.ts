@@ -1,24 +1,7 @@
 import { Response } from 'express'
-import knexConfig from '../../knexfile.js'
-import * as knexLib from 'knex'
 import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
-
-// Determine the environment (default to development)
-const { NODE_ENV = 'development' } = process.env
-
-/**
- * Knex instance connected based on environment (development, production, or staging).
- */
-const knex: knexLib.Knex = (knexLib as any).default?.(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-) ?? (knexLib as any)(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-)
+import { runtimeDeps } from '../runtimeDeps.js'
 
 export interface RegisteredDevice {
   id: number
@@ -51,7 +34,7 @@ export default {
 
       try {
         // Query devices for the authenticated user
-        const devices = await knex('device_registrations')
+        const devices = await runtimeDeps.knex('device_registrations')
           .select([
             'id',
             'device_id as deviceId',

@@ -9,6 +9,7 @@ import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript, verifyTruthy } from '../../utility/utilityHelpers'
 import { KeyPair } from '../../sdk/types'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
+import { maxPossibleSatoshis } from '../../storage/methods/generateChange'
 
 export function buildSignableTransaction (
   dctr: StorageCreateActionResult,
@@ -235,7 +236,7 @@ export function verifyRequestedOutputsUnchanged (
       )
     }
 
-    if (provided.satoshis !== requested.satoshis) {
+    if (requested.satoshis !== maxPossibleSatoshis && provided.satoshis !== requested.satoshis) {
       throw new WERR_INVALID_PARAMETER(
         'output.satoshis',
         `equal to the caller-requested satoshis. Storage returned ${provided.satoshis} for output index ${i}, caller requested ${requested.satoshis}.`

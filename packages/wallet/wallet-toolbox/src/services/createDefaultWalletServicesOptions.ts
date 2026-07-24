@@ -3,6 +3,7 @@ import { WalletServicesOptions } from '../sdk/WalletServices.interfaces'
 import { randomBytesHex } from '../utility/utilityHelpers'
 import { ChaintracksClientApi } from './chaintracker/chaintracks/Api/ChaintracksClientApi'
 import { ChaintracksServiceClient } from './chaintracker/chaintracks/ChaintracksServiceClient'
+import { tstnArcadeUrl, tstnChaintracksUrl } from './networkConfig'
 
 export function createDefaultWalletServicesOptions (
   chain: Chain,
@@ -34,10 +35,14 @@ export function createDefaultWalletServicesOptions (
   deploymentId ||= `wallet-toolbox-${randomBytesHex(16)}`
 
   // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
-  const chaintracksUrl =
-    chain === 'ttn'
-      ? 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/v1'
-      : `https://${chain}net-chaintracks.babbage.systems`
+  let chaintracksUrl: string
+  if (chain === 'ttn') {
+    chaintracksUrl = 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/v1'
+  } else if (chain === 'tstn') {
+    chaintracksUrl = tstnChaintracksUrl()
+  } else {
+    chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
+  }
   // The mainnet endpoint is always used since these are fiat exchange rates,
   // independent of the chain being used.
   const chaintracksFiatExchangeRatesUrl = 'https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates'
@@ -119,6 +124,9 @@ export function arcadeDefaultUrl (chain: Chain): string | undefined {
       return 'https://arcade-v2-us-1.bsvblockchain.tech'
     case 'ttn':
       return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
+    case 'tstn':
+      // Private per-deployment endpoint supplied via TSTN_ARCADE_URL (undefined when unset).
+      return tstnArcadeUrl()
     case 'test':
       // No public testnet Arcade endpoint deployed yet.
       return undefined
@@ -135,6 +143,9 @@ export function arcDefaultUrl (chain: Chain): string {
       return 'https://arc-test.taal.com'
     case 'ttn':
       return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/'
+    case 'tstn':
+      // Private per-deployment endpoint supplied via TSTN_ARCADE_URL ('' when unset).
+      return tstnArcadeUrl() ?? ''
     case 'mock':
       return ''
   }

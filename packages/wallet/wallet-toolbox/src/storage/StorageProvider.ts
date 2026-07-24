@@ -65,11 +65,39 @@ import {
   WERR_INVALID_OPERATION,
   WERR_INVALID_PARAMETER,
   WERR_MISSING_PARAMETER,
+  WERR_NOT_IMPLEMENTED,
   WERR_UNAUTHORIZED
 } from '../sdk/WERR_errors'
 import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
+import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
+import {
+  AbortActionBatchResult,
+  ActionBatchManifest,
+  BeginActionBatchArgs,
+  BeginActionBatchResult,
+  CommitActionBatchResult,
+  ExtendActionBatchArgs,
+  ExtendActionBatchResult,
+  PrepareActionBatchCommitResult,
+  PutActionBatchBlobArgs,
+  RenewActionBatchResult,
+  StorageCapabilities
+} from '../sdk/ActionBatch.interfaces'
+import {
+  abortActionBatch as abortBatch,
+  beginActionBatch as beginBatch,
+  cleanupExpiredActionBatches,
+  commitActionBatch as commitBatch,
+  extendActionBatch as extendBatch,
+  getActionBatchCapabilities,
+  renewActionBatch as renewBatch
+} from './methods/actionBatch'
+import {
+  prepareActionBatchCommit as prepareBatchCommit,
+  putActionBatchBlob as putBatchBlob
+} from './methods/actionBatchBlobs'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -133,6 +161,74 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   abstract countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number>
 
+  async insertActionBatch (batch: TableActionBatch, trx?: TrxToken): Promise<number> { throw new WERR_NOT_IMPLEMENTED() }
+  async findActionBatch (userId: number, batchId: string, trx?: TrxToken): Promise<TableActionBatch | undefined> { throw new WERR_NOT_IMPLEMENTED() }
+  async findActionBatchForUpdate (
+    userId: number,
+    batchId: string,
+    trx: TrxToken
+  ): Promise<TableActionBatch | undefined> {
+    return await this.findActionBatch(userId, batchId, trx)
+  }
+
+  async findExpiredActionBatches (now: Date, trx?: TrxToken): Promise<TableActionBatch[]> { throw new WERR_NOT_IMPLEMENTED() }
+  async updateActionBatch (actionBatchId: number, update: Partial<TableActionBatch>, trx?: TrxToken): Promise<number> { throw new WERR_NOT_IMPLEMENTED() }
+  async deleteActionBatch (actionBatchId: number, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
+  async reserveActionBatchOutputs (
+    reservations: TableActionBatchOutput[],
+    trx?: TrxToken
+  ): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
+
+  async findActionBatchOutputIds (actionBatchId: number, trx?: TrxToken): Promise<number[]> { throw new WERR_NOT_IMPLEMENTED() }
+  async findReservedActionBatchOutputIds (_outputIds: number[], _trx?: TrxToken): Promise<number[]> { return [] }
+  async deleteActionBatchOutputReservations (actionBatchId: number, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
+  async putActionBatchBlobRecord (blob: TableActionBatchBlob, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
+  async findActionBatchBlobRecord (
+    actionBatchId: number,
+    digest: string,
+    trx?: TrxToken
+  ): Promise<TableActionBatchBlob | undefined> { throw new WERR_NOT_IMPLEMENTED() }
+
+  async deleteActionBatchBlobRecords (actionBatchId: number, trx?: TrxToken): Promise<void> { throw new WERR_NOT_IMPLEMENTED() }
+
+  async getCapabilities (): Promise<StorageCapabilities> {
+    return this.supportsActionBatchPersistence() ? getActionBatchCapabilities() : {}
+  }
+
+  protected supportsActionBatchPersistence (): boolean { return false }
+
+  async beginActionBatch (auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
+    if (!this.supportsActionBatchPersistence()) throw new WERR_NOT_IMPLEMENTED('actionBatch capability is not available')
+    return await beginBatch(this, auth, args)
+  }
+
+  async extendActionBatch (auth: AuthId, args: ExtendActionBatchArgs): Promise<ExtendActionBatchResult> {
+    return await extendBatch(this, auth, args)
+  }
+
+  async renewActionBatch (auth: AuthId, batchId: string): Promise<RenewActionBatchResult> {
+    return await renewBatch(this, auth, batchId)
+  }
+
+  async prepareActionBatchCommit (
+    auth: AuthId,
+    manifest: ActionBatchManifest
+  ): Promise<PrepareActionBatchCommitResult> {
+    return await prepareBatchCommit(this, auth, manifest)
+  }
+
+  async putActionBatchBlob (auth: AuthId, args: PutActionBatchBlobArgs): Promise<void> {
+    return await putBatchBlob(this, auth, args)
+  }
+
+  async commitActionBatch (auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
+    return await commitBatch(this, auth, manifest)
+  }
+
+  async abortActionBatch (auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
+    return await abortBatch(this, auth, batchId)
+  }
+
   async findOutputsByIds (outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
     const byId: Record<number, TableOutput> = {}
     for (const outputId of outputIds) {
@@ -160,6 +256,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (o?.txid !== undefined && o.vout !== undefined) byOutpoint[`${o.txid}.${o.vout}`] = o
     }
     return byOutpoint
+  }
+
+  async findOutputsByOutpointsForUpdate (
+    userId: number,
+    outpoints: Array<{ txid: string, vout: number }>,
+    trx: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    return await this.findOutputsByOutpoints(userId, outpoints, trx)
   }
 
   async findOrInsertOutputBasketsBulk (
@@ -594,6 +698,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async createAction (auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (auth.userId == null) throw new WERR_UNAUTHORIZED()
+    if (this.supportsActionBatchPersistence()) await cleanupExpiredActionBatches(this)
     return await createAction(this, auth, args)
   }
 

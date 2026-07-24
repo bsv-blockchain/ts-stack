@@ -20,6 +20,7 @@ import { TaskUnFail } from './tasks/TaskUnFail'
 import { TaskReviewUtxos } from './tasks/TaskReviewUtxos'
 import { TaskReviewDoubleSpends } from './tasks/TaskReviewDoubleSpends'
 import { TaskReviewProvenTxs } from './tasks/TaskReviewProvenTxs'
+import { TaskCleanupActionBatches } from './tasks/TaskCleanupActionBatches'
 import { Chain, ProvenTransactionStatus } from '../sdk/types'
 import { ReviewActionResult } from '../sdk/WalletStorage.interfaces'
 import { WERR_BAD_REQUEST, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
@@ -235,6 +236,7 @@ export class Monitor {
       new TaskReviewUtxos(this),
       new TaskReviewDoubleSpends(this),
       new TaskReviewProvenTxs(this),
+      new TaskCleanupActionBatches(this),
       new TaskPurge(this, this.defaultPurgeParams)
     )
     if (this.chain === 'mock') {
@@ -259,6 +261,7 @@ export class Monitor {
       new TaskReorg(this),
       new TaskReviewDoubleSpends(this),
       new TaskReviewProvenTxs(this),
+      new TaskCleanupActionBatches(this),
       new TaskArcadeSSE(this)
     )
     this._otherTasks.push(
@@ -287,6 +290,7 @@ export class Monitor {
       new TaskReorg(this),
       new TaskReviewDoubleSpends(this),
       new TaskReviewProvenTxs(this),
+      new TaskCleanupActionBatches(this),
       new TaskArcadeSSE(this)
     )
     this._otherTasks.push(

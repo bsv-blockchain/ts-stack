@@ -1,93 +1,92 @@
-import type { Transaction } from '@bsv/sdk'
-import type BdkVerifierInterface from './BdkVerifierInterface.js'
-import { mapVerifyFlags } from './flags.js'
+import createBdkModule from './wasm/bdk-core.mjs'
+import { availableParallelism } from 'node:os'
+import { Worker as NodeWorker } from 'node:worker_threads'
+import BdkVerifierCore, {
+  type BdkVerifierOptions,
+  type BdkWasmFactory
+} from './BdkVerifierCore.js'
+import BdkWorkerPool, { type WorkerAdapter } from './workers/BdkWorkerPool.js'
+import BdkWorkerScheduler from './workers/BdkWorkerScheduler.js'
+import type {
+  BdkWorkerRequest,
+  BdkWorkerResponse
+} from './workers/BdkWorkerProtocol.js'
 
-/** Height used when an input's source UTXO mined-height is unobtainable (post-Chronicle). */
-const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
+export * from './BdkVerifierCore.js'
 
-/** Return code from BDK VerifyScript that denotes "all scripts valid". */
-const BDK_SUCCESS = 1
-
-/** Minimal embind vector surface used by the adapter. */
-interface EmbindVector<T> {
-  push_back: (value: T) => void
-  delete: () => void
-}
-
-type EmbindVectorCtor<T> = new () => EmbindVector<T>
-
-/** The subset of the BDK WASM module this adapter uses. */
-export interface BdkWasmModule {
-  VectorUInt8: EmbindVectorCtor<number>
-  VectorInt32: EmbindVectorCtor<number>
-  VectorUInt32: EmbindVectorCtor<number>
-  VerifyScript: (
-    extendedTX: EmbindVector<number>,
-    utxoHeights: EmbindVector<number>,
-    blockHeight: number,
-    consensus: boolean,
-    customFlags: EmbindVector<number>
-  ) => number
-}
-
-/** Async factory that loads/instantiates the BDK WASM module (e.g. `createBdkModule`). */
-export type BdkWasmFactory = () => Promise<BdkWasmModule>
-
-function toVector<T> (ctor: EmbindVectorCtor<T>, values: T[]): EmbindVector<T> {
-  const vec = new ctor()
-  for (const v of values) vec.push_back(v)
-  return vec
-}
-
-/**
- * BdkVerifierInterface implementation backed by the BSV BDK engine compiled to WASM.
- * Strict: a non-success return code => false; any thrown error propagates.
- */
-export default class BdkVerifier implements BdkVerifierInterface {
-  private module: BdkWasmModule | undefined
-  private loading: Promise<BdkWasmModule> | undefined
-
-  /** @param factory loads the WASM module; invoked once, memoised. */
-  constructor (private readonly factory: BdkWasmFactory) {}
-
-  private async getModule (): Promise<BdkWasmModule> {
-    if (this.module !== undefined) return this.module
-    this.loading ??= this.factory().then((m) => { this.module = m; return m })
-    return await this.loading
+function createNodeWorker (): WorkerAdapter {
+  const worker = new NodeWorker(
+    new URL('./workers/BdkVerifierNodeWorker.js', import.meta.url)
+  )
+  let activeRequests = 0
+  worker.unref()
+  return {
+    post: (request: BdkWorkerRequest, transfer: ArrayBuffer[]) => {
+      activeRequests++
+      worker.ref()
+      try {
+        worker.postMessage(request, transfer)
+      } catch (error) {
+        activeRequests--
+        if (activeRequests === 0) worker.unref()
+        throw error
+      }
+    },
+    onMessage: handler => {
+      worker.on('message', (response: BdkWorkerResponse) => {
+        if (activeRequests > 0) activeRequests--
+        if (activeRequests === 0) worker.unref()
+        handler(response)
+      })
+    },
+    onError: handler => {
+      worker.on('error', error => {
+        activeRequests = 0
+        worker.unref()
+        handler(error instanceof Error ? error : new Error(String(error)))
+      })
+    },
+    onExit: handler => {
+      worker.on('exit', code => {
+        activeRequests = 0
+        handler(new Error(`BDK worker exited unexpectedly with code ${code}`))
+      })
+    },
+    terminate: () => { void worker.terminate() }
   }
+}
 
-  async verifyScripts (params: {
-    tx: Transaction
-    blockHeight: number
-    consensus: boolean
-    verifyFlags?: string | string[]
-  }): Promise<boolean> {
-    const bdk = await this.getModule()
+function createNodeWorkerPool (
+  options: BdkVerifierOptions
+): BdkWorkerScheduler | undefined {
+  if (
+    options.batchWorkers !== undefined &&
+    (!Number.isSafeInteger(options.batchWorkers) ||
+      options.batchWorkers < 1 ||
+      options.batchWorkers > 16)
+  ) {
+    throw new RangeError('batchWorkers must be a safe integer from 1 to 16')
+  }
+  const workerCount = options.batchWorkers ??
+    Math.max(1, Math.min(4, Math.floor(availableParallelism() / 4)))
+  if (workerCount <= 1) return undefined
+  return new BdkWorkerScheduler(
+    onFailure => new BdkWorkerPool(workerCount, createNodeWorker, onFailure),
+    options
+  )
+}
 
-    const heights = params.tx.inputs.map(
-      (input) => input.sourceTransaction?.merklePath?.blockHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
-    )
-
-    const extendedTX = toVector(bdk.VectorUInt8, params.tx.toEF())
-    const utxoHeights = toVector(bdk.VectorInt32, heights)
-    const customFlags = toVector(
-      bdk.VectorUInt32,
-      [mapVerifyFlags(params.verifyFlags)].filter((f) => f !== 0)
-    )
-
-    try {
-      const result = bdk.VerifyScript(
-        extendedTX,
-        utxoHeights,
-        params.blockHeight,
-        params.consensus,
-        customFlags
+/** Node.js BDK verifier using the Node-only Emscripten loader. */
+export default class BdkVerifier extends BdkVerifierCore {
+  constructor (factoryOrOptions: BdkWasmFactory | BdkVerifierOptions = {}, options: BdkVerifierOptions = {}) {
+    if (typeof factoryOrOptions === 'function') {
+      super(factoryOrOptions, options)
+    } else {
+      super(
+        createBdkModule,
+        factoryOrOptions,
+        createNodeWorkerPool(factoryOrOptions)
       )
-      return result === BDK_SUCCESS
-    } finally {
-      extendedTX.delete()
-      utxoHeights.delete()
-      customFlags.delete()
     }
   }
 }

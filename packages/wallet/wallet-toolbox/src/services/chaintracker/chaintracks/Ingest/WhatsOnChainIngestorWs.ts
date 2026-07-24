@@ -55,6 +55,7 @@ export async function WocHeadersBulkListener (
   switch (chain) {
     case 'test':
     case 'ttn':
+    case 'tstn':
       webSocketUrl = `wss://socket-v2-testnet.whatsonchain.com/websocket/blockheaders/history?from=${fromHeight}&to=${toHeight}`
       break
     case 'main':
@@ -281,6 +282,7 @@ export async function WocHeadersLiveListener (
   switch (chain) {
     case 'test':
     case 'ttn':
+    case 'tstn':
       webSocketUrl = 'wss://socket-v2-testnet.whatsonchain.com/websocket/blockHeaders'
       break
     case 'main':

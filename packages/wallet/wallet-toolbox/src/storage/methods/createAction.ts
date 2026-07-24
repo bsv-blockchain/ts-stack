@@ -49,6 +49,7 @@ import { createStorageServiceChargeScript } from './offsetKey'
 import { transactionSize } from './utils'
 import { WalletError } from '../../sdk'
 import { isAutoSpendableChangeOutput } from './managedChange'
+import { randomizeOutputVouts as randomizePlannedOutputVouts } from './actionPlanning'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest (v: boolean) {
@@ -370,33 +371,6 @@ async function getCompetingBeefForReview (storage: StorageProvider, txid: string
 }
 
 /** Randomly reassign vout values across newOutputs using either the provided randomVals or crypto-random bytes. */
-function randomizeOutputVouts (
-  newOutputs: Array<{ o: TableOutput; tags: string[] }>,
-  randomVals?: number[]
-): void {
-  const vals = [...(randomVals || [])]
-  const nextRandom = (): number => {
-    if (vals.length > 0) {
-      const v = vals.shift()!
-      vals.push(v)
-      return v
-    }
-    const bytes = Random(4)
-    return (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
-  }
-  const newVouts = Array.from({ length: newOutputs.length }, (_, i) => i)
-  for (let cur = newVouts.length; cur > 0; cur--) {
-    const rnd = Math.floor(nextRandom() * cur)
-    ;[newVouts[cur - 1], newVouts[rnd]] = [newVouts[rnd], newVouts[cur - 1]]
-  }
-  let vout = -1
-  for (const no of newOutputs) {
-    vout++
-    if (no.o.vout !== vout) throw new WERR_INTERNAL(`new output ${vout} has out of order vout ${no.o.vout}`)
-    no.o.vout = newVouts[vout]
-  }
-}
-
 /** Insert the output and attach its tags; return the SDK output descriptor. */
 async function persistNewOutput (
   storage: StorageProvider,
@@ -482,7 +456,7 @@ async function createNewOutputs (
     newOutputs.push({ o, tags: [] })
   }
 
-  if (vargs.options.randomizeOutputs) randomizeOutputVouts(newOutputs, vargs.randomVals)
+  if (vargs.options.randomizeOutputs) randomizePlannedOutputVouts(newOutputs.map(output => output.o), vargs.randomVals)
 
   const outputs: StorageCreateTransactionSdkOutput[] = []
   const changeVouts: number[] = []
@@ -642,6 +616,10 @@ async function validateRequiredInputs (
     userId,
     xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout }))
   )
+  const preloadedOutputIds = Object.values(preloadedOutputsByOutpoint).map(output => output.outputId)
+  if ((await storage.findReservedActionBatchOutputIds(preloadedOutputIds)).length > 0) {
+    throw new WERR_INVALID_PARAMETER('inputs', 'outputs not reserved by an active action batch')
+  }
 
   const inputsByTxid: Record<string, XValidCreateActionInput[]> = {}
   for (const input of xinputs) {
@@ -782,6 +760,10 @@ async function validateNoSendChange (
         {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'unique. Duplicates are not allowed.')}
       r.push(output)
     }
+  }
+
+  if ((await storage.findReservedActionBatchOutputIds(r.map(output => output.outputId))).length > 0) {
+    throw new WERR_INVALID_PARAMETER('noSendChange', 'outputs not reserved by an active action batch')
   }
 
   return r

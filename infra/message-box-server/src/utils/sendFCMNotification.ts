@@ -1,24 +1,7 @@
 import { getFirebaseMessaging } from '../config/firebase.js'
 import { Logger } from './logger.js'
 import { PubKeyHex } from '@bsv/sdk'
-import knexConfig from '../../knexfile.js'
-import * as knexLib from 'knex'
-
-// Determine the environment (default to development)
-const { NODE_ENV = 'development' } = process.env
-
-/**
- * Knex instance connected based on environment (development, production, or staging).
- */
-const knex: knexLib.Knex = (knexLib as any).default?.(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-) ?? (knexLib as any)(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-)
+import { runtimeDeps } from '../runtimeDeps.js'
 
 /**
  * FCM Payload interface
@@ -50,7 +33,7 @@ export async function sendFCMNotification(
     Logger.log('[DEBUG] Payload:', payload)
 
     // Look up all active FCM tokens for this recipient
-    const deviceRegistrations = await knex('device_registrations')
+    const deviceRegistrations = await runtimeDeps.knex('device_registrations')
       .where({
         identity_key: recipient,
         active: true
@@ -112,7 +95,7 @@ export async function sendFCMNotification(
         })
 
         // Update last_used timestamp on successful send
-        await knex('device_registrations')
+        await runtimeDeps.knex('device_registrations')
           .where('fcm_token', device.fcm_token)
           .update({
             last_used: new Date(),
@@ -129,7 +112,7 @@ export async function sendFCMNotification(
           error.message.includes('invalid-registration-token')
         )) {
           Logger.log(`[DEBUG] Marking invalid token as inactive: ...${device.fcm_token.slice(-10)}`)
-          await knex('device_registrations')
+          await runtimeDeps.knex('device_registrations')
             .where('fcm_token', device.fcm_token)
             .update({
               active: false,

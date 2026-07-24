@@ -1,4 +1,4 @@
-import {
+import type {
   AbortActionArgs,
   AbortActionResult,
   BEEF,
@@ -38,6 +38,19 @@ import {
 import { WalletServices } from './WalletServices.interfaces'
 import { Chain, Paged, ProvenTxReqStatus, TransactionStatus } from './types'
 import { WalletError } from './WalletError'
+import {
+  AbortActionBatchResult,
+  ActionBatchManifest,
+  BeginActionBatchArgs,
+  BeginActionBatchResult,
+  CommitActionBatchResult,
+  ExtendActionBatchArgs,
+  ExtendActionBatchResult,
+  PrepareActionBatchCommitResult,
+  PutActionBatchBlobArgs,
+  RenewActionBatchResult,
+  StorageCapabilities
+} from './ActionBatch.interfaces'
 
 /**
  * This is the `WalletStorage` interface implemented by a class such as `WalletStorageManager`,
@@ -68,6 +81,14 @@ export interface WalletStorage {
   abortAction: (args: AbortActionArgs) => Promise<AbortActionResult>
   createAction: (args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
   processAction: (args: StorageProcessActionArgs) => Promise<StorageProcessActionResults>
+  getCapabilities: () => Promise<StorageCapabilities>
+  beginActionBatch: (args: BeginActionBatchArgs) => Promise<BeginActionBatchResult>
+  extendActionBatch: (args: ExtendActionBatchArgs) => Promise<ExtendActionBatchResult>
+  renewActionBatch: (batchId: string) => Promise<RenewActionBatchResult>
+  prepareActionBatchCommit: (manifest: ActionBatchManifest) => Promise<PrepareActionBatchCommitResult>
+  putActionBatchBlob: (args: PutActionBatchBlobArgs) => Promise<void>
+  commitActionBatch: (manifest: ActionBatchManifest) => Promise<CommitActionBatchResult>
+  abortActionBatch: (batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (args: InternalizeActionArgs) => Promise<InternalizeActionResult>
 
   findCertificates: (args: FindCertificatesArgs) => Promise<TableCertificateX[]>
@@ -150,6 +171,14 @@ export interface WalletStorageWriter extends WalletStorageReader {
   abortAction: (auth: AuthId, args: AbortActionArgs) => Promise<AbortActionResult>
   createAction: (auth: AuthId, args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
   processAction: (auth: AuthId, args: StorageProcessActionArgs) => Promise<StorageProcessActionResults>
+  getCapabilities: () => Promise<StorageCapabilities>
+  beginActionBatch: (auth: AuthId, args: BeginActionBatchArgs) => Promise<BeginActionBatchResult>
+  extendActionBatch: (auth: AuthId, args: ExtendActionBatchArgs) => Promise<ExtendActionBatchResult>
+  renewActionBatch: (auth: AuthId, batchId: string) => Promise<RenewActionBatchResult>
+  prepareActionBatchCommit: (auth: AuthId, manifest: ActionBatchManifest) => Promise<PrepareActionBatchCommitResult>
+  putActionBatchBlob: (auth: AuthId, args: PutActionBatchBlobArgs) => Promise<void>
+  commitActionBatch: (auth: AuthId, manifest: ActionBatchManifest) => Promise<CommitActionBatchResult>
+  abortActionBatch: (auth: AuthId, batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (auth: AuthId, args: InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
 
   insertCertificateAuth: (auth: AuthId, certificate: TableCertificateX) => Promise<number>

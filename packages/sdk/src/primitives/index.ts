@@ -13,3 +13,4 @@ export { default as TransactionSignature, type SignatureHashCache } from './Tran
 export { default as Polynomial, PointInFiniteField } from './Polynomial.js'
 export { default as Schnorr } from './Schnorr.js'
 export { default as Secp256r1 } from './Secp256r1.js'
+export * from './AsyncCryptoBackend.js'
