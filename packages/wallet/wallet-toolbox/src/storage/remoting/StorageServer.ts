@@ -9,6 +9,7 @@ import { MakeWalletLogger, WalletInterface, WalletLoggerInterface } from '@bsv/s
 import express, { Request, Response } from 'express'
 import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
 import { WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
@@ -101,6 +102,12 @@ export interface WalletStorageServerOptions {
    * Defaults to the auth middleware's in-process SessionManager.
    */
   sessionManager?: AuthMiddlewareOptions['sessionManager']
+  /**
+   * Authenticated request rate limiting. Defaults to 1,000 requests per
+   * identity key per minute. Override the store for shared enforcement across
+   * multiple server processes or replicas.
+   */
+  rateLimit?: Partial<RateLimitOptions>
   /** Emit one JSON log record for each authenticated RPC. Default: true. */
   logRpcRequests?: boolean
 }
@@ -115,6 +122,7 @@ export class StorageServer {
   private readonly adminIdentityKeys?: string[]
   private readonly makeLogger?: MakeWalletLogger
   private readonly sessionManager?: AuthMiddlewareOptions['sessionManager']
+  private readonly rateLimitOptions?: Partial<RateLimitOptions>
   private readonly logRpcRequests: boolean
 
   constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
@@ -126,6 +134,7 @@ export class StorageServer {
     this.adminIdentityKeys = options.adminIdentityKeys
     this.makeLogger = options.makeLogger
     this.sessionManager = options.sessionManager
+    this.rateLimitOptions = options.rateLimit
     this.logRpcRequests = options.logRpcRequests ?? true
 
     if (options['logShortReqs']) {
@@ -216,6 +225,14 @@ export class StorageServer {
     }
     if (this.sessionManager != null) options.sessionManager = this.sessionManager
     this.app.use(createAuthMiddleware(options))
+    const authenticatedRateLimit = rateLimit({
+      windowMs: 60_000,
+      limit: 1_000,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      keyGenerator: (req: Request) => req.auth.identityKey,
+      ...this.rateLimitOptions
+    })
     if (this.monetize) {
       this.app.use(
         createPaymentMiddleware({
@@ -227,6 +244,7 @@ export class StorageServer {
 
     this.app.put(
       '/action-batch/:batchId/blob/:digest',
+      authenticatedRateLimit,
       async (req: Request, res: Response) => {
         try {
           const auth = await this.authenticatedAuth(req, true)
@@ -244,7 +262,7 @@ export class StorageServer {
     )
 
     // A single POST endpoint for JSON-RPC:
-    this.app.post('/', async (req: Request, res: Response) => {
+    this.app.post('/', authenticatedRateLimit, async (req: Request, res: Response) => {
       const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
       const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
       if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)

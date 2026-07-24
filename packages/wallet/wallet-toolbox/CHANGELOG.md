@@ -24,7 +24,8 @@ attention to changes that materially alter behavior or extend functionality.
 - Bind remote batch authorization exclusively to the BRC-103 authenticated identity and its active
   storage provider, ignoring caller-supplied user IDs and active-state claims. Restrict JSON-RPC
   dispatch to the public remote-storage protocol so authenticated callers cannot invoke low-level
-  provider methods. Unauthenticated and cross-user batch-management regressions cover the boundary.
+  provider methods, and rate-limit authenticated RPCs per identity key without limiting workspace
+  length. Unauthenticated and cross-user batch-management regressions cover the boundary.
 - Replace the cumulative 64-output reservation ceiling with repeatable extensions bounded to 64
   outputs per storage call. Workspaces and spend chains no longer have an action-count or confirmed
   funding-input ceiling; an 80-action independent batch crosses the old boundary and commits.

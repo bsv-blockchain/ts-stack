@@ -88,7 +88,10 @@ The remote server derives the batch user ID and active-storage state from the
 BRC-103 authenticated identity for every management call and binary upload.
 Caller-supplied user IDs or active-state claims are never authoritative, and the
 JSON-RPC dispatcher exposes only the public remote-storage protocol rather than
-low-level provider methods.
+low-level provider methods. Authenticated RPC and blob requests are rate-limited
+by identity key without limiting the number of actions, transactions, or blobs
+in a workspace; operators can configure the rate and a shared multi-replica
+store through `WalletStorageServerOptions.rateLimit`.
 
 ## Rollout and measurement roadmap
 
