@@ -38,6 +38,7 @@
   "scripts": {
     "build": "node scripts/check-artifacts.mjs && node scripts/clean.mjs && tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs && node scripts/build-cjs.mjs && rspack --config rspack.config.js && node scripts/copy-umd.mjs && node scripts/check-bundle-size.mjs",
     "test": "pnpm build && NODE_OPTIONS=--experimental-vm-modules jest && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs",
+    "test:coverage": "pnpm build && NODE_OPTIONS=--experimental-vm-modules jest --coverage --watchman=false",
     "check:artifacts": "node scripts/check-artifacts.mjs",
     "bench": "tsx bench/benchmark.ts",
     "bench:batch": "node --expose-gc --import tsx bench/batch-benchmark.ts",

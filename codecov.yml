@@ -16,13 +16,8 @@ coverage:
 
     patch:
       default:
-        target: 80%
-        threshold: 1%
-
-flags:
-  sdk:
-    paths:
-      - "packages/sdk/src/"
+        target: 90%
+        threshold: 0%
 
 comment:
   layout: "reach,diff,flags,files,footer"

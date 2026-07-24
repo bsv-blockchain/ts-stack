@@ -33,6 +33,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Reject high and critical dependency advisories
+        run: pnpm audit:security
+
       - name: Check cross-package version references
         # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
         # downstream deps can't reference the new versions until publish) will always
@@ -61,10 +64,20 @@ jobs:
             if echo "$CHANGED" | grep -q '^packages/helpers/did/'; then
               echo "did=true" >> "$GITHUB_OUTPUT"
             fi
+            if echo "$CHANGED" | grep -q '^packages/wallet/wallet-toolbox/'; then
+              echo "wallet=true" >> "$GITHUB_OUTPUT"
+            fi
+            if echo "$CHANGED" | grep -q '^packages/verifast/'; then
+              echo "verifast=true" >> "$GITHUB_OUTPUT"
+            fi
+            echo "coverage-filter=[${BASE_SHA}]" >> "$GITHUB_OUTPUT"
           else
             echo "filter=" >> "$GITHUB_OUTPUT"
             echo "sdk=true" >> "$GITHUB_OUTPUT"
             echo "did=true" >> "$GITHUB_OUTPUT"
+            echo "wallet=true" >> "$GITHUB_OUTPUT"
+            echo "verifast=true" >> "$GITHUB_OUTPUT"
+            echo "coverage-filter=[$(git rev-parse HEAD^)]" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build changed packages
@@ -118,34 +131,67 @@ jobs:
           pnpm --filter @bsv/did run test:coverage
           node scripts/normalize-lcov-paths.mjs packages/helpers/did/coverage/lcov.info packages/helpers/did
 
+      - name: Generate coverage (wallet-toolbox)
+        if: steps.scope.outputs.wallet == 'true'
+        run: |
+          pnpm --filter @bsv/wallet-toolbox run test:coverage
+          node scripts/normalize-lcov-paths.mjs packages/wallet/wallet-toolbox/coverage/lcov.info packages/wallet/wallet-toolbox
+
+      - name: Generate coverage (VeriFast)
+        if: steps.scope.outputs.verifast == 'true'
+        run: |
+          pnpm --filter @bsv/verifast run test:coverage
+          node scripts/normalize-lcov-paths.mjs packages/verifast/coverage/lcov.info packages/verifast
+
+      - name: Generate coverage for other changed packages
+        env:
+          COVERAGE_FILTER: ${{ steps.scope.outputs.coverage-filter }}
+        run: |
+          pnpm -r \
+            --filter "$COVERAGE_FILTER" \
+            --filter '!@bsv/sdk' \
+            --filter '!@bsv/did' \
+            --filter '!@bsv/wallet-toolbox' \
+            --filter '!@bsv/verifast' \
+            --filter '!@bsv/ts-stack' \
+            --if-present run test:coverage
+
+          while IFS= read -r report; do
+            package_dir="${report%/coverage/lcov.info}"
+            node scripts/normalize-lcov-paths.mjs "$report" "$package_dir"
+          done < <(find packages -type f -path '*/coverage/lcov.info' | sort)
+
       - name: Compose codecov inputs
         id: cov
-        if: steps.scope.outputs.sdk == 'true' || steps.scope.outputs.did == 'true'
         run: |
-          FILES=""
-          FLAGS=""
-          if [ "${{ steps.scope.outputs.sdk }}" = "true" ]; then
-            FILES="packages/sdk/coverage/lcov.info"
-            FLAGS="sdk"
-          fi
-          if [ "${{ steps.scope.outputs.did }}" = "true" ]; then
-            FILES="${FILES:+$FILES,}packages/helpers/did/coverage/lcov.info"
-            FLAGS="${FLAGS:+$FLAGS,}did"
+          FILES="$(find packages -type f -path '*/coverage/lcov.info' | sort | paste -sd, -)"
+          if [ -n "$FILES" ]; then
+            echo "has-coverage=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-coverage=false" >> "$GITHUB_OUTPUT"
           fi
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
-          echo "flags=$FLAGS" >> "$GITHUB_OUTPUT"
 
       - name: Upload coverage to Codecov
-        if: (steps.scope.outputs.sdk == 'true' || steps.scope.outputs.did == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.cov.outputs.has-coverage == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.cov.outputs.files }}
-          flags: ${{ steps.cov.outputs.flags }}
           name: ts-stack
           slug: bsv-blockchain/ts-stack
           # Coverage upload is non-blocking: Codecov CLI GPG-verify/outages must not gate CI.
           fail_ci_if_error: false
+
+      - name: SonarQube Cloud scan and quality gate
+        # SONAR_CI_ENABLED is flipped only after a Sonar organization admin
+        # disables Automatic Analysis; the two methods cannot run together.
+        # Dependabot changes are covered by audit + dependency review and do
+        # not receive Actions secrets.
+        if: vars.SONAR_CI_ENABLED == 'true' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   docs-validate:
     name: Docs Site Validation
@@ -216,3 +262,46 @@ jobs:
           name: conformance-vectors
           path: conformance/vectors/
           retention-days: 90
+
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Block newly introduced high and critical vulnerabilities
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+
+  merge-gate:
+    name: merge-gate
+    if: always()
+    needs:
+      - build-and-test
+      - docs-validate
+      - conformance
+      - dependency-review
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Verify every required CI result
+        env:
+          BUILD_RESULT: ${{ needs.build-and-test.result }}
+          DOCS_RESULT: ${{ needs.docs-validate.result }}
+          CONFORMANCE_RESULT: ${{ needs.conformance.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          if [[ "$BUILD_RESULT" != "success" ||
+                "$DOCS_RESULT" != "success" ||
+                "$CONFORMANCE_RESULT" != "success" ]]; then
+            echo "::error::Required CI failed: build=$BUILD_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
+            exit 1
+          fi
+          if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then
+            echo "::error::Dependency review failed: dependency-review=$DEPENDENCY_RESULT"
+            exit 1
+          fi
