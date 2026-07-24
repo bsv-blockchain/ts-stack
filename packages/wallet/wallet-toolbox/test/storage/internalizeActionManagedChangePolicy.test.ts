@@ -7,7 +7,7 @@ describe('internalizeAction managed-change policy', () => {
   let ctx: TestWalletNoSetup
 
   beforeAll(async () => {
-    ctx = await _tu.createLegacyWalletSQLiteCopy('internalizeActionManagedChangePolicy')
+    ctx = await _tu.createLegacyWalletSQLiteCopy('internalizeActionManagedChangePolicy', 'legacy')
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({
       isValidRootForHeight: async () => true
     } as any)

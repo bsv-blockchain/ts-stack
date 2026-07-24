@@ -111,6 +111,51 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-07-15-001 add action batch reservations and blobs'] = {
+      async up (knex) {
+        const dbtype = await determineDBType(knex)
+        await knex.schema.createTable('action_batches', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('actionBatchId').notNullable()
+          table.integer('userId').unsigned().references('userId').inTable('users').notNullable()
+          table.string('batchId', 64).notNullable()
+          table.string('status', 16).notNullable()
+          table.dateTime('expiresAt').notNullable()
+          table.dateTime('hardExpiresAt').notNullable()
+          table.string('manifestDigest', 64).nullable()
+          table.text('uploadDigests', 'longtext').nullable()
+          table.text('result', 'longtext').nullable()
+          table.unique(['userId', 'batchId'])
+          table.index(['userId', 'status'])
+          table.index('expiresAt')
+        })
+        await knex.schema.createTable('action_batch_outputs', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.integer('actionBatchId').unsigned().references('actionBatchId').inTable('action_batches').notNullable()
+          table.integer('outputId').unsigned().references('outputId').inTable('outputs').notNullable().unique()
+          table.primary(['actionBatchId', 'outputId'])
+          table.index('actionBatchId')
+        })
+        await knex.schema.createTable('action_batch_blobs', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('actionBatchBlobId').notNullable()
+          table.integer('actionBatchId').unsigned().references('actionBatchId').inTable('action_batches').notNullable()
+          table.string('digest', 64).notNullable()
+          table.binary('bytes').notNullable()
+          table.unique(['actionBatchId', 'digest'])
+          table.index('actionBatchId')
+        })
+        if (dbtype === 'MySQL') {
+          await knex.raw('ALTER TABLE action_batch_blobs MODIFY COLUMN bytes LONGBLOB')
+        }
+      },
+      async down (knex) {
+        await knex.schema.dropTable('action_batch_blobs')
+        await knex.schema.dropTable('action_batch_outputs')
+        await knex.schema.dropTable('action_batches')
+      }
+    }
+
     migrations['2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs'] = {
       async up (knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {

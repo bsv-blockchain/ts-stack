@@ -678,69 +678,46 @@ describe('AuthFetch.normalizeBodyToNumberArray (private)', () => {
     expect(result.length).toBe(3)
   })
 
-  it('converts a number[] to a JSON-encoded number array', async () => {
-    // Arrays are objects, so they hit the typeof === 'object' branch first
-    // and are serialized via JSON.stringify before the number[] guard runs.
+  it('preserves a number[] as binary bytes', async () => {
     const input = [1, 2, 3]
     const result = await (authFetch as any).normalizeBodyToNumberArray(input)
-    // '[1,2,3]' encoded as UTF-8 bytes
-    const expected = Utils.toArray(JSON.stringify(input), 'utf8')
-    expect(result).toEqual(expected)
+    expect(result).toEqual(input)
   })
 
-  it('converts ArrayBuffer to a JSON-encoded number array', async () => {
-    // ArrayBuffer is an object, so it hits the typeof === 'object' branch first.
+  it('preserves ArrayBuffer bytes', async () => {
     const buf = new Uint8Array([10, 20, 30]).buffer
     const result = await (authFetch as any).normalizeBodyToNumberArray(buf)
-    // JSON.stringify of an ArrayBuffer produces '{}'
-    const expected = Utils.toArray(JSON.stringify(buf), 'utf8')
-    expect(result).toEqual(expected)
+    expect(result).toEqual([10, 20, 30])
   })
 
-  it('converts Uint8Array to a JSON-encoded number array', async () => {
-    // Uint8Array is an object, so it hits the typeof === 'object' branch first.
-    const arr = new Uint8Array([5, 6, 7])
+  it('preserves the selected Uint8Array view bytes', async () => {
+    const arr = new Uint8Array([4, 5, 6, 7]).subarray(1, 3)
     const result = await (authFetch as any).normalizeBodyToNumberArray(arr)
-    // JSON.stringify of a Uint8Array produces e.g. '{"0":5,"1":6,"2":7}'
-    const expected = Utils.toArray(JSON.stringify(arr), 'utf8')
-    expect(result).toEqual(expected)
+    expect(result).toEqual([5, 6])
   })
 
-  it('converts Blob via JSON.stringify (object branch)', async () => {
-    // Blob is an object — hits the typeof === 'object' branch before the Blob check.
+  it('preserves Blob bytes', async () => {
     const blob = new Blob(['hi'])
     const result = await (authFetch as any).normalizeBodyToNumberArray(blob)
-    // JSON.stringify(new Blob(...)) → '{}'
-    const expected = Utils.toArray(JSON.stringify(blob), 'utf8')
-    expect(result).toEqual(expected)
+    expect(result).toEqual(Utils.toArray('hi', 'utf8'))
   })
 
-  it('converts FormData via JSON.stringify (object branch)', async () => {
-    // FormData is an object — hits the typeof === 'object' branch before the FormData check.
+  it('normalizes FormData as URL-encoded bytes', async () => {
     const fd = new FormData()
     fd.append('name', 'alice')
     const result = await (authFetch as any).normalizeBodyToNumberArray(fd)
-    // JSON.stringify(FormData) → '{}'
-    const expected = Utils.toArray(JSON.stringify(fd), 'utf8')
-    expect(result).toEqual(expected)
+    expect(result).toEqual(Utils.toArray('name=alice', 'utf8'))
   })
 
-  it('converts URLSearchParams via JSON.stringify (object branch)', async () => {
-    // URLSearchParams is an object — hits typeof === 'object' branch first.
+  it('normalizes URLSearchParams bytes', async () => {
     const params = new URLSearchParams({ q: 'hello' })
     const result = await (authFetch as any).normalizeBodyToNumberArray(params)
-    // JSON.stringify(URLSearchParams) → '{}'
-    const expected = Utils.toArray(JSON.stringify(params), 'utf8')
-    expect(result).toEqual(expected)
+    expect(result).toEqual(Utils.toArray('q=hello', 'utf8'))
   })
 
-  it('converts ReadableStream via JSON.stringify (object branch)', async () => {
-    // ReadableStream is an object, so it hits the typeof === 'object' branch first
-    // and is serialized via JSON.stringify (produces '{}') rather than throwing.
+  it('rejects ReadableStream bodies that cannot be replayed', async () => {
     const stream = new ReadableStream()
-    const result = await (authFetch as any).normalizeBodyToNumberArray(stream)
-    const expected = Utils.toArray(JSON.stringify(stream), 'utf8')
-    expect(result).toEqual(expected)
+    await expect((authFetch as any).normalizeBodyToNumberArray(stream)).rejects.toThrow('ReadableStream')
   })
 
   it('converts a plain object via JSON.stringify', async () => {

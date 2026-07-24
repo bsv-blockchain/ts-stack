@@ -7,10 +7,12 @@
     "strict": true,
     "skipLibCheck": true,
     "noImplicitAny": false,
+    "types": ["jest", "node"],
     "noEmit": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "benchmarks/**/*.ts"
   ],
   "exclude": [
     "node_modules",

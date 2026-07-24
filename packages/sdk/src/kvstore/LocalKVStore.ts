@@ -155,7 +155,8 @@ export default class LocalKVStore {
     if (outputs.length === 0) {
       return r
     }
-    const output = outputs.at(-1)!
+    const output = outputs.at(-1)
+    if (output == null) return r
     r.outpoint = output.outpoint
     let field: number[]
     try {

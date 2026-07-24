@@ -86,7 +86,7 @@ export async function createAction (
 async function createNewTx (wallet: Wallet, vargs: Validation.ValidCreateActionArgs): Promise<PendingSignAction> {
   const logger = vargs.logger
   const storageArgs = removeUnlockScripts(vargs)
-  const dcr = await wallet.storage.createAction(storageArgs)
+  const dcr = await wallet.actionBatch.plan(storageArgs) ?? await wallet.storage.createAction(storageArgs)
 
   const reference = dcr.reference
 
@@ -155,6 +155,8 @@ export async function processAction (
   auth: AuthId,
   vargs: Validation.ValidProcessActionArgs
 ): Promise<StorageProcessActionResults> {
+  const batchResult = await wallet.actionBatch.process(prior, vargs)
+  if (batchResult != null) return batchResult
   const args: StorageProcessActionArgs = {
     isNewTx: vargs.isNewTx,
     isSendWith: vargs.isSendWith,

@@ -245,7 +245,7 @@ export default class BigNumber {
     if (effectiveBase === 16) {
       this._initFromHexString(numStr, sign, effectiveEndian)
     } else {
-      this._initFromNonHexString(numStr, effectiveBase as number, sign, effectiveEndian)
+      this._initFromNonHexString(numStr, effectiveBase, sign, effectiveEndian)
     }
   }
 

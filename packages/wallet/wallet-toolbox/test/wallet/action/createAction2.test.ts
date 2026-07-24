@@ -97,7 +97,7 @@ describe('createAction2 nosend transactions', () => {
   test('spends a locally known noSend output without resubmitting inputBEEF', async () => {
     for (const { wallet } of ctxs) {
       wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
-      const sourceScript = '76a914abcdef0123456789abcdef0123456789abcdef88ac'
+      const sourceScript = '7551'
       const fundingResult = await wallet.createAction({
         outputs: [
           {

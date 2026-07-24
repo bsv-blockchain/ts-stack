@@ -18,8 +18,32 @@ import {
   TableTxLabelMap,
   TableUser
 } from './tables'
+import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './tables/TableActionBatch'
 
 export interface StorageIdbSchema {
+  action_batches: {
+    key: number
+    value: TableActionBatch
+    indexes: {
+      userId: number
+      userId_batchId: [number, string]
+      expiresAt: Date
+    }
+  }
+  action_batch_outputs: {
+    key: number
+    value: TableActionBatchOutput
+    indexes: {
+      actionBatchId: number
+    }
+  }
+  action_batch_blobs: {
+    key: [number, string]
+    value: TableActionBatchBlob
+    indexes: {
+      actionBatchId: number
+    }
+  }
   certificates: {
     key: number
     value: TableCertificate

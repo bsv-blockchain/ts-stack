@@ -12,8 +12,8 @@ describe('WalletStorageManager tests', () => {
   const ctxs: TestWalletNoSetup[] = []
 
   beforeAll(async () => {
-    if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('walletStorageManagerTestSource'))
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('walletStorageManagerTestSource'))
+    if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('walletStorageManagerTestSource', 'legacy'))
+    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('walletStorageManagerTestSource', 'legacy'))
   })
 
   afterAll(async () => {

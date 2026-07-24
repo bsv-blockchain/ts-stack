@@ -21,12 +21,12 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const module1: PermissionsModule = {
         onRequest: jest.fn(async req => {
           callOrder.push('req1')
-          expect((req.args as any).req1Processed).toBeUndefined()
-          return { ...req, args: { ...(req.args as any), req1Processed: true } }
+          expect(req.args.req1Processed).toBeUndefined()
+          return { ...req, args: { ...req.args, req1Processed: true } }
         }),
         onResponse: jest.fn(async res => {
           callOrder.push('res1')
-          expect((res).processedBy).toBe('module2')
+          expect(res.processedBy).toBe('module2')
           return { ...res, finalProcessedBy: 'module1' }
         })
       }
@@ -34,12 +34,12 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const module2: PermissionsModule = {
         onRequest: jest.fn(async req => {
           callOrder.push('req2')
-          expect((req.args as any).req1Processed).toBe(true)
-          return { ...req, args: { ...(req.args as any), req2Processed: true } }
+          expect(req.args.req1Processed).toBe(true)
+          return { ...req, args: { ...req.args, req2Processed: true } }
         }),
         onResponse: jest.fn(async res => {
           callOrder.push('res2')
-          expect((res).processedBy).toBeUndefined()
+          expect(res.processedBy).toBeUndefined()
           return { ...res, processedBy: 'module2' }
         })
       }
@@ -200,11 +200,11 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         onRequest: jest.fn(async req => {
           // Module can inspect and transform the request
           expect(req.method).toBe('listOutputs')
-          expect((req.args as any).basket).toBe('p myscheme some-data')
+          expect(req.args.basket).toBe('p myscheme some-data')
           // Transform basket for underlying call
           return {
             ...req,
-            args: { ...(req.args as any), basket: 'transformed-basket' }
+            args: { ...req.args, basket: 'transformed-basket' }
           }
         }),
         onResponse: jest.fn(async res => {
@@ -316,10 +316,10 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('relinquishOutput')
-          expect((req.args as any).basket).toBe('p token admin-basket-data')
+          expect(req.args.basket).toBe('p token admin-basket-data')
           return {
             ...req,
-            args: { ...(req.args as any), basket: 'admin-real-basket' }
+            args: { ...req.args, basket: 'admin-real-basket' }
           }
         }),
         onResponse: jest.fn(async res => res)
@@ -402,18 +402,18 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         onRequest: jest.fn(async req => {
           callOrder.push('req1')
           // First module receives original args without any processing markers
-          expect((req.args as any).req1Processed).toBeUndefined()
-          expect((req.args as any).req2Processed).toBeUndefined()
+          expect(req.args.req1Processed).toBeUndefined()
+          expect(req.args.req2Processed).toBeUndefined()
           // Transform args - add marker to track this module processed them
           return {
             ...req,
-            args: { ...(req.args as any), req1Processed: true }
+            args: { ...req.args, req1Processed: true }
           }
         }),
         onResponse: jest.fn(async res => {
           callOrder.push('res1')
           // Last module in response chain should see transformations from res2 and res3
-          expect((res).processedBy).toBe('module2')
+          expect(res.processedBy).toBe('module2')
           return { ...res, finalProcessedBy: 'module1' }
         })
       }
@@ -423,17 +423,17 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
           callOrder.push('req2')
           // Second module receives args transformed by module1
           // (each module gets fresh request object, but args are chained)
-          expect((req.args as any).req1Processed).toBe(true)
-          expect((req.args as any).req2Processed).toBeUndefined()
+          expect(req.args.req1Processed).toBe(true)
+          expect(req.args.req2Processed).toBeUndefined()
           return {
             ...req,
-            args: { ...(req.args as any), req2Processed: true }
+            args: { ...req.args, req2Processed: true }
           }
         }),
         onResponse: jest.fn(async res => {
           callOrder.push('res2')
           // Second-to-last in response chain should see transformation from res3
-          expect((res).processedBy).toBe('module3')
+          expect(res.processedBy).toBe('module3')
           return { ...res, processedBy: 'module2' }
         })
       }
@@ -442,18 +442,18 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         onRequest: jest.fn(async req => {
           callOrder.push('req3')
           // Third module receives args with transformations from both module1 and module2
-          expect((req.args as any).req1Processed).toBe(true)
-          expect((req.args as any).req2Processed).toBe(true)
-          expect((req.args as any).req3Processed).toBeUndefined()
+          expect(req.args.req1Processed).toBe(true)
+          expect(req.args.req2Processed).toBe(true)
+          expect(req.args.req3Processed).toBeUndefined()
           return {
             ...req,
-            args: { ...(req.args as any), req3Processed: true }
+            args: { ...req.args, req3Processed: true }
           }
         }),
         onResponse: jest.fn(async res => {
           callOrder.push('res3')
           // First module in response chain receives raw response from underlying wallet
-          expect((res).processedBy).toBeUndefined()
+          expect(res.processedBy).toBeUndefined()
           return { ...res, processedBy: 'module3' }
         })
       }
@@ -550,7 +550,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('getPublicKey')
-          expect((req.args as any).protocolID).toEqual([0, 'p bottle test'])
+          expect(req.args.protocolID).toEqual([0, 'p bottle test'])
           return req
         }),
         onResponse: jest.fn(async res => {
@@ -588,7 +588,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('createSignature')
-          expect((req.args as any).protocolID).toEqual([1, 'p token spend'])
+          expect(req.args.protocolID).toEqual([1, 'p token spend'])
           // Module can validate spend amounts, check limits, etc.
           return req
         }),
@@ -655,7 +655,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           expect(req.method).toBe('encrypt')
-          expect((req.args as any).protocolID).toEqual([2, 'p secure encrypt'])
+          expect(req.args.protocolID).toEqual([2, 'p secure encrypt'])
           return req
         }),
         onResponse: jest.fn(async res => res)

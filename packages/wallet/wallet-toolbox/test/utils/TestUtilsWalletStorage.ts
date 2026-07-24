@@ -886,15 +886,21 @@ export abstract class TestUtilsWalletStorage {
   }
 
   //if (await _tu.fileExists(walletFile))
-  static async createLegacyWalletSQLiteCopy(databaseName: string): Promise<TestWalletNoSetup> {
+  static async createLegacyWalletSQLiteCopy (
+    databaseName: string,
+    actionBatchMode: 'auto' | 'legacy' = 'auto'
+  ): Promise<TestWalletNoSetup> {
     const walletFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const walletKnex = _tu.createLocalSQLite(walletFile)
-    return await _tu.createLegacyWalletCopy(databaseName, walletKnex, walletFile)
+    return await _tu.createLegacyWalletCopy(databaseName, walletKnex, walletFile, actionBatchMode)
   }
 
-  static async createLegacyWalletMySQLCopy(databaseName: string): Promise<TestWalletNoSetup> {
+  static async createLegacyWalletMySQLCopy (
+    databaseName: string,
+    actionBatchMode: 'auto' | 'legacy' = 'auto'
+  ): Promise<TestWalletNoSetup> {
     const walletKnex = _tu.createLocalMySQL(databaseName)
-    return await _tu.createLegacyWalletCopy(databaseName, walletKnex)
+    return await _tu.createLegacyWalletCopy(databaseName, walletKnex, undefined, actionBatchMode)
   }
 
   static async createLiveWalletSQLiteWARNING(
@@ -926,7 +932,8 @@ export abstract class TestUtilsWalletStorage {
   static async createLegacyWalletCopy(
     databaseName: string,
     walletKnex: Knex<any, any[]>,
-    tryCopyToPath?: string
+    tryCopyToPath?: string,
+    actionBatchMode: 'auto' | 'legacy' = 'auto'
   ): Promise<TestWalletNoSetup> {
     const readerFile = await _tu.existingDataFile(`walletLegacyTestData.sqlite`)
     let useReader = true
@@ -968,7 +975,7 @@ export abstract class TestUtilsWalletStorage {
     const services = new Services(chain)
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services)
     const monitor = new Monitor(monopts)
-    const wallet = new Wallet({ chain, keyDeriver, storage, services, monitor })
+    const wallet = new Wallet({ chain, keyDeriver, storage, services, monitor, actionBatchMode })
     const userId = verifyTruthy(await activeStorage.findUserByIdentityKey(identityKey)).userId
     const r: TestWallet<{}> = {
       rootKey,

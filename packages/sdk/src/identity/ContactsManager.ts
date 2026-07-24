@@ -181,8 +181,11 @@ export class ContactsManager {
 
     const hashedIdentityKey = await this.hashIdentityKey(contact.identityKey)
     const outputs = await this.wallet.listOutputs({
-      basket: 'contacts', include: 'entire transactions', includeCustomInstructions: true,
-      tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`], limit: 100
+      basket: 'contacts',
+      include: 'entire transactions',
+      includeCustomInstructions: true,
+      tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`],
+      limit: 100
     }, this.originator)
 
     const { existingOutput, keyID } = await this.findExistingOutput(outputs, contact.identityKey)
@@ -201,7 +204,9 @@ export class ContactsManager {
   /** Computes the HMAC-based hash of an identity key for tag indexing. */
   private async hashIdentityKey (identityKey: string): Promise<number[]> {
     const { hmac } = await this.wallet.createHmac({
-      protocolID: CONTACT_PROTOCOL_ID, keyID: identityKey, counterparty: 'self',
+      protocolID: CONTACT_PROTOCOL_ID,
+      keyID: identityKey,
+      counterparty: 'self',
       data: Utils.toArray(identityKey, 'utf8')
     }, this.originator)
     return hmac
@@ -236,7 +241,9 @@ export class ContactsManager {
   private async encryptAndLock (contactData: Contact, keyID: string): Promise<LockingScript> {
     const { ciphertext } = await this.wallet.encrypt({
       plaintext: Utils.toArray(JSON.stringify(contactData), 'utf8'),
-      protocolID: CONTACT_PROTOCOL_ID, keyID, counterparty: 'self'
+      protocolID: CONTACT_PROTOCOL_ID,
+      keyID,
+      counterparty: 'self'
     }, this.originator)
     return await new PushDrop(this.wallet, this.originator).lock([ciphertext], CONTACT_PROTOCOL_ID, keyID, 'self')
   }
@@ -258,9 +265,12 @@ export class ContactsManager {
       inputBEEF: outputs.BEEF as number[],
       inputs: [{ outpoint: prevOutpoint, unlockingScriptLength: 74, inputDescription: 'Spend previous contact output' }],
       outputs: [{
-        basket: 'contacts', satoshis: 1, lockingScript: lockingScript.toHex(),
+        basket: 'contacts',
+        satoshis: 1,
+        lockingScript: lockingScript.toHex(),
         outputDescription: `Updated Contact: ${contact.name ?? contact.identityKey.slice(0, 10)}`,
-        tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`], customInstructions: JSON.stringify({ keyID })
+        tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`],
+        customInstructions: JSON.stringify({ keyID })
       }],
       options: { acceptDelayedBroadcast: false, randomizeOutputs: false }
     }, this.originator)
@@ -284,9 +294,12 @@ export class ContactsManager {
     const { tx } = await this.wallet.createAction({
       description: 'Add Contact',
       outputs: [{
-        basket: 'contacts', satoshis: 1, lockingScript: lockingScript.toHex(),
+        basket: 'contacts',
+        satoshis: 1,
+        lockingScript: lockingScript.toHex(),
         outputDescription: `Contact: ${contact.name ?? contact.identityKey.slice(0, 10)}`,
-        tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`], customInstructions: JSON.stringify({ keyID })
+        tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`],
+        customInstructions: JSON.stringify({ keyID })
       }],
       options: { acceptDelayedBroadcast: false, randomizeOutputs: false }
     }, this.originator)
