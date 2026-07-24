@@ -21,7 +21,7 @@
   "scripts": {
     "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
+    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
     "lint": "prettier --write 'src/**/*.ts' --log-level silent",
     "build": "tsc --build",
     "prepublish": "npm run build && npm run doc",
