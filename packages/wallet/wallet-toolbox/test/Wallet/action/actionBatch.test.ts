@@ -268,6 +268,34 @@ describe('in-memory action batch workspace', () => {
     expect(commit.mock.calls[0][0].actions[0].plan.inputs.every(input => input.sourceTransaction == null)).toBe(true)
   })
 
+  test('an open batch does not capture a legacy pending signAction', async () => {
+    const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
+    const legacyProcess = jest.spyOn(ctx.storage, 'processAction')
+    ctx.wallet.randomVals = randomVals
+    const pending = await ctx.wallet.createAction({
+      outputs: [{
+        satoshis: 1,
+        lockingScript: '51',
+        outputDescription: 'legacy pending output'
+      }],
+      description: 'Create legacy pending action before the batch',
+      options: { noSend: false, signAndProcess: false, randomizeOutputs: false }
+    })
+    const staged = await ctx.wallet.createAction(actionArgs())
+
+    await expect(ctx.wallet.signAction({
+      reference: pending.signableTransaction!.reference,
+      spends: {}
+    })).resolves.toEqual(expect.objectContaining({ txid: expect.any(String) }))
+    expect(legacyCreate).toHaveBeenCalledTimes(1)
+    expect(legacyProcess).toHaveBeenCalledTimes(1)
+
+    await expect(ctx.wallet.createAction({
+      description: 'Commit batch after legacy pending signAction',
+      options: { sendWith: [staged.txid!] }
+    })).resolves.toBeDefined()
+  })
+
   test('first-action returnTXIDOnly retains internal proof data through commit', async () => {
     ctx.wallet.randomVals = randomVals
     const staged = await ctx.wallet.createAction({
@@ -471,6 +499,44 @@ describe('in-memory action batch workspace', () => {
     const { digest: _digest, ...semanticManifest } = withoutDigest
     const invalid = { ...semanticManifest, digest: actionBatchManifestDigest(semanticManifest) }
     await expect(ctx.storage.commitActionBatch(invalid)).rejects.toThrow('not double spend')
+  })
+
+  test('duplicate spends fail while planning and leave the valid batch commit-able', async () => {
+    ctx.wallet.randomVals = randomVals
+    const source = await ctx.wallet.createAction({
+      ...actionArgs(),
+      outputs: [{
+        satoshis: 2,
+        lockingScript: '7551',
+        outputDescription: 'duplicate-spend source',
+        basket: 'funding basket'
+      }]
+    })
+    const spendArgs: CreateActionArgs = {
+      inputs: [{
+        outpoint: `${source.txid}.0`,
+        unlockingScript: '00',
+        inputDescription: 'spend staged source'
+      }],
+      inputBEEF: source.tx,
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'spend result' }],
+      description: 'Spend staged source once',
+      options: { noSend: true, randomizeOutputs: false }
+    }
+    const first = await ctx.wallet.createAction(spendArgs)
+    const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+
+    await expect(ctx.wallet.createAction({
+      ...spendArgs,
+      description: 'Attempt duplicate staged spend'
+    })).rejects.toThrow('already consumed by this action batch')
+    expect(commit).not.toHaveBeenCalled()
+
+    await expect(ctx.wallet.createAction({
+      description: 'Commit after rejected duplicate spend',
+      options: { sendWith: [source.txid!, first.txid!] }
+    })).resolves.toBeDefined()
+    expect(commit).toHaveBeenCalledTimes(1)
   })
 
   test('atomic validation rejects a raw transaction with an invalidated signature', async () => {
@@ -688,6 +754,73 @@ describe('in-memory action batch workspace', () => {
     expect(await ctx.activeStorage.findActionBatchOutputIds(batch!.actionBatchId)).toHaveLength(0)
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('aborted')
     expect((await ctx.wallet.listActions({ labels: ['action batch workload'] })).totalActions).toBe(0)
+  })
+
+  test('aborting one staged action preserves independent signed siblings', async () => {
+    ctx.wallet.randomVals = randomVals
+    const first = await ctx.wallet.createAction({
+      ...actionArgs(),
+      labels: ['abort batch sibling'],
+      options: { ...actionArgs().options, signAndProcess: false }
+    })
+    const firstSigned = await ctx.wallet.signAction({
+      reference: first.signableTransaction!.reference,
+      spends: {},
+      options: { noSend: true }
+    })
+    const sibling = await ctx.wallet.createAction({
+      ...actionArgs(),
+      labels: ['surviving batch sibling']
+    })
+
+    await expect(ctx.wallet.abortAction({
+      reference: first.signableTransaction!.reference
+    })).resolves.toEqual({ aborted: true })
+    expect((await ctx.wallet.listActions({ labels: ['abort batch sibling'] })).totalActions).toBe(0)
+    expect((await ctx.wallet.listActions({ labels: ['surviving batch sibling'] })).actions)
+      .toContainEqual(expect.objectContaining({ txid: sibling.txid }))
+
+    await expect(ctx.wallet.createAction({
+      description: 'Commit surviving batch sibling',
+      options: { sendWith: [sibling.txid!] }
+    })).resolves.toBeDefined()
+    expect(await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: firstSigned.txid }
+    })).toHaveLength(0)
+    expect(await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: sibling.txid }
+    })).toHaveLength(1)
+  })
+
+  test('aborting a staged parent is refused while another action depends on it', async () => {
+    ctx.wallet.randomVals = randomVals
+    const source = await ctx.wallet.createAction({
+      ...actionArgs(),
+      outputs: [{
+        satoshis: 2,
+        lockingScript: '7551',
+        outputDescription: 'abort dependency source',
+        basket: 'funding basket'
+      }]
+    })
+    const child = await ctx.wallet.createAction({
+      inputs: [{
+        outpoint: `${source.txid}.0`,
+        unlockingScript: '00',
+        inputDescription: 'depend on staged source'
+      }],
+      inputBEEF: source.tx,
+      outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'dependent result' }],
+      description: 'Create staged dependency',
+      options: { noSend: true, randomizeOutputs: false }
+    })
+
+    await expect(ctx.wallet.abortAction({ reference: source.txid! }))
+      .rejects.toThrow('another staged action depends on it')
+    await expect(ctx.wallet.createAction({
+      description: 'Commit dependency after refused abort',
+      options: { sendWith: [source.txid!, child.txid!] }
+    })).resolves.toBeDefined()
   })
 
   test('wallet destruction releases an uncommitted workspace', async () => {

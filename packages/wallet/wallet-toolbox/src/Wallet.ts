@@ -1000,8 +1000,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     this.validateAuthAndArgs(args, Validation.validateAbortActionArgs)
     if (this.actionBatch.ownsReference(args.reference)) {
-      await this.actionBatch.abort()
-      return { aborted: true }
+      return { aborted: await this.actionBatch.abortAction(args.reference) }
     }
     const r = await this.storage.abortAction(args)
     return r

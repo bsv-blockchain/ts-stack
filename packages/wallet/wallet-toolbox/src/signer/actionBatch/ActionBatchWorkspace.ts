@@ -107,6 +107,7 @@ function makePlannerState (
     reserved: new Map(),
     explicit: new Map(),
     staged: new Map(),
+    discardedStagedTxids: new Set(),
     consumed: new Set(),
     estimatedChangeCount: begin.availableChangeCount
   }
@@ -143,7 +144,16 @@ class ActionBatchWorkspace {
   }
 
   ownsReference (reference: string): boolean {
-    return this.planned.has(reference) || this.actions.some(action => action.reference === reference)
+    if (this.planned.has(reference)) return true
+    if (this.actions.some(action => action.reference === reference || action.txid === reference)) return true
+    return Object.entries(this.wallet.pendingSignActions)
+      .some(([pendingReference, pending]) =>
+        this.planned.has(pendingReference) && pending.tx.id('hex') === reference
+      )
+  }
+
+  get isEmpty (): boolean {
+    return this.planned.size === 0 && this.actions.length === 0
   }
 
   overlayListActions (
@@ -297,7 +307,8 @@ class ActionBatchWorkspace {
       .filter(outpoint => {
         const key = `${outpoint.txid}.${outpoint.vout}`
         return !this.state.staged.has(key) && !this.state.explicit.has(key) &&
-          !this.state.reserved.has(key) && this.state.sharedBeef.findTxid(outpoint.txid)?.tx == null
+          !this.state.reserved.has(key) && (this.state.discardedStagedTxids.has(outpoint.txid) ||
+            this.state.sharedBeef.findTxid(outpoint.txid)?.tx == null)
       })
   }
 
@@ -546,6 +557,85 @@ class ActionBatchWorkspace {
     return result
   }
 
+  abortAction (referenceOrTxid: string): boolean {
+    let pendingReference: string | undefined
+    if (this.planned.has(referenceOrTxid)) {
+      pendingReference = referenceOrTxid
+    } else {
+      pendingReference = Object.entries(this.wallet.pendingSignActions)
+        .find(([reference, pending]) =>
+          this.planned.has(reference) && pending.tx.id('hex') === referenceOrTxid
+        )?.[0]
+    }
+    const actionIndex = this.actions.findIndex(action =>
+      action.reference === referenceOrTxid || action.txid === referenceOrTxid
+    )
+    const action = actionIndex < 0 ? undefined : this.actions[actionIndex]
+    const targetTxid = action?.txid ??
+      (pendingReference == null ? undefined : this.wallet.pendingSignActions[pendingReference]?.tx.id('hex'))
+    if (targetTxid != null && this.hasDependentAction(targetTxid, action?.reference ?? pendingReference)) {
+      throw new WERR_INVALID_OPERATION(
+        `cannot abort action ${referenceOrTxid} while another staged action depends on it`
+      )
+    }
+    if (action != null) {
+      this.actions.splice(actionIndex, 1)
+    } else if (pendingReference != null) {
+      this.planned.delete(pendingReference)
+      Reflect.deleteProperty(this.wallet.pendingSignActions, pendingReference)
+    } else {
+      return false
+    }
+    if (targetTxid != null) this.state.discardedStagedTxids.add(targetTxid)
+    this.rebuildStagedState()
+    return true
+  }
+
+  private hasDependentAction (txid: string, excludedReference: string | undefined): boolean {
+    if (this.actions.some(action =>
+      action.reference !== excludedReference &&
+      action.plan.inputs.some(input => input.sourceTxid === txid)
+    )) return true
+    return [...this.planned.entries()].some(([reference, pending]) =>
+      reference !== excludedReference &&
+      pending.planned.dcr.inputs.some(input => input.sourceTxid === txid)
+    )
+  }
+
+  private rebuildStagedState (): void {
+    this.state.consumed.clear()
+    this.state.staged.clear()
+    this.state.estimatedChangeCount = this.state.begin.availableChangeCount
+    this.lockingScripts.clear()
+
+    for (const action of this.actions) {
+      const tx = this.state.sharedBeef.findTxid(action.txid)?.tx
+      if (tx == null) throw new WERR_INVALID_OPERATION(`missing staged transaction ${action.txid}`)
+      for (const input of action.plan.inputs) {
+        this.state.consumed.add(`${input.sourceTxid}.${input.sourceVout}`)
+      }
+      const managedInputCount = action.plan.inputs.length - action.metadata.inputs.length
+      const changeOutputCount = action.plan.outputs.filter(output => output.purpose === 'change').length
+      this.state.estimatedChangeCount += changeOutputCount - managedInputCount
+      stageTransactionOutputs(this.state, tx, action.plan)
+      const lockingScriptDigests = action.lockingScriptDigests ?? []
+      lockingScriptDigests.forEach((digest, outputIndex) => {
+        if (digest == null) return
+        const vout = action.plan.outputs[outputIndex]?.vout
+        const script = vout == null ? undefined : tx.outputs[vout]?.lockingScript
+        if (script == null) throw new WERR_INVALID_OPERATION(`missing staged output script for ${action.txid}.${vout}`)
+        this.lockingScripts.set(digest, script.toHex())
+      })
+    }
+
+    for (const pending of this.planned.values()) {
+      for (const outpoint of pending.planned.consumedOutpoints) this.state.consumed.add(outpoint)
+      const managedInputCount = pending.planned.dcr.inputs.length - pending.args.inputs.length
+      const changeOutputCount = pending.planned.dcr.outputs.filter(output => output.purpose === 'change').length
+      this.state.estimatedChangeCount += changeOutputCount - managedInputCount
+    }
+  }
+
   async abort (): Promise<void> {
     if (this.committed) return
     await this.wallet.storage.abortActionBatch(this.batchId)
@@ -632,6 +722,7 @@ export class ActionBatchController {
     return await this.runExclusive(async () => {
       const workspace = this.workspace
       if (workspace == null) return undefined
+      if (prior != null && !workspace.ownsReference(prior.reference)) return undefined
       if (prior != null) workspace.stage(prior, args)
       const shouldCommit = args.isSendWith || (prior != null && !args.isNoSend)
       if (!shouldCommit) return { sendWithResults: [] }
@@ -652,6 +743,20 @@ export class ActionBatchController {
       if (this.workspace == null) return false
       await this.workspace.abort()
       this.workspace = undefined
+      return true
+    })
+  }
+
+  async abortAction (referenceOrTxid: string): Promise<boolean> {
+    return await this.runExclusive(async () => {
+      const workspace = this.workspace
+      if (workspace == null) return false
+      const aborted = workspace.abortAction(referenceOrTxid)
+      if (!aborted) return false
+      if (workspace.isEmpty) {
+        await workspace.abort()
+        this.workspace = undefined
+      }
       return true
     })
   }

@@ -44,6 +44,7 @@ export interface ActionBatchPlannerState {
   reserved: Map<string, PlannerOutput>
   explicit: Map<string, PlannerOutput>
   staged: Map<string, PlannerOutput>
+  discardedStagedTxids: Set<string>
   consumed: Set<string>
   estimatedChangeCount: number
 }
@@ -105,7 +106,7 @@ function resolveInputOutput (
 ): PlannerOutput {
   const key = `${outpoint.txid}.${outpoint.vout}`
   return state.staged.get(key) ?? state.explicit.get(key) ?? state.reserved.get(key) ??
-    outputFromBeef(state.sharedBeef, outpoint) ??
+    (!state.discardedStagedTxids.has(outpoint.txid) ? outputFromBeef(state.sharedBeef, outpoint) : undefined) ??
     (() => { throw new WERR_INVALID_PARAMETER('inputBEEF', `proof data for ${key}`) })()
 }
 
@@ -277,6 +278,17 @@ export async function planAction (
   state: ActionBatchPlannerState,
   args: Validation.ValidCreateActionArgs
 ): Promise<ActionBatchPlannedAction> {
+  const seenOutpoints = new Set<string>()
+  for (const outpoint of [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange]) {
+    const key = `${outpoint.txid}.${outpoint.vout}`
+    if (seenOutpoints.has(key)) {
+      throw new WERR_INVALID_PARAMETER('inputs', `unique inputs; ${key} is repeated`)
+    }
+    if (state.consumed.has(key)) {
+      throw new WERR_INVALID_PARAMETER('inputs', `unspent inputs; ${key} is already consumed by this action batch`)
+    }
+    seenOutpoints.add(key)
+  }
   const explicit = args.inputs.map(input => resolveInputOutput(state, input.outpoint))
   for (const output of explicit) {
     if (output.change) throw new WERR_INVALID_PARAMETER('inputs', 'unmanaged inputs; use noSendChange for managed change')
@@ -355,6 +367,7 @@ export function stageTransactionOutputs (
   tx: Transaction,
   dcr: StorageCreateActionResult
 ): void {
+  state.discardedStagedTxids.delete(tx.id('hex'))
   const now = new Date()
   for (const output of dcr.outputs) {
     const isChange = output.providedBy === 'storage' && output.purpose === 'change'
