@@ -15,5 +15,11 @@ packages/helpers/                               @sirdeggen @ty-everett @BraydenL
 # Conformance runner
 conformance/                                    @sirdeggen @ty-everett @BraydenLangley @tonesnotes
 
-# CI / release / repo config
-.github/                                        @sirdeggen
+# CI, release, dependency, and analysis controls require redundant ownership.
+.github/                                        @sirdeggen @ty-everett
+/package.json                                   @sirdeggen @ty-everett
+/pnpm-lock.yaml                                 @sirdeggen @ty-everett
+/pnpm-workspace.yaml                            @sirdeggen @ty-everett
+/sonar-project.properties                       @sirdeggen @ty-everett
+/.sonarcloud.properties                         @sirdeggen @ty-everett
+/codecov.yml                                    @sirdeggen @ty-everett

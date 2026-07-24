@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-05-07T20:32:52.600Z",
-  "totalVectors": 6601,
-  "totalFiles": 71,
+  "timestamp": "2026-07-24T22:49:48.768Z",
+  "totalVectors": 6650,
+  "totalFiles": 74,
   "parseErrors": 0,
   "suites": [
     {
@@ -28129,6 +28129,266 @@
         },
         {
           "name": "storage.uhrp-http.15",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "sync/brc136-basm",
+      "cases": [
+        {
+          "name": "sync.brc136-basm.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc136-basm.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc136-basm.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc136-basm.4",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "sync/brc40-user-state",
+      "cases": [
+        {
+          "name": "sync.brc40.request.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.error.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.error.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.error.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.error.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.error.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.request.error.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.response.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.response.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.response.error.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.response.error.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.response.error.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.flow.idmap.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.flow.idmap.error.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.merge.tx.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.merge.tx.error.regression.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.merge.tx.error.regression.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.merge.output.error.regression.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.merge.output.error.regression.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.merge.proventx.error.regression.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.flow.regression.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.brc40.flow.since.inclusive.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "sync/chaintracks-v2-http",
+      "cases": [
+        {
+          "name": "sync.chaintracks-v2-http.network.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.tip.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.tip.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.tip-bin.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-height.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-height.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-height.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-height.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-height.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-height-bin.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-hash.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-hash.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-hash.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-hash.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.header-by-hash-bin.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.headers.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.headers.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.headers.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.headers.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.headers-bin.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "sync.chaintracks-v2-http.headers-bin.2",
           "pass": true,
           "error": null
         }

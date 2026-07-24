@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="bsv-conformance" tests="6601" failures="0" errors="0" skipped="0">
+<testsuites name="bsv-conformance" tests="6650" failures="0" errors="0" skipped="0">
   <testsuite name="auth/brc31-handshake" tests="16" failures="0" errors="0" skipped="0">
     <testcase name="auth.brc31-handshake.1" classname="auth/brc31-handshake" time="0"/>
     <testcase name="auth.brc31-handshake.2" classname="auth/brc31-handshake" time="0"/>
@@ -5665,6 +5665,61 @@
     <testcase name="storage.uhrp-http.13" classname="storage/uhrp-http" time="0"/>
     <testcase name="storage.uhrp-http.14" classname="storage/uhrp-http" time="0"/>
     <testcase name="storage.uhrp-http.15" classname="storage/uhrp-http" time="0"/>
+  </testsuite>
+  <testsuite name="sync/brc136-basm" tests="4" failures="0" errors="0" skipped="0">
+    <testcase name="sync.brc136-basm.1" classname="sync/brc136-basm" time="0"/>
+    <testcase name="sync.brc136-basm.2" classname="sync/brc136-basm" time="0"/>
+    <testcase name="sync.brc136-basm.3" classname="sync/brc136-basm" time="0"/>
+    <testcase name="sync.brc136-basm.4" classname="sync/brc136-basm" time="0"/>
+  </testsuite>
+  <testsuite name="sync/brc40-user-state" tests="24" failures="0" errors="0" skipped="0">
+    <testcase name="sync.brc40.request.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.2" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.3" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.error.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.error.2" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.error.3" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.error.4" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.error.5" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.request.error.6" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.response.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.response.2" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.response.error.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.response.error.2" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.response.error.3" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.flow.idmap.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.flow.idmap.error.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.merge.tx.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.merge.tx.error.regression.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.merge.tx.error.regression.2" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.merge.output.error.regression.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.merge.output.error.regression.2" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.merge.proventx.error.regression.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.flow.regression.1" classname="sync/brc40-user-state" time="0"/>
+    <testcase name="sync.brc40.flow.since.inclusive.1" classname="sync/brc40-user-state" time="0"/>
+  </testsuite>
+  <testsuite name="sync/chaintracks-v2-http" tests="21" failures="0" errors="0" skipped="0">
+    <testcase name="sync.chaintracks-v2-http.network.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.tip.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.tip.2" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.tip-bin.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-height.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-height.2" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-height.3" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-height.4" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-height.5" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-height-bin.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-hash.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-hash.2" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-hash.3" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-hash.4" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.header-by-hash-bin.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.headers.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.headers.2" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.headers.3" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.headers.4" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.headers-bin.1" classname="sync/chaintracks-v2-http" time="0"/>
+    <testcase name="sync.chaintracks-v2-http.headers-bin.2" classname="sync/chaintracks-v2-http" time="0"/>
   </testsuite>
   <testsuite name="sync/gasp-protocol" tests="20" failures="0" errors="0" skipped="0">
     <testcase name="sync.gasprotocol.1" classname="sync/gasp-protocol" time="0"/>

@@ -19,9 +19,15 @@ on:
         required: false
         default: ''
 
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: npm-production
+    timeout-minutes: 90
     permissions:
       contents: write
       id-token: write   # required for npm OIDC provenance
@@ -40,8 +46,33 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
+      - name: Verify trusted release source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          git fetch origin main
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Manual npm releases must run from main."
+              exit 1
+            fi
+          elif ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Release tags must point to a commit reachable from main."
+            exit 1
+          fi
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # Release builds do not need dependency lifecycle scripts. Package
+        # prepublish scripts still run explicitly during pnpm publish. Rebuild
+        # the one audited tool binary used by the workspace build instead of
+        # allowing arbitrary transitive lifecycle scripts.
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited build tool
+        run: pnpm rebuild esbuild
+
+      - name: Reject high and critical dependency advisories
+        run: pnpm audit:security
 
       - name: Build all packages
         run: pnpm -r --filter '!@bsv/ts-stack' run build
@@ -179,7 +210,7 @@ jobs:
           git clean -fd
 
           pnpm sync-versions
-          pnpm install --lockfile-only
+          pnpm install --lockfile-only --ignore-scripts
 
           # Infra components are NOT in the pnpm workspace — each has its own
           # npm package-lock.json that goes stale when sync-versions rewrites
