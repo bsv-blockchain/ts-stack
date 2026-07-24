@@ -1,229 +1,226 @@
-/**
- * WABClient
- *
- * Provides high-level methods to:
- *  - Retrieve server info (supported auth methods, faucet info)
- *  - Generate a random presentation key
- *  - Start/Complete authentication with a chosen AuthMethodInteractor
- *  - Link/unlink methods
- *  - Request faucet
- *  - Delete user
- */
-import { AuthMethodInteractor } from './auth-method-interactors/AuthMethodInteractor'
 import { PrivateKey } from '@bsv/sdk'
+import {
+  AuthMethodInteractor,
+  AuthPayload,
+  CompleteAuthResponse,
+  StartAuthResponse
+} from './auth-method-interactors/AuthMethodInteractor'
+import { WABTransport, WABTransportOptions } from './WABTransport'
 
+export interface WABClientOptions extends WABTransportOptions {}
+
+export interface WABServerInfo {
+  supportedAuthMethods?: string[]
+  [key: string]: unknown
+}
+
+export interface WABOperationResponse {
+  success: boolean
+  message?: string
+  [key: string]: unknown
+}
+
+export interface WABFaucetResponse extends WABOperationResponse {
+  paymentData?: {
+    k?: string
+    tx?: number[]
+    txid?: string
+  }
+}
+
+function assertHexIdentifier (value: string, name: string): void {
+  if (!/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw new TypeError(`${name} must be a 32-byte hexadecimal string.`)
+  }
+}
+
+function assertMethodType (methodType: string): void {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(methodType)) {
+    throw new TypeError('methodType contains unsupported characters.')
+  }
+}
+
+function normalizeAuthPayload (methodType: string, payload: AuthPayload): AuthPayload {
+  if (methodType !== 'TwilioPhone') return payload
+  const phoneNumber = payload.phoneNumber
+  if (typeof phoneNumber !== 'string') {
+    throw new TypeError('TwilioPhone authentication requires phoneNumber.')
+  }
+  const normalized = phoneNumber.trim()
+  if (!/^\+[1-9][0-9]{7,14}$/.test(normalized)) {
+    throw new TypeError('phoneNumber must use canonical E.164 format.')
+  }
+  return {
+    ...payload,
+    phoneNumber: normalized
+  }
+}
+
+/**
+ * Production-oriented WAB client with one security and observability boundary
+ * for every endpoint.
+ */
 export class WABClient {
-  constructor (private readonly serverUrl: string) {}
+  readonly transport: WABTransport
 
-  /**
-   * Return the WAB server info
-   */
-  public async getInfo (): Promise<any> {
-    const res = await fetch(`${this.serverUrl}/info`)
-    return await res.json()
+  constructor (serverUrl: string, options: WABClientOptions = {}) {
+    this.transport = new WABTransport(serverUrl, options)
   }
 
-  /**
-   * Generate a random 256-bit presentation key as a hex string (client side).
-   */
+  public async getInfo (): Promise<WABServerInfo> {
+    return await this.transport.request<WABServerInfo>('/info', {
+      method: 'GET',
+      operation: 'get-info'
+    })
+  }
+
   public generateRandomPresentationKey (): string {
     return PrivateKey.fromRandom().toHex()
   }
 
-  /**
-   * Start an Auth Method flow
-   */
-  public async startAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any): Promise<any> {
-    return await authMethod.startAuth(this.serverUrl, presentationKey, payload)
+  public async startAuthMethod (
+    authMethod: AuthMethodInteractor,
+    presentationKey: string,
+    payload: AuthPayload,
+    correlationId?: string
+  ): Promise<StartAuthResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    return await authMethod.startAuth(
+      this.transport.serverUrl,
+      presentationKey,
+      payload,
+      this.transport,
+      correlationId
+    )
   }
 
-  /**
-   * Complete an Auth Method flow
-   */
-  public async completeAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any): Promise<any> {
-    return await authMethod.completeAuth(this.serverUrl, presentationKey, payload)
+  public async completeAuthMethod (
+    authMethod: AuthMethodInteractor,
+    presentationKey: string,
+    payload: AuthPayload,
+    correlationId?: string
+  ): Promise<CompleteAuthResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    return await authMethod.completeAuth(
+      this.transport.serverUrl,
+      presentationKey,
+      payload,
+      this.transport,
+      correlationId
+    )
   }
 
-  /**
-   * List user-linked methods
-   */
-  public async listLinkedMethods (presentationKey: string): Promise<any> {
-    const res = await fetch(`${this.serverUrl}/user/linkedMethods`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ presentationKey })
+  public async listLinkedMethods (presentationKey: string): Promise<WABOperationResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    return await this.transport.request<WABOperationResponse>('/user/linkedMethods', {
+      operation: 'list-linked-methods',
+      body: { presentationKey }
     })
-    return await res.json()
   }
 
-  /**
-   * Unlink a given Auth Method by ID
-   */
-  public async unlinkMethod (presentationKey: string, authMethodId: number): Promise<any> {
-    const res = await fetch(`${this.serverUrl}/user/unlinkMethod`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ presentationKey, authMethodId })
+  public async unlinkMethod (
+    presentationKey: string,
+    authMethodId: number
+  ): Promise<WABOperationResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    if (!Number.isSafeInteger(authMethodId) || authMethodId <= 0) {
+      throw new TypeError('authMethodId must be a positive safe integer.')
+    }
+    return await this.transport.request<WABOperationResponse>('/user/unlinkMethod', {
+      operation: 'unlink-method',
+      body: { presentationKey, authMethodId }
     })
-    return await res.json()
   }
 
-  /**
-   * Request faucet
-   */
-  public async requestFaucet (presentationKey: string): Promise<any> {
-    const res = await fetch(`${this.serverUrl}/faucet/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ presentationKey })
+  public async requestFaucet (presentationKey: string): Promise<WABFaucetResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    return await this.transport.request<WABFaucetResponse>('/faucet/request', {
+      operation: 'request-faucet',
+      body: { presentationKey }
     })
-    return await res.json()
   }
 
-  /**
-   * Delete user
-   */
-  public async deleteUser (presentationKey: string): Promise<any> {
-    const res = await fetch(`${this.serverUrl}/user/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ presentationKey })
+  public async deleteUser (presentationKey: string): Promise<WABOperationResponse> {
+    assertHexIdentifier(presentationKey, 'presentationKey')
+    return await this.transport.request<WABOperationResponse>('/user/delete', {
+      operation: 'delete-user',
+      body: { presentationKey }
     })
-    return await res.json()
   }
 
-  // ============================================================
-  // Shamir Share Management (2-of-3 Key Recovery System)
-  // ============================================================
-
-  /**
-   * Start OTP verification for share operations
-   * This initiates the auth flow (e.g., sends SMS code via Twilio)
-   *
-   * @param methodType The auth method type (e.g., "TwilioPhone", "DevConsole")
-   * @param userIdHash SHA256 hash of the user's identity key
-   * @param payload Auth method specific data (e.g., { phoneNumber: "+1..." })
-   */
   public async startShareAuth (
     methodType: string,
     userIdHash: string,
-    payload: any
+    payload: AuthPayload
   ): Promise<{ success: boolean, message: string }> {
-    const res = await fetch(`${this.serverUrl}/auth/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    assertMethodType(methodType)
+    assertHexIdentifier(userIdHash, 'userIdHash')
+    const normalizedPayload = normalizeAuthPayload(methodType, payload)
+    return await this.transport.request('/auth/start', {
+      operation: 'start-share-auth',
+      body: {
         methodType,
-        presentationKey: userIdHash, // Reuse existing auth flow with userIdHash
-        payload
-      })
+        presentationKey: userIdHash,
+        payload: normalizedPayload
+      }
     })
-    return await res.json()
   }
 
-  /**
-   * Store a Shamir share (Share B) on the server
-   * Requires prior OTP verification via startShareAuth
-   *
-   * @param methodType The auth method type used for verification
-   * @param payload Contains the OTP code and auth method specific data
-   * @param shareB The Shamir share to store (format: x.y.threshold.integrity)
-   * @param userIdHash SHA256 hash of the user's identity key
-   */
   public async storeShare (
     methodType: string,
-    payload: any,
+    payload: AuthPayload,
     shareB: string,
     userIdHash: string
   ): Promise<{ success: boolean, message: string, userId?: number }> {
-    const res = await fetch(`${this.serverUrl}/share/store`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        methodType,
-        payload,
-        shareB,
-        userIdHash
-      })
+    assertMethodType(methodType)
+    assertHexIdentifier(userIdHash, 'userIdHash')
+    const normalizedPayload = normalizeAuthPayload(methodType, payload)
+    return await this.transport.request('/share/store', {
+      operation: 'store-share',
+      body: { methodType, payload: normalizedPayload, shareB, userIdHash }
     })
-    return await res.json()
   }
 
-  /**
-   * Retrieve a Shamir share (Share B) from the server
-   * Requires OTP verification
-   *
-   * @param methodType The auth method type used for verification
-   * @param payload Contains the OTP code and auth method specific data
-   * @param userIdHash SHA256 hash of the user's identity key
-   */
   public async retrieveShare (
     methodType: string,
-    payload: any,
+    payload: AuthPayload,
     userIdHash: string
   ): Promise<{ success: boolean, shareB?: string, message: string }> {
-    const res = await fetch(`${this.serverUrl}/share/retrieve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        methodType,
-        payload,
-        userIdHash
-      })
+    assertMethodType(methodType)
+    assertHexIdentifier(userIdHash, 'userIdHash')
+    const normalizedPayload = normalizeAuthPayload(methodType, payload)
+    return await this.transport.request('/share/retrieve', {
+      operation: 'retrieve-share',
+      body: { methodType, payload: normalizedPayload, userIdHash }
     })
-    return await res.json()
   }
 
-  /**
-   * Update a Shamir share (for key rotation)
-   * Requires OTP verification
-   *
-   * @param methodType The auth method type used for verification
-   * @param payload Contains the OTP code and auth method specific data
-   * @param userIdHash SHA256 hash of the user's identity key
-   * @param newShareB The new Shamir share to store
-   */
   public async updateShare (
     methodType: string,
-    payload: any,
+    payload: AuthPayload,
     userIdHash: string,
     newShareB: string
   ): Promise<{ success: boolean, message: string, shareVersion?: number }> {
-    const res = await fetch(`${this.serverUrl}/share/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        methodType,
-        payload,
-        userIdHash,
-        newShareB
-      })
+    assertMethodType(methodType)
+    assertHexIdentifier(userIdHash, 'userIdHash')
+    const normalizedPayload = normalizeAuthPayload(methodType, payload)
+    return await this.transport.request('/share/update', {
+      operation: 'update-share',
+      body: { methodType, payload: normalizedPayload, userIdHash, newShareB }
     })
-    return await res.json()
   }
 
-  /**
-   * Delete a Shamir user's account and stored share
-   * Requires OTP verification
-   *
-   * @param methodType The auth method type used for verification
-   * @param payload Contains the OTP code and auth method specific data
-   * @param userIdHash SHA256 hash of the user's identity key
-   */
   public async deleteShamirUser (
     methodType: string,
-    payload: any,
+    payload: AuthPayload,
     userIdHash: string
   ): Promise<{ success: boolean, message: string }> {
-    const res = await fetch(`${this.serverUrl}/share/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        methodType,
-        payload,
-        userIdHash
-      })
+    assertMethodType(methodType)
+    assertHexIdentifier(userIdHash, 'userIdHash')
+    const normalizedPayload = normalizeAuthPayload(methodType, payload)
+    return await this.transport.request('/share/delete', {
+      operation: 'delete-share-user',
+      body: { methodType, payload: normalizedPayload, userIdHash }
     })
-    return await res.json()
   }
 }

@@ -6,6 +6,17 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Harden CWI/WAB account continuity so overlay failures, malformed or ambiguous
+  UMP results, and snapshot-load failures cannot silently enter new-user
+  onboarding. Add an expiring WAB auth session, legacy-compatible WAB account
+  status inference, canonical E.164 phone identity, bounded KDF/snapshot
+  parsing, and fail-closed UMP renewal/broadcast behavior.
+- Replace WAB's endpoint-by-endpoint raw `fetch` calls with one typed transport
+  enforcing HTTPS (localhost excepted), timeouts, request/response limits,
+  redirect and ambient-credential protection, correlation IDs, and privacy-safe errors.
+  Wallet authentication, UMP, WAB, and snapshot events now support the SDK's
+  opt-in generic telemetry sink without reporting keys, snapshots, payloads,
+  OTPs, or Shamir shares.
 - Add automatically negotiated, in-memory planning for dependent `noSend` workloads. Capable
   storage providers reserve funding once, perform middle action planning and signing without
   persistence round trips, and atomically commit the complete workspace on `sendWith`. Existing

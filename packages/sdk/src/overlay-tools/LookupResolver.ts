@@ -3,6 +3,7 @@ import { Beef } from '../transaction/Beef.js'
 import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
 import * as Utils from '../primitives/utils.js'
 import { getOverlayHostReputationTracker, HostReputationTracker } from './HostReputationTracker.js'
+import { Telemetry, TelemetryConfig } from '../telemetry/Telemetry.js'
 
 const defaultFetch: typeof fetch =
   typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function'
@@ -91,6 +92,8 @@ export interface LookupQueryOptions {
    * alias; `waitForAllHosts` takes precedence when both are supplied.
    */
   waitForAllHosts?: boolean
+  /** Correlates resolver and downstream wallet telemetry without logging the query payload. */
+  correlationId?: string
 }
 
 /** Info supplied to onUnreachableHost callbacks. */
@@ -121,6 +124,24 @@ export interface LookupAnswerProgress {
   hostCount: number
   /** Number of hosts that have settled (success / fail / timeout). */
   completedHosts: number
+  /** Hosts that returned a structurally valid output-list response. */
+  successfulHosts: number
+  /** Successful hosts whose output list was empty. */
+  emptyHosts: number
+  /** Hosts that failed due to availability, timeout, or malformed responses. */
+  failedHosts: number
+  /** Hosts that rejected this query semantically (for example, HTTP 400). */
+  rejectedHosts: number
+  /** Hosts that returned a valid but non-aggregatable freeform response. */
+  freeformHosts: number
+  /** Correlation id used for privacy-safe distributed diagnostics. */
+  correlationId?: string
+}
+
+/** A lookup answer together with the host settlement evidence behind it. */
+export interface LookupResolution {
+  answer: LookupAnswer
+  progress: LookupAnswerProgress
 }
 
 /** Default SLAP trackers */
@@ -299,6 +320,8 @@ export interface LookupResolverConfig {
   cache?: CacheOptions
   /** Optional storage for host reputation data. */
   reputationStorage?: 'localStorage' | { get: (key: string) => string | null | undefined, set: (key: string, value: string) => void }
+  /** Optional privacy-bounded telemetry sink. Query payloads are never emitted. */
+  telemetry?: TelemetryConfig
 }
 
 /** Facilitates lookups to URLs that return answers. */
@@ -448,6 +471,7 @@ export default class LookupResolver {
   private readonly additionalHosts: Record<string, string[]>
   private readonly networkPreset: 'mainnet' | 'testnet' | 'local'
   private readonly hostReputation: HostReputationTracker
+  private readonly telemetry: Telemetry
 
   // ---- Caches / memoization ----
   private readonly hostsCache: Map<string, { hosts: string[], expiresAt: number }>
@@ -474,6 +498,7 @@ export default class LookupResolver {
     this.assertValidOverrideServices(hostOverrides)
     this.hostOverrides = hostOverrides
     this.additionalHosts = config.additionalHosts ?? {}
+    this.telemetry = new Telemetry(config.telemetry)
 
     const rs = config.reputationStorage
     if (rs === 'localStorage') {
@@ -508,6 +533,19 @@ export default class LookupResolver {
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
+    return (await this.queryDetailed(question, timeout, options)).answer
+  }
+
+  /**
+   * Performs a lookup and returns both its answer and the host settlement
+   * evidence required by security-sensitive consumers to distinguish an
+   * authoritative empty result from an availability failure.
+   */
+  async queryDetailed (
+    question: LookupQuestion,
+    timeout?: number,
+    options?: LookupQueryOptions
+  ): Promise<LookupResolution> {
     // A generic resolver cannot prove that a larger answer is fresher or more
     // authoritative. The blocking API therefore waits for every bounded host
     // settlement by default and merges the valid outputs. Callers that prefer
@@ -527,8 +565,24 @@ export default class LookupResolver {
       await iter.return?.(undefined)
     }
     return {
-      type: 'output-list',
-      outputs: last?.outputs ?? []
+      answer: {
+        type: 'output-list',
+        outputs: last?.outputs ?? []
+      },
+      progress: last ?? {
+        type: 'output-list',
+        outputs: [],
+        txIds: [],
+        isFinal: true,
+        hostCount: 0,
+        completedHosts: 0,
+        successfulHosts: 0,
+        emptyHosts: 0,
+        failedHosts: 0,
+        rejectedHosts: 0,
+        freeformHosts: 0,
+        ...(options?.correlationId !== undefined ? { correlationId: options.correlationId } : {})
+      }
     }
   }
 
@@ -623,10 +677,31 @@ export default class LookupResolver {
     const waitForAllHosts = options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false
 
     const hostCount = rankedHosts.length
+    const correlationId = options?.correlationId ??
+      (this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined)
+    const lookupStartedAt = Date.now()
     const outputsMap = new Map<string, { beef: number[], context?: number[], outputIndex: number }>()
     const txIds: string[] = []
     let completedHosts = 0
+    let successfulHosts = 0
+    let emptyHosts = 0
+    let failedHosts = 0
+    let rejectedHosts = 0
+    let freeformHosts = 0
     let firstResponseAt: number | null = null
+    let emittedFinal = false
+
+    this.telemetry.capture({
+      name: 'sdk.overlay.lookup.started',
+      component: 'sdk.lookup-resolver',
+      severity: 'debug',
+      correlationId,
+      attributes: {
+        service: question.service,
+        network: this.networkPreset,
+        hostCount
+      }
+    })
 
     type Event =
       | { kind: 'answer', answer: LookupAnswer }
@@ -645,11 +720,43 @@ export default class LookupResolver {
     }
 
     for (const host of rankedHosts) {
+      const hostStartedAt = Date.now()
       void this.lookupHostWithTracking(host, question, timeout)
         .then((answer) => {
-          if (isOutputListAnswer(answer) && answer.outputs.length > 0) push({ kind: 'answer', answer })
+          if (isOutputListAnswer(answer)) {
+            successfulHosts++
+            if (answer.outputs.length === 0) emptyHosts++
+            else push({ kind: 'answer', answer })
+            this.captureHostTelemetry(
+              question.service,
+              host,
+              answer.outputs.length === 0 ? 'empty' : 'success',
+              Date.now() - hostStartedAt,
+              correlationId
+            )
+          } else {
+            freeformHosts++
+            this.captureHostTelemetry(
+              question.service,
+              host,
+              'freeform',
+              Date.now() - hostStartedAt,
+              correlationId
+            )
+          }
         })
         .catch((err) => {
+          const semanticRejection = isSemanticLookupRejection(err)
+          if (semanticRejection) rejectedHosts++
+          else failedHosts++
+          this.captureHostTelemetry(
+            question.service,
+            host,
+            semanticRejection ? 'rejected' : 'failed',
+            Date.now() - hostStartedAt,
+            correlationId,
+            err
+          )
           if (!isSemanticLookupRejection(err) && typeof onUnreachableHost === 'function') {
             const notificationKey = `${question.service}\u0000${host}`
             const now = Date.now()
@@ -707,7 +814,13 @@ export default class LookupResolver {
       txIds: txIds.slice(),
       isFinal,
       hostCount,
-      completedHosts
+      completedHosts,
+      successfulHosts,
+      emptyHosts,
+      failedHosts,
+      rejectedHosts,
+      freeformHosts,
+      ...(correlationId !== undefined ? { correlationId } : {})
     })
 
     try {
@@ -760,10 +873,31 @@ export default class LookupResolver {
           // snapshot below is the first emission when waitForAllHosts is set.
         }
       }
-      yield snapshot(true)
+      const finalSnapshot = snapshot(true)
+      emittedFinal = true
+      this.captureLookupCompletedTelemetry(
+        question.service,
+        finalSnapshot,
+        Date.now() - lookupStartedAt
+      )
+      yield finalSnapshot
     } finally {
       if (graceTimer !== null) clearTimeout(graceTimer)
       if (softTimer !== null) clearTimeout(softTimer)
+      if (!emittedFinal) {
+        this.telemetry.capture({
+          name: 'sdk.overlay.lookup.cancelled',
+          component: 'sdk.lookup-resolver',
+          severity: 'debug',
+          correlationId,
+          attributes: {
+            service: question.service,
+            hostCount,
+            completedHosts,
+            durationMs: Date.now() - lookupStartedAt
+          }
+        })
+      }
     }
   }
 
@@ -1006,5 +1140,61 @@ export default class LookupResolver {
     const malformed = new Error('Malformed lookup response')
     this.hostReputation.recordFailure(host, malformed)
     throw malformed
+  }
+
+  private captureHostTelemetry (
+    service: string,
+    host: string,
+    outcome: 'success' | 'empty' | 'failed' | 'rejected' | 'freeform',
+    durationMs: number,
+    correlationId?: string,
+    error?: unknown
+  ): void {
+    let hostOrigin = 'invalid-host'
+    try {
+      hostOrigin = new URL(host).origin
+    } catch {
+      // Host input is consumer configuration; never forward paths or query data.
+    }
+    this.telemetry.capture({
+      name: 'sdk.overlay.lookup.host-settled',
+      component: 'sdk.lookup-resolver',
+      severity: outcome === 'failed' ? 'warn' : 'debug',
+      correlationId,
+      attributes: {
+        service,
+        hostOrigin,
+        outcome,
+        durationMs
+      },
+      error
+    })
+  }
+
+  private captureLookupCompletedTelemetry (
+    service: string,
+    progress: LookupAnswerProgress,
+    durationMs: number
+  ): void {
+    const degraded = progress.failedHosts > 0 || progress.rejectedHosts > 0 || progress.freeformHosts > 0
+    this.telemetry.capture({
+      name: 'sdk.overlay.lookup.completed',
+      component: 'sdk.lookup-resolver',
+      severity: degraded ? 'warn' : 'info',
+      correlationId: progress.correlationId,
+      attributes: {
+        service,
+        durationMs,
+        hostCount: progress.hostCount,
+        completedHosts: progress.completedHosts,
+        successfulHosts: progress.successfulHosts,
+        emptyHosts: progress.emptyHosts,
+        failedHosts: progress.failedHosts,
+        rejectedHosts: progress.rejectedHosts,
+        freeformHosts: progress.freeformHosts,
+        outputCount: progress.outputs.length,
+        isFinal: progress.isFinal
+      }
+    })
   }
 }
