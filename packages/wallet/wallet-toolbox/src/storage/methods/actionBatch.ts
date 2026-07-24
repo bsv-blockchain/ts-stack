@@ -48,7 +48,7 @@ export const ACTION_BATCH_LEASE_MS = 15 * 60 * 1000
 export const ACTION_BATCH_HARD_LIFETIME_MS = 60 * 60 * 1000
 const INITIAL_RESERVATION_LIMIT = 8
 const INITIAL_EXTRA_OUTPUTS = 3
-const MAX_RESERVED_HEADROOM = 64
+export const ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS = 64
 
 export function getActionBatchCapabilities (): StorageCapabilities {
   return {
@@ -399,9 +399,12 @@ export async function extendActionBatch (
   const basket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
   const alreadyReserved = await storage.findActionBatchOutputIds(batch.actionBatchId)
   const available = await availableManagedChange(storage, userId, basket.basketId, false)
+  if (!Number.isSafeInteger(args.requestedOutputs) || args.requestedOutputs < 0) {
+    throw new WERR_INVALID_PARAMETER('requestedOutputs', 'non-negative safe integer')
+  }
   const requestedCount = Math.min(
-    Math.max(0, args.requestedOutputs),
-    Math.max(0, MAX_RESERVED_HEADROOM - alreadyReserved.length)
+    args.requestedOutputs,
+    ACTION_BATCH_MAX_RESERVATION_EXTENSION_OUTPUTS
   )
   const funding = chooseReservationPool(
     available,

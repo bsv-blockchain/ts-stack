@@ -386,7 +386,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns array of output baskets matching args.
    */
   async findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
-    const r = await this.rpcCall<TableOutputBasket[]>('findOutputBaskets', [auth, args])
+    const r = await this.rpcCall<TableOutputBasket[]>('findOutputBasketsAuth', [auth, args])
     validateEntities(r)
     return r
   }

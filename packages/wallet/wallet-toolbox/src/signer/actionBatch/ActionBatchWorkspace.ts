@@ -55,6 +55,10 @@ function mergeUnique (values: string[]): string[] {
   return [...new Set(values)]
 }
 
+function nextGeometricTarget (value: number): number {
+  return Math.min(Number.MAX_SAFE_INTEGER, value * 2)
+}
+
 export function additionalFundingTarget (error: WERR_INSUFFICIENT_FUNDS): number {
   return error.moreSatoshisNeeded
 }
@@ -73,7 +77,7 @@ export function fundingRunwayExtension (
     ? availableConfirmedSatoshis / ewmaConfirmedSatoshis
     : Number.POSITIVE_INFINITY
   if (Math.min(predictedByInputs, predictedBySatoshis) >= 2) return undefined
-  const nextRunwayTarget = Math.min(64, runwayTarget * 2)
+  const nextRunwayTarget = nextGeometricTarget(runwayTarget)
   return {
     nextRunwayTarget,
     requestedOutputs: Math.max(
@@ -339,18 +343,20 @@ class ActionBatchWorkspace {
     if (missing.length > 0) await this.extend(1, 1, missing, args.isSignAction)
 
     let planned: ActionBatchPlannedAction | undefined
-    for (let attempt = 0; attempt < 5; attempt++) {
+    let requestedOutputs = 8
+    for (;;) {
       try {
         planned = await planAction(this.state, args)
         break
       } catch (error) {
-        if (!(error instanceof WERR_INSUFFICIENT_FUNDS) || attempt === 4) throw error
+        if (!(error instanceof WERR_INSUFFICIENT_FUNDS)) throw error
         // generateChangeSdk has already credited every unconsumed reservation
         // supplied by planFunding. Only the reported shortfall is additional;
         // requesting totalSatoshisNeeded here double-counts the held pool.
         const target = additionalFundingTarget(error)
-        const requested = Math.min(64, 2 ** (attempt + 3))
-        await this.extend(target, requested, [], args.isSignAction)
+        const added = await this.extend(target, requestedOutputs, [], args.isSignAction)
+        if (added.outputCount === 0 || added.satoshis === 0) throw error
+        requestedOutputs = nextGeometricTarget(requestedOutputs)
       }
     }
     if (planned == null) throw new WERR_INVALID_OPERATION('unable to plan action batch transaction')

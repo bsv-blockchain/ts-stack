@@ -11,13 +11,83 @@ import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-m
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
-import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
+import { WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
 import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
+
+const storageRpcMethods = new Set([
+  'abortAction',
+  'abortActionBatch',
+  'adminStats',
+  'beginActionBatch',
+  'commitActionBatch',
+  'createAction',
+  'destroy',
+  'extendActionBatch',
+  'findCertificatesAuth',
+  'findOrInsertSyncStateAuth',
+  'findOrInsertUser',
+  'findOutputBaskets',
+  'findOutputBasketsAuth',
+  'findOutputsAuth',
+  'findProvenTxReqs',
+  'getCapabilities',
+  'getSettings',
+  'getSyncChunk',
+  'insertCertificateAuth',
+  'internalizeAction',
+  'listActions',
+  'listCertificates',
+  'listOutputs',
+  'makeAvailable',
+  'migrate',
+  'prepareActionBatchCommit',
+  'processAction',
+  'processSyncChunk',
+  'relinquishCertificate',
+  'relinquishOutput',
+  'renewActionBatch',
+  'setActive',
+  'updateProvenTxReqWithNewProvenTx'
+])
+
+const authIdRpcMethods = new Set([
+  'abortAction',
+  'abortActionBatch',
+  'beginActionBatch',
+  'commitActionBatch',
+  'createAction',
+  'extendActionBatch',
+  'findCertificatesAuth',
+  'findOrInsertSyncStateAuth',
+  'findOutputBaskets',
+  'findOutputBasketsAuth',
+  'findOutputsAuth',
+  'insertCertificateAuth',
+  'internalizeAction',
+  'listActions',
+  'listCertificates',
+  'listOutputs',
+  'prepareActionBatchCommit',
+  'processAction',
+  'relinquishCertificate',
+  'relinquishOutput',
+  'renewActionBatch',
+  'setActive'
+])
+
+const actionBatchRpcMethods = new Set([
+  'abortActionBatch',
+  'beginActionBatch',
+  'commitActionBatch',
+  'extendActionBatch',
+  'prepareActionBatchCommit',
+  'renewActionBatch'
+])
 
 export interface WalletStorageServerOptions {
   port: number
@@ -159,11 +229,7 @@ export class StorageServer {
       '/action-batch/:batchId/blob/:digest',
       async (req: Request, res: Response) => {
         try {
-          const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
-          const auth: AuthId = {
-            identityKey: req.auth.identityKey,
-            userId: user.userId
-          }
+          const auth = await this.authenticatedAuth(req, true)
           const batchId = String(req.params.batchId)
           const digest = String(req.params.digest)
           const body = req.body
@@ -215,7 +281,17 @@ export class StorageServer {
           // if you wanted to handle certain methods on the server class itself
           // e.g. this['someServerMethod'](params)
           throw new TypeError('Server method dispatch not used in this approach.')
-        } else if (typeof (this.storage as any)[method] === 'function') {
+        } else if (storageRpcMethods.has(method)) {
+          const storageMethod = method === 'findOutputBaskets'
+            ? 'findOutputBasketsAuth'
+            : method
+          if (typeof (this.storage as any)[storageMethod] !== 'function') {
+            return sendRpc({
+              jsonrpc: '2.0',
+              error: { code: -32601, message: `Method not found: ${method}` },
+              id
+            }, 400)
+          }
           // method is on the walletStorage:
           // Find user
           switch (method) {
@@ -246,7 +322,11 @@ export class StorageServer {
               break
             }
             default:
-              await this.validateParam0(params, req)
+              if (authIdRpcMethods.has(method)) {
+                await this.bindAuthenticatedAuth(params, req, actionBatchRpcMethods.has(method))
+              } else {
+                await this.validateParam0(params, req)
+              }
               break
           }
 
@@ -263,7 +343,7 @@ export class StorageServer {
           }
 
           try {
-            const result = await (this.storage as any)[method](...(params || []))
+            const result = await (this.storage as any)[storageMethod](...(params || []))
 
             if (logger != null) {
               logger.groupEnd()
@@ -310,15 +390,43 @@ export class StorageServer {
     })
   }
 
-  private async validateParam0 (params: any, req: Request): Promise<void> {
-    if (typeof params[0] !== 'object' || !params[0]) {
-      params = [{}]
+  private async authenticatedAuth (req: Request, requireActive: boolean): Promise<AuthId> {
+    const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
+    const isActive = user.activeStorage === this.storage.getSettings().storageIdentityKey
+    if (requireActive && !isActive) {
+      throw new WERR_NOT_ACTIVE('action batch methods require the authenticated user\'s active storage provider')
     }
-    if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentiation') }
+    return {
+      identityKey: req.auth.identityKey,
+      userId: user.userId,
+      isActive
+    }
+  }
+
+  private async bindAuthenticatedAuth (params: any[], req: Request, requireActive: boolean): Promise<void> {
+    if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
+    const claimed = typeof params[0] === 'object' && params[0] != null ? params[0] : {}
+    if (claimed.identityKey != null && claimed.identityKey !== req.auth.identityKey) {
+      throw new WERR_UNAUTHORIZED('identityKey does not match authentication')
+    }
+    const auth = await this.authenticatedAuth(req, requireActive)
+    params[0] = {
+      ...claimed,
+      ...auth,
+      reqAuthUserId: auth.userId
+    }
+  }
+
+  private async validateParam0 (params: any[], req: Request): Promise<void> {
+    if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
+    if (typeof params[0] !== 'object' || !params[0]) {
+      params[0] = {}
+    }
+    if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentication') }
     // console.log('looking up user with identityKey:', req.auth.identityKey)
     const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
     params[0].reqAuthUserId = user.userId
-    if (params[0].identityKey) params[0].userId = user.userId
+    if (params[0].identityKey || params[0].userId != null) params[0].userId = user.userId
   }
 
   server: any

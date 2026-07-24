@@ -31,13 +31,13 @@ function noSendArgs (i: number) {
   }
 }
 
-async function mockChain (ctx: TestWalletNoSetup): Promise<void> {
+async function mockChain (ctx: TestWalletNoSetup, feeRate = 100): Promise<void> {
   _tu.mockPostServicesAsSuccess([ctx])
   jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight: async () => true } as any)
   jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
   // Production fee regime (the test fixture defaults to sat/kb 1, under which
   // dust inputs are never fee-negative and the funding loop is never stressed).
-  ctx.activeStorage.feeModel = { model: 'sat/kb', value: 100 }
+  ctx.activeStorage.feeModel = { model: 'sat/kb', value: feeRate }
 }
 
 /**
@@ -45,16 +45,20 @@ async function mockChain (ctx: TestWalletNoSetup): Promise<void> {
  * then let the wallet's own change generator fragment the pool via ordinary,
  * immediately-processed actions. Returns the resulting spendable change set.
  */
-async function fragmentWallet (ctx: TestWalletNoSetup): Promise<number[]> {
+async function fragmentWallet (
+  ctx: TestWalletNoSetup,
+  numberOfDesiredUTXOs = 144,
+  churnActions = 20
+): Promise<number[]> {
   const basket = verifyOne(await ctx.activeStorage.findOutputBaskets({
     partial: { userId: 1, name: 'default' }
   }))
   await ctx.activeStorage.updateOutputBasket(basket.basketId, {
-    numberOfDesiredUTXOs: 144,
+    numberOfDesiredUTXOs,
     minimumDesiredUTXOValue: 40
   })
 
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < churnActions; i++) {
     await ctx.wallet.createAction({
       description: `fragmentation churn ${i}`,
       outputs: [{ satoshis: 1, lockingScript: '7551', outputDescription: 'churn output' }],
@@ -144,6 +148,42 @@ describe('action batch funding on a fragmented wallet', () => {
         options: { sendWith: txids, acceptDelayedBroadcast: false }
       })
       expect(commit.sendWithResults).toHaveLength(16)
+    } finally {
+      await ctx.wallet.destroy()
+    }
+  })
+
+  test('un-chained workspace can consume more than 64 confirmed funding outputs', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('actionBatchBeyond64FundingInputs', 'auto')
+    try {
+      await mockChain(ctx, 1)
+      ctx.wallet.randomVals = [...randomVals]
+      const sats = await fragmentWallet(ctx, 256, 40)
+      expect(sats.length).toBeGreaterThan(80)
+
+      const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+      const extendedOutputCounts: number[] = []
+      const origExtend = ctx.storage.extendActionBatch.bind(ctx.storage)
+      jest.spyOn(ctx.storage, 'extendActionBatch').mockImplementation(async args => {
+        const result = await origExtend(args)
+        extendedOutputCounts.push(result.reservedOutputs.length)
+        return result
+      })
+
+      const txids: string[] = []
+      for (let i = 0; i < 80; i++) {
+        const result = await ctx.wallet.createAction(noSendArgs(i))
+        txids.push(result.txid!)
+      }
+      const begun = await begin.mock.results[0].value
+      expect(begun.reservedOutputs.length + extendedOutputCounts.reduce((sum, count) => sum + count, 0))
+        .toBeGreaterThan(64)
+
+      const commit = await ctx.wallet.createAction({
+        description: 'commit workspace beyond 64 confirmed inputs',
+        options: { sendWith: txids, acceptDelayedBroadcast: false }
+      })
+      expect(commit.sendWithResults).toHaveLength(txids.length)
     } finally {
       await ctx.wallet.destroy()
     }

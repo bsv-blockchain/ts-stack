@@ -185,6 +185,11 @@ describe('in-memory action batch workspace', () => {
       5_000,
       Array.from({ length: 8 }, () => ({ satoshis: 5_000 }))
     )).toBeUndefined()
+    expect(fundingRunwayExtension(64, 1, 100, [{ satoshis: 100 }])).toEqual({
+      nextRunwayTarget: 128,
+      requestedOutputs: 127,
+      targetSatoshis: 12_700
+    })
   })
 
   test('staged outputs and balance are coherent before commit', async () => {

@@ -21,6 +21,13 @@ attention to changes that materially alter behavior or extend functionality.
   the remaining shortfall, and EWMA runway extensions subtract unconsumed reserved funding without
   compounding after empty or partial responses. The regression runs 16 independent actions through
   both the in-process and authenticated remote-storage paths and commits the complete batch.
+- Bind remote batch authorization exclusively to the BRC-103 authenticated identity and its active
+  storage provider, ignoring caller-supplied user IDs and active-state claims. Restrict JSON-RPC
+  dispatch to the public remote-storage protocol so authenticated callers cannot invoke low-level
+  provider methods. Unauthenticated and cross-user batch-management regressions cover the boundary.
+- Replace the cumulative 64-output reservation ceiling with repeatable extensions bounded to 64
+  outputs per storage call. Workspaces and spend chains no longer have an action-count or confirmed
+  funding-input ceiling; an 80-action independent batch crosses the old boundary and commits.
 - Add a retained workload benchmark covering 1, 10, 50, and 250 actions across dependent,
   independent, mixed-input, and two-step signing models, four script sizes, and 25/100/250 ms
   storage latency. Run it with `pnpm --filter @bsv/wallet-toolbox bench:action-batch`.

@@ -52,15 +52,18 @@ input fee and enough value to recover an economically viable first change output
 so a low basket minimum cannot repeatedly select inputs that satisfy the nominal
 deficit but cost too much to use.
 
-Extensions retain at most 64 outputs of headroom and use the same exact,
-least-over, then largest-under selection policy as normal funding. Retry targets
-are incremental shortfalls: the planner credits the value and count of every
-unconsumed reserved output before asking for more. Confirmed inputs already used
-by staged transactions remain reserved until commit but are not credited as
-available funding. Proactive EWMA requests likewise subtract the unconsumed pool,
-initialize from the first complete sample, and increase geometric runway only
-when the provider fulfills both the requested count and value. Empty or partial
-extensions therefore cannot compound a target against unchanged wallet state.
+Extensions add at most 64 outputs per storage call, but there is no cumulative
+reservation, workspace-size, action-count, or spend-chain limit. Additional
+bounded calls continue for as long as the workspace needs confirmed funding.
+They use the same exact, least-over, then largest-under selection policy as
+normal funding. Retry targets are incremental shortfalls: the planner credits
+the value and count of every unconsumed reserved output before asking for more.
+Confirmed inputs already used by staged transactions remain reserved until
+commit but are not credited as available funding. Proactive EWMA requests
+likewise subtract the unconsumed pool, initialize from the first complete
+sample, and increase geometric runway only when the provider fulfills both the
+requested count and value. Empty or partial extensions therefore cannot
+compound a target against unchanged wallet state.
 Leases last 15 minutes with a 60-minute hard lifetime. Long-running workspaces
 renew near 80% of the lease; commit may atomically reacquire an expired reservation
 when no conflicting spend or reservation occurred. Commit, abort, wallet
@@ -80,6 +83,12 @@ workloads prepare a manifest, upload only missing blobs through authenticated ra
 binary requests, and commit by digest. Logical blobs are split at the provider's
 advertised limit (8 MiB by default), deduplicated by digest, and uploaded with at
 most four concurrent requests. Incomplete uploads expire with their batch.
+
+The remote server derives the batch user ID and active-storage state from the
+BRC-103 authenticated identity for every management call and binary upload.
+Caller-supplied user IDs or active-state claims are never authoritative, and the
+JSON-RPC dispatcher exposes only the public remote-storage protocol rather than
+low-level provider methods.
 
 ## Rollout and measurement roadmap
 

@@ -14,6 +14,7 @@ describe('StorageClient tests', () => {
   let server: { setup: TestWalletNoSetup, server: StorageServer }
 
   let client: TestWalletOnly
+  let attacker: TestWalletOnly
 
   let logSpy: jest.SpyInstance
   const capturedLogs: string[] = []
@@ -35,6 +36,11 @@ describe('StorageClient tests', () => {
       endpointUrl: 'http://localhost:8042',
       chain: server.setup.chain
     })
+    attacker = await _tu.createTestWalletWithStorageClient({
+      rootKeyHex: '2'.repeat(64),
+      endpointUrl: 'http://localhost:8042',
+      chain: server.setup.chain
+    })
   })
 
   afterAll(async () => {
@@ -43,6 +49,7 @@ describe('StorageClient tests', () => {
     logSpy.mockRestore()
     errorSpy.mockRestore()
 
+    await attacker.wallet.destroy()
     await client.wallet.destroy()
     await server.server.close()
     await server.setup.wallet.destroy()
@@ -117,6 +124,57 @@ describe('StorageClient tests', () => {
     expect(batch).toBeDefined()
     const blob = await server.setup.activeStorage.findActionBatchBlobRecord(batch!.actionBatchId, dependencyBeefDigest)
     expect(blob?.bytes).toHaveLength(bytes.length)
+    await client.storage.abortActionBatch(batchId)
+  })
+
+  test('1c batch RPCs are authenticated, user-bound, and restricted to the public protocol', async () => {
+    const batchId = `auth-bound-${Date.now()}`
+    await client.storage.beginActionBatch({ batchId, firstAction: Validation.validateCreateActionArgs({
+      description: 'protect victim action batch',
+      outputs: [{
+        satoshis: 1,
+        lockingScript: '51',
+        outputDescription: 'protected batch output'
+      }],
+      options: { noSend: true }
+    }) })
+
+    const unauthenticated = await fetch('http://localhost:8042', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'abortActionBatch',
+        params: [{ userId: server.setup.userId, isActive: true }, batchId],
+        id: 1
+      })
+    })
+    expect(unauthenticated.status).toBe(401)
+
+    const attackerStorage = attacker.storage.getActive() as StorageClient
+    await expect(Reflect.get(attackerStorage, 'rpcCall').call(
+      attackerStorage,
+      'findActionBatch',
+      [server.setup.userId, batchId]
+    )).rejects.toThrow('network error 400')
+
+    await expect(attackerStorage.abortActionBatch(
+      { userId: server.setup.userId, isActive: true } as any,
+      batchId
+    )).resolves.toEqual({ aborted: true })
+    expect((await server.setup.activeStorage.findActionBatch(server.setup.userId, batchId))?.status).toBe('active')
+
+    const attackerUser = await server.setup.activeStorage.findUserByIdentityKey(attacker.identityKey)
+    expect(attackerUser).toBeDefined()
+    await server.setup.activeStorage.updateUser(attackerUser!.userId, { activeStorage: 'inactive-storage' })
+    await expect(attackerStorage.abortActionBatch(
+      { userId: server.setup.userId, isActive: true } as any,
+      batchId
+    )).rejects.toThrow('authenticated user\'s active storage provider')
+    await server.setup.activeStorage.updateUser(attackerUser!.userId, {
+      activeStorage: server.setup.activeStorage.getSettings().storageIdentityKey
+    })
+
     await client.storage.abortActionBatch(batchId)
   })
 
