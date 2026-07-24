@@ -7,14 +7,14 @@ settings:
 overrides:
   '@babel/plugin-transform-modules-systemjs@<7.29.4': 7.29.4
   brace-expansion@<=5.0.7: 5.0.8
-  dompurify@<=3.4.10: 3.4.11
+  dompurify@<=3.4.11: 3.4.12
   engine.io@>=6.0.0 <6.6.7: 6.6.7
   fast-uri@>=3.0.0 <=3.1.3: 3.1.4
   fast-xml-builder@<=1.1.6: 1.1.7
   fast-xml-parser@>=5.9.3 <5.10.1: 5.10.1
   form-data@>=4.0.0 <4.0.6: 4.0.6
   http-proxy-middleware@>=2.0.0 <2.0.10: 2.0.10
-  immutable@>=5.0.0-beta.1 <5.1.8: 5.1.8
+  immutable@>=5.0.0-beta.1 <5.1.8: 5.1.9
   js-yaml@^3.0.0: 3.15.0
   js-yaml@^4.0.0: 4.3.0
   jsonpath-plus@<10.3.0: 10.4.0
@@ -6003,8 +6003,8 @@ packages:
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
 
-  dompurify@3.4.11:
-    resolution: {integrity: sha512-zhlUV12GsaRzMsf9q5M254YhA4+VuF0fG+QFqu6aYpoGlKtz+w8//jBcGVYBgQkR5GHjUomejY84AV+/uPbWdw==}
+  dompurify@3.4.12:
+    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
 
   dot-case@3.0.4:
     resolution: {integrity: sha512-Kv5nKlh6yRrdrGvxeJ2e5y2eRUpkUosIW4A2AS38zwSz27zu7ufDwQPi5Jhs3XAlGNetl3bmnGhQsMtkKJnj3w==}
@@ -7006,8 +7006,8 @@ packages:
   immer@9.0.21:
     resolution: {integrity: sha512-bc4NBHqOqSfRW7POMkHd51LvClaeMXpm8dx0e8oE2GORbq5aRK7Bxl4FyzVLdGtLmvLKL7BTDBG5ACQm4HWjTA==}
 
-  immutable@5.1.8:
-    resolution: {integrity: sha512-TM5YqrGeTsVIPPpILzeqZ8D2Zc2TvNgSDi88zPF2a4cyqQdWV/wVWBDRDbNzzrLeRWScrFcOX9lW2iX6GOtUDw==}
+  immutable@5.1.9:
+    resolution: {integrity: sha512-m8nVez3rwrgmWxtLMt1ZYXB2Lv7OKYn/disyxAlSDYAlKSlFoPPfIAmAM/M5xqL4m4C/wAPw7S2/CNaUii1Hxg==}
 
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
@@ -16449,7 +16449,7 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
-  dompurify@3.4.11:
+  dompurify@3.4.12:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -16799,6 +16799,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  eslint-plugin-es@4.1.0(eslint@10.5.0):
+    dependencies:
+      eslint: 10.5.0
+      eslint-utils: 2.1.0
+      regexpp: 3.2.0
+
   eslint-plugin-es@4.1.0(eslint@8.57.1):
     dependencies:
       eslint: 8.57.1
@@ -16865,8 +16871,8 @@ snapshots:
     dependencies:
       builtins: 5.1.0
       eslint: 10.5.0
-      eslint-plugin-es: 4.1.0(eslint@8.57.1)
-      eslint-utils: 3.0.0(eslint@8.57.1)
+      eslint-plugin-es: 4.1.0(eslint@10.5.0)
+      eslint-utils: 3.0.0(eslint@10.5.0)
       ignore: 5.3.2
       is-core-module: 2.16.2
       minimatch: 3.1.5
@@ -16957,6 +16963,11 @@ snapshots:
   eslint-utils@2.1.0:
     dependencies:
       eslint-visitor-keys: 1.3.0
+
+  eslint-utils@3.0.0(eslint@10.5.0):
+    dependencies:
+      eslint: 10.5.0
+      eslint-visitor-keys: 2.1.0
 
   eslint-utils@3.0.0(eslint@8.57.1):
     dependencies:
@@ -17896,7 +17907,7 @@ snapshots:
 
   immer@9.0.21: {}
 
-  immutable@5.1.8:
+  immutable@5.1.9:
     optional: true
 
   import-fresh@3.3.1:
@@ -18164,7 +18175,7 @@ snapshots:
 
   isomorphic-dompurify@2.36.0(@noble/hashes@2.2.0):
     dependencies:
-      dompurify: 3.4.11
+      dompurify: 3.4.12
       jsdom: 28.1.0(@noble/hashes@2.2.0)
     transitivePeerDependencies:
       - '@noble/hashes'
@@ -19321,7 +19332,7 @@ snapshots:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.20
-      dompurify: 3.4.11
+      dompurify: 3.4.12
       es-toolkit: 1.47.0
       katex: 0.16.47
       khroma: 2.1.0
@@ -21078,7 +21089,7 @@ snapshots:
   sass@1.99.0:
     dependencies:
       chokidar: 4.0.3
-      immutable: 5.1.8
+      immutable: 5.1.9
       source-map-js: 1.2.1
     optionalDependencies:
       '@parcel/watcher': 2.5.6
