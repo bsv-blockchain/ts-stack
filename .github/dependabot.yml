@@ -9,6 +9,7 @@ multi-ecosystem-groups:
       interval: monthly
       time: '06:00'
       timezone: America/Los_Angeles
+    open-pull-requests-limit: 1
     labels:
       - dependencies
     commit-message:
@@ -22,7 +23,6 @@ updates:
     patterns:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
-    open-pull-requests-limit: 1
     rebase-strategy: auto
     ignore:
       # First-party workspace versions are reconciled after publishing by
@@ -52,7 +52,6 @@ updates:
     patterns:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
-    open-pull-requests-limit: 1
     rebase-strategy: auto
     ignore:
       - dependency-name: '@bsv/*'
@@ -69,5 +68,4 @@ updates:
     patterns:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
-    open-pull-requests-limit: 1
     rebase-strategy: auto
