@@ -19,6 +19,7 @@ jobs:
       pull-requests: read
     outputs:
       filter: ${{ steps.scope.outputs.filter }}
+      standard-packages: ${{ steps.scope.outputs.standard-packages }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -75,10 +76,15 @@ jobs:
 
           echo "filter=$FILTER" >> "$GITHUB_OUTPUT"
           if [ -n "$FILTER" ]; then
-            AFFECTED=$(pnpm -r --filter "$FILTER" list --depth -1 --json | jq -r '.[].name')
+            PROJECTS=$(pnpm -r --filter "$FILTER" list --depth -1 --json)
           else
-            AFFECTED=$(pnpm -r list --depth -1 --json | jq -r '.[].name')
+            PROJECTS=$(pnpm -r list --depth -1 --json)
           fi
+          AFFECTED=$(jq -r '.[].name' <<<"$PROJECTS")
+          printf '%s\n' "$PROJECTS" > .ci-affected-packages.json
+          STANDARD_PACKAGES=$(node scripts/run-ci-tests.mjs \
+            --projects-json .ci-affected-packages.json)
+          echo "standard-packages=$STANDARD_PACKAGES" >> "$GITHUB_OUTPUT"
 
           for entry in \
             "sdk:@bsv/sdk" \
@@ -144,7 +150,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build allowlisted native test dependencies
+        run: pnpm rebuild better-sqlite3 sqlite3
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -152,9 +160,25 @@ jobs:
       - name: Restore build outputs
         run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Run affected suites without a coverage script
-        run: node scripts/run-ci-tests.mjs --scope-filter "$SCOPE_FILTER"
         env:
-          SCOPE_FILTER: ${{ needs.prepare.outputs.filter }}
+          STANDARD_PACKAGES: ${{ needs.prepare.outputs.standard-packages }}
+        run: |
+          packages=()
+          while IFS= read -r package; do
+            packages+=("$package")
+          done < <(jq -r '.[]' <<<"$STANDARD_PACKAGES")
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "No affected packages require the non-coverage test lane."
+            exit 0
+          fi
+
+          filters=()
+          echo "Non-coverage test lane:"
+          for package in "${packages[@]}"; do
+            echo "  - $package"
+            filters+=(--filter "$package")
+          done
+          pnpm -r "${filters[@]}" run test
 
   coverage-sdk:
     name: Coverage / SDK
@@ -170,7 +194,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -204,7 +228,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -242,7 +266,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build allowlisted native test dependencies
+        run: pnpm rebuild better-sqlite3 sqlite3
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -251,7 +277,7 @@ jobs:
       - name: Generate wallet-toolbox coverage shard
         run: |
           pnpm --filter @bsv/wallet-toolbox exec jest \
-            --testPathIgnorePatterns='man.test.ts|bench.test.ts' \
+            --testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts' \
             --coverage \
             --shard=${{ matrix.shard }}/3 \
             --coverageDirectory=coverage/shard-${{ matrix.shard }}
@@ -264,6 +290,49 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-wallet-${{ matrix.shard }}
+          path: .coverage-output/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  coverage-wallet-monitor:
+    name: Coverage / wallet-toolbox monitor
+    if: needs.prepare.outputs.wallet == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build allowlisted native test dependencies
+        run: pnpm rebuild better-sqlite3 sqlite3
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Generate wallet-toolbox monitor coverage
+        run: |
+          pnpm --filter @bsv/wallet-toolbox exec jest \
+            test/monitor/Monitor.test.ts \
+            --coverage \
+            --coverageDirectory=coverage/monitor \
+            --runInBand
+          node scripts/normalize-lcov-paths.mjs \
+            packages/wallet/wallet-toolbox/coverage/monitor/lcov.info \
+            packages/wallet/wallet-toolbox
+          mkdir -p .coverage-output
+          cp packages/wallet/wallet-toolbox/coverage/monitor/lcov.info \
+            .coverage-output/wallet-monitor.lcov.info
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-wallet-monitor
           path: .coverage-output/
           if-no-files-found: error
           include-hidden-files: true
@@ -283,7 +352,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build allowlisted browser test dependency
+        run: pnpm rebuild esbuild
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -318,7 +389,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build allowlisted native test dependencies
+        run: pnpm rebuild better-sqlite3 sqlite3 esbuild
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -377,12 +450,14 @@ jobs:
       (needs.coverage-sdk.result == 'success' || needs.coverage-sdk.result == 'skipped') &&
       (needs.coverage-did.result == 'success' || needs.coverage-did.result == 'skipped') &&
       (needs.coverage-wallet.result == 'success' || needs.coverage-wallet.result == 'skipped') &&
+      (needs.coverage-wallet-monitor.result == 'success' || needs.coverage-wallet-monitor.result == 'skipped') &&
       (needs.coverage-verifast.result == 'success' || needs.coverage-verifast.result == 'skipped')
     needs:
       - prepare
       - coverage-sdk
       - coverage-did
       - coverage-wallet
+      - coverage-wallet-monitor
       - coverage-verifast
       - coverage-other
     runs-on: ubuntu-latest

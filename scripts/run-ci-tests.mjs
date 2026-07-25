@@ -1,38 +1,23 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const args = process.argv.slice(2)
-let scopeFilter = ''
-let dryRun = false
+let projectsJson = ''
 
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index]
-  if (arg === '--scope-filter') {
-    scopeFilter = args[index + 1] ?? ''
+  if (arg === '--projects-json') {
+    projectsJson = args[index + 1] ?? ''
     index += 1
-  } else if (arg === '--dry-run') {
-    dryRun = true
   } else {
     throw new Error(`Unknown argument: ${arg}`)
   }
 }
 
-const listArgs = ['-r']
-if (scopeFilter !== '') {
-  listArgs.push('--filter', scopeFilter)
-}
-listArgs.push('list', '--depth', '-1', '--json')
-
-const listed = spawnSync('pnpm', listArgs, {
-  encoding: 'utf8',
-  stdio: ['ignore', 'pipe', 'inherit']
-})
-
-if (listed.status !== 0) {
-  process.exit(listed.status ?? 1)
+if (projectsJson === '') {
+  throw new Error('--projects-json is required')
 }
 
 const dedicatedSuites = new Set([
@@ -40,7 +25,7 @@ const dedicatedSuites = new Set([
   '@bsv/conformance-runner-ts'
 ])
 
-const projects = JSON.parse(listed.stdout)
+const projects = JSON.parse(readFileSync(resolve(projectsJson), 'utf8'))
 const selected = projects
   .map(project => {
     const manifest = JSON.parse(
@@ -61,28 +46,4 @@ const selected = projects
   )
   .sort((left, right) => left.name.localeCompare(right.name))
 
-if (selected.length === 0) {
-  console.log('No affected packages require the non-coverage test lane.')
-  process.exit(0)
-}
-
-console.log('Non-coverage test lane:')
-for (const project of selected) {
-  console.log(`  - ${project.name}`)
-}
-
-if (dryRun) {
-  process.exit(0)
-}
-
-const testArgs = ['-r']
-for (const project of selected) {
-  testArgs.push('--filter', project.name)
-}
-testArgs.push('run', 'test')
-
-const tested = spawnSync('pnpm', testArgs, {
-  stdio: 'inherit'
-})
-
-process.exit(tested.status ?? 1)
+process.stdout.write(JSON.stringify(selected.map(project => project.name)))

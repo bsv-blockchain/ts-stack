@@ -21,7 +21,7 @@ jobs:
           node-version: '24'
           cache: pnpm
       - name: Install deps
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build TS SDK
         run: pnpm --filter @bsv/sdk run build
       - name: Create reports directory
