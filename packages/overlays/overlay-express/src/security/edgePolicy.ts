@@ -165,7 +165,10 @@ function resolveCorsPolicy (
       ? prefixedMode
       : process.env.CORS_MODE ?? ''
   ).trim().toLowerCase()
-  const mode = rawMode === '' ? (origins.length > 0 ? 'allowlist' : defaultMode) : rawMode
+  let mode: string = rawMode
+  if (mode === '') {
+    mode = origins.length > 0 ? 'allowlist' : defaultMode
+  }
   if (!['public', 'allowlist', 'disabled'].includes(mode)) {
     throw new Error(`${environmentPrefix}_CORS_MODE must be public, allowlist, or disabled`)
   }
@@ -219,7 +222,6 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
   if (policy.mode === 'public' && options.allowCredentials === true) {
     throw new Error('Public CORS mode cannot be combined with cookie credentials')
   }
-  const allowedOrigins = new Set(policy.origins)
   const allowedHeaders = readCsv(
     `${options.environmentPrefix}_CORS_ALLOWED_HEADERS`,
     options.allowedHeaders ?? DEFAULT_ALLOWED_HEADERS
@@ -268,7 +270,12 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
       return
     }
 
-    if (policy.mode === 'disabled' || !allowedOrigins.has(normalizedOrigin)) {
+    // Select the response value from trusted configuration, never from the
+    // request header. The normalized request origin is only a lookup key.
+    const configuredOrigin = policy.origins.find(
+      allowedOrigin => allowedOrigin === normalizedOrigin
+    )
+    if (policy.mode === 'disabled' || configuredOrigin == null) {
       res.status(403).json({
         status: 'error',
         code: 'ERR_ORIGIN_NOT_ALLOWED',
@@ -278,7 +285,7 @@ export function corsPolicy (options: CorsPolicyOptions): RequestHandler {
     }
 
     appendVary(res, 'Origin')
-    res.setHeader('Access-Control-Allow-Origin', normalizedOrigin)
+    res.setHeader('Access-Control-Allow-Origin', configuredOrigin)
     res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
     res.setHeader('Access-Control-Allow-Headers', allowedHeaders.join(', '))
     res.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(', '))

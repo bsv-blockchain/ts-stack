@@ -52,6 +52,22 @@ export type StreamWriteResult =
   | { status: 'stored', byteLength: number, hash: number[] }
   | { status: 'exists' | 'invalid' | 'too_large' | 'size_mismatch' }
 
+function validateStreamLimits(
+  expectedBytes: number,
+  maximumBytes: number
+): StreamWriteResult | undefined {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
+    return { status: 'size_mismatch' }
+  }
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0) {
+    return { status: 'size_mismatch' }
+  }
+  if (expectedBytes > maximumBytes) {
+    return { status: 'too_large' }
+  }
+  return undefined
+}
+
 /**
  * Streams an object into a same-filesystem temporary file, hashes it
  * incrementally, and atomically links it into the public CDN directory.
@@ -67,15 +83,8 @@ export async function writeCdnObjectStreamExclusive(
 ): Promise<StreamWriteResult> {
   const filePath = resolveCdnObjectPath(objectID, root)
   if (filePath === null) return { status: 'invalid' }
-  if (
-    !Number.isSafeInteger(expectedBytes) ||
-    expectedBytes < 0 ||
-    !Number.isSafeInteger(maximumBytes) ||
-    maximumBytes < 1 ||
-    expectedBytes > maximumBytes
-  ) {
-    return { status: expectedBytes > maximumBytes ? 'too_large' : 'size_mismatch' }
-  }
+  const invalidLimits = validateStreamLimits(expectedBytes, maximumBytes)
+  if (invalidLimits != null) return invalidLimits
 
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
   try {
