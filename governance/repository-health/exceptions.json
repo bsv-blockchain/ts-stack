@@ -1,21 +1,22 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-24",
+  "lastReviewed": "2026-07-25",
   "exceptions": [
     {
       "id": "brace-expansion-jest-override",
       "category": "override",
       "target": "pnpm-workspace.yaml overrides brace-expansion@<=5.0.7",
       "owner": "ts-stack-maintainers",
-      "reason": "Jest 30 still resolves vulnerable brace-expansion major lines through minimatch, so the workspace temporarily forces the patched compatible release.",
+      "reason": "Jest 30.4.2 still constrains its reporting and coverage paths to minimatch releases that require brace-expansion 1.x/2.x, while GHSA-mh99-v99m-4gvg is fixed only in brace-expansion 5.0.8.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
+        "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
-      "created": "2026-07-24",
-      "reviewBy": "2026-08-24",
-      "removeWhen": "Remove after the supported Jest dependency graph resolves only patched brace-expansion versions without an override."
+      "created": "2026-07-25",
+      "reviewBy": "2026-08-25",
+      "removeWhen": "Remove after the supported Jest dependency graph adopts minimatch 10.2.5 or newer and natively resolves brace-expansion 5.0.8 or newer."
     },
     {
       "id": "conformance-intended-skips",

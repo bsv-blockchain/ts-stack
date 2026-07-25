@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: "Dependency and Release Policy"
 kind: reference
 version: "1.0.0"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -27,11 +27,20 @@ lint errors fail the build. Existing warnings remain visible and are reduced
 progressively; a package may opt into stricter warning enforcement once its
 warning baseline reaches zero.
 
+TypeScript 7 is not yet the supported compiler because the current `ts-jest`
+29.4 line explicitly accepts TypeScript versions below 7. TypeScript 6.0.3 is
+therefore the sole intentional direct-major hold. The test-harness
+standardization wave must remove or upgrade that peer constraint, run the
+workspace-wide TypeScript 7 migration, and only then change this baseline;
+forcing the compiler through an incompatible peer range is not permitted.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
 
 - dependency build scripts are denied unless explicitly listed in `allowBuilds`;
+- peer dependencies must be declared explicitly instead of being installed
+  implicitly (including unused optional tooling peers);
 - ordinary releases must age for 24 hours before installation;
 - first-party `@bsv/*` packages are exempt so coordinated releases can complete;
 - registry provenance downgrades are rejected for recent packages; and
@@ -48,12 +57,14 @@ type declarations, test runners, test clients, linters, documentation
 generators, or TypeScript build tools in `dependencies`. This prevents
 development-only advisory trees from leaking into clean consumer installs.
 
-The workspace carries one audited dependency override. Jest 30 still reaches
-unpatched `brace-expansion` 1.x/2.x releases through its current `glob` and
-`test-exclude` graph, so those versions are raised to 5.0.8. This final
-substitution is verified by every Jest suite and is removed when Jest accepts
-the patched major. Any future temporary override must likewise name its upstream
-removal condition in `pnpm-workspace.yaml` and verify the affected path.
+The workspace carries one audited dependency override. Jest 30.4.2 still
+constrains its reporting and coverage graph to minimatch releases that require
+`brace-expansion` 1.x/2.x, while GHSA-mh99-v99m-4gvg is fixed only in
+`brace-expansion` 5.0.8. The workspace therefore substitutes 5.0.8, verifies
+that substitution across the full Jest suite, and tracks removal when Jest
+adopts minimatch 10.2.5 or newer. Any future temporary override must likewise
+name an owner, evidence, review date, and upstream removal condition in the
+repository-health exception registry, and must verify the affected path.
 
 The former AsyncAPI generator override was eliminated by replacing that
 dependency with a deterministic
@@ -61,20 +72,23 @@ renderer built on the maintained `yaml` parser. This removes the legacy parser,
 `brace-expansion`, and `jsonpath-plus` chains instead of masking them with
 transitive substitutions.
 
-## Known upstream advisory holds
+## Advisory disposition
 
-The verified 2026-07-24 audit contains no high or critical findings. The
-remaining findings are not runtime paths in published BSV libraries:
+The verified 2026-07-25 frozen dependency graph has no known audit findings or
+accepted advisory holds after applying the single tracked Jest compatibility
+substitution. All other advisory paths were removed at their causes:
 
-| Scope | Severity | Reason for hold |
-| --- | --- | --- |
-| Jest notifier: `uuid` 8 | Moderate | Test notification path only; no caller supplies a UUID output buffer. |
-| Docs site: React Router 6 | Moderate | Static, repository-authored site. Router 7 is incompatible with the current SSG adapter and currently introduces a high-severity React Server Components advisory into the audit. |
-| `ts-jest` build helper: `esbuild` | Low | Development dependency; the advisory requires a Windows development server, which this workflow does not run. |
-| Express: `body-parser` 2.2 | Low | The paymail service does not configure an invalid body-size limit. |
+- the unused message-box `webpack-dev-server` dependency and its vulnerable
+  `uuid` path were deleted;
+- package builds use the maintained `esbuild` release directly instead of
+  inheriting the older release pinned by `tsup`;
+- the documentation site uses React Router 8 and a repository-owned static
+  renderer instead of the incompatible React Router 6 SSG adapter; and
+- lockfile normalization selects the patched Express/body-parser graph.
 
-Do not hide these with broad overrides. Re-evaluate them when Jest, `ts-jest`,
-Express, or the docs SSG adapter publishes a compatible fix.
+Do not hide a future advisory with a broad override or dismissal. Remove an
+unused dependency, upgrade or replace the owning tool, and verify the frozen
+consumer and development graphs first.
 
 ## Update and release flow
 

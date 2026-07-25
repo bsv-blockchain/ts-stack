@@ -22,7 +22,7 @@
     "dev": "node dist/index.js"
   },
   "dependencies": {
-    "@clack/prompts": "^0.7.0"
+    "@clack/prompts": "^1.7.0"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",

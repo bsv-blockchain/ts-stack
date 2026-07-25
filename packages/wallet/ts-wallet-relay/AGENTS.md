@@ -236,7 +236,7 @@ export default async function handler(req, res) {
 - **`jest`** ^30.3.0 — Test runner
 - **`ts-jest`** ^29.4.6 — TypeScript support
 - **`typescript`** ^5.4.0 — Compiler
-- **`tsup`** ^8.0.0 — Bundler
+- **`esbuild`** ^0.28.1 — Direct ESM/CJS bundler used by `build.mjs`
 
 ### Other ts-stack packages
 - **`@bsv/sdk`** — Cryptography, ProtoWallet, PrivateKey types
