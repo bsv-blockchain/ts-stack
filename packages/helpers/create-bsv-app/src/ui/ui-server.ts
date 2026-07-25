@@ -51,8 +51,12 @@ async function handleGenerate (
     sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
     resolveDone(result)
   } catch (err) {
-    const status = err instanceof ConfigError ? 400 : 500
-    sendJson(res, status, { error: err instanceof Error ? err.message : String(err) })
+    if (err instanceof ConfigError) {
+      sendJson(res, 400, { error: 'Invalid project configuration.' })
+      return
+    }
+    console.error('Project generation failed:', err)
+    sendJson(res, 500, { error: 'Project generation failed.' })
   }
 }
 
@@ -92,7 +96,12 @@ async function handlePlan (
     const files = planPaths(config, caps).map(p => ({ path: p, status: existsSync(join(targetDir, p)) ? 'edit' as const : 'new' as const }))
     sendJson(res, 200, { files })
   } catch (err) {
-    sendJson(res, 200, { files: [], error: err instanceof Error ? err.message : String(err) })
+    if (err instanceof ConfigError) {
+      sendJson(res, 200, { files: [], error: 'Invalid project configuration.' })
+      return
+    }
+    console.error('Project plan generation failed:', err)
+    sendJson(res, 200, { files: [], error: 'Unable to generate project plan.' })
   }
 }
 
