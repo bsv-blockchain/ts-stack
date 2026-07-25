@@ -171,12 +171,29 @@ Package-level docs start at [`docs/packages/index.md`](docs/packages/index.md). 
 
 ## Quality Gates
 
-The main CI workflow builds, lints, tests, generates SDK coverage, uploads Codecov coverage, and runs SonarCloud. The workflow expects the organization secrets already used by the BSV repositories:
+The main CI workflow performs one frozen install and full package build, then
+runs non-coverage tests and the SDK, DID, wallet-toolbox, VeriFast, and other
+affected coverage suites in parallel. Wallet-toolbox coverage is split into
+three deterministic Jest shards. Coverage artifacts are normalized and
+aggregated before one Codecov upload and the optional SonarCloud scan. Packages
+with a `test:coverage` script execute their assertions in a coverage lane;
+packages without one are selected dynamically by
+[`scripts/run-ci-tests.mjs`](scripts/run-ci-tests.mjs), so each affected suite
+runs once without losing assertions or coverage.
+
+The docs build, infrastructure matrix, dependency review, structural
+conformance runner, and dedicated TypeScript conformance runner remain
+independent gates. Superseded runs on the same PR are canceled so runner
+capacity is spent on the newest commit. The workflow expects the organization
+secrets already used by the BSV repositories:
 
 - `CODECOV_TOKEN`
 - `SONAR_TOKEN`
 
-Coverage upload is currently based on the SDK LCOV report and normalized to repo-root paths by [`scripts/normalize-lcov-paths.mjs`](scripts/normalize-lcov-paths.mjs). Root configuration lives in [`codecov.yml`](codecov.yml) and [`sonar-project.properties`](sonar-project.properties).
+Every LCOV report is normalized to repo-root paths by
+[`scripts/normalize-lcov-paths.mjs`](scripts/normalize-lcov-paths.mjs). Root
+configuration lives in [`codecov.yml`](codecov.yml) and
+[`sonar-project.properties`](sonar-project.properties).
 
 ## Releases
 
