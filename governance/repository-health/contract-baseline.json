@@ -1,0 +1,979 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-25",
+  "findingCount": 243,
+  "findings": [
+    {
+      "id": ".::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": ".::missing-script::format:check",
+      "message": "Profile monorepo requires script format:check"
+    },
+    {
+      "id": "conformance/runner::missing-readme",
+      "message": "Profile requires a README"
+    },
+    {
+      "id": "conformance/runner::missing-script::format:check",
+      "message": "Profile conformance-runner requires script format:check"
+    },
+    {
+      "id": "conformance/runner::missing-script::lint",
+      "message": "Profile conformance-runner requires script lint"
+    },
+    {
+      "id": "conformance/runner/ts::missing-script::format:check",
+      "message": "Profile conformance-runner-ts requires script format:check"
+    },
+    {
+      "id": "conformance/runner/ts::missing-script::lint",
+      "message": "Profile conformance-runner-ts requires script lint"
+    },
+    {
+      "id": "conformance/runner/ts::missing-script::typecheck",
+      "message": "Profile conformance-runner-ts requires script typecheck"
+    },
+    {
+      "id": "docs-site::missing-readme",
+      "message": "Profile requires a README"
+    },
+    {
+      "id": "docs-site::missing-script::format:check",
+      "message": "Profile documentation-site requires script format:check"
+    },
+    {
+      "id": "docs-site::missing-script::lint",
+      "message": "Profile documentation-site requires script lint"
+    },
+    {
+      "id": "docs-site::missing-script::test",
+      "message": "Profile documentation-site requires script test"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-exports",
+      "message": "Profile requires package exports"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-script::lint",
+      "message": "Profile node-library requires script lint"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-script::test:coverage",
+      "message": "Profile node-library requires script test:coverage"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/amountinator::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::disabled-quality-script::lint:ci-disabled",
+      "message": "Remove disabled quality escape hatch lint:ci-disabled"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::disabled-quality-script::test:coverage-disabled",
+      "message": "Remove disabled quality escape hatch test:coverage-disabled"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-script::test:coverage",
+      "message": "Profile node-library requires script test:coverage"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/bsv-wallet-helper::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/create-bsv-app::missing-script::format:check",
+      "message": "Profile cli requires script format:check"
+    },
+    {
+      "id": "packages/helpers/create-bsv-app::missing-script::pack:check",
+      "message": "Profile cli requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/create-bsv-app::missing-script::test:coverage",
+      "message": "Profile cli requires script test:coverage"
+    },
+    {
+      "id": "packages/helpers/create-bsv-app::missing-script::typecheck",
+      "message": "Profile cli requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/create-bsv-app::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-exports",
+      "message": "Profile requires package exports"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-script::format:check",
+      "message": "Profile browser-library requires script format:check"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-script::pack:check",
+      "message": "Profile browser-library requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-script::test:browser",
+      "message": "Profile browser-library requires script test:browser"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-script::typecheck",
+      "message": "Profile browser-library requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/did-client::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/did::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/helpers/did::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/did::missing-script::format:check",
+      "message": "Profile dual-runtime-library requires script format:check"
+    },
+    {
+      "id": "packages/helpers/did::missing-script::pack:check",
+      "message": "Profile dual-runtime-library requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/did::missing-script::typecheck",
+      "message": "Profile dual-runtime-library requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/did::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-script::format:check",
+      "message": "Profile cli requires script format:check"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-script::lint",
+      "message": "Profile cli requires script lint"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-script::pack:check",
+      "message": "Profile cli requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-script::test:coverage",
+      "message": "Profile cli requires script test:coverage"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-script::typecheck",
+      "message": "Profile cli requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/fund-wallet::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/simple::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/simple::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/helpers/simple::missing-script::format:check",
+      "message": "Profile browser-library requires script format:check"
+    },
+    {
+      "id": "packages/helpers/simple::missing-script::pack:check",
+      "message": "Profile browser-library requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/simple::missing-script::test:browser",
+      "message": "Profile browser-library requires script test:browser"
+    },
+    {
+      "id": "packages/helpers/simple::missing-script::typecheck",
+      "message": "Profile browser-library requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/simple::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/helpers/ts-templates::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/helpers/ts-templates::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/helpers/ts-templates::missing-script::format:check",
+      "message": "Profile dual-runtime-library requires script format:check"
+    },
+    {
+      "id": "packages/helpers/ts-templates::missing-script::pack:check",
+      "message": "Profile dual-runtime-library requires script pack:check"
+    },
+    {
+      "id": "packages/helpers/ts-templates::missing-script::typecheck",
+      "message": "Profile dual-runtime-library requires script typecheck"
+    },
+    {
+      "id": "packages/helpers/ts-templates::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/messaging/authsocket-client::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/messaging/authsocket-client::missing-script::format:check",
+      "message": "Profile browser-library requires script format:check"
+    },
+    {
+      "id": "packages/messaging/authsocket-client::missing-script::pack:check",
+      "message": "Profile browser-library requires script pack:check"
+    },
+    {
+      "id": "packages/messaging/authsocket-client::missing-script::test:browser",
+      "message": "Profile browser-library requires script test:browser"
+    },
+    {
+      "id": "packages/messaging/authsocket-client::missing-script::typecheck",
+      "message": "Profile browser-library requires script typecheck"
+    },
+    {
+      "id": "packages/messaging/authsocket-client::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/messaging/authsocket::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/messaging/authsocket::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/messaging/authsocket::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/messaging/authsocket::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/messaging/authsocket::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/messaging/message-box-client::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/messaging/message-box-client::missing-script::format:check",
+      "message": "Profile dual-runtime-library requires script format:check"
+    },
+    {
+      "id": "packages/messaging/message-box-client::missing-script::pack:check",
+      "message": "Profile dual-runtime-library requires script pack:check"
+    },
+    {
+      "id": "packages/messaging/message-box-client::missing-script::typecheck",
+      "message": "Profile dual-runtime-library requires script typecheck"
+    },
+    {
+      "id": "packages/messaging/message-box-client::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/messaging/ts-paymail::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/messaging/ts-paymail::missing-script::format:check",
+      "message": "Profile dual-runtime-library requires script format:check"
+    },
+    {
+      "id": "packages/messaging/ts-paymail::missing-script::pack:check",
+      "message": "Profile dual-runtime-library requires script pack:check"
+    },
+    {
+      "id": "packages/messaging/ts-paymail::missing-script::typecheck",
+      "message": "Profile dual-runtime-library requires script typecheck"
+    },
+    {
+      "id": "packages/messaging/ts-paymail::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/messaging/ts-paymail/docs/examples::missing-readme",
+      "message": "Profile requires a README"
+    },
+    {
+      "id": "packages/messaging/ts-paymail/docs/examples::missing-script::format:check",
+      "message": "Profile examples requires script format:check"
+    },
+    {
+      "id": "packages/messaging/ts-paymail/docs/examples::missing-script::typecheck",
+      "message": "Profile examples requires script typecheck"
+    },
+    {
+      "id": "packages/messaging/ts-paymail/docs/examples::placeholder-quality-script::test",
+      "message": "test is a failing placeholder, not a quality check"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-script::format:check",
+      "message": "Profile dual-runtime-library requires script format:check"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-script::lint",
+      "message": "Profile dual-runtime-library requires script lint"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-script::pack:check",
+      "message": "Profile dual-runtime-library requires script pack:check"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-script::test:coverage",
+      "message": "Profile dual-runtime-library requires script test:coverage"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-script::typecheck",
+      "message": "Profile dual-runtime-library requires script typecheck"
+    },
+    {
+      "id": "packages/middleware/402-pay::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/middleware/auth-express-middleware::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/middleware/auth-express-middleware::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/middleware/auth-express-middleware::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/middleware/auth-express-middleware::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/middleware/auth-express-middleware::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/middleware/auth-express-middleware::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/middleware/auth::disabled-quality-script::lint:ci-disabled",
+      "message": "Remove disabled quality escape hatch lint:ci-disabled"
+    },
+    {
+      "id": "packages/middleware/auth::disabled-quality-script::test:coverage-disabled",
+      "message": "Remove disabled quality escape hatch test:coverage-disabled"
+    },
+    {
+      "id": "packages/middleware/auth::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/middleware/auth::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/middleware/auth::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/middleware/auth::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/middleware/auth::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/middleware/auth::missing-script::test:coverage",
+      "message": "Profile node-library requires script test:coverage"
+    },
+    {
+      "id": "packages/middleware/auth::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/middleware/auth::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/middleware/payment-express-middleware::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/middleware/payment-express-middleware::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/middleware/payment-express-middleware::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/middleware/payment-express-middleware::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/middleware/payment-express-middleware::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/middleware/payment-express-middleware::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-exports",
+      "message": "Profile requires package exports"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-script::lint",
+      "message": "Profile node-library requires script lint"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/network/ts-p2p::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/overlays/btms-backend::missing-script::format:check",
+      "message": "Profile private-library requires script format:check"
+    },
+    {
+      "id": "packages/overlays/btms-backend::missing-script::typecheck",
+      "message": "Profile private-library requires script typecheck"
+    },
+    {
+      "id": "packages/overlays/gasp-core::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/overlays/gasp-core::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/overlays/gasp-core::missing-script::format:check",
+      "message": "Profile dual-runtime-library requires script format:check"
+    },
+    {
+      "id": "packages/overlays/gasp-core::missing-script::pack:check",
+      "message": "Profile dual-runtime-library requires script pack:check"
+    },
+    {
+      "id": "packages/overlays/gasp-core::missing-script::typecheck",
+      "message": "Profile dual-runtime-library requires script typecheck"
+    },
+    {
+      "id": "packages/overlays/gasp-core::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/overlays/overlay-discovery-services::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/overlays/overlay-discovery-services::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/overlays/overlay-discovery-services::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/overlays/overlay-discovery-services::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/overlays/overlay-discovery-services::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/overlays/overlay-discovery-services::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/overlays/overlay-express::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/overlays/overlay-express::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/overlays/overlay-express::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/overlays/overlay-express::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/overlays/overlay-express::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/overlays/overlay-express::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/overlays/overlay::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/overlays/overlay::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/overlays/overlay::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/overlays/overlay::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/overlays/overlay::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/overlays/overlay::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/overlays/topics::missing-files-allowlist",
+      "message": "Public package requires a non-empty files allowlist"
+    },
+    {
+      "id": "packages/overlays/topics::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/overlays/topics::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/overlays/topics::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/overlays/topics::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/overlays/topics::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/overlays/topics::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/overlays/topics::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/sdk::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/sdk::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/sdk::missing-script::format:check",
+      "message": "Profile browser-library requires script format:check"
+    },
+    {
+      "id": "packages/sdk::missing-script::pack:check",
+      "message": "Profile browser-library requires script pack:check"
+    },
+    {
+      "id": "packages/sdk::missing-script::test:browser",
+      "message": "Profile browser-library requires script test:browser"
+    },
+    {
+      "id": "packages/sdk::missing-script::typecheck",
+      "message": "Profile browser-library requires script typecheck"
+    },
+    {
+      "id": "packages/sdk::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/verifast::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/verifast::missing-script::format:check",
+      "message": "Profile wasm-library requires script format:check"
+    },
+    {
+      "id": "packages/verifast::missing-script::lint",
+      "message": "Profile wasm-library requires script lint"
+    },
+    {
+      "id": "packages/verifast::missing-script::pack:check",
+      "message": "Profile wasm-library requires script pack:check"
+    },
+    {
+      "id": "packages/verifast::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-files-allowlist",
+      "message": "Public package requires a non-empty files allowlist"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-script::lint",
+      "message": "Profile node-library requires script lint"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-script::test",
+      "message": "Profile node-library requires script test"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-script::test:coverage",
+      "message": "Profile node-library requires script test:coverage"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/wallet/btms-permission-module::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/wallet/btms::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/wallet/btms::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/wallet/btms::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/wallet/btms::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/wallet/btms::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/wallet/btms::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/wallet/btms::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-license-field",
+      "message": "Public package requires license"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-script::format:check",
+      "message": "Profile cli-library requires script format:check"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-script::lint",
+      "message": "Profile cli-library requires script lint"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-script::pack:check",
+      "message": "Profile cli-library requires script pack:check"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-script::test:coverage",
+      "message": "Profile cli-library requires script test:coverage"
+    },
+    {
+      "id": "packages/wallet/ts-wallet-relay::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox-examples::missing-script::format:check",
+      "message": "Profile examples requires script format:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox-examples::missing-script::typecheck",
+      "message": "Profile examples requires script typecheck"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox-examples::mutating-check-script::lint",
+      "message": "lint must not modify the working tree"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-exports",
+      "message": "Profile requires package exports"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-script::format:check",
+      "message": "Profile node-library requires script format:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-script::pack:check",
+      "message": "Profile node-library requires script pack:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-script::typecheck",
+      "message": "Profile node-library requires script typecheck"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-exports",
+      "message": "Profile requires package exports"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-files-allowlist",
+      "message": "Public package requires a non-empty files allowlist"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::format:check",
+      "message": "Profile browser-library requires script format:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::lint",
+      "message": "Profile browser-library requires script lint"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::pack:check",
+      "message": "Profile browser-library requires script pack:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::test",
+      "message": "Profile browser-library requires script test"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::test:browser",
+      "message": "Profile browser-library requires script test:browser"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::test:coverage",
+      "message": "Profile browser-library requires script test:coverage"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-script::typecheck",
+      "message": "Profile browser-library requires script typecheck"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/client::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-exports",
+      "message": "Profile requires package exports"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-files-allowlist",
+      "message": "Public package requires a non-empty files allowlist"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-license-file",
+      "message": "Profile requires a shipped license file"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-node-engine",
+      "message": "Public package requires engines.node"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-publish-access",
+      "message": "Public package requires publishConfig.access=public"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::format:check",
+      "message": "Profile react-native-library requires script format:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::lint",
+      "message": "Profile react-native-library requires script lint"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::pack:check",
+      "message": "Profile react-native-library requires script pack:check"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::test",
+      "message": "Profile react-native-library requires script test"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::test:coverage",
+      "message": "Profile react-native-library requires script test:coverage"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::test:mobile",
+      "message": "Profile react-native-library requires script test:mobile"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::typecheck",
+      "message": "Profile react-native-library requires script typecheck"
+    },
+    {
+      "id": "packages/wallet/wallet-toolbox/mobile::missing-side-effects",
+      "message": "Public package requires an explicit sideEffects declaration"
+    }
+  ]
+}

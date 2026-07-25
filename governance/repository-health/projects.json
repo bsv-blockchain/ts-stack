@@ -1,0 +1,663 @@
+{
+  "schemaVersion": 1,
+  "ownerDefinitions": {
+    "ts-stack-maintainers": {
+      "description": "Maintainers with write access to bsv-blockchain/ts-stack",
+      "codeownersSource": ".github/CODEOWNERS"
+    }
+  },
+  "profiles": {
+    "monorepo": {
+      "description": "Private workspace orchestration root",
+      "requiredScripts": [
+        "audit:security",
+        "build",
+        "check-versions",
+        "conformance",
+        "format:check",
+        "health:check",
+        "lint",
+        "test"
+      ],
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "conformance-runner": {
+      "description": "Private conformance runner",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "test",
+        "validate"
+      ],
+      "requiresReadme": true
+    },
+    "conformance-runner-ts": {
+      "description": "Private TypeScript conformance implementation",
+      "requiredScripts": [
+        "format:check",
+        "lint",
+        "test",
+        "typecheck"
+      ],
+      "requiresReadme": false
+    },
+    "documentation-site": {
+      "description": "Private browser documentation application",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "test",
+        "validate"
+      ],
+      "requiresReadme": true
+    },
+    "node-library": {
+      "description": "Published Node.js library",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresExports": true,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "dual-runtime-library": {
+      "description": "Published library supporting Node.js and browser consumers",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresExports": true,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "browser-library": {
+      "description": "Published browser-first or browser-capable library",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:browser",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresExports": true,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "react-native-library": {
+      "description": "Published React Native/mobile library",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:coverage",
+        "test:mobile",
+        "typecheck"
+      ],
+      "requiresExports": true,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "cli": {
+      "description": "Published command-line application",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresBin": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "cli-library": {
+      "description": "Published library with a command-line entry point",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresBin": true,
+      "requiresExports": true,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "wasm-library": {
+      "description": "Published Node/browser library backed by WASM and workers",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "pack:check",
+        "test",
+        "test:browser",
+        "test:consumers",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresExports": true,
+      "requiresTypes": true,
+      "requiresReadme": true,
+      "requiresLicenseFile": true
+    },
+    "private-library": {
+      "description": "Private package used within the workspace",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "test",
+        "test:coverage",
+        "typecheck"
+      ],
+      "requiresReadme": true
+    },
+    "examples": {
+      "description": "Private examples or test applications",
+      "requiredScripts": [
+        "build",
+        "format:check",
+        "lint",
+        "test",
+        "typecheck"
+      ],
+      "requiresReadme": true
+    }
+  },
+  "projects": [
+    {
+      "path": ".",
+      "name": "@bsv/ts-stack",
+      "owner": "ts-stack-maintainers",
+      "area": "repository",
+      "profile": "monorepo",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "conformance/runner",
+      "name": "@bsv/conformance-runner",
+      "owner": "ts-stack-maintainers",
+      "area": "conformance",
+      "profile": "conformance-runner",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "conformance/runner/ts",
+      "name": "@bsv/conformance-runner-ts",
+      "owner": "ts-stack-maintainers",
+      "area": "conformance",
+      "profile": "conformance-runner-ts",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "docs-site",
+      "name": "docs-site",
+      "owner": "ts-stack-maintainers",
+      "area": "documentation",
+      "profile": "documentation-site",
+      "criticality": "tier-2",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "packages/helpers/amountinator",
+      "name": "@bsv/amountinator",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "node-library",
+      "criticality": "tier-2",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/bsv-wallet-helper",
+      "name": "@bsv/wallet-helper",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/create-bsv-app",
+      "name": "create-bsv-app",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "cli",
+      "criticality": "tier-2",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/did",
+      "name": "@bsv/did",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "dual-runtime-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/did-client",
+      "name": "@bsv/did-client",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "browser-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node",
+        "umd"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/fund-wallet",
+      "name": "@bsv/fund-wallet",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "cli",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/simple",
+      "name": "@bsv/simple",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "browser-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/helpers/ts-templates",
+      "name": "@bsv/templates",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "dual-runtime-library",
+      "criticality": "tier-2",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/messaging/authsocket",
+      "name": "@bsv/authsocket",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/messaging/authsocket-client",
+      "name": "@bsv/authsocket-client",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "browser-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node",
+        "umd"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/messaging/message-box-client",
+      "name": "@bsv/message-box-client",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "dual-runtime-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/messaging/ts-paymail",
+      "name": "@bsv/paymail",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "dual-runtime-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/messaging/ts-paymail/docs/examples",
+      "name": "example-paymail",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "packages/middleware/402-pay",
+      "name": "@bsv/402-pay",
+      "owner": "ts-stack-maintainers",
+      "area": "middleware",
+      "profile": "dual-runtime-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/middleware/auth",
+      "name": "@bsv/auth",
+      "owner": "ts-stack-maintainers",
+      "area": "middleware",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/middleware/auth-express-middleware",
+      "name": "@bsv/auth-express-middleware",
+      "owner": "ts-stack-maintainers",
+      "area": "middleware",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/middleware/payment-express-middleware",
+      "name": "@bsv/payment-express-middleware",
+      "owner": "ts-stack-maintainers",
+      "area": "middleware",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/network/ts-p2p",
+      "name": "@bsv/teranode-listener",
+      "owner": "ts-stack-maintainers",
+      "area": "network",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/overlays/btms-backend",
+      "name": "@bsv/btms-backend",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "private-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "packages/overlays/gasp-core",
+      "name": "@bsv/gasp",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "dual-runtime-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/overlays/overlay",
+      "name": "@bsv/overlay",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/overlays/overlay-discovery-services",
+      "name": "@bsv/overlay-discovery-services",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/overlays/overlay-express",
+      "name": "@bsv/overlay-express",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/overlays/topics",
+      "name": "@bsv/overlay-topics",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/sdk",
+      "name": "@bsv/sdk",
+      "owner": "ts-stack-maintainers",
+      "area": "sdk",
+      "profile": "browser-library",
+      "criticality": "tier-0",
+      "runtimeTargets": [
+        "browser",
+        "node",
+        "umd"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/verifast",
+      "name": "@bsv/verifast",
+      "owner": "ts-stack-maintainers",
+      "area": "sdk",
+      "profile": "wasm-library",
+      "criticality": "tier-0",
+      "runtimeTargets": [
+        "browser",
+        "node",
+        "wasm",
+        "worker"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/btms",
+      "name": "@bsv/btms",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/btms-permission-module",
+      "name": "@bsv/btms-permission-module",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "node-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/ts-wallet-relay",
+      "name": "@bsv/wallet-relay",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "cli-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox",
+      "name": "@bsv/wallet-toolbox",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "node-library",
+      "criticality": "tier-0",
+      "runtimeTargets": [
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox-examples",
+      "name": "@bsv/wallet-toolbox-examples",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "examples",
+      "criticality": "tier-3",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "none"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/client",
+      "name": "@bsv/wallet-toolbox-client",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "browser-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "browser",
+        "node"
+      ],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/mobile",
+      "name": "@bsv/wallet-toolbox-mobile",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "react-native-library",
+      "criticality": "tier-1",
+      "runtimeTargets": [
+        "react-native"
+      ],
+      "release": "npm-oidc"
+    }
+  ]
+}

@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-24",
+  "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
+  "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
+  "workspace": {
+    "projects": 37,
+    "packageAreaProjects": 33,
+    "publicPackages": 30,
+    "privatePackageAreaProjects": 3
+  },
+  "ci": {
+    "mergeGateSeconds": 295,
+    "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
+  },
+  "conformance": {
+    "passed": 6439,
+    "skipped": 211,
+    "total": 6650,
+    "vectorFiles": 74,
+    "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
+  },
+  "lint": {
+    "warnings": 846,
+    "errors": 0,
+    "productionWarningsApproximate": 302,
+    "testAndBenchmarkWarningsApproximate": 544,
+    "largestRules": {
+      "no-unused-vars": 516,
+      "unicorn/no-new-array": 282
+    }
+  },
+  "typescript": {
+    "effectiveConfigs": 31,
+    "strict": 11,
+    "strictNullChecks": 16,
+    "noImplicitAny": 9,
+    "useUnknownInCatchVariables": 11,
+    "noImplicitOverride": 2,
+    "noFallthroughCasesInSwitch": 1,
+    "noUncheckedIndexedAccess": 0,
+    "exactOptionalPropertyTypes": 0,
+    "noUnusedLocals": 0,
+    "noUnusedParameters": 0
+  },
+  "coverage": {
+    "provider": "Codecov",
+    "totalPercent": 66.97,
+    "files": 543,
+    "lines": 46259,
+    "hit": 30981,
+    "missed": 11619,
+    "partial": 3659,
+    "projectThresholdScope": "packages/sdk/src",
+    "patchThresholdPercent": 90,
+    "source": "https://app.codecov.io/gh/BSV-blockchain/ts-stack"
+  },
+  "security": {
+    "codeqlOpen": 17,
+    "codeqlHigh": 14,
+    "codeqlMedium": 3,
+    "dependabotOpen": 6,
+    "dependabotMedium": 4,
+    "dependabotLow": 2,
+    "secretScanningOpen": 0,
+    "dependabotSecurityUpdatesEnabled": false,
+    "codeql": "https://github.com/BSV-blockchain/ts-stack/security/code-scanning?query=is%3Aopen",
+    "dependabot": "https://github.com/BSV-blockchain/ts-stack/security/dependabot",
+    "codeqlAlerts": [
+      {
+        "number": 14,
+        "severity": "high",
+        "rule": "js/incomplete-url-substring-sanitization",
+        "path": "packages/helpers/simple/src/modules/credentials.ts",
+        "line": 284
+      },
+      {
+        "number": 61,
+        "severity": "medium",
+        "rule": "js/prototype-polluting-assignment",
+        "path": "packages/sdk/src/transaction/BeefParty.ts",
+        "line": 100
+      },
+      {
+        "number": 62,
+        "severity": "high",
+        "rule": "js/disabling-certificate-validation",
+        "path": "packages/helpers/fund-wallet/index.ts",
+        "line": 9
+      },
+      {
+        "number": 73,
+        "severity": "high",
+        "rule": "js/resource-exhaustion",
+        "path": "packages/sdk/src/primitives/BigNumber.ts",
+        "line": 131
+      },
+      {
+        "number": 86,
+        "severity": "medium",
+        "rule": "actions/missing-workflow-permissions",
+        "path": ".github/workflows/conformance.yml",
+        "line": 15
+      },
+      {
+        "number": 90,
+        "severity": "high",
+        "rule": "js/loop-bound-injection",
+        "path": "infra/message-box-server/src/routes/permissions/getQuote.ts",
+        "line": 93
+      },
+      {
+        "number": 91,
+        "severity": "high",
+        "rule": "js/path-injection",
+        "path": "infra/uhrp-server-basic/src/routes/put.ts",
+        "line": 61
+      },
+      {
+        "number": 92,
+        "severity": "high",
+        "rule": "js/path-injection",
+        "path": "infra/uhrp-server-basic/src/routes/put.ts",
+        "line": 69
+      },
+      {
+        "number": 100,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/wab/src/app.ts",
+        "line": 44
+      },
+      {
+        "number": 101,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/wab/src/app.ts",
+        "line": 45
+      },
+      {
+        "number": 102,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/wab/src/app.ts",
+        "line": 54
+      },
+      {
+        "number": 107,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/uhrp-server-basic/src/index.ts",
+        "line": 126
+      },
+      {
+        "number": 108,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/uhrp-server-cloud-bucket/src/index.ts",
+        "line": 134
+      },
+      {
+        "number": 112,
+        "severity": "medium",
+        "rule": "js/stack-trace-exposure",
+        "path": "packages/helpers/create-bsv-app/src/ui/ui-server.ts",
+        "line": 30
+      },
+      {
+        "number": 116,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/message-box-server/src/compose.ts",
+        "line": 55
+      },
+      {
+        "number": 117,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "infra/message-box-server/src/app.ts",
+        "line": 169
+      },
+      {
+        "number": 120,
+        "severity": "high",
+        "rule": "js/missing-rate-limiting",
+        "path": "packages/wallet/wallet-toolbox/src/storage/remoting/StorageServer.ts",
+        "line": 227
+      }
+    ],
+    "dependabotAlerts": [
+      {
+        "number": 1395,
+        "severity": "medium",
+        "ghsa": "GHSA-w5hq-g745-h8pq",
+        "package": "uuid"
+      },
+      {
+        "number": 1431,
+        "severity": "low",
+        "ghsa": "GHSA-g7r4-m6w7-qqqr",
+        "package": "esbuild"
+      },
+      {
+        "number": 1551,
+        "severity": "low",
+        "ghsa": "GHSA-v422-hmwv-36x6",
+        "package": "body-parser"
+      },
+      {
+        "number": 1568,
+        "severity": "medium",
+        "ghsa": "GHSA-337j-9hxr-rhxg",
+        "package": "react-router"
+      },
+      {
+        "number": 1569,
+        "severity": "medium",
+        "ghsa": "GHSA-jjmj-jmhj-qwj2",
+        "package": "react-router-dom"
+      },
+      {
+        "number": 1570,
+        "severity": "medium",
+        "ghsa": "GHSA-wrjc-x8rr-h8h6",
+        "package": "react-router"
+      }
+    ]
+  },
+  "sonar": {
+    "unresolved": 1529,
+    "codeSmells": 1494,
+    "bugs": 26,
+    "vulnerabilities": 9,
+    "blocker": 140,
+    "critical": 191,
+    "major": 312,
+    "minor": 876,
+    "info": 10,
+    "cognitiveComplexity": 24902,
+    "complexity": 31783,
+    "duplicatedLines": 10874,
+    "duplicationDensityPercent": 2.0,
+    "ncloc": 349151,
+    "reliabilityRating": "D",
+    "securityRating": "C",
+    "maintainabilityRating": "A",
+    "debtMinutes": 13544,
+    "mainCoverageAvailable": false,
+    "source": "https://sonarcloud.io/project/issues?issueStatuses=OPEN%2CCONFIRMED&sinceLeakPeriod=true&id=bsv-blockchain_ts-stack"
+  },
+  "governance": {
+    "requiredApprovals": 1,
+    "requireLastPushApproval": false,
+    "requireReviewThreadResolution": true,
+    "administratorAndMaintainerBypass": true,
+    "rulesets": [
+      {
+        "id": 3950107,
+        "name": "main-branches"
+      },
+      {
+        "id": 19713320,
+        "name": "ts-stack hardened main"
+      }
+    ]
+  },
+  "publicPackageVersions": {
+    "@bsv/amountinator": "2.1.1",
+    "@bsv/wallet-helper": "0.1.1",
+    "create-bsv-app": "1.0.2",
+    "@bsv/did": "0.2.1",
+    "@bsv/did-client": "1.2.1",
+    "@bsv/fund-wallet": "1.4.1",
+    "@bsv/simple": "0.4.1",
+    "@bsv/templates": "1.9.1",
+    "@bsv/authsocket": "2.1.1",
+    "@bsv/authsocket-client": "2.1.1",
+    "@bsv/message-box-client": "2.2.2",
+    "@bsv/paymail": "2.4.2",
+    "@bsv/402-pay": "0.2.1",
+    "@bsv/auth": "0.1.1",
+    "@bsv/auth-express-middleware": "2.1.2",
+    "@bsv/payment-express-middleware": "2.1.1",
+    "@bsv/teranode-listener": "1.1.1",
+    "@bsv/gasp": "1.3.1",
+    "@bsv/overlay": "2.2.1",
+    "@bsv/overlay-discovery-services": "2.1.1",
+    "@bsv/overlay-express": "2.4.2",
+    "@bsv/overlay-topics": "1.6.1",
+    "@bsv/sdk": "2.2.0",
+    "@bsv/verifast": "0.3.0",
+    "@bsv/btms": "1.1.1",
+    "@bsv/btms-permission-module": "1.1.1",
+    "@bsv/wallet-relay": "0.2.2",
+    "@bsv/wallet-toolbox-client": "2.4.4",
+    "@bsv/wallet-toolbox-mobile": "2.4.4",
+    "@bsv/wallet-toolbox": "2.4.4"
+  }
+}
