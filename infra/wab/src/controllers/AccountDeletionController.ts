@@ -6,52 +6,22 @@
  */
 
 import { Request, Response } from "express";
-import { randomBytes } from "crypto";
 import { UserService } from "../services/UserService";
-import { AuthMethod } from "../auth-methods/AuthMethod";
-import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
+import {
+  getAuthMethodInstance,
+  UnsupportedAuthMethodError
+} from "../auth-methods/AuthMethodFactory";
+import { InvalidAuthPayloadError } from "../auth-methods/AuthMethod";
+import {
+  DeletionSessionRateLimitError,
+  DeletionSessionService
+} from "../services/DeletionSessionService";
+import {
+  isAuthMethodType,
+  isAuthPayload,
+  isRecord
+} from "../security/requestValidation";
 import { log } from "../logger";
-
-// Simple in-memory rate limiting
-const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_MAX_ATTEMPTS = 3; // Max 3 deletion attempts per phone number per 15 minutes
-
-function checkRateLimit(config: string): boolean {
-  const now = Date.now();
-  const key = `deletion_${config}`;
-
-  let rateLimitData = rateLimitMap.get(key);
-
-  if (!rateLimitData || (now - rateLimitData.lastReset) > RATE_LIMIT_WINDOW) {
-    // Reset window
-    rateLimitData = { count: 0, lastReset: now };
-    rateLimitMap.set(key, rateLimitData);
-  }
-
-  if (rateLimitData.count >= RATE_LIMIT_MAX_ATTEMPTS) {
-    return false; // Rate limited
-  }
-
-  rateLimitData.count++;
-  return true; // Allowed
-}
-
-/**
- * Returns the appropriate AuthMethod instance given a methodType.
- */
-function getAuthMethodInstance(methodType: string): AuthMethod {
-  switch (methodType) {
-    case "TwilioPhone":
-      return new TwilioAuthMethod({
-        accountSid: process.env.TWILIO_ACCOUNT_SID!,
-        authToken: process.env.TWILIO_AUTH_TOKEN!,
-        verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID!
-      });
-    default:
-      throw new Error(`Unsupported auth method: ${methodType}`);
-  }
-}
 
 export class AccountDeletionController {
   /**
@@ -62,26 +32,28 @@ export class AccountDeletionController {
    */
   public static async startDeletion(req: Request, res: Response) {
     try {
+      if (!isRecord(req.body)) {
+        return res.status(400).json({ message: "Request body must be a JSON object." });
+      }
       const { methodType, payload } = req.body;
-      if (!methodType || !payload) {
-        return res.status(400).json({ message: "methodType and payload are required." });
+      if (!isAuthMethodType(methodType) || !isAuthPayload(payload)) {
+        return res.status(400).json({ message: "A valid methodType and payload are required." });
       }
 
       const authMethod = getAuthMethodInstance(methodType);
       const config = authMethod.buildConfigFromPayload(payload);
 
-      // Rate limiting to prevent SMS spam attacks
-      if (!checkRateLimit(config)) {
-        return res.status(429).json({
-          message: "Too many deletion attempts. Please try again later."
-        });
-      }
-
       // Check if this auth method exists in the system
       const user = await UserService.findUserByConfig(methodType, config);
 
-      // Use a temporary key for this deletion process
-      const deletionKey = `deletion_${Date.now()}_${randomBytes(9).toString("hex")}`;
+      // Persist a hashed, expiring, single-use intent even for unknown
+      // identities so start responses and per-identity limits do not reveal
+      // whether an account exists.
+      const deletionKey = await DeletionSessionService.create(
+        methodType,
+        config,
+        user?.id
+      );
 
       // Always send the same response to prevent enumeration attacks
       if (user) {
@@ -102,6 +74,15 @@ export class AccountDeletionController {
         message: "If an account exists with this authentication method, a verification code has been sent."
       });
     } catch (error: any) {
+      if (
+        error instanceof UnsupportedAuthMethodError ||
+        error instanceof InvalidAuthPayloadError
+      ) {
+        return res.status(400).json({ message: error.message });
+      }
+      if (error instanceof DeletionSessionRateLimitError) {
+        return res.status(429).json({ message: error.message });
+      }
       log.error({ operation: 'controller.account_deletion.request', err: error, outcome: 'error' }, 'requestDeletion failed');
       res.status(500).json({ message: "An internal error occurred." });
     }
@@ -116,19 +97,33 @@ export class AccountDeletionController {
    */
   public static async completeDeletion(req: Request, res: Response) {
     try {
+      if (!isRecord(req.body)) {
+        return res.status(400).json({ message: "Request body must be a JSON object." });
+      }
       const { methodType, deletionKey, payload } = req.body;
-      if (!methodType || !deletionKey || !payload) {
+      if (
+        !isAuthMethodType(methodType) ||
+        typeof deletionKey !== "string" ||
+        !isAuthPayload(payload)
+      ) {
         return res.status(400).json({
-          message: "methodType, deletionKey, and payload are required."
+          message: "A valid methodType, deletionKey, and payload are required."
         });
       }
 
-      // Verify the deletion key format
-      if (!deletionKey.startsWith('deletion_')) {
-        return res.status(400).json({ message: "Invalid deletion key format." });
-      }
-
       const authMethod = getAuthMethodInstance(methodType);
+      const config = authMethod.buildConfigFromPayload(payload);
+      const session = await DeletionSessionService.findActive(
+        deletionKey,
+        methodType,
+        config
+      );
+      if (!session) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired deletion session."
+        });
+      }
 
       // Verify the auth method (OTP, etc.)
       const result = await authMethod.completeAuth(deletionKey, payload);
@@ -136,13 +131,21 @@ export class AccountDeletionController {
         return res.status(400).json(result);
       }
 
-      // Find the user by auth method config
-      const config = authMethod.buildConfigFromPayload(payload);
-      const user = await UserService.findUserByConfig(methodType, config);
+      // Re-resolve both sides immediately before deletion. The verified
+      // external identity, session snapshot, and live account must all agree.
+      const user = await UserService.getUserById(Number(session.userId));
+      const configUser = await UserService.findUserByConfig(methodType, config);
+      if (!user || configUser?.id !== user.id) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired deletion session."
+        });
+      }
 
-      if (!user) {
-        return res.status(404).json({
-          message: "No account found with this authentication method."
+      if (!await DeletionSessionService.consume(session)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired deletion session."
         });
       }
 
@@ -154,6 +157,12 @@ export class AccountDeletionController {
         message: "Account successfully deleted. You can now sign up again if desired."
       });
     } catch (error: any) {
+      if (
+        error instanceof UnsupportedAuthMethodError ||
+        error instanceof InvalidAuthPayloadError
+      ) {
+        return res.status(400).json({ message: error.message });
+      }
       log.error({ operation: 'controller.account_deletion.complete', err: error, outcome: 'error' }, 'completeDeletion failed');
       res.status(500).json({ message: "An internal error occurred." });
     }

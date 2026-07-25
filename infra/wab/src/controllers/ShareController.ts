@@ -6,13 +6,25 @@
  */
 
 import { Request, Response } from "express";
-import { UserService } from "../services/UserService";
+import {
+    AuthIdentityConflictError,
+    UserService
+} from "../services/UserService";
 import { ShareService } from "../services/ShareService";
 import {
     getAuthMethodInstance,
     UnsupportedAuthMethodError
 } from "../auth-methods/AuthMethodFactory";
+import { AuthPayload } from "../auth-methods/AuthMethod";
 import { log } from "../logger";
+import {
+    isAuthMethodType,
+    isAuthPayload,
+    isHexIdentifier,
+    isRecord,
+    isShamirShare
+} from "../security/requestValidation";
+import { User } from "../types";
 
 /**
  * Extract client IP from request, handling proxies
@@ -22,6 +34,203 @@ function getClientIp(req: Request): string {
     // trust-proxy hop count. Reading X-Forwarded-For directly would let a
     // directly reachable client spoof the audit/rate-limit identity.
     return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+type VerifiedIdentity =
+    | { success: true; config: string; userId?: number }
+    | { success: false; message: string };
+
+async function verifyIdentity(
+    methodType: string,
+    contextKey: string,
+    payload: AuthPayload
+): Promise<VerifiedIdentity> {
+    const authMethod = getAuthMethodInstance(methodType);
+    const authResult = await authMethod.completeAuth(contextKey, payload);
+    if (!authResult.success) {
+        return {
+            success: false,
+            message: authResult.message || "OTP verification failed"
+        };
+    }
+
+    const config = authMethod.buildConfigFromPayload(payload);
+    const user = await UserService.findUserByConfig(methodType, config);
+    return user
+        ? { success: true, config, userId: user.id }
+        : { success: true, config };
+}
+
+function identityIsBoundToUser(
+    identity: VerifiedIdentity & { success: true },
+    userId: number
+): boolean {
+    return identity.userId === userId;
+}
+
+type UserResolution =
+    | { success: true; user: User }
+    | { success: false; status: 401 | 403 | 404 | 429; message: string };
+
+async function resolveStoreUser(
+    methodType: string,
+    payload: AuthPayload,
+    userIdHash: string,
+    ipAddress: string
+): Promise<UserResolution> {
+    const identity = await verifyIdentity(methodType, userIdHash, payload);
+    if (!identity.success) {
+        return { success: false, status: 401, message: identity.message };
+    }
+
+    const targetUser = await UserService.getUserByUserIdHash(userIdHash);
+    if (targetUser) {
+        if (!identityIsBoundToUser(identity, targetUser.id)) {
+            await ShareService.logAccess(
+                targetUser.id,
+                ipAddress,
+                "store",
+                false,
+                "Authenticated method is not linked to target user"
+            );
+            return {
+                success: false,
+                status: 403,
+                message: "Authenticated method is not authorized for this account."
+            };
+        }
+        return { success: true, user: targetUser };
+    }
+
+    if (identity.userId !== undefined) {
+        const user = await UserService.attachUserIdHash(
+            identity.userId,
+            userIdHash
+        );
+        return { success: true, user };
+    }
+
+    const user = await UserService.createUserWithUserIdHash(userIdHash);
+    await UserService.linkAuthMethod(user.id, methodType, identity.config);
+    return { success: true, user };
+}
+
+interface ShareTargetRequest {
+    methodType: string;
+    payload: AuthPayload;
+    userIdHash: string;
+}
+
+function parseShareTargetRequest(body: unknown): ShareTargetRequest | undefined {
+    if (!isRecord(body)) return undefined;
+    const { methodType, payload, userIdHash } = body;
+    if (
+        !isAuthMethodType(methodType) ||
+        !isAuthPayload(payload) ||
+        !isHexIdentifier(userIdHash)
+    ) {
+        return undefined;
+    }
+    return { methodType, payload, userIdHash };
+}
+
+async function authorizeShareUser(
+    request: ShareTargetRequest,
+    ipAddress: string,
+    action: "retrieve" | "update"
+): Promise<UserResolution> {
+    const user = await UserService.getUserByUserIdHash(request.userIdHash);
+    if (!user) {
+        return { success: false, status: 404, message: "User not found" };
+    }
+
+    const rateLimit = await ShareService.isRateLimited(
+        user.id,
+        ipAddress,
+        action
+    );
+    if (rateLimit.limited) {
+        await ShareService.logAccess(
+            user.id,
+            ipAddress,
+            action,
+            false,
+            "Rate limited"
+        );
+        return {
+            success: false,
+            status: 429,
+            message: `Too many attempts. Try again in ${rateLimit.retryAfterMinutes} minutes.`
+        };
+    }
+
+    const identity = await verifyIdentity(
+        request.methodType,
+        request.userIdHash,
+        request.payload
+    );
+    if (!identity.success) {
+        await ShareService.logAccess(
+            user.id,
+            ipAddress,
+            action,
+            false,
+            "OTP verification failed"
+        );
+        return { success: false, status: 401, message: identity.message };
+    }
+    if (!identityIsBoundToUser(identity, user.id)) {
+        await ShareService.logAccess(
+            user.id,
+            ipAddress,
+            action,
+            false,
+            "Authenticated method is not linked to target user"
+        );
+        return {
+            success: false,
+            status: 403,
+            message: "Authenticated method is not authorized for this account."
+        };
+    }
+
+    return { success: true, user };
+}
+
+function sendResolutionFailure(
+    res: Response,
+    resolution: UserResolution & { success: false }
+) {
+    return res.status(resolution.status).json({
+        success: false,
+        message: resolution.message
+    });
+}
+
+function handleShareError(
+    res: Response,
+    error: unknown,
+    operation: string,
+    message: string,
+    handleIdentityConflict = false
+) {
+    if (error instanceof UnsupportedAuthMethodError) {
+        return res.status(400).json({
+            success: false,
+            message: "Unsupported auth method."
+        });
+    }
+    if (handleIdentityConflict && error instanceof AuthIdentityConflictError) {
+        return res.status(409).json({
+            success: false,
+            message: "Authenticated identity is already linked to another account."
+        });
+    }
+    log.error({ operation, err: error, outcome: "error" }, message);
+    return res.status(500).json({
+        success: false,
+        message: "An internal error occurred."
+    });
 }
 
 export class ShareController {
@@ -41,54 +250,44 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
+            if (!isRecord(req.body)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Request body must be a JSON object."
+                });
+            }
             const { methodType, payload, shareB, userIdHash } = req.body;
 
-            if (!methodType || !payload || !shareB || !userIdHash) {
+            if (
+                !isAuthMethodType(methodType) ||
+                !isAuthPayload(payload) ||
+                !isShamirShare(shareB) ||
+                !isHexIdentifier(userIdHash)
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, shareB, and userIdHash are required."
+                    message: "A valid methodType, payload, Shamir share, and 32-byte userIdHash are required."
                 });
             }
 
-            // Validate share format (should be in Shamir backup format: x.y.threshold.integrity)
-            const shareParts = shareB.split(".");
-            if (shareParts.length !== 4) {
-                return res.status(400).json({
+            const resolution = await resolveStoreUser(
+                methodType,
+                payload,
+                userIdHash,
+                ipAddress
+            );
+            if (!resolution.success) {
+                return sendResolutionFailure(res, resolution);
+            }
+            const { user } = resolution;
+
+            const existingShare = await ShareService.getShareByUserId(user.id);
+            if (existingShare) {
+                await ShareService.logAccess(user.id, ipAddress, "store", false, "Share already exists");
+                return res.status(409).json({
                     success: false,
-                    message: "Invalid share format. Expected Shamir backup format."
+                    message: "User already has a stored share. Use /share/update for key rotation."
                 });
-            }
-
-            // First verify the OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
-                return res.status(401).json({
-                    success: false,
-                    message: authResult.message || "OTP verification failed"
-                });
-            }
-
-            // Check if user already exists with this userIdHash
-            let user = await UserService.getUserByUserIdHash(userIdHash);
-
-            if (user) {
-                // User exists - check if they already have a share
-                const existingShare = await ShareService.getShareByUserId(user.id);
-                if (existingShare) {
-                    // Log the failed attempt
-                    await ShareService.logAccess(user.id, ipAddress, "store", false, "Share already exists");
-                    return res.status(409).json({
-                        success: false,
-                        message: "User already has a stored share. Use /share/update for key rotation."
-                    });
-                }
-            } else {
-                // Create new user with userIdHash
-                const config = authMethod.buildConfigFromPayload(payload);
-                user = await UserService.createUserWithUserIdHash(userIdHash);
-                await UserService.linkAuthMethod(user.id, methodType, config);
             }
 
             // Check rate limiting
@@ -110,18 +309,14 @@ export class ShareController {
                 message: "Share stored successfully",
                 userId: user.id
             });
-        } catch (error: any) {
-            if (error instanceof UnsupportedAuthMethodError) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Unsupported auth method."
-                });
-            }
-            log.error({ operation: 'controller.share.store', err: error, outcome: 'error' }, 'storeShare failed');
-            res.status(500).json({
-                success: false,
-                message: "An internal error occurred."
-            });
+        } catch (error: unknown) {
+            return handleShareError(
+                res,
+                error,
+                "controller.share.store",
+                "storeShare failed",
+                true
+            );
         }
     }
 
@@ -140,45 +335,23 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
-            const { methodType, payload, userIdHash } = req.body;
-
-            if (!methodType || !payload || !userIdHash) {
+            const request = parseShareTargetRequest(req.body);
+            if (!request) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, and userIdHash are required."
+                    message: "A valid methodType, payload, and 32-byte userIdHash are required."
                 });
             }
 
-            // Find user by userIdHash
-            const user = await UserService.getUserByUserIdHash(userIdHash);
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: "User not found"
-                });
+            const resolution = await authorizeShareUser(
+                request,
+                ipAddress,
+                "retrieve"
+            );
+            if (!resolution.success) {
+                return sendResolutionFailure(res, resolution);
             }
-
-            // Check rate limiting before OTP verification
-            const rateLimit = await ShareService.isRateLimited(user.id, ipAddress, "retrieve");
-            if (rateLimit.limited) {
-                await ShareService.logAccess(user.id, ipAddress, "retrieve", false, "Rate limited");
-                return res.status(429).json({
-                    success: false,
-                    message: `Too many attempts. Try again in ${rateLimit.retryAfterMinutes} minutes.`
-                });
-            }
-
-            // Verify OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
-                await ShareService.logAccess(user.id, ipAddress, "retrieve", false, "OTP verification failed");
-                return res.status(401).json({
-                    success: false,
-                    message: authResult.message || "OTP verification failed"
-                });
-            }
+            const { user } = resolution;
 
             // Retrieve and decrypt the share
             const share = await ShareService.retrieveDecryptedShare(user.id);
@@ -197,18 +370,13 @@ export class ShareController {
                 shareB: share,
                 message: "Share retrieved successfully"
             });
-        } catch (error: any) {
-            if (error instanceof UnsupportedAuthMethodError) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Unsupported auth method."
-                });
-            }
-            log.error({ operation: 'controller.share.retrieve', err: error, outcome: 'error' }, 'retrieveShare failed');
-            res.status(500).json({
-                success: false,
-                message: "An internal error occurred."
-            });
+        } catch (error: unknown) {
+            return handleShareError(
+                res,
+                error,
+                "controller.share.retrieve",
+                "retrieveShare failed"
+            );
         }
     }
 
@@ -228,54 +396,26 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
-            const { methodType, payload, userIdHash, newShareB } = req.body;
-
-            if (!methodType || !payload || !userIdHash || !newShareB) {
+            const request = parseShareTargetRequest(req.body);
+            const newShareB = isRecord(req.body)
+                ? req.body.newShareB
+                : undefined;
+            if (!request || !isShamirShare(newShareB)) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, userIdHash, and newShareB are required."
+                    message: "A valid methodType, payload, 32-byte userIdHash, and Shamir share are required."
                 });
             }
 
-            // Validate share format
-            const shareParts = newShareB.split(".");
-            if (shareParts.length !== 4) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid share format. Expected Shamir backup format."
-                });
+            const resolution = await authorizeShareUser(
+                request,
+                ipAddress,
+                "update"
+            );
+            if (!resolution.success) {
+                return sendResolutionFailure(res, resolution);
             }
-
-            // Find user
-            const user = await UserService.getUserByUserIdHash(userIdHash);
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: "User not found"
-                });
-            }
-
-            // Check rate limiting
-            const rateLimit = await ShareService.isRateLimited(user.id, ipAddress, "update");
-            if (rateLimit.limited) {
-                await ShareService.logAccess(user.id, ipAddress, "update", false, "Rate limited");
-                return res.status(429).json({
-                    success: false,
-                    message: `Too many attempts. Try again in ${rateLimit.retryAfterMinutes} minutes.`
-                });
-            }
-
-            // Verify OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
-                await ShareService.logAccess(user.id, ipAddress, "update", false, "OTP verification failed");
-                return res.status(401).json({
-                    success: false,
-                    message: authResult.message || "OTP verification failed"
-                });
-            }
+            const { user } = resolution;
 
             // Update the share
             const updated = await ShareService.updateShare(user.id, newShareB);
@@ -286,18 +426,13 @@ export class ShareController {
                 message: "Share updated successfully",
                 shareVersion: updated.shareVersion
             });
-        } catch (error: any) {
-            if (error instanceof UnsupportedAuthMethodError) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Unsupported auth method."
-                });
-            }
-            log.error({ operation: 'controller.share.update', err: error, outcome: 'error' }, 'updateShare failed');
-            res.status(500).json({
-                success: false,
-                message: "An internal error occurred."
-            });
+        } catch (error: unknown) {
+            return handleShareError(
+                res,
+                error,
+                "controller.share.update",
+                "updateShare failed"
+            );
         }
     }
 
@@ -316,62 +451,41 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
-            const { methodType, payload, userIdHash } = req.body;
-
-            if (!methodType || !payload || !userIdHash) {
+            const request = parseShareTargetRequest(req.body);
+            if (!request) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, and userIdHash are required."
+                    message: "A valid methodType, payload, and 32-byte userIdHash are required."
                 });
             }
 
-            // Find user by userIdHash
-            const user = await UserService.getUserByUserIdHash(userIdHash);
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: "User not found"
-                });
+            const resolution = await authorizeShareUser(
+                request,
+                ipAddress,
+                "retrieve"
+            );
+            if (!resolution.success) {
+                return sendResolutionFailure(res, resolution);
             }
-
-            // Check rate limiting (reuse retrieve limits for delete operations)
-            const rateLimit = await ShareService.isRateLimited(user.id, ipAddress, "retrieve");
-            if (rateLimit.limited) {
-                await ShareService.logAccess(user.id, ipAddress, "retrieve", false, "Rate limited (delete attempt)");
-                return res.status(429).json({
-                    success: false,
-                    message: `Too many attempts. Try again in ${rateLimit.retryAfterMinutes} minutes.`
-                });
-            }
-
-            // Verify OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
-                await ShareService.logAccess(user.id, ipAddress, "retrieve", false, "OTP verification failed (delete attempt)");
-                return res.status(401).json({
-                    success: false,
-                    message: authResult.message || "OTP verification failed"
-                });
-            }
+            const { user } = resolution;
 
             // Delete the user's share first (if exists)
             await ShareService.deleteShare(user.id);
 
             // Delete the user account (cascades to auth_methods via FK)
-            await UserService.deleteUserByUserIdHash(userIdHash);
+            await UserService.deleteUserByUserIdHash(request.userIdHash);
 
             res.json({
                 success: true,
                 message: "Account and all associated data deleted successfully."
             });
-        } catch (error: any) {
-            log.error({ operation: 'controller.share.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
-            res.status(500).json({
-                success: false,
-                message: "An internal error occurred."
-            });
+        } catch (error: unknown) {
+            return handleShareError(
+                res,
+                error,
+                "controller.share.delete_user",
+                "deleteUser failed"
+            );
         }
     }
 }

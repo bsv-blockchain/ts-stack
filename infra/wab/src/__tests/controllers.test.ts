@@ -9,7 +9,7 @@ jest.mock("../auth-methods/TwilioAuthMethod", () => {
                 return { success: true, message: "started" };
             }
             async completeAuth(_presentationKey: string, payload: any) {
-                if (payload?.phoneNumber === "+18006382638" && payload?.otp === "123456") {
+                if (payload?.phoneNumber === "+14155550100" && payload?.otp === "123456") {
                     return { success: true, message: "verified successfully" };
                 }
                 return { success: false, message: "invalid otp" };
@@ -19,18 +19,22 @@ jest.mock("../auth-methods/TwilioAuthMethod", () => {
 });
 
 import { UserService } from "../services/UserService";
+import { ShareService } from "../services/ShareService";
 
 let AuthController: typeof import("../controllers/AuthController")["AuthController"]; 
 let UserController: typeof import("../controllers/UserController")["UserController"]; 
 let InfoController: typeof import("../controllers/InfoController")["InfoController"]; 
 let AccountDeletionController: typeof import("../controllers/AccountDeletionController")["AccountDeletionController"]; 
+let ShareController: typeof import("../controllers/ShareController")["ShareController"];
 
 
 // Mock Express request/response objects
 const mockRequest = (body: any = {}, params: any = {}) => ({
     body,
     params,
-    query: {}
+    query: {},
+    ip: "127.0.0.1",
+    socket: { remoteAddress: "127.0.0.1" }
 }) as any;
 
 const mockResponse = () => {
@@ -42,7 +46,8 @@ const mockResponse = () => {
 };
 
 describe("Controllers", () => {
-    const testPresentationKey = "testkey_" + Date.now();
+    const testPresentationKey = "ab".repeat(32);
+    const verifiedPhone = "+14155550100";
 
     beforeAll(async () => {
         // Dynamically import after mocks are set up
@@ -50,6 +55,11 @@ describe("Controllers", () => {
         ({ UserController } = await import("../controllers/UserController"));
         ({ InfoController } = await import("../controllers/InfoController"));
         ({ AccountDeletionController } = await import("../controllers/AccountDeletionController"));
+        ({ ShareController } = await import("../controllers/ShareController"));
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     describe("InfoController", () => {
@@ -91,10 +101,8 @@ describe("Controllers", () => {
         });
     });
 
-    describe("AuthController with admin phone", () => {
-        const adminPhone = "+18006382638";
-
-        it("should complete auth successfully with admin phone", async () => {
+    describe("AuthController with verified phone", () => {
+        it("should complete auth successfully after provider verification", async () => {
             // Mock UserService so controller test doesn't depend on DB specifics
             jest.spyOn(UserService, "findUserByConfig").mockResolvedValueOnce(undefined as any);
             jest.spyOn(UserService, "createUser").mockResolvedValueOnce({ id: 1, presentationKey: testPresentationKey } as any);
@@ -103,7 +111,7 @@ describe("Controllers", () => {
             const req = mockRequest({
                 methodType: "TwilioPhone",
                 presentationKey: testPresentationKey,
-                payload: { phoneNumber: adminPhone, otp: "123456" }
+                payload: { phoneNumber: verifiedPhone, otp: "123456" }
             });
             const res = mockResponse();
 
@@ -122,7 +130,7 @@ describe("Controllers", () => {
             const req = mockRequest({
                 methodType: "TwilioPhone",
                 presentationKey: testPresentationKey,
-                payload: { phoneNumber: adminPhone, otp: "wrong" }
+                payload: { phoneNumber: verifiedPhone, otp: "wrong" }
             });
             const res = mockResponse();
 
@@ -171,10 +179,9 @@ describe("Controllers", () => {
 
     describe("AccountDeletionController", () => {
         it("should start deletion process", async () => {
-            const adminPhone = "+18006382638";
             const req = mockRequest({
                 methodType: "TwilioPhone",
-                payload: { phoneNumber: adminPhone }
+                payload: { phoneNumber: verifiedPhone }
             });
             const res = mockResponse();
 
@@ -186,6 +193,189 @@ describe("Controllers", () => {
                     deletionKey: expect.stringContaining("deletion_")
                 })
             );
+        });
+
+        it("rejects a forged deletion token even with a valid OTP", async () => {
+            const req = mockRequest({
+                methodType: "TwilioPhone",
+                deletionKey: `deletion_${"a".repeat(64)}`,
+                payload: { phoneNumber: verifiedPhone, otp: "123456" }
+            });
+            const res = mockResponse();
+
+            await AccountDeletionController.completeDeletion(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: "Invalid or expired deletion session."
+                })
+            );
+        });
+
+        it("deletes only the account bound to a verified single-use session", async () => {
+            const presentationKey = "ac".repeat(32);
+            const phoneNumber = verifiedPhone;
+            const user = await UserService.createUser(presentationKey);
+            await UserService.linkAuthMethod(user.id, "TwilioPhone", phoneNumber);
+            const startResponse = mockResponse();
+
+            await AccountDeletionController.startDeletion(mockRequest({
+                methodType: "TwilioPhone",
+                payload: { phoneNumber }
+            }), startResponse);
+
+            const deletionKey = startResponse.json.mock.calls[0][0].deletionKey;
+            expect(deletionKey).toMatch(/^deletion_[0-9a-f]{64}$/);
+
+            const completeResponse = mockResponse();
+            await AccountDeletionController.completeDeletion(mockRequest({
+                methodType: "TwilioPhone",
+                deletionKey,
+                payload: { phoneNumber, otp: "123456" }
+            }), completeResponse);
+
+            expect(completeResponse.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Account successfully deleted. You can now sign up again if desired."
+            });
+            await expect(
+                UserService.getUserByPresentationKey(presentationKey)
+            ).resolves.toBeUndefined();
+            await expect(
+                UserService.findUserByConfig("TwilioPhone", phoneNumber)
+            ).resolves.toBeUndefined();
+
+            const replayResponse = mockResponse();
+            await AccountDeletionController.completeDeletion(mockRequest({
+                methodType: "TwilioPhone",
+                deletionKey,
+                payload: { phoneNumber, otp: "123456" }
+            }), replayResponse);
+            expect(replayResponse.status).toHaveBeenCalledWith(400);
+        });
+    });
+
+    describe("ShareController identity binding", () => {
+        const victimHash = "cd".repeat(32);
+        const victim = {
+            id: 10,
+            presentationKey: `shamir_${victimHash.slice(0, 48)}`,
+            userIdHash: victimHash
+        };
+        const attacker = {
+            id: 20,
+            presentationKey: "ef".repeat(32)
+        };
+        const verifiedPayload = {
+            phoneNumber: verifiedPhone,
+            otp: "123456"
+        };
+
+        function mockIdentityMismatch() {
+            jest.spyOn(UserService, "getUserByUserIdHash")
+                .mockResolvedValue(victim as any);
+            jest.spyOn(UserService, "findUserByConfig")
+                .mockResolvedValue(attacker as any);
+            jest.spyOn(ShareService, "isRateLimited")
+                .mockResolvedValue({ limited: false } as any);
+            jest.spyOn(ShareService, "logAccess")
+                .mockResolvedValue(undefined as any);
+        }
+
+        it("does not retrieve a victim share with an attacker's valid OTP", async () => {
+            mockIdentityMismatch();
+            const retrieve = jest.spyOn(
+                ShareService,
+                "retrieveDecryptedShare"
+            ).mockResolvedValue("2.3.2.deadbeef");
+            const res = mockResponse();
+
+            await ShareController.retrieveShare(mockRequest({
+                methodType: "TwilioPhone",
+                payload: verifiedPayload,
+                userIdHash: victimHash
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(retrieve).not.toHaveBeenCalled();
+        });
+
+        it("does not update a victim share with an attacker's valid OTP", async () => {
+            mockIdentityMismatch();
+            const update = jest.spyOn(ShareService, "updateShare");
+            const res = mockResponse();
+
+            await ShareController.updateShare(mockRequest({
+                methodType: "TwilioPhone",
+                payload: verifiedPayload,
+                userIdHash: victimHash,
+                newShareB: "2.3.2.deadbeef"
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(update).not.toHaveBeenCalled();
+        });
+
+        it("does not delete a victim account with an attacker's valid OTP", async () => {
+            mockIdentityMismatch();
+            const deleteShare = jest.spyOn(ShareService, "deleteShare");
+            const deleteUser = jest.spyOn(UserService, "deleteUserByUserIdHash");
+            const res = mockResponse();
+
+            await ShareController.deleteUser(mockRequest({
+                methodType: "TwilioPhone",
+                payload: verifiedPayload,
+                userIdHash: victimHash
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(deleteShare).not.toHaveBeenCalled();
+            expect(deleteUser).not.toHaveBeenCalled();
+        });
+
+        it("does not store over a victim account with an attacker's valid OTP", async () => {
+            mockIdentityMismatch();
+            const store = jest.spyOn(ShareService, "storeShare");
+            const res = mockResponse();
+
+            await ShareController.storeShare(mockRequest({
+                methodType: "TwilioPhone",
+                payload: verifiedPayload,
+                shareB: "2.3.2.deadbeef",
+                userIdHash: victimHash
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(store).not.toHaveBeenCalled();
+        });
+
+        it("retrieves a share when the verified identity owns the target user", async () => {
+            jest.spyOn(UserService, "getUserByUserIdHash")
+                .mockResolvedValue(victim as any);
+            jest.spyOn(UserService, "findUserByConfig")
+                .mockResolvedValue(victim as any);
+            jest.spyOn(ShareService, "isRateLimited")
+                .mockResolvedValue({ limited: false } as any);
+            jest.spyOn(ShareService, "logAccess")
+                .mockResolvedValue(undefined as any);
+            jest.spyOn(ShareService, "retrieveDecryptedShare")
+                .mockResolvedValue("2.3.2.deadbeef");
+            const res = mockResponse();
+
+            await ShareController.retrieveShare(mockRequest({
+                methodType: "TwilioPhone",
+                payload: verifiedPayload,
+                userIdHash: victimHash
+            }), res);
+
+            expect(res.status).not.toHaveBeenCalled();
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                shareB: "2.3.2.deadbeef",
+                message: "Share retrieved successfully"
+            });
         });
     });
 });

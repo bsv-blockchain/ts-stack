@@ -37,11 +37,11 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 LABEL org.opencontainers.image.title="Wallet Authentication Backend"
 LABEL org.opencontainers.image.description="Multi-factor authentication backend for BSV wallets"
 LABEL org.opencontainers.image.vendor="BSV Blockchain"
-LABEL org.opencontainers.image.version="1.4.1"
-LABEL org.opencontainers.image.source="https://github.com/bsv-blockchain/wab"
+LABEL org.opencontainers.image.version="1.4.11"
+LABEL org.opencontainers.image.source="https://github.com/bsv-blockchain/ts-stack"
 LABEL org.opencontainers.image.licenses="Open-BSV-License-v4"
-LABEL org.opencontainers.image.url="https://github.com/bsv-blockchain/wab"
-LABEL org.opencontainers.image.documentation="https://github.com/bsv-blockchain/wab/blob/master/README.md"
+LABEL org.opencontainers.image.url="https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab"
+LABEL org.opencontainers.image.documentation="https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab"
 
 WORKDIR /app
 

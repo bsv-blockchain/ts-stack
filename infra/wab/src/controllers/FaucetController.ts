@@ -7,6 +7,7 @@
 
 import { Request, Response } from "express";
 import { UserService } from "../services/UserService";
+import { isHexIdentifier, isRecord } from "../security/requestValidation";
 import { log } from "../logger";
 const COMMISSION_FEE = process.env.COMMISSION_FEE
 
@@ -17,6 +18,9 @@ export class FaucetController {
      */
     public static async requestFaucet(req: Request, res: Response) {
         try {
+            if (!isRecord(req.body)) {
+                return res.status(400).json({ message: "Request body must be a JSON object." });
+            }
             const faucetEnabled = true; // Hardcoded for demonstration
             const faucetAmount = Number(COMMISSION_FEE) || 1000;  // Hardcoded for demonstration
 
@@ -25,8 +29,8 @@ export class FaucetController {
             }
 
             const { presentationKey } = req.body;
-            if (!presentationKey) {
-                return res.status(400).json({ message: "presentationKey is required" });
+            if (!isHexIdentifier(presentationKey)) {
+                return res.status(400).json({ message: "A 32-byte presentationKey is required." });
             }
 
             const user = await UserService.getUserByPresentationKey(presentationKey);
