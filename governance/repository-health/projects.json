@@ -6,6 +6,53 @@
       "codeownersSource": ".github/CODEOWNERS"
     }
   },
+  "generatedArtifacts": [
+    {
+      "path": "conformance/generated/**",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "specs/overlay/overlay-http.yaml",
+        "specs/broadcast/arc.yaml",
+        "specs/messaging/message-box-http.yaml"
+      ],
+      "generator": ".github/workflows/codegen.yml",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review the source specifications and deterministic generator; never treat generated output as hand-authored source."
+    },
+    {
+      "path": "docs-site/public/assets/asyncapi/**",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "specs/payments/brc29-payment-protocol.yaml",
+        "specs/auth/brc103-mutual-auth.yaml",
+        "specs/messaging/authsocket-asyncapi.yaml",
+        "specs/sync/gasp-asyncapi.yaml"
+      ],
+      "generator": "scripts/generate-asyncapi-html.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review the specification and renderer changes; verify regeneration is deterministic in the docs build."
+    },
+    {
+      "path": "packages/verifast/src/wasm/bdk-core.{mjs,browser.mjs,umd.js,wasm,umd.wasm,d.ts,browser.d.ts}",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "packages/verifast/README.md#reproducible-wasm-build"
+      ],
+      "generator": "module/typesbdk/wasm/build.sh from the pinned BDK source described by @bsv/verifast",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Verify pinned inputs, hashes, ABI tests, browser and Node consumer tests, and package size; do not hand-edit generated glue or binaries."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/docs/open-rpc/index.html",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "packages/wallet/wallet-toolbox/src/storage/**"
+      ],
+      "generator": "JSight OpenRPC documentation export",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review the StorageClient contract and the regenerated documentation artifact together."
+    }
+  ],
   "profiles": {
     "monorepo": {
       "description": "Private workspace orchestration root",

@@ -20,6 +20,14 @@
     "vectorFiles": 74,
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
   },
+  "testExceptions": {
+    "explicitSkipDeclarations": 60,
+    "passWithNoTestsManifests": 4,
+    "noOpTestManifests": 1,
+    "failingPlaceholderTestManifests": 1,
+    "dependencyOverrides": 1,
+    "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7"
+  },
   "lint": {
     "warnings": 846,
     "errors": 0,

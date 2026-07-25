@@ -42,10 +42,19 @@ contract debt present when the control was introduced. The health check rejects
 new findings and stale entries for findings that have been fixed. This makes
 the baseline a ratchet: debt can fall, but it cannot grow silently.
 
+The `generatedArtifacts` section of `projects.json` records each checked-in
+generated boundary, its owning team, source inputs, generator, review policy,
+and analysis treatment. Generated output can be excluded narrowly only when
+this relationship is explicit. Product source and tests must not be
+reclassified as generated to reduce quality findings.
+
 `governance/repository-health/exceptions.json` is the only registry for temporary
 exceptions. Its schema is in `exception.schema.json`. Every entry requires an
 owner, rationale, evidence, creation date, review deadline, and objective
-removal condition. Expired entries fail CI. An empty registry is preferred.
+removal condition. Owners must resolve to the same owner registry used by the
+workspace inventory. Expired entries fail CI. An empty registry is preferred,
+but existing overrides, skipped tests, and analysis suppressions must be
+recorded until they are removed.
 
 ## Commands
 
@@ -81,10 +90,12 @@ checks:
 1. discovery matches the exact 37-project inventory;
 2. names, owners, profiles, criticality, targets, privacy, and release methods
    are internally consistent;
-3. published package versions match the recorded baseline;
-4. exception records are structurally valid and unexpired;
-5. current package-contract findings exactly match the ratcheted snapshot; and
-6. the health implementation’s unit tests pass.
+3. generated artifact boundaries have valid owners, sources, generators, and
+   narrow review/analysis policies;
+4. published package versions match the recorded baseline;
+5. exception records are owned, structurally valid, and unexpired;
+6. current package-contract findings exactly match the ratcheted snapshot; and
+7. the health implementation’s unit tests pass.
 
 The job writes a rule-by-rule and project-by-project report to the GitHub Actions
 step summary and feeds the required `merge-gate`. Known findings stay visible

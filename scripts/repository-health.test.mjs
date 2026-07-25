@@ -28,6 +28,10 @@ test('workspace discovery exactly matches the 37-project registry', () => {
     [...projects.projects].map(project => project.path).sort()
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
+  assert.equal(projects.generatedArtifacts.length, 4)
+  assert.ok(
+    projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers')
+  )
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
@@ -120,6 +124,37 @@ test('exception registry requires a current monthly review even when empty', () 
       exceptions: []
     }, '2026-07-25'),
     ['exceptions.json lastReviewed is in the future: 2026-07-26']
+  )
+})
+
+test('generated-artifact and exception owners must resolve to the owner registry', () => {
+  const discovered = discoverWorkspaceProjects()
+  const invalidProjects = structuredClone(projects)
+  invalidProjects.generatedArtifacts[0].owner = 'unknown-owner'
+
+  assert.match(
+    validateProjectRegistry(invalidProjects, discovered).join('\n'),
+    /generated artifact conformance\/generated\/\*\* references unknown owner/
+  )
+  assert.deepEqual(
+    validateExceptionRegistry({
+      schemaVersion: 1,
+      lastReviewed: '2026-07-25',
+      exceptions: [
+        {
+          id: 'owned-hold',
+          category: 'dependency-hold',
+          target: 'example',
+          owner: 'unknown-owner',
+          reason: 'A sufficiently detailed temporary compatibility hold.',
+          evidence: ['https://example.test/evidence'],
+          created: '2026-07-25',
+          reviewBy: '2026-08-01',
+          removeWhen: 'Compatibility is restored.'
+        }
+      ]
+    }, '2026-07-25', projects.ownerDefinitions),
+    ['exception owned-hold references unknown owner "unknown-owner"']
   )
 })
 

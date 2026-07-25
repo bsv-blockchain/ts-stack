@@ -109,6 +109,31 @@ export function validateProjectRegistry(registry, discovered) {
   if (!registry?.ownerDefinitions || typeof registry.ownerDefinitions !== 'object') {
     errors.push('projects.json ownerDefinitions must be an object')
   }
+  if (!Array.isArray(registry?.generatedArtifacts)) {
+    errors.push('projects.json generatedArtifacts must be an array')
+  } else {
+    for (const duplicate of duplicateValues(registry.generatedArtifacts.map(item => item.path))) {
+      errors.push(`projects.json contains duplicate generated artifact path: ${duplicate}`)
+    }
+    for (const artifact of registry.generatedArtifacts) {
+      const prefix = `generated artifact ${artifact?.path ?? '<missing path>'}`
+      if (!isNonEmptyString(artifact?.path)) errors.push(`${prefix} must have a path`)
+      if (!isNonEmptyString(artifact?.owner) ||
+          !registry.ownerDefinitions?.[artifact.owner]) {
+        errors.push(`${prefix} references unknown owner ${JSON.stringify(artifact?.owner)}`)
+      }
+      if (!Array.isArray(artifact?.sourceInputs) || artifact.sourceInputs.length === 0 ||
+          artifact.sourceInputs.some(item => !isNonEmptyString(item))) {
+        errors.push(`${prefix} must have one or more sourceInputs`)
+      }
+      for (const field of ['generator', 'reviewPolicy']) {
+        if (!isNonEmptyString(artifact?.[field])) errors.push(`${prefix} must have ${field}`)
+      }
+      if (artifact?.analysisPolicy !== 'exclude-generated') {
+        errors.push(`${prefix} analysisPolicy must be "exclude-generated"`)
+      }
+    }
+  }
   if (!registry?.profiles || typeof registry.profiles !== 'object') {
     errors.push('projects.json profiles must be an object')
   }
@@ -178,7 +203,11 @@ export function validateProjectRegistry(registry, discovered) {
   return errors
 }
 
-export function validateExceptionRegistry(registry, today = new Date().toISOString().slice(0, 10)) {
+export function validateExceptionRegistry(
+  registry,
+  today = new Date().toISOString().slice(0, 10),
+  ownerDefinitions
+) {
   const errors = []
   if (registry?.schemaVersion !== 1) errors.push('exceptions.json schemaVersion must be 1')
   if (!isValidDate(registry?.lastReviewed)) {
@@ -214,6 +243,10 @@ export function validateExceptionRegistry(registry, today = new Date().toISOStri
     }
     for (const field of ['target', 'owner']) {
       if (!isNonEmptyString(exception?.[field])) errors.push(`${prefix} must have ${field}`)
+    }
+    if (ownerDefinitions && isNonEmptyString(exception?.owner) &&
+        !ownerDefinitions[exception.owner]) {
+      errors.push(`${prefix} references unknown owner ${JSON.stringify(exception.owner)}`)
     }
     if (!isNonEmptyString(exception?.reason) || exception.reason.trim().length < 20) {
       errors.push(`${prefix} reason must be at least 20 characters`)
@@ -633,7 +666,7 @@ export function evaluateRepositoryHealth({
   const findings = collectContractFindings(registry, discovered, root)
   const errors = [
     ...validateProjectRegistry(registry, discovered),
-    ...validateExceptionRegistry(exceptions, today),
+    ...validateExceptionRegistry(exceptions, today, registry.ownerDefinitions),
     ...validateBaselines(baselines, registry, discovered)
   ]
 
