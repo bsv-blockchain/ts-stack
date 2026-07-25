@@ -145,7 +145,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
@@ -171,7 +171,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
@@ -187,6 +187,7 @@ jobs:
           name: coverage-sdk
           path: .coverage-output/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1
 
   coverage-did:
@@ -204,7 +205,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
@@ -220,6 +221,7 @@ jobs:
           name: coverage-did
           path: .coverage-output/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1
 
   coverage-wallet:
@@ -241,7 +243,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
@@ -264,6 +266,7 @@ jobs:
           name: coverage-wallet-${{ matrix.shard }}
           path: .coverage-output/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1
 
   coverage-verifast:
@@ -281,7 +284,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
@@ -299,6 +302,7 @@ jobs:
           name: coverage-verifast
           path: .coverage-output/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1
 
   coverage-other:
@@ -315,7 +319,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
@@ -361,6 +365,7 @@ jobs:
           name: coverage-other
           path: .coverage-output/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1
 
   coverage-upload:
@@ -387,7 +392,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: coverage-*
           path: .coverage-artifacts
