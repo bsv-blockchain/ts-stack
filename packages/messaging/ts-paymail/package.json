@@ -1,6 +1,6 @@
 {
   "name": "@bsv/paymail",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "BSV Paymail library",
   "publishConfig": {
     "access": "public"
@@ -10,9 +10,15 @@
   "types": "dist/types/mod.d.ts",
   "type": "module",
   "files": [
-    "dist",
-    "src",
-    "docs"
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.json",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.ts.map",
+    "src/**/*.ts",
+    "!src/**/__tests__/**",
+    "docs/*.md",
+    "docs/specs"
   ],
   "exports": {
     ".": {
@@ -103,24 +109,23 @@
     "Paymail"
   ],
   "dependencies": {
-    "@types/jest": "^30.0.0",
     "cross-fetch": "^4.1.0",
     "express": "^5.2.1",
-    "jest": "^30.4.2",
-    "joi": "^18.2.3",
-    "node-fetch": "^3.3.2",
-    "supertest": "^7.2.2",
-    "ts-jest": "^29.4.12",
-    "ts2md": "^0.2.8",
-    "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^6.0.3"
+    "joi": "^18.2.3"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/body-parser": "^1.19.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
-    "oxlint": "^1.75.0"
+    "jest": "^30.4.2",
+    "oxlint": "^1.75.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.12",
+    "ts2md": "^0.2.8",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

@@ -3,7 +3,7 @@ id: pkg-paymail
 title: "@bsv/paymail"
 kind: package
 domain: messaging
-version: "2.4.1"
+version: "2.4.2"
 source_repo: "bsv-blockchain/paymail"
 source_commit: "unknown"
 last_updated: "2026-07-24"
