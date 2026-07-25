@@ -84,8 +84,8 @@ const logExporter: LogRecordExporter = useOtlp
   : new ConsoleLogRecordExporter()
 
 const logRecordProcessor = useOtlp
-  ? new BatchLogRecordProcessor(logExporter)
-  : new SimpleLogRecordProcessor(logExporter)
+  ? new BatchLogRecordProcessor({ exporter: logExporter })
+  : new SimpleLogRecordProcessor({ exporter: logExporter })
 
 const sdk = new NodeSDK({
   resource,

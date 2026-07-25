@@ -12,7 +12,7 @@ describe('compose API', () => {
     expect(() => createMessageBoxContext({} as any)).toThrow(/wallet/)
   })
 
-  it('register pre/post auth routes attach without throwing', () => {
+  it('register pre/post auth routes attach without throwing', async () => {
     const knexConfig = { client: 'mysql2', connection: {}, useNullAsDefault: true }
     const knex = (knexLib as any).default?.(knexConfig) ?? (knexLib as any)(knexConfig)
     const wallet = {
@@ -30,5 +30,6 @@ describe('compose API', () => {
       registerMessageBoxPostAuthRoutes(app, ctx)
     }).not.toThrow()
     expect(typeof app.use).toBe('function')
+    await knex.destroy()
   })
 })

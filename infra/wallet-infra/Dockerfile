@@ -1,30 +1,38 @@
-FROM node:22-alpine
+FROM node:24-alpine AS build
 
-# Install nginx
-RUN echo "http://dl-4.alpinelinux.org/alpine/v3.3/main" >> /etc/apk/repositories && \
-    apk add --no-cache --update nginx && \
-    chown -R nginx:www-data /var/lib/nginx
+RUN apk add --no-cache g++ make python3
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3
+
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build \
+ && npm prune --omit=dev
+
+FROM node:24-alpine
+
+RUN apk upgrade --no-cache \
+ && apk add --no-cache nginx \
+ && chown -R nginx:www-data /var/lib/nginx
 
 COPY ./nginx.conf /etc/nginx/nginx.conf
 
-EXPOSE 8080
 WORKDIR /app
-COPY package.json .
-COPY src/ src/
-RUN npm i
-COPY tsconfig.json .
-RUN npm i knex typescript -g && \
-    npm run build
 
-# Strip npm from the runtime image: the app runs via `node` (see CMD) and
-# node:22-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
-# that we don't need at runtime.
+COPY --from=build --chown=root:root --chmod=0444 /app/package.json /app/package-lock.json ./
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/out ./out
+
+# The service starts directly with Node, so the runtime image does not retain
+# npm or its unrelated dependency graph.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
-# Run as non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+USER node
 
-# Preload the OpenTelemetry bootstrap (ESM --import) before app code so
-# auto-instrumentation patches modules before they are imported.
-CMD [ "node", "--import", "./out/src/telemetry.js", "out/src/index.js"]
+EXPOSE 8080
+
+CMD ["node", "--import", "./out/src/telemetry.js", "out/src/index.js"]

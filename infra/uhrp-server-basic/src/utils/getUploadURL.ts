@@ -1,4 +1,3 @@
-import path from 'path'
 import { getWallet } from './walletSingleton'
 import { Utils } from '@bsv/sdk'
 

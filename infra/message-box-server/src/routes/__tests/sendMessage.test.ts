@@ -108,8 +108,9 @@ describe('sendMessage', () => {
     axiosMock?.restore()
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     mockKnex.unmock(knex)
+    await testKnex.destroy()
   })
 
   it('Throws an error if message is missing', async () => {

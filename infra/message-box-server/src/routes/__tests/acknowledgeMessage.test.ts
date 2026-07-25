@@ -67,8 +67,9 @@ describe('acknowledgeMessage', () => {
     }
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     (mockKnex as any).unmock(knex)
+    await testKnex.destroy()
   })
 
   it('Throws an error if messageId is missing', async () => {

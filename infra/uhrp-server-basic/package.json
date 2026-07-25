@@ -1,6 +1,15 @@
 {
   "name": "@bsv/uhrp-lite",
   "version": "0.1.7",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "gaxios": "7.3.0",
+    "uuid": "11.1.1"
+  },
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
   "files": [
@@ -19,33 +28,30 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
-    "@bsv/auth-express-middleware": "^2.1.0",
+    "@bsv/auth-express-middleware": "^2.1.1",
     "@bsv/payment-express-middleware": "^2.1.0",
-    "@bsv/sdk": "^2.1.6",
-    "@bsv/wallet-toolbox-client": "^2.3.3",
+    "@bsv/sdk": "^2.1.9",
+    "@bsv/wallet-toolbox-client": "^2.4.3",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/api-logs": "^0.219.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.77.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.219.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.219.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
-    "@opentelemetry/instrumentation": "^0.219.0",
-    "@opentelemetry/instrumentation-runtime-node": "^0.32.0",
-    "@opentelemetry/resources": "^2.8.0",
-    "@opentelemetry/sdk-logs": "^0.219.0",
-    "@opentelemetry/sdk-metrics": "^2.8.0",
-    "@opentelemetry/sdk-node": "^0.219.0",
-    "@opentelemetry/sdk-trace-base": "^2.8.0",
-    "@opentelemetry/semantic-conventions": "^1.41.1",
-    "axios": "^1.18.0",
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.79.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/instrumentation": "^0.221.0",
+    "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "axios": "^1.18.1",
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "pino": "^10.3.1",
     "prettyjson": "^1.2.5"
-  },
-  "overrides": {
-    "@bsv/sdk": "$@bsv/sdk"
   },
   "scripts": {
     "start": "ts-node -r ./src/telemetry.ts src/index.ts",
@@ -54,16 +60,16 @@
     "build": "tsc",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
-    "lint": "standard --fix ."
+    "lint": "oxlint src --deny-warnings"
   },
   "devDependencies": {
-    "@types/body-parser": "^1.19.5",
+    "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.0.0",
+    "@types/node": "^24.13.3",
     "@types/prettyjson": "^0.0.33",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.14",
-    "standard": "^17.1.2",
+    "oxlint": "^1.75.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   }

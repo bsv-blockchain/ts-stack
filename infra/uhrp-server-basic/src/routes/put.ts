@@ -1,10 +1,9 @@
 import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
-import { Hash, StorageUtils, Utils } from '@bsv/sdk';
+import { Hash, Utils } from '@bsv/sdk';
 import fs from 'fs'
 import { getWallet } from '../utils/walletSingleton';
 import path from 'path';
-import bodyparser from 'body-parser';
 import { IncomingHttpHeaders } from 'http';
 import { log } from '../logger';
 
@@ -44,12 +43,19 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
 
   // Verify hmac
   const str = `fileSize=${req.query.fileSize}&objectID=${req.query.objectID}&expiry=${req.query.expiry}&uploader=${req.query.uploader}`
-    const { valid } = await wallet.verifyHmac({
+  const { valid } = await wallet.verifyHmac({
       protocolID: [2, 'storage upload'],
       keyID: '1',
       data: Utils.toArray(str, 'utf8'),
       hmac: Utils.toArray(req.query.hmac, 'hex')
+  })
+  if (!valid) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'ERR_INVALID_HMAC',
+      description: 'Invalid upload authorization'
     })
+  }
 
   // Verify no file exists with the same object ID
   if (fs.existsSync(path.join(__dirname, `../../public/cdn/${req.query.objectID}`))) {

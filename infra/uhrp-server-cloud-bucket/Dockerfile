@@ -1,24 +1,26 @@
 # ── Stage 1: build ──────────────────────────────────────────
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 COPY tsconfig.json ./
 COPY src/ ./src/
 
 RUN npm run build
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 # ── Stage 2: production ────────────────────────────────────
-FROM node:22-alpine
+FROM node:24-alpine
 
 RUN apk upgrade --no-cache
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
-# node:22-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
+# node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
 # that we don't need at runtime.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 

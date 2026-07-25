@@ -57,7 +57,7 @@ describe("UserService", () => {
 
         it("should delete user", async () => {
             const key = "deleteKey_" + Date.now();
-            const user = await UserService.createUser(key);
+            await UserService.createUser(key);
             await UserService.deleteUserByPresentationKey(key);
             const fetched = await UserService.getUserByPresentationKey(key);
             expect(fetched).toBeUndefined();

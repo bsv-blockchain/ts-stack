@@ -1,4 +1,5 @@
 // Jest setup file - runs for each test file
+import { afterAll, beforeAll } from '@jest/globals';
 import { db, migrateLatest } from './src/db/knex';
 
 // This is a singleton to track if DB is initialized across test files
@@ -11,3 +12,7 @@ beforeAll(async () => {
         dbInitialized = true;
     }
 }, 30000);
+
+afterAll(async () => {
+    await db.destroy();
+});

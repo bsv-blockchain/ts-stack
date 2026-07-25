@@ -4,14 +4,19 @@ process.env.PRICE_PER_GB_MO = 0.03
 
 const getPriceForFile = require('../getPriceForFile').default
 const axios = require('axios')
+const { log } = require('../../logger')
 
 jest.mock('axios')
+jest.mock('../../logger', () => ({
+  log: {
+    error: jest.fn()
+  }
+}))
 
 let valid
 
 describe('getPriceForFile', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => {})
     axios.get.mockReturnValue({ data: { rate: 200 } })
     valid = {
       fileSize: 580 * 1000000, // 580 MB
@@ -29,9 +34,14 @@ describe('getPriceForFile', () => {
     axios.get.mockReturnValue({ data: null })
     const returnValue = await getPriceForFile(valid)
     expect(returnValue).toEqual(5645333)
-    expect(console.error).toHaveBeenCalledWith(
-      'Exchange rate failed, using fallback rate of 30',
-      expect.any(Error)
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'price.exchange_rate',
+        outcome: 'error',
+        fallback_rate: 30,
+        err: expect.any(Error)
+      }),
+      'Exchange rate failed, using fallback rate'
     )
   })
   it('Works with different exchange rates', async () => {

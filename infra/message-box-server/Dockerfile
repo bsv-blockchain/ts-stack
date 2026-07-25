@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -12,11 +12,10 @@ COPY package*.json ./
 COPY tsconfig*.json ./
 COPY knexfile.ts ./
 
-# Install all dependencies (including dev deps for build)
-RUN npm install
-
-# Install global tools (optional, depends on how you're running knex)
-RUN npm install -g knex typescript
+# Install without running arbitrary dependency lifecycle scripts, then compile
+# the one allowlisted native module required by the service.
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 # Copy source code required for compilation
 COPY src ./src
@@ -28,7 +27,7 @@ RUN npm run build
 RUN cp out/knexfile.js ./knexfile.js
 
 # ---- Production stage ----
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Ensure all OS packages are up to date (patch CVEs in base image) and install nginx
 RUN apk upgrade --no-cache && \
@@ -42,7 +41,8 @@ WORKDIR /app
 # install, then remove it in the same layer to keep the image slim.
 COPY --chown=root:root --chmod=0444 package*.json ./
 RUN apk add --no-cache --virtual .build-deps python3 make g++ \
- && npm ci --omit=dev \
+ && npm ci --omit=dev --ignore-scripts \
+ && npm rebuild better-sqlite3 \
  && apk del .build-deps \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 

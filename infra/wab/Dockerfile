@@ -1,7 +1,7 @@
 # ------------------------------------------------------------------------------
 # 1) Builder Stage: builds TypeScript and compiles native modules
 # ------------------------------------------------------------------------------
-FROM public.ecr.aws/docker/library/node:22-alpine AS builder
+FROM public.ecr.aws/docker/library/node:24-alpine AS builder
 
 # Install build tools for native modules (sqlite3, etc.)
 RUN apk add --no-cache python3 make g++
@@ -11,7 +11,8 @@ WORKDIR /app
 # Copy only the manifest files first for better caching
 COPY package*.json ./
 COPY tsconfig.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3 sqlite3
 
 # Copy the source needed for the build
 COPY src ./src
@@ -22,13 +23,13 @@ RUN npm run build
 # ------------------------------------------------------------------------------
 # 2) Production Stage: minimal runtime image
 # ------------------------------------------------------------------------------
-FROM public.ecr.aws/docker/library/node:22-alpine
+FROM public.ecr.aws/docker/library/node:24-alpine
 
 # Patch any OS-level CVEs in the base image
 RUN apk upgrade --no-cache
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
-# node:22-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
+# node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
 # that we don't need at runtime.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 

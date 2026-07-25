@@ -6,12 +6,18 @@ const quote = require('../quote').default
 const getPriceForFile = require(
   '../../utils/getPriceForFile'
 ).default
+const { log } = require('../../logger')
 
 const {
   MIN_HOSTING_MINUTES
 } = process.env
 
 jest.mock('../../utils/getPriceForFile')
+jest.mock('../../logger', () => ({
+  log: {
+    error: jest.fn()
+  }
+}))
 
 const mockRes = {}
 mockRes.status = jest.fn(() => mockRes)
@@ -20,9 +26,6 @@ let validReq
 
 describe('quote', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(e => {
-      throw e
-    })
     getPriceForFile.mockReturnValue(1024)
     validReq = {
       body: {
@@ -102,12 +105,24 @@ describe('quote', () => {
       quote: 1024
     })
   })
-  it('Throws unknown errors', async () => {
+  it('returns a sanitized internal error for unknown failures', async () => {
     getPriceForFile.mockImplementation(() => {
       throw new Error('Failed')
     })
-    await expect(quote.func(validReq, mockRes)).rejects.toThrow(
-      new Error('Failed')
+    await quote.func(validReq, mockRes)
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'quote.handle',
+        outcome: 'error',
+        err: expect.any(Error)
+      }),
+      'Quote handler failed'
     )
+    expect(mockRes.status).toHaveBeenCalledWith(500)
+    expect(mockRes.json).toHaveBeenCalledWith({
+      status: 'error',
+      code: 'ERR_INTERNAL',
+      description: 'An internal error has occurred.'
+    })
   })
 })

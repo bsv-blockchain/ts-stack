@@ -2,6 +2,15 @@
   "name": "@bsv/overlay-express-examples",
   "private": true,
   "version": "2.1.17",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "gaxios": "7.3.0",
+    "uuid": "11.1.1"
+  },
   "description": "Run the overlay infrastructure for distributed applications.",
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server#readme",
   "bugs": {
@@ -18,38 +27,37 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
+    "lint": "oxlint src --deny-warnings",
     "start": "node --import ./dist/telemetry.js dist/index.js",
     "dev": "tsx src/index.ts"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
+    "@types/node": "^24.13.3",
+    "oxlint": "^1.75.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.1.1",
+    "@bsv/overlay": "^2.2.0",
     "@bsv/overlay-discovery-services": "^2.1.0",
     "@bsv/overlay-express": "^2.4.1",
-    "@bsv/overlay-topics": "^1.4.0",
-    "@bsv/sdk": "^2.1.6",
+    "@bsv/overlay-topics": "^1.6.0",
+    "@bsv/sdk": "^2.1.9",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/api-logs": "^0.219.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.77.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.219.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.219.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
-    "@opentelemetry/instrumentation-runtime-node": "^0.32.0",
-    "@opentelemetry/resources": "^2.8.0",
-    "@opentelemetry/sdk-logs": "^0.219.0",
-    "@opentelemetry/sdk-metrics": "^2.8.0",
-    "@opentelemetry/sdk-node": "^0.219.0",
-    "@opentelemetry/sdk-trace-base": "^2.8.0",
-    "@opentelemetry/semantic-conventions": "^1.41.1",
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.79.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
     "dotenv": "^17.4.2",
-    "mongodb": "^7.2.0",
-    "mysql2": "^3.22.5",
+    "mongodb": "^7.5.0",
+    "mysql2": "^3.23.1",
     "pino": "^10.3.1"
-  },
-  "overrides": {
-    "picomatch": ">=4.0.4"
   }
 }

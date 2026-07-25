@@ -100,8 +100,9 @@ describe('listMessages', () => {
     }
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     (mockKnex as any).unmock(knex)
+    await testKnex.destroy()
   })
 
   it('Throws an error if a messageBox is not provided', async () => {

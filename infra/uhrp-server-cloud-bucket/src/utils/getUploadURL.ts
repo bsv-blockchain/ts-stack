@@ -32,7 +32,7 @@ const devUploadFunction = (): Promise<UploadResponse> => {
  * be present on the request. There is no way to force these headers solely via the URL.
  */
 const prodUploadFunction = async ({
-  size,
+  size: _size,
   expiryTime,
   objectIdentifier,
   uploaderIdentityKey
