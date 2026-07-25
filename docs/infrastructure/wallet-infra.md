@@ -2,9 +2,9 @@
 id: infra-wallet-infra
 title: "Wallet Infrastructure Services"
 kind: infra
-version: "2.0.4"
-last_updated: "2026-06-27"
-last_verified: "2026-06-27"
+version: "2.0.13"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: stable
 tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
@@ -41,6 +41,8 @@ Clients connect with identity-based auth headers, manage UTXOs, baskets, labels,
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | / | JSON-RPC 2.0 endpoint (all wallet operations) |
+| PUT | /action-batch/:batchId/blob/:digest | Authenticated bounded binary blob upload |
+| GET | /, /robots.txt | Public service metadata |
 
 JSON-RPC methods: walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, walletUtxoStorage_getBasket, walletUtxoStorage_listLabels, walletUtxoStorage_upsertLabel, walletUtxoStorage_dropLabels, walletUtxoStorage_listCertificates, walletUtxoStorage_insertCertificate (see @bsv/wallet-toolbox docs for full list).
 
@@ -64,6 +66,14 @@ None; HTTP JSON-RPC only.
 | TAAL_API_KEY | No | API key used by the default Arc/Taal service configuration (optional) |
 | TSTN_ARCADE_URL | tstn only | Private Arcade (broadcast + merkle proofs) endpoint for the `tstn` network. Not public; supplied per-deployment. Also used as the default ChainTracks host. |
 | TSTN_CHAINTRACKS_URL | No | Private ChainTracks endpoint for `tstn`. Defaults to `${TSTN_ARCADE_URL}/chaintracks/v1` when omitted. |
+| WALLET_STORAGE_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
+| WALLET_STORAGE_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
+| WALLET_STORAGE_JSON_MAX_BODY_BYTES | No | JSON-RPC body ceiling (default 31457280) |
+| WALLET_STORAGE_BINARY_MAX_BODY_BYTES | No | Blob body ceiling (default 8388608) |
+
+See [Public Service Edge Security](service-edge-security.md#wallet-storageserver-and-adminserver)
+for the authentication, rate, timeout, logging, CORS/CSP, admin, and nginx
+contracts.
 
 > `tstn` (Teranode Scaling Test Net) runs only Arcade and ChainTracks — it has no
 > WhatsOnChain / block-explorer service. Its endpoints are private and are read from the
@@ -207,5 +217,5 @@ upstream app port (`HTTP_PORT`, default `8081`).
 
 ## Source
 
-- [GitHub](https://github.com/bsv-blockchain/wallet-infra)
+- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra)
 - [npm package](https://npmjs.com/package/@bsv/wallet-toolbox)

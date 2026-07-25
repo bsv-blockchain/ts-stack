@@ -1,22 +1,26 @@
 ---
 id: infra-wab
-title: "Wallet Abstraction Backend (WAB)"
+title: "Wallet Authentication Backend (WAB)"
 kind: infra
-version: "1.4.1"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "1.4.10"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: stable
 tags: [wallet, authentication, mfa, presentation-keys, bsv-wallet]
 ---
 
-# Wallet Abstraction Backend (WAB)
+# Wallet Authentication Backend (WAB)
 
-> A TypeScript/Express server that provides multi-factor authentication for BSV wallet applications. Manages 256-bit presentation keys for users, authenticated via SMS (Twilio), ID verification (Persona), or dev console, as part of a 2-of-3 threshold cryptographic recovery system.
+> A TypeScript/Express server that provides presentation-key and Shamir-share recovery workflows for BSV wallet applications, using Twilio verification in production and an explicitly development-only console OTP method.
 
 ## What it does
 
-The Wallet Abstraction Backend (WAB) implements three auth methods (TwilioAuthMethod, PersonaAuthMethod, DevConsoleAuthMethod) and coordinates key storage via a UserService backed by SQLite (dev) or MySQL (production). Clients request authentication via /auth/start with a presentation key, an external service verifies identity (phone number via SMS, ID document verification, or console OTP), then clients complete authentication via /auth/complete with the verification code. The server looks up existing users by verified identity (phone number, etc.) and returns their stored presentation key, or creates new users. Supports endpoints for managing linked auth methods, deleting users, and requesting faucet payments using R-puzzle transactions.
+WAB enables Twilio phone verification and coordinates key/share storage through
+SQLite (development) or MySQL (production). A Persona example exists in source
+but is not registered as a supported method. The DevConsole method is available
+only when explicitly enabled in a `development` or `test` runtime and cannot be
+activated in production or staging.
 
 Clients authenticate by phone number, recover original presentation keys, and optionally receive one-time BSV payments.
 
@@ -47,6 +51,12 @@ Clients authenticate by phone number, recover original presentation keys, and op
 | POST | /user/unlinkMethod | Unlink auth method (presentationKey, methodId) |
 | POST | /user/delete | Delete user account (presentationKey) |
 | POST | /faucet/request | Request faucet payment (presentationKey) |
+| POST | /account/delete/start | Start OTP-confirmed account deletion |
+| POST | /account/delete/complete | Complete account deletion |
+| POST | /share/store | OTP-confirmed Shamir share creation |
+| POST | /share/retrieve | OTP-confirmed Shamir share recovery |
+| POST | /share/update | OTP-confirmed Shamir share rotation |
+| POST | /share/delete | OTP-confirmed share/account deletion |
 
 ## WebSocket endpoints
 
@@ -71,6 +81,15 @@ None.
 | DB_HOST | No | Database host |
 | DB_PORT | No | Database port |
 | DB_CONNECTION_NAME | No | GCP Cloud SQL connection name (for Cloud SQL with Unix socket) |
+| DEV_CONSOLE_AUTH_METHOD_ENABLED | No | Development/test-only explicit console OTP opt-in |
+| WAB_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
+| WAB_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins for allowlist mode |
+| WAB_MAX_BODY_BYTES | No | JSON body ceiling (default 262144) |
+| WAB_MAX_CONCURRENT_REQUESTS | No | Per-process in-flight ceiling (default 200) |
+| TRUST_PROXY_HOPS | No | Exact trusted proxy hop count, 0 through 10 |
+
+See [Public Service Edge Security](service-edge-security.md#wab) for endpoint
+rate limits, errors, CORS/CSP behavior, and the threat model.
 
 ## Run locally
 
@@ -167,11 +186,11 @@ No explicit health endpoint. Monitor:
 - Twilio setup critical: TWILIO_VERIFY_SERVICE_SID must be VAxxxx (Verify) or VExxxx (Verify Email); wrong SID causes all auth attempts to fail
 - SQLite for dev only: In-memory tables reset on restart; switch to MySQL for production
 - Faucet requires funds: SERVER_PRIVATE_KEY wallet must have UTXOs; transactions fail if insufficient balance
-- Auth methods are singletons: DevConsoleAuthMethod uses in-memory state; reset on service restart
-- CORS permissive: All origins/headers allowed; apply restrictive CORS in production via reverse proxy
+- Dev console is ephemeral: its OTP store resets on restart and is intentionally unavailable in production/staging
+- Public CORS is intentional for wallet apps on unknown domains; use `WAB_CORS_MODE=allowlist` only when the deployment has a closed caller set
 - Migration timing: Must run before server startup; Knex handles schema versioning automatically
 
 ## Source
 
-- [GitHub](https://github.com/bsv-blockchain/wab-server)
+- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab)
 - [npm package](https://npmjs.com/package/@bsv/wab-server)

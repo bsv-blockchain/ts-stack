@@ -3,6 +3,7 @@ import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
 import { StorageUtils } from '@bsv/sdk';
 import { log } from '../logger';
+import { timingSafeEqual } from 'node:crypto';
 
 const {
   ADMIN_TOKEN,
@@ -14,7 +15,6 @@ const storage = new Storage()
 
 interface AdvertiseRequest extends Request {
   body: {
-    adminToken: string
     uhrpUrl: string
     uploaderIdentityKey: string
     objectIdentifier: string
@@ -30,7 +30,15 @@ interface AdvertiseResponse {
 }
 
 const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseResponse>) => {
-  if (typeof ADMIN_TOKEN !== 'string' || ADMIN_TOKEN.length <= 10 || req.body.adminToken !== ADMIN_TOKEN) {
+  const authorization = req.get('authorization')
+  const suppliedToken = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : ''
+  const configuredToken = typeof ADMIN_TOKEN === 'string' ? ADMIN_TOKEN : ''
+  const tokenValid = configuredToken.length >= 32 &&
+    suppliedToken.length === configuredToken.length &&
+    timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(configuredToken))
+  if (!tokenValid) {
     return res.status(401).json({
       status: 'error',
       code: 'ERR_UNAUTHORIZED',
@@ -74,7 +82,7 @@ export default {
   path: '/advertise',
   summary: 'Administrative endpoint to trigger UHRP advertisements when new files are uploaded.',
   parameters: {
-    adminToken: 'Server admin token',
+    authorization: 'Bearer token in the Authorization header',
     uhrpUrl: 'The UHRP URL string to advertise',
     objectIdentifier: 'The ID of this contract',
     fileSize: 'The length of the file'

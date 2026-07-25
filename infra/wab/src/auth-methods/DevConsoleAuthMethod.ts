@@ -35,13 +35,14 @@ export class DevConsoleAuthMethod extends AuthMethod {
         const expiresAt = Date.now() + (10 * 60 * 1000);
         this.otpStorage.set(phoneNumber, { otp, expiresAt, presentationKey });
 
-        // Log OTP for development use
+        // Deliberately disclose only the development OTP. Never log the
+        // presentation key or the in-memory OTP store.
         log.info(
             {
                 operation: 'auth.dev_console.start',
                 identifier: phoneNumber,
                 expires_at: expiresAt,
-                presentation_key: presentationKey
+                otp
             },
             'Development OTP code generated'
         );
@@ -72,7 +73,10 @@ export class DevConsoleAuthMethod extends AuthMethod {
             };
         }
 
-        log.debug({ operation: 'auth.dev_console.complete', payload, store: this.otpStorage }, 'Verifying development OTP')
+        log.debug(
+            { operation: 'auth.dev_console.complete', identifier: phoneNumber },
+            'Verifying development OTP'
+        )
 
         const storedData = this.otpStorage.get(phoneNumber);
         if (!storedData) {

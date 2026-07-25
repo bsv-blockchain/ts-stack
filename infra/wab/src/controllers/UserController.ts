@@ -30,7 +30,7 @@ export class UserController {
             res.json({ authMethods });
         } catch (error: any) {
             log.error({ operation: 'controller.user.list_linked_methods', err: error, outcome: 'error' }, 'listLinkedMethods failed');
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ message: "An internal error occurred." });
         }
     }
 
@@ -61,7 +61,7 @@ export class UserController {
             res.json({ success: true, message: "Auth Method unlinked." });
         } catch (error: any) {
             log.error({ operation: 'controller.user.unlink_method', err: error, outcome: 'error' }, 'unlinkMethod failed');
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ message: "An internal error occurred." });
         }
     }
 
@@ -85,7 +85,7 @@ export class UserController {
             res.json({ success: true, message: "User (and all linked data) deleted." });
         } catch (error: any) {
             log.error({ operation: 'controller.user.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ message: "An internal error occurred." });
         }
     }
 }

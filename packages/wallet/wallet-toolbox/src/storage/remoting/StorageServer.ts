@@ -25,6 +25,16 @@ import {
   rateLimitOptions,
   TrustProxySetting
 } from './RateLimitPolicy'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  configureHttpServer,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders,
+  type HttpServerPolicyDefaults,
+  type SecurityHeadersOptions
+} from './edgePolicy'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -131,6 +141,14 @@ export interface WalletStorageServerOptions {
    * `true` is intentionally unsupported.
    */
   trustProxy?: TrustProxySetting
+  /** Exact browser origins allowed to call this server. Omit for public CORS. */
+  allowedOrigins?: string[]
+  /** Per-process in-flight request ceiling. Defaults to 200. */
+  maxConcurrentRequests?: number
+  /** Node HTTP timeout/connection policy overrides. */
+  http?: Partial<HttpServerPolicyDefaults>
+  /** Security response-header and CSP overrides. */
+  securityHeaders?: SecurityHeadersOptions
   /** Emit one JSON log record for each authenticated RPC. Default: true. */
   logRpcRequests?: boolean
 }
@@ -148,6 +166,10 @@ export class StorageServer {
   private readonly rateLimitOptions?: Partial<RateLimitOptions>
   private readonly preAuthRateLimitOptions?: Partial<RateLimitOptions>
   private readonly trustProxy?: TrustProxySetting
+  private readonly allowedOrigins?: string[]
+  private readonly maxConcurrentRequests: number
+  private readonly httpPolicy: HttpServerPolicyDefaults
+  private readonly securityHeadersPolicy: SecurityHeadersOptions
   private readonly logRpcRequests: boolean
 
   constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
@@ -162,6 +184,17 @@ export class StorageServer {
     this.rateLimitOptions = options.rateLimit
     this.preAuthRateLimitOptions = options.preAuthRateLimit
     this.trustProxy = options.trustProxy
+    this.allowedOrigins = options.allowedOrigins
+    this.maxConcurrentRequests = options.maxConcurrentRequests ?? 200
+    this.httpPolicy = {
+      requestTimeoutMs: 2 * 60 * 1000,
+      headersTimeoutMs: 15_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 2 * 60 * 1000,
+      maxRequestsPerSocket: 1_000,
+      ...options.http
+    }
+    this.securityHeadersPolicy = options.securityHeaders ?? {}
     this.logRpcRequests = options.logRpcRequests ?? true
 
     if (options['logShortReqs']) {
@@ -183,29 +216,16 @@ export class StorageServer {
           ts: new Date().toISOString(),
           url: req.originalUrl,
           ip: req.ip || req.socket.remoteAddress,
-          ua: req.headers['user-agent'] || '-',
-          headers: { ...req.headers } // shallow copy
+          ua: req.headers['user-agent'] || '-'
         }
         const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split(
           '/'
         )[0]
         if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
 
-        const chunks: Buffer[] = []
-        req.on('data', chunk => chunks.push(Buffer.from(chunk)))
-
-        req.on('end', () => {
-          const bodyBuffer = Buffer.concat(chunks)
-
-          try {
-            logObj.body = bodyBuffer.toString('utf8')
-          } catch {
-            logObj.body = bodyBuffer.toString('hex')
-            logObj.bodyEncoding = 'hex'
-          }
-
-          console.log(JSON.stringify(logObj))
-        })
+        // Request bodies and BSV auth/payment headers can contain sensitive
+        // material. Short-request logging records metadata only.
+        console.log(JSON.stringify(logObj))
       }
 
       next()
@@ -214,6 +234,20 @@ export class StorageServer {
 
   private setupRoutes (): void {
     configureTrustProxy(this.app, this.trustProxy)
+    this.app.disable('x-powered-by')
+    this.app.use(securityHeaders({
+      environmentPrefix: 'WALLET_STORAGE',
+      ...this.securityHeadersPolicy
+    }))
+    this.app.use(corsPolicy({
+      environmentPrefix: 'WALLET_STORAGE',
+      allowedOrigins: this.allowedOrigins,
+      methods: ['GET', 'PUT', 'POST', 'OPTIONS']
+    }))
+    this.app.use(concurrencyLimit(
+      'WALLET_STORAGE',
+      this.maxConcurrentRequests
+    ))
 
     this.app.use(rateLimit(rateLimitOptions(
       { windowMs: 60_000, limit: 300 },
@@ -227,25 +261,16 @@ export class StorageServer {
     // decoded JSON value while keeping user-controlled strings inert even if a
     // consumer embeds a response in an HTML context.
     this.app.set('json escape', true)
-    this.app.use(express.json({ limit: '30mb' }))
+    this.app.use(express.json({
+      limit: readBodyLimitBytes('WALLET_STORAGE_JSON', 30 * 1024 * 1024)
+    }))
     // Authentication must see the exact binary body bytes, so parse octet
     // streams before the auth middleware just as JSON is parsed above.
-    this.app.use(express.raw({ type: 'application/octet-stream', limit: '8mb' }))
-
-    // This allows the API to be used everywhere when CORS is enforced
-    this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*')
-      res.header('Access-Control-Allow-Headers', '*')
-      res.header('Access-Control-Allow-Methods', '*')
-      res.header('Access-Control-Expose-Headers', '*')
-      res.header('Access-Control-Allow-Private-Network', 'true')
-      if (req.method === 'OPTIONS') {
-        // Handle CORS preflight requests to allow cross-origin POST/PUT requests
-        res.sendStatus(200)
-      } else {
-        next()
-      }
-    })
+    this.app.use(express.raw({
+      type: 'application/octet-stream',
+      limit: readBodyLimitBytes('WALLET_STORAGE_BINARY', 8 * 1024 * 1024)
+    }))
+    this.app.use(bodyParserErrorHandler)
 
     this.app.get('/robots.txt', (req: Request, res: Response) => {
       res.type('text/plain')
@@ -523,6 +548,7 @@ export class StorageServer {
     this.server = this.app.listen(this.port, () => {
       console.log(`WalletStorageServer listening at http://localhost:${this.port}`)
     })
+    configureHttpServer(this.server, 'WALLET_STORAGE', this.httpPolicy)
   }
 
   public async close (): Promise<void> {

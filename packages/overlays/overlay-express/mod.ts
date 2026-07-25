@@ -1,6 +1,7 @@
 export {
   default,
   type EngineConfig,
+  type EdgePolicyConfig,
   type HealthCheckDefinition,
   type HealthCheckHandler,
   type HealthCheckResult,

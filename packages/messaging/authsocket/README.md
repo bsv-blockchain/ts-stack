@@ -69,6 +69,23 @@ server.listen(port, () => {
 2. On `'connection'`, you receive an `AuthSocket` instance that works like a normal Socket.IO socket: `socket.on(...)`, `socket.emit(...)`, etc.  
 3. All messages are automatically signed and verified under the hood.
 
+### Targeted authenticated delivery
+
+Use `emitToIdentity` when a message is private to one BRC-103 identity:
+
+```ts
+const selectedConnections = io.emitToIdentity(
+  recipientIdentityKey,
+  'message',
+  encryptedPayload
+)
+```
+
+The routing decision uses the peer identity discovered by the signed
+transport, not a caller-provided room or payload claim. The return value is
+the number of authenticated connections selected. `emit` remains a broadcast
+operation and should be reserved for intentionally public events.
+
 ### How It Works (Briefly)
 
 - On each new connection, `AuthSocketServer` sets up a **BRC-103** `Peer` with a corresponding transport (`SocketServerTransport`).
@@ -99,4 +116,4 @@ server.listen(port, () => {
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).  
+See [LICENSE.txt](./LICENSE.txt).

@@ -1,5 +1,6 @@
 import { Db } from 'mongodb'
 import chalk from 'chalk'
+import { isIP } from 'node:net'
 import { BanService } from './BanService.js'
 
 /**
@@ -14,6 +15,11 @@ export interface JanitorConfig {
   banService?: BanService
   /** Whether to auto-ban domains when they exceed the down threshold (default: true) */
   autoBanOnRemoval?: boolean
+  /**
+   * Permit loopback/private IPs, HTTP, and non-standard ports for isolated
+   * development environments. Never enable this on an internet-facing node.
+   */
+  allowPrivateHosts?: boolean
 }
 
 /**
@@ -67,6 +73,7 @@ export class JanitorService {
   private readonly hostDownRevokeScore: number
   private readonly banService?: BanService
   private readonly autoBanOnRemoval: boolean
+  private readonly allowPrivateHosts: boolean
 
   constructor (config: JanitorConfig) {
     this.mongoDb = config.mongoDb
@@ -75,6 +82,7 @@ export class JanitorService {
     this.hostDownRevokeScore = config.hostDownRevokeScore ?? 3
     this.banService = config.banService
     this.autoBanOnRemoval = config.autoBanOnRemoval ?? true
+    this.allowPrivateHosts = config.allowPrivateHosts ?? false
   }
 
   /**
@@ -150,6 +158,7 @@ export class JanitorService {
         const response = await fetch(healthURL, {
           method: 'GET',
           signal: controller.signal,
+          redirect: 'error',
           headers: { Accept: 'application/json' }
         })
 
@@ -158,6 +167,16 @@ export class JanitorService {
 
         if (!response.ok) {
           return { healthy: false, responseTimeMs, statusCode: response.status, error: `HTTP ${response.status}` }
+        }
+
+        const contentLength = Number.parseInt(response.headers?.get?.('content-length') ?? '0', 10)
+        if (Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+          return {
+            healthy: false,
+            responseTimeMs,
+            statusCode: response.status,
+            error: 'Health response too large'
+          }
         }
 
         const data = await response.json()
@@ -169,10 +188,12 @@ export class JanitorService {
         if (error.name === 'AbortError') {
           return { healthy: false, responseTimeMs, error: 'Timeout' }
         }
-        return { healthy: false, responseTimeMs, error: error.message ?? 'Connection failed' }
+        this.logger.warn?.('Janitor health request failed', { url, error })
+        return { healthy: false, responseTimeMs, error: 'Connection failed' }
       }
-    } catch (error: any) {
-      return { healthy: false, responseTimeMs: Date.now() - startTime, error: error.message ?? 'Invalid URL' }
+    } catch (error) {
+      this.logger.warn?.('Janitor health URL parsing failed', { url, error })
+      return { healthy: false, responseTimeMs: Date.now() - startTime, error: 'Invalid URL' }
     }
   }
 
@@ -304,8 +325,9 @@ export class JanitorService {
           baseResult.error = 'REMOVED'
         }
       }
-    } catch (error: any) {
-      baseResult.error = error.message ?? 'Check failed'
+    } catch (error) {
+      this.logger.warn?.('Janitor output health check failed', { domain, error })
+      baseResult.error = 'Check failed'
       await this.handleUnhealthyOutput(output, collection, domain).catch(() => {})
     }
 
@@ -340,17 +362,90 @@ export class JanitorService {
     }
   }
 
+  /** Reject private/special IPv4 address space that could reach local services. */
+  private isPublicIPv4 (hostname: string): boolean {
+    const octets = hostname.split('.').map(value => Number.parseInt(value, 10))
+    if (octets.length !== 4 || octets.some(value => !Number.isInteger(value) || value < 0 || value > 255)) {
+      return false
+    }
+    const [a, b] = octets
+    return !(
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 0 || b === 168)) ||
+      (a === 198 && (b === 18 || b === 19 || b === 51)) ||
+      (a === 203 && b === 0) ||
+      a >= 224
+    )
+  }
+
+  /** Reject non-global IPv6 address space, including IPv4-mapped addresses. */
+  private isPublicIPv6 (hostname: string): boolean {
+    const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    if (
+      normalized === '::' ||
+      normalized === '::1' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      /^fe[89ab]/.test(normalized) ||
+      normalized.startsWith('ff') ||
+      normalized.startsWith('2001:db8:')
+    ) {
+      return false
+    }
+    if (normalized.startsWith('::ffff:')) {
+      return this.isPublicIPv4(normalized.slice('::ffff:'.length))
+    }
+    return true
+  }
+
   /**
-   * Validates if a string is a valid domain name
+   * Validates the outbound health-check target. Production defaults require
+   * HTTPS, a public host, no credentials, and the standard TLS port. Redirects
+   * are also disabled in checkHost so an allowed target cannot bounce a
+   * request into an internal service.
    */
   private isValidDomain (url: string): boolean {
     try {
       const parsedURL = new URL(url.startsWith('http') ? url : `https://${url}`)
-      const hostname = parsedURL.hostname
+      const hostname = parsedURL.hostname.replace(/^\[|\]$/g, '')
       const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i
-      const localhostRegex = /^localhost$/i
-      const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/
-      return domainRegex.test(hostname) || localhostRegex.test(hostname) || ipv4Regex.test(hostname)
+      const ipVersion = isIP(hostname)
+
+      if (
+        parsedURL.username.length > 0 ||
+        parsedURL.password.length > 0 ||
+        parsedURL.search.length > 0 ||
+        parsedURL.hash.length > 0
+      ) {
+        return false
+      }
+
+      if (this.allowPrivateHosts) {
+        return (
+          (parsedURL.protocol === 'http:' || parsedURL.protocol === 'https:') &&
+          (domainRegex.test(hostname) || hostname.toLowerCase() === 'localhost' || ipVersion > 0)
+        )
+      }
+
+      if (parsedURL.protocol !== 'https:' || (parsedURL.port !== '' && parsedURL.port !== '443')) {
+        return false
+      }
+      if (
+        hostname.toLowerCase() === 'localhost' ||
+        hostname.toLowerCase().endsWith('.localhost') ||
+        hostname.toLowerCase().endsWith('.local') ||
+        hostname.toLowerCase().endsWith('.internal')
+      ) {
+        return false
+      }
+      if (ipVersion === 4) return this.isPublicIPv4(hostname)
+      if (ipVersion === 6) return this.isPublicIPv6(hostname)
+      return domainRegex.test(hostname)
     } catch {
       return false
     }

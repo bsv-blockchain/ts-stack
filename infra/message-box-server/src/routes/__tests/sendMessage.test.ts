@@ -1,5 +1,13 @@
 /* eslint-env jest */
-import sendMessage, { calculateMessagePrice, Message, SendMessageRequest } from '../sendMessage.js'
+import sendMessage, {
+  calculateMessagePrice,
+  MAX_MESSAGE_BODY_BYTES,
+  MAX_MESSAGE_BOX_BYTES,
+  MAX_MESSAGE_ID_BYTES,
+  MAX_MESSAGE_RECIPIENTS,
+  Message,
+  SendMessageRequest
+} from '../sendMessage.js'
 import mockKnex from 'mock-knex'
 import { Response } from 'express'
 import type { Tracker } from 'mock-knex'
@@ -217,6 +225,51 @@ describe('sendMessage', () => {
       status: 'error',
       code: 'ERR_INVALID_MESSAGE_BODY',
       description: 'Invalid message body.'
+    }))
+  })
+
+  it('rejects recipient fan-out above the service limit', async () => {
+    const recipient = validReq.body.message?.recipient as string
+    validReq.body.message!.recipient = Array(MAX_MESSAGE_RECIPIENTS + 1).fill(recipient)
+
+    await sendMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(400)
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'ERR_TOO_MANY_RECIPIENTS'
+    }))
+  })
+
+  it('rejects message-box names above the byte limit', async () => {
+    validReq.body.message!.messageBox = 'b'.repeat(MAX_MESSAGE_BOX_BYTES + 1)
+
+    await sendMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(400)
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'ERR_MESSAGEBOX_TOO_LARGE'
+    }))
+  })
+
+  it('rejects message IDs above the byte limit', async () => {
+    validReq.body.message!.messageId = 'i'.repeat(MAX_MESSAGE_ID_BYTES + 1)
+
+    await sendMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(400)
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'ERR_INVALID_MESSAGEID'
+    }))
+  })
+
+  it('rejects message bodies above the byte limit before database work', async () => {
+    validReq.body.message!.body = 'm'.repeat(MAX_MESSAGE_BODY_BYTES + 1)
+
+    await sendMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(413)
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'ERR_MESSAGE_BODY_TOO_LARGE'
     }))
   })
 

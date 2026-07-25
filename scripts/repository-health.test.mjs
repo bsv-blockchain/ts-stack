@@ -28,7 +28,7 @@ test('workspace discovery exactly matches the 37-project registry', () => {
     [...projects.projects].map(project => project.path).sort()
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
-  assert.equal(projects.generatedArtifacts.length, 4)
+  assert.equal(projects.generatedArtifacts.length, 10)
   assert.ok(
     projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers')
   )

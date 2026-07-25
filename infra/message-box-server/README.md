@@ -62,8 +62,6 @@ ENABLE_WEBSOCKETS - Set to 'true' to enable real-time messaging over WebSocket
 
 LOGGING_ENABLED - Set to 'true' to enable verbose debug logging in any environment
 
-MIGRATE_KEY - (Optional) Key used to authorize protected migration operations, if required
-
 TRUST_PROXY_HOPS - (Optional) Exact trusted reverse-proxy hop count from 0 through 10
 
 MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX / MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_WINDOW_MS -
@@ -73,12 +71,31 @@ MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX /
 MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_WINDOW_MS - Per-identity protection before
 payment and route work (defaults to 1,000 requests per minute)
 
+MESSAGE_BOX_CORS_MODE - `public` (default), `allowlist`, or `disabled`
+
+MESSAGE_BOX_CORS_ALLOWED_ORIGINS - Exact comma-separated HTTP(S) origins in
+allowlist mode
+
+MESSAGE_BOX_MAX_BODY_BYTES - JSON body ceiling (default 4 MiB)
+
+MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES - Signed WebSocket event ceiling (default
+1 MiB)
+
 ________________________________________
 
 Invalid or unbounded rate-limit/proxy values fail startup. Forwarding headers
 remain ignored unless `TRUST_PROXY_HOPS` is explicitly configured. The default
 in-memory store is per process; replicated deployments must also enforce an
 aggregate policy at their trusted ingress until a shared store is configured.
+Browser access is public by default without cookie credentials so deployed
+apps and wallet UIs on unknown domains can connect. Origin restriction does
+not replace BRC-103 identity, recipient permission, payment, or box ownership.
+
+WebSocket identity comes only from the signed BRC-103 transport. A payload
+claim must match it, room access is limited to the authenticated identity, and
+delivery notifications target only connections authenticated as the
+recipient. WebSocket sends reuse the HTTP route's validation, fee, duplicate,
+and persistence policy.
 
 ## 4. Quick Start
 

@@ -300,7 +300,7 @@ describe('JanitorService', () => {
       )
     })
 
-    it('should accept localhost', async () => {
+    it('should reject localhost by default', async () => {
       const mockOutput = {
         _id: '123',
         txid: 'abc123',
@@ -325,10 +325,11 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(global.fetch).toHaveBeenCalled()
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockCollection.updateOne).toHaveBeenCalled()
     })
 
-    it('should accept IP address', async () => {
+    it('should reject private IP addresses by default', async () => {
       const mockOutput = {
         _id: '123',
         txid: 'abc123',
@@ -349,6 +350,38 @@ describe('JanitorService', () => {
       const janitor = new JanitorService({
         mongoDb: mockDb,
         logger: mockLogger
+      })
+
+      await janitor.run()
+
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockCollection.updateOne).toHaveBeenCalled()
+    })
+
+    it('should allow private HTTP hosts only with an explicit development override', async () => {
+      const mockOutput = {
+        _id: '123',
+        txid: 'abc123',
+        outputIndex: 0,
+        domain: 'http://localhost:3000',
+        down: 0
+      }
+
+      mockCollection.find.mockReturnValue({
+        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+      })
+
+      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+        ok: true,
+        headers: { get: jest.fn().mockReturnValue(null) },
+        status: 200,
+        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+      })
+
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger,
+        allowPrivateHosts: true
       })
 
       await janitor.run()
@@ -694,7 +727,7 @@ describe('JanitorService', () => {
       const result = await janitor.checkHost('https://example.com')
 
       expect(result.healthy).toBe(false)
-      expect(result.error).toBe('ECONNREFUSED')
+      expect(result.error).toBe('Connection failed')
     })
 
     it('should prepend https:// to domains without protocol', async () => {

@@ -18,6 +18,14 @@ import { createV1Routes } from './v1-routes'
 import { createV2Routes } from './v2-routes'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { log } from './logger'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  configureHttpServer,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders
+} from './security/edgePolicy'
 
 const tracer = trace.getTracer('chaintracks-server')
 
@@ -257,17 +265,19 @@ async function main() {
 
   // Create Express app with both v1 and v2 routes
   const app = express.default()
-
-  // CORS middleware
-  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
-    res.header('Access-Control-Allow-Origin', '*')
-    res.header('Access-Control-Allow-Headers', '*')
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    next()
-  })
+  app.disable('x-powered-by')
+  app.use(securityHeaders({ environmentPrefix: 'CHAINTRACKS' }))
+  app.use(corsPolicy({
+    environmentPrefix: 'CHAINTRACKS',
+    methods: ['GET', 'POST', 'OPTIONS']
+  }))
+  app.use(concurrencyLimit('CHAINTRACKS', 200))
 
   // Body parser for POST requests
-  app.use(bodyParser.json())
+  app.use(bodyParser.json({
+    limit: readBodyLimitBytes('CHAINTRACKS', 256 * 1024)
+  }))
+  app.use(bodyParserErrorHandler)
 
   // Root endpoint
   app.get('/', (_req: express.Request, res: express.Response) => {
@@ -291,20 +301,26 @@ async function main() {
   const apiServer = app.listen(port, () => {
     log.info({ operation: 'listen', outcome: 'ok', port, chain: `${chain}Net` }, 'API server running')
   })
+  configureHttpServer(apiServer, 'CHAINTRACKS', {
+    requestTimeoutMs: 30_000,
+    headersTimeoutMs: 10_000,
+    keepAliveTimeoutMs: 5_000,
+    socketTimeoutMs: 30_000,
+    maxRequestsPerSocket: 1_000
+  })
 
   // Start a separate CDN server for bulk headers if enabled
   let cdnServer: any
   if (enableBulkHeadersCDN) {
     const cdnPort = port + 1 // Use next port for CDN
     const cdnApp = express.default()
-
-    // CORS headers for CDN
-    cdnApp.use((_req: any, res: any, next: any) => {
-      res.header('Access-Control-Allow-Origin', '*')
-      res.header('Access-Control-Allow-Headers', '*')
-      res.header('Access-Control-Allow-Methods', '*')
-      next()
-    })
+    cdnApp.disable('x-powered-by')
+    cdnApp.use(securityHeaders({ environmentPrefix: 'CHAINTRACKS_CDN' }))
+    cdnApp.use(corsPolicy({
+      environmentPrefix: 'CHAINTRACKS_CDN',
+      methods: ['GET', 'HEAD', 'OPTIONS']
+    }))
+    cdnApp.use(concurrencyLimit('CHAINTRACKS_CDN', 100))
 
     // Serve static files from the bulk headers directory
     cdnApp.use('/', express.static(bulkHeadersPath, {
@@ -329,6 +345,13 @@ async function main() {
         },
         'Bulk Headers CDN server running'
       )
+    })
+    configureHttpServer(cdnServer, 'CHAINTRACKS_CDN', {
+      requestTimeoutMs: 5 * 60 * 1000,
+      headersTimeoutMs: 10_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 5 * 60 * 1000,
+      maxRequestsPerSocket: 1_000
     })
   }
 

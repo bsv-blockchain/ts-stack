@@ -17,34 +17,47 @@ import {
   configureTrustProxy,
   rateLimitOptions
 } from './security/rateLimitPolicy'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  configureHttpServer,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders
+} from './security/edgePolicy'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
 
+const preAuthRateLimit = rateLimit(rateLimitOptions(
+  'UHRP_PRE_AUTH_RATE_LIMIT',
+  { windowMs: 60_000, limit: 300 }
+))
+
+const authenticatedRateLimit = rateLimit(rateLimitOptions(
+  'UHRP_AUTHENTICATED_RATE_LIMIT',
+  { windowMs: 60_000, limit: 1_000 },
+  { keyGenerator: authenticatedIdentityKey }
+))
+
 const app = express()
 app.disable('x-powered-by')
 configureTrustProxy(app)
-// This allows the API to be used when CORS is enforced
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', '*')
-  res.header('Access-Control-Allow-Methods', '*')
-  res.header('Access-Control-Expose-Headers', '*')
-  res.header('Access-Control-Allow-Private-Network', 'true')
-  if (req.method === 'OPTIONS') {
-    res.send(200)
-  } else {
-    next()
-  }
-})
+app.use(securityHeaders({ environmentPrefix: 'UHRP' }))
+app.use(corsPolicy({
+  environmentPrefix: 'UHRP',
+  methods: ['GET', 'PUT', 'POST', 'OPTIONS']
+}))
+app.use(concurrencyLimit('UHRP', 100))
+app.use(preAuthRateLimit)
 // Add CDN MIME type middleware before static middleware
 app.use(cdnMimeTypeMiddleware)
 app.use(express.static(path.join(__dirname, '../public')))
-app.use(
-  '/put',
-  bodyparser.raw({ type: '*/*', limit: '2gb' })
-)
-app.use(bodyparser.json({ limit: '1gb', type: 'application/json' }))
+app.use(bodyparser.json({
+  limit: readBodyLimitBytes('UHRP_JSON', 256 * 1024),
+  type: 'application/json'
+}))
+app.use(bodyParserErrorHandler)
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   log.info({ operation: 'request.in', method: req.method, path: req.path }, 'Incoming request')
@@ -55,8 +68,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
   next()
 })
-
-app.use(express.static('public'))
 
 // Unsecured pre-auth routes are added first
 const preAuthRoutes = Object.values(routes.preAuth);
@@ -92,25 +103,12 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
   }
 })
 
-const preAuthRateLimit = rateLimit(rateLimitOptions(
-  'UHRP_PRE_AUTH_RATE_LIMIT',
-  { windowMs: 60_000, limit: 300 }
-))
-
-const authenticatedRateLimit = rateLimit(rateLimitOptions(
-  'UHRP_AUTHENTICATED_RATE_LIMIT',
-  { windowMs: 60_000, limit: 1_000 },
-  { keyGenerator: authenticatedIdentityKey }
-))
-
-app.use(preAuthRateLimit)
-
   // Auth is enforced from here forward
   ; (async () => {
     const wallet = await getWallet()
     const authMiddleware = createAuthMiddleware({
       wallet,
-      allowUnauthenticated: true
+      allowUnauthenticated: false
     })
 
     const paymentMiddleware = createPaymentMiddleware({
@@ -170,13 +168,20 @@ app.use(preAuthRateLimit)
       })
     })
 
-    app.listen(HTTP_PORT, () => {
+    const server = app.listen(HTTP_PORT, () => {
       const idKey = PrivateKey
         .fromString(SERVER_PRIVATE_KEY).toPublicKey().toString()
       log.info(
         { operation: 'listen', outcome: 'ok', port: HTTP_PORT, identity_key: idKey },
         'UHRP Storage Server listening'
       )
+    })
+    configureHttpServer(server, 'UHRP', {
+      requestTimeoutMs: 5 * 60 * 1000,
+      headersTimeoutMs: 15_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 5 * 60 * 1000,
+      maxRequestsPerSocket: 1_000
     })
 
   })().catch((error) => {

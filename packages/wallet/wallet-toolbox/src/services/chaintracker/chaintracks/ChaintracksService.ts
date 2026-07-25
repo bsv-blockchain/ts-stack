@@ -10,6 +10,15 @@ import { FiatExchangeRates, WERR_INVALID_PARAMETER } from '../../../sdk'
 import { ChaintracksInfoApi } from './Api/ChaintracksClientApi'
 import { wait } from '../../../utility/utilityHelpers'
 import { BaseBlockHeader, BlockHeader } from './Api/BlockHeaderApi'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  configureHttpServer,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders,
+  type HttpServerPolicyDefaults
+} from '../../../storage/remoting/edgePolicy'
 
 export interface ChaintracksServiceOptions {
   chain: Chain
@@ -23,6 +32,10 @@ export interface ChaintracksServiceOptions {
   chaintracks?: Chaintracks
   services?: Services
   port?: number
+  /** Exact browser origins allowed to use the service. Omit for public CORS. */
+  allowedOrigins?: string[]
+  maxConcurrentRequests?: number
+  http?: Partial<HttpServerPolicyDefaults>
 }
 
 export class ChaintracksService {
@@ -70,21 +83,20 @@ export class ChaintracksService {
 
     const app = express()
     app.disable('x-powered-by')
-    app.use(bodyParser.json())
-
-    // This allows the API to be used when CORS is enforced
-    app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*')
-      res.header('Access-Control-Allow-Headers', '*')
-      res.header('Access-Control-Allow-Methods', '*')
-      res.header('Access-Control-Expose-Headers', '*')
-      res.header('Access-Control-Allow-Private-Network', 'true')
-      if (req.method === 'OPTIONS') {
-        res.sendStatus(200)
-      } else {
-        next()
-      }
-    })
+    app.use(securityHeaders({ environmentPrefix: 'CHAINTRACKS' }))
+    app.use(corsPolicy({
+      environmentPrefix: 'CHAINTRACKS',
+      allowedOrigins: this.options.allowedOrigins,
+      methods: ['GET', 'POST', 'OPTIONS']
+    }))
+    app.use(concurrencyLimit(
+      'CHAINTRACKS',
+      this.options.maxConcurrentRequests ?? 200
+    ))
+    app.use(bodyParser.json({
+      limit: readBodyLimitBytes('CHAINTRACKS', 256 * 1024)
+    }))
+    app.use(bodyParserErrorHandler)
 
     app.get('/robots.txt', (req: Request, res: Response) => {
       res.type('text/plain')
@@ -97,10 +109,11 @@ export class ChaintracksService {
     })
 
     const handleErr = (err: any, res: any) => {
+      console.error('Chaintracks request failed', err)
       res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL',
-        description: err?.message || 'An internal error has occurred.'
+        description: 'An internal error has occurred.'
       })
     }
 
@@ -176,8 +189,17 @@ export class ChaintracksService {
       return await this.chaintracks.getHeaders(Number(q.height), Number(q.count))
     })
 
-    this.server = app.listen(this.port, () => {
+    const server = app.listen(this.port, () => {
       console.log(`ChaintracksService listening on port ${this.port}`)
+    })
+    this.server = server
+    configureHttpServer(server, 'CHAINTRACKS', {
+      requestTimeoutMs: 30_000,
+      headersTimeoutMs: 10_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 30_000,
+      maxRequestsPerSocket: 1_000,
+      ...this.options.http
     })
   }
 }

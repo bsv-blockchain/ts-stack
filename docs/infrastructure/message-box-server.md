@@ -2,9 +2,9 @@
 id: infra-message-box-server
 title: "Message-box Server"
 kind: infra
-version: "1.1.5"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "1.1.14"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: stable
 tags: [messaging, overlay, store-and-forward, authentication]
@@ -42,13 +42,21 @@ Clients connect with identity-based authentication, send and receive messages th
 | POST | /sendMessage | Send encrypted message to recipient (authenticated) |
 | POST | /listMessages | List all unacknowledged messages in box (authenticated) |
 | POST | /acknowledgeMessage | Mark messages as read/delete them (authenticated) |
+| POST | /registerDevice | Register a push-notification device for the authenticated identity |
+| GET | /devices | List the authenticated identity's devices with redacted tokens |
+| GET | /permissions/get | Read a recipient permission |
+| GET | /permissions/list | List recipient permissions |
+| GET | /permissions/quote | Quote up to 100 recipients |
+| POST | /permissions/set | Set an authenticated recipient permission |
+| GET | /docs, /openapi.json | Public API documentation |
 
 ## WebSocket endpoints
 
 - **ws://host:8080** – Authenticated WebSocket server using @bsv/authsocket
-  - Rooms: `{identityKey}-{messageBox}` format
+  - Subscription names: `{identityKey}-{messageBox}` format
   - Events: `authenticated`, `joinRoom`, `sendMessage`, `leaveRoom`
-  - Real-time message delivery and notifications
+  - Payload identity claims must match the BRC-103 peer identity
+  - Notifications are routed only to authenticated recipient connections; sends reuse the HTTP validation, permission, fee, and persistence policy
 
 ## Configuration (env vars)
 
@@ -70,6 +78,13 @@ Clients connect with identity-based authentication, send and receive messages th
 | FIREBASE_PROJECT_ID | No | GCP project ID for Firebase |
 | FIREBASE_SERVICE_ACCOUNT_JSON | No | Firebase service account JSON (inline) |
 | FIREBASE_SERVICE_ACCOUNT_PATH | No | Path to Firebase service account JSON file |
+| MESSAGE_BOX_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
+| MESSAGE_BOX_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
+| MESSAGE_BOX_MAX_BODY_BYTES | No | HTTP JSON ceiling (default 4194304) |
+| MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES | No | WebSocket payload ceiling (default 1048576) |
+
+See [Public Service Edge Security](service-edge-security.md#message-box) for
+rate, timeout, WebSocket authorization, CORS/CSP, and error controls.
 
 ## Run locally
 
@@ -109,7 +124,9 @@ docker run -d \
 docker compose up -d
 ```
 
-Multi-stage Dockerfile compiles TypeScript to `out/` with Node 20-alpine builder, then runs in production runtime. Nginx reverse proxy listens on 8080, proxies to app on 3000, with HTTP/2, gzip compression, and 1GB max body size.
+The multi-stage Dockerfile compiles TypeScript for a minimal production
+runtime. Nginx proxies to the app with a 4 MiB body ceiling and bounded
+header/body/send/upstream timeouts.
 
 ## Migrations
 
@@ -149,7 +166,7 @@ No explicit health endpoint; monitor via:
 
 ## Common pitfalls
 
-- WebSocket scaling: In-memory rooms require sticky sessions or external message broker for horizontal scaling
+- WebSocket scaling: authenticated connection routing is per process; use sticky sessions or an authenticated external broker for horizontal scaling
 - Database indexing: Ensure indexes on identity keys + messageBox for high-volume deployments
 - Firebase setup: Requires valid service account JSON; Firebase push disabled if misconfigured
 - Private key generation: Must be 256-bit hex; asymmetric key used for mutual auth signing
@@ -157,5 +174,5 @@ No explicit health endpoint; monitor via:
 
 ## Source
 
-- [GitHub](https://github.com/bsv-blockchain/message-box-server)
+- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server)
 - [npm package](https://npmjs.com/package/@bsv/messagebox-server)

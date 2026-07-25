@@ -8,41 +8,20 @@
 import { Request, Response } from "express";
 import { UserService } from "../services/UserService";
 import { ShareService } from "../services/ShareService";
-import { AuthMethod } from "../auth-methods/AuthMethod";
-import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
-import { DevConsoleAuthMethod } from "../auth-methods/DevConsoleAuthMethod";
+import {
+    getAuthMethodInstance,
+    UnsupportedAuthMethodError
+} from "../auth-methods/AuthMethodFactory";
 import { log } from "../logger";
-
-// Singleton for dev auth method
-const dev = new DevConsoleAuthMethod();
-
-/**
- * Returns the appropriate AuthMethod instance given a methodType.
- */
-function getAuthMethodInstance(methodType: string): AuthMethod {
-    switch (methodType) {
-        case "TwilioPhone":
-            return new TwilioAuthMethod({
-                accountSid: process.env.TWILIO_ACCOUNT_SID!,
-                authToken: process.env.TWILIO_AUTH_TOKEN!,
-                verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID!
-            });
-        case "DevConsole":
-            return dev;
-        default:
-            throw new Error(`Unsupported auth method: ${methodType}`);
-    }
-}
 
 /**
  * Extract client IP from request, handling proxies
  */
 function getClientIp(req: Request): string {
-    const forwarded = req.headers["x-forwarded-for"];
-    if (typeof forwarded === "string") {
-        return forwarded.split(",")[0].trim();
-    }
-    return req.socket.remoteAddress || "unknown";
+    // Express derives req.ip from the socket and the explicitly configured
+    // trust-proxy hop count. Reading X-Forwarded-For directly would let a
+    // directly reachable client spoof the audit/rate-limit identity.
+    return req.ip || req.socket.remoteAddress || "unknown";
 }
 
 export class ShareController {
@@ -132,10 +111,16 @@ export class ShareController {
                 userId: user.id
             });
         } catch (error: any) {
+            if (error instanceof UnsupportedAuthMethodError) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Unsupported auth method."
+                });
+            }
             log.error({ operation: 'controller.share.store', err: error, outcome: 'error' }, 'storeShare failed');
             res.status(500).json({
                 success: false,
-                message: error.message
+                message: "An internal error occurred."
             });
         }
     }
@@ -213,10 +198,16 @@ export class ShareController {
                 message: "Share retrieved successfully"
             });
         } catch (error: any) {
+            if (error instanceof UnsupportedAuthMethodError) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Unsupported auth method."
+                });
+            }
             log.error({ operation: 'controller.share.retrieve', err: error, outcome: 'error' }, 'retrieveShare failed');
             res.status(500).json({
                 success: false,
-                message: error.message
+                message: "An internal error occurred."
             });
         }
     }
@@ -296,10 +287,16 @@ export class ShareController {
                 shareVersion: updated.shareVersion
             });
         } catch (error: any) {
+            if (error instanceof UnsupportedAuthMethodError) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Unsupported auth method."
+                });
+            }
             log.error({ operation: 'controller.share.update', err: error, outcome: 'error' }, 'updateShare failed');
             res.status(500).json({
                 success: false,
-                message: error.message
+                message: "An internal error occurred."
             });
         }
     }
@@ -373,7 +370,7 @@ export class ShareController {
             log.error({ operation: 'controller.share.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
             res.status(500).json({
                 success: false,
-                message: error.message
+                message: "An internal error occurred."
             });
         }
     }

@@ -95,8 +95,11 @@ describe('Overlay transaction providers', () => {
     if (response.status === 'error') {
       expect(response.code).toBe('DOUBLE_SPEND_ATTEMPTED')
     }
-    expect(requests[0].url).toBe('https://arcade.example/tx')
-    expect((requests[0].init?.headers as Record<string, string>).Authorization).toBe('Bearer secret')
+    const request = requests[0]
+    expect(request).toBeDefined()
+    expect(request?.url).toBe('https://arcade.example/tx')
+    const requestHeaders = request?.init?.headers as Record<string, string> | undefined
+    expect(requestHeaders?.Authorization).toBe('Bearer secret')
   })
 
   it('validates merkle roots through go-chaintracks headers', async () => {

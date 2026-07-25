@@ -81,7 +81,7 @@ export class TwilioAuthMethod extends AuthMethod {
             log.error({ operation: 'auth.twilio.start', err: error, outcome: 'error' }, 'Error starting Twilio phone verification');
             return {
                 success: false,
-                message: error.message || "Failed to start Twilio phone verification."
+                message: "Failed to start Twilio phone verification."
             };
         }
     }
@@ -138,7 +138,7 @@ export class TwilioAuthMethod extends AuthMethod {
             log.error({ operation: 'auth.twilio.complete', err: error, outcome: 'error' }, 'Error completing Twilio phone verification');
             return {
                 success: false,
-                message: error.message || "Failed to complete Twilio phone verification."
+                message: "Failed to complete Twilio phone verification."
             };
         }
     }

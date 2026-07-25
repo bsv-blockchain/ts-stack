@@ -34,6 +34,7 @@ import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import chalk from 'chalk'
 import util from 'node:util'
 import { v4 as uuidv4 } from 'uuid'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
 import { BanService } from './BanService.js'
 import { BanAwareLookupWrapper } from './BanAwareLookupWrapper.js'
@@ -45,6 +46,17 @@ import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middle
 import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
 import { ProviderChainBroadcaster, type NamedBroadcaster } from './ProviderChainBroadcaster.js'
 import { ChaintracksProvider } from './ChaintracksProvider.js'
+import type { Server } from 'node:http'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  configureHttpServer,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders,
+  type HttpServerPolicyDefaults,
+  type SecurityHeadersOptions
+} from './security/edgePolicy.js'
 
 /**
  * Knex database migration.
@@ -67,7 +79,7 @@ class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
    * @param loadExtensions - Array of file extensions to filter by (not used here)
    * @returns Promise resolving to the array of migrations
    */
-  async getMigrations (loadExtensions: readonly string[]): Promise<Migration[]> {
+  async getMigrations (_loadExtensions: readonly string[]): Promise<Migration[]> {
     return this.migrations
   }
 
@@ -158,6 +170,16 @@ export interface HealthReport {
   context?: Record<string, any>
 }
 
+export interface EdgePolicyConfig {
+  environmentPrefix: string
+  allowedOrigins?: string[]
+  jsonBodyLimitBytes: number
+  binaryBodyLimitBytes: number
+  maxConcurrentRequests: number
+  http: HttpServerPolicyDefaults
+  securityHeaders: SecurityHeadersOptions
+}
+
 export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<{
   blockHeight: number
   blockHash: string
@@ -188,14 +210,43 @@ interface BASMCapableEngine extends Engine {
   revalidateRecentAnchors: (depth?: number) => Promise<any>
 }
 
+class PublicRequestError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'PublicRequestError'
+  }
+}
+
+function publicErrorMessage (
+  error: unknown,
+  fallback: string = 'Request could not be processed'
+): string {
+  return error instanceof PublicRequestError ? error.message : fallback
+}
+
+function secretMatches (provided: string, expected: string): boolean {
+  const providedDigest = createHash('sha256').update(provided, 'utf8').digest()
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest()
+  return timingSafeEqual(providedDigest, expectedDigest)
+}
+
 function parseTopicsHeader (header: string): string[] {
   const value = header.trim()
-  const parsed: unknown = value.startsWith('[')
-    ? JSON.parse(value)
-    : value.split(',').map(topic => topic.trim())
+  let parsed: unknown
+  try {
+    parsed = value.startsWith('[')
+      ? JSON.parse(value)
+      : value.split(',').map(topic => topic.trim())
+  } catch {
+    throw new PublicRequestError(
+      'Invalid x-topics header: expected a comma-separated list or JSON string array'
+    )
+  }
 
   if (!Array.isArray(parsed) || parsed.some(topic => typeof topic !== 'string' || topic.length === 0)) {
-    throw new TypeError('Invalid x-topics header: expected a comma-separated list or JSON string array')
+    throw new PublicRequestError(
+      'Invalid x-topics header: expected a comma-separated list or JSON string array'
+    )
   }
   return parsed
 }
@@ -316,10 +367,12 @@ export default class OverlayExpress {
     requestTimeoutMs: number
     hostDownRevokeScore: number
     autoBanOnRemoval: boolean
+    allowPrivateHosts: boolean
   } = {
       requestTimeoutMs: 10000, // 10 seconds
       hostDownRevokeScore: 3,
-      autoBanOnRemoval: true
+      autoBanOnRemoval: true,
+      allowPrivateHosts: false
     }
 
   // Ban service for persistent domain/outpoint blocking
@@ -345,6 +398,27 @@ export default class OverlayExpress {
 
   // Lifecycle marker for readiness/liveness reporting
   isListening: boolean = false
+
+  // Active HTTP server, retained so timeout policy is observable and the
+  // process can add graceful-close handling without replacing app.listen().
+  server?: Server
+
+  edgePolicyConfig: EdgePolicyConfig = {
+    environmentPrefix: 'OVERLAY',
+    jsonBodyLimitBytes: 8 * 1024 * 1024,
+    binaryBodyLimitBytes: 64 * 1024 * 1024,
+    maxConcurrentRequests: 200,
+    http: {
+      requestTimeoutMs: 2 * 60 * 1000,
+      headersTimeoutMs: 15_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 2 * 60 * 1000,
+      maxRequestsPerSocket: 1_000
+    },
+    securityHeaders: {
+      contentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://bsvblockchain.org; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    }
+  }
 
   /**
    * Constructs an instance of OverlayExpress.
@@ -396,6 +470,7 @@ export default class OverlayExpress {
    *   - requestTimeoutMs: Timeout for health check requests (default: 10000ms)
    *   - hostDownRevokeScore: Number of consecutive failures before deleting output (default: 3)
    *   - autoBanOnRemoval: Whether to auto-ban domains when removed by janitor (default: true)
+   *   - allowPrivateHosts: Permit private/HTTP targets for isolated local development (default: false)
    */
   configureJanitor (config: Partial<typeof this.janitorConfig>): void {
     this.janitorConfig = {
@@ -414,6 +489,40 @@ export default class OverlayExpress {
       ...config
     }
     this.logger.log(chalk.blue('Health reporting has been configured.'))
+  }
+
+  /**
+   * Configures explicit browser origins and bounded request/resource policy.
+   * Public cross-origin access is the default; pass allowedOrigins or set
+   * OVERLAY_CORS_MODE=allowlist to restrict browser callers.
+   */
+  configureEdgePolicy (config: Partial<Omit<EdgePolicyConfig, 'http' | 'securityHeaders'>> & {
+    http?: Partial<HttpServerPolicyDefaults>
+    securityHeaders?: SecurityHeadersOptions
+  }): void {
+    const { http, securityHeaders: headerConfig, ...topLevel } = config
+    const definedTopLevel = Object.fromEntries(
+      Object.entries(topLevel).filter(([, value]) => value !== undefined)
+    ) as Partial<Omit<EdgePolicyConfig, 'http' | 'securityHeaders'>>
+    const definedHttp = Object.fromEntries(
+      Object.entries(http ?? {}).filter(([, value]) => value !== undefined)
+    ) as Partial<HttpServerPolicyDefaults>
+    const definedHeaders = Object.fromEntries(
+      Object.entries(headerConfig ?? {}).filter(([, value]) => value !== undefined)
+    ) as SecurityHeadersOptions
+    this.edgePolicyConfig = {
+      ...this.edgePolicyConfig,
+      ...definedTopLevel,
+      http: {
+        ...this.edgePolicyConfig.http,
+        ...definedHttp
+      },
+      securityHeaders: {
+        ...this.edgePolicyConfig.securityHeaders,
+        ...definedHeaders
+      }
+    }
+    this.logger.log(chalk.blue('HTTP edge policy has been configured.'))
   }
 
   /**
@@ -1020,7 +1129,8 @@ export default class OverlayExpress {
       requestTimeoutMs: this.janitorConfig.requestTimeoutMs,
       hostDownRevokeScore: this.janitorConfig.hostDownRevokeScore,
       banService: this.banService,
-      autoBanOnRemoval: this.janitorConfig.autoBanOnRemoval
+      autoBanOnRemoval: this.janitorConfig.autoBanOnRemoval,
+      allowPrivateHosts: this.janitorConfig.allowPrivateHosts
     })
   }
 
@@ -1093,12 +1203,16 @@ export default class OverlayExpress {
     definition: Required<Pick<HealthCheckDefinition, 'name' | 'scope' | 'critical'>> & { handler: HealthCheckHandler }
   ): Promise<HealthCheckResult> {
     const startedAt = Date.now()
+    let timeout: ReturnType<typeof setTimeout> | undefined
 
     try {
       const result = ((await Promise.race([
         Promise.resolve(definition.handler()),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Timed out after ${this.healthConfig.timeoutMs}ms`)), this.healthConfig.timeoutMs)
+          timeout = setTimeout(
+            () => reject(new Error(`Timed out after ${this.healthConfig.timeoutMs}ms`)),
+            this.healthConfig.timeoutMs
+          )
         })
       ])) ?? {}) as {
         status?: HealthStatus
@@ -1116,14 +1230,21 @@ export default class OverlayExpress {
         durationMs: Date.now() - startedAt
       }
     } catch (error) {
+      this.logger.error({
+        operation: 'overlay.health_check',
+        check: definition.name,
+        error
+      })
       return {
         name: definition.name,
         scope: definition.scope,
         critical: definition.critical,
         status: 'error',
-        message: error instanceof Error ? error.message : 'Unknown health-check error',
+        message: 'Health check failed',
         durationMs: Date.now() - startedAt
       }
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout)
     }
   }
 
@@ -1246,7 +1367,11 @@ export default class OverlayExpress {
       },
       checks: this.healthConfig.includeDetails
         ? checks
-        : checks.map(({ details, ...check }) => check),
+        : checks.map(check => {
+            const publicCheck = { ...check }
+            delete publicCheck.details
+            return publicCheck
+          }),
       context
     }
 
@@ -1256,18 +1381,28 @@ export default class OverlayExpress {
   /**
    * Renders a request or response body for verbose logging, truncating overly long payloads.
    */
-  private formatBodyForLog (body: any, tooLongLabel: string, okPrefix: string): string {
-    let bodyString: string
-    if (typeof body === 'object') {
-      bodyString = JSON.stringify(body, null, 2)
-    } else if (Buffer.isBuffer(body)) {
-      bodyString = body.toString('utf8')
-    } else {
-      bodyString = String(body)
+  private formatBodyForLog (body: any, okPrefix: string): string {
+    if (Buffer.isBuffer(body)) {
+      return chalk.green(`${okPrefix} binary body (${String(body.byteLength)} bytes)`)
     }
-    return bodyString.length > 280
-      ? chalk.yellow(`(${tooLongLabel}, length: ${String(bodyString.length)} characters)`)
-      : chalk.green(`${okPrefix}\n${bodyString}`)
+    if (typeof body === 'string') {
+      return chalk.green(`${okPrefix} string body (${String(Buffer.byteLength(body, 'utf8'))} bytes)`)
+    }
+    if (body != null && typeof body === 'object') {
+      const keys = Array.isArray(body) ? body.length : Object.keys(body).length
+      return chalk.green(`${okPrefix} structured body (${String(keys)} top-level item(s))`)
+    }
+    return chalk.green(`${okPrefix} ${typeof body}`)
+  }
+
+  private redactHeadersForLog (headers: Record<string, any>): Record<string, any> {
+    const sensitiveHeader = /authorization|cookie|token|secret|payment|signature|nonce/i
+    return Object.fromEntries(
+      Object.entries(headers).map(([name, value]) => [
+        name,
+        sensitiveHeader.test(name) ? '[REDACTED]' : value
+      ])
+    )
   }
 
   /**
@@ -1281,11 +1416,11 @@ export default class OverlayExpress {
       this.logger.log(chalk.magenta.bold(`Incoming Request: ${String(req.method)} ${String(req.originalUrl)}`))
       // Pretty-print headers
       this.logger.log(chalk.cyan('Headers:'))
-      this.logger.log(util.inspect(req.headers, { colors: true, depth: null }))
+      this.logger.log(util.inspect(this.redactHeadersForLog(req.headers), { colors: true, depth: null }))
 
       // Handle request body
       if (req.body != null && Object.keys(req.body).length > 0) {
-        this.logger.log(this.formatBodyForLog(req.body, 'Body too long to display', 'Request Body:'))
+        this.logger.log(this.formatBodyForLog(req.body, 'Request Body:'))
       }
 
       // Intercept the res.send method to log responses
@@ -1306,11 +1441,11 @@ export default class OverlayExpress {
           )
         )
         this.logger.log(chalk.cyan('Response Headers:'))
-        this.logger.log(util.inspect(res.getHeaders(), { colors: true, depth: null }))
+        this.logger.log(util.inspect(this.redactHeadersForLog(res.getHeaders()), { colors: true, depth: null }))
 
         // Handle response body
         if (responseBody != null) {
-          this.logger.log(this.formatBodyForLog(responseBody, 'Response body too long to display', 'Response Body:'))
+          this.logger.log(this.formatBodyForLog(responseBody, 'Response Body:'))
         }
       })
 
@@ -1327,26 +1462,40 @@ export default class OverlayExpress {
     const knex = this.ensureKnex()
     this.startTime = new Date()
 
-    this.app.use(bodyParser.json({ limit: '1gb', type: 'application/json' }))
-    this.app.use(bodyParser.raw({ limit: '1gb', type: 'application/octet-stream' }))
+    const edgePolicy = this.edgePolicyConfig
+    this.app.disable('x-powered-by')
+    this.app.use(securityHeaders({
+      environmentPrefix: edgePolicy.environmentPrefix,
+      ...edgePolicy.securityHeaders
+    }))
+    this.app.use(corsPolicy({
+      environmentPrefix: edgePolicy.environmentPrefix,
+      allowedOrigins: edgePolicy.allowedOrigins,
+      methods: ['GET', 'POST', 'OPTIONS']
+    }))
+    this.app.use(concurrencyLimit(
+      edgePolicy.environmentPrefix,
+      edgePolicy.maxConcurrentRequests
+    ))
+    this.app.use(bodyParser.json({
+      limit: readBodyLimitBytes(
+        `${edgePolicy.environmentPrefix}_JSON`,
+        edgePolicy.jsonBodyLimitBytes
+      ),
+      type: 'application/json'
+    }))
+    this.app.use(bodyParser.raw({
+      limit: readBodyLimitBytes(
+        `${edgePolicy.environmentPrefix}_BINARY`,
+        edgePolicy.binaryBodyLimitBytes
+      ),
+      type: 'application/octet-stream'
+    }))
+    this.app.use(bodyParserErrorHandler)
 
     if (this.verboseRequestLogging) {
       this.setupVerboseRequestLogging()
     }
-
-    // Enable CORS
-    this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*')
-      res.header('Access-Control-Allow-Headers', '*')
-      res.header('Access-Control-Allow-Methods', '*')
-      res.header('Access-Control-Expose-Headers', '*')
-      res.header('Access-Control-Allow-Private-Network', 'true')
-      if (req.method === 'OPTIONS') {
-        res.sendStatus(200)
-      } else {
-        next()
-      }
-    })
 
     // Serve a static documentation site or user interface
     this.app.get('/', (req, res) => {
@@ -1363,9 +1512,10 @@ export default class OverlayExpress {
         const report = await this.collectHealthReport('live')
         return res.status(report.live ? 200 : 503).json(report)
       })().catch((error) => {
+        this.logger.error({ operation: 'overlay.health_live', error })
         res.status(500).json({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Unexpected error'
+          message: 'Health report unavailable'
         })
       })
     })
@@ -1375,9 +1525,10 @@ export default class OverlayExpress {
         const report = await this.collectHealthReport('ready')
         return res.status(report.ready ? 200 : 503).json(report)
       })().catch((error) => {
+        this.logger.error({ operation: 'overlay.health_ready', error })
         res.status(500).json({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Unexpected error'
+          message: 'Health report unavailable'
         })
       })
     })
@@ -1387,9 +1538,10 @@ export default class OverlayExpress {
         const report = await this.collectHealthReport('full')
         return res.status(report.ready ? 200 : 503).json(report)
       })().catch((error) => {
+        this.logger.error({ operation: 'overlay.health_full', error })
         res.status(500).json({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Unexpected error'
+          message: 'Health report unavailable'
         })
       })
     })
@@ -1403,7 +1555,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1422,7 +1574,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1444,7 +1596,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1465,7 +1617,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1484,12 +1636,12 @@ export default class OverlayExpress {
           const topicsHeader = req.headers['x-topics']
           const includesOffChain = req.headers['x-includes-off-chain-values'] === 'true'
           if (typeof topicsHeader !== 'string') {
-            throw new TypeError('Missing x-topics header')
+            throw new PublicRequestError('Missing x-topics header')
           }
           const topics = parseTopicsHeader(topicsHeader)
           const body = req.body
           if (body == null || typeof body[Symbol.iterator] !== 'function' || body.length === 0) {
-            throw new TypeError('Missing or empty BEEF body')
+            throw new PublicRequestError('Missing or empty BEEF body')
           }
           let offChainValues: number[] | undefined
           let beef = Array.from(body as number[])
@@ -1518,7 +1670,7 @@ export default class OverlayExpress {
           console.error(chalk.red('Error in /submit:'), error)
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1587,7 +1739,7 @@ export default class OverlayExpress {
           console.error(chalk.red('Error in /lookup:'), error)
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1620,7 +1772,7 @@ export default class OverlayExpress {
             }
             const { txid, merklePath: merklePathHex, blockHeight, txStatus, extraInfo, competingTxs, topic } = req.body
             if (typeof txid !== 'string' || txid === '') {
-              throw new TypeError('Provider callback is missing txid')
+              throw new PublicRequestError('Provider callback is missing txid')
             }
             if (isTerminalArcStatus(txStatus, extraInfo)) {
               const report = await (engine as BASMCapableEngine).evictAppliedTransaction(txid, {
@@ -1661,7 +1813,7 @@ export default class OverlayExpress {
             console.error(chalk.red('Error in /arc-ingest:'), error)
             return res.status(400).json({
               status: 'error',
-              message: error instanceof Error ? error.message : 'An unknown error occurred'
+              message: publicErrorMessage(error)
             })
           }
         })().catch(() => {
@@ -1687,7 +1839,7 @@ export default class OverlayExpress {
             console.error(chalk.red('Error in /requestSyncResponse:'), error)
             return res.status(400).json({
               status: 'error',
-              message: error instanceof Error ? error.message : 'An unknown error occurred'
+              message: publicErrorMessage(error)
             })
           }
         })().catch(() => {
@@ -1708,7 +1860,7 @@ export default class OverlayExpress {
             console.error(chalk.red('Error in /requestForeignGASPNode:'), error)
             return res.status(400).json({
               status: 'error',
-              message: error instanceof Error ? error.message : 'An unknown error occurred'
+              message: publicErrorMessage(error)
             })
           }
         })().catch(() => {
@@ -1727,7 +1879,7 @@ export default class OverlayExpress {
     const readBasmTopic = (req: express.Request): string => {
       const header = req.headers['x-bsv-topic']
       if (typeof header !== 'string' || header.length === 0) {
-        throw new TypeError('Missing x-bsv-topic header')
+        throw new PublicRequestError('Missing x-bsv-topic header')
       }
       return header
     }
@@ -1752,7 +1904,7 @@ export default class OverlayExpress {
             console.error(chalk.red(`Error in ${path}:`), error)
             return res.status(400).json({
               status: 'error',
-              message: error instanceof Error ? error.message : 'An unknown error occurred'
+              message: publicErrorMessage(error)
             })
           }
         })().catch(() => {
@@ -1763,7 +1915,7 @@ export default class OverlayExpress {
 
     const requireTxids = (value: unknown): string[] => {
       if (!Array.isArray(value) || !value.every(txid => typeof txid === 'string')) {
-        throw new TypeError('txids must be an array of strings')
+        throw new PublicRequestError('txids must be an array of strings')
       }
       return value
     }
@@ -1839,7 +1991,7 @@ export default class OverlayExpress {
       const authHeader = req.headers.authorization
       if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring('Bearer '.length)
-        if (token === this.adminToken) {
+        if (secretMatches(token, this.adminToken)) {
           next()
           return
         }
@@ -1899,7 +2051,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1945,7 +2097,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -1991,7 +2143,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2015,7 +2167,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2048,7 +2200,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2078,7 +2230,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2102,7 +2254,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2148,7 +2300,7 @@ export default class OverlayExpress {
         } catch (error) {
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2168,7 +2320,7 @@ export default class OverlayExpress {
           console.error(chalk.red('Error in /admin/syncAdvertisements:'), error)
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2191,7 +2343,7 @@ export default class OverlayExpress {
           console.error(chalk.red('Error in /admin/startGASPSync:'), error)
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2276,7 +2428,7 @@ export default class OverlayExpress {
           console.error(chalk.red('Error in /admin/evictOutpoint:'), error)
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2300,7 +2452,7 @@ export default class OverlayExpress {
           console.error(chalk.red('Error in /admin/janitor:'), error)
           return res.status(400).json({
             status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
+            message: publicErrorMessage(error)
           })
         }
       })().catch(() => {
@@ -2331,10 +2483,15 @@ export default class OverlayExpress {
     await this.runStartupSync()
 
     // Start listening on the configured port
-    this.app.listen(this.port, () => {
+    this.server = this.app.listen(this.port, () => {
       this.isListening = true
       this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
     })
+    configureHttpServer(
+      this.server,
+      edgePolicy.environmentPrefix,
+      edgePolicy.http
+    )
   }
 
   /**

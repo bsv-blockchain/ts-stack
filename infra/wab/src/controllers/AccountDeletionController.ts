@@ -103,7 +103,7 @@ export class AccountDeletionController {
       });
     } catch (error: any) {
       log.error({ operation: 'controller.account_deletion.request', err: error, outcome: 'error' }, 'requestDeletion failed');
-      res.status(500).json({ message: error.message });
+      res.status(500).json({ message: "An internal error occurred." });
     }
   }
 
@@ -155,7 +155,7 @@ export class AccountDeletionController {
       });
     } catch (error: any) {
       log.error({ operation: 'controller.account_deletion.complete', err: error, outcome: 'error' }, 'completeDeletion failed');
-      res.status(500).json({ message: error.message });
+      res.status(500).json({ message: "An internal error occurred." });
     }
   }
 }

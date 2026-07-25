@@ -66,6 +66,29 @@ describe("Controllers", () => {
                 })
             );
         });
+
+        it("never advertises console OTP authentication in production", () => {
+            const previousNodeEnv = process.env.NODE_ENV;
+            const previousEnabled = process.env.DEV_CONSOLE_AUTH_METHOD_ENABLED;
+            process.env.NODE_ENV = "production";
+            process.env.DEV_CONSOLE_AUTH_METHOD_ENABLED = "true";
+            const res = mockResponse();
+
+            try {
+                InfoController.getInfo(mockRequest(), res);
+
+                expect(res.json).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        supportedAuthMethods: ["TwilioPhone"]
+                    })
+                );
+            } finally {
+                if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+                else process.env.NODE_ENV = previousNodeEnv;
+                if (previousEnabled === undefined) delete process.env.DEV_CONSOLE_AUTH_METHOD_ENABLED;
+                else process.env.DEV_CONSOLE_AUTH_METHOD_ENABLED = previousEnabled;
+            }
+        });
     });
 
     describe("AuthController with admin phone", () => {

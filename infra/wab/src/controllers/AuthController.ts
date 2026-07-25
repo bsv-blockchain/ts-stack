@@ -6,34 +6,11 @@
 
 import { Request, Response } from "express";
 import { UserService } from "../services/UserService";
-import { AuthMethod } from "../auth-methods/AuthMethod";
-import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
-import { DevConsoleAuthMethod } from "../auth-methods/DevConsoleAuthMethod";
+import {
+    getAuthMethodInstance,
+    UnsupportedAuthMethodError
+} from "../auth-methods/AuthMethodFactory";
 import { log } from "../logger";
-
-// Singleton instance to maintain state between requests, given dev only in memory use.
-const dev = new DevConsoleAuthMethod()
-
-/**
- * Returns the appropriate AuthMethod instance given a methodType.
- */
-function getAuthMethodInstance(methodType: string): AuthMethod {
-    switch (methodType) {
-        case "TwilioPhone":
-            return new TwilioAuthMethod({
-                accountSid: process.env.TWILIO_ACCOUNT_SID!,
-                authToken: process.env.TWILIO_AUTH_TOKEN!,
-                verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID!
-            });
-        case "DevConsole":
-            return dev;
-        // Add support for other auth methods if required.
-        // case "PersonaID":
-        //     return new PersonaAuthMethod({ apiKey: "mockApiKey" });
-        default:
-            throw new Error(`Unsupported auth method: ${methodType}`);
-    }
-}
 
 export class AuthController {
     /**
@@ -54,8 +31,11 @@ export class AuthController {
             const result = await authMethod.startAuth(presentationKey, payload);
             res.json(result);
         } catch (error: any) {
+            if (error instanceof UnsupportedAuthMethodError) {
+                return res.status(400).json({ message: "Unsupported auth method." });
+            }
             log.error({ operation: 'controller.auth.start', err: error, outcome: 'error' }, 'startAuth failed');
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ message: "An internal error occurred." });
         }
     }
 
@@ -94,8 +74,11 @@ export class AuthController {
                 message: result.message
             });
         } catch (error: any) {
+            if (error instanceof UnsupportedAuthMethodError) {
+                return res.status(400).json({ message: "Unsupported auth method." });
+            }
             log.error({ operation: 'controller.auth.complete', err: error, outcome: 'error' }, 'completeAuth failed');
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ message: "An internal error occurred." });
         }
     }
 }

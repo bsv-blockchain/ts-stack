@@ -22,3 +22,15 @@ service is behind that exact number of trusted reverse proxies; never expose a
 proxy-configured instance directly to untrusted clients. The default in-memory
 store enforces limits per process, so replicated deployments must also enforce
 an aggregate policy at their trusted ingress until a shared store is configured.
+
+Browser callers are accepted from any valid HTTP(S) origin by default without
+cookie credentials. Set `UHRP_CORS_MODE=allowlist` and
+`UHRP_CORS_ALLOWED_ORIGINS` for an exact opt-in list, or use `disabled` to
+reject Origin-bearing requests while keeping mobile, server, and command-line
+clients available.
+
+`PUT /put` does not buffer the object in memory. It validates the HMAC,
+expiry, declared size, and optional `Content-Length` first, streams up to
+`UHRP_UPLOAD_MAX_BODY_BYTES` into a private temporary file, hashes
+incrementally, and exclusively commits the completed object without
+overwriting an existing file or symlink.

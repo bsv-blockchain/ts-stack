@@ -43,6 +43,16 @@ const main = async () => {
     // Decide what port you want the server to listen on.
     server.configurePort(8080)
 
+    // Public CORS is the default so wallet UIs and mobile-backed web apps can
+    // call the protocol from previously unknown domains. Deployments with a
+    // closed caller set can opt into exact origins and customize the UI CSP.
+    server.configureEdgePolicy({
+      allowedOrigins: process.env.OVERLAY_CORS_ALLOWED_ORIGINS?.split(','),
+      securityHeaders: {
+        contentSecurityPolicy: process.env.OVERLAY_CONTENT_SECURITY_POLICY
+      }
+    })
+
     // Connect to your SQL database with Knex
     await server.configureKnex(process.env.KNEX_URL!)
 
@@ -97,6 +107,25 @@ main()
 Check out [API.md](./API.md) for the API docs.
 
 ## Additional Features
+
+### Public HTTP edge policy
+
+Overlay nodes are public protocol services. With no CORS configuration,
+OverlayExpress returns `Access-Control-Allow-Origin: *` and never enables
+cookie credentials. Set `OVERLAY_CORS_MODE=allowlist` with exact
+`OVERLAY_CORS_ALLOWED_ORIGINS`, pass `allowedOrigins` to
+`configureEdgePolicy`, or use `OVERLAY_CORS_MODE=disabled` for a deliberately
+closed browser surface.
+
+`configureEdgePolicy` also controls JSON/binary body limits, per-process
+concurrency, Node HTTP timeouts, CSP, and other security headers. Environment
+overrides are listed in `.env.example`. Protocol authentication, admin
+authentication, callback tokens, and input validation remain required
+regardless of CORS mode.
+
+Janitor outbound checks accept only public HTTPS targets on the standard port
+and do not follow redirects by default. `allowPrivateHosts: true` exists only
+for isolated local development.
 
 ### Advanced Engine Configuration
 

@@ -6,6 +6,15 @@ import { MonitorDaemon } from '../../monitor/MonitorDaemon'
 import { Wallet } from '../../Wallet'
 import { renderAdminPage } from './adminUi'
 import path from 'node:path'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  configureHttpServer,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders,
+  type SecurityHeadersOptions
+} from '../remoting/edgePolicy'
 
 const express = require('express')
 const { createAuthMiddleware } = require('@bsv/auth-express-middleware')
@@ -15,6 +24,8 @@ export interface MonitorAdminContextConfig {
   adminPort?: number
   adminHost: string
   adminIdentityKeys: string[]
+  adminAllowedOrigins?: string[]
+  adminSecurityHeaders?: SecurityHeadersOptions
 }
 
 export interface MonitorAdminContext {
@@ -518,14 +529,22 @@ export class AdminServer {
   }
 
   private setupRoutes (): void {
-    this.app.use(express.json({ limit: '5mb' }))
-    this.app.use((req: any, res: any, next: any) => {
-      res.header('Access-Control-Allow-Origin', '*')
-      res.header('Access-Control-Allow-Headers', '*')
-      res.header('Access-Control-Allow-Methods', '*')
-      if (req.method === 'OPTIONS') return res.sendStatus(200)
-      next()
-    })
+    this.app.disable('x-powered-by')
+    this.app.use(securityHeaders({
+      environmentPrefix: 'WALLET_ADMIN',
+      contentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      ...this.context.config.adminSecurityHeaders
+    }))
+    this.app.use(corsPolicy({
+      environmentPrefix: 'WALLET_ADMIN',
+      allowedOrigins: this.context.config.adminAllowedOrigins,
+      methods: ['GET', 'POST', 'OPTIONS']
+    }))
+    this.app.use(concurrencyLimit('WALLET_ADMIN', 50))
+    this.app.use(express.json({
+      limit: readBodyLimitBytes('WALLET_ADMIN', 1024 * 1024)
+    }))
+    this.app.use(bodyParserErrorHandler)
 
     this.app.get('/healthz', (_req: any, res: any) => {
       res.json({ ok: true, chain: this.context.config.chain })
@@ -665,14 +684,25 @@ export class AdminServer {
 
     this.app.use((error: any, _req: any, res: any, _next: any) => {
       const e = sdk.WalletError.fromUnknown(error)
-      res.status(500).json({ error: { code: e.code, message: e.message, description: e.description } })
+      console.error('Monitor admin request failed', e)
+      res.status(500).json({
+        error: {
+          code: 'ERR_INTERNAL',
+          message: 'The admin request could not be completed.'
+        }
+      })
     })
   }
 
-  private requireAdmin (req: any, _res: any, next: any): void {
+  private requireAdmin (req: any, res: any, next: any): void {
     const identityKey = req.auth?.identityKey
     if (!identityKey || !this.context.config.adminIdentityKeys.includes(identityKey)) {
-      next(new Error('Authenticated user is not an allowed monitor admin.'))
+      res.status(403).json({
+        error: {
+          code: 'ERR_ADMIN_FORBIDDEN',
+          message: 'The authenticated identity is not an allowed monitor admin.'
+        }
+      })
       return
     }
     next()
@@ -683,6 +713,13 @@ export class AdminServer {
       console.log(
         `Monitor admin listening at http://${this.context.config.adminHost}:${this.context.config.adminPort}/admin`
       )
+    })
+    configureHttpServer(this.server, 'WALLET_ADMIN', {
+      requestTimeoutMs: 60_000,
+      headersTimeoutMs: 10_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 60_000,
+      maxRequestsPerSocket: 500
     })
   }
 
