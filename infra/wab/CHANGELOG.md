@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- Apply one configurable rate-limit policy to authentication, user, faucet,
+  deletion, and share routes. Forwarded client addresses are accepted only
+  behind an explicitly bounded trusted-proxy chain.
+
 ## [1.1.0] - 2025-08-08
 
 ### Changed

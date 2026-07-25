@@ -29,6 +29,7 @@ import knexLib, { Knex } from 'knex'
 import knexConfig from '../knexfile.js'
 import type { WalletInterface } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
+import { rateLimit } from 'express-rate-limit'
 import { setupSwagger } from './swagger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import {
@@ -36,12 +37,14 @@ import {
   registerMessageBoxPostAuthRoutes
 } from './compose.js'
 import * as crypto from 'crypto'
+import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy.js'
 (global.self as any) = { crypto }
 
 dotenv.config()
 
 // Create the Express app instance
 export const app: Express = express()
+configureTrustProxy(app)
 
 // Load environment variables
 const {
@@ -164,6 +167,11 @@ export async function useRoutes (): Promise<void> {
   }
 
   registerMessageBoxPreAuthRoutes(app, ROUTING_PREFIX)
+
+  app.use(rateLimit(rateLimitOptions(
+    'MESSAGE_BOX_PRE_AUTH_RATE_LIMIT',
+    { windowMs: 60_000, limit: 300 }
+  )))
 
   app.use(
     createAuthMiddleware({

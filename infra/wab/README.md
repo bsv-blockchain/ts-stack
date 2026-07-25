@@ -157,9 +157,26 @@ DB_PORT=5432
 
 # Other environment-specific config
 PORT=3000
+
+# Optional, explicit reverse-proxy hop count. Omit when directly reachable.
+TRUST_PROXY_HOPS=1
 ```
 
 *(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)*
+
+All state-changing routes are rate-limited and return HTTP 429 with
+`ERR_RATE_LIMITED`. Defaults are 10 authentication attempts per 15 minutes,
+120 user operations per 15 minutes, 5 faucet requests per hour, 5 account
+deletion attempts per 15 minutes, and 10 share operations per 15 minutes.
+Override a policy with `<PREFIX>_MAX` and `<PREFIX>_WINDOW_MS`, where the
+prefix is `WAB_AUTH_RATE_LIMIT`, `WAB_USER_RATE_LIMIT`,
+`WAB_FAUCET_RATE_LIMIT`, `WAB_ACCOUNT_DELETION_RATE_LIMIT`, or
+`WAB_SHARE_RATE_LIMIT`. Invalid or unbounded values fail startup.
+
+Express ignores forwarding headers unless `TRUST_PROXY_HOPS` is explicitly set
+to a value from 0 through 10. Set it only to the number of trusted proxies in
+front of the service; never expose an instance configured for a proxy directly
+to untrusted clients.
 
 ### Running Locally
 

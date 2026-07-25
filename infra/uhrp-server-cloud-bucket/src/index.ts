@@ -9,12 +9,19 @@ import routes from './routes'
 import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
 import { log } from './logger'
+import { rateLimit } from 'express-rate-limit'
+import {
+  authenticatedIdentityKey,
+  configureTrustProxy,
+  rateLimitOptions
+} from './security/rateLimitPolicy'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
 
 const app = express()
 app.disable('x-powered-by')
+configureTrustProxy(app)
 app.use(bodyparser.json({ limit: '1gb', type: 'application/json' }))
 
 // This allows the API to be used when CORS is enforced
@@ -92,6 +99,19 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
   }
 })
 
+const preAuthRateLimit = rateLimit(rateLimitOptions(
+  'UHRP_PRE_AUTH_RATE_LIMIT',
+  { windowMs: 60_000, limit: 300 }
+))
+
+const authenticatedRateLimit = rateLimit(rateLimitOptions(
+  'UHRP_AUTHENTICATED_RATE_LIMIT',
+  { windowMs: 60_000, limit: 1_000 },
+  { keyGenerator: authenticatedIdentityKey }
+))
+
+app.use(preAuthRateLimit)
+
   // Auth is enforced from here forward
   ; (async () => {
     const wallet = await getWallet()
@@ -131,6 +151,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     })
 
     app.use(authMiddleware);
+    app.use(authenticatedRateLimit)
     app.use(paymentMiddleware)
 
     // Secured, post-auth routes are added

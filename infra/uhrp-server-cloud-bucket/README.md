@@ -113,10 +113,20 @@ Refer to the inline comments in `.env.example` and update the fields as appropri
 | **PRICE_PER_GB_MO** | Monthly price (USD) for user per GB stored | `0.03` |
 | **WALLET_STORAGE_URL** | URL of the Toolbox Wallet storage server | `https://staging-storage.babbage.systems` |
 | **HTTP_PORT** | Port your app listens on inside the container | `8080` |
+| **TRUST_PROXY_HOPS** | Optional trusted reverse-proxy hop count (0–10); omit for direct-socket IPs | `1` |
+| **UHRP_PRE_AUTH_RATE_LIMIT_MAX** | Optional per-IP requests per pre-auth window (default 300/minute) | `300` |
+| **UHRP_PRE_AUTH_RATE_LIMIT_WINDOW_MS** | Optional pre-auth window in milliseconds | `60000` |
+| **UHRP_AUTHENTICATED_RATE_LIMIT_MAX** | Optional per-identity requests per authenticated window (default 1,000/minute) | `1000` |
+| **UHRP_AUTHENTICATED_RATE_LIMIT_WINDOW_MS** | Optional authenticated window in milliseconds | `60000` |
 | **DOCKERHUB_USERNAME** | *OPTIONAL* Docker account username for GitHub Actions | `my-docker-username` |
 | **DOCKERHUB_PASSWORD** | *OPTIONAL* Docker account password | `my-docker-password` |
 
 > You don’t need to fill in `GCP_STORAGE_CREDS` or the `GCR_PUSH_KEY` yet. These will be generated later when you create Runtime and Deployer service accounts.
+
+Invalid or unbounded rate-limit/proxy values fail startup. Forwarding headers
+remain ignored unless `TRUST_PROXY_HOPS` is explicitly configured. The
+in-memory store is per process; replicated deployments must enforce an
+aggregate policy at their trusted ingress until a shared store is configured.
 
 ----------
 

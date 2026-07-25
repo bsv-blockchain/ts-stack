@@ -107,10 +107,22 @@ const server = new StorageServer(storage, {
   wallet,
   monetize: false,
   sessionManager,
+  // Optional: exact trusted proxy chain. Omit for direct-socket IPs.
+  trustProxy: 1,
+  // Per-IP before auth (default 300/minute).
+  preAuthRateLimit: { limit: 300, windowMs: 60_000 },
+  // Per-identity before payment/RPC work (default 1,000/minute).
+  rateLimit: { limit: 1_000, windowMs: 60_000 },
   logRpcRequests: false
 })
 server.start()
 ```
+
+Both stages return HTTP 429 with `ERR_RATE_LIMITED`. For multi-process or
+multi-replica deployments, configure a shared `express-rate-limit` store in
+both options so limits are aggregate rather than per process. Never use a
+permissive trust-all proxy setting; use a known hop count, subnet, or trust
+predicate.
 
 Every replica must share the same database and session TTL. Run
 `sessionManager.pruneExpiredSessions()` from one scheduled maintenance worker;

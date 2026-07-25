@@ -27,6 +27,9 @@ jobs:
       - name: Test repository health controls
         run: node --test scripts/repository-health.test.mjs
 
+      - name: Verify synchronized service security policy
+        run: node scripts/sync-service-rate-limit-policy.mjs --check
+
       - name: Enforce inventory, exception, baseline, and contract ratchets
         run: >-
           node scripts/repository-health.mjs
@@ -88,7 +91,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.github/workflows/ci\.yml|governance/repository-health/|scripts/(repository-health|run-ci-tests|normalize-lcov-paths)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/ci\.yml|governance/repository-health/|scripts/(repository-health|run-ci-tests|normalize-lcov-paths|sync-service-rate-limit-policy)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"

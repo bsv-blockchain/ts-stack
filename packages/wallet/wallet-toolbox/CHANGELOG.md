@@ -6,6 +6,9 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Bound StorageServer work per source IP before BRC-103 authentication and per
+  identity before payment/RPC handling. Both stages support shared stores, and
+  proxy trust now requires an explicit hop/subnet/predicate configuration.
 - Harden CWI/WAB account continuity so overlay failures, malformed or ambiguous
   UMP results, and snapshot-load failures cannot silently enter new-user
   onboarding. Add an expiring WAB auth session, legacy-compatible WAB account
