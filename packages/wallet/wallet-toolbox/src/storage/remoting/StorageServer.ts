@@ -96,6 +96,11 @@ const actionBatchRpcMethods = new Set([
   'renewActionBatch'
 ])
 
+interface RpcDispatchResult {
+  found: boolean
+  result?: unknown
+}
+
 export interface WalletStorageServerOptions {
   port: number
   wallet: Wallet
@@ -293,150 +298,187 @@ export class StorageServer {
     )
 
     // A single POST endpoint for JSON-RPC:
-    this.app.post('/', async (req: Request, res: Response) => {
-      const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
-      const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
-      if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
-      const { jsonrpc, method, id } = req.body
-      const params = (requestUsesBinary ? decodeBinaryJsonValue(req.body.params) : req.body.params) as any[]
-      const sendRpc = (payload: unknown, status: number = 200): Response => {
-        res.set('X-Content-Type-Options', 'nosniff')
-        // Normalize with the negotiated binary replacer, then let Express emit
-        // the JSON response through its escaping-aware JSON sink.
-        return res.status(status).json(JSON.parse(stringifyJsonRpc(payload, useBinary)))
-      }
-      // Basic JSON-RPC protocol checks:
-      if (jsonrpc !== '2.0' || !method || typeof method !== 'string') {
-        return sendRpc({ error: { code: -32600, message: 'Invalid Request' } }, 400)
-      }
+    this.app.post('/', this.handleRpcRequest.bind(this))
+  }
 
-      let logObj: Record<string, unknown> | undefined
-      if (this.logRpcRequests) {
-        logObj = {
-          source: 'StorageServer POST handler',
-          method,
-          id,
-          user: req.auth.identityKey,
-          params: JSON.stringify(params || '').slice(0, 256)
-        }
-        const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
-        if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
-        console.log(JSON.stringify(logObj))
-      }
+  private async handleRpcRequest (req: Request, res: Response): Promise<Response> {
+    const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+    const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
+    if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
 
-      try {
-        // Dispatch the method call:
-        if (typeof (this as any)[method] === 'function') {
-          // if you wanted to handle certain methods on the server class itself
-          // e.g. this['someServerMethod'](params)
-          throw new TypeError('Server method dispatch not used in this approach.')
-        } else if (storageRpcMethods.has(method)) {
-          const storageMethod = method === 'findOutputBaskets'
-            ? 'findOutputBasketsAuth'
-            : method
-          if (typeof (this.storage as any)[storageMethod] !== 'function') {
-            return sendRpc({
-              jsonrpc: '2.0',
-              error: { code: -32601, message: `Method not found: ${method}` },
-              id
-            }, 400)
-          }
-          // method is on the walletStorage:
-          // Find user
-          switch (method) {
-            case 'destroy': {
-              if (logObj != null) {
-                logObj.result = undefined
-                logObj.comment = 'IGNORED'
-                console.log(JSON.stringify(logObj))
-              }
-              return sendRpc({ jsonrpc: '2.0', result: undefined, id })
-            }
-            case 'getSettings':
-              /** */
-              break
-            case 'findOrInsertUser':
-              if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated user.') }
-              break
-            case 'adminStats':
-              // Add check for admin user
-              if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.') }
-              if (!this.adminIdentityKeys?.includes(req.auth.identityKey)) { throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.') }
-              break
-            case 'processSyncChunk': {
-              await this.validateParam0(params, req)
-              // const args: RequestSyncChunkArgs = params[0]
-              const r: SyncChunk = params[1]
-              validateSyncChunkEntities(r)
-              break
-            }
-            default:
-              if (authIdRpcMethods.has(method)) {
-                await this.bindAuthenticatedAuth(params, req, actionBatchRpcMethods.has(method))
-              } else {
-                await this.validateParam0(params, req)
-              }
-              break
-          }
+    const { jsonrpc, method, id } = req.body
+    const params = (requestUsesBinary ? decodeBinaryJsonValue(req.body.params) : req.body.params) as any[]
+    if (jsonrpc !== '2.0' || !method || typeof method !== 'string') {
+      return this.sendRpc(res, useBinary, { error: { code: -32600, message: 'Invalid Request' } }, 400)
+    }
 
-          // If makeLogger is valid, setup and potentially initialize to return data
-          let logger: WalletLoggerInterface | undefined
-          if ((this.makeLogger != null) && typeof params[1] === 'object') {
-            logger = this.makeLogger(params[1].logger)
-            params[1].logger = logger
-            logger.group(`StorageSever ${method}`)
-            const userId = params[0]?.userId
-            const identityKey = params[0]?.identityKey
-            if (userId) logger.log(`userId: ${userId}`)
-            if (identityKey) logger.log(`identityKey: ${identityKey}`)
-          }
-
-          try {
-            const result = await (this.storage as any)[storageMethod](...(params || []))
-
-            if (logger != null) {
-              logger.groupEnd()
-              logger.flush?.()
-              if (logger.isOrigin) {
-                // Potentially only flush if isOrigin...
-              } else if ((logger.logs != null) && typeof result === 'object') {
-                // If not the start of logging, return logged data with result.
-                result.log = { logs: logger.logs }
-              }
-            }
-
-            return sendRpc({ jsonrpc: '2.0', result, id })
-          } catch (error_: unknown) {
-            logWalletError(error_, logger, 'error executing requested method')
-            logger?.flush?.()
-            throw error_
-          }
-        } else {
-          // Unknown method
-          return sendRpc({
-            jsonrpc: '2.0',
-            error: { code: -32601, message: `Method not found: ${method}` },
-            id
-          }, 400)
-        }
-      } catch (error: unknown) {
-        /**
-         * Catch any thrown errors from the local walletStorage method.
-         *
-         * Convert errors to standard JSON object format that can be converted
-         * back to WalletError derived objects on the client side and re-thrown.
-         *
-         * Uses WalletError.fromJson(<error object>) on the client side to re-create
-         * an error object of the right class and properties.
-         */
-        const json = WalletError.unknownToJson(error)
-        return sendRpc({
+    const logObj = this.createRpcLog(req, method, id, params)
+    try {
+      const dispatch = await this.dispatchRpcCall(method, params, req, logObj)
+      if (!dispatch.found) {
+        return this.sendRpc(res, useBinary, {
           jsonrpc: '2.0',
-          error: JSON.parse(json),
+          error: { code: -32601, message: `Method not found: ${method}` },
           id
-        })
+        }, 400)
       }
+      return this.sendRpc(res, useBinary, { jsonrpc: '2.0', result: dispatch.result, id })
+    } catch (error: unknown) {
+      return this.sendRpcError(res, useBinary, id, error)
+    }
+  }
+
+  private sendRpc (res: Response, useBinary: boolean, payload: unknown, status: number = 200): Response {
+    res.set('X-Content-Type-Options', 'nosniff')
+    // Normalize with the negotiated binary replacer, then let Express emit
+    // the JSON response through its escaping-aware JSON sink.
+    return res.status(status).json(JSON.parse(stringifyJsonRpc(payload, useBinary)))
+  }
+
+  private sendRpcError (res: Response, useBinary: boolean, id: unknown, error: unknown): Response {
+    /**
+     * Convert errors to standard JSON object format that can be converted back
+     * to WalletError derived objects on the client side and re-thrown.
+     */
+    const json = WalletError.unknownToJson(error)
+    return this.sendRpc(res, useBinary, {
+      jsonrpc: '2.0',
+      error: JSON.parse(json),
+      id
     })
+  }
+
+  private createRpcLog (
+    req: Request,
+    method: string,
+    id: unknown,
+    params: any[]
+  ): Record<string, unknown> | undefined {
+    if (!this.logRpcRequests) return undefined
+
+    const logObj: Record<string, unknown> = {
+      source: 'StorageServer POST handler',
+      method,
+      id,
+      user: req.auth.identityKey,
+      params: JSON.stringify(params || '').slice(0, 256)
+    }
+    const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
+    if (traceContext) {
+      logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
+    }
+    console.log(JSON.stringify(logObj))
+    return logObj
+  }
+
+  private async dispatchRpcCall (
+    method: string,
+    params: any[],
+    req: Request,
+    logObj?: Record<string, unknown>
+  ): Promise<RpcDispatchResult> {
+    if (!storageRpcMethods.has(method)) return { found: false }
+    if (typeof (this as any)[method] === 'function') {
+      throw new TypeError('Server method dispatch not used in this approach.')
+    }
+
+    const storageMethod = method === 'findOutputBaskets'
+      ? 'findOutputBasketsAuth'
+      : method
+    const storageHandler = (this.storage as any)[storageMethod]
+    if (typeof storageHandler !== 'function') return { found: false }
+
+    const shouldInvoke = await this.authorizeRpcCall(method, params, req, logObj)
+    if (!shouldInvoke) return { found: true, result: undefined }
+
+    const logger = this.createRpcLogger(method, params)
+    try {
+      const result = await storageHandler.call(this.storage, ...(params || []))
+      this.finishRpcLogging(logger, result)
+      return { found: true, result }
+    } catch (error: unknown) {
+      logWalletError(error, logger, 'error executing requested method')
+      logger?.flush?.()
+      throw error
+    }
+  }
+
+  private async authorizeRpcCall (
+    method: string,
+    params: any[],
+    req: Request,
+    logObj?: Record<string, unknown>
+  ): Promise<boolean> {
+    switch (method) {
+      case 'destroy':
+        this.logIgnoredDestroy(logObj)
+        return false
+      case 'getSettings':
+        return true
+      case 'findOrInsertUser':
+        if (params[0] !== req.auth.identityKey) {
+          throw new WERR_UNAUTHORIZED('function may only access authenticated user.')
+        }
+        return true
+      case 'adminStats':
+        this.authorizeAdminStats(params, req)
+        return true
+      case 'processSyncChunk':
+        await this.validateParam0(params, req)
+        validateSyncChunkEntities(params[1] as SyncChunk)
+        return true
+      default:
+        await this.authorizeStandardRpcCall(method, params, req)
+        return true
+    }
+  }
+
+  private logIgnoredDestroy (logObj?: Record<string, unknown>): void {
+    if (logObj == null) return
+    logObj.result = undefined
+    logObj.comment = 'IGNORED'
+    console.log(JSON.stringify(logObj))
+  }
+
+  private authorizeAdminStats (params: any[], req: Request): void {
+    if (params[0] !== req.auth.identityKey) {
+      throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.')
+    }
+    if (!this.adminIdentityKeys?.includes(req.auth.identityKey)) {
+      throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.')
+    }
+  }
+
+  private async authorizeStandardRpcCall (method: string, params: any[], req: Request): Promise<void> {
+    if (authIdRpcMethods.has(method)) {
+      await this.bindAuthenticatedAuth(params, req, actionBatchRpcMethods.has(method))
+      return
+    }
+    await this.validateParam0(params, req)
+  }
+
+  private createRpcLogger (method: string, params: any[]): WalletLoggerInterface | undefined {
+    if (this.makeLogger == null || params[1] == null || typeof params[1] !== 'object') return undefined
+
+    const logger = this.makeLogger(params[1].logger)
+    params[1].logger = logger
+    logger.group(`StorageSever ${method}`)
+    const userId = params[0]?.userId
+    const identityKey = params[0]?.identityKey
+    if (userId) logger.log(`userId: ${userId}`)
+    if (identityKey) logger.log(`identityKey: ${identityKey}`)
+    return logger
+  }
+
+  private finishRpcLogging (logger: WalletLoggerInterface | undefined, result: any): void {
+    if (logger == null) return
+
+    logger.groupEnd()
+    logger.flush?.()
+    if (!logger.isOrigin && logger.logs != null && result != null && typeof result === 'object') {
+      // If this is not the start of logging, return logged data with the result.
+      result.log = { logs: logger.logs }
+    }
   }
 
   private async authenticatedAuth (req: Request, requireActive: boolean): Promise<AuthId> {
