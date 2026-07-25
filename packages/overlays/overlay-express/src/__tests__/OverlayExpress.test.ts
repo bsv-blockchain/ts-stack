@@ -204,6 +204,54 @@ describe('OverlayExpress', () => {
     })
   })
 
+  describe('security-safe diagnostics', () => {
+    it('logs body metadata without serializing payload contents', () => {
+      const instance = overlayExpress as any
+
+      expect(instance.formatBodyForLog(Buffer.from('secret'), 'Body:')).toContain(
+        'binary body (6 bytes)'
+      )
+      expect(instance.formatBodyForLog('secret', 'Body:')).toContain(
+        'string body (6 bytes)'
+      )
+      expect(instance.formatBodyForLog(['secret'], 'Body:')).toContain(
+        'structured body (1 top-level item(s))'
+      )
+      expect(instance.formatBodyForLog({ secret: true }, 'Body:')).toContain(
+        'structured body (1 top-level item(s))'
+      )
+      expect(instance.formatBodyForLog(undefined, 'Body:')).toContain('undefined')
+    })
+
+    it('redacts authentication and payment headers while preserving safe metadata', () => {
+      const result = (overlayExpress as any).redactHeadersForLog({
+        authorization: 'Bearer private',
+        cookie: 'session=private',
+        'x-bsv-payment': 'private',
+        'x-bsv-auth-nonce': 'private',
+        'content-type': 'application/json'
+      })
+
+      expect(result).toEqual({
+        authorization: '[REDACTED]',
+        cookie: '[REDACTED]',
+        'x-bsv-payment': '[REDACTED]',
+        'x-bsv-auth-nonce': '[REDACTED]',
+        'content-type': 'application/json'
+      })
+    })
+
+    it('removes internal health-check details when configured', async () => {
+      overlayExpress.healthConfig.includeDetails = false
+
+      const report = await (overlayExpress as any).collectHealthReport('live')
+
+      expect(report.checks).toHaveLength(1)
+      expect(report.checks[0].name).toBe('process')
+      expect(report.checks[0].details).toBeUndefined()
+    })
+  })
+
   describe('configureLogger', () => {
     it('should set custom logger', () => {
       const customLogger = {
@@ -917,6 +965,7 @@ describe('OverlayExpress', () => {
     it.each([
       ['', 'an empty comma-separated list'],
       ['tm_foo,', 'an empty comma-separated topic'],
+      ['["tm_foo"', 'malformed JSON'],
       ['["tm_foo",42]', 'a JSON array containing a non-string topic']
     ])('returns a clean 400 when X-Topics is %s (%s)', async (topicsHeader) => {
       const postSpy = jest.spyOn(instance.app, 'post')
