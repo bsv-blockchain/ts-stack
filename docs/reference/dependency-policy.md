@@ -38,6 +38,11 @@ warning baseline reaches zero.
 - `pnpm audit --audit-level=high` blocks high and critical advisories in CI and
   release jobs.
 
+The version-consistency gate also rejects public package manifests that place
+type declarations, test runners, test clients, linters, documentation
+generators, or TypeScript build tools in `dependencies`. This prevents
+development-only advisory trees from leaking into clean consumer installs.
+
 The workspace carries one audited dependency override. Jest 30 still reaches
 unpatched `brace-expansion` 1.x/2.x releases through its current `glob` and
 `test-exclude` graph, so those versions are raised to 5.0.8. This final

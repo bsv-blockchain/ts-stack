@@ -45,6 +45,11 @@
 - Some production dependencies (@types/jest, jest, ts-jest, etc.) appear to be dev-only dependencies listed in `dependencies` rather than `devDependencies` — tracked debt.
 - Extended test timeout (15s) may indicate network-dependent tests.
 
+Resolution (2026-07-25): version 2.4.2 moved all test, type, build, lint, and
+documentation tools to `devDependencies`, removed unused `node-fetch`, added
+the declared license to the tarball, and excluded tests and locally generated
+example/build artifacts from the published package.
+
 ## Migration Gate Checklist (MBGA §13.3)
 - [x] BASELINE.md captured
 - [ ] Conformance runner vectors passing

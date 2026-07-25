@@ -1,0 +1,4 @@
+dist/**/*.tsbuildinfo
+docs/examples/dist
+docs/examples/node_modules
+src/**/__tests__
