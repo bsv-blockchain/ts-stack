@@ -19,7 +19,7 @@
   "scripts": {
     "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
+    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
     "lint:ci": "oxlint src",
     "lint": "oxlint src",
     "build": "npm run build:ts && npm run build:umd",

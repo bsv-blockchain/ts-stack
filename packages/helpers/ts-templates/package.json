@@ -27,7 +27,7 @@
   "scripts": {
     "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
+    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
     "lint": "oxlint src",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
