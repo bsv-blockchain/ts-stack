@@ -50,10 +50,14 @@ reclassified as generated to reduce quality findings.
 
 `.github/codeql/codeql-config.yml` is the executable CodeQL boundary. Its
 `paths-ignore` entries must exactly match the owned generated artifacts above.
-The advanced workflow keeps JavaScript/TypeScript, Python, and GitHub Actions
+The advanced workflow keeps authored JavaScript/TypeScript and GitHub Actions
 analysis on pull requests, `main` pushes, and a weekly schedule with the
-`security-extended` suite. A repository-control test rejects any loss of those
-languages, events, permissions, query coverage, or required check names.
+`security-extended` suite. The repository's Python files are deterministic
+OpenAPI output under `conformance/generated/**`; their source specifications,
+locked generator, and checked-in output are verified by codegen CI instead of
+being misrepresented as authored Python in CodeQL. A repository-control test
+rejects any loss of the authored languages, events, permissions, query
+coverage, or required check names.
 `CODEQL_ADVANCED_ENABLED` is the repository-level cutover gate: keep it `true`
 after advanced setup is activated. It exists only to prevent default and
 advanced analysis from uploading concurrently during the migration PR.
