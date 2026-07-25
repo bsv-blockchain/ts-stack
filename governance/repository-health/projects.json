@@ -6,6 +6,17 @@
       "codeownersSource": ".github/CODEOWNERS"
     }
   },
+  "dependencyAutomation": {
+    "firstParty": {
+      "pattern": "@bsv/*",
+      "owner": "ts-stack-maintainers",
+      "dependabotPolicy": "ignored",
+      "updateMechanism": "scripts/sync-versions.mjs",
+      "releaseWorkflow": ".github/workflows/release.yaml",
+      "verification": "scripts/check-versions.mjs",
+      "rationale": "First-party versions are updated as one release-aware graph after packages are published; generic Dependabot PRs cannot safely coordinate unpublished sibling versions."
+    }
+  },
   "generatedArtifacts": [
     {
       "path": "conformance/generated/**",
@@ -13,9 +24,16 @@
       "sourceInputs": [
         "specs/overlay/overlay-http.yaml",
         "specs/broadcast/arc.yaml",
-        "specs/messaging/message-box-http.yaml"
+        "specs/messaging/message-box-http.yaml",
+        "scripts/generate-openapi-types.mjs",
+        "tools/codegen/go.mod",
+        "tools/codegen/go.sum",
+        "tools/codegen/node/package.json",
+        "tools/codegen/node/package-lock.json",
+        "tools/codegen/pyproject.toml",
+        "tools/codegen/uv.lock"
       ],
-      "generator": ".github/workflows/codegen.yml",
+      "generator": "scripts/generate-openapi-types.mjs with tools/codegen lockfiles; verified by .github/workflows/codegen.yml",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review the source specifications and deterministic generator; never treat generated output as hand-authored source."
     },

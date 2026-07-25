@@ -33,7 +33,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited docs build tool
+        run: pnpm rebuild esbuild
 
       - name: Generate AsyncAPI HTML bundles
         run: pnpm docs:asyncapi
