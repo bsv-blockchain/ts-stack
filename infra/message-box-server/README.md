@@ -64,7 +64,21 @@ LOGGING_ENABLED - Set to 'true' to enable verbose debug logging in any environme
 
 MIGRATE_KEY - (Optional) Key used to authorize protected migration operations, if required
 
+TRUST_PROXY_HOPS - (Optional) Exact trusted reverse-proxy hop count from 0 through 10
+
+MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX / MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_WINDOW_MS -
+Per-IP protection before authentication (defaults to 300 requests per minute)
+
+MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX /
+MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_WINDOW_MS - Per-identity protection before
+payment and route work (defaults to 1,000 requests per minute)
+
 ________________________________________
+
+Invalid or unbounded rate-limit/proxy values fail startup. Forwarding headers
+remain ignored unless `TRUST_PROXY_HOPS` is explicitly configured. The default
+in-memory store is per process; replicated deployments must also enforce an
+aggregate policy at their trusted ingress until a shared store is configured.
 
 ## 4. Quick Start
 
@@ -369,4 +383,3 @@ See [DEPLOYING.md](./DEPLOYING.md) for tips.
 ________________________________________
 ## 11. License
 This project is released under the [Open BSV License](https://www.bsvlicense.org/).
-

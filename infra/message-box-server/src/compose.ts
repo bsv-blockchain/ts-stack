@@ -13,12 +13,17 @@ import express, {
 import type { Server as HttpServer } from 'node:http'
 import { PublicKey } from '@bsv/sdk'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import { rateLimit, type Options as RateLimitOptions } from 'express-rate-limit'
 import { AuthSocketServer } from '@bsv/authsocket'
 import { preAuth, postAuth } from './routes/index.js'
 import sendMessageRoute from './routes/sendMessage.js'
 import { Logger } from './utils/logger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import type { MessageBoxContext } from './context.js'
+import {
+  authenticatedIdentityKey,
+  rateLimitOptions
+} from './security/rateLimitPolicy.js'
 
 export { createMessageBoxContext } from './context.js'
 export type { MessageBoxContext, CreateMessageBoxContextOptions } from './context.js'
@@ -49,8 +54,18 @@ export function registerMessageBoxPreAuthRoutes (
 export function registerMessageBoxPostAuthRoutes (
   router: MessageBoxRouter,
   ctx: Pick<MessageBoxContext, 'wallet' | 'calculateRequestPrice'>,
-  routingPrefix: string = ''
+  routingPrefix: string = '',
+  authenticatedRateLimitOptions: Partial<RateLimitOptions> = {}
 ): void {
+  router.use(rateLimit(rateLimitOptions(
+    'MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT',
+    { windowMs: 60_000, limit: 1_000 },
+    {
+      keyGenerator: authenticatedIdentityKey,
+      ...authenticatedRateLimitOptions
+    }
+  )))
+
   router.use(
     createPaymentMiddleware({
       wallet: ctx.wallet,

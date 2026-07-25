@@ -19,6 +19,12 @@ import { validateDate, validateEntity, validateEntities, validateSyncChunkEntiti
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
 import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
+import {
+  authenticatedIdentityKey,
+  configureTrustProxy,
+  rateLimitOptions,
+  TrustProxySetting
+} from './RateLimitPolicy'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -108,6 +114,18 @@ export interface WalletStorageServerOptions {
    * multiple server processes or replicas.
    */
   rateLimit?: Partial<RateLimitOptions>
+  /**
+   * Pre-authentication IP rate limiting. Defaults to 300 requests per minute.
+   * Use a shared store when multiple server processes or replicas must enforce
+   * one aggregate limit.
+   */
+  preAuthRateLimit?: Partial<RateLimitOptions>
+  /**
+   * Explicit Express proxy trust policy. Omit for the secure direct-socket
+   * default. Prefer a known hop count, subnet, or predicate; permissive
+   * `true` is intentionally unsupported.
+   */
+  trustProxy?: TrustProxySetting
   /** Emit one JSON log record for each authenticated RPC. Default: true. */
   logRpcRequests?: boolean
 }
@@ -123,6 +141,8 @@ export class StorageServer {
   private readonly makeLogger?: MakeWalletLogger
   private readonly sessionManager?: AuthMiddlewareOptions['sessionManager']
   private readonly rateLimitOptions?: Partial<RateLimitOptions>
+  private readonly preAuthRateLimitOptions?: Partial<RateLimitOptions>
+  private readonly trustProxy?: TrustProxySetting
   private readonly logRpcRequests: boolean
 
   constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
@@ -135,6 +155,8 @@ export class StorageServer {
     this.makeLogger = options.makeLogger
     this.sessionManager = options.sessionManager
     this.rateLimitOptions = options.rateLimit
+    this.preAuthRateLimitOptions = options.preAuthRateLimit
+    this.trustProxy = options.trustProxy
     this.logRpcRequests = options.logRpcRequests ?? true
 
     if (options['logShortReqs']) {
@@ -186,6 +208,16 @@ export class StorageServer {
   }
 
   private setupRoutes (): void {
+    configureTrustProxy(this.app, this.trustProxy)
+
+    this.app.use(rateLimit(rateLimitOptions(
+      { windowMs: 60_000, limit: 300 },
+      {
+        skip: (req: Request) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+        ...this.preAuthRateLimitOptions
+      }
+    )))
+
     // Escape HTML-significant characters in JSON responses. This preserves the
     // decoded JSON value while keeping user-controlled strings inert even if a
     // consumer embeds a response in an HTML context.
@@ -225,14 +257,14 @@ export class StorageServer {
     }
     if (this.sessionManager != null) options.sessionManager = this.sessionManager
     this.app.use(createAuthMiddleware(options))
-    const authenticatedRateLimit = rateLimit({
-      windowMs: 60_000,
-      limit: 1_000,
-      standardHeaders: 'draft-8',
-      legacyHeaders: false,
-      keyGenerator: (req: Request) => req.auth.identityKey,
-      ...this.rateLimitOptions
-    })
+    const authenticatedRateLimit = rateLimit(rateLimitOptions(
+      { windowMs: 60_000, limit: 1_000 },
+      {
+        keyGenerator: authenticatedIdentityKey,
+        ...this.rateLimitOptions
+      }
+    ))
+    this.app.use(authenticatedRateLimit)
     if (this.monetize) {
       this.app.use(
         createPaymentMiddleware({
@@ -244,7 +276,6 @@ export class StorageServer {
 
     this.app.put(
       '/action-batch/:batchId/blob/:digest',
-      authenticatedRateLimit,
       async (req: Request, res: Response) => {
         try {
           const auth = await this.authenticatedAuth(req, true)
@@ -262,7 +293,7 @@ export class StorageServer {
     )
 
     // A single POST endpoint for JSON-RPC:
-    this.app.post('/', authenticatedRateLimit, async (req: Request, res: Response) => {
+    this.app.post('/', async (req: Request, res: Response) => {
       const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
       const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
       if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
