@@ -48,6 +48,16 @@ and analysis treatment. Generated output can be excluded narrowly only when
 this relationship is explicit. Product source and tests must not be
 reclassified as generated to reduce quality findings.
 
+`.github/codeql/codeql-config.yml` is the executable CodeQL boundary. Its
+`paths-ignore` entries must exactly match the owned generated artifacts above.
+The advanced workflow keeps JavaScript/TypeScript, Python, and GitHub Actions
+analysis on pull requests, `main` pushes, and a weekly schedule with the
+`security-extended` suite. A repository-control test rejects any loss of those
+languages, events, permissions, query coverage, or required check names.
+`CODEQL_ADVANCED_ENABLED` is the repository-level cutover gate: keep it `true`
+after advanced setup is activated. It exists only to prevent default and
+advanced analysis from uploading concurrently during the migration PR.
+
 `governance/repository-health/exceptions.json` is the only registry for temporary
 exceptions. Its schema is in `exception.schema.json`. Every entry requires an
 owner, rationale, evidence, creation date, review deadline, and objective
@@ -90,8 +100,8 @@ checks:
 1. discovery matches the exact 37-project inventory;
 2. names, owners, profiles, criticality, targets, privacy, and release methods
    are internally consistent;
-3. generated artifact boundaries have valid owners, sources, generators, and
-   narrow review/analysis policies;
+3. generated artifact boundaries have valid owners, sources, generators, narrow
+   review/analysis policies, and exact CodeQL exclusion coverage;
 4. published package versions match the recorded baseline;
 5. exception records are owned, structurally valid, and unexpired;
 6. current package-contract findings exactly match the ratcheted snapshot; and

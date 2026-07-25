@@ -27,6 +27,70 @@ describe('ExpressTransport configuration', () => {
     expect(res.status).not.toHaveBeenCalled()
   })
 
+  it('dispatches only the exact BRC-104 path to the public handshake', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = {} as any
+    const handshake = jest
+      .spyOn(transport as any, 'handleWellKnownAuth')
+      .mockResolvedValue(undefined)
+    const general = jest
+      .spyOn(transport as any, 'handleGeneralMessage')
+      .mockImplementation(() => {})
+    const unauthenticated = jest
+      .spyOn(transport as any, 'handleUnauthenticated')
+      .mockImplementation(() => {})
+    const res = {} as any
+    const next = jest.fn()
+
+    await transport.handleIncomingRequest(
+      { path: '/.well-known/auth', headers: {} } as any,
+      res,
+      next
+    )
+    expect(handshake).toHaveBeenCalledTimes(1)
+    expect(general).not.toHaveBeenCalled()
+    expect(unauthenticated).not.toHaveBeenCalled()
+
+    for (const path of [
+      '/.well-known/auth/extra',
+      '/.well-known/authentication',
+      '/.well-known/Auth',
+      '/protected'
+    ]) {
+      await transport.handleIncomingRequest({ path, headers: {} } as any, res, next)
+    }
+    expect(handshake).toHaveBeenCalledTimes(1)
+    expect(general).not.toHaveBeenCalled()
+    expect(unauthenticated).toHaveBeenCalledTimes(4)
+  })
+
+  it('requires an auth request ID before using signed general-message dispatch', async () => {
+    const transport = new ExpressTransport()
+    transport.peer = {} as any
+    const handshake = jest
+      .spyOn(transport as any, 'handleWellKnownAuth')
+      .mockResolvedValue(undefined)
+    const general = jest
+      .spyOn(transport as any, 'handleGeneralMessage')
+      .mockImplementation(() => {})
+    const unauthenticated = jest
+      .spyOn(transport as any, 'handleUnauthenticated')
+      .mockImplementation(() => {})
+
+    await transport.handleIncomingRequest(
+      {
+        path: '/protected',
+        headers: { 'x-bsv-auth-request-id': 'signed-request-id' }
+      } as any,
+      {} as any,
+      jest.fn()
+    )
+
+    expect(general).toHaveBeenCalledTimes(1)
+    expect(handshake).not.toHaveBeenCalled()
+    expect(unauthenticated).not.toHaveBeenCalled()
+  })
+
   it('stores attacker-controlled request IDs in prototype-safe maps', async () => {
     const transport = new ExpressTransport()
     transport.peer = {

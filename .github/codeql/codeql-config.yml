@@ -1,0 +1,19 @@
+name: ts-stack security-extended analysis
+
+queries:
+  - uses: security-extended
+
+# Every ignored path is a checked-in generated boundary owned in
+# governance/repository-health/projects.json. Repository controls require this
+# list to match that registry exactly.
+paths-ignore:
+  - conformance/generated/**
+  - docs-site/public/assets/asyncapi/**
+  - packages/verifast/src/wasm/bdk-core.*
+  - packages/wallet/wallet-toolbox/docs/open-rpc/index.html
+  - infra/uhrp-server-basic/src/security/edgePolicy.ts
+  - infra/uhrp-server-cloud-bucket/src/security/edgePolicy.ts
+  - infra/message-box-server/src/security/edgePolicy.ts
+  - infra/chaintracks-server/src/security/edgePolicy.ts
+  - packages/overlays/overlay-express/src/security/edgePolicy.ts
+  - packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.ts
