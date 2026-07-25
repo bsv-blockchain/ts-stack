@@ -8,26 +8,31 @@ import { FaucetController } from "./controllers/FaucetController"
 import { AccountDeletionController } from "./controllers/AccountDeletionController"
 import { ShareController } from "./controllers/ShareController"
 import { configureTrustProxy, rateLimitOptions } from "./security/rateLimitPolicy"
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders
+} from "./security/edgePolicy"
 
 const app = express()
 app.disable('x-powered-by')
 configureTrustProxy(app)
-
-// Alternatively, you could add custom middleware to set headers and handle OPTIONS:
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', '*')
-  res.header('Access-Control-Allow-Methods', '*')
-  res.header('Access-Control-Expose-Headers', '*')
-  res.header('Access-Control-Allow-Private-Network', 'true')
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200)
-  } else {
-    next()
-  }
-})
-
-app.use(bodyParser.json())
+app.use(securityHeaders({ environmentPrefix: 'WAB' }))
+app.use(corsPolicy({
+  environmentPrefix: 'WAB',
+  methods: ['GET', 'POST', 'OPTIONS']
+}))
+app.use(concurrencyLimit('WAB', 200))
+app.use(rateLimit(rateLimitOptions(
+  'WAB_PRE_AUTH_RATE_LIMIT',
+  { windowMs: 60_000, limit: 300 }
+)))
+app.use(bodyParser.json({
+  limit: readBodyLimitBytes('WAB', 256 * 1024)
+}))
+app.use(bodyParserErrorHandler)
 
 const authenticationLimiter = rateLimit(rateLimitOptions(
   'WAB_AUTH_RATE_LIMIT',

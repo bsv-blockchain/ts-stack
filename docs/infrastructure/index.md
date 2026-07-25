@@ -88,6 +88,10 @@ The public BSVA deployment names are driven by the cluster `app_suffix`. For the
 
 ## Common Requirements
 
+The cross-service endpoint inventory, CORS/CSP modes, rate/body/timeout
+controls, threat model, and release retest checklist are maintained in
+[Public Service Edge Security](service-edge-security.md).
+
 All infrastructure services:
 - **Node.js 18+** – Runtime environment
 - **Docker & docker-compose** – Local development and containerization

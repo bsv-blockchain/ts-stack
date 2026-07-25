@@ -1,4 +1,3 @@
-version: '3.8'
 networks:
   babnet:
     ipam:
@@ -18,16 +17,23 @@ services:
     networks:
       - babnet
     environment:
-      MIGRATE_KEY: 'my-great-key'
       NODE_ENV: 'development'
       HOSTING_DOMAIN: 'http://localhost:8080'
       WALLET_STORAGE_URL: 'https://store-us-1.bsvb.tech'
-      ADMIN_TOKEN: 'admin-token'
+      ADMIN_TOKEN: "${ADMIN_TOKEN:?Set ADMIN_TOKEN to at least 32 random characters}"
       HTTP_PORT: 8080
       PRICE_PER_GB_MO: 0.03
-      UHRP_HOST_PRIVATE_KEY: '5KKGHf1dZpJ1L4aQTGCrVL4q3y5iwbcf9YcWS3oXynrWjaxS2LD'
-      SERVER_PRIVATE_KEY: '53a6156d87fd51d00095e82b59d20354b31786206462dbc8bbf5aeaa3a2a9309'
-      SERVER_XPRIV: 'xprv9s21ZrQH143K3GN3VANh6bt72CgqhysD35WrbZWq7zJMg9Jegv7qPhgCy1To8PHW8fJoa4EDLCx73FK8Ljfg64mW9XK9g13xkMwZKQPWZ9Y'
+      SERVER_PRIVATE_KEY: "${SERVER_PRIVATE_KEY:?Set SERVER_PRIVATE_KEY to a dedicated local-only key}"
+      UHRP_CORS_MODE: ${UHRP_CORS_MODE:-}
+      UHRP_CORS_ALLOWED_ORIGINS: ${UHRP_CORS_ALLOWED_ORIGINS:-}
+      UHRP_CORS_ALLOWED_HEADERS: ${UHRP_CORS_ALLOWED_HEADERS:-}
+      UHRP_CORS_EXPOSED_HEADERS: ${UHRP_CORS_EXPOSED_HEADERS:-}
+      UHRP_CONTENT_SECURITY_POLICY: ${UHRP_CONTENT_SECURITY_POLICY:-}
+      UHRP_CROSS_ORIGIN_RESOURCE_POLICY: ${UHRP_CROSS_ORIGIN_RESOURCE_POLICY:-}
+      UHRP_CROSS_ORIGIN_OPENER_POLICY: ${UHRP_CROSS_ORIGIN_OPENER_POLICY:-}
+      UHRP_FRAME_OPTIONS: ${UHRP_FRAME_OPTIONS:-}
+      UHRP_PERMISSIONS_POLICY: ${UHRP_PERMISSIONS_POLICY:-}
+      UHRP_STRICT_TRANSPORT_SECURITY: ${UHRP_STRICT_TRANSPORT_SECURITY:-}
       MIN_HOSTING_MINUTES: 15
       GCP_BUCKET_NAME: 'uhrp'
       GCP_PROJECT_ID: 'uhrp'
@@ -40,4 +46,3 @@ services:
       DEPLOY_ENV: ${DEPLOY_ENV:-development}
     # Direct node invocation with the OTel preload (image has no npm; see Dockerfile).
     command: ["node", "--require", "./out/src/telemetry.js", "--max-http-header-size=512000", "out/src/index.js"]
-

@@ -2,9 +2,9 @@
 id: infra-uhrp-basic
 title: "UHRP Server (Basic)"
 kind: infra
-version: "0.1.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "0.1.8"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: beta
 tags: [uhrp, storage, file-server, development, lightweight]
@@ -16,7 +16,11 @@ tags: [uhrp, storage, file-server, development, lightweight]
 
 ## What it does
 
-A lightweight Node.js server with Express that implements UHRP endpoints for file storage and retrieval. Files are stored on local filesystem (configurable via `./public` or `./data` directory), served by HTTP with public GET access, and uploads via PUT are authenticated with BRC-103 signatures. The server calculates pricing per GB/month (advisory pricing, not enforced by default) and provides a simple POST /lookup endpoint for UHRP metadata queries. No database dependencies — all file metadata stored as JSON alongside files.
+A lightweight Node.js server with Express that implements UHRP storage and
+metadata endpoints. Files are served publicly from the local object directory.
+The raw `PUT /put` commit is HMAC-authorized; the upload, list, find, and renew
+workflows require BRC-103 identity, and payment policy runs after
+authentication.
 
 Clients PUT files with authentication, retrieve files via public GET, and query metadata via POST /lookup.
 
@@ -39,11 +43,13 @@ Clients PUT files with authentication, retrieve files via public GET, and query 
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| PUT | /put/{hash} | Upload file to local storage (authenticated, priced) |
-| GET | /{hash} | Retrieve file from local storage (public) |
-| POST | /lookup | UHRP lookup queries to find files and metadata (public) |
-| GET | /info | Server info and pricing details (public) |
-| GET | / | Health/readiness check (HTTP 200) |
+| GET/HEAD | Static object paths | Retrieve stored files (public) |
+| PUT | /put | HMAC-authorized streaming object commit (64 MiB default ceiling) |
+| POST | /quote | Public storage-price quote |
+| POST | /upload | Authenticated upload authorization and payment workflow |
+| GET | /list | List the authenticated uploader's objects |
+| GET | /find | Find authenticated uploader metadata |
+| POST | /renew | Authenticated ownership/payment renewal |
 
 ## WebSocket endpoints
 
@@ -60,6 +66,19 @@ None.
 | SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
 | HTTP_PORT | No | Express server port (default: 8080) |
 | NODE_ENV | No | `development` or `production` |
+| UHRP_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
+| UHRP_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
+| UHRP_UPLOAD_MAX_BODY_BYTES | No | Raw `/put` ceiling (default 67108864) |
+| UHRP_JSON_MAX_BODY_BYTES | No | JSON ceiling (default 262144) |
+| TRUST_PROXY_HOPS | No | Exact trusted proxy hop count, 0 through 10 |
+
+`PUT /put` validates authorization, expiry, declared size, and any
+`Content-Length` before consuming the body. It streams into a private
+same-filesystem temporary file, hashes incrementally, and uses exclusive
+atomic linking so partial data and overwrites are never published.
+
+See [Public Service Edge Security](service-edge-security.md#uhrp-basic-server)
+for the complete endpoint threat model.
 
 ## Run locally
 
@@ -108,7 +127,7 @@ Implicit health via GET / returning HTTP 200. No explicit health endpoint. Monit
 ## Spec conformance
 
 - **UHRP** – Implements basic UHRP host protocol for file storage and retrieval
-- **BRC-103** – Mutual authentication on PUT (authenticated endpoint)
+- **BRC-103** – Mutual authentication on uploader metadata and renewal endpoints
 - **BRC-100** – Optional payment verification (via payment middleware if enabled)
 
 ## Integration with ts-stack
@@ -121,7 +140,7 @@ Implicit health via GET / returning HTTP 200. No explicit health endpoint. Monit
 ## Common pitfalls
 
 - No cleanup mechanism: files persist until manually deleted; monitor disk usage in production
-- Pricing is advisory: PRICE_PER_GB_MO displayed but not enforced unless payment middleware configured
+- Raw object commit is HMAC-authorized; authenticated upload/renew workflows apply payment middleware
 - Single instance only: no built-in replication or load balancing
 - MIME types auto-detected from file extension; unusual extensions may lack proper type
 - Direct disk access: ensure filesystem permissions allow Node.js process read/write access
@@ -129,5 +148,5 @@ Implicit health via GET / returning HTTP 200. No explicit health endpoint. Monit
 
 ## Source
 
-- [GitHub](https://github.com/bsv-blockchain/uhrp-server-basic)
+- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic)
 - [npm package](https://npmjs.com/package/@bsv/uhrp-lite)

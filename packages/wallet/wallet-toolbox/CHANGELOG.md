@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Make StorageServer, AdminServer, and the reusable ChaintracksService
+  credential-free public-CORS compatible by default, with opt-in exact origin
+  lists and configurable CSP/browser response headers. Add bounded parsers,
+  in-flight work and Node connection limits, stable non-sensitive errors, and
+  metadata-only request logging. Storage RPC work remains protected by
+  BRC-103 identity, per-IP/per-identity limits, method allowlisting, and
+  optional payment policy.
 - Bound StorageServer work per source IP before BRC-103 authentication and per
   identity before payment/RPC handling. Both stages support shared stores, and
   proxy trust now requires an explicit hop/subnet/predicate configuration.

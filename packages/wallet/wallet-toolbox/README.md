@@ -113,6 +113,12 @@ const server = new StorageServer(storage, {
   preAuthRateLimit: { limit: 300, windowMs: 60_000 },
   // Per-identity before payment/RPC work (default 1,000/minute).
   rateLimit: { limit: 1_000, windowMs: 60_000 },
+  // Public CORS is the default. Supply exact origins to opt into a whitelist.
+  allowedOrigins: process.env.WALLET_ALLOWED_ORIGINS?.split(','),
+  // Optional CSP/security-header overrides for an embedding deployment.
+  securityHeaders: {
+    contentSecurityPolicy: "default-src 'none'"
+  },
   logRpcRequests: false
 })
 server.start()
@@ -123,6 +129,13 @@ multi-replica deployments, configure a shared `express-rate-limit` store in
 both options so limits are aggregate rather than per process. Never use a
 permissive trust-all proxy setting; use a known hop count, subnet, or trust
 predicate.
+
+The storage service is intentionally reachable by browser apps on previously
+unknown domains. With no origin configuration it uses public wildcard CORS
+without cookie credentials. Passing `allowedOrigins`, setting
+`WALLET_STORAGE_CORS_MODE=allowlist`, or setting the mode to `disabled`
+provides opt-in restriction. BRC-103 authentication and optional payment
+policy are unchanged by CORS mode.
 
 Every replica must share the same database and session TTL. Run
 `sessionManager.pruneExpiredSessions()` from one scheduled maintenance worker;

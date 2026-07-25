@@ -51,6 +51,66 @@
       "generator": "JSight OpenRPC documentation export",
       "analysisPolicy": "exclude-generated",
       "reviewPolicy": "Review the StorageClient contract and the regenerated documentation artifact together."
+    },
+    {
+      "path": "infra/uhrp-server-basic/src/security/edgePolicy.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "infra/wab/src/security/edgePolicy.ts"
+      ],
+      "generator": "scripts/sync-service-edge-policy.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "infra/uhrp-server-cloud-bucket/src/security/edgePolicy.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "infra/wab/src/security/edgePolicy.ts"
+      ],
+      "generator": "scripts/sync-service-edge-policy.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "infra/message-box-server/src/security/edgePolicy.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "infra/wab/src/security/edgePolicy.ts"
+      ],
+      "generator": "scripts/sync-service-edge-policy.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "infra/chaintracks-server/src/security/edgePolicy.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "infra/wab/src/security/edgePolicy.ts"
+      ],
+      "generator": "scripts/sync-service-edge-policy.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "packages/overlays/overlay-express/src/security/edgePolicy.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "infra/wab/src/security/edgePolicy.ts"
+      ],
+      "generator": "scripts/sync-service-edge-policy.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.ts",
+      "owner": "ts-stack-maintainers",
+      "sourceInputs": [
+        "infra/wab/src/security/edgePolicy.ts"
+      ],
+      "generator": "scripts/sync-service-edge-policy.mjs",
+      "analysisPolicy": "exclude-generated",
+      "reviewPolicy": "Review and analyze the canonical WAB policy, verify byte-for-byte synchronization in CI, and exclude only intentional generated-copy duplication."
     }
   ],
   "profiles": {

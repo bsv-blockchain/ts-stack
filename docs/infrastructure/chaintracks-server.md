@@ -2,9 +2,9 @@
 id: infra-chaintracks-server
 title: "Chaintracks Server"
 kind: infra
-version: "1.0.2"
-last_updated: "2026-05-19"
-last_verified: "2026-05-19"
+version: "1.0.10"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: stable
 tags: [chaintracks, block-headers, spv, merkle, infrastructure]
@@ -79,6 +79,14 @@ WHATS_ON_CHAIN_LIVE=true                   # Use WhatsOnChain live ingester inst
 ```
 
 Teranode P2P live ingest requires bootstrap peer configuration.
+
+Public browser access is enabled by default. Use
+`CHAINTRACKS_CORS_MODE=allowlist` and
+`CHAINTRACKS_CORS_ALLOWED_ORIGINS` only for a deployment with a closed browser
+caller set. API JSON bodies are capped at 256 KiB, the optional bulk CDN has a
+separate concurrency/timeout policy, and all responses receive the shared
+security-header baseline. See
+[Public Service Edge Security](service-edge-security.md#chaintracks-server-and-reusable-chaintracksservice).
 
 ## When to deploy this
 

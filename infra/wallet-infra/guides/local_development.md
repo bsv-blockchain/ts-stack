@@ -34,10 +34,12 @@ This guide explains how to run the UTXO Management Server **locally** using **Do
        NODE_ENV: "development"
        BSV_NETWORK: "test" # main | test
        HTTP_PORT: "8080"
-       SERVER_PRIVATE_KEY: "bffe0d7a3f7effce2b3511323c6cca1df1649e41a336a8b603194d53287ad285"
+       SERVER_PRIVATE_KEY: "${SERVER_PRIVATE_KEY:?Set SERVER_PRIVATE_KEY to a dedicated local-only key}"
        KNEX_DB_CONNECTION: '{"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage","port":3306}'
      ```
-   - You can edit these in `docker-compose.yml` to suit your environment. 
+   - Export a newly generated, local-only `SERVER_PRIVATE_KEY` before running
+     Compose. Never reuse a checked-in example key or a production identity.
+   - You can edit the remaining values in `docker-compose.yml` to suit your environment.
 
 4. **Run Docker Compose**:
 

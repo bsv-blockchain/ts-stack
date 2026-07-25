@@ -28,6 +28,7 @@ import {
 import { AuthSocketServer } from '@bsv/authsocket'
 import * as crypto from 'crypto'
 import { initializeFirebase } from './config/firebase.js'
+import { configureHttpServer } from './security/edgePolicy.js'
 (global.self as any) = { crypto }
 
 dotenv.config()
@@ -68,6 +69,13 @@ initializeFirebase()
 // Create HTTP server
 /* eslint-disable @typescript-eslint/no-misused-promises */
 const http = createServer(app)
+configureHttpServer(http, 'MESSAGE_BOX', {
+  requestTimeoutMs: 60_000,
+  headersTimeoutMs: 15_000,
+  keepAliveTimeoutMs: 5_000,
+  socketTimeoutMs: 60_000,
+  maxRequestsPerSocket: 1_000
+})
 
 // WebSocket setup (only if enabled)
 // Held in a const container so the exported binding is never reassigned.

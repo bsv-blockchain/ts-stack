@@ -38,12 +38,20 @@ import {
 } from './compose.js'
 import * as crypto from 'crypto'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy.js'
+import {
+  bodyParserErrorHandler,
+  concurrencyLimit,
+  corsPolicy,
+  readBodyLimitBytes,
+  securityHeaders
+} from './security/edgePolicy.js'
 (global.self as any) = { crypto }
 
 dotenv.config()
 
 // Create the Express app instance
 export const app: Express = express()
+app.disable('x-powered-by')
 configureTrustProxy(app)
 
 // Load environment variables
@@ -140,23 +148,24 @@ export const appReady = (async () => {
  * @throws If wallet is not available when needed
  */
 export async function useRoutes (): Promise<void> {
-  // Parse incoming JSON bodies with a high limit
-  app.use(bodyParser.json({ limit: '1gb', type: 'application/json' }))
-
-  // CORS setup
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*')
-    res.header('Access-Control-Allow-Headers', '*')
-    res.header('Access-Control-Allow-Methods', '*')
-    res.header('Access-Control-Expose-Headers', '*')
-    res.header('Access-Control-Allow-Private-Network', 'true')
-
-    if (req.method === 'OPTIONS') {
-      res.sendStatus(200)
-    } else {
-      next()
-    }
-  })
+  app.use(securityHeaders({
+    environmentPrefix: 'MESSAGE_BOX',
+    contentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  }))
+  app.use(corsPolicy({
+    environmentPrefix: 'MESSAGE_BOX',
+    methods: ['GET', 'POST', 'OPTIONS']
+  }))
+  app.use(concurrencyLimit('MESSAGE_BOX', 200))
+  app.use(rateLimit(rateLimitOptions(
+    'MESSAGE_BOX_PRE_AUTH_RATE_LIMIT',
+    { windowMs: 60_000, limit: 300 }
+  )))
+  app.use(bodyParser.json({
+    limit: readBodyLimitBytes('MESSAGE_BOX', 4 * 1024 * 1024),
+    type: 'application/json'
+  }))
+  app.use(bodyParserErrorHandler)
 
   // Enable Swagger docs
   setupSwagger(app)
@@ -167,11 +176,6 @@ export async function useRoutes (): Promise<void> {
   }
 
   registerMessageBoxPreAuthRoutes(app, ROUTING_PREFIX)
-
-  app.use(rateLimit(rateLimitOptions(
-    'MESSAGE_BOX_PRE_AUTH_RATE_LIMIT',
-    { windowMs: 60_000, limit: 300 }
-  )))
 
   app.use(
     createAuthMiddleware({

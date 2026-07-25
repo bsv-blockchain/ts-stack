@@ -84,7 +84,7 @@ server/
 
 ### Prerequisites
 
-- **Node.js 18+** (or 16+ should also work, but 18+ recommended for built-in Web Crypto).
+- **Node.js 24** and npm 11 (the supported runtime declared in `package.json`).
 - **npm** or **yarn** package manager.
 - **SQLite** (for quick local dev) or a local MySQL database if you prefer.
 
@@ -160,6 +160,14 @@ PORT=3000
 
 # Optional, explicit reverse-proxy hop count. Omit when directly reachable.
 TRUST_PROXY_HOPS=1
+
+# Public CORS is the default. For a closed caller set:
+# WAB_CORS_MODE=allowlist
+# WAB_CORS_ALLOWED_ORIGINS=https://wallet.example.com
+
+# Console OTP is permitted only in development/test and requires both values.
+# NODE_ENV=development
+# DEV_CONSOLE_AUTH_METHOD_ENABLED=true
 ```
 
 *(Note: The server already reads environment variables to figure out how to connect to the DB, Twilio, etc. Adjust as needed.)*
@@ -177,6 +185,12 @@ Express ignores forwarding headers unless `TRUST_PROXY_HOPS` is explicitly set
 to a value from 0 through 10. Set it only to the number of trusted proxies in
 front of the service; never expose an instance configured for a proxy directly
 to untrusted clients.
+
+WAB is a public protocol service used by deployed wallet apps on many domains.
+It therefore enables wildcard CORS without cookie credentials by default.
+`WAB_CORS_MODE=allowlist` plus exact origins, or `disabled`, provides an
+operator opt-in restriction. Authentication and all endpoint rate limits apply
+in every mode.
 
 ### Running Locally
 
@@ -209,7 +223,7 @@ to untrusted clients.
 The WAB is **modular**: you can configure multiple ways for users to authenticate. Two example methods are:
 
 1. **Twilio Phone Verification** (SMS-based).
-2. **Persona / Jumio ID Verification** (3rd-party ID check).
+2. **Development console OTP** (explicit development/test opt-in only).
 
 ### Configuring Twilio Phone Verification
 
@@ -234,7 +248,9 @@ When a client sends a request to `/auth/start` with `methodType = "TwilioPhone"`
 
 ### Persona / Jumio ID Verification (Example)
 
-We also have a `PersonaAuthMethod` example. This is **mocked** for demonstration. If you want real ID verification, integrate with **Persona** or **Jumio** properly (webhooks, tokens, verifying session IDs, etc.).
+The repository contains a mocked `PersonaAuthMethod` example, but it is not
+registered or advertised by the server. It must not be treated as production
+identity verification without a complete provider integration and review.
 
 ### Adding More Methods
 

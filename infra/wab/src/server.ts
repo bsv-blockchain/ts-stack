@@ -7,6 +7,7 @@ import app from "./app";
 import { migrateLatest } from "./db/knex";
 import { trace, SpanStatusCode } from "@opentelemetry/api";
 import { log } from "./logger";
+import { configureHttpServer } from "./security/edgePolicy";
 
 const PORT = process.env.PORT || 8080;
 const tracer = trace.getTracer("@bsv/wab-server");
@@ -24,6 +25,13 @@ async function startServer() {
                     "WAB server running"
                 );
                 span.end();
+            });
+            configureHttpServer(server, 'WAB', {
+                requestTimeoutMs: 30_000,
+                headersTimeoutMs: 10_000,
+                keepAliveTimeoutMs: 5_000,
+                socketTimeoutMs: 30_000,
+                maxRequestsPerSocket: 1_000
             });
             server.on('error', (err: Error) => {
                 span.recordException(err);

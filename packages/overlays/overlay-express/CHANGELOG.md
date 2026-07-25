@@ -12,10 +12,16 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- (Include new features or significant user-visible enhancements here.)
+- Added `configureEdgePolicy` for public/allowlisted browser access, bounded
+  JSON and binary bodies, concurrency, Node HTTP timeouts, and configurable
+  CSP/browser response headers.
 
 ### Changed
-- (Detail modifications that are non-breaking but relevant to the end-users.)
+- Public protocol endpoints now allow credential-free cross-origin browser
+  calls by default. Operators can opt into exact origins or disable
+  Origin-bearing calls.
+- Verbose request logging records redacted headers and body size/type metadata
+  instead of request bodies.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)
@@ -24,10 +30,15 @@ All notable changes to this project will be documented in this file. The format 
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
-- (Document bugs that were fixed since the last release.)
+- Health and route failures no longer return internal exception messages.
 
 ### Security
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+- Added body, concurrency, connection-timeout, parser-error, and browser-header
+  baselines to every route.
+- Administrative Bearer tokens are compared in constant time.
+- Janitor health probes now reject HTTP, redirects, credentials,
+  query/fragment components, non-standard ports, and private or special IP
+  literals unless the local-development override is explicitly enabled.
 
 ---
 

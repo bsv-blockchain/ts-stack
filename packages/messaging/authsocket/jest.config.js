@@ -3,6 +3,10 @@ export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testPathIgnorePatterns: ['dist/'],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1'
+  },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {

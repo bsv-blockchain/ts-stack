@@ -27,7 +27,8 @@ describe('JanitorService', () => {
 
     mockLogger = {
       log: jest.fn(),
-      error: jest.fn()
+      error: jest.fn(),
+      warn: jest.fn()
     }
   })
 
@@ -300,7 +301,7 @@ describe('JanitorService', () => {
       )
     })
 
-    it('should accept localhost', async () => {
+    it('should reject localhost by default', async () => {
       const mockOutput = {
         _id: '123',
         txid: 'abc123',
@@ -325,10 +326,11 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(global.fetch).toHaveBeenCalled()
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockCollection.updateOne).toHaveBeenCalled()
     })
 
-    it('should accept IP address', async () => {
+    it('should reject private IP addresses by default', async () => {
       const mockOutput = {
         _id: '123',
         txid: 'abc123',
@@ -353,7 +355,106 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockCollection.updateOne).toHaveBeenCalled()
+    })
+
+    it('should allow private HTTP hosts only with an explicit development override', async () => {
+      const mockOutput = {
+        _id: '123',
+        txid: 'abc123',
+        outputIndex: 0,
+        domain: 'http://localhost:3000',
+        down: 0
+      }
+
+      mockCollection.find.mockReturnValue({
+        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+      })
+
+      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+        ok: true,
+        headers: { get: jest.fn().mockReturnValue(null) },
+        status: 200,
+        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+      })
+
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger,
+        allowPrivateHosts: true
+      })
+
+      await janitor.run()
+
       expect(global.fetch).toHaveBeenCalled()
+    })
+
+    it.each([
+      'https://0.1.2.3',
+      'https://10.0.0.1',
+      'https://127.0.0.1',
+      'https://100.64.0.1',
+      'https://169.254.0.1',
+      'https://172.16.0.1',
+      'https://192.0.0.1',
+      'https://192.168.0.1',
+      'https://198.18.0.1',
+      'https://198.51.100.1',
+      'https://203.0.113.1',
+      'https://224.0.0.1',
+      'https://[::]',
+      'https://[::1]',
+      'https://[fc00::1]',
+      'https://[fd00::1]',
+      'https://[fe80::1]',
+      'https://[ff00::1]',
+      'https://[2001:db8::1]',
+      'https://[::ffff:192.168.1.1]',
+      'https://service.local',
+      'https://service.internal',
+      'https://service.localhost',
+      'https://user:password@example.com',
+      'https://example.com:8443',
+      'https://example.com?target=internal',
+      'https://example.com#fragment'
+    ])('rejects private or ambiguous production health target %s', async target => {
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger
+      })
+
+      const result = await janitor.checkHost(target)
+
+      expect(result).toMatchObject({
+        healthy: false,
+        error: 'Invalid domain'
+      })
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      'https://8.8.8.8',
+      'https://[2606:4700:4700::1111]'
+    ])('allows public IP health targets %s', async target => {
+      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+        ok: true,
+        headers: { get: jest.fn().mockReturnValue(null) },
+        status: 200,
+        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+      })
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger
+      })
+
+      const result = await janitor.checkHost(target)
+
+      expect(result.healthy).toBe(true)
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/health$/),
+        expect.objectContaining({ redirect: 'error' })
+      )
     })
   })
 
@@ -694,7 +795,36 @@ describe('JanitorService', () => {
       const result = await janitor.checkHost('https://example.com')
 
       expect(result.healthy).toBe(false)
-      expect(result.error).toBe('ECONNREFUSED')
+      expect(result.error).toBe('Connection failed')
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'Janitor health request failed',
+        expect.objectContaining({ url: 'https://example.com' })
+      )
+    })
+
+    it('should reject oversized health responses before parsing JSON', async () => {
+      const json = jest.fn<any>()
+      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: {
+          get: jest.fn().mockReturnValue(String(64 * 1024 + 1))
+        },
+        json
+      })
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger
+      })
+
+      const result = await janitor.checkHost('https://example.com')
+
+      expect(result).toMatchObject({
+        healthy: false,
+        statusCode: 200,
+        error: 'Health response too large'
+      })
+      expect(json).not.toHaveBeenCalled()
     })
 
     it('should prepend https:// to domains without protocol', async () => {

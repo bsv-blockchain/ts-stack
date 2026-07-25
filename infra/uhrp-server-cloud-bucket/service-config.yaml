@@ -28,7 +28,7 @@ metadata:
 spec:
   template:
     spec:
-      timeoutSeconds: 3540
+      timeoutSeconds: 60
       containers:
       - image: 
         ports:

@@ -4,8 +4,19 @@ Runs the BSV infra components together behind a Traefik reverse proxy that route
 by hostname, so you can hit each service at `<name>.localhost` in the browser.
 
 ```sh
+export OVERLAY_SERVER_PRIVATE_KEY="$(openssl rand -hex 32)"
+export WALLET_SERVER_PRIVATE_KEY="$(openssl rand -hex 32)"
+export MESSAGE_BOX_SERVER_PRIVATE_KEY="$(openssl rand -hex 32)"
+export WAB_SERVER_PRIVATE_KEY="$(openssl rand -hex 32)"
+export UHRP_SERVER_PRIVATE_KEY="$(openssl rand -hex 32)"
+export OVERLAY_ADMIN_TOKEN="$(openssl rand -hex 32)"
 docker compose -f infra/docker-compose.yaml up --build
 ```
+
+These identities and the Overlay administrative token are deliberately
+generated outside source control for each local environment. Store them in a
+gitignored local environment file if they must remain stable across restarts;
+never reuse production credentials.
 
 | URL | Component |
 |---|---|
@@ -47,7 +58,9 @@ curl -H 'Host: chaintracks.localhost' http://127.0.0.1/
 
 ## Notes / caveats
 
-- Keys and passwords in the compose file are **throwaway local-dev values only**.
+- Database passwords in the compose file are **throwaway local-dev values
+  only**. Service private keys are required from the invoking environment and
+  are never checked in.
 - `wallet-infra` runs with `BSV_NETWORK=main` (connects to mainnet by default).
 - `overlay-server`, `wab`, and `uhrp-server-basic` reach out to external BSV
   services (wallet storage, ARC) at runtime; some operations need network access

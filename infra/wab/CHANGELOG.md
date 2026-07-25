@@ -15,6 +15,14 @@ All notable changes to this project will be documented in this file.
 - Apply one configurable rate-limit policy to authentication, user, faucet,
   deletion, and share routes. Forwarded client addresses are accepted only
   behind an explicitly bounded trusted-proxy chain.
+- Add public-by-default credential-free CORS with exact-allowlist and disabled
+  modes, configurable browser response headers, bounded parsing/concurrency,
+  and Node connection timeouts.
+- Share one development-console OTP provider across authentication and Shamir
+  share flows, and prevent that provider from being enabled or advertised
+  outside development and test runtimes.
+- Remove presentation keys, request payloads, OTP stores, and provider
+  exception details from logs and public error responses.
 
 ## [1.1.0] - 2025-08-08
 

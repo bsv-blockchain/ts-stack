@@ -43,9 +43,9 @@ All critical configuration is supplied through environment variables. Create a `
 | Variable | Example | Description |
 | -------- | ------- | ----------- |
 | `NODE_NAME` | `my-overlay` | One-word, lowercase overlay service node identifier. |
-| `SERVER_PRIVATE_KEY` | `6f5523…` | 32-byte hex root private key for the server's wallet for creating advertisements. |
+| `SERVER_PRIVATE_KEY` | required | Dedicated 32-byte hex root private key for the server wallet. Generate and inject it outside source control. |
 | `HOSTING_URL` | `https://my.overlay.network` | Public URL where your node is reachable. |
-| `ADMIN_TOKEN` | `supersecret` | Token required to access the admin API. |
+| `ADMIN_TOKEN` | `at-least-32-random-characters` | Random token of at least 32 characters required to access the admin API. |
 | `WALLET_STORAGE_URL` | `https://store-us-1.bsvb.tech` | Wallet storage endpoint where advertisement tokens will be kept, and from where funds will be drawn. |
 | `NETWORK` | `main` or `test` | BSV Blockchain network your node operates on. |
 | `ARC_API_KEY` | — | Your ARC key for transaction broadcasting. |

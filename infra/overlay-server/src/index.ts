@@ -66,6 +66,14 @@ const optionalEnv = (name: string): string | undefined => {
     return value === undefined || value === '' ? undefined : value
 }
 
+const optionalSecretEnv = (name: string, minimumLength: number): string | undefined => {
+    const value = optionalEnv(name)
+    if (value !== undefined && value.length < minimumLength) {
+        throw new Error(`${name} must contain at least ${minimumLength} characters`)
+    }
+    return value
+}
+
 const boolEnv = (name: string, defaultValue: boolean): boolean => {
     const value = optionalEnv(name)
     if (value === undefined) return defaultValue
@@ -153,7 +161,7 @@ const main = async () => {
     const CHAINTRACKS_API_PREFIX = optionalEnv('CHAINTRACKS_API_PREFIX') ?? '/chaintracks/v2'
     const KNEX_URL = requireEnv('KNEX_URL')
     const MONGO_URL = requireEnv('MONGO_URL')
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN // optional: a random token is generated if unset
+    const ADMIN_TOKEN = optionalSecretEnv('ADMIN_TOKEN', 32) // random token generated if unset
 
     const NETWORK = requireEnv('NETWORK')
     if (NETWORK !== 'main' && NETWORK !== 'test') {

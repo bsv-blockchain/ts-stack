@@ -12,6 +12,36 @@ const storage = new Storage()
 const hashToUhrpUrl = (hash) => StorageUtils.getURLForHash([...hash])
 exports.hashToUhrpUrl = hashToUhrpUrl
 
+const buildAdvertiseRequest = ({
+  hostingDomain,
+  adminToken,
+  uhrpUrl,
+  uploaderIdentityKey,
+  objectIdentifier,
+  expiryTime,
+  fileSize
+}) => {
+  if (typeof adminToken !== 'string' || adminToken.length < 32) {
+    throw new Error('ADMIN_TOKEN must contain at least 32 characters')
+  }
+  return {
+    url: `${hostingDomain}/advertise`,
+    body: {
+      uhrpUrl,
+      uploaderIdentityKey,
+      objectIdentifier,
+      expiryTime,
+      fileSize
+    },
+    config: {
+      headers: {
+        Authorization: `Bearer ${adminToken}`
+      }
+    }
+  }
+}
+exports.buildAdvertiseRequest = buildAdvertiseRequest
+
 /**
  * UHRP Storage Notifier to be triggered by Cloud Storage.
  *
@@ -28,7 +58,6 @@ exports.notifier = async (file, context) => {
   console.log(`  Created: ${file.timeCreated}`)
   console.log(`  Updated: ${file.updated}`)
   console.log(`  Object ID: ${objectIdentifier}`)
-  console.log(file)
 
   if (!file.name.startsWith('cdn/')) {
     // Only files uploaded to the CDN folder are advertised this way.
@@ -37,7 +66,6 @@ exports.notifier = async (file, context) => {
 
   const storageFile = storage.bucket(file.bucket).file(file.name)
   const [metadata] = await storageFile.getMetadata()
-  console.log('File metadata', metadata)
   let uploaderIdentityKey = ''
   if (typeof metadata.metadata === 'object') {
     uploaderIdentityKey = metadata.metadata.uploaderidentitykey
@@ -48,17 +76,15 @@ exports.notifier = async (file, context) => {
     digest.update(chunk)
   }
   const uhrpUrl = hashToUhrpUrl(digest.digest())
-  console.log('Got UHRP URL', uhrpUrl)
-  await axios.post(
-    `${HOSTING_DOMAIN}/advertise`,
-    {
-      adminToken: ADMIN_TOKEN,
-      uhrpUrl,
-      uploaderIdentityKey,
-      objectIdentifier,
-      expiryTime,
-      fileSize: file.size
-    }
-  )
+  const request = buildAdvertiseRequest({
+    hostingDomain: HOSTING_DOMAIN,
+    adminToken: ADMIN_TOKEN,
+    uhrpUrl,
+    uploaderIdentityKey,
+    objectIdentifier,
+    expiryTime,
+    fileSize: file.size
+  })
+  await axios.post(request.url, request.body, request.config)
   return true
 }

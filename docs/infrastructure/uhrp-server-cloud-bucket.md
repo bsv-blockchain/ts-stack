@@ -2,9 +2,9 @@
 id: infra-uhrp-cloud
 title: "UHRP Server (Cloud Bucket)"
 kind: infra
-version: "0.2.1"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "0.2.10"
+last_updated: "2026-07-25"
+last_verified: "2026-07-25"
 review_cadence_days: 30
 status: stable
 tags: [uhrp, storage, cloud, google-cloud-run, production]
@@ -16,7 +16,10 @@ tags: [uhrp, storage, cloud, google-cloud-run, production]
 
 ## What it does
 
-A TypeScript/Express server designed for Google Cloud Run that implements UHRP endpoints backed by Google Cloud Storage or S3-compatible buckets. Files are uploaded via authenticated PUT /put/{hash} endpoint with BRC-103 signatures, served publicly via GET /{hash}, and queried via POST /lookup. The server bills users per GB/month using configurable pricing, optionally enforces micropayment verification, and runs a background worker that broadcasts UHRP host advertisements to the overlay network via SHIP protocol. Metadata tracked in optional Cloud SQL MySQL database; stateless HTTP service with cloud bucket as source of truth.
+A TypeScript/Express server designed for Google Cloud Run that implements UHRP
+workflows backed by Google Cloud Storage. Static object retrieval is public;
+upload, list, find, and renewal require BRC-103 identity. A separate
+administrative advertisement endpoint uses a strong Bearer token.
 
 Clients upload files with authentication, retrieve files via public GET, and server continuously advertises hosting capability.
 
@@ -40,10 +43,13 @@ Clients upload files with authentication, retrieve files via public GET, and ser
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| PUT | /put/{hash} | Upload file to cloud bucket (authenticated, priced, size-limited) |
-| GET | /{hash} | Retrieve file from cloud bucket (public) |
-| POST | /lookup | UHRP metadata lookup queries (public) |
-| GET | /info | Server info, pricing, and status (public) |
+| GET/HEAD | Static object paths | Retrieve stored objects (public) |
+| POST | /advertise | Administrative advertisement using `Authorization: Bearer` |
+| POST | /quote | Public storage-price quote |
+| POST | /upload | Authenticated upload/payment workflow |
+| GET | /list | List the authenticated uploader's objects |
+| GET | /find | Find authenticated uploader metadata |
+| POST | /renew | Authenticated ownership/payment renewal |
 
 ## WebSocket endpoints
 
@@ -67,6 +73,14 @@ None; HTTP-only with background advertising worker.
 | ARC_API_KEY | No | ARC API key for transaction broadcasting (advertising) |
 | ADVERTISE_INTERVAL_MS | No | Interval for re-advertising to overlay (default: 3600000ms = 1 hour) |
 | BUGSNAG_API_KEY | No | Bugsnag error reporting API key (optional) |
+| ADMIN_TOKEN | Yes | At least 32 random characters for `/advertise` Bearer auth |
+| UHRP_CORS_MODE | No | `public` (default), `allowlist`, or `disabled` |
+| UHRP_CORS_ALLOWED_ORIGINS | No | Exact comma-separated origins in allowlist mode |
+| UHRP_JSON_MAX_BODY_BYTES | No | JSON body ceiling (default 262144) |
+| TRUST_PROXY_HOPS | No | Exact trusted proxy hop count, 0 through 10 |
+
+See [Public Service Edge Security](service-edge-security.md#uhrp-cloud-bucket-server)
+for full edge controls.
 
 ## Run locally
 
@@ -135,10 +149,10 @@ Implicit health via /info endpoint (HTTP 200). Cloud Run readiness probe typical
 - Cost management: Monitor storage usage and pricing; use Cloud Storage lifecycle policies for archival
 - Payment enforcement: ENABLE_PAYMENT_MIDDLEWARE requires ARC_API_KEY and WALLET_STORAGE_URL; uploads fail if not configured
 - Advertising loop: ADVERTISE_INTERVAL_MS should balance frequent updates vs transaction costs; 1 hour is conservative default
-- Cloud Run timeout: Default 60s timeout may be too short for large file uploads; increase if needed
+- Cloud Run and application request timeouts default to 60 seconds; use direct cloud upload workflows for large objects rather than unbounded application buffering
 - Graceful shutdown: Cloud Run sends SIGTERM; ensure all writes complete before exit (transaction broadcasts, metadata flushes)
 
 ## Source
 
-- [GitHub](https://github.com/bsv-blockchain/uhrp-server-cloud-bucket)
+- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket)
 - [npm package](https://npmjs.com/package/@bsv/uhrp-storage-server)

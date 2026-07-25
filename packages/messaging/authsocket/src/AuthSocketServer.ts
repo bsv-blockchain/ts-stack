@@ -80,13 +80,36 @@ export class AuthSocketServer {
    * authenticated peer. We'll embed eventName + data in the payload.
    */
   public emit(eventName: string, data: any) {
-    this.peers.forEach(({ peer, authSocket, identityKey }) => {
+    this.peers.forEach(({ peer, identityKey }) => {
       const payload = this.encodeEventPayload(eventName, data)
       peer.toPeer(payload, identityKey).catch(err => {
         // log or handle error
         console.error(err)
       })
     })
+  }
+
+  /**
+   * Emit only to connections whose cryptographically authenticated peer
+   * identity matches the requested identity key.
+   *
+   * This is safer than application-level "room" names for private delivery:
+   * a client cannot subscribe itself to another identity because the routing
+   * decision uses the key discovered by the BRC-103 handshake.
+   *
+   * @returns the number of authenticated connections selected for delivery
+   */
+  public emitToIdentity(identityKey: string, eventName: string, data: any): number {
+    let selected = 0
+    this.peers.forEach(({ peer, identityKey: authenticatedIdentityKey }) => {
+      if (authenticatedIdentityKey !== identityKey) return
+      selected += 1
+      const payload = this.encodeEventPayload(eventName, data)
+      peer.toPeer(payload, authenticatedIdentityKey).catch(err => {
+        console.error(err)
+      })
+    })
+    return selected
   }
 
   /**

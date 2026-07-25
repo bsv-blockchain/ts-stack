@@ -75,6 +75,11 @@ export interface SendMessageRequest extends AuthRequest {
   }
 }
 
+export const MAX_MESSAGE_RECIPIENTS = 100
+export const MAX_MESSAGE_BOX_BYTES = 128
+export const MAX_MESSAGE_ID_BYTES = 256
+export const MAX_MESSAGE_BODY_BYTES = 1024 * 1024
+
 /**
  * @function calculateMessagePrice
  * @description Determines the price (in satoshis) to send a message, optionally with priority.
@@ -111,18 +116,30 @@ export function calculateMessagePrice(message: string, _priority: boolean = fals
  *                   - body
  *                 properties:
  *                   recipient:
- *                     type: string
- *                     description: Identity key of the recipient
- *                   messageBox:
- *                     type: string
- *                     description: The name of the recipient's message box
- *                   messageId:
- *                     type: string
- *                     description: Unique identifier for the message (usually an HMAC)
- *                   body:
  *                     oneOf:
  *                       - type: string
- *                       - type: object
+ *                       - type: array
+ *                         maxItems: 100
+ *                         items:
+ *                           type: string
+ *                     description: Identity key or keys of up to 100 recipients
+ *                   messageBox:
+ *                     type: string
+ *                     maxLength: 128
+ *                     description: The name of the recipient's message box
+ *                   messageId:
+ *                     oneOf:
+ *                       - type: string
+ *                         maxLength: 256
+ *                       - type: array
+ *                         maxItems: 100
+ *                         items:
+ *                           type: string
+ *                           maxLength: 256
+ *                     description: Unique identifier per recipient (usually an HMAC)
+ *                   body:
+ *                     type: string
+ *                     maxLength: 1048576
  *                     description: The message content
  *     responses:
  *       200:
@@ -167,7 +184,6 @@ export default {
 
   func: async (req: SendMessageRequest, res: Response): Promise<Response> => {
     Logger.log('[DEBUG] Processing /sendMessage request...')
-    Logger.log('[DEBUG] Request Headers:', JSON.stringify(req.headers, null, 2))
 
     const senderKey = req.auth?.identityKey
     if (senderKey == null) {
@@ -194,12 +210,26 @@ export default {
       if (typeof message.messageBox !== 'string' || message.messageBox.trim() === '') {
         return res.status(400).json({ status: 'error', code: 'ERR_INVALID_MESSAGEBOX', description: 'Invalid message box.' })
       }
+      if (Buffer.byteLength(message.messageBox.trim(), 'utf8') > MAX_MESSAGE_BOX_BYTES) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_MESSAGEBOX_TOO_LARGE',
+          description: `Message box names must not exceed ${MAX_MESSAGE_BOX_BYTES} bytes.`
+        })
+      }
 
       if (
-        (typeof message.body !== 'string' && (typeof message.body !== 'object' || message.body === null)) ||
+        typeof message.body !== 'string' ||
         (typeof message.body === 'string' && message.body.trim() === '')
       ) {
         return res.status(400).json({ status: 'error', code: 'ERR_INVALID_MESSAGE_BODY', description: 'Invalid message body.' })
+      }
+      if (Buffer.byteLength(message.body, 'utf8') > MAX_MESSAGE_BODY_BYTES) {
+        return res.status(413).json({
+          status: 'error',
+          code: 'ERR_MESSAGE_BODY_TOO_LARGE',
+          description: `Message bodies must not exceed ${MAX_MESSAGE_BODY_BYTES} bytes.`
+        })
       }
 
       // ---------- Back-compat normalization ----------
@@ -215,6 +245,13 @@ export default {
       const recipients: string[] = Array.isArray(recipientsRaw)
         ? recipientsRaw
         : [recipientsRaw]
+      if (recipients.length === 0 || recipients.length > MAX_MESSAGE_RECIPIENTS) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_TOO_MANY_RECIPIENTS',
+          description: `A message may include at most ${MAX_MESSAGE_RECIPIENTS} recipients.`
+        })
+      }
 
       const messageIdRaw = message.messageId
       if (messageIdRaw == null) {
@@ -246,7 +283,11 @@ export default {
 
       // Validate each messageId
       for (const id of messageIds) {
-        if (typeof id !== 'string' || id.trim() === '') {
+        if (
+          typeof id !== 'string' ||
+          id.trim() === '' ||
+          Buffer.byteLength(id, 'utf8') > MAX_MESSAGE_ID_BYTES
+        ) {
           return res.status(400).json({ status: 'error', code: 'ERR_INVALID_MESSAGEID', description: 'Each messageId must be a non-empty string.' })
         }
       }
@@ -347,7 +388,7 @@ export default {
             return res.status(500).json({
               status: 'error',
               code: 'ERR_INTERNALIZE_FAILED',
-              description: `Failed to internalize payment: ${error instanceof Error ? error.message : 'Unknown error'}`
+              description: 'Failed to internalize payment.'
             })
           }
         }

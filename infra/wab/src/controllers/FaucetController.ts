@@ -61,7 +61,7 @@ export class FaucetController {
             });
         } catch (error: any) {
             log.error({ operation: 'controller.faucet.request', err: error, outcome: 'error' }, 'requestFaucet failed');
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ message: "An internal error occurred." });
         }
     }
 }

@@ -5,8 +5,7 @@
  */
 
 import { Request, Response } from "express";
-
-const devConsoleEnabled = process.env.DEV_CONSOLE_AUTH_METHOD_ENABLED === "true";
+import { getSupportedAuthMethodTypes } from "../auth-methods/AuthMethodFactory";
 
 export class InfoController {
     /**
@@ -14,8 +13,7 @@ export class InfoController {
      */
     public static getInfo(req: Request, res: Response): void {
         // Hard-coded for demonstration
-        const supportedAuthMethods = ["TwilioPhone"];
-        if (devConsoleEnabled) supportedAuthMethods.push("DevConsole");
+        const supportedAuthMethods = getSupportedAuthMethodTypes();
         const faucetEnabled = true;
         const faucetAmount = 1000; // satoshis
 
