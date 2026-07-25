@@ -71,9 +71,8 @@ export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { 
   const authMiddleware = createAuthMiddleware({
     allowUnauthenticated: false,
     wallet: mockWallet,
-    onCertificatesReceived: async (_senderPublicKey: string, certs: VerifiableCertificate[], req: Request, res: Response, next: NextFunction) => {
+    onCertificatesReceived: async (_senderPublicKey: string, certs: VerifiableCertificate[], _req: Request, _res: Response, _next: NextFunction) => {
       certsreceived = certs
-      console.log('Certificates received:', certs)
     },
     certificatesToRequest
   })
@@ -86,14 +85,12 @@ export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { 
   })
 
   app.post('/cert-protected-endpoint', async (req: Request, res: Response) => {
-    console.log('Received POST body:', req.body)
     // wait a moment for the certificates to be received
     await new Promise(resolve => {
       const t = setTimeout(resolve, 5000)
       if (typeof t.unref === 'function') t.unref()
     })
     if (certsreceived) {
-      console.log('Certificates received in POST:', certsreceived)
       res.status(200).send({ message: 'You have certs!' })
     } else {
       res.status(401).send({ message: 'You must have certs!' })
@@ -109,9 +106,7 @@ export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { 
     })
   })
 
-  const server = app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`)
-  })
+  const server = app.listen(port)
   server.ready = ready
   return server
 }

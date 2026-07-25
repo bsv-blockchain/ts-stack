@@ -1,4 +1,4 @@
-import { TopicManager } from '@bsv/overlay'
+import { TopicManager, serializeLogValue } from '@bsv/overlay'
 import { AdmittanceInstructions, PushDrop, Transaction, Utils } from '@bsv/sdk'
 import { BanService } from './BanService.js'
 
@@ -35,7 +35,7 @@ export class BanAwareTopicManager implements TopicManager {
 
     for (const outputIndex of instructions.outputsToAdmit) {
       if (await this.banService.isOutpointBanned(txid, outputIndex)) {
-        this.logger.log(`[BAN] Blocked banned outpoint ${txid}.${outputIndex} from ${this.protocol} topic admittance`)
+        this.logger.log(`[BAN] Blocked banned outpoint from topic admittance: txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)} protocol=${serializeLogValue(this.protocol)}`)
         continue
       }
 
@@ -47,7 +47,7 @@ export class BanAwareTopicManager implements TopicManager {
         if (result.fields.length >= 3 && Utils.toUTF8(result.fields[0]) === this.protocol) {
           const domain = Utils.toUTF8(result.fields[2])
           if (await this.banService.isDomainBanned(domain)) {
-            this.logger.log(`[BAN] Blocked banned domain ${domain} from ${this.protocol} topic admittance (${txid}.${outputIndex})`)
+            this.logger.log(`[BAN] Blocked banned domain from topic admittance: domain=${serializeLogValue(domain)} protocol=${serializeLogValue(this.protocol)} txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
             continue
           }
         }

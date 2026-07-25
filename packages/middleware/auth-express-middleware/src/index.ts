@@ -562,7 +562,7 @@ export class ExpressTransport implements Transport {
     const identityKey = message.identityKey
     if (typeof identityKey === 'string') {
       const nextFn = this.openNextHandlers.get(identityKey)
-      if (nextFn === undefined) return
+      if (typeof nextFn !== 'function') return
       const timeoutHandle = this.openNextHandlerTimeouts.get(identityKey)
       if (timeoutHandle != null) {
         clearTimeout(timeoutHandle)

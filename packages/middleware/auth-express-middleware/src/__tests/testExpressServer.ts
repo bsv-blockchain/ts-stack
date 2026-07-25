@@ -44,7 +44,7 @@ export const startServer = (port = 3000): Server => {
       certificateType
     )
     mockWallet.addMasterCertificate(masterCert)
-  })().catch(e => console.error(e))
+  })().catch(() => console.error('Test certificate setup failed'))
 
   // This allows the API to be used everywhere when CORS is enforced
   app.use((req, res, next) => {
@@ -90,9 +90,7 @@ export const startServer = (port = 3000): Server => {
     allowUnauthenticated: false,
     wallet: mockWallet,
     sessionManager,
-    onCertificatesReceived: (_senderPublicKey: string, certs: VerifiableCertificate[], req: Request, res: Response, next: NextFunction) => {
-      console.log('Certificates received:', certs)
-    }
+    onCertificatesReceived: (_senderPublicKey: string, _certs: VerifiableCertificate[], _req: Request, _res: Response, _next: NextFunction) => {}
     // certificatesToRequest
   })
 
@@ -120,7 +118,6 @@ export const startServer = (port = 3000): Server => {
   })
 
   app.post('/cert-protected-endpoint', (req: Request, res: Response) => {
-    console.log('Received POST body:', req.body)
     res.status(200).send({ message: 'You must have certs!' })
     // await (res as any).sendCertificateRequest(certsToRequest, identityKey)
   })
@@ -130,27 +127,22 @@ export const startServer = (port = 3000): Server => {
   })
 
   app.put('/put-endpoint', (req: Request, res: Response) => {
-    console.log('Received PUT body:', req.body)
     res.send({ status: 'updated', body: req.body })
   })
 
   app.delete('/delete-endpoint', (req: Request, res: Response) => {
-    console.log('Received DELETE request')
     res.send({ status: 'deleted' })
   })
 
   app.post('/large-upload', (req: Request, res: Response) => {
-    console.log('Received binary upload, size:', req.body.length)
     res.send({ status: 'upload received', size: req.body.length })
   })
 
   app.get('/query-endpoint', (req: Request, res: Response) => {
-    console.log('Received query parameters:', req.query)
     res.send({ status: 'query received', query: req.query })
   })
 
   app.get('/custom-headers', (req: Request, res: Response) => {
-    console.log('Received headers:', req.headers)
     res.send({ status: 'headers received', headers: req.headers })
   })
 

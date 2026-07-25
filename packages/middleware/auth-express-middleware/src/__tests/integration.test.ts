@@ -27,7 +27,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     server = startServer(3000) // Returns un-listened server
     await new Promise<void>((resolve, reject) => {
       server.once('listening', () => {
-        console.log('Test server is running on http://localhost:3000')
         resolve()
       })
       server.once('error', reject)
@@ -39,7 +38,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     if (server && server.listening) {
       await new Promise<void>((resolve, reject) => {
         server.once('close', () => {
-          console.log('Test server stopped')
           resolve()
         })
         server.once('error', reject)
@@ -70,7 +68,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     )
     expect(result.status).toBe(200)
     const jsonResponse = await result.json()
-    console.log(jsonResponse)
     expect(jsonResponse).toBeDefined()
   })
   test('Test 1b: Simple POST request with JSON resulting in 500 error code', async () => {
@@ -88,7 +85,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     )
     expect(result.status).toBe(500)
     const jsonResponse = await result.json()
-    console.log(jsonResponse)
     expect(jsonResponse).toHaveProperty('code', 'ERR_BAD_THING')
   })
 
@@ -281,7 +277,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     )
     expect(result.status).toBe(200)
     const jsonResponse = await result.json()
-    console.log(jsonResponse)
     expect(jsonResponse).toBeDefined()
   })
 
@@ -300,7 +295,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     )
     expect(result.status).toBe(200)
     const jsonResponse = await result.json()
-    console.log(jsonResponse)
     expect(jsonResponse).toBeDefined()
   })
 
@@ -317,13 +311,11 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     })
     expect(resp1.status).toBe(200)
     const data1 = await resp1.json()
-    console.log('Data from first AuthFetch instance (before server restart):', data1)
     expect(data1).toBeDefined()
 
     // Close the server and wait for it to shut down.
     await new Promise<void>((resolve, reject) => {
       server.once('close', () => {
-        console.log('Server closed mid-test')
         resolve()
       })
       server.once('error', reject)
@@ -337,7 +329,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     server = startServer(3000)
     await new Promise<void>((resolve, reject) => {
       server.once('listening', () => {
-        console.log('Server restarted for second half of the test...')
         resolve()
       })
       server.once('error', (err) => {
@@ -358,7 +349,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     })
     expect(resp2.status).toBe(200)
     const data2 = await resp2.json()
-    console.log('Data from second AuthFetch instance (after server restart):', data2)
     expect(data2).toBeDefined()
   })
 
@@ -377,7 +367,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     )
     expect(result.status).toBe(200)
     const jsonResponse = await result.json()
-    console.log(jsonResponse)
     expect(jsonResponse).toBeDefined()
   })
 

@@ -2,7 +2,12 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import OverlayExpress from '../OverlayExpress.js'
 import Knex from 'knex'
 import { MongoClient } from 'mongodb'
-import { TopicManager, LookupService } from '@bsv/overlay'
+import {
+  TopicManager,
+  LookupService,
+  serializeErrorForLog,
+  serializeLogValue
+} from '@bsv/overlay'
 import { ChainTracker } from '@bsv/sdk'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 
@@ -35,6 +40,18 @@ describe('OverlayExpress', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    jest.mocked(serializeLogValue).mockImplementation(value => {
+      try {
+        return JSON.stringify(value) ?? '"[Unserializable value]"'
+      } catch {
+        return '"[Unserializable value]"'
+      }
+    })
+    jest.mocked(serializeErrorForLog).mockImplementation(error =>
+      serializeLogValue(error instanceof Error
+        ? { name: error.name, message: error.message, stack: error.stack }
+        : error)
+    )
     overlayExpress = new OverlayExpress(
       'TestService',
       'test-private-key-123',
@@ -239,6 +256,42 @@ describe('OverlayExpress', () => {
         'x-bsv-auth-nonce': '[REDACTED]',
         'content-type': 'application/json'
       })
+    })
+
+    it('keeps verbose request and response metadata on a single log line', () => {
+      const instance = overlayExpress as any
+      const logger = {
+        log: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn()
+      }
+      instance.logger = logger
+      const useSpy = jest.spyOn(instance.app, 'use')
+      instance.setupVerboseRequestLogging()
+      const middleware = useSpy.mock.calls[useSpy.mock.calls.length - 1]?.[0] as any
+      let finishHandler: (() => void) | undefined
+      const request = {
+        method: 'GET\r\nFORGED',
+        originalUrl: '/lookup\r\nFORGED',
+        headers: { 'x-test': 'value\r\nFORGED' },
+        body: undefined
+      }
+      const response: any = {
+        statusCode: 200,
+        send: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === 'finish') finishHandler = handler
+        }),
+        getHeaders: jest.fn(() => ({ 'x-test': 'value\r\nFORGED' }))
+      }
+
+      middleware(request, response, jest.fn())
+      finishHandler?.()
+
+      const messages = logger.log.mock.calls.flat()
+        .filter((value): value is string => typeof value === 'string')
+      expect(messages.join(' ')).toContain('\\r\\nFORGED')
+      expect(messages.every(message => !/[\r\n\u2028\u2029]/.test(message))).toBe(true)
     })
 
     it('removes internal health-check details when configured', async () => {

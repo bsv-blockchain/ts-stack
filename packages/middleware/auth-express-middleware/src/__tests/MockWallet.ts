@@ -145,10 +145,9 @@ export class MockWallet extends ProtoWallet
 
   /**
    * Mock implementation of internalizeAction.
-   * Logs the provided action details and returns a successful response.
+   * Returns a successful response.
    */
-  async internalizeAction (args: InternalizeActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<InternalizeActionResult> {
-    console.log('Mock internalizeAction called with:', { args, originator })
+  async internalizeAction (_args: InternalizeActionArgs, _originator?: OriginatorDomainNameStringUnder250Bytes): Promise<InternalizeActionResult> {
     return await Promise.resolve({ accepted: true })
   }
 
