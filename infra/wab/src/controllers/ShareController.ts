@@ -24,6 +24,7 @@ import {
     isRecord,
     isShamirShare
 } from "../security/requestValidation";
+import { User } from "../types";
 
 /**
  * Extract client IP from request, handling proxies
@@ -36,7 +37,7 @@ function getClientIp(req: Request): string {
 }
 
 type VerifiedIdentity =
-    | { success: true; userId?: number }
+    | { success: true; config: string; userId?: number }
     | { success: false; message: string };
 
 async function verifyIdentity(
@@ -55,7 +56,9 @@ async function verifyIdentity(
 
     const config = authMethod.buildConfigFromPayload(payload);
     const user = await UserService.findUserByConfig(methodType, config);
-    return user ? { success: true, userId: user.id } : { success: true };
+    return user
+        ? { success: true, config, userId: user.id }
+        : { success: true, config };
 }
 
 function identityIsBoundToUser(
@@ -63,6 +66,53 @@ function identityIsBoundToUser(
     userId: number
 ): boolean {
     return identity.userId === userId;
+}
+
+type StoreUserResolution =
+    | { success: true; user: User }
+    | { success: false; status: 401 | 403; message: string };
+
+async function resolveStoreUser(
+    methodType: string,
+    payload: AuthPayload,
+    userIdHash: string,
+    ipAddress: string
+): Promise<StoreUserResolution> {
+    const identity = await verifyIdentity(methodType, userIdHash, payload);
+    if (!identity.success) {
+        return { success: false, status: 401, message: identity.message };
+    }
+
+    const targetUser = await UserService.getUserByUserIdHash(userIdHash);
+    if (targetUser) {
+        if (!identityIsBoundToUser(identity, targetUser.id)) {
+            await ShareService.logAccess(
+                targetUser.id,
+                ipAddress,
+                "store",
+                false,
+                "Authenticated method is not linked to target user"
+            );
+            return {
+                success: false,
+                status: 403,
+                message: "Authenticated method is not authorized for this account."
+            };
+        }
+        return { success: true, user: targetUser };
+    }
+
+    if (identity.userId !== undefined) {
+        const user = await UserService.attachUserIdHash(
+            identity.userId,
+            userIdHash
+        );
+        return { success: true, user };
+    }
+
+    const user = await UserService.createUserWithUserIdHash(userIdHash);
+    await UserService.linkAuthMethod(user.id, methodType, identity.config);
+    return { success: true, user };
 }
 
 export class ShareController {
@@ -102,61 +152,27 @@ export class ShareController {
                 });
             }
 
-            // Verify the external identity before resolving account ownership.
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-            if (!authResult.success) {
-                return res.status(401).json({
+            const resolution = await resolveStoreUser(
+                methodType,
+                payload,
+                userIdHash,
+                ipAddress
+            );
+            if (!resolution.success) {
+                return res.status(resolution.status).json({
                     success: false,
-                    message: authResult.message || "OTP verification failed"
+                    message: resolution.message
                 });
             }
-            const config = authMethod.buildConfigFromPayload(payload);
-            const authenticatedUser = await UserService.findUserByConfig(
-                methodType,
-                config
-            );
+            const { user } = resolution;
 
-            // Check if user already exists with this userIdHash
-            let user = await UserService.getUserByUserIdHash(userIdHash);
-
-            if (user) {
-                if (authenticatedUser?.id !== user.id) {
-                    await ShareService.logAccess(
-                        user.id,
-                        ipAddress,
-                        "store",
-                        false,
-                        "Authenticated method is not linked to target user"
-                    );
-                    return res.status(403).json({
-                        success: false,
-                        message: "Authenticated method is not authorized for this account."
-                    });
-                }
-
-                // User exists - check if they already have a share
-                const existingShare = await ShareService.getShareByUserId(user.id);
-                if (existingShare) {
-                    // Log the failed attempt
-                    await ShareService.logAccess(user.id, ipAddress, "store", false, "Share already exists");
-                    return res.status(409).json({
-                        success: false,
-                        message: "User already has a stored share. Use /share/update for key rotation."
-                    });
-                }
-            } else if (authenticatedUser) {
-                // Legacy users may adopt a Shamir identity exactly once. An
-                // existing different hash is rejected by attachUserIdHash.
-                user = await UserService.attachUserIdHash(
-                    authenticatedUser.id,
-                    userIdHash
-                );
-            } else {
-                // Create a new account only when the verified external
-                // identity is not linked to any live user.
-                user = await UserService.createUserWithUserIdHash(userIdHash);
-                await UserService.linkAuthMethod(user.id, methodType, config);
+            const existingShare = await ShareService.getShareByUserId(user.id);
+            if (existingShare) {
+                await ShareService.logAccess(user.id, ipAddress, "store", false, "Share already exists");
+                return res.status(409).json({
+                    success: false,
+                    message: "User already has a stored share. Use /share/update for key rotation."
+                });
             }
 
             // Check rate limiting

@@ -146,7 +146,7 @@ export class UserService {
         }
 
         const user = await this.getUserById(userId);
-        if (!user || user.userIdHash !== userIdHash) {
+        if (user?.userIdHash !== userIdHash) {
             throw new AuthIdentityConflictError(
                 "Authenticated identity could not be bound safely."
             );

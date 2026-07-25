@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { db } from "../db/knex";
 
 const DELETION_TOKEN = /^deletion_[0-9a-f]{64}$/;

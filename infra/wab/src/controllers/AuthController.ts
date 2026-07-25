@@ -5,13 +5,15 @@
  */
 
 import { Request, Response } from "express";
-import { UserService } from "../services/UserService";
+import {
+    AuthIdentityConflictError,
+    UserService
+} from "../services/UserService";
 import {
     getAuthMethodInstance,
     UnsupportedAuthMethodError
 } from "../auth-methods/AuthMethodFactory";
 import { InvalidAuthPayloadError } from "../auth-methods/AuthMethod";
-import { AuthIdentityConflictError } from "../services/UserService";
 import {
     isAuthMethodType,
     isAuthPayload,

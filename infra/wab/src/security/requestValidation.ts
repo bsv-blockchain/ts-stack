@@ -43,7 +43,7 @@ export function isShamirShare(value: unknown): value is string {
         return false;
     }
     if (!BASE58_FIELD.test(x) || !BASE58_FIELD.test(y)) return false;
-    if (!/^[0-9]{1,3}$/.test(thresholdText)) return false;
+    if (!/^\d{1,3}$/.test(thresholdText)) return false;
     const threshold = Number.parseInt(thresholdText, 10);
     return threshold >= 2 && threshold <= 255 && INTEGRITY_TAG.test(integrity);
 }

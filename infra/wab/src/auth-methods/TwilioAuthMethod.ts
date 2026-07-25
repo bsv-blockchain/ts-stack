@@ -7,7 +7,7 @@ import {
 import twilio from "twilio";
 import { log } from "../logger";
 
-const E164_PHONE_NUMBER = /^\+[1-9][0-9]{7,14}$/;
+const E164_PHONE_NUMBER = /^\+[1-9]\d{7,14}$/;
 
 function canonicalPhoneNumber(payload: AuthPayload): string {
     if (typeof payload.phoneNumber !== "string") {
