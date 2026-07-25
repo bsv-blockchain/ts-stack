@@ -39,6 +39,7 @@ function escapeHtml (value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+    .replaceAll('\n', '&#10;')
 }
 
 function identifier (value) {
@@ -62,12 +63,26 @@ function scalar (value) {
   return `<code class="value">${escapeHtml(JSON.stringify(value))}</code>`
 }
 
+function collectionSummary (value) {
+  if (Array.isArray(value)) {
+    const suffix = value.length === 1 ? '' : 's'
+    return `${value.length} item${suffix}`
+  }
+
+  const count = Object.keys(value).length
+  const suffix = count === 1 ? '' : 's'
+  return `${count} field${suffix}`
+}
+
 function renderValue (value, depth = 0) {
   if (value == null || typeof value !== 'object') return scalar(value)
 
   if (Array.isArray(value)) {
     if (value.length === 0) return '<span class="muted">empty list</span>'
-    return `<ol class="tree-list">${value.map(item => `<li>${renderValue(item, depth + 1)}</li>`).join('')}</ol>`
+    const items = value
+      .map(item => '<li>' + renderValue(item, depth + 1) + '</li>')
+      .join('')
+    return `<ol class="tree-list">${items}</ol>`
   }
 
   const entries = Object.entries(value)
@@ -80,7 +95,9 @@ function renderValue (value, depth = 0) {
     }
 
     const open = depth < 1 ? ' open' : ''
-    return `<div class="tree-row nested"><dt>${escapeHtml(key)}</dt><dd><details${open}><summary>${Array.isArray(child) ? `${child.length} item${child.length === 1 ? '' : 's'}` : `${Object.keys(child).length} field${Object.keys(child).length === 1 ? '' : 's'}`}</summary>${renderValue(child, depth + 1)}</details></dd></div>`
+    const summary = collectionSummary(child)
+    const renderedChild = renderValue(child, depth + 1)
+    return `<div class="tree-row nested"><dt>${escapeHtml(key)}</dt><dd><details${open}><summary>${summary}</summary>${renderedChild}</details></dd></div>`
   }).join('')}</dl>`
 }
 
@@ -177,18 +194,18 @@ function renderSpec (document, source, specPath) {
   <footer>Generated deterministically from the repository source. No remote scripts, styles, fonts, or runtime dependencies.</footer>
 </body>
 </html>
-`.replace(/[ \t]+$/gm, '')
+`.split('\n').map(line => line.trim()).join('')
 }
 
 function validate (document, specPath) {
   if (document == null || typeof document !== 'object') {
-    throw new Error(`${specPath} must contain a YAML object`)
+    throw new TypeError(`${specPath} must contain a YAML object`)
   }
   if (typeof document.asyncapi !== 'string' || !document.asyncapi.startsWith('3.')) {
-    throw new Error(`${specPath} must declare AsyncAPI 3.x`)
+    throw new TypeError(`${specPath} must declare AsyncAPI 3.x`)
   }
   if (typeof document.info?.title !== 'string' || typeof document.info?.version !== 'string') {
-    throw new Error(`${specPath} must declare info.title and info.version`)
+    throw new TypeError(`${specPath} must declare info.title and info.version`)
   }
 }
 
