@@ -100,6 +100,44 @@ function escapeJsonObject (value: object): unknown {
   return { [TAG]: ESCAPED, entries: Object.entries(value) }
 }
 
+function defineOwnValues (
+  target: object,
+  values: Array<readonly [string, unknown]>
+): void {
+  // Build the descriptors through Object.fromEntries so reserved keys such as
+  // __proto__ remain ordinary own data properties. Defining the batch avoids
+  // both prototype setters and individual writes through remote property names.
+  Object.defineProperties(
+    target,
+    Object.fromEntries(values.map(([key, value]) => [
+      key,
+      {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true
+      }
+    ]))
+  )
+}
+
+function collectDecodedChild (
+  key: string,
+  child: unknown,
+  replacements: Array<readonly [string, unknown]>,
+  stack: object[]
+): void {
+  if (isTaggedBinary(child)) {
+    replacements.push([key, fromBase64(child.data)])
+  } else if (isEscapedJson(child)) {
+    const restored = Object.fromEntries(child.entries)
+    replacements.push([key, restored])
+    stack.push(restored)
+  } else if (child != null && typeof child === 'object') {
+    stack.push(child)
+  }
+}
+
 export function binaryJsonReplacer (this: Record<string, unknown>, key: string, value: unknown): unknown {
   if (value instanceof Uint8Array) return { [TAG]: BINARY_ENCODING, data: toBase64(value) }
   if (value == null || typeof value !== 'object') return value
@@ -137,17 +175,11 @@ export function decodeBinaryJsonValue (value: unknown): unknown {
   while (stack.length > 0) {
     const current = stack.pop()
     if (current == null) continue
+    const replacements: Array<readonly [string, unknown]> = []
     for (const [key, child] of Object.entries(current)) {
-      if (isTaggedBinary(child)) {
-        ;(current as Record<string, unknown>)[key] = fromBase64(child.data)
-      } else if (isEscapedJson(child)) {
-        const restored = Object.fromEntries(child.entries)
-        ;(current as Record<string, unknown>)[key] = restored
-        stack.push(restored)
-      } else if (child != null && typeof child === 'object') {
-        stack.push(child)
-      }
+      collectDecodedChild(key, child, replacements, stack)
     }
+    if (replacements.length > 0) defineOwnValues(current, replacements)
   }
   return decoded
 }

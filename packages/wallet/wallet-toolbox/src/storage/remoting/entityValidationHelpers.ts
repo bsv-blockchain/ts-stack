@@ -16,6 +16,24 @@ export function validateDate (date: Date | string | number): Date {
   return new Date(date)
 }
 
+function defineOwnValues (
+  target: object,
+  values: ReadonlyMap<string, unknown>
+): void {
+  Object.defineProperties(
+    target,
+    Object.fromEntries(Array.from(values, ([key, value]) => [
+      key,
+      {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true
+      }
+    ]))
+  )
+}
+
 /**
  * Force uniform behaviour across database engines.
  * Use to process all individual records with timestamps retrieved from database.
@@ -23,19 +41,23 @@ export function validateDate (date: Date | string | number): Date {
 export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T {
   entity.created_at = validateDate(entity.created_at)
   entity.updated_at = validateDate(entity.updated_at)
+  const replacements = new Map<string, unknown>()
   if (dateFields != null) {
     for (const df of dateFields) {
-      if (entity[df]) entity[df] = validateDate(entity[df])
+      if (Object.hasOwn(entity, df) && entity[df]) {
+        replacements.set(df, validateDate(entity[df]))
+      }
     }
   }
   for (const key of Object.keys(entity)) {
-    const val = entity[key]
+    const val = replacements.has(key) ? replacements.get(key) : entity[key]
     if (val === null) {
-      entity[key] = undefined
+      replacements.set(key, undefined)
     } else if (val instanceof Uint8Array) {
-      entity[key] = Array.from(val)
+      replacements.set(key, Array.from(val))
     }
   }
+  if (replacements.size > 0) defineOwnValues(entity, replacements)
   return entity
 }
 

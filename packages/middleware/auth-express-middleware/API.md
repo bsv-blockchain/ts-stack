@@ -59,9 +59,9 @@ Transport implementation for Express.
 export class ExpressTransport implements Transport {
     peer?: Peer;
     allowAuthenticated: boolean;
-    openNonGeneralHandles: Record<string, Response[]> = {};
-    openGeneralHandles: Record<string, Response> = {};
-    openNextHandlers: Record<string, NextFunction> = {};
+    openNonGeneralHandles: Map<string, Response[]> = new Map();
+    openGeneralHandles: Map<string, Response> = new Map();
+    openNextHandlers: Map<string, NextFunction> = new Map();
     constructor(allowUnauthenticated: boolean = false, logger?: typeof console, logLevel?: "debug" | "info" | "warn" | "error") 
     setPeer(peer: Peer): void 
     async send(message: AuthMessage): Promise<void> 

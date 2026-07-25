@@ -113,6 +113,34 @@ describe('binary JSON-RPC encoding', () => {
     expect(current.bytes).toEqual(new Uint8Array([1, 2, 3]))
   })
 
+  it('decodes reserved property names without mutating object prototypes', () => {
+    const value = JSON.parse(
+      `{"holder":{"__proto__":{"$bsvBinary":"${BINARY_ENCODING}","data":"AQID"}}}`
+    )
+    const holderPrototype = Object.getPrototypeOf(value.holder)
+
+    decodeBinaryJsonValue(value)
+
+    expect(Object.getPrototypeOf(value.holder)).toBe(holderPrototype)
+    expect(Object.hasOwn(value.holder, '__proto__')).toBe(true)
+    expect(Reflect.get(value.holder, '__proto__')).toEqual(
+      new Uint8Array([1, 2, 3])
+    )
+  })
+
+  it('restores escaped reserved keys as own data properties', () => {
+    const value = JSON.parse(
+      '{"holder":{"__proto__":{"$bsvBinary":"escaped","entries":[["safe","value"]]}}}'
+    )
+    const holderPrototype = Object.getPrototypeOf(value.holder)
+
+    decodeBinaryJsonValue(value)
+
+    expect(Object.getPrototypeOf(value.holder)).toBe(holderPrototype)
+    expect(Object.hasOwn(value.holder, '__proto__')).toBe(true)
+    expect(Reflect.get(value.holder, '__proto__')).toEqual({ safe: 'value' })
+  })
+
   it('keeps requests legacy-safe by default across mixed-version server instances', async () => {
     const requests: string[] = []
     const requestHeaders: Headers[] = []

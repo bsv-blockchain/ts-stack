@@ -163,6 +163,16 @@ describe('entityValidationHelpers', () => {
       expect(result.blob).toEqual([9, 8, 7])
       expect(result.id).toBe(1)
     })
+
+    test('only normalizes requested date fields that are own properties', () => {
+      const e = makeEntity()
+      const originalPrototype = Object.getPrototypeOf(e)
+
+      validateEntity(e, ['__proto__'])
+
+      expect(Object.getPrototypeOf(e)).toBe(originalPrototype)
+      expect(Object.hasOwn(e, '__proto__')).toBe(false)
+    })
   })
 
   describe('validateEntities', () => {

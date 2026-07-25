@@ -165,10 +165,10 @@ class ResponseWriterWrapper {
 export class ExpressTransport implements Transport {
   peer?: Peer
   allowUnauthenticated: boolean
-  openNonGeneralHandles: Record<string, Array<{ res: Response, next: Function }>> = {}
-  openGeneralHandles: Record<string, { next: Function, res: Response }> = {}
-  openNextHandlers: Record<string, NextFunction> = {}
-  openNextHandlerTimeouts: Record<string, ReturnType<typeof setTimeout>> = {}
+  openNonGeneralHandles = new Map<string, Array<{ res: Response, next: Function }>>()
+  openGeneralHandles = new Map<string, { next: Function, res: Response }>()
+  openNextHandlers = new Map<string, NextFunction>()
+  openNextHandlerTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
   private messageCallback?: (message: AuthMessage) => Promise<void>
   private readonly logger: typeof console | undefined
@@ -259,12 +259,13 @@ export class ExpressTransport implements Transport {
     const reader = new Utils.Reader(message.payload)
     const requestId = Utils.toBase64(reader.read(32))
 
-    if (typeof this.openGeneralHandles[requestId] !== 'object') {
+    const handle = this.openGeneralHandles.get(requestId)
+    if (handle === undefined) {
       this.log('warn', 'No response handle for this requestId', { requestId })
       throw new Error('No response handle for this requestId!')
     }
-    let { res, next } = this.openGeneralHandles[requestId]
-    delete this.openGeneralHandles[requestId]
+    let { res, next } = handle
+    this.openGeneralHandles.delete(requestId)
 
     const statusCode = reader.readVarIntNum()
     ;(res as any).__status(statusCode)
@@ -327,7 +328,7 @@ export class ExpressTransport implements Transport {
    * Handles a non-general (handshake) AuthMessage response.
    */
   private async sendNonGeneralMessage (message: AuthMessage): Promise<void> {
-    const handles = this.openNonGeneralHandles[message.yourNonce!]
+    const handles = this.openNonGeneralHandles.get(message.yourNonce!)
     if (!Array.isArray(handles) || handles.length === 0) {
       this.log('warn', 'No open handles to peer for nonce', { yourNonce: message.yourNonce })
       throw new Error('No open handles to this peer!')
@@ -361,6 +362,9 @@ export class ExpressTransport implements Transport {
     })
     res.send(message)
     handles.shift()
+    if (handles.length === 0) {
+      this.openNonGeneralHandles.delete(message.yourNonce!)
+    }
   }
 
   /**
@@ -453,10 +457,11 @@ export class ExpressTransport implements Transport {
       requestId = message.initialNonce!
     }
 
-    if (Array.isArray(this.openNonGeneralHandles[requestId])) {
-      this.openNonGeneralHandles[requestId].push({ res, next })
+    const handles = this.openNonGeneralHandles.get(requestId)
+    if (handles !== undefined) {
+      handles.push({ res, next })
     } else {
-      this.openNonGeneralHandles[requestId] = [{ res, next }]
+      this.openNonGeneralHandles.set(requestId, [{ res, next }])
     }
 
     if (!await this.peer!.sessionManager.hasSession(message.identityKey)) {
@@ -507,11 +512,11 @@ export class ExpressTransport implements Transport {
         } catch (error) {
           this.log('error', 'Error in certificate listener callback', { error })
         } finally {
-          const handles = this.openNonGeneralHandles[requestId]
+          const handles = this.openNonGeneralHandles.get(requestId)
           if (handles && handles.length > 0) {
             handles.shift()
             if (handles.length === 0) {
-              delete this.openNonGeneralHandles[requestId]
+              this.openNonGeneralHandles.delete(requestId)
             }
           }
           this.peer?.stopListeningForCertificatesReceived(listenerId)
@@ -540,7 +545,9 @@ export class ExpressTransport implements Transport {
   ): void {
     if (!Array.isArray(certs) || certs.length === 0) {
       this.log('warn', 'No certificates provided by peer', { senderPublicKey })
-      const handles = this.openNonGeneralHandles[req.headers['x-bsv-auth-request-id'] as string ?? message.initialNonce]
+      const handles = this.openNonGeneralHandles.get(
+        req.headers['x-bsv-auth-request-id'] as string ?? message.initialNonce!
+      )
       if (handles && handles.length > 0) {
         handles[0].res.status(400).json({ status: 'No certificates provided' })
       }
@@ -552,19 +559,17 @@ export class ExpressTransport implements Transport {
       onCertificatesReceived(senderPublicKey, certs, req, res, next)
     }
 
-    // Validate that identityKey is an own property of the handler map before
-    // invoking, preventing CodeQL js/unvalidated-dynamic-method-call from
-    // flagging prototype-chain dispatch on a user-supplied key.
     const identityKey = message.identityKey
-    if (typeof identityKey === 'string' && Object.hasOwn(this.openNextHandlers, identityKey)) {
-      const nextFn = this.openNextHandlers[identityKey]
-      const timeoutHandle = this.openNextHandlerTimeouts[identityKey]
+    if (typeof identityKey === 'string') {
+      const nextFn = this.openNextHandlers.get(identityKey)
+      if (nextFn === undefined) return
+      const timeoutHandle = this.openNextHandlerTimeouts.get(identityKey)
       if (timeoutHandle != null) {
         clearTimeout(timeoutHandle)
-        delete this.openNextHandlerTimeouts[identityKey]
+        this.openNextHandlerTimeouts.delete(identityKey)
       }
       nextFn()
-      delete this.openNextHandlers[identityKey]
+      this.openNextHandlers.delete(identityKey)
     }
   }
 
@@ -641,7 +646,7 @@ export class ExpressTransport implements Transport {
           this.logger,
           this.logLevel
         )
-        this.openGeneralHandles[requestId] = { res, next }
+        this.openGeneralHandles.set(requestId, { res, next })
         this.log('debug', 'Sending general message response', {
           requestId,
           responseStatus: wrapper.getStatusCode(),
@@ -650,7 +655,7 @@ export class ExpressTransport implements Transport {
         })
         await this.peer?.toPeer(responsePayload, req.headers['x-bsv-auth-identity-key'] as string)
       } catch (err) {
-        delete this.openGeneralHandles[requestId]
+        this.openGeneralHandles.delete(requestId)
         this.log('error', 'Failed to build and send authenticated response', { error: err })
         try {
           const restored = this.resetRes(res, next)
@@ -756,7 +761,7 @@ export class ExpressTransport implements Transport {
       senderPublicKey,
       hasSession,
       needsCertificates,
-      openNextHandlersKeys: Object.keys(this.openNextHandlers)
+      openNextHandlersKeys: Array.from(this.openNextHandlers.keys())
     })
 
     if (!needsCertificates || hasSession) {
@@ -766,19 +771,19 @@ export class ExpressTransport implements Transport {
     }
 
     this.log('debug', 'Storing next handler to wait for certificates', { senderPublicKey })
-    const existingTimeout = this.openNextHandlerTimeouts[senderPublicKey]
+    const existingTimeout = this.openNextHandlerTimeouts.get(senderPublicKey)
     if (existingTimeout != null) {
       clearTimeout(existingTimeout)
-      delete this.openNextHandlerTimeouts[senderPublicKey]
+      this.openNextHandlerTimeouts.delete(senderPublicKey)
     }
-    this.openNextHandlers[senderPublicKey] = next
+    this.openNextHandlers.set(senderPublicKey, next)
 
     const CERTIFICATE_TIMEOUT_MS = 30000
     const timeoutHandle = setTimeout(() => {
-      if (this.openNextHandlers[senderPublicKey]) {
+      if (this.openNextHandlers.has(senderPublicKey)) {
         this.log('warn', 'Certificate request timed out', { senderPublicKey })
-        delete this.openNextHandlers[senderPublicKey]
-        delete this.openNextHandlerTimeouts[senderPublicKey]
+        this.openNextHandlers.delete(senderPublicKey)
+        this.openNextHandlerTimeouts.delete(senderPublicKey)
         wrapper.status(408).json({
           status: 'error',
           code: 'CERTIFICATE_TIMEOUT',
@@ -787,7 +792,7 @@ export class ExpressTransport implements Transport {
         buildAndSendResponse()
       }
     }, CERTIFICATE_TIMEOUT_MS)
-    this.openNextHandlerTimeouts[senderPublicKey] = timeoutHandle
+    this.openNextHandlerTimeouts.set(senderPublicKey, timeoutHandle)
   }
 
   /**
