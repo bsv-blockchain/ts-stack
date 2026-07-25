@@ -4,6 +4,8 @@ import { Logger, log } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { getRecipientFee, getServerDeliveryFee } from '../../utils/messagePermissions.js'
 
+export const MAX_QUOTE_RECIPIENTS = 100
+
 export interface GetQuoteRequest extends AuthRequest {
   query: {
     recipient: string | string[] // identityKey of recipient or array of recipients
@@ -27,6 +29,7 @@ export interface GetQuoteRequest extends AuthRequest {
  *           oneOf:
  *             - type: string
  *             - type: array
+ *               maxItems: 100
  *               items:
  *                 type: string
  *         description: identityKey of the recipient, or multiple recipients by repeating the parameter (?recipient=A&recipient=B)
@@ -85,6 +88,14 @@ export default {
           status: 'error',
           code: 'ERR_MISSING_PARAMETERS',
           description: 'At least one recipient is required.'
+        })
+      }
+
+      if (recipients.length > MAX_QUOTE_RECIPIENTS) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_TOO_MANY_RECIPIENTS',
+          description: `A quote may include at most ${MAX_QUOTE_RECIPIENTS} recipients.`
         })
       }
 

@@ -1,11 +1,10 @@
 import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
 import { Hash, Utils } from '@bsv/sdk';
-import fs from 'fs'
 import { getWallet } from '../utils/walletSingleton';
-import path from 'path';
 import { IncomingHttpHeaders } from 'http';
 import { log } from '../logger';
+import { resolveCdnObjectPath, writeCdnObjectExclusive } from '../utils/cdnObjectPath';
 
 const {
   HOSTING_DOMAIN
@@ -31,7 +30,14 @@ interface AdvertiseResponse {
 }
 
 const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseResponse>) => {
-  const wallet = await getWallet()
+  const objectID = req.query.objectID
+  if (resolveCdnObjectPath(objectID) === null) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'ERR_INVALID_OBJECT_ID',
+      description: 'Invalid object identifier'
+    })
+  }
 
   // Verify size
   if (Number(req.query.fileSize) !== req.body.byteLength) {
@@ -41,8 +47,10 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
     })
   }
 
+  const wallet = await getWallet()
+
   // Verify hmac
-  const str = `fileSize=${req.query.fileSize}&objectID=${req.query.objectID}&expiry=${req.query.expiry}&uploader=${req.query.uploader}`
+  const str = `fileSize=${req.query.fileSize}&objectID=${objectID}&expiry=${req.query.expiry}&uploader=${req.query.uploader}`
   const { valid } = await wallet.verifyHmac({
       protocolID: [2, 'storage upload'],
       keyID: '1',
@@ -57,16 +65,21 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
     })
   }
 
-  // Verify no file exists with the same object ID
-  if (fs.existsSync(path.join(__dirname, `../../public/cdn/${req.query.objectID}`))) {
+  // Atomically create the object so concurrent requests cannot overwrite it.
+  const writeResult = writeCdnObjectExclusive(objectID, req.body)
+  if (writeResult === 'exists') {
     return res.status(400).json({
       status: 'error',
       description: 'File exists'
     })
   }
-
-  // Write file
-  fs.writeFileSync(path.join(__dirname, `../../public/cdn/${req.query.objectID}`), req.body)
+  if (writeResult === 'invalid') {
+    return res.status(400).json({
+      status: 'error',
+      code: 'ERR_INVALID_OBJECT_ID',
+      description: 'Invalid object identifier'
+    })
+  }
 
   // Create UHRP ad under /cdn
   try {
@@ -77,8 +90,8 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
     const expiryTime = Math.floor(new Date(req.query.expiry).getTime() / 1000)
     await createUHRPAdvertisement({
       hash: Hash.sha256(Array.from(req.body)),
-      objectIdentifier: req.query.objectID,
-      url: `https://${HOSTING_DOMAIN}/cdn/${req.query.objectID}`,
+      objectIdentifier: objectID,
+      url: `https://${HOSTING_DOMAIN}/cdn/${objectID}`,
       uploaderIdentityKey: req.query.uploader,
       expiryTime,
       contentLength: req.body.byteLength,

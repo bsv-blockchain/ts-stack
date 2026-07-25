@@ -4,6 +4,7 @@ import fs from 'fs'
 import { getWallet } from './walletSingleton'
 import { Utils } from '@bsv/sdk'
 import { log } from '../logger'
+import { CDN_ROOT } from './cdnObjectPath'
 
 /**
  * Cache to store MIME types for object identifiers to avoid repeated database lookups
@@ -11,7 +12,6 @@ import { log } from '../logger'
 const mimeTypeCache = new Map<string, string>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes in milliseconds
 const cacheTimestamps = new Map<string, number>()
-const CDN_ROOT = path.resolve(__dirname, '../../public/cdn')
 
 /**
  * Get MIME type from UHRP advertisement tags

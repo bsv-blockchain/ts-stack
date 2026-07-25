@@ -1,4 +1,4 @@
-import { expect, test, beforeEach, afterEach } from '@jest/globals'
+import { expect, jest, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -90,9 +90,44 @@ test('POST /generate (invalid: new with no targets) returns 400 and stays up', a
     })
     expect(res.status).toBe(400)
     const data = await res.json()
-    expect(String(data.error)).toMatch(/frontend or a backend/i)
+    expect(data).toEqual({ error: 'Invalid project configuration.' })
     expect((await fetch(srvUrl)).status).toBe(200)
   } finally { srv.close() }
+})
+
+test('POST /generate does not expose unexpected command failures', async () => {
+  const internalMessage = 'secret filesystem detail from an internal stack'
+  const failingRun: RunCommand = () => { throw new Error(internalMessage) }
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: join(dir, 'failed-app'),
+    deps: { runCommand: failingRun }
+  })
+  try {
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'new',
+        name: 'demo',
+        frontend: 'react',
+        capabilities: ['wallet-connect']
+      })
+    })
+    const data = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(data).toEqual({ error: 'Project generation failed.' })
+    expect(JSON.stringify(data)).not.toContain(internalMessage)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Project generation failed:',
+      expect.objectContaining({ message: internalMessage })
+    )
+  } finally {
+    srv.close()
+    errorSpy.mockRestore()
+  }
 })
 
 test('runUi opens the browser then resolves after the simulated submit', async () => {
@@ -163,6 +198,30 @@ test('POST /plan returns { files: [], error } for an invalid draft', async () =>
     expect(data.files).toEqual([])
     expect(typeof data.error).toBe('string')
   } finally { srv.close() }
+})
+
+test('POST /plan does not expose unexpected parser details', async () => {
+  const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const res = await fetch(`${srv.url}/plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{'
+    })
+    const data = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(data).toEqual({ files: [], error: 'Unable to generate project plan.' })
+    expect(JSON.stringify(data)).not.toMatch(/JSON|position|stack/i)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Project plan generation failed:',
+      expect.any(SyntaxError)
+    )
+  } finally {
+    srv.close()
+    errorSpy.mockRestore()
+  }
 })
 
 test('POST /generate add-mode does NOT overwrite existing capability files (force=false)', async () => {

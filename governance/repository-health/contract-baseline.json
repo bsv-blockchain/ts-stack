@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-25",
-  "findingCount": 243,
+  "findingCount": 242,
   "findings": [
     {
       "id": ".::missing-license-file",
@@ -134,10 +134,6 @@
     {
       "id": "packages/helpers/create-bsv-app::missing-script::pack:check",
       "message": "Profile cli requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/create-bsv-app::missing-script::test:coverage",
-      "message": "Profile cli requires script test:coverage"
     },
     {
       "id": "packages/helpers/create-bsv-app::missing-script::typecheck",
