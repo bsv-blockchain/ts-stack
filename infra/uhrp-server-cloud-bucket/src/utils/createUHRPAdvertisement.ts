@@ -1,5 +1,4 @@
-import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, AtomicBEEF, SHIPBroadcaster } from "@bsv/sdk"
-import { getWallet } from "./walletSingleton"
+import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, SHIPBroadcaster } from "@bsv/sdk"
 import { Setup } from "@bsv/wallet-toolbox"
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string

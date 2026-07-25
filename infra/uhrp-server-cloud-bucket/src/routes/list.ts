@@ -1,4 +1,3 @@
-import { Storage } from '@google-cloud/storage'
 import { Request, Response } from 'express'
 import { getWallet } from '../utils/walletSingleton'
 import { Utils } from '@bsv/sdk'

@@ -1,7 +1,6 @@
 // /utils/getMetadata.ts
 import { Storage } from '@google-cloud/storage'
 import { getWallet } from './walletSingleton'
-import upload from '../routes/upload'
 import { Utils } from '@bsv/sdk'
 
 const storage = new Storage()

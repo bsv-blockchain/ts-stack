@@ -65,12 +65,12 @@ describe("ShareService", () => {
             // Clean up - ignore errors if already deleted
             try {
                 await ShareService.deleteShare(testUserId);
-            } catch (e) {
+            } catch {
                 // Ignore
             }
             try {
                 await UserService.deleteUserByUserIdHash(testUserIdHash);
-            } catch (e) {
+            } catch {
                 // Ignore
             }
         });
@@ -154,7 +154,7 @@ describe("ShareService", () => {
         afterEach(async () => {
             try {
                 await UserService.deleteUserByUserIdHash(testUserIdHash);
-            } catch (e) {
+            } catch {
                 // Ignore
             }
         });
@@ -197,7 +197,7 @@ describe("ShareService", () => {
         afterEach(async () => {
             try {
                 await UserService.deleteUserByUserIdHash(testUserIdHash);
-            } catch (e) {
+            } catch {
                 // Ignore
             }
         });

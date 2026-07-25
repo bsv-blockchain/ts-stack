@@ -105,8 +105,9 @@ monitor events in storage.
 - Telemetry shutdown flushes the SDK on `SIGTERM`/`SIGINT` and only force-exits
   when the app has no signal handler of its own (e.g. chaintracks owns its
   lifecycle), so it never preempts application cleanup.
-- Adding telemetry introduced no new dependency CVEs; pre-existing transitive
-  advisories (e.g. message-box `firebase-admin → @google-cloud/storage`) are
-  unrelated.
+- The infra projects use one aligned OpenTelemetry release family and their
+  committed npm graphs pass `npm audit --audit-level=high`. Temporary
+  transitive security pins and their removal criteria are documented in
+  `infra/DEPENDENCY_POLICY.md`.
 
 See the design spec: `docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md`.

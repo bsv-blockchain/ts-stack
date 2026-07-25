@@ -2,13 +2,12 @@ import { Request, Response } from 'express'
 import { Storage } from '@google-cloud/storage'
 import getPriceForFile from '../utils/getPriceForFile'
 import { getWallet } from '../utils/walletSingleton'
-import { LockingScript, PrivateKey, PushDrop, SHIPBroadcaster, StorageUtils, TopicBroadcaster, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
+import { PushDrop, SHIPBroadcaster, Transaction, Utils } from '@bsv/sdk'
 import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
 
 const storage = new Storage()
 const GCP_BUCKET_NAME = process.env.GCP_BUCKET_NAME as string
-const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
 
 interface RenewRequest extends Request {

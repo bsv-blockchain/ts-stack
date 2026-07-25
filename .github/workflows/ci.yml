@@ -193,6 +193,81 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+  infra:
+    name: Infra / ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - chaintracks-server
+          - message-box-server
+          - overlay-server
+          - uhrp-server-basic
+          - uhrp-server-cloud-bucket
+          - uhrp-server-cloud-bucket/notifier
+          - wab
+          - wallet-infra
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether this component changed
+        id: changed
+        env:
+          COMPONENT: ${{ matrix.component }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          if git diff --quiet "$BASE_SHA"...HEAD -- "infra/$COMPONENT/" .github/workflows/ci.yml; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Use Node.js 24
+        if: steps.changed.outputs.run == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: infra/${{ matrix.component }}/package-lock.json
+
+      - name: Install locked dependencies
+        if: steps.changed.outputs.run == 'true'
+        working-directory: infra/${{ matrix.component }}
+        run: npm ci
+
+      - name: Reject high and critical dependency advisories
+        if: steps.changed.outputs.run == 'true'
+        working-directory: infra/${{ matrix.component }}
+        run: npm audit --audit-level=high
+
+      - name: Build
+        if: steps.changed.outputs.run == 'true'
+        working-directory: infra/${{ matrix.component }}
+        run: npm run build --if-present
+
+      - name: Lint
+        if: steps.changed.outputs.run == 'true'
+        working-directory: infra/${{ matrix.component }}
+        run: npm run lint --if-present
+
+      - name: Test
+        if: steps.changed.outputs.run == 'true'
+        working-directory: infra/${{ matrix.component }}
+        run: npm test --if-present
+
+      - name: Build Linux image
+        if: steps.changed.outputs.run == 'true' && matrix.component != 'uhrp-server-cloud-bucket/notifier'
+        run: docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}"
+
   docs-validate:
     name: Docs Site Validation
     runs-on: ubuntu-latest
@@ -282,6 +357,7 @@ jobs:
     if: always()
     needs:
       - build-and-test
+      - infra
       - docs-validate
       - conformance
       - dependency-review
@@ -291,14 +367,16 @@ jobs:
       - name: Verify every required CI result
         env:
           BUILD_RESULT: ${{ needs.build-and-test.result }}
+          INFRA_RESULT: ${{ needs.infra.result }}
           DOCS_RESULT: ${{ needs.docs-validate.result }}
           CONFORMANCE_RESULT: ${{ needs.conformance.result }}
           DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
         run: |
           if [[ "$BUILD_RESULT" != "success" ||
+                "$INFRA_RESULT" != "success" ||
                 "$DOCS_RESULT" != "success" ||
                 "$CONFORMANCE_RESULT" != "success" ]]; then
-            echo "::error::Required CI failed: build=$BUILD_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
+            echo "::error::Required CI failed: build=$BUILD_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
             exit 1
           fi
           if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then

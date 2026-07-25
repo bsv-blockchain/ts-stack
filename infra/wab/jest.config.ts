@@ -12,11 +12,13 @@ const config: JestConfigWithTsJest = {
         '^.+\\.ts$': ['ts-jest', {
             tsconfig: {
                 module: 'commonjs',
-                moduleResolution: 'bundler'
+                moduleResolution: 'bundler',
+                types: ['node', 'jest']
             }
         }]
     },
     moduleFileExtensions: ['ts', 'js', 'json'],
+    modulePathIgnorePatterns: ['<rootDir>/out/'],
     collectCoverage: false,
     coverageDirectory: 'coverage',
     collectCoverageFrom: [

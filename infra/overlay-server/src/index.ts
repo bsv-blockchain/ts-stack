@@ -38,6 +38,7 @@ import {
     TokenDemoTopicManager,
     createTokenDemoLookupService,
     MandalaTopicManager,
+    MandalaStorageManager,
     createMandalaLookupService,
     InMemoryScreeningProvider,
 } from '@bsv/overlay-topics'
@@ -353,13 +354,27 @@ const main = async () => {
     // NOTE: production must use an HSM/KMS-custodied verifier key (see spec follow-ups); this local
     // wiring reuses SERVER_PRIVATE_KEY and an empty in-memory sanctions list.
     const mandalaWallet = new ProtoWallet(PrivateKey.fromHex(SERVER_PRIVATE_KEY)) as unknown as WalletInterface
+    let mandalaStorage: MandalaStorageManager | undefined
+    const requireMandalaStorage = (): MandalaStorageManager => {
+        if (mandalaStorage === undefined) {
+            throw new Error('Mandala storage is not initialized')
+        }
+        return mandalaStorage
+    }
     server.configureTopicManager('tm_mandala', new MandalaTopicManager({
         verifierWallet: mandalaWallet,
         screeningProvider: new InMemoryScreeningProvider([]),
         adminWallet: mandalaWallet,
-        adminProtocolID: [2, 'mandala admin'] as [2, string]
+        adminProtocolID: [2, 'mandala admin'] as [2, string],
+        stateStore: {
+            getAssetState: async (assetId) => await requireMandalaStorage().getAssetState(assetId),
+            getTokenRow: async (txid, outputIndex) => await requireMandalaStorage().getTokenRow(txid, outputIndex)
+        }
     }))
-    server.configureLookupServiceWithMongo('ls_mandala', createMandalaLookupService(mandalaWallet))
+    server.configureLookupServiceWithMongo('ls_mandala', (db) => {
+        mandalaStorage = new MandalaStorageManager(db)
+        return createMandalaLookupService(mandalaWallet, mandalaStorage)(db)
+    })
 
     // For simple local deployments, sync can be disabled.
     server.configureEnableGASPSync(process.env?.GASP_ENABLED === 'true')

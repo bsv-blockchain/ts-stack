@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -13,10 +13,7 @@ COPY tsconfig*.json ./
 COPY knexfile.ts ./
 
 # Install all dependencies (including dev deps for build)
-RUN npm install
-
-# Install global tools (optional, depends on how you're running knex)
-RUN npm install -g knex typescript
+RUN npm ci
 
 # Copy source code required for compilation
 COPY src ./src
@@ -28,7 +25,7 @@ RUN npm run build
 RUN cp out/knexfile.js ./knexfile.js
 
 # ---- Production stage ----
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Ensure all OS packages are up to date (patch CVEs in base image) and install nginx
 RUN apk upgrade --no-cache && \

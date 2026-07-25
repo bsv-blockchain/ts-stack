@@ -1,11 +1,6 @@
 import { Request, Response } from 'express'
-import { Storage } from '@google-cloud/storage'
-import { getWallet } from '../utils/walletSingleton'
 import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
-
-const storage = new Storage()
-const { GCP_BUCKET_NAME } = process.env
 
 interface FindRequest extends Request {
     auth: {

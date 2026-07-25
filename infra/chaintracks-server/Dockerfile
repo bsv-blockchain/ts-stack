@@ -1,10 +1,10 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
 # better-sqlite3 (transitive via @bsv/wallet-toolbox) ships no musl prebuilt for
-# node 20 — needs python3/make/g++ to compile from source on Alpine.
+# Node 24 — needs python3/make/g++ to compile from source on Alpine.
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
@@ -21,7 +21,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -35,7 +35,7 @@ RUN apk upgrade --no-cache libssl3 libcrypto3 \
 COPY package*.json ./
 
 # Install production dependencies only. Then strip npm from the runtime image:
-# the app runs via `node` (see CMD) and node:20-alpine's bundled npm ships its
+# the app runs via `node` (see CMD) and node:24-alpine's bundled npm ships its
 # own HIGH-CVE deps (tar/glob/minimatch/cross-spawn/undici) that we don't need.
 RUN npm ci --omit=dev \
  && apk del .build-deps \

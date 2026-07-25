@@ -2,9 +2,6 @@
  * AuthMethod is the abstract base that all Auth Method implementations must follow.
  */
 
-import { db } from "../db/knex";
-import { User } from "../types";
-
 /**
  * Represents the data needed to start or complete an auth method.
  */
@@ -51,7 +48,7 @@ export abstract class AuthMethod {
      * given the stored config in the DB vs. an input that might identify them.
      * Return boolean or throw if not relevant.
      */
-    public isAlreadyLinked(storedConfig: Record<string, any>, payload: AuthPayload): boolean {
+    public isAlreadyLinked(_storedConfig: Record<string, any>, _payload: AuthPayload): boolean {
         return false;
     }
 }

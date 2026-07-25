@@ -1,3 +1,30 @@
+jest.mock("twilio", () => ({
+    __esModule: true,
+    default: jest.fn(() => ({
+        verify: {
+            v2: {
+                services: jest.fn(() => ({
+                    verifications: {
+                        create: jest.fn().mockResolvedValue({ status: "pending" })
+                    },
+                    verificationChecks: {
+                        create: jest.fn().mockResolvedValue({ status: "pending" })
+                    }
+                }))
+            }
+        },
+        lookups: {
+            v2: {
+                phoneNumbers: jest.fn(() => ({
+                    fetch: jest.fn().mockResolvedValue({
+                        lineTypeIntelligence: { lineType: "mobile" }
+                    })
+                }))
+            }
+        }
+    }))
+}));
+
 import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
 
 describe("AuthMethods", () => {
@@ -31,13 +58,13 @@ describe("AuthMethods", () => {
             expect(completeResult.success).toBe(false);
         });
 
-        it("should fail with non-admin phone without real Twilio", async () => {
+        it("should reject a non-approved verification without network access", async () => {
             const completeResult = await method.completeAuth("someKey", {
                 phoneNumber: "+1234567890",
                 otp: "123456"
             });
-            // Will fail because mock Twilio credentials won't work
             expect(completeResult.success).toBe(false);
+            expect(completeResult.message).toContain("invalid or expired");
         });
 
         it("should require phoneNumber in payload", async () => {

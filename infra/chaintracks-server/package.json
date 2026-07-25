@@ -1,11 +1,21 @@
 {
   "name": "chaintracks-server",
   "version": "1.0.9",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "gaxios": "7.3.0",
+    "uuid": "11.1.1"
+  },
   "description": "TypeScript Express server wrapping ChaintracksService from @bsv/wallet-toolbox",
   "main": "dist/server.js",
   "type": "commonjs",
   "scripts": {
     "build": "tsc",
+    "lint": "oxlint src --deny-warnings",
     "start": "node dist/server.js",
     "start:test": "CHAIN=test node dist/server.js",
     "start:custom": "node dist/server-custom.js",
@@ -26,20 +36,20 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@bsv/wallet-toolbox": "^2.3.3",
+    "@bsv/wallet-toolbox": "^2.4.3",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/api-logs": "^0.220.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.78.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.220.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.220.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
-    "@opentelemetry/instrumentation": "^0.220.0",
-    "@opentelemetry/instrumentation-runtime-node": "^0.33.0",
-    "@opentelemetry/resources": "^2.9.0",
-    "@opentelemetry/sdk-logs": "^0.220.0",
-    "@opentelemetry/sdk-metrics": "^2.9.0",
-    "@opentelemetry/sdk-node": "^0.220.0",
-    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.79.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/instrumentation": "^0.221.0",
+    "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "@opentelemetry/sdk-metrics": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
@@ -48,14 +58,9 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
-    "@types/node": "^26.1.1",
+    "@types/node": "^24.13.3",
+    "oxlint": "^1.75.0",
     "ts-node": "^10.9.2",
-    "typescript": "^7.0.2"
-  },
-  "overrides": {
-    "tar": ">=7.5.11",
-    "minimatch": ">=9.0.7",
-    "cross-spawn": ">=7.0.6",
-    "glob": ">=10.5.0"
+    "typescript": "^6.0.3"
   }
 }

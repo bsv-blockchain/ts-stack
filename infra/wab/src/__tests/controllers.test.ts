@@ -21,7 +21,6 @@ jest.mock("../auth-methods/TwilioAuthMethod", () => {
 import { UserService } from "../services/UserService";
 
 let AuthController: typeof import("../controllers/AuthController")["AuthController"]; 
-let FaucetController: typeof import("../controllers/FaucetController")["FaucetController"]; 
 let UserController: typeof import("../controllers/UserController")["UserController"]; 
 let InfoController: typeof import("../controllers/InfoController")["InfoController"]; 
 let AccountDeletionController: typeof import("../controllers/AccountDeletionController")["AccountDeletionController"]; 
@@ -48,7 +47,6 @@ describe("Controllers", () => {
     beforeAll(async () => {
         // Dynamically import after mocks are set up
         ({ AuthController } = await import("../controllers/AuthController"));
-        ({ FaucetController } = await import("../controllers/FaucetController"));
         ({ UserController } = await import("../controllers/UserController"));
         ({ InfoController } = await import("../controllers/InfoController"));
         ({ AccountDeletionController } = await import("../controllers/AccountDeletionController"));

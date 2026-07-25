@@ -19,7 +19,7 @@ export class PersonaAuthMethod extends AuthMethod {
      * In a real scenario, we might start a Persona session for ID capture.
      * We'll mock that we simply create a "verification session id".
      */
-    public async startAuth(presentationKey: string, payload: AuthPayload): Promise<AuthResult> {
+    public async startAuth(_presentationKey: string, _payload: AuthPayload): Promise<AuthResult> {
         // Create mock "sessionId"
         const sessionId = "persona-session-abc123";
 

@@ -1,16 +1,25 @@
 {
   "name": "notifier",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "overrides": {
+    "gaxios": "7.3.0",
+    "uuid": "11.1.1"
+  },
   "description": "This is a simple Google Cloud Function that is triggered whenever a new object is finalized in the Cloud Storage bucket.",
   "main": "notifier.js",
   "scripts": {
-    "test": "exit 0"
+    "lint": "node --check notifier.js && node --check notifier.test.js",
+    "test": "node --test notifier.test.js"
   },
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
+    "@bsv/sdk": "^2.1.9",
     "@google-cloud/storage": "^7.21.0",
-    "axios": "^1.18.1",
-    "uhrp-url": "^0.1.3"
+    "axios": "^1.18.1"
   }
 }

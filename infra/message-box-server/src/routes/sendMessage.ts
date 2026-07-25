@@ -79,7 +79,7 @@ export interface SendMessageRequest extends AuthRequest {
  * @function calculateMessagePrice
  * @description Determines the price (in satoshis) to send a message, optionally with priority.
  */
-export function calculateMessagePrice(message: string, priority: boolean = false): number {
+export function calculateMessagePrice(message: string, _priority: boolean = false): number {
   const basePrice = 2 // Base fee in satoshis
   const sizeFactor = Math.ceil(Buffer.byteLength(message, 'utf8') / 1024) * 3 // Satoshis per KB
   return basePrice + sizeFactor

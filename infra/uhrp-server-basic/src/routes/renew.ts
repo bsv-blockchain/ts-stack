@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import getPriceForFile from '../utils/getPriceForFile'
 import { getWallet } from '../utils/walletSingleton'
-import { PushDrop, SHIPBroadcaster, StorageUtils, TopicBroadcaster, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
+import { PushDrop, SHIPBroadcaster, Transaction, Utils } from '@bsv/sdk'
 import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
 

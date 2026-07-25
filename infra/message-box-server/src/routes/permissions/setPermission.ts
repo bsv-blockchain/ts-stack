@@ -83,7 +83,7 @@ export default {
       if (sender != null) {
         try {
           PublicKey.fromString(sender)
-        } catch (error) {
+        } catch {
           Logger.log('[DEBUG] Invalid sender public key format')
           return res.status(400).json({
             status: 'error',

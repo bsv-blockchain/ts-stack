@@ -18,7 +18,6 @@
 
 import * as dotenv from 'dotenv'
 import { app, appReady, getWallet, knex } from './app.js'
-import { spawn } from 'child_process'
 import { createServer } from 'http'
 import { Logger, log } from './utils/logger.js'
 import { trace, SpanStatusCode } from '@opentelemetry/api'

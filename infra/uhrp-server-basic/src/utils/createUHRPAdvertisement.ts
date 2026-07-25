@@ -1,10 +1,9 @@
-import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, AtomicBEEF, SHIPBroadcaster } from "@bsv/sdk"
+import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, SHIPBroadcaster } from "@bsv/sdk"
 import { getWallet } from "./walletSingleton"
 import { log } from "../logger"
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
-const WALLET_STORAGE_URL = process.env.WALLET_STORAGE_URL as string
 
 export interface AdvertisementParams {
   hash: number[]
