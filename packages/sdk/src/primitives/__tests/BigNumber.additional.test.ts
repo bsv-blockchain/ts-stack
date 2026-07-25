@@ -1,6 +1,17 @@
 import BigNumber from '../BigNumber'
 
 describe('BigNumber – additional coverage', () => {
+  it('rejects nominal word lengths that could exhaust memory', () => {
+    const bn = new BigNumber(1)
+
+    expect(() => bn.expand(1_048_577)).toThrow(
+      'Expand size must be a non-negative safe integer within the supported word limit'
+    )
+    expect(() => bn.expand(Number.POSITIVE_INFINITY)).toThrow(
+      'Expand size must be a non-negative safe integer within the supported word limit'
+    )
+  })
+
   describe('negative setter', () => {
     it('sets sign to 0 when magnitude is zero (setting val=1 on zero BN)', () => {
       const bn = new BigNumber(0)

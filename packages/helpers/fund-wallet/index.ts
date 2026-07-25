@@ -6,8 +6,6 @@ import { createInterface } from 'node:readline';
 import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, InternalizeActionArgs } from '@bsv/sdk'
 import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-
 async function makeWallet (
   chain: 'test' | 'main',
   storageURL: string,

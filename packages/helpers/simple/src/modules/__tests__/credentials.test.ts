@@ -195,6 +195,27 @@ describe('CredentialIssuer', () => {
         'Missing BSV certificate data'
       ]
     })
+
+    for (const deceptiveContext of [
+      `https://evil.example/${vc['@context'][0]}`,
+      `${vc['@context'][0]}.evil.example`
+    ]) {
+      await expect(issuer.verify({
+        ...vc,
+        '@context': [deceptiveContext]
+      })).resolves.toMatchObject({
+        valid: false,
+        errors: ['Missing W3C VC context']
+      })
+    }
+
+    await expect(issuer.verify({
+      ...vc,
+      '@context': 'https://www.w3.org/2018/credentials/v1'
+    } as any)).resolves.toMatchObject({
+      valid: false,
+      errors: ['Missing W3C VC context']
+    })
   })
 
   it('detects revoked credentials when revocation records are missing', async () => {

@@ -71,6 +71,10 @@ export default class BigNumber {
   private static readonly MIN_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MIN_SAFE_INTEGER)
   private static readonly MAX_IMULN_ARG: number = 0x4000000 - 1
   private static readonly MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT: bigint = (1n << 53n) - 1n
+  // About 3.25 MiB of mathematical payload. Legitimate cryptographic values
+  // are orders of magnitude smaller; this cap prevents hostile sparse-length
+  // metadata from causing an unbounded dense JavaScript array allocation.
+  private static readonly MAX_NOMINAL_WORD_LENGTH: number = 1_048_576
 
   private _magnitude: bigint = 0n
   private _sign: 0 | 1 = 0
@@ -124,6 +128,13 @@ export default class BigNumber {
    * @property words
    */
   public get words (): number[] {
+    if (
+      !Number.isSafeInteger(this._nominalWordLength) ||
+      this._nominalWordLength < 1 ||
+      this._nominalWordLength > BigNumber.MAX_NOMINAL_WORD_LENGTH
+    ) {
+      throw new Error('BigNumber word length exceeds the supported limit')
+    }
     const computed = this._computedWordsArray
     if (this._nominalWordLength <= computed.length) {
       return computed
@@ -406,7 +417,12 @@ export default class BigNumber {
   clone (): BigNumber { const r = new BigNumber(0n); this.copy(r); return r }
 
   expand (size: number): this {
-    this.assert(size >= 0, 'Expand size must be non-negative')
+    this.assert(
+      Number.isSafeInteger(size) &&
+      size >= 0 &&
+      size <= BigNumber.MAX_NOMINAL_WORD_LENGTH,
+      'Expand size must be a non-negative safe integer within the supported word limit'
+    )
     this._nominalWordLength = Math.max(this._nominalWordLength, size, 1)
     return this
   }

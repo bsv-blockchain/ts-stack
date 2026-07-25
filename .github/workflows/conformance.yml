@@ -10,6 +10,9 @@ concurrency:
   group: conformance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   ts-runner:
     runs-on: ubuntu-latest

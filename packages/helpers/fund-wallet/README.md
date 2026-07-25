@@ -117,6 +117,10 @@ npx fund-wallet \
 ## Security Notes
 
 - Private keys are sensitive information - handle with care
+- Storage connections use Node.js's normal trusted certificate authorities and
+  reject invalid or self-signed TLS certificates. For a private development
+  authority, configure Node.js with `NODE_EXTRA_CA_CERTS` rather than disabling
+  certificate verification.
 - Use test network for development and testing
 - Never share your private keys
 - Consider using environment variables for private keys in scripts
