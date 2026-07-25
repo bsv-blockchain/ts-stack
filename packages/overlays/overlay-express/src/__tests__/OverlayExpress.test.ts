@@ -845,6 +845,40 @@ describe('OverlayExpress', () => {
       consoleError.mockRestore()
     })
 
+    it.each([
+      ['', 'an empty comma-separated list'],
+      ['tm_foo,', 'an empty comma-separated topic'],
+      ['["tm_foo",42]', 'a JSON array containing a non-string topic']
+    ])('returns a clean 400 when X-Topics is %s (%s)', async (topicsHeader) => {
+      const postSpy = jest.spyOn(instance.app, 'post')
+      jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
+        callback()
+        return {} as any
+      })
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      await instance.start()
+
+      const route = postSpy.mock.calls.find(call => call[0] === '/submit')
+      const handler: any = route === undefined ? undefined : route[route.length - 1]
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis()
+      }
+      handler?.({
+        headers: { 'x-topics': topicsHeader },
+        body: Buffer.from([1, 2, 3])
+      }, res)
+      await new Promise(resolve => setImmediate(resolve))
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(res.json).toHaveBeenCalledWith({
+        status: 'error',
+        message: 'Invalid x-topics header: expected a comma-separated list or JSON string array'
+      })
+      expect(mockEngine.submit).not.toHaveBeenCalled()
+      consoleError.mockRestore()
+    })
+
     it('returns a clean 400 when /admin/health-check has no body', async () => {
       const postSpy = jest.spyOn(instance.app, 'post')
       jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {

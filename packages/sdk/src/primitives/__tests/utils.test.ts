@@ -33,6 +33,30 @@ describe('utils', () => {
     expect(toHex([0, 1, 2, 3])).toBe('00010203')
   })
 
+  it('should convert to hex without a global Buffer implementation', () => {
+    const originalBuffer = Object.getOwnPropertyDescriptor(globalThis, 'Buffer')
+    Object.defineProperty(globalThis, 'Buffer', {
+      value: undefined,
+      configurable: true,
+      writable: true
+    })
+
+    try {
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { toHex: fallbackToHex } = require('../../primitives/utils')
+        expect(fallbackToHex([])).toBe('')
+        expect(fallbackToHex(new Uint8Array([0, 1, 254, 255]))).toBe('0001feff')
+      })
+    } finally {
+      if (originalBuffer === undefined) {
+        delete (globalThis as any).Buffer
+      } else {
+        Object.defineProperty(globalThis, 'Buffer', originalBuffer)
+      }
+    }
+  })
+
   it('should encode', () => {
     expect(encode([0, 1, 2, 3])).toEqual([0, 1, 2, 3])
     expect(encode([0, 1, 2, 3], 'hex')).toBe('00010203')
