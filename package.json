@@ -12,7 +12,7 @@
     "sync:service-edge-policy": "node scripts/sync-service-edge-policy.mjs",
     "check-versions": "node scripts/check-versions.mjs",
     "health:baseline": "node scripts/repository-health.mjs --update-contract-baseline",
-    "health:check": "node --test scripts/repository-health.test.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
+    "health:check": "node --test scripts/*.test.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
     "health:report": "node scripts/repository-health.mjs --format markdown",
     "audit:security": "pnpm audit --audit-level=high",
     "codegen": "node scripts/generate-openapi-types.mjs",

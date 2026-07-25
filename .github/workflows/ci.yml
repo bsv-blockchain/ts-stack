@@ -25,7 +25,7 @@ jobs:
           node-version: 24.x
 
       - name: Test repository health controls
-        run: node --test scripts/repository-health.test.mjs
+        run: node --test scripts/*.test.mjs
 
       - name: Verify synchronized service security policies
         run: |

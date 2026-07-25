@@ -19,10 +19,11 @@
  * Safe to run repeatedly (idempotent). Does not touch non-workspace deps.
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { readUtf8FileIfExists, writeUtf8FileAtomic } from './file-system.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
@@ -110,7 +111,7 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
   }
 
   if (changed && !DRY_RUN) {
-    writeFileSync(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
+    writeUtf8FileAtomic(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
   }
 }
 
@@ -163,15 +164,20 @@ const bumpPatch = (version) => {
   return `${major}.${minor}.${patch + 1}${suffix}`
 }
 
-if (!WORKSPACE_ONLY && existsSync(INFRA_DIR)) {
-  const entries = readdirSync(INFRA_DIR)
+if (!WORKSPACE_ONLY) {
+  let entries = []
+  try {
+    entries = readdirSync(INFRA_DIR, { withFileTypes: true })
+  } catch (error) {
+    const missing = typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+    if (!missing) throw error
+  }
   for (const entry of entries) {
-    const componentDir = join(INFRA_DIR, entry)
-    if (!statSync(componentDir).isDirectory()) continue
+    if (!entry.isDirectory()) continue
+    const componentDir = join(INFRA_DIR, entry.name)
     const jsonPath = join(componentDir, 'package.json')
-    if (!existsSync(jsonPath)) continue
-
-    const raw = readFileSync(jsonPath, 'utf-8')
+    const raw = readUtf8FileIfExists(jsonPath)
+    if (raw === undefined) continue
     const pkg = JSON.parse(raw)
     let changed = false
 
@@ -198,7 +204,7 @@ if (!WORKSPACE_ONLY && existsSync(INFRA_DIR)) {
         infraBumps++
       }
       if (!DRY_RUN) {
-        writeFileSync(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
+        writeUtf8FileAtomic(jsonPath, JSON.stringify(pkg, null, 2) + '\n')
       }
     }
   }
