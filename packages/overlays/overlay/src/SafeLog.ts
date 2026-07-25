@@ -16,7 +16,7 @@ export function serializeLogValue (value: unknown): string {
     }
     return serialized.replace(
       /[\u0080-\u009f\u2028\u2029]/g,
-      character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
+      character => String.raw`\u${(character.codePointAt(0) as number).toString(16).padStart(4, '0')}`
     )
   } catch {
     return UNSERIALIZABLE_LOG_VALUE
