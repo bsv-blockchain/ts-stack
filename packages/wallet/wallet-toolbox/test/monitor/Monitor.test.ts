@@ -293,6 +293,10 @@ describe('Monitor tests', () => {
     const ctxs: TestWallet<{}>[] = []
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6b'))
 
+    // The legacy fixture contains other unmined requests. Keep this unit test
+    // deterministic instead of asking live proof services about those records.
+    _tu.mockMerklePathServicesAsCallback(ctxs, async () => ({ name: 'mock' }))
+
     for (const { activeStorage: storage, monitor } of ctxs) {
       if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
 
