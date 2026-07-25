@@ -134,6 +134,14 @@ console.log(publicKey, action.txid)
 
 `WalletClient` implements the BRC-100 method surface. It discovers a wallet substrate such as BSV Desktop over localhost or BSV Browser over a postMessage bridge.
 
+For advanced postMessage integrations, `XDM` defaults to the wildcard target
+origin so public apps, mobile webviews, and opaque origins can reach an embedded
+wallet. Every response must still come from the current parent window and match
+the invocation's random request ID. When the wallet parent has a stable known
+origin, pass that exact origin to `new XDM('https://wallet.example')` to require
+it on both outbound and inbound messages. This transport choice is independent
+of CORS and of any CSP applied to an app's documents.
+
 ### Verify SPV with merkle proof
 
 ```typescript

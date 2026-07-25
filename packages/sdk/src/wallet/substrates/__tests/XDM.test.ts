@@ -38,7 +38,11 @@ describe('XDMSubstrate', () => {
   }
 
   const dispatchMessage = (event: Partial<MessageEvent> & { data: any }) => {
-    getMessageListener()(event as MessageEvent)
+    getMessageListener()({
+      source: window.parent,
+      origin: 'https://wallet.example',
+      ...event
+    } as MessageEvent)
   }
 
   describe('constructor', () => {
@@ -119,6 +123,110 @@ describe('XDMSubstrate', () => {
       const res = await invokePromise
 
       expect(res).toEqual(result)
+    })
+
+    it('should ignore matching messages from a window other than the parent', async () => {
+      const mockId = 'mockedId'
+      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
+
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'success',
+          result: 'spoofed'
+        },
+        isTrusted: true,
+        source: {} as Window
+      })
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'success',
+          result: 'parent'
+        },
+        isTrusted: true
+      })
+
+      await expect(invokePromise).resolves.toBe('parent')
+    })
+
+    it('should enforce an exact configured origin', async () => {
+      const mockId = 'mockedId'
+      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      xdmSubstrate = new XDMSubstrate('https://wallet.example')
+      const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
+      const response = {
+        type: 'CWI',
+        isInvocation: false,
+        id: mockId,
+        status: 'success',
+        result: 'accepted'
+      }
+
+      dispatchMessage({
+        data: response,
+        isTrusted: true,
+        origin: 'https://attacker.example'
+      })
+      dispatchMessage({
+        data: response,
+        isTrusted: true,
+        origin: 'https://wallet.example'
+      })
+
+      expect(window.parent.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: mockId }),
+        'https://wallet.example'
+      )
+      await expect(invokePromise).resolves.toBe('accepted')
+    })
+
+    it('should preserve wildcard interoperability for opaque parent origins', async () => {
+      const mockId = 'mockedId'
+      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
+
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'success',
+          result: 'opaque-parent'
+        },
+        isTrusted: true,
+        origin: 'null'
+      })
+
+      await expect(invokePromise).resolves.toBe('opaque-parent')
+    })
+
+    it('should ignore malformed message data without throwing', async () => {
+      const mockId = 'mockedId'
+      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
+
+      expect(() => {
+        dispatchMessage({ data: null, isTrusted: true })
+        dispatchMessage({ data: 'not-a-response', isTrusted: true })
+      }).not.toThrow()
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'success',
+          result: 'valid'
+        },
+        isTrusted: true
+      })
+
+      await expect(invokePromise).resolves.toBe('valid')
     })
 
     it('should reject when receiving an error message', async () => {
