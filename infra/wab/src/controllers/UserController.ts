@@ -7,6 +7,11 @@
 
 import { Request, Response } from "express";
 import { UserService } from "../services/UserService";
+import {
+    isHexIdentifier,
+    isPositiveSafeInteger,
+    isRecord
+} from "../security/requestValidation";
 import { log } from "../logger";
 
 export class UserController {
@@ -16,9 +21,12 @@ export class UserController {
      */
     public static async listLinkedMethods(req: Request, res: Response) {
         try {
+            if (!isRecord(req.body)) {
+                return res.status(400).json({ message: "Request body must be a JSON object." });
+            }
             const { presentationKey } = req.body;
-            if (!presentationKey) {
-                return res.status(400).json({ message: "presentationKey is required" });
+            if (!isHexIdentifier(presentationKey)) {
+                return res.status(400).json({ message: "A 32-byte presentationKey is required." });
             }
 
             const user = await UserService.getUserByPresentationKey(presentationKey);
@@ -40,11 +48,17 @@ export class UserController {
      */
     public static async unlinkMethod(req: Request, res: Response) {
         try {
+            if (!isRecord(req.body)) {
+                return res.status(400).json({ message: "Request body must be a JSON object." });
+            }
             const { presentationKey, authMethodId } = req.body;
-            if (!presentationKey || !authMethodId) {
+            if (
+                !isHexIdentifier(presentationKey) ||
+                !isPositiveSafeInteger(authMethodId)
+            ) {
                 return res
                     .status(400)
-                    .json({ message: "presentationKey and authMethodId are required" });
+                    .json({ message: "A 32-byte presentationKey and positive authMethodId are required." });
             }
 
             const user = await UserService.getUserByPresentationKey(presentationKey);
@@ -71,9 +85,12 @@ export class UserController {
      */
     public static async deleteUser(req: Request, res: Response) {
         try {
+            if (!isRecord(req.body)) {
+                return res.status(400).json({ message: "Request body must be a JSON object." });
+            }
             const { presentationKey } = req.body;
-            if (!presentationKey) {
-                return res.status(400).json({ message: "presentationKey is required" });
+            if (!isHexIdentifier(presentationKey)) {
+                return res.status(400).json({ message: "A 32-byte presentationKey is required." });
             }
 
             const user = await UserService.getUserByPresentationKey(presentationKey);

@@ -23,6 +23,17 @@ All notable changes to this project will be documented in this file.
   outside development and test runtimes.
 - Remove presentation keys, request payloads, OTP stores, and provider
   exception details from logs and public error responses.
+- Bind every Shamir share operation to the account owned by the externally
+  verified authentication method, preventing cross-account share access.
+- Remove the legacy production OTP bypass and require canonical E.164 phone
+  identities for Twilio verification.
+- Make authentication identities non-transferable between live users while
+  preserving faucet history when an identity is relinked after account
+  deletion.
+- Replace forgeable account-deletion keys with hashed, expiring, rate-limited,
+  single-use sessions bound to the exact authentication method and user.
+- Validate presentation keys, user hashes, auth method names, numeric IDs, and
+  Shamir share envelopes at every public controller boundary.
 
 ## [1.1.0] - 2025-08-08
 

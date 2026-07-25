@@ -147,13 +147,13 @@ TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxx
 TWILIO_VERIFY_SERVICE_SID=VExxxxxxxxx
 
-# If using a local MySQL or other DB, for example:
-DB_CLIENT=pg
+# If using a local MySQL database:
+DB_CLIENT=mysql2
 DB_USER=mysql
 DB_PASS=password
 DB_NAME=wallet_auth
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=3306
 
 # Other environment-specific config
 PORT=3000
@@ -190,7 +190,27 @@ WAB is a public protocol service used by deployed wallet apps on many domains.
 It therefore enables wildcard CORS without cookie credentials by default.
 `WAB_CORS_MODE=allowlist` plus exact origins, or `disabled`, provides an
 operator opt-in restriction. Authentication and all endpoint rate limits apply
-in every mode.
+in every mode. This API policy is independent of Content Security Policy:
+deploying applications should configure CSP for their own documents, while WAB
+uses authentication, authorization, validation, and rate limits to protect API
+operations.
+
+### Authentication and account-deletion invariants
+
+Phone identities use canonical E.164 form and cannot move between live user
+accounts. A previously linked identity may be attached to a new account only
+after its old account has been deleted; its faucet history is retained.
+Presentation keys and Shamir user hashes are exact 256-bit hexadecimal values.
+Stored Shamir shares are bounded and structurally validated before any database
+operation.
+
+Account deletion is a two-step proof-of-identity flow. The start response is
+identical for known and unknown identities to avoid account enumeration. Its
+bearer token has 256 bits of entropy; only a SHA-256 digest is persisted. The
+intent expires after ten minutes, is single-use, is rate-limited per external
+identity, and is bound to the authentication method, canonical identity, and
+specific live user. A valid OTP from another flow or account cannot authorize
+deletion.
 
 ### Running Locally
 
@@ -319,7 +339,7 @@ We provide a [GitHub Actions workflow](./.github/workflows/deploy.yaml) that aut
 
 ```bash
 NODE_ENV=production
-DB_CLIENT=pg
+DB_CLIENT=mysql2
 DB_CONNECTION_NAME=my-project:us-central1:wab-sql
 DB_USER=myuser
 DB_PASS=mysecret
@@ -342,7 +362,7 @@ gcloud run deploy wab-server-production \
   --allow-unauthenticated \
   --add-cloudsql-instances=my-project:us-central1:wab-sql \
   --set-env-vars=NODE_ENV=production \
-  --set-env-vars=DB_CLIENT=pg \
+  --set-env-vars=DB_CLIENT=mysql2 \
   --set-env-vars=DB_CONNECTION_NAME=my-project:us-central1:wab-sql \
   --set-env-vars=DB_USER=myuser \
   --set-env-vars=DB_PASS=mysecret \

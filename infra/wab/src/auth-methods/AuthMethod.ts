@@ -19,6 +19,13 @@ export interface AuthResult {
     data?: Record<string, any>;
 }
 
+export class InvalidAuthPayloadError extends Error {
+    public constructor(message: string) {
+        super(message);
+        this.name = "InvalidAuthPayloadError";
+    }
+}
+
 /**
  * Abstract class that all AuthMethods implement.
  */

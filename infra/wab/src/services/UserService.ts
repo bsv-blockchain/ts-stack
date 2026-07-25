@@ -16,6 +16,13 @@ const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY
 const STORAGE_URL = process.env.STORAGE_URL
 const BSV_NETWORK = process.env.BSV_NETWORK
 
+export class AuthIdentityConflictError extends Error {
+    public constructor(message: string) {
+        super(message);
+        this.name = "AuthIdentityConflictError";
+    }
+}
+
 export class UserService {
     /**
      * Create a new user with a given presentationKey
@@ -104,10 +111,54 @@ export class UserService {
     }
 
     /**
+     * Attach a Shamir identity hash to an existing legacy user exactly once.
+     * A user or hash that is already bound elsewhere fails closed.
+     */
+    static async attachUserIdHash(userId: number, userIdHash: string): Promise<User> {
+        const current = await this.getUserById(userId);
+        if (!current) {
+            throw new AuthIdentityConflictError("Authenticated user no longer exists.");
+        }
+        if (current.userIdHash === userIdHash) {
+            return current;
+        }
+        if (current.userIdHash) {
+            throw new AuthIdentityConflictError(
+                "Authenticated identity is already bound to another Shamir account."
+            );
+        }
+
+        try {
+            const updated = await db("users")
+                .where({ id: userId })
+                .whereNull("userIdHash")
+                .update({ userIdHash });
+            if (updated !== 1) {
+                throw new AuthIdentityConflictError(
+                    "Authenticated identity could not be bound safely."
+                );
+            }
+        } catch (error) {
+            if (error instanceof AuthIdentityConflictError) throw error;
+            throw new AuthIdentityConflictError(
+                "Shamir identity hash is already bound to another user."
+            );
+        }
+
+        const user = await this.getUserById(userId);
+        if (!user || user.userIdHash !== userIdHash) {
+            throw new AuthIdentityConflictError(
+                "Authenticated identity could not be bound safely."
+            );
+        }
+        return user;
+    }
+
+    /**
      * Link an AuthMethod to the user
      * Checks if this auth method (methodType + config) already exists.
-     * If it does, reuses it and updates the userId.
-     * This prevents faucet abuse by tracking auth methods across account deletions.
+     * If it belongs to a deleted account (`userId` is null), reuse it without
+     * clearing its faucet history. Never move an identity between live users.
      */
     static async linkAuthMethod(
         userId: number,
@@ -120,10 +171,26 @@ export class UserService {
             .first();
 
         if (existing) {
-            // Reuse existing auth method, update userId to link to current user
-            await db("auth_methods")
+            if (existing.userId === userId) {
+                return existing;
+            }
+            if (existing.userId !== null) {
+                throw new AuthIdentityConflictError(
+                    "Authentication method is already linked to another user."
+                );
+            }
+
+            // Reuse an orphaned method from a deleted account, preserving
+            // receivedFaucet so account deletion cannot reset faucet history.
+            const updated = await db("auth_methods")
                 .where({ id: existing.id })
+                .whereNull("userId")
                 .update({ userId });
+            if (updated !== 1) {
+                throw new AuthIdentityConflictError(
+                    "Authentication method could not be linked safely."
+                );
+            }
 
             return {
                 ...existing,
@@ -132,7 +199,7 @@ export class UserService {
         }
 
         // Create new auth method
-        const [authMethodId] = await db("auth_methods").insert(
+        const insertResult: any = await db("auth_methods").insert(
             {
                 userId,
                 methodType,
@@ -141,6 +208,15 @@ export class UserService {
             },
             ["id"]
         );
+        const firstResult = Array.isArray(insertResult)
+            ? insertResult[0]
+            : insertResult;
+        const authMethodId = typeof firstResult === "number"
+            ? firstResult
+            : firstResult?.id;
+        if (!Number.isSafeInteger(authMethodId) || authMethodId < 1) {
+            throw new Error("Failed to determine new auth method ID");
+        }
         const authMethod = await db<AuthMethodEntity>("auth_methods")
             .where({ id: authMethodId })
             .first();

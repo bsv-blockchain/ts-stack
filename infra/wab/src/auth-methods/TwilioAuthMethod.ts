@@ -1,11 +1,26 @@
-import { AuthMethod, AuthPayload, AuthResult } from "./AuthMethod";
+import {
+    AuthMethod,
+    AuthPayload,
+    AuthResult,
+    InvalidAuthPayloadError
+} from "./AuthMethod";
 import twilio from "twilio";
 import { log } from "../logger";
 
-// Example admin phone number for testing
-const ADMIN_PHONE_NUMBERS = [
-    { phoneNumber: "+18006382638", otp: "123456" }
-]
+const E164_PHONE_NUMBER = /^\+[1-9][0-9]{7,14}$/;
+
+function canonicalPhoneNumber(payload: AuthPayload): string {
+    if (typeof payload.phoneNumber !== "string") {
+        throw new InvalidAuthPayloadError("phoneNumber is required.");
+    }
+    const phoneNumber = payload.phoneNumber.trim();
+    if (!E164_PHONE_NUMBER.test(phoneNumber)) {
+        throw new InvalidAuthPayloadError(
+            "phoneNumber must use canonical E.164 format."
+        );
+    }
+    return phoneNumber;
+}
 
 /**
  * TwilioAuthMethod
@@ -43,10 +58,15 @@ export class TwilioAuthMethod extends AuthMethod {
      * @param payload - Must include { phoneNumber }
      * @returns AuthResult
      */
-    public async startAuth(presentationKey: string, payload: AuthPayload): Promise<AuthResult> {
-        const phoneNumber = payload.phoneNumber;
-        if (!phoneNumber) {
-            return { success: false, message: "phoneNumber is required." };
+    public async startAuth(_presentationKey: string, payload: AuthPayload): Promise<AuthResult> {
+        let phoneNumber: string;
+        try {
+            phoneNumber = canonicalPhoneNumber(payload);
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : "Invalid phoneNumber."
+            };
         }
 
         try {
@@ -94,25 +114,26 @@ export class TwilioAuthMethod extends AuthMethod {
      * @param payload - Must include { phoneNumber, otp }
      * @returns AuthResult
      */
-    public async completeAuth(presentationKey: string, payload: AuthPayload): Promise<AuthResult> {
-        const phoneNumber = payload.phoneNumber;
+    public async completeAuth(_presentationKey: string, payload: AuthPayload): Promise<AuthResult> {
         const providedOtp = payload.otp;
-        if (!phoneNumber || !providedOtp) {
+        if (typeof providedOtp !== "string" || providedOtp.length === 0) {
             return {
                 success: false,
                 message: "phoneNumber and otp are required."
             };
         }
 
+        let phoneNumber: string;
         try {
-            // Mock verification for admin/test accounts
-            if (ADMIN_PHONE_NUMBERS.some(admin => admin.phoneNumber === phoneNumber && admin.otp === providedOtp)) {
-                return {
-                    success: true,
-                    message: `Phone number ${phoneNumber} verified successfully.`
-                }
-            }
+            phoneNumber = canonicalPhoneNumber(payload);
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : "Invalid phoneNumber."
+            };
+        }
 
+        try {
             // Attempt to verify the code
             const verificationCheck = await this.twilioClient.verify.v2
                 .services(this.verifyServiceSid)
@@ -151,7 +172,7 @@ export class TwilioAuthMethod extends AuthMethod {
      * @returns Record<string, any>
      */
     public buildConfigFromPayload(payload: AuthPayload): string {
-        return payload.phoneNumber
+        return canonicalPhoneNumber(payload);
     }
 
     /**

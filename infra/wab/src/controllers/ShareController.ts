@@ -6,13 +6,24 @@
  */
 
 import { Request, Response } from "express";
-import { UserService } from "../services/UserService";
+import {
+    AuthIdentityConflictError,
+    UserService
+} from "../services/UserService";
 import { ShareService } from "../services/ShareService";
 import {
     getAuthMethodInstance,
     UnsupportedAuthMethodError
 } from "../auth-methods/AuthMethodFactory";
+import { AuthPayload } from "../auth-methods/AuthMethod";
 import { log } from "../logger";
+import {
+    isAuthMethodType,
+    isAuthPayload,
+    isHexIdentifier,
+    isRecord,
+    isShamirShare
+} from "../security/requestValidation";
 
 /**
  * Extract client IP from request, handling proxies
@@ -22,6 +33,36 @@ function getClientIp(req: Request): string {
     // trust-proxy hop count. Reading X-Forwarded-For directly would let a
     // directly reachable client spoof the audit/rate-limit identity.
     return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+type VerifiedIdentity =
+    | { success: true; userId?: number }
+    | { success: false; message: string };
+
+async function verifyIdentity(
+    methodType: string,
+    contextKey: string,
+    payload: AuthPayload
+): Promise<VerifiedIdentity> {
+    const authMethod = getAuthMethodInstance(methodType);
+    const authResult = await authMethod.completeAuth(contextKey, payload);
+    if (!authResult.success) {
+        return {
+            success: false,
+            message: authResult.message || "OTP verification failed"
+        };
+    }
+
+    const config = authMethod.buildConfigFromPayload(payload);
+    const user = await UserService.findUserByConfig(methodType, config);
+    return user ? { success: true, userId: user.id } : { success: true };
+}
+
+function identityIsBoundToUser(
+    identity: VerifiedIdentity & { success: true },
+    userId: number
+): boolean {
+    return identity.userId === userId;
 }
 
 export class ShareController {
@@ -41,39 +82,59 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
+            if (!isRecord(req.body)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Request body must be a JSON object."
+                });
+            }
             const { methodType, payload, shareB, userIdHash } = req.body;
 
-            if (!methodType || !payload || !shareB || !userIdHash) {
+            if (
+                !isAuthMethodType(methodType) ||
+                !isAuthPayload(payload) ||
+                !isShamirShare(shareB) ||
+                !isHexIdentifier(userIdHash)
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, shareB, and userIdHash are required."
+                    message: "A valid methodType, payload, Shamir share, and 32-byte userIdHash are required."
                 });
             }
 
-            // Validate share format (should be in Shamir backup format: x.y.threshold.integrity)
-            const shareParts = shareB.split(".");
-            if (shareParts.length !== 4) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid share format. Expected Shamir backup format."
-                });
-            }
-
-            // First verify the OTP
+            // Verify the external identity before resolving account ownership.
             const authMethod = getAuthMethodInstance(methodType);
             const authResult = await authMethod.completeAuth(userIdHash, payload);
-
             if (!authResult.success) {
                 return res.status(401).json({
                     success: false,
                     message: authResult.message || "OTP verification failed"
                 });
             }
+            const config = authMethod.buildConfigFromPayload(payload);
+            const authenticatedUser = await UserService.findUserByConfig(
+                methodType,
+                config
+            );
 
             // Check if user already exists with this userIdHash
             let user = await UserService.getUserByUserIdHash(userIdHash);
 
             if (user) {
+                if (authenticatedUser?.id !== user.id) {
+                    await ShareService.logAccess(
+                        user.id,
+                        ipAddress,
+                        "store",
+                        false,
+                        "Authenticated method is not linked to target user"
+                    );
+                    return res.status(403).json({
+                        success: false,
+                        message: "Authenticated method is not authorized for this account."
+                    });
+                }
+
                 // User exists - check if they already have a share
                 const existingShare = await ShareService.getShareByUserId(user.id);
                 if (existingShare) {
@@ -84,9 +145,16 @@ export class ShareController {
                         message: "User already has a stored share. Use /share/update for key rotation."
                     });
                 }
+            } else if (authenticatedUser) {
+                // Legacy users may adopt a Shamir identity exactly once. An
+                // existing different hash is rejected by attachUserIdHash.
+                user = await UserService.attachUserIdHash(
+                    authenticatedUser.id,
+                    userIdHash
+                );
             } else {
-                // Create new user with userIdHash
-                const config = authMethod.buildConfigFromPayload(payload);
+                // Create a new account only when the verified external
+                // identity is not linked to any live user.
                 user = await UserService.createUserWithUserIdHash(userIdHash);
                 await UserService.linkAuthMethod(user.id, methodType, config);
             }
@@ -117,6 +185,12 @@ export class ShareController {
                     message: "Unsupported auth method."
                 });
             }
+            if (error instanceof AuthIdentityConflictError) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Authenticated identity is already linked to another account."
+                });
+            }
             log.error({ operation: 'controller.share.store', err: error, outcome: 'error' }, 'storeShare failed');
             res.status(500).json({
                 success: false,
@@ -140,12 +214,22 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
-            const { methodType, payload, userIdHash } = req.body;
-
-            if (!methodType || !payload || !userIdHash) {
+            if (!isRecord(req.body)) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, and userIdHash are required."
+                    message: "Request body must be a JSON object."
+                });
+            }
+            const { methodType, payload, userIdHash } = req.body;
+
+            if (
+                !isAuthMethodType(methodType) ||
+                !isAuthPayload(payload) ||
+                !isHexIdentifier(userIdHash)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A valid methodType, payload, and 32-byte userIdHash are required."
                 });
             }
 
@@ -168,15 +252,25 @@ export class ShareController {
                 });
             }
 
-            // Verify OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
+            const identity = await verifyIdentity(methodType, userIdHash, payload);
+            if (!identity.success) {
                 await ShareService.logAccess(user.id, ipAddress, "retrieve", false, "OTP verification failed");
                 return res.status(401).json({
                     success: false,
-                    message: authResult.message || "OTP verification failed"
+                    message: identity.message
+                });
+            }
+            if (!identityIsBoundToUser(identity, user.id)) {
+                await ShareService.logAccess(
+                    user.id,
+                    ipAddress,
+                    "retrieve",
+                    false,
+                    "Authenticated method is not linked to target user"
+                );
+                return res.status(403).json({
+                    success: false,
+                    message: "Authenticated method is not authorized for this account."
                 });
             }
 
@@ -228,21 +322,23 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
-            const { methodType, payload, userIdHash, newShareB } = req.body;
-
-            if (!methodType || !payload || !userIdHash || !newShareB) {
+            if (!isRecord(req.body)) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, userIdHash, and newShareB are required."
+                    message: "Request body must be a JSON object."
                 });
             }
+            const { methodType, payload, userIdHash, newShareB } = req.body;
 
-            // Validate share format
-            const shareParts = newShareB.split(".");
-            if (shareParts.length !== 4) {
+            if (
+                !isAuthMethodType(methodType) ||
+                !isAuthPayload(payload) ||
+                !isHexIdentifier(userIdHash) ||
+                !isShamirShare(newShareB)
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid share format. Expected Shamir backup format."
+                    message: "A valid methodType, payload, 32-byte userIdHash, and Shamir share are required."
                 });
             }
 
@@ -265,15 +361,25 @@ export class ShareController {
                 });
             }
 
-            // Verify OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
+            const identity = await verifyIdentity(methodType, userIdHash, payload);
+            if (!identity.success) {
                 await ShareService.logAccess(user.id, ipAddress, "update", false, "OTP verification failed");
                 return res.status(401).json({
                     success: false,
-                    message: authResult.message || "OTP verification failed"
+                    message: identity.message
+                });
+            }
+            if (!identityIsBoundToUser(identity, user.id)) {
+                await ShareService.logAccess(
+                    user.id,
+                    ipAddress,
+                    "update",
+                    false,
+                    "Authenticated method is not linked to target user"
+                );
+                return res.status(403).json({
+                    success: false,
+                    message: "Authenticated method is not authorized for this account."
                 });
             }
 
@@ -316,12 +422,22 @@ export class ShareController {
         const ipAddress = getClientIp(req);
 
         try {
-            const { methodType, payload, userIdHash } = req.body;
-
-            if (!methodType || !payload || !userIdHash) {
+            if (!isRecord(req.body)) {
                 return res.status(400).json({
                     success: false,
-                    message: "methodType, payload, and userIdHash are required."
+                    message: "Request body must be a JSON object."
+                });
+            }
+            const { methodType, payload, userIdHash } = req.body;
+
+            if (
+                !isAuthMethodType(methodType) ||
+                !isAuthPayload(payload) ||
+                !isHexIdentifier(userIdHash)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A valid methodType, payload, and 32-byte userIdHash are required."
                 });
             }
 
@@ -344,15 +460,25 @@ export class ShareController {
                 });
             }
 
-            // Verify OTP
-            const authMethod = getAuthMethodInstance(methodType);
-            const authResult = await authMethod.completeAuth(userIdHash, payload);
-
-            if (!authResult.success) {
+            const identity = await verifyIdentity(methodType, userIdHash, payload);
+            if (!identity.success) {
                 await ShareService.logAccess(user.id, ipAddress, "retrieve", false, "OTP verification failed (delete attempt)");
                 return res.status(401).json({
                     success: false,
-                    message: authResult.message || "OTP verification failed"
+                    message: identity.message
+                });
+            }
+            if (!identityIsBoundToUser(identity, user.id)) {
+                await ShareService.logAccess(
+                    user.id,
+                    ipAddress,
+                    "retrieve",
+                    false,
+                    "Authenticated method is not linked to target user (delete attempt)"
+                );
+                return res.status(403).json({
+                    success: false,
+                    message: "Authenticated method is not authorized for this account."
                 });
             }
 
@@ -367,6 +493,12 @@ export class ShareController {
                 message: "Account and all associated data deleted successfully."
             });
         } catch (error: any) {
+            if (error instanceof UnsupportedAuthMethodError) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Unsupported auth method."
+                });
+            }
             log.error({ operation: 'controller.share.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
             res.status(500).json({
                 success: false,
