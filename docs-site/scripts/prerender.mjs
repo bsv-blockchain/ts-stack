@@ -15,7 +15,9 @@ function routeOutput(routePath) {
     throw new Error(`Unsafe static route path: ${routePath}`)
   }
 
-  const relativeRoute = routePath.replace(/^\/+|\/+$/g, '')
+  const relativeRoute = routePath === '/'
+    ? ''
+    : routePath.slice(1, routePath.endsWith('/') ? -1 : undefined)
   return relativeRoute ? resolve(distRoot, relativeRoute, 'index.html') : resolve(distRoot, 'index.html')
 }
 
@@ -34,7 +36,7 @@ try {
 
   const { basePath, render, staticPaths } = await import(pathToFileURL(serverEntry).href)
   const normalizedBase = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath
-  const routePaths = [...new Set(staticPaths)].sort()
+  const routePaths = [...new Set(staticPaths)].sort((left, right) => left.localeCompare(right))
 
   for (const routePath of routePaths) {
     const outputPath = routeOutput(routePath)

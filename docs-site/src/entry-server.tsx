@@ -4,14 +4,14 @@ import {
   createStaticRouter,
   StaticRouterProvider,
 } from 'react-router'
-import { docPaths, routes } from './routes'
+import { routes } from './routes'
 import './styles/tokens.css'
 import './styles/reset.css'
 import './styles/code.css'
 import './styles/callout.css'
 
 export const basePath = import.meta.env.BASE_URL
-export const staticPaths = docPaths
+export { docPaths as staticPaths } from './routes'
 
 export async function render(pathname: string): Promise<string> {
   const handler = createStaticHandler(routes, { basename: basePath })
@@ -19,7 +19,7 @@ export async function render(pathname: string): Promise<string> {
   const context = await handler.query(request)
 
   if (context instanceof Response) {
-    throw new Error(`Static route ${pathname} returned HTTP ${context.status}`)
+    throw new TypeError(`Static route ${pathname} returned HTTP ${context.status}`)
   }
 
   const router = createStaticRouter(handler.dataRoutes, context)
