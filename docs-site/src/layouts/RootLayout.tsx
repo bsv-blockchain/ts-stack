@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router'
 import { MDXProvider } from '@mdx-js/react'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'

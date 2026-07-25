@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router'
 import { NAV, type NavItem } from '../lib/nav'
 import '../styles/sidebar.css'
 

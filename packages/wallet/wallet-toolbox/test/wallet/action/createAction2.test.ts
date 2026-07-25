@@ -1,4 +1,4 @@
-import chalk from 'chalk'
+import colors from 'picocolors'
 import fs from 'fs'
 import path from 'path'
 import {
@@ -740,7 +740,7 @@ const formatOptionalFieldWithQuotes = (fieldName: string, value: any) =>
  */
 const formatOptionalFieldWithColor = (fieldName: string, value: any, colorFunc: (val: string) => string) =>
   value !== undefined && value !== null && value !== ''
-    ? ` ${chalk.gray(fieldName + ':')}${colorFunc(typeof value === 'string' ? value : String(value))}`
+    ? ` ${colors.gray(fieldName + ':')}${colorFunc(typeof value === 'string' ? value : String(value))}`
     : ''
 
 /**
@@ -805,23 +805,23 @@ const formatInputs = (inputs: WalletActionInput[]) =>
         .sort((a, b) => a.sourceOutpoint.localeCompare(b.sourceOutpoint))
         .map((input, i) => {
           let line = `${i}: sourceTXID:${input.sourceOutpoint} sats:${input.sourceSatoshis}`
-          let color = `${chalk.gray(`${i}:`)} ${chalk.blue(input.sourceOutpoint)} ${chalk.green(`${input.sourceSatoshis} sats`)}`
+          let color = `${colors.gray(`${i}:`)} ${colors.blue(input.sourceOutpoint)} ${colors.green(`${input.sourceSatoshis} sats`)}`
 
           line += formatOptionalFieldWithQuotes('desc', input.inputDescription)
-          color += formatOptionalFieldWithColor('desc', input.inputDescription, chalk.white)
+          color += formatOptionalFieldWithColor('desc', input.inputDescription, colors.white)
 
           if (input.sourceLockingScript) {
             line += ` lock:(${input.sourceLockingScript.length})${truncate(input.sourceLockingScript)}`
-            color += ` ${chalk.gray('lock:')}(${input.sourceLockingScript.length})${chalk.cyan(truncate(input.sourceLockingScript))}`
+            color += ` ${colors.gray('lock:')}(${input.sourceLockingScript.length})${colors.cyan(truncate(input.sourceLockingScript))}`
           }
 
           if (input.unlockingScript) {
             line += ` unlock:(${input.unlockingScript.length})${truncate(input.unlockingScript)}`
-            color += ` ${chalk.gray('unlock:')}(${input.unlockingScript.length})${chalk.cyan(truncate(input.unlockingScript))}`
+            color += ` ${colors.gray('unlock:')}(${input.unlockingScript.length})${colors.cyan(truncate(input.unlockingScript))}`
           }
 
           line += ` seq:${input.sequenceNumber}`
-          color += ` ${chalk.gray('seq:')}${input.sequenceNumber}`
+          color += ` ${colors.gray('seq:')}${input.sequenceNumber}`
 
           return {
             log: formatIndentedLineWithWrap(2, line),
@@ -831,7 +831,7 @@ const formatInputs = (inputs: WalletActionInput[]) =>
     : [
         {
           log: formatIndentedLineWithWrap(2, 'No inputs'),
-          logColor: formatIndentedLineWithWrap(2, chalk.gray('No inputs'))
+          logColor: formatIndentedLineWithWrap(2, colors.gray('No inputs'))
         }
       ]
 
@@ -846,27 +846,27 @@ const formatOutputs = (outputs: WalletActionOutput[]) =>
         .sort((a, b) => a.satoshis - b.satoshis)
         .map((output, i) => {
           let line = `${i}: sats:${output.satoshis} lock:(${output.lockingScript?.length || ''})${truncate(output.lockingScript!) ?? 'N/A'}`
-          let color = `${chalk.gray(`${i}:`)} ${chalk.green(`${output.satoshis} sats`)} ${chalk.gray('lock:')}(${output.lockingScript?.length || ''})${chalk.cyan(truncate(output.lockingScript!) ?? 'N/A')}`
+          let color = `${colors.gray(`${i}:`)} ${colors.green(`${output.satoshis} sats`)} ${colors.gray('lock:')}(${output.lockingScript?.length || ''})${colors.cyan(truncate(output.lockingScript!) ?? 'N/A')}`
 
           line += formatOptionalField('index', output.outputIndex)
-          color += formatOptionalFieldWithColor('index', output.outputIndex, chalk.white)
+          color += formatOptionalFieldWithColor('index', output.outputIndex, colors.white)
 
           line += formatOptionalField('spendable', output.spendable)
-          color += formatOptionalFieldWithColor('spendable', output.spendable, chalk.white)
+          color += formatOptionalFieldWithColor('spendable', output.spendable, colors.white)
 
           line += formatOptionalFieldWithQuotes('custinst', output.customInstructions)
-          color += formatOptionalFieldWithColor('custinst', output.customInstructions, chalk.white)
+          color += formatOptionalFieldWithColor('custinst', output.customInstructions, colors.white)
 
           line += formatOptionalFieldWithQuotes('basket', output.basket)
-          color += formatOptionalFieldWithColor('basket', output.basket, chalk.white)
+          color += formatOptionalFieldWithColor('basket', output.basket, colors.white)
 
           line += formatOptionalFieldWithQuotes('desc', output.outputDescription)
-          color += formatOptionalFieldWithColor('desc', output.outputDescription, chalk.white)
+          color += formatOptionalFieldWithColor('desc', output.outputDescription, colors.white)
 
           if (output.tags?.length) {
             const tagsString = `[${output.tags.map(tag => `'${truncate(tag)}'`).join(',')}]`
             line += ` tags:${tagsString}`
-            color += ` ${chalk.gray('tags:')}${chalk.white(tagsString)}`
+            color += ` ${colors.gray('tags:')}${colors.white(tagsString)}`
           }
 
           return {
@@ -877,7 +877,7 @@ const formatOutputs = (outputs: WalletActionOutput[]) =>
     : [
         {
           log: formatIndentedLineWithWrap(2, 'No outputs'),
-          logColor: formatIndentedLineWithWrap(2, chalk.gray('No outputs'))
+          logColor: formatIndentedLineWithWrap(2, colors.gray('No outputs'))
         }
       ]
 
@@ -908,10 +908,10 @@ export function toLogString(
     beef.version = BEEF_V1
 
     let log = `transactions:${beef.txs.length}`
-    let logColor = chalk.gray(`transactions:${beef.txs.length}`)
+    let logColor = colors.gray(`transactions:${beef.txs.length}`)
 
     if (showKey) {
-      logColor += ` ${chalk.gray(`key:`)} (${chalk.blue('txid/outpoint')} ${chalk.cyan('script')} ${chalk.green('sats')})`
+      logColor += ` ${colors.gray(`key:`)} (${colors.blue('txid/outpoint')} ${colors.cyan('script')} ${colors.green('sats')})`
     }
 
     const mainTxid = beef.txs.slice(-1)[0].txid
@@ -927,23 +927,23 @@ export function toLogString(
     logColor += `\n${formatIndentedLineWithWrap(
       1,
       [
-        chalk.blue(mainTxid),
-        ` ${chalk.gray('version:')}${mainTx.version}`,
-        ` ${chalk.gray('lockTime:')}${mainTx.lockTime}`,
-        ` ${chalk.green(`${action?.satoshis} sats`)}`,
-        formatOptionalFieldWithColor('status', action?.status, chalk.white),
-        formatOptionalFieldWithColor('outgoing', action?.isOutgoing, chalk.white),
-        formatOptionalFieldWithColor('desc', action?.description, chalk.white),
-        metadataString ? chalk.gray(metadataString) : '',
-        merklePathString ? chalk.gray(merklePathString) : '',
-        ` ${chalk.gray('labels:')}${chalk.white(labelString)}`
+        colors.blue(mainTxid),
+        ` ${colors.gray('version:')}${mainTx.version}`,
+        ` ${colors.gray('lockTime:')}${mainTx.lockTime}`,
+        ` ${colors.green(`${action?.satoshis} sats`)}`,
+        formatOptionalFieldWithColor('status', action?.status, colors.white),
+        formatOptionalFieldWithColor('outgoing', action?.isOutgoing, colors.white),
+        formatOptionalFieldWithColor('desc', action?.description, colors.white),
+        metadataString ? colors.gray(metadataString) : '',
+        merklePathString ? colors.gray(merklePathString) : '',
+        ` ${colors.gray('labels:')}${colors.white(labelString)}`
       ]
         .filter(Boolean)
         .join('')
     )}`
 
     log += `\n${formatIndentedLine(1, `inputs: ${action?.inputs?.length ?? 0}`)}`
-    logColor += `\n${formatIndentedLine(1, chalk.gray(`inputs: ${action?.inputs?.length ?? 0}`))}`
+    logColor += `\n${formatIndentedLine(1, colors.gray(`inputs: ${action?.inputs?.length ?? 0}`))}`
 
     const sortedInputs = (action?.inputs ?? []).sort((a, b) => a.sourceOutpoint.localeCompare(b.sourceOutpoint))
     const formattedInputs = formatInputs(sortedInputs)
@@ -953,7 +953,7 @@ export function toLogString(
     })
 
     log += `\n${formatIndentedLineWithWrap(1, `outputs: ${action?.outputs?.length ?? 0}`)}`
-    logColor += `\n${formatIndentedLineWithWrap(1, chalk.gray(`outputs: ${action?.outputs?.length ?? 0}`))}`
+    logColor += `\n${formatIndentedLineWithWrap(1, colors.gray(`outputs: ${action?.outputs?.length ?? 0}`))}`
 
     const sortedOutputs = action?.outputs?.slice().sort((a, b) => a.satoshis - b.satoshis)
     const formattedOutputs = formatOutputs(sortedOutputs!)
@@ -966,7 +966,7 @@ export function toLogString(
   } catch (error) {
     return {
       log: `Error parsing transaction: ${(error as Error).message}`,
-      logColor: chalk.red(`Error parsing transaction: ${(error as Error).message}`)
+      logColor: colors.red(`Error parsing transaction: ${(error as Error).message}`)
     }
   }
 }
@@ -1016,12 +1016,12 @@ const formatTxOutputs = (outputs: TransactionOutput[], indent: number) =>
           )
           let color = formatIndentedLine(
             indent + 4,
-            `${chalk.gray(`${i}:`)} ${chalk.gray('lock:')}(${output.lockingScript.toHex().length || ''})${chalk.cyan(truncate(output.lockingScript.toHex()))}`
+            `${colors.gray(`${i}:`)} ${colors.gray('lock:')}(${output.lockingScript.toHex().length || ''})${colors.cyan(truncate(output.lockingScript.toHex()))}`
           )
 
           if (output.satoshis) {
             line += ` sats:${output.satoshis}`
-            color += ` ${chalk.green(`${output.satoshis} sats`)}`
+            color += ` ${colors.green(`${output.satoshis} sats`)}`
           }
 
           return { log: line, logColor: color }
@@ -1029,7 +1029,7 @@ const formatTxOutputs = (outputs: TransactionOutput[], indent: number) =>
     : [
         {
           log: formatIndentedLine(indent + 4, 'No outputs'),
-          logColor: formatIndentedLine(indent + 4, chalk.gray('No outputs'))
+          logColor: formatIndentedLine(indent + 4, colors.gray('No outputs'))
         }
       ]
 
@@ -1050,17 +1050,17 @@ const formatTxInputs = (inputs: TransactionInput[], indent: number) =>
           )
           let color = formatIndentedLine(
             indent + 4,
-            `${chalk.gray(`${i}:`)} ${chalk.blue(truncateTxid(input.sourceTXID!))}.${chalk.blue(input.sourceOutputIndex)}`
+            `${colors.gray(`${i}:`)} ${colors.blue(truncateTxid(input.sourceTXID!))}.${colors.blue(input.sourceOutputIndex)}`
           )
 
           if (input.unlockingScript) {
             line += `\n${formatIndentedLine(indent + 6, `unlock:(${input.unlockingScript.toHex().length})${truncate(input.unlockingScript.toHex())}`)}`
-            color += `\n${formatIndentedLine(indent + 6, `${chalk.gray('unlock:')}(${input.unlockingScript.toHex().length})${chalk.cyan(truncate(input.unlockingScript.toHex()))}`)}`
+            color += `\n${formatIndentedLine(indent + 6, `${colors.gray('unlock:')}(${input.unlockingScript.toHex().length})${colors.cyan(truncate(input.unlockingScript.toHex()))}`)}`
           }
 
           if (input.sequence) {
             line += `\n${formatIndentedLine(indent + 6, `seq:${input.sequence}`)}`
-            color += `\n${formatIndentedLine(indent + 6, `${chalk.gray('seq:')}${input.sequence}`)}`
+            color += `\n${formatIndentedLine(indent + 6, `${colors.gray('seq:')}${input.sequence}`)}`
           }
 
           if (input.sourceTransaction) {
@@ -1068,10 +1068,10 @@ const formatTxInputs = (inputs: TransactionInput[], indent: number) =>
             const sourceTxLogTrimed = sourceTxLog.replace(' Transaction', 'Transaction')
             const sourceTxLogColorTrimed = sourceTxLogColor.replace(' Transaction', 'Transaction')
             line += `\n${formatIndentedLine(indent + 6, `sourceTx:`)}${sourceTxLogTrimed}`
-            color += `\n${formatIndentedLine(indent + 6, `${chalk.gray('sourceTx:')}`)}${sourceTxLogColorTrimed}`
+            color += `\n${formatIndentedLine(indent + 6, `${colors.gray('sourceTx:')}`)}${sourceTxLogColorTrimed}`
           } else {
             line += `\n${formatIndentedLine(indent + 6, `sourceTx:Transaction [Max Depth Reached]`)}`
-            color += `\n${formatIndentedLine(indent + 6, chalk.gray(`sourceTx:Transaction [Max Depth Reached]`))}`
+            color += `\n${formatIndentedLine(indent + 6, colors.gray(`sourceTx:Transaction [Max Depth Reached]`))}`
           }
 
           return { log: line, logColor: color }
@@ -1079,7 +1079,7 @@ const formatTxInputs = (inputs: TransactionInput[], indent: number) =>
     : [
         {
           log: formatIndentedLine(indent + 4, 'No inputs'),
-          logColor: formatIndentedLine(indent + 4, chalk.gray('No inputs'))
+          logColor: formatIndentedLine(indent + 4, colors.gray('No inputs'))
         }
       ]
 
@@ -1102,7 +1102,7 @@ export function txToLogString(
     if (indent / 2 >= MAX_RECURSION_DEPTH) {
       return {
         log: formatIndentedLine(indent + 4, 'Transaction [Max Depth Reached]'),
-        logColor: chalk.gray(formatIndentedLine(indent + 4, 'Transaction [Max Depth Reached]'))
+        logColor: colors.gray(formatIndentedLine(indent + 4, 'Transaction [Max Depth Reached]'))
       }
     }
     const beef = Beef.fromBinary(tx.toBEEF())
@@ -1110,22 +1110,22 @@ export function txToLogString(
     const metadataString = formatMetadata(tx.metadata)
     const merklePathString = formatMerklePath(tx.merklePath)
     let log = formatIndentedLine(indent, `Transaction:${truncateTxid(mainTxid)}`)
-    let logColor = formatIndentedLine(indent, `${chalk.gray('Transaction:')}${chalk.blue(truncateTxid(mainTxid))}`)
+    let logColor = formatIndentedLine(indent, `${colors.gray('Transaction:')}${colors.blue(truncateTxid(mainTxid))}`)
 
     if (showKey) {
-      logColor += ` ${chalk.gray(`key:`)} (${chalk.blue('txid/outpoint')} ${chalk.cyan('script')} ${chalk.green('sats')})`
+      logColor += ` ${colors.gray(`key:`)} (${colors.blue('txid/outpoint')} ${colors.cyan('script')} ${colors.green('sats')})`
     }
 
     log += `\n${formatIndentedLine(indent + 2, `version:${tx.version} lockTime:${tx.lockTime}${metadataString}${merklePathString}`)}`
     logColor += `\n${formatIndentedLine(
       indent + 2,
-      `${chalk.gray('version:')}${chalk.white(tx.version)} ${chalk.gray('lockTime:')}${chalk.white(tx.lockTime)}` +
-        (metadataString ? chalk.gray(metadataString) : '') +
-        (merklePathString ? chalk.gray(merklePathString) : '')
+      `${colors.gray('version:')}${colors.white(tx.version)} ${colors.gray('lockTime:')}${colors.white(tx.lockTime)}` +
+        (metadataString ? colors.gray(metadataString) : '') +
+        (merklePathString ? colors.gray(merklePathString) : '')
     )}`
 
     log += `\n${formatIndentedLine(indent + 2, `inputs: ${tx?.inputs?.length ?? 0}`)}`
-    logColor += `\n${formatIndentedLine(indent + 2, chalk.gray(`inputs: ${tx?.inputs?.length ?? 0}`))}`
+    logColor += `\n${formatIndentedLine(indent + 2, colors.gray(`inputs: ${tx?.inputs?.length ?? 0}`))}`
 
     const sortedInputs = (tx?.inputs ?? []).sort((a, b) => a.sourceTXID!.localeCompare(b.sourceTXID!))
     const formattedInputs = formatTxInputs(sortedInputs, indent)
@@ -1135,7 +1135,7 @@ export function txToLogString(
     })
 
     log += `\n${formatIndentedLine(indent + 2, `outputs: ${tx?.outputs?.length ?? 0}`)}`
-    logColor += `\n${formatIndentedLine(indent + 2, chalk.gray(`outputs: ${tx?.outputs?.length ?? 0}`))}`
+    logColor += `\n${formatIndentedLine(indent + 2, colors.gray(`outputs: ${tx?.outputs?.length ?? 0}`))}`
 
     const sortedOutputs = tx?.outputs?.slice().sort((a, b) => a.satoshis! - b.satoshis!)
     const formattedTxOutputs = formatTxOutputs(sortedOutputs, indent)
@@ -1148,7 +1148,7 @@ export function txToLogString(
   } catch (error) {
     return {
       log: `Error parsing transaction: ${(error as Error).message}`,
-      logColor: chalk.red(`Error parsing transaction: ${(error as Error).message}`)
+      logColor: colors.red(`Error parsing transaction: ${(error as Error).message}`)
     }
   }
 }
@@ -1170,7 +1170,7 @@ function log(s: string) {
 }
 
 function logWarn(s: string) {
-  process.stdout.write(chalk.yellowBright(s))
+  process.stdout.write(colors.yellow(s))
 }
 
 export function numberArrayToHexString(numbers: number[]): string {

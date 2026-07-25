@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import manifest from '../manifest.json'
 
 export interface PageMeta {

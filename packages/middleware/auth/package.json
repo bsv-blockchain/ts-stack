@@ -27,7 +27,7 @@
     "test:watch": "jest --watch",
     "test:perf": "jest --config jest.perf.config.js --runInBand",
     "test:coverage-disabled": "jest --coverage",
-    "build": "tsup && tsc --emitDeclarationOnly"
+    "build": "node build.mjs && tsc --emitDeclarationOnly"
   },
   "keywords": [
     "bsv",
@@ -47,7 +47,7 @@
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "tslib": "^2.8.1",
-    "tsup": "^8.5.1",
+    "esbuild": "^0.28.1",
     "typescript": "^6.0.3",
     "oxlint": "^1.75.0"
   },

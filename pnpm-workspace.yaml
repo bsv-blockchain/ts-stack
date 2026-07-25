@@ -20,6 +20,9 @@ allowBuilds:
   sqlite3: true
   unrs-resolver: true
 strictDepBuilds: true
+# Require manifests to declare their runtime and build peers explicitly. This
+# keeps unused optional tooling peers out of the frozen dependency graph.
+autoInstallPeers: false
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@bsv/*'
@@ -29,8 +32,8 @@ trustPolicy: no-downgrade
 # false positives (for example chokidar 4.0.3 in pnpm's own documentation).
 trustPolicyIgnoreAfter: 525600
 
+# Jest 30's current coverage/reporting graph still constrains minimatch to
+# brace-expansion 1.x/2.x. GHSA-mh99-v99m-4gvg is only fixed in 5.0.8, so keep
+# this narrow, tested substitution until Jest adopts minimatch 10.2.5 or newer.
 overrides:
-  # Jest 30 still reaches brace-expansion 1.x/2.x through minimatch 3/9, and
-  # those major lines have no patched release. Remove this final override when
-  # Jest's glob/test-exclude dependency graph accepts brace-expansion >=5.0.8.
-  'brace-expansion@<=5.0.7': '5.0.8'
+  brace-expansion@<=5.0.7: 5.0.8

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { PageMeta } from '../lib/usePageMeta'
 import EditOnGitHub from '../components/EditOnGitHub'
 import { NAV } from '../lib/nav'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router'
 import styles from './GuideLayout.module.css'
 
 interface Props {

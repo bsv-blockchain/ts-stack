@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from 'react'
-import type { RouteObject } from 'react-router-dom'
+import type { RouteObject } from 'react-router'
 import RootLayout from './layouts/RootLayout'
 
 function page(factory: () => Promise<{ default: ComponentType }>) {
@@ -24,16 +24,18 @@ function mdRoute(docPath: string): string {
     .replace(/\.md$/, '/')
 }
 
-// vite-react-ssg requires parent route to have path '/' so it can discover
-// the root route for pre-rendering. Child paths must be relative (no leading /).
-const docRoutes: RouteObject[] = Object.keys(pages).map(key => {
+const pageEntries = Object.entries(pages).sort(([left], [right]) => left.localeCompare(right))
+
+export const docPaths = pageEntries.map(([key]) => mdRoute(key))
+
+// Child paths are relative to the root route; the basename is supplied by each
+// browser or static-rendering router.
+const docRoutes: RouteObject[] = pageEntries.map(([key, loadPage]) => {
   const absPath = mdRoute(key)
   if (absPath === '/') {
-    // Root index.md → React Router index route so RootLayout renders at /
-    return { index: true, element: page(pages[key]) } as RouteObject
+    return { index: true, element: page(loadPage) } as RouteObject
   }
-  // Strip leading / to make path relative to the '/' parent
-  return { path: absPath.slice(1), element: page(pages[key]) }
+  return { path: absPath.slice(1), element: page(loadPage) }
 })
 
 export const routes: RouteObject[] = [
