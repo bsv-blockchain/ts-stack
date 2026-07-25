@@ -187,8 +187,10 @@ function validateConfiguredProjects(registry, discovered) {
   const errors = []
   const discoveredByPath = new Map(discovered.map(project => [project.path, project]))
   for (const project of registry.projects) {
-    errors.push(...validateProjectMetadata(project, registry))
-    errors.push(...validateProjectManifest(project, discoveredByPath.get(project.path)))
+    errors.push(
+      ...validateProjectMetadata(project, registry),
+      ...validateProjectManifest(project, discoveredByPath.get(project.path))
+    )
   }
   return errors
 }
@@ -207,11 +209,13 @@ export function validateProjectRegistry(registry, discovered) {
     return [...errors, 'projects.json projects must be an array']
   }
 
-  errors.push(...duplicateValues(registry.projects.map(project => project.path))
-    .map(duplicate => `projects.json contains duplicate path: ${duplicate}`))
-  errors.push(...duplicateValues(registry.projects.map(project => project.name))
-    .map(duplicate => `projects.json contains duplicate name: ${duplicate}`))
-  errors.push(...validateConfiguredProjects(registry, discovered))
+  errors.push(
+    ...duplicateValues(registry.projects.map(project => project.path))
+      .map(duplicate => `projects.json contains duplicate path: ${duplicate}`),
+    ...duplicateValues(registry.projects.map(project => project.name))
+      .map(duplicate => `projects.json contains duplicate name: ${duplicate}`),
+    ...validateConfiguredProjects(registry, discovered)
+  )
 
   const configuredPaths = new Set(registry.projects.map(project => project.path))
   errors.push(...discovered
@@ -286,7 +290,7 @@ function validateException(exception, today, ownerDefinitions) {
 export function validateExceptionRegistry(
   registry,
   today = new Date().toISOString().slice(0, 10),
-  ownerDefinitions
+  ownerDefinitions = undefined
 ) {
   const errors = []
   if (registry?.schemaVersion !== 1) errors.push('exceptions.json schemaVersion must be 1')
