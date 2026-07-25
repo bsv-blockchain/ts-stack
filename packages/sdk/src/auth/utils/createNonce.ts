@@ -8,7 +8,12 @@ import * as Utils from '../../primitives/utils.js'
 import Random from '../../primitives/Random.js'
 
 /**
- * Creates a nonce derived from a wallet
+ * Creates a wallet-authenticated challenge token.
+ *
+ * Despite the historical name, this value has no expiry and is not single-use
+ * by itself. Do not use it as a standalone login or replay-prevention token.
+ * Authentication flows must bind the challenge to a signature and track
+ * freshness, as BRC-103 `Peer` does.
  * @param wallet
  * @param counterparty - The counterparty to the nonce creation. Defaults to 'self'.
  * @returns A random nonce derived with a wallet

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react'
+import { isValidElement, lazy, Suspense, useState, type ReactNode } from 'react'
 import '../styles/code.css'
 
 const Mermaid = lazy(() => import('./Mermaid'))
@@ -8,15 +8,21 @@ interface Props {
   [key: string]: unknown
 }
 
+function textContent(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textContent).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return textContent(node.props.children)
+  return ''
+}
+
 export default function CodeBlock({ children, ...rest }: Readonly<Props>) {
   const [copied, setCopied] = useState(false)
 
-  const codeEl =
-    typeof children === 'object' && children !== null && 'props' in (children as object)
-      ? (children as { props: { children?: string; className?: string } }).props
-      : null
-
-  const rawCode = codeEl?.children ?? ''
+  const codeEl = isValidElement<{ children?: ReactNode; className?: string }>(children)
+    ? children.props
+    : undefined
+  const rawCode = textContent(codeEl?.children ?? children)
   // Shiki strips language-xxx from <code> but we inject data-language on <pre> via transformer
   const lang = (rest['data-language'] as string | undefined)
     ?? codeEl?.className?.replace('language-', '')

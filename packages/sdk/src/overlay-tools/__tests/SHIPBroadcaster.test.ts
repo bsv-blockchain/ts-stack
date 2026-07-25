@@ -1,4 +1,4 @@
-import SHIPCast from '../../overlay-tools/SHIPBroadcaster'
+import SHIPCast, { HTTPSOverlayBroadcastFacilitator } from '../../overlay-tools/SHIPBroadcaster'
 import LookupResolver from '../../overlay-tools/LookupResolver'
 import { PrivateKey } from '../../primitives/index'
 import { Transaction } from '../../transaction/index'
@@ -24,6 +24,31 @@ describe('SHIPCast', () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
+  })
+
+  it('uses the configured HTTP client and canonical comma-separated X-Topics header', async () => {
+    const httpClient = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ tm_foo: { outputsToAdmit: [], coinsToRetain: [] } })
+    })
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await facilitator.send('https://overlay.example', {
+      beef: [1, 2, 3],
+      topics: ['tm_foo', 'tm_bar']
+    })
+
+    expect(httpClient).toHaveBeenCalledWith(
+      'https://overlay.example/submit',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Topics': 'tm_foo,tm_bar'
+        },
+        body: new Uint8Array([1, 2, 3])
+      })
+    )
   })
 
   it('Handles constructor errors', () => {

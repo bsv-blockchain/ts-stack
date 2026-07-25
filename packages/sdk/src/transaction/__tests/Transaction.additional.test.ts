@@ -146,6 +146,30 @@ describe('Transaction – additional coverage', () => {
   })
 
   describe('sign', () => {
+    it('preserves existing unlocking scripts when requested', async () => {
+      const existingScript = UnlockingScript.fromHex('51')
+      const sign = jest.fn(async () => UnlockingScript.fromHex('52'))
+      const tx = new Transaction(
+        1,
+        [{
+          sourceTXID: '00'.repeat(32),
+          sourceOutputIndex: 0,
+          unlockingScript: existingScript,
+          unlockingScriptTemplate: {
+            sign,
+            estimateLength: async () => 1
+          }
+        }],
+        [{ lockingScript: new LockingScript(), satoshis: 0 }],
+        0
+      )
+
+      await tx.sign({ skipExistingSignatures: true })
+
+      expect(sign).not.toHaveBeenCalled()
+      expect(tx.inputs[0].unlockingScript).toBe(existingScript)
+    })
+
     it('throws when an output has undefined satoshis and change is not set', async () => {
       const tx = new Transaction(
         1,

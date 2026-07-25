@@ -2,7 +2,11 @@ import * as Utils from '../../primitives/utils.js'
 import { WalletInterface, WalletCounterparty, Base64String, OriginatorDomainNameStringUnder250Bytes } from '../../wallet/Wallet.interfaces.js'
 
 /**
- * Verifies a nonce derived from a wallet
+ * Verifies that a challenge token was derived from the wallet.
+ *
+ * A successful result does not establish freshness, expiry, single use, or
+ * asymmetric proof of key ownership. Use the complete BRC-103 handshake or a
+ * signed, expiring payload for authentication.
  * @param nonce - A nonce to verify as a base64 string.
  * @param wallet
  * @param counterparty - The counterparty to the nonce creation. Defaults to 'self'.

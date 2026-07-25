@@ -43,7 +43,7 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
   let promptCount: number
   let requestIDs: string[]
 
-  const ensureProto = async (usageType: any) =>
+  const ensureProto = async (usageType: any): Promise<boolean> =>
     await manager.ensureProtocolPermission({ ...PROTO, reason: 't', seekPermission: true, usageType })
 
   const mints = (): number => underlying.createAction.mock.calls.length
@@ -75,16 +75,17 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
   })
 
   it('an ensure arriving during an in-flight mint waits instead of re-prompting', async () => {
-    let releaseMint!: () => void
-    const gate = new Promise<void>(r => { releaseMint = r })
+    let releaseMint: () => void = () => { throw new Error('mint gate was not initialized') }
+    const gate = new Promise<void>(resolve => { releaseMint = resolve })
     const originalCreateAction = underlying.createAction.getMockImplementation()
+    if (originalCreateAction === undefined) throw new Error('createAction mock implementation is required')
     underlying.createAction.mockImplementation(async (args: any) => {
       await gate
-      return originalCreateAction!(args)
+      return originalCreateAction(args)
     })
 
     const ensure1 = ensureProto('generic')
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise(resolve => setTimeout(resolve, 20))
     expect(promptCount).toBe(1)
 
     // User clicks Grant; mint is now in flight (gated).
@@ -95,7 +96,7 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
 
     // A follow-up identical request arrives during the mint window.
     const ensure2 = ensureProto('generic')
-    await new Promise(r => setTimeout(r, 50))
+    await new Promise(resolve => setTimeout(resolve, 50))
     expect(promptCount).toBe(1) // no re-prompt
 
     releaseMint()
@@ -108,7 +109,7 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
   it('stacked first-contact grants for one permission mint exactly one token', async () => {
     // Four concurrent usage types, no token yet: four prompts by design…
     const ensures = ['generic', 'signing', 'encrypting', 'hmac'].map(ensureProto)
-    await new Promise(r => setTimeout(r, 30))
+    await new Promise(resolve => setTimeout(resolve, 30))
     expect(promptCount).toBe(4)
 
     // …but granting them all mints ONE token, not four.
@@ -121,14 +122,14 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
     underlying.createAction.mockRejectedValueOnce(new Error('mint failed'))
 
     const ensure1 = ensureProto('generic')
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise(resolve => setTimeout(resolve, 20))
     await expect(manager.grantPermission({ requestID: requestIDs[0] })).rejects.toThrow('mint failed')
     await expect(ensure1).resolves.toBe(true) // waiter was already resolved by grant
 
     // The failed mint must not have cached the permission: a new request
     // prompts again (and this time mints successfully).
     const ensure2 = ensureProto('generic')
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise(resolve => setTimeout(resolve, 20))
     expect(promptCount).toBe(2)
     await manager.grantPermission({ requestID: requestIDs[1] })
     await expect(ensure2).resolves.toBe(true)
@@ -136,24 +137,25 @@ describe('WalletPermissionsManager duplicate mint prevention', () => {
   })
 
   it('a grant deduped against a mint that then FAILS falls through and mints its own token', async () => {
-    let rejectMint!: (e: Error) => void
-    const gate = new Promise<never>((_, reject) => { rejectMint = reject })
+    let rejectMint: (e: Error) => void = () => { throw new Error('mint rejection gate was not initialized') }
+    const gate = new Promise<never>((_resolve, reject) => { rejectMint = reject })
     const originalCreateAction = underlying.createAction.getMockImplementation()
+    if (originalCreateAction === undefined) throw new Error('createAction mock implementation is required')
     underlying.createAction
       .mockImplementationOnce(async () => await gate) // mint 1: will fail
-      .mockImplementation(originalCreateAction!) // subsequent mints succeed
+      .mockImplementation(originalCreateAction) // subsequent mints succeed
 
     // Two stacked prompts for the same permission.
     const ensure1 = ensureProto('generic')
     const ensure2 = ensureProto('signing')
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise(resolve => setTimeout(resolve, 20))
     expect(promptCount).toBe(2)
 
     // Grant #1 starts a mint that will fail; grant #2 dedups against it.
     const grant1 = manager.grantPermission({ requestID: requestIDs[0] })
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
     const grant2 = manager.grantPermission({ requestID: requestIDs[1] })
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
 
     rejectMint(new Error('mint 1 failed'))
     await expect(grant1).rejects.toThrow('mint 1 failed')

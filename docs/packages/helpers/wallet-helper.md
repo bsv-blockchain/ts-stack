@@ -3,11 +3,11 @@ id: pkg-wallet-helper
 title: "@bsv/wallet-helper"
 kind: package
 domain: helpers
-version: "0.0.6"
+version: "0.1.1"
 source_repo: "bsv-blockchain/wallet-helper"
 source_commit: "unknown"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/wallet-helper"
 repo: "https://github.com/bsv-blockchain/wallet-helper"

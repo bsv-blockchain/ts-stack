@@ -119,7 +119,7 @@ expect(publicProfile).toHaveProperty('avatar')
 - `express` ^5.1.0 — web framework (server only)
 - `joi` ^18.0.1 — schema validation
 - `cross-fetch` or `node-fetch` ^3 — HTTP client
-- Dev: jest, ts-jest, TypeScript, ts-standard
+- Dev: jest, ts-jest, TypeScript, Oxlint
 
 ## Common pitfalls / gotchas
 

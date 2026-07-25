@@ -919,7 +919,7 @@ export class Engine {
   async lookup(lookupQuestion: LookupQuestion): Promise<LookupAnswer> {
     // Validate a lookup service for the provider is found
     const lookupService = this.lookupServices[lookupQuestion.service]
-    if (lookupService === undefined || lookupService === null) throw new Error(`Lookup service not found for provider: ${lookupQuestion.service} `)
+    if (lookupService === undefined || lookupService === null) throw new Error(`Lookup service not found for provider: ${lookupQuestion.service}`)
 
     const lookupResult = await lookupService.lookup(lookupQuestion)
     const hydrationContext = this.createUTXOHistoryHydrationContext()
@@ -1954,20 +1954,20 @@ export class Engine {
    * @param proof for txid
    */
   private updateInputProofs(tx: Transaction, txid: string, proof: MerklePath): void {
-    if (tx.merklePath !== undefined) {
+    if (tx.id('hex') === txid) {
       // Update the merkle path to handle potential reorgs
       tx.merklePath = proof
       return
     }
-    if (tx.id('hex') === txid) {
-      tx.merklePath = proof
-    } else {
-      for (const input of tx.inputs) {
-        // All inputs must have sourceTransactions
-        const stx = input.sourceTransaction
-        if (typeof stx !== 'object') continue
-        this.updateInputProofs(stx, txid, proof)
-      }
+    // A mined transaction's source graph is no longer part of its BEEF. Do not
+    // replace an unrelated transaction's proof with the proof for an ancestor.
+    if (tx.merklePath !== undefined) return
+
+    for (const input of tx.inputs) {
+      // All inputs must have sourceTransactions
+      const stx = input.sourceTransaction
+      if (typeof stx !== 'object') continue
+      this.updateInputProofs(stx, txid, proof)
     }
   }
 
@@ -1984,13 +1984,8 @@ export class Engine {
     }
 
     const tx = Transaction.fromBEEF(output.beef)
-    if (tx.merklePath !== undefined) {
-      // Update the merkle path to handle potential reorgs
-      tx.merklePath = proof
-      return
-    }
-
-    // recursively update all sourceTransactions proven by (txid,proof)
+    // Update this transaction, or recursively update the matching source
+    // transaction. This also persists replacement proofs after a reorg.
     this.updateInputProofs(tx, txid, proof)
 
     // Update the output's BEEF in the storage DB

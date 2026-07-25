@@ -4,9 +4,9 @@ title: "@bsv/wallet-relay"
 kind: package
 domain: wallet
 npm: "@bsv/wallet-relay"
-version: "0.1.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "0.2.2"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["wallet", "relay"]
 github_repo: "https://github.com/bsv-blockchain/ts-stack"

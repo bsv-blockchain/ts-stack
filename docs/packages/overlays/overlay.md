@@ -4,9 +4,9 @@ title: "@bsv/overlay"
 kind: package
 domain: overlays
 npm: "@bsv/overlay"
-version: "1.0.0"
-last_updated: "2026-06-27"
-last_verified: "2026-06-27"
+version: "2.2.1"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["overlay", "framework"]
 ---
@@ -48,7 +48,10 @@ const engine = new Engine(
 )
 
 // Submit transactions with topics
-const topics = JSON.parse(req.headers['x-topics'] ?? '[]')
+const topicsHeader = req.headers['x-topics'] ?? ''
+const topics = topicsHeader.trim().startsWith('[')
+  ? JSON.parse(topicsHeader)
+  : topicsHeader.split(',').map(topic => topic.trim())
 const taggedBEEF = { beef: Array.from(req.body), topics }
 await engine.submit(taggedBEEF, (steak) => res.status(200).json(steak))
 

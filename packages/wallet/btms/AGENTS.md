@@ -178,7 +178,7 @@ if (decoded.valid) {
 - **`jest`** ^30.3.0 — Test framework
 - **`ts-jest`** ^29.4.9 — TypeScript support for Jest
 - **`typescript`** ^5.2.2 — Compiler
-- **`ts-standard`** ^12.0.2 — Linter
+- **`oxlint`** ^1.75.0 — Linter
 - **`ts2md`** ^0.2.0 — Documentation generator
 
 ### Other ts-stack packages

@@ -94,7 +94,7 @@ const paymentMiddleware = createPaymentMiddleware({
 - `@bsv/sdk` ^2.0.14 — BRC-29 nonce creation/verification, `createNonce()`, `verifyNonce()`, `Utils`, `AtomicBEEF`
 - `@bsv/auth-express-middleware` ^2.0.5 — Auth middleware (peer dependency; must be installed)
 - `express` ^5.1.0 — Web framework
-- Dev: jest, ts-jest, TypeScript, ts-standard
+- Dev: jest, ts-jest, TypeScript, Oxlint
 
 ## Common pitfalls / gotchas
 

@@ -132,7 +132,7 @@ const token = server.getAdminToken()
 - `chalk` — Colored console output
 
 **Dev:**
-- jest, ts-jest, typescript, ts-standard
+- jest, ts-jest, typescript, Oxlint
 
 ## Common pitfalls / gotchas
 

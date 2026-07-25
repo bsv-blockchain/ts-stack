@@ -44,7 +44,7 @@
 ## Known Issues & Incidents
 - Example code only — not intended for production use.
 - No test files despite test/coverage commands being configured.
-- Uses prettier rather than ts-standard (org standard).
+- Uses prettier rather than Oxlint (org standard).
 
 ## Migration Gate Checklist (MBGA §13.3)
 - [x] BASELINE.md captured

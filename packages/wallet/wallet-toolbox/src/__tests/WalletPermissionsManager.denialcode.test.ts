@@ -27,8 +27,8 @@ describe('denial error codes', () => {
     })
   })
 
-  const ensure = () =>
-    manager.ensureProtocolPermission({
+  const ensure = async (): Promise<boolean> =>
+    await manager.ensureProtocolPermission({
       originator: 'app.example.com',
       privileged: false,
       protocolID: [1, 'denial test'],
@@ -40,7 +40,7 @@ describe('denial error codes', () => {
 
   it('individual denyPermission rejects with ERR_PERMISSION_DENIED', async () => {
     const call = ensure()
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise(resolve => setTimeout(resolve, 20))
     expect(requestIDs).toHaveLength(1)
 
     await manager.denyPermission(requestIDs[0])
@@ -55,7 +55,7 @@ describe('denial error codes', () => {
     // Seed a grouped active request directly; the grouped prompt flow itself
     // is covered elsewhere — this pins the rejection shape.
     let rejection: unknown
-    const pending = new Promise((_, reject) => {
+    const pending = new Promise((_resolve, reject) => {
       ;(manager as any).activeRequests.set('group-1', {
         request: { type: 'protocol', originator: 'app.example.com' },
         pending: [{ resolve: () => {}, reject }]
@@ -64,7 +64,7 @@ describe('denial error codes', () => {
     pending.catch(e => { rejection = e })
 
     await (manager as any).denyGroupedPermission('group-1')
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
 
     expect((rejection as any)?.code).toBe('ERR_PERMISSION_DENIED')
   })

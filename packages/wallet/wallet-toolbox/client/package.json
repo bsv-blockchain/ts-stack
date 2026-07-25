@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-client",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.client.js",
   "types": "./out/src/index.client.d.ts",
@@ -16,13 +16,16 @@
     "wallet",
     "BRC100"
   ],
+  "scripts": {
+    "build": "tsc --build ../tsconfig.client.json"
+  },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client#readme",
   "dependencies": {
     "hash-wasm": "^4.12.0",
-    "idb": "^8.0.2"
+    "idb": "^8.0.3"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.8"
@@ -33,6 +36,8 @@
     }
   },
   "devDependencies": {
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "workspace:^",
+    "@types/node": "^26.1.1",
+    "typescript": "^6.0.3"
   }
 }

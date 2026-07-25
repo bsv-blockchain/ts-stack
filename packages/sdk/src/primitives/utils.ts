@@ -40,11 +40,7 @@ export const toHex = (msg: number[] | Uint8Array): string => {
     return BufferCtor.from(msg).toString('hex')
   }
   if (msg.length === 0) return ''
-  const out = new Array(msg.length)
-  for (let i = 0; i < msg.length; i++) {
-    out[i] = HEX_BYTE_STRINGS[msg[i] & 0xff]
-  }
-  return out.join('')
+  return Array.from(msg, byte => HEX_BYTE_STRINGS[byte & 0xff]).join('')
 }
 
 /**

@@ -9,7 +9,7 @@
 | Check | Status |
 |-------|--------|
 | TypeScript | ✅ passes (`tsc --noEmit`) |
-| Lint | ⚠️ not yet run (ts-standard) |
+| Lint | ⚠️ not yet run (Oxlint) |
 | Tests | ✅ 189 passing, 1 skipped (19 suites: all 19 topic pairs) |
 
 ## Coverage

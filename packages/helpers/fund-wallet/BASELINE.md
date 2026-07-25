@@ -39,7 +39,7 @@
 ## Dependencies
 | Type | Count | Packages |
 |------|-------|---------|
-| Production | 6 | @bsv/sdk, @bsv/wallet-toolbox, chalk, crypto, dotenv, readline |
+| Production | 4 | @bsv/sdk, @bsv/wallet-toolbox, chalk, dotenv |
 
 ## Known Issues & Incidents
 - No tests configured.

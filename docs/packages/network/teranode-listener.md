@@ -4,9 +4,9 @@ title: "@bsv/teranode-listener"
 kind: package
 domain: network
 npm: "@bsv/teranode-listener"
-version: "1.0.3"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: "1.1.1"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["network", "broadcast", "teranode", "p2p", "libp2p"]
 ---

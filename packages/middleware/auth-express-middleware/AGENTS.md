@@ -119,7 +119,7 @@ expect(jsonResponse).toBeDefined()
 
 - `@bsv/sdk` ^2.0.14 — BRC-103 `Peer`, `Transport`, `SessionManager`, `Utils`, wallet interfaces
 - `express` ^5.1.0 — Web framework
-- Dev: jest, ts-jest, TypeScript, ts-standard
+- Dev: jest, ts-jest, TypeScript, Oxlint
 
 ## Common pitfalls / gotchas
 

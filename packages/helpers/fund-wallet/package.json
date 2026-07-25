@@ -1,7 +1,7 @@
 {
   "name": "@bsv/fund-wallet",
   "private": false,
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "fund a metanet wallet",
   "license": "ISC",
   "author": "deggen",
@@ -21,16 +21,14 @@
     "test": "exit 0"
   },
   "dependencies": {
-    "@bsv/wallet-toolbox": "^2.3.3",
+    "@bsv/wallet-toolbox": "workspace:^",
     "chalk": "^5.6.2",
-    "crypto": "^1.0.1",
-    "dotenv": "^17.4.2",
-    "readline": "^1.3.0"
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
-    "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "workspace:^",
+    "@types/node": "^26.1.1",
+    "typescript": "^6.0.3"
   },
   "files": [
     "dist"

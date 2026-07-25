@@ -3,11 +3,11 @@ id: pkg-simple
 title: "@bsv/simple"
 kind: package
 domain: helpers
-version: "0.3.0"
+version: "0.4.1"
 source_repo: "bsv-blockchain/simple"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/simple"
 repo: "https://github.com/bsv-blockchain/simple"

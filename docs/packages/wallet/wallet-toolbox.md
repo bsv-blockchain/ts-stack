@@ -4,9 +4,9 @@ title: "@bsv/wallet-toolbox"
 kind: package
 domain: wallet
 npm: "@bsv/wallet-toolbox"
-version: "2.1.22"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: "2.4.4"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["wallet", "brc100"]
 github_repo: "https://github.com/bsv-blockchain/ts-stack"

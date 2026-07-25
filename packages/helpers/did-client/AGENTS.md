@@ -116,7 +116,7 @@ const page1 = await didClient.findDID({
 - `@bsv/wallet-toolbox-client` ^2.1.18 (implied via @bsv/sdk)
 
 **Dev:**
-- TypeScript, Jest, ts-jest, ts-standard, webpack
+- TypeScript, Jest, ts-jest, Oxlint, webpack
 
 ## Common pitfalls / gotchas
 

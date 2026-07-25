@@ -188,6 +188,18 @@ interface BASMCapableEngine extends Engine {
   revalidateRecentAnchors: (depth?: number) => Promise<any>
 }
 
+function parseTopicsHeader (header: string): string[] {
+  const value = header.trim()
+  const parsed: unknown = value.startsWith('[')
+    ? JSON.parse(value)
+    : value.split(',').map(topic => topic.trim())
+
+  if (!Array.isArray(parsed) || parsed.some(topic => typeof topic !== 'string' || topic.length === 0)) {
+    throw new TypeError('Invalid x-topics header: expected a comma-separated list or JSON string array')
+  }
+  return parsed
+}
+
 /**
  * OverlayExpress class provides an Express-based server for hosting Overlay Services.
  * It allows configuration of various components like databases, topic managers, and lookup services.
@@ -1474,9 +1486,13 @@ export default class OverlayExpress {
           if (typeof topicsHeader !== 'string') {
             throw new TypeError('Missing x-topics header')
           }
-          const topics = JSON.parse(topicsHeader)
+          const topics = parseTopicsHeader(topicsHeader)
+          const body = req.body
+          if (body == null || typeof body[Symbol.iterator] !== 'function' || body.length === 0) {
+            throw new TypeError('Missing or empty BEEF body')
+          }
           let offChainValues: number[] | undefined
-          let beef = Array.from(req.body as number[])
+          let beef = Array.from(body as number[])
           if (includesOffChain) {
             const r = new Utils.Reader(beef)
             const l = r.readVarIntNum()
@@ -1989,7 +2005,7 @@ export default class OverlayExpress {
     this.app.post('/admin/health-check', checkAdminAuth as any, (req, res) => {
       ; (async () => {
         try {
-          const { url } = req.body
+          const url = req.body?.url
           if (typeof url !== 'string' || url.length === 0) {
             return res.status(400).json({ status: 'error', message: 'url is required' })
           }

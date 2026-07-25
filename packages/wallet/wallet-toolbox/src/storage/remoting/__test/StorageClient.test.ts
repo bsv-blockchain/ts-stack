@@ -62,6 +62,31 @@ describe('StorageClient tests', () => {
     expect(capturedLogs.some(line => line.includes('StorageServer POST handler'))).toBe(false)
   })
 
+  test('0a basket reads are scoped to the authenticated remote user', async () => {
+    const attackerStorage = attacker.storage.getActive() as StorageClient
+    const attackerUser = await server.setup.activeStorage.findUserByIdentityKey(attacker.identityKey)
+    expect(attackerUser).toBeDefined()
+    expect(attackerUser!.userId).not.toBe(server.setup.userId)
+
+    const baskets = await attacker.storage.findOutputBaskets({ partial: { name: 'default' } })
+    expect(baskets.length).toBeGreaterThan(0)
+    expect(baskets.every(basket => basket.userId === attackerUser!.userId)).toBe(true)
+    expect(baskets.some(basket => basket.userId === server.setup.userId)).toBe(false)
+
+    // Preserve old clients that used the unscoped RPC method name, but bind
+    // their claimed auth object to the authenticated identity on the server.
+    const legacyBaskets = await Reflect.get(attackerStorage, 'rpcCall').call(
+      attackerStorage,
+      'findOutputBaskets',
+      [
+        { identityKey: attacker.identityKey, userId: server.setup.userId },
+        { partial: { name: 'default' } }
+      ]
+    )
+    expect(legacyBaskets.every((basket: any) => basket.userId === attackerUser!.userId)).toBe(true)
+    expect(legacyBaskets.some((basket: any) => basket.userId === server.setup.userId)).toBe(false)
+  })
+
   test('1 repeatable createAction', async () => {
     const wallet = client.wallet
     // wallet.makeLogger = () => console

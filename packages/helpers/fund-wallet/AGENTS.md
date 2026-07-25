@@ -64,7 +64,7 @@ npx fund-wallet
 - `@bsv/wallet-toolbox` ^2.1.22 (ServerWallet for local funding)
 - `chalk` ^5.4.1 (colored CLI output)
 - `dotenv` ^16.5.0 (environment variable loading)
-- `readline` ^1.3.0 (interactive prompts)
+- Node.js built-ins `node:crypto` and `node:readline`
 
 **Dev:**
 - TypeScript, @types/node

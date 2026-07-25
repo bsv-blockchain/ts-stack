@@ -3,11 +3,11 @@ id: pkg-message-box-client
 title: "@bsv/message-box-client"
 kind: package
 domain: messaging
-version: "2.1.1"
+version: "2.2.2"
 source_repo: "bsv-blockchain/message-box-client"
 source_commit: "unknown"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/message-box-client"
 repo: "https://github.com/bsv-blockchain/message-box-client"

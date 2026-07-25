@@ -33,8 +33,8 @@
 ## Lint
 | Field | Value |
 |-------|-------|
-| Linter | ts-standard |
-| Lint command | `ts-standard --fix .` |
+| Linter | Oxlint |
+| Lint command | `oxlint .` |
 
 ## Dependencies
 | Type | Count | Packages |

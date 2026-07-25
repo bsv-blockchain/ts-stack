@@ -66,7 +66,7 @@ Thank you for considering contributing in the BSV Blockchain ecosystem! This doc
 
 > ADAPT TO YOUR PROJECT
 
-- **Code Style**: We use `ts-standard` for our TypeScript coding style. Run `npm run lint` to ensure your code adheres to this style.
+- **Code Style**: We use `Oxlint` for our TypeScript coding style. Run `npm run lint` to ensure your code adheres to this style.
 
 - **Testing**: Always include tests for new code or changes. We aim for industry-standard levels of test coverage.
   

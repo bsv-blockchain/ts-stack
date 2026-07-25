@@ -125,6 +125,40 @@ describe('OverlayGASPStorage', () => {
         requestedInputs: { 'neededTxid.1': { metadata: false } }
       })
     })
+
+    it.each([
+      [new Error('manager failed'), 'manager failed'],
+      ['manager failed as a string', 'manager failed as a string']
+    ])('terminates the graph and logs normalized identifyNeededInputs errors', async (failure, message) => {
+      const mockTx: GASPNode = {
+        rawTx: '001122',
+        proof: 'someproof',
+        graphID: 'txid123.0',
+        outputIndex: 0
+      }
+      const parsedTx = {
+        inputs: [],
+        toBEEF: jest.fn().mockReturnValue([1, 2, 3]),
+        id: jest.fn().mockReturnValue('txid123'),
+        merklePath: {}
+      }
+      Transaction.fromHex = jest.fn().mockReturnValue(parsedTx)
+      MerklePath.fromHex = jest.fn().mockReturnValue(parsedTx.merklePath)
+      mockEngine.managers['test-topic'] = {
+        identifyAdmissibleOutputs: jest.fn().mockResolvedValue({
+          outputsToAdmit: []
+        }),
+        identifyNeededInputs: jest.fn().mockRejectedValue(failure)
+      }
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+      await expect(overlayStorage.findNeededInputs(mockTx)).resolves.toBeUndefined()
+
+      expect(consoleError).toHaveBeenCalledWith(
+        `An error occurred when identifying needed inputs for transaction: txid123.0: ${message}`
+      )
+      consoleError.mockRestore()
+    })
   })
 
   describe('discardGraph', () => {

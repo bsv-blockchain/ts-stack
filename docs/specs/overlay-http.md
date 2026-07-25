@@ -3,8 +3,8 @@ id: spec-overlay-http
 title: Overlay HTTP API
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["spec", "overlay"]
 ---
@@ -36,7 +36,8 @@ tags: ["spec", "overlay"]
 
 1. **Client → Overlay** `POST /submit`
    - Raw BEEF transaction (BRC-62) in request body
-   - `x-topics` header: JSON array of topic names (e.g., `["tm_ship", "tm_identity"]`)
+   - `x-topics` header: OpenAPI simple-style, comma-separated topic names (e.g., `tm_ship,tm_identity`)
+   - During migration, the TypeScript server also accepts the legacy JSON array form
    - Optional `x-includes-off-chain-values` for metadata
 
 2. **Overlay Engine**
@@ -113,7 +114,7 @@ const response = await fetch('https://overlay.example.com/submit', {
   method: 'POST',
   headers: {
     'content-type': 'application/octet-stream',
-    'x-topics': JSON.stringify(topics)
+    'x-topics': topics.join(',')
   },
   body: new Uint8Array(action.tx)
 })

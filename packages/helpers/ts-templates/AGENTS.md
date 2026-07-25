@@ -104,7 +104,7 @@ const unlockingScript2 = await multiSigUnlocker.sign(tx3, 0)
 - `@bsv/sdk` ^2.0.14 (Transaction, Script, OP, LockingScript, etc.)
 
 **Dev:**
-- TypeScript, Jest, ts-jest, ts-standard
+- TypeScript, Jest, ts-jest, Oxlint
 
 ## Common pitfalls / gotchas
 

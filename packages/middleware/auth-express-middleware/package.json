@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth-express-middleware",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "BSV Blockchain mutual-authentication express middleware",
   "repository": {
     "type": "git",
@@ -34,7 +34,7 @@
     "test": "npm run build && jest --runInBand",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
-    "lint": "ts-standard --fix src/**/*.ts",
+    "lint": "oxlint src",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
     "prepublish": "npm run build",
@@ -54,17 +54,17 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
-    "@types/body-parser": "^1.19.5",
-    "@types/express": "^5.0.0",
+    "@bsv/sdk": "workspace:^",
+    "@types/body-parser": "^1.19.6",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/mime-types": "^3.0.1",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11",
-    "ts-standard": "^12.0.2",
-    "ts2md": "^0.2.0",
+    "ts-jest": "^29.4.12",
+    "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "dependencies": {
     "express": "^5.2.1",

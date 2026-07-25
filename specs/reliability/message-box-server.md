@@ -13,7 +13,7 @@
 ## Build and Test
 - Build command: `npm run build` (tsc; prebuild: rimraf dist)
 - Test command: `npm test` (node --experimental-vm-modules jest --config=jest.config.mjs)
-- Lint command: `npm run lint` (ts-standard --fix .; no lint:ci target)
+- Lint command: `npm run lint` (oxlint .; no lint:ci target)
 - Coverage command: `npm run test:coverage`
 - Benchmark command: None defined
 - Last baseline date: 2026-04-24
@@ -81,7 +81,7 @@ Date: 2026-04-24
 - Coverage: Available via `npm run test:coverage`; no enforced threshold
 
 ## Lint
-- Lint command: `npm run lint` (ts-standard --fix .)
+- Lint command: `npm run lint` (oxlint .)
 - Result: Unknown — lint applies auto-fixes; no separate lint:ci (check-only) command defined
 
 ## Dependencies

@@ -3,11 +3,11 @@ id: pkg-templates
 title: "@bsv/templates"
 kind: package
 domain: helpers
-version: "1.4.0"
+version: "1.9.1"
 source_repo: "bsv-blockchain/templates"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/templates"
 repo: "https://github.com/bsv-blockchain/templates"

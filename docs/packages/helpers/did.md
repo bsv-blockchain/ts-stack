@@ -3,11 +3,11 @@ id: pkg-did
 title: "@bsv/did"
 kind: package
 domain: helpers
-version: "0.1.0"
+version: "0.2.1"
 source_repo: "bsv-blockchain/ts-stack"
 source_commit: "unknown"
-last_updated: "2026-05-07"
-last_verified: "2026-05-07"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/did"
 repo: "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did"

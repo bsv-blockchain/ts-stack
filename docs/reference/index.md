@@ -3,8 +3,8 @@ id: reference-overview
 title: "Reference"
 kind: meta
 version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 status: stable
 tags: [reference, api, index]
@@ -17,11 +17,13 @@ Quick reference material for API details and protocol indices.
 ## Contents
 
 - **[BRC Standards Index](./brc-index.md)** — All BRC standards with links to implementations
+- **[Dependency and release policy](./dependency-policy.md)** — Runtime baseline, supply-chain controls, advisory handling, and release rules
+- **[July 2026 modernization release](./release-2026-07-25.md)** — Package versions, compatibility notes, and verification scope
 - **TypeDoc API docs** — Per-package generated reference (see links below)
 
 ## Packages by Domain
 
-All 27 packages in the monorepo, with published npm names.
+All 30 public packages in the monorepo, with published npm names.
 
 ### SDK
 
@@ -34,10 +36,11 @@ All 27 packages in the monorepo, with published npm names.
 | Package | npm | Purpose |
 |---------|-----|---------|
 | wallet-toolbox | `@bsv/wallet-toolbox` | Modular toolkit for building BRC-100-compliant wallets |
+| wallet-toolbox-client | `@bsv/wallet-toolbox-client` | Browser and remote client surfaces for wallet-toolbox |
+| wallet-toolbox-mobile | `@bsv/wallet-toolbox-mobile` | Mobile wallet-toolbox entry point |
 | btms | `@bsv/btms` | UTXO-based token client (BTMS) |
 | btms-permission-module | `@bsv/btms-permission-module` | Permission hooks for BTMS token operations |
 | ts-wallet-relay | `@bsv/wallet-relay` | ECDH-encrypted WebSocket tunnel between desktop and mobile wallets |
-| wallet-toolbox-examples | `@bsv/wallet-toolbox-examples` | Reference wallet implementations using wallet-toolbox |
 
 ### Overlays
 
@@ -48,7 +51,6 @@ All 27 packages in the monorepo, with published npm names.
 | overlay-topics | `@bsv/overlay-topics` | Built-in Topic Managers and Lookup Services (UHRP, BTMS) |
 | overlay-discovery-services | `@bsv/overlay-discovery-services` | SHIP/SLAP discovery for overlay networks |
 | gasp-core | `@bsv/gasp` | Graph-Aware Sync Protocol for inter-node synchronization |
-| btms-backend | `@bsv/btms-backend` | Overlay-server-side shell for BTMS; core logic now in `@bsv/overlay-topics` |
 
 ### Messaging
 
@@ -64,6 +66,7 @@ All 27 packages in the monorepo, with published npm names.
 | Package | npm | Purpose |
 |---------|-----|---------|
 | auth-express-middleware | `@bsv/auth-express-middleware` | BRC-31 mutual-auth middleware for Express |
+| auth | `@bsv/auth` | Framework-neutral authenticated request helpers |
 | payment-express-middleware | `@bsv/payment-express-middleware` | BRC-121 payment-gated middleware for Express |
 | 402-pay | `@bsv/402-pay` | BRC-121 HTTP 402 client |
 
@@ -78,12 +81,19 @@ All 27 packages in the monorepo, with published npm names.
 | amountinator | `@bsv/amountinator` | BSV amount formatting and conversion |
 | fund-wallet | `@bsv/fund-wallet` | CLI tool for funding wallets on testnet |
 | ts-templates | `@bsv/templates` | Low-level script templates |
+| create-bsv-app | `create-bsv-app` | Starter application generator |
 
 ### Network
 
 | Package | npm | Purpose |
 |---------|-----|---------|
 | ts-p2p | `@bsv/teranode-listener` | BSV peer-to-peer node listener |
+
+### Verification
+
+| Package | npm | Purpose |
+|---------|-----|---------|
+| verifast | `@bsv/verifast` | High-performance script verification backend |
 
 ## Quick Navigation
 

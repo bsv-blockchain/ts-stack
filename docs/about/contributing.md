@@ -113,11 +113,12 @@ pnpm test --coverage
 # Check linting
 pnpm lint
 
-# Fix linting issues
-pnpm lint --fix
+# Fix linting issues in a package
+pnpm --filter @bsv/sdk exec oxlint --fix src
 ```
 
-Uses **ts-standard** for consistent code style.
+Uses **Oxlint** for fast, consistent TypeScript checks. Errors fail CI; warnings
+remain visible while the inherited warning backlog is reduced.
 
 ### Build Packages
 

@@ -13,7 +13,7 @@
 ## Build and Test
 - Build command: `npm run build` (tsc -b + rspack UMD bundle)
 - Test command: `npm test` (build + jest)
-- Lint command: `npm run lint:ci` (ts-standard)
+- Lint command: `npm run lint:ci` (Oxlint)
 - Coverage command: `npm run test:coverage`
 - Benchmark command: None defined (benchmarks/ directory exists but no npm script)
 - Last baseline date: 2026-04-24
@@ -81,7 +81,7 @@ Date: 2026-04-24
 - Coverage: Available via `npm run test:coverage` (lcov output to coverage/); no enforced threshold
 
 ## Lint
-- Lint command: `npm run lint:ci` (ts-standard src/**/*.ts)
+- Lint command: `npm run lint:ci` (oxlint src)
 - Result: pass (run in CI on every push/PR)
 
 ## Dependencies

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SD-JWT VC and did:key helpers for BSV SDK identities",
   "publishConfig": {
     "access": "public"
@@ -31,18 +31,12 @@
   "scripts": {
     "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
-    "lint:ci": "ts-standard src/**/*.ts tests/**/*.ts",
-    "lint": "ts-standard --fix src/**/*.ts tests/**/*.ts",
+    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
+    "lint:ci": "oxlint src tests",
+    "lint": "oxlint src tests",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
     "prepublish": "npm run build"
-  },
-  "ts-standard": {
-    "project": "tsconfig.eslint.json",
-    "ignore": [
-      "dist"
-    ]
   },
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
   "license": "Open BSV License",
@@ -50,15 +44,15 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.1",
     "@types/qrcode": "^1.5.6",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11",
-    "ts-standard": "^12.0.2",
+    "ts-jest": "^29.4.12",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "repository": {
     "type": "git",

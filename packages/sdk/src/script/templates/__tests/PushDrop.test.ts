@@ -235,6 +235,18 @@ describe('PushDrop', () => {
   })
 
   describe('decode', () => {
+    it('round-trips OP_16 fields without silently dropping their value', async () => {
+      const fields = [[16], [15]]
+      const lockingScript = await pushDrop.lock(
+        fields,
+        [2, 'pushdrop decode regression'],
+        '1',
+        'self'
+      )
+
+      expect(PushDrop.decode(lockingScript).fields).toEqual(fields)
+    })
+
     it('decodes the locking script correctly', async () => {
       const fields = [
         Utils.toArray('hello world', 'utf8'),

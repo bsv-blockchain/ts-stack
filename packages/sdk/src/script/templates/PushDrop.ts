@@ -95,7 +95,7 @@ export default class PushDrop implements ScriptTemplate {
       let chunk: number[] = script.chunks[i].data ?? []
 
       if (chunk.length === 0) {
-        if (script.chunks[i].op >= 80 && script.chunks[i].op <= 95) {
+        if (script.chunks[i].op >= 80 && script.chunks[i].op <= 96) {
           chunk = [script.chunks[i].op - 80]
         } else if (script.chunks[i].op === 0) {
           chunk = [0]

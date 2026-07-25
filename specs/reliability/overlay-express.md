@@ -13,7 +13,7 @@
 ## Build and Test
 - Build command: `npm run build` (tsc -b + tsconfig-to-dual-package)
 - Test command: `npm test` (jest — no build step required before tests)
-- Lint command: `npm run lint:ci` (ts-standard src/**/*.ts)
+- Lint command: `npm run lint:ci` (oxlint src)
 - Coverage command: `npm run test:coverage`
 - Benchmark command: None defined
 - Last baseline date: 2026-04-24
@@ -81,7 +81,7 @@ Date: 2026-04-24
 - Coverage: Available via `npm run test:coverage` (lcov to coverage/); uploaded to Codecov; no enforced threshold
 
 ## Lint
-- Lint command: `npm run lint:ci` (ts-standard src/**/*.ts)
+- Lint command: `npm run lint:ci` (oxlint src)
 - Result: pass (run in CI on every push/PR)
 
 ## Dependencies

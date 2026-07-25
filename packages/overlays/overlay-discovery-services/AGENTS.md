@@ -109,7 +109,7 @@ const validName = isValidTopicOrServiceName('tm_custom_topic')
 - `mongodb` — MongoDB for lookup service storage (optional, but expected for production)
 
 **Dev:**
-- jest, ts-jest, typescript, ts-standard
+- jest, ts-jest, typescript, Oxlint
 
 ## Common pitfalls / gotchas
 

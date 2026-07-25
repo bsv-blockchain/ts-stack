@@ -38,9 +38,9 @@
 
 | Field | Value |
 |-------|-------|
-| Linter | ts-standard |
-| Lint command | `ts-standard src/**/*.ts` |
-| Fix command | `ts-standard --fix src/**/*.ts` |
+| Linter | Oxlint |
+| Lint command | `oxlint src` |
+| Fix command | `oxlint src` |
 | Status | Not yet verified clean in ts-stack CI |
 
 ## Dependencies
@@ -48,7 +48,7 @@
 | Type | Count | Packages |
 |------|-------|---------|
 | Production | 3 | @bsv/gasp, @bsv/sdk, knex |
-| Dev | — | typescript, jest, ts-standard, ts2md, … |
+| Dev | — | typescript, jest, Oxlint, ts2md, … |
 
 ## Known Issues & Incidents
 
