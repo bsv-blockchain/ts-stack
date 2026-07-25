@@ -1,6 +1,43 @@
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { execSync } = require('node:child_process');
+
+function hasErrorCode(error, code) {
+  return typeof error === 'object' && error !== null && error.code === code;
+}
+
+function readJsonIfExists(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) return undefined;
+    throw error;
+  }
+}
+
+function writeJsonAtomic(file, value) {
+  const temporary = path.join(
+    path.dirname(file),
+    `.${path.basename(file)}.${process.pid}.${crypto.randomUUID()}.tmp`
+  );
+  let descriptor;
+  try {
+    descriptor = fs.openSync(temporary, 'wx');
+    fs.writeFileSync(descriptor, JSON.stringify(value, null, 2) + '\n', 'utf8');
+    fs.fsyncSync(descriptor);
+    const completedDescriptor = descriptor;
+    descriptor = undefined;
+    fs.closeSync(completedDescriptor);
+    fs.renameSync(temporary, file);
+  } finally {
+    try {
+      if (descriptor !== undefined) fs.closeSync(descriptor);
+    } finally {
+      fs.rmSync(temporary, { force: true });
+    }
+  }
+}
 
 /**
  * Synchronizes version numbers from root package.json to mobile and client package.json files
@@ -26,31 +63,27 @@ function syncVersions() {
       const fullPath = path.join(__dirname, packagePath);
       const fullDirPath = path.join(__dirname, dir);
       
-      if (fs.existsSync(fullPath)) {
-        const packageData = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      const packageData = readJsonIfExists(fullPath);
+      if (packageData !== undefined) {
         const oldVersion = packageData.version;
         
         packageData.version = version;
-        fs.writeFileSync(fullPath, JSON.stringify(packageData, null, 2) + '\n');
+        writeJsonAtomic(fullPath, packageData);
         
         console.log(`Updated ${packagePath}: ${oldVersion} → ${version}`);
         
         // Run npm install to update package-lock.json
-        if (fs.existsSync(fullDirPath)) {
-          console.log(`Running npm install in ${dir}...`);
-          try {
-            execSync('npm install', {
-              cwd: fullDirPath,
-              stdio: 'inherit',
-              timeout: 60000, // 60 second timeout
-              env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' }
-            });
-            console.log(`✓ npm install completed in ${dir}`);
-          } catch (installError) {
-            console.error(`✗ npm install failed in ${dir}:`, installError.message);
-          }
-        } else {
-          console.warn(`Warning: Directory ${dir} not found`);
+        console.log(`Running npm install in ${dir}...`);
+        try {
+          execSync('npm install', {
+            cwd: fullDirPath,
+            stdio: 'inherit',
+            timeout: 60000, // 60 second timeout
+            env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' }
+          });
+          console.log(`✓ npm install completed in ${dir}`);
+        } catch (installError) {
+          console.error(`✗ npm install failed in ${dir}:`, installError.message);
         }
       } else {
         console.warn(`Warning: ${packagePath} not found`);

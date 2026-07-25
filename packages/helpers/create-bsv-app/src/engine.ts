@@ -1,9 +1,10 @@
 // src/engine.ts
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { FileSpec, Capability, CapabilityContext, Role } from './types.js'
 import type { ProjectConfig, Layout } from './config/model.js'
 import { layoutOf } from './config/model.js'
+import { writeUtf8FileAtomic, writeUtf8FileExclusive } from './file-system.js'
 
 export type TargetKey = 'root' | 'client' | 'server'
 export interface PlacementResult {
@@ -102,14 +103,13 @@ export function writeFiles (specs: FileSpec[], targetDir: string, opts: { force?
   const skipped: string[] = []
   for (const spec of specs) {
     const abs = join(targetDir, spec.path)
-    const exists: boolean = existsSync(abs)
-    const shouldSkip: boolean = exists && opts.force !== true
-    if (shouldSkip) {
+    mkdirSync(dirname(abs), { recursive: true })
+    if (opts.force === true) {
+      writeUtf8FileAtomic(abs, spec.content)
+    } else if (!writeUtf8FileExclusive(abs, spec.content)) {
       skipped.push(spec.path)
       continue
     }
-    mkdirSync(dirname(abs), { recursive: true })
-    writeFileSync(abs, spec.content)
     written.push(spec.path)
   }
   return { written, skipped }

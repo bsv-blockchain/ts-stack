@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { readUtf8FileIfExists, writeUtf8FileAtomic } from './file-system.mjs'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const canonicalPath = 'infra/wab/src/security/rateLimitPolicy.ts'
@@ -19,14 +20,12 @@ const checkOnly = process.argv.includes('--check')
 let drift = false
 for (const relativePath of synchronizedPaths) {
   const absolutePath = path.join(repositoryRoot, relativePath)
-  const current = fs.existsSync(absolutePath)
-    ? fs.readFileSync(absolutePath, 'utf8')
-    : ''
+  const current = readUtf8FileIfExists(absolutePath) ?? ''
   if (current === canonical) continue
   drift = true
   if (!checkOnly) {
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true })
-    fs.writeFileSync(absolutePath, canonical)
+    writeUtf8FileAtomic(absolutePath, canonical)
     console.log(`Synchronized ${relativePath}`)
   } else {
     console.error(`${relativePath} differs from ${canonicalPath}`)
