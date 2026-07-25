@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -8,6 +9,13 @@ const CODEQL_CONFIG_PATH = join(REPOSITORY_ROOT, '.github/codeql/codeql-config.y
 const CODEQL_WORKFLOW_PATH = join(REPOSITORY_ROOT, '.github/workflows/codeql.yml')
 const PROJECTS_PATH = join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
 const CODEQL_ACTION_SHA = 'e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81'
+
+function matchesGeneratedBoundary (path, boundary) {
+  if (boundary.endsWith('/**')) {
+    return path.startsWith(boundary.slice(0, -2))
+  }
+  return path === boundary
+}
 
 function readIndentedList (source, key, indentation = 0) {
   const lines = source.split('\n')
@@ -40,14 +48,31 @@ test('CodeQL scans the owned source boundary with the security-extended suite', 
   assert.deepEqual(readIndentedList(config, 'paths-ignore').sort(), ownedGeneratedPaths)
 })
 
-test('advanced CodeQL preserves languages, events, permissions, and required check names', () => {
+test('advanced CodeQL preserves authored languages, events, permissions, and required check names', () => {
   const workflow = readFileSync(CODEQL_WORKFLOW_PATH, 'utf8')
+  const registry = JSON.parse(readFileSync(PROJECTS_PATH, 'utf8'))
+  const generatedBoundaries = registry.generatedArtifacts
+    .filter(artifact => artifact.analysisPolicy === 'exclude-generated')
+    .map(artifact => artifact.path)
+  const authoredPythonFiles = execFileSync(
+    'git',
+    ['ls-files', '--', '*.py'],
+    { cwd: REPOSITORY_ROOT, encoding: 'utf8' }
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .filter(path => !generatedBoundaries.some(boundary => matchesGeneratedBoundary(path, boundary)))
 
   assert.deepEqual(readIndentedList(workflow, 'language', 8), [
     'actions',
-    'javascript-typescript',
-    'python'
+    'javascript-typescript'
   ])
+  assert.deepEqual(
+    authoredPythonFiles,
+    [],
+    'authored Python requires restoring the Python CodeQL lane'
+  )
   assert.match(workflow, /^  push:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  pull_request:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)
