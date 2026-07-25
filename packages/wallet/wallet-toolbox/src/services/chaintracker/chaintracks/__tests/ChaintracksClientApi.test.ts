@@ -244,7 +244,13 @@ class FixtureFetch {
   }
 
   pathJoin (baseUrl: string, subpath: string): string {
-    return `${baseUrl.replace(/\/+$/, '')}/${subpath.replace(/^\/+/, '')}`
+    let baseEnd = baseUrl.length
+    while (baseEnd > 0 && baseUrl[baseEnd - 1] === '/') baseEnd--
+
+    let subpathStart = 0
+    while (subpathStart < subpath.length && subpath[subpathStart] === '/') subpathStart++
+
+    return `${baseUrl.slice(0, baseEnd)}/${subpath.slice(subpathStart)}`
   }
 }
 
