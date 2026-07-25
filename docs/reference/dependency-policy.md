@@ -38,6 +38,11 @@ warning baseline reaches zero.
 - `pnpm audit --audit-level=high` blocks high and critical advisories in CI and
   release jobs.
 
+Parallel test lanes install with lifecycle scripts disabled. The wallet lanes
+then rebuild only the explicitly allowlisted `better-sqlite3` binding they need;
+the full build lane remains the single place that runs the workspace's approved
+installation scripts.
+
 The version-consistency gate also rejects public package manifests that place
 type declarations, test runners, test clients, linters, documentation
 generators, or TypeScript build tools in `dependencies`. This prevents

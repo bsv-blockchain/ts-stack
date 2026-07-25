@@ -265,10 +265,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Build repository-allowlisted test dependencies
-        env:
-          MONGOMS_DISABLE_POSTINSTALL: '1'
-        run: pnpm rebuild --pending
+      - name: Build allowlisted better-sqlite3 binding
+        working-directory: packages/wallet/wallet-toolbox
+        run: npm rebuild better-sqlite3
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -310,10 +309,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Build repository-allowlisted test dependencies
-        env:
-          MONGOMS_DISABLE_POSTINSTALL: '1'
-        run: pnpm rebuild --pending
+      - name: Build allowlisted better-sqlite3 binding
+        working-directory: packages/wallet/wallet-toolbox
+        run: npm rebuild better-sqlite3
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -390,10 +388,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Build repository-allowlisted test dependencies
-        env:
-          MONGOMS_DISABLE_POSTINSTALL: '1'
-        run: pnpm rebuild --pending
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
