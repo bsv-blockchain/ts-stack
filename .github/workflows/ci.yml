@@ -201,15 +201,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        component:
-          - chaintracks-server
-          - message-box-server
-          - overlay-server
-          - uhrp-server-basic
-          - uhrp-server-cloud-bucket
-          - uhrp-server-cloud-bucket/notifier
-          - wab
-          - wallet-infra
+        include:
+          - component: chaintracks-server
+            native-modules: better-sqlite3
+          - component: message-box-server
+            native-modules: better-sqlite3
+          - component: overlay-server
+            native-modules: ''
+          - component: uhrp-server-basic
+            native-modules: ''
+          - component: uhrp-server-cloud-bucket
+            native-modules: better-sqlite3
+          - component: uhrp-server-cloud-bucket/notifier
+            native-modules: ''
+          - component: wab
+            native-modules: better-sqlite3 sqlite3
+          - component: wallet-infra
+            native-modules: better-sqlite3
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -242,7 +250,14 @@ jobs:
       - name: Install locked dependencies
         if: steps.changed.outputs.run == 'true'
         working-directory: infra/${{ matrix.component }}
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Build allowlisted native modules
+        if: steps.changed.outputs.run == 'true' && matrix.native-modules != ''
+        working-directory: infra/${{ matrix.component }}
+        env:
+          NATIVE_MODULES: ${{ matrix.native-modules }}
+        run: npm rebuild $NATIVE_MODULES
 
       - name: Reject high and critical dependency advisories
         if: steps.changed.outputs.run == 'true'

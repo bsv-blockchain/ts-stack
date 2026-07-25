@@ -11,7 +11,8 @@ WORKDIR /app
 # Copy only the manifest files first for better caching
 COPY package*.json ./
 COPY tsconfig.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3 sqlite3
 
 # Copy the source needed for the build
 COPY src ./src

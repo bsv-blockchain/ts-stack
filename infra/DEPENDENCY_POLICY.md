@@ -34,6 +34,24 @@ npm test --if-present
 Commit the resulting lockfile. Do not use `--legacy-peer-deps`; the lockfile
 must preserve the peer-dependency contract used by the BSV packages.
 
+## Install scripts
+
+CI and Docker builds install dependencies with `npm ci --ignore-scripts`.
+Lifecycle scripts are code execution, so native modules are rebuilt only from
+the following explicit allowlist:
+
+| Component | Allowlisted native modules |
+| --- | --- |
+| `chaintracks-server` | `better-sqlite3` |
+| `message-box-server` | `better-sqlite3` |
+| `uhrp-server-cloud-bucket` | `better-sqlite3` |
+| `wab` | `better-sqlite3`, `sqlite3` |
+| `wallet-infra` | `better-sqlite3` |
+
+Adding an install script or native-module rebuild requires the same dependency
+review as adding a direct production dependency. Components not listed above
+must remain buildable with lifecycle scripts disabled.
+
 ## Overrides
 
 Overrides are a last resort for a transitive security issue that the direct

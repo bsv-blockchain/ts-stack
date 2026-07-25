@@ -1,11 +1,12 @@
 FROM node:24-alpine AS build
 
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache g++ make python3
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 COPY tsconfig.json ./
 COPY src ./src

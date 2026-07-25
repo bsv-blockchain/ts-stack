@@ -10,8 +10,10 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install without running arbitrary dependency lifecycle scripts, then compile
+# the one allowlisted native module required by the service.
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 # Copy source code
 COPY tsconfig.json ./
@@ -37,7 +39,8 @@ COPY package*.json ./
 # Install production dependencies only. Then strip npm from the runtime image:
 # the app runs via `node` (see CMD) and node:24-alpine's bundled npm ships its
 # own HIGH-CVE deps (tar/glob/minimatch/cross-spawn/undici) that we don't need.
-RUN npm ci --omit=dev \
+RUN npm ci --omit=dev --ignore-scripts \
+ && npm rebuild better-sqlite3 \
  && apk del .build-deps \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 

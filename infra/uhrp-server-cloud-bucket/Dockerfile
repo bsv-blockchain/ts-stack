@@ -4,13 +4,15 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 COPY tsconfig.json ./
 COPY src/ ./src/
 
 RUN npm run build
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts \
+ && npm rebuild better-sqlite3
 
 # ── Stage 2: production ────────────────────────────────────
 FROM node:24-alpine
