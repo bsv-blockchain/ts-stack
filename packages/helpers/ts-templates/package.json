@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "type": "module",
   "description": "BSV Blockchain Script Templates",
   "main": "dist/cjs/mod.js",
@@ -28,7 +28,7 @@
     "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
-    "lint": "ts-standard --fix 'src/**/*.ts'",
+    "lint": "oxlint src",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
     "prepublish": "npm run build"
@@ -53,16 +53,15 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates#readme",
   "devDependencies": {
-    "@bsv/wallet-toolbox": "^2.3.3",
+    "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox": "workspace:^",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11",
-    "ts-standard": "^12.0.2",
+    "ts-jest": "^29.4.12",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
-  "dependencies": {},
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"
   },

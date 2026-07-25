@@ -128,7 +128,7 @@ console.log('Would send:', preview.estimatedFee)
 - `@bsv/wallet-toolbox-client` ^2.1.18
 
 **Dev:**
-- TypeScript, Jest, ts-jest, ts-standard
+- TypeScript, Jest, ts-jest, Oxlint
 
 ## Common pitfalls / gotchas
 

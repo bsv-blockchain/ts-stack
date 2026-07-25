@@ -3,11 +3,11 @@ id: pkg-auth-express-middleware
 title: "@bsv/auth-express-middleware"
 kind: package
 domain: middleware
-version: "2.0.5"
+version: "2.1.2"
 source_repo: "bsv-blockchain/auth-express-middleware"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/auth-express-middleware"
 repo: "https://github.com/bsv-blockchain/auth-express-middleware"

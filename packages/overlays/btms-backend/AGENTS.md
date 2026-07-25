@@ -103,7 +103,7 @@ const metadata = await manager.getMetaData()
 - `mongodb` — MongoDB driver (for lookup service)
 
 **Dev:**
-- jest, ts-jest, typescript, ts-standard
+- jest, ts-jest, typescript, Oxlint
 - mongodb-memory-server — In-memory MongoDB for tests
 
 ## Common pitfalls / gotchas

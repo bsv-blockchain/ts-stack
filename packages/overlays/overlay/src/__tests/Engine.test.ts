@@ -309,6 +309,37 @@ describe('BSV Overlay Services Engine', () => {
     })
   })
   describe('handleNewMerkleProof tests', () => {
+    it('persists a replacement proof when the stored BEEF is already mined', async () => {
+      const tx = Transaction.fromHexBEEF(beef37abad0)
+      const txid = tx.id('hex')
+      const output: Output = {
+        txid,
+        outputIndex: 0,
+        outputScript: tx.outputs[0].lockingScript.toBinary(),
+        topic: 'hello',
+        satoshis: tx.outputs[0].satoshis,
+        beef: tx.toBEEF(),
+        spent: false,
+        outputsConsumed: [],
+        consumedBy: [],
+        score: Date.now()
+      }
+      const updateTransactionBEEF = jest.fn(async () => undefined)
+      mockStorageEngine.findOutputsForTransaction = jest.fn(async () => [output])
+      mockStorageEngine.updateTransactionBEEF = updateTransactionBEEF
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        { Hello: mockLookupService },
+        mockStorageEngine,
+        mockChainTracker
+      )
+
+      if (tx.merklePath === undefined) throw new Error('improper test setup')
+      await engine.handleNewMerkleProof(txid, tx.merklePath)
+
+      expect(updateTransactionBEEF).toHaveBeenCalledWith(txid, tx.toBEEF())
+    })
+
     it('0 simple proof', async () => {
       const beef = beef27c8f1
       const txid = txid27c8f
@@ -423,7 +454,12 @@ describe('BSV Overlay Services Engine', () => {
 
       const mp37abad = Transaction.fromHexBEEF(beef37abad0).merklePath
       await engine.handleNewMerkleProof(txid37abad, mp37abad)
-      expect(Object.keys(newBEEF).length).toBe(0)
+      expect(newBEEF[`${txid37abad}`]).toBe(beef37abad0)
+      expect(newBEEF[`${txid877734}`].length).toBeGreaterThan(beef8777340.length)
+      expect(newBEEF[`${txid509f5e}`].length).toBeGreaterThan(beef509f5e0.length)
+      expect(newBEEF[`${txid942620}`].length).toBeGreaterThan(beef9426200.length)
+      expect(newBEEF[`${txid17d182}`].length).toBeGreaterThan(beef17d1820.length)
+      expect(Object.keys(newBEEF)).toHaveLength(5)
 
       const mp877734 = Transaction.fromHexBEEF(beef8777340).merklePath
       await engine.handleNewMerkleProof(txid877734, mp877734)
@@ -431,7 +467,7 @@ describe('BSV Overlay Services Engine', () => {
       expect(newBEEF[`${txid509f5e}`].length).toBeGreaterThan(beef509f5e0.length)
       expect(newBEEF[`${txid942620}`].length).toBeGreaterThan(beef9426200.length)
       expect(newBEEF[`${txid17d182}`].length).toBeGreaterThan(beef17d1820.length)
-      expect(Object.keys(newBEEF).length).toBe(4)
+      expect(Object.keys(newBEEF)).toHaveLength(5)
 
       const mp509f5e = Transaction.fromHexBEEF(beef509f5e0).merklePath
       await engine.handleNewMerkleProof(txid509f5e, mp509f5e)
@@ -439,7 +475,7 @@ describe('BSV Overlay Services Engine', () => {
       expect(newBEEF[`${txid509f5e}`]).toBe(beef509f5e0)
       expect(newBEEF[`${txid942620}`].length).toBeGreaterThan(beef9426200.length)
       expect(newBEEF[`${txid17d182}`].length).toBeGreaterThan(beef17d1820.length)
-      expect(Object.keys(newBEEF).length).toBe(4)
+      expect(Object.keys(newBEEF)).toHaveLength(5)
 
       const mp942620 = Transaction.fromHexBEEF(beef9426200).merklePath
       await engine.handleNewMerkleProof(txid942620, mp942620)
@@ -447,7 +483,7 @@ describe('BSV Overlay Services Engine', () => {
       expect(newBEEF[`${txid509f5e}`]).toBe(beef509f5e0)
       expect(newBEEF[`${txid942620}`]).toBe(beef9426200)
       expect(newBEEF[`${txid17d182}`].length).toBeGreaterThan(beef17d1820.length)
-      expect(Object.keys(newBEEF).length).toBe(4)
+      expect(Object.keys(newBEEF)).toHaveLength(5)
 
       const mp17d182 = Transaction.fromHexBEEF(beef17d1820).merklePath
       await engine.handleNewMerkleProof(txid17d182, mp17d182)
@@ -455,7 +491,7 @@ describe('BSV Overlay Services Engine', () => {
       expect(newBEEF[`${txid509f5e}`]).toBe(beef509f5e0)
       expect(newBEEF[`${txid942620}`]).toBe(beef9426200)
       expect(newBEEF[`${txid17d182}`]).toBe(beef17d1820)
-      expect(Object.keys(newBEEF).length).toBe(4)
+      expect(Object.keys(newBEEF)).toHaveLength(5)
     })
   })
 
@@ -963,7 +999,7 @@ describe('BSV Overlay Services Engine', () => {
         await expect(engine.lookup({
           service: 'HelloWorld',
           query: { name: 'Bob' }
-        })).rejects.toThrow()
+        })).rejects.toThrow('Lookup service not found for provider: HelloWorld')
       })
       it('Calls the lookup function from the lookup service', async () => {
         // TODO: Make the default storage engine return something...?

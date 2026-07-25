@@ -3,11 +3,11 @@ id: pkg-fund-wallet
 title: "@bsv/fund-wallet"
 kind: package
 domain: helpers
-version: "1.3.1"
+version: "1.4.1"
 source_repo: "bsv-blockchain/fund-wallet"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/fund-wallet"
 repo: "https://github.com/bsv-blockchain/fund-wallet"

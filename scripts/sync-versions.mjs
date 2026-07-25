@@ -27,6 +27,7 @@ import { execSync } from 'node:child_process'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 const DRY_RUN = process.argv.includes('--dry-run')
+const WORKSPACE_ONLY = process.argv.includes('--workspace-only')
 
 // --- 1. Collect all workspace package.json paths ---
 const output = execSync('pnpm -r ls --json --depth 0', { cwd: ROOT }).toString()
@@ -38,6 +39,35 @@ for (const pkg of pkgList) {
   if (pkg.name && pkg.version && pkg.path) {
     workspaceMap[pkg.name] = { version: pkg.version, path: pkg.path }
   }
+}
+
+function parseVersion (version) {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
+  if (!match) return null
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3])
+  }
+}
+
+function compareVersion (a, b) {
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
+}
+
+function caretUpperBound (version) {
+  if (version.major > 0) return { major: version.major + 1, minor: 0, patch: 0 }
+  if (version.minor > 0) return { major: 0, minor: version.minor + 1, patch: 0 }
+  return { major: 0, minor: 0, patch: version.patch + 1 }
+}
+
+function acceptsPeerVersion (range, wsVersion) {
+  if (!range.startsWith('^')) return false
+  const minimum = parseVersion(range.slice(1))
+  const current = parseVersion(wsVersion)
+  if (!minimum || !current) return false
+  return compareVersion(current, minimum) >= 0 &&
+    compareVersion(current, caretUpperBound(minimum)) < 0
 }
 
 console.log(`Found ${Object.keys(workspaceMap).length} workspace packages`)
@@ -62,18 +92,15 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
     for (const [dep, range] of Object.entries(pkg[field])) {
       const ws = workspaceMap[dep]
       if (!ws) continue
-      const target = `^${ws.version}`
-      // `workspace:^` is the canonical form for cross-workspace deps in this repo —
-      // publishes as `^X.Y.Z` so downstream installs dedupe. `workspace:*` publishes
-      // as an exact pin and causes duplicate-install bugs; rewrite it to `workspace:^`.
-      if (range === 'workspace:*') {
-        console.log(`  ${pkg.name}: ${dep} workspace:* → workspace:^`)
-        pkg[field][dep] = 'workspace:^'
-        changed = true
-        totalChanges++
-        continue
-      }
-      if (range !== target && range !== 'workspace:^') {
+      // Runtime, development, and optional workspace edges must link to the
+      // local package. pnpm rewrites workspace:^ to ^X.Y.Z during publish.
+      // Peer ranges remain ordinary semver because they express the public
+      // compatibility contract rather than an installation edge.
+      const target = field === 'peerDependencies' ? `^${ws.version}` : 'workspace:^'
+      const valid = field === 'peerDependencies'
+        ? acceptsPeerVersion(range, ws.version)
+        : range === target
+      if (!valid) {
         console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
         pkg[field][dep] = target
         changed = true
@@ -136,7 +163,7 @@ const bumpPatch = (version) => {
   return `${major}.${minor}.${patch + 1}${suffix}`
 }
 
-if (existsSync(INFRA_DIR)) {
+if (!WORKSPACE_ONLY && existsSync(INFRA_DIR)) {
   const entries = readdirSync(INFRA_DIR)
   for (const entry of entries) {
     const componentDir = join(INFRA_DIR, entry)

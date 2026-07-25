@@ -79,8 +79,8 @@ const amount = await staticConverter.convertAmount('100')
 ## Dependencies
 
 **Runtime:**
-- `@bsv/sdk` ^2.0.14
-- `@bsv/wallet-toolbox-client` ^2.1.18 (Services, WalletSettingsManager)
+- `@bsv/sdk` ^2.1.6
+- `@bsv/wallet-toolbox-client` ^2.4.4 (Services, WalletSettingsManager)
 
 **Dev:**
 - TypeScript, Jest, ts-jest

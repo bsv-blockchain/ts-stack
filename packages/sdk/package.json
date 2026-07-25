@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.1.9",
+  "version": "2.2.0",
   "type": "module",
   "description": "BSV Blockchain Software Development Kit",
   "main": "dist/cjs/mod.js",
@@ -232,8 +232,8 @@
     "test": "npm run build && jest",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage --watchman=false",
-    "lint:ci": "ts-standard src/**/*.ts",
-    "lint": "ts-standard --fix src/**/*.ts",
+    "lint:ci": "oxlint src",
+    "lint": "oxlint src",
     "build": "npm run build:ts && npm run build:umd",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "build:umd": "rspack --config rspack.config.js",
@@ -262,28 +262,18 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk#readme",
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.4.1",
-    "@rspack/cli": "^2.0.8",
-    "@rspack/core": "^2.0.8",
+    "@rspack/cli": "^2.1.5",
+    "@rspack/core": "^2.1.5",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
-    "eslint": "^10.5.0",
-    "globals": "^17.6.0",
+    "@types/node": "^26.1.1",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
-    "ts-jest": "^29.4.11",
+    "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
-    "ts-standard": "^12.0.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.0"
-  },
-  "ts-standard": {
-    "project": "tsconfig.eslint.json",
-    "ignore": [
-      "dist"
-    ]
+    "oxlint": "^1.75.0"
   }
 }

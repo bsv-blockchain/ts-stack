@@ -64,7 +64,7 @@ Thank you for considering contributing to the BSV Blockchain Overlay Services En
 
 ## Coding Conventions
 
-- **Code Style**: We use `ts-standard` for our TypeScript coding style. Run `npm run lint` to ensure your code adheres to this style.
+- **Code Style**: We use `Oxlint` for our TypeScript coding style. Run `npm run lint` to ensure your code adheres to this style.
   
 - **Minimal Runtime Dependencies**: Code should not depend on external systems where possible, with a strong preference for maintaining things internally. The one exception is the `@bsv/sdk` library dependency.
   

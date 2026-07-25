@@ -1,6 +1,6 @@
 {
   "name": "@bsv/authsocket-client",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "publishConfig": {
     "access": "public"
   },
@@ -26,7 +26,7 @@
     "test": "npm run build && jest",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
-    "lint": "ts-standard --fix src/**/*.ts",
+    "lint": "oxlint src",
     "build": "npm run build:ts",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "build:umd": "webpack --config webpack.config.js",
@@ -53,21 +53,21 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client#readme",
   "dependencies": {
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
-    "ts-jest": "^29.4.11",
+    "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
-    "ts-standard": "^12.0.2",
-    "ts2md": "^0.2.5",
+    "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "webpack": "^5.107.2",
-    "webpack-cli": "^7.0.3",
-    "@bsv/sdk": "workspace:^"
+    "webpack": "^5.109.0",
+    "webpack-cli": "^7.2.1",
+    "oxlint": "^1.75.0"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

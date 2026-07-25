@@ -210,7 +210,7 @@ await gaspSequential.sync()
 - `@bsv/sdk` — Transaction, utils for encoding/decoding
 
 **Dev:**
-- jest, ts-jest, typescript, ts-standard
+- jest, ts-jest, typescript, Oxlint
 
 ## Common pitfalls / gotchas
 

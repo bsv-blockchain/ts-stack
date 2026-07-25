@@ -4,9 +4,9 @@ title: "@bsv/btms"
 kind: package
 domain: wallet
 npm: "@bsv/btms"
-version: "1.0.1"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "1.1.1"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["tokens", "protocol"]
 github_repo: "https://github.com/bsv-blockchain/ts-stack"

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/simple",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Simplified, modular helper library for BSV blockchain development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,8 +28,8 @@
     "dev": "tsc --watch",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "lint": "ts-standard --fix src/**/*.ts",
-    "lint:ci": "ts-standard src/**/*.ts",
+    "lint": "oxlint src",
+    "lint:ci": "oxlint src",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -45,28 +45,22 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@bsv/message-box-client": "^2.2.0",
-    "@bsv/wallet-toolbox": "^2.3.3",
-    "@bsv/wallet-toolbox-client": "^2.3.3"
+    "@bsv/message-box-client": "workspace:^",
+    "@bsv/wallet-toolbox": "workspace:^",
+    "@bsv/wallet-toolbox-client": "workspace:^"
   },
   "overrides": {
     "minimatch": "^10.2.1"
   },
-  "ts-standard": {
-    "project": "tsconfig.eslint.json",
-    "ignore": [
-      "dist"
-    ]
-  },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
-    "ts-standard": "^12.0.2",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "files": [
     "dist",

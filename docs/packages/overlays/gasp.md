@@ -3,11 +3,11 @@ id: pkg-gasp
 title: "@bsv/gasp"
 kind: package
 domain: overlays
-version: "1.2.2"
+version: "1.3.1"
 source_repo: "bsv-blockchain/gasp"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/gasp"
 repo: "https://github.com/bsv-blockchain/gasp"

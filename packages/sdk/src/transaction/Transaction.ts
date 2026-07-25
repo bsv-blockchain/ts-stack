@@ -742,8 +742,9 @@ export default class Transaction {
 
   /**
    * Signs a transaction, hydrating all its unlocking scripts based on the provided script templates where they are available.
+   * @param options - Signing behavior. Set `skipExistingSignatures` to preserve inputs that already have an unlocking script.
    */
-  async sign (): Promise<void> {
+  async sign (options: { skipExistingSignatures?: boolean } = {}): Promise<void> {
     this.invalidateSerializationCaches()
     for (const out of this.outputs) {
       if (out.satoshis === undefined) {
@@ -765,6 +766,9 @@ export default class Transaction {
     try {
       unlockingScripts = await Promise.all(
         this.inputs.map(async (x, i): Promise<UnlockingScript | undefined> => {
+          if (options.skipExistingSignatures === true && this.inputs[i].unlockingScript != null) {
+            return this.inputs[i].unlockingScript
+          }
           if (typeof this.inputs[i].unlockingScriptTemplate === 'object') {
             return await this.inputs[i]?.unlockingScriptTemplate?.sign(this, i)
           } else {

@@ -101,7 +101,9 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
     }
     const headers = {
       'Content-Type': 'application/octet-stream',
-      'X-Topics': JSON.stringify(taggedBEEF.topics)
+      // OpenAPI "simple" array encoding is comma-separated. Overlay Express
+      // accepts this canonical form and the legacy JSON array during rollout.
+      'X-Topics': taggedBEEF.topics.join(',')
     }
     let body
     if (Array.isArray(taggedBEEF.offChainValues)) {
@@ -114,7 +116,7 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
     } else {
       body = new Uint8Array(taggedBEEF.beef)
     }
-    const response = await fetch(`${url}/submit`, {
+    const response = await this.httpClient(`${url}/submit`, {
       method: 'POST',
       headers,
       body

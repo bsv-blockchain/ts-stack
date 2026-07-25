@@ -33,8 +33,8 @@
 ## Lint
 | Field | Value |
 |-------|-------|
-| Linter | ts-standard |
-| Lint command | `ts-standard --fix 'src/**/*.ts'` |
+| Linter | Oxlint |
+| Lint command | `oxlint src` |
 
 ## Dependencies
 | Type | Count | Packages |

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did-client",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Discover DID records with ease",
   "publishConfig": {
     "access": "public"
@@ -20,8 +20,8 @@
     "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
-    "lint:ci": "ts-standard src/**/*.ts",
-    "lint": "ts-standard --fix src/**/*.ts",
+    "lint:ci": "oxlint src",
+    "lint": "oxlint src",
     "build": "npm run build:ts && npm run build:umd",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "build:umd": "webpack --config webpack.config.js",
@@ -32,27 +32,23 @@
   "author": "Peer-to-peer Privacy Systems Research, LLC",
   "license": "Open BSV License",
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
-    "eslint": "^10.5.0",
-    "globals": "^17.6.0",
+    "@types/node": "^26.1.1",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
-    "ts-jest": "^29.4.11",
+    "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
-    "ts-standard": "^12.0.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.0",
-    "webpack": "^5.107.2",
-    "webpack-cli": "^7.0.3",
-    "@bsv/sdk": "workspace:^"
+    "webpack": "^5.109.0",
+    "webpack-cli": "^7.2.1",
+    "oxlint": "^1.75.0"
   },
   "dependencies": {
-    "@bsv/wallet-toolbox-client": "^2.3.3"
+    "@bsv/wallet-toolbox-client": "workspace:^"
   },
   "overrides": {
     "typescript": "^6.0.3"

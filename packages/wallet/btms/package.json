@@ -1,6 +1,6 @@
 {
   "name": "@bsv/btms",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Basic Token Management System - UTXO-based token management for BSV",
   "module": "dist/esm/src/index.js",
@@ -21,7 +21,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "ts-standard --fix src/**/*.ts",
+    "lint": "oxlint src",
     "build": "tsc -b",
     "prepublishOnly": "npm run build",
     "doc": "ts2md --inputFilename=src/index.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1"
@@ -42,13 +42,13 @@
     "directory": "packages/wallet/btms"
   },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11",
-    "ts-standard": "^12.0.2",
-    "ts2md": "^0.2.0",
+    "ts-jest": "^29.4.12",
+    "ts2md": "^0.2.8",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

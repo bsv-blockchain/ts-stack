@@ -51,11 +51,8 @@ function caretUpperBound (version) {
   return { major: 0, minor: 0, patch: version.patch + 1 }
 }
 
-function acceptsWorkspaceVersion (range, wsVersion) {
-  // workspace:^ is the only `workspace:` form we allow — it publishes as `^X.Y.Z`,
-  // letting downstream consumers dedupe. `workspace:*` publishes as an exact pin
-  // and causes duplicate-install bugs across infra components, so reject it here.
-  if (range === 'workspace:^' || range === `^${wsVersion}`) return true
+function acceptsPeerVersion (range, wsVersion) {
+  if (range === `^${wsVersion}`) return true
   if (!range.startsWith('^')) return false
 
   const min = parseVersion(range.slice(1))
@@ -77,12 +74,15 @@ for (const pkg of pkgList) {
     continue
   }
   const d = JSON.parse(raw)
-  for (const field of ['dependencies', 'devDependencies', 'peerDependencies']) {
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
     if (!d[field]) continue
     for (const [dep, range] of Object.entries(d[field])) {
       const wsVersion = workspaceMap[dep]
       if (!wsVersion) continue
-      if (!acceptsWorkspaceVersion(range, wsVersion)) {
+      const valid = field === 'peerDependencies'
+        ? acceptsPeerVersion(range, wsVersion)
+        : range === 'workspace:^'
+      if (!valid) {
         console.log(`STALE  ${d.name}  ${dep}  ${range}  (current: ${wsVersion})`)
         stale++
       }
@@ -132,7 +132,7 @@ for (const child of located) {
 if (stale === 0 && mismatched === 0) {
   console.log('All cross-package version references up to date.')
 } else {
-  if (stale > 0) console.error(`\n${stale} stale references. Run: node scripts/sync-versions.mjs`)
+  if (stale > 0) console.error(`\n${stale} stale references. Run: node scripts/sync-versions.mjs --workspace-only`)
   if (mismatched > 0) console.error(`\n${mismatched} nested package(s) out of lockstep with their enclosing package. Bump them to match.`)
   process.exit(1)
 }

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/message-box-client",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "publishConfig": {
     "access": "public"
   },
@@ -32,7 +32,7 @@
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.integration.ts --watchman=false",
     "test:coverage": "jest --coverage --coverageReporters=text --coverageReporters=html",
     "test:watch": "jest --watch",
-    "lint": "ts-standard --fix .",
+    "lint": "oxlint src",
     "clean": "rimraf dist node_modules && npm install"
   },
   "keywords": [
@@ -55,36 +55,29 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
-    "@bsv/auth-express-middleware": "^2.1.0",
-    "@bsv/payment-express-middleware": "^2.1.0",
-    "@eslint/js": "^10.0.1",
+    "@bsv/auth-express-middleware": "workspace:^",
+    "@bsv/payment-express-middleware": "workspace:^",
+    "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
-    "@types/supertest": "^7.2.0",
-    "@typescript-eslint/eslint-plugin": "^8.61.0",
-    "@typescript-eslint/parser": "^8.61.0",
+    "@types/node": "^26.1.1",
+    "@types/supertest": "^7.2.1",
     "ejs": "^6.0.1",
-    "eslint": "^10.5.0",
-    "eslint-plugin-react": "^7.37.4",
-    "globals": "^17.6.0",
     "jest": "^30.4.2",
-    "jest-fetch-mock": "^3.0.3",
-    "ts-jest": "^29.4.11",
+    "jest-fetch-mock": "^3.2.0",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "ts-standard": "^12.0.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.0",
-    "webpack": "^5.107.2",
-    "webpack-bundle-analyzer": "^5.3.0",
-    "webpack-cli": "^7.0.3",
-    "webpack-dev-server": "^5.2.5",
+    "webpack": "^5.109.0",
+    "webpack-bundle-analyzer": "^5.3.1",
+    "webpack-cli": "^7.2.1",
+    "webpack-dev-server": "^5.2.6",
     "webpack-merge": "^6.0.1",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "dependencies": {
-    "@bsv/authsocket-client": "^2.1.0"
+    "@bsv/authsocket-client": "workspace:^"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

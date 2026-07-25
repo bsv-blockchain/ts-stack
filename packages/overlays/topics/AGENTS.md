@@ -177,7 +177,7 @@ await server.start()
 - `mongodb` — MongoDB driver (for lookup services)
 
 **Dev:**
-- jest, ts-jest, typescript, ts-standard
+- jest, ts-jest, typescript, Oxlint
 - mongodb-memory-server — In-memory MongoDB for tests
 
 ## Common pitfalls / gotchas

@@ -7,8 +7,7 @@ import {
   SUPPORTED_FIAT_CURRENCY_CODES,
   SupportedCurrencyCode
 } from '../types'
-import { Services } from '@bsv/wallet-toolbox-client'
-import { WalletSettingsManager } from '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager'
+import { Services, WalletSettingsManager } from '@bsv/wallet-toolbox-client'
 const DEFAULT_REFRESH_INTERVAL = 5 * 60 * 1000
 
 /**

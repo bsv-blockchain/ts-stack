@@ -28,6 +28,11 @@ interface FakeStore {
   applied?: AppliedRow[]
 }
 
+function must<T> (value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message)
+  return value
+}
+
 function makeStorage (store: FakeStore): any {
   const key = (topic: string, height: number): string => `${topic}:${height}`
   return {
@@ -111,11 +116,11 @@ describe('BRC-136 BASM anchor chain continuity', () => {
     const store: FakeStore = { anchors: new Map(), admitted: new Map() }
 
     // Genesis: topic admits two txs at height 100.
-    store.admitted!.set(100, [
+    must(store.admitted, 'admitted transaction map').set(100, [
       { txid: TXID_1, blockIndex: 0 },
       { txid: TXID_2, blockIndex: 1 }
     ])
-    const genesisRoot = computeBasmRoot(store.admitted!.get(100)!)
+    const genesisRoot = computeBasmRoot(must(must(store.admitted, 'admitted transaction map').get(100), 'genesis admissions'))
     const genesisTac = computeTac(ZERO, blockHashFor(100), genesisRoot)
     store.anchors.set('tm_test:100', {
       topic: 'tm_test',
@@ -137,7 +142,7 @@ describe('BRC-136 BASM anchor chain continuity', () => {
     // 101..105 are empty anchors (zero root, zero count) chained off genesis.
     let expectedTac = genesisTac
     for (let h = 101; h <= 105; h++) {
-      const anchor = store.anchors.get(`tm_test:${h}`)!
+      const anchor = must(store.anchors.get(`tm_test:${h}`), `anchor ${h}`)
       expect(anchor.basmRoot).toBe(ZERO)
       expect(anchor.admittedCount).toBe(0)
       expectedTac = computeTac(expectedTac, blockHashFor(h), ZERO)
@@ -146,7 +151,7 @@ describe('BRC-136 BASM anchor chain continuity', () => {
 
     // The tip TAC is a cumulative hash that still depends on the genesis block —
     // i.e. it was NOT reset to a per-block value.
-    const tipTac = store.anchors.get('tm_test:105')!.tac
+    const tipTac = must(store.anchors.get('tm_test:105'), 'tip anchor').tac
     const resetTac = computeTac(ZERO, blockHashFor(105), ZERO)
     expect(tipTac).not.toBe(resetTac)
   })
@@ -192,29 +197,29 @@ describe('BRC-136 BASM reorg handling', () => {
     })
 
     // TXID_2 is demoted: no longer proven, block metadata cleared.
-    const row = store.applied!.find(r => r.txid === TXID_2)!
+    const row = must(store.applied?.find(r => r.txid === TXID_2), 'orphaned applied row')
     expect(row.proven).toBe(false)
     expect(row.blockHeight).toBeUndefined()
     // It survives as a receipt record (firstSeenHeight retained).
     expect(row.firstSeenHeight).toBe(101)
 
     // Anchor at 101 rebuilt: empty admitted set, canonical hash, recomputed TAC.
-    const anchor101 = store.anchors.get('tm_test:101')!
+    const anchor101 = must(store.anchors.get('tm_test:101'), 'anchor 101')
     expect(anchor101.admittedCount).toBe(0)
     expect(anchor101.basmRoot).toBe(ZERO)
     expect(anchor101.blockHash).toBe(H101_NEW)
-    const tac100 = store.anchors.get('tm_test:100')!.tac
+    const tac100 = must(store.anchors.get('tm_test:100'), 'anchor 100').tac
     expect(anchor101.tac).toBe(computeTac(tac100, H101_NEW, ZERO))
 
     // Height 100 is untouched.
     const root100 = computeBasmRoot([{ txid: TXID_1, blockIndex: 0 }])
-    expect(store.anchors.get('tm_test:100')!.basmRoot).toBe(root100)
+    expect(must(store.anchors.get('tm_test:100'), 'anchor 100').basmRoot).toBe(root100)
   })
 
   it('is idempotent: orphaned hashes matching no proven rows leave the chain unchanged', async () => {
     const store = seedTwoBlockChain()
     const engine = makeEngine(store, { currentHeight: 101 })
-    const before = store.anchors.get('tm_test:101')!.tac
+    const before = must(store.anchors.get('tm_test:101'), 'anchor 101').tac
 
     await (engine as any).handleReorg({
       orphanedBlockHashes: ['ffff000000000000000000000000000000000000000000000000000000000000'],
@@ -222,8 +227,8 @@ describe('BRC-136 BASM reorg handling', () => {
       newTipHeight: 101
     })
 
-    expect(store.applied!.find(r => r.txid === TXID_2)!.proven).toBe(true)
-    expect(store.anchors.get('tm_test:101')!.tac).toBe(before)
+    expect(must(store.applied?.find(r => r.txid === TXID_2), 'applied row 2').proven).toBe(true)
+    expect(must(store.anchors.get('tm_test:101'), 'anchor 101').tac).toBe(before)
   })
 
   it('re-proving a demoted tx at a new height restores it to the admitted set', async () => {
@@ -235,10 +240,10 @@ describe('BRC-136 BASM reorg handling', () => {
       rebuildFromHeight: 101,
       newTipHeight: 101
     })
-    expect(store.anchors.get('tm_test:101')!.basmRoot).toBe(ZERO)
+    expect(must(store.anchors.get('tm_test:101'), 'anchor 101').basmRoot).toBe(ZERO)
 
     // TXID_2 re-mined into the new canonical block at 101.
-    const row = store.applied!.find(r => r.txid === TXID_2)!
+    const row = must(store.applied?.find(r => r.txid === TXID_2), 'applied row 2')
     row.proven = true
     row.blockHeight = 101
     row.blockHash = H101_NEW
@@ -251,7 +256,7 @@ describe('BRC-136 BASM reorg handling', () => {
       newTipHeight: 101
     })
 
-    const anchor101 = store.anchors.get('tm_test:101')!
+    const anchor101 = must(store.anchors.get('tm_test:101'), 'anchor 101')
     expect(anchor101.admittedCount).toBe(1)
     expect(anchor101.basmRoot).toBe(computeBasmRoot([{ txid: TXID_2, blockIndex: 0 }]))
     expect(anchor101.blockHash).toBe(H101_NEW)
@@ -268,23 +273,23 @@ describe('BRC-136 BASM reorg revalidation sweep', () => {
 
     await (engine as any).revalidateRecentAnchors(3)
 
-    expect(store.applied!.find(r => r.txid === TXID_2)!.proven).toBe(false)
-    const anchor101 = store.anchors.get('tm_test:101')!
+    expect(must(store.applied?.find(r => r.txid === TXID_2), 'applied row 2').proven).toBe(false)
+    const anchor101 = must(store.anchors.get('tm_test:101'), 'anchor 101')
     expect(anchor101.basmRoot).toBe(ZERO)
     expect(anchor101.blockHash).toBe(H101_NEW)
     // Height 100 still valid and untouched.
-    expect(store.applied!.find(r => r.txid === TXID_1)!.proven).toBe(true)
-    expect(store.anchors.get('tm_test:100')!.basmRoot).toBe(computeBasmRoot([{ txid: TXID_1, blockIndex: 0 }]))
+    expect(must(store.applied?.find(r => r.txid === TXID_1), 'applied row 1').proven).toBe(true)
+    expect(must(store.anchors.get('tm_test:100'), 'anchor 100').basmRoot).toBe(computeBasmRoot([{ txid: TXID_1, blockIndex: 0 }]))
   })
 
   it('leaves the chain unchanged when every proof in the window still validates', async () => {
     const store = seedTwoBlockChain()
     const engine = makeEngine(store, { currentHeight: 101, isValidRootForHeight: async () => true })
-    const before = store.anchors.get('tm_test:101')!.tac
+    const before = must(store.anchors.get('tm_test:101'), 'anchor 101').tac
 
     await (engine as any).revalidateRecentAnchors(3)
 
-    expect(store.applied!.find(r => r.txid === TXID_2)!.proven).toBe(true)
-    expect(store.anchors.get('tm_test:101')!.tac).toBe(before)
+    expect(must(store.applied?.find(r => r.txid === TXID_2), 'applied row 2').proven).toBe(true)
+    expect(must(store.anchors.get('tm_test:101'), 'anchor 101').tac).toBe(before)
   })
 })

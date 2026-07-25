@@ -7,17 +7,11 @@ jest.mock('@bsv/wallet-toolbox-client', () => ({
     Services: jest.fn().mockImplementation(() => ({
         getBsvExchangeRate: getBsvExchangeRateMock,
         getFiatExchangeRates: getFiatExchangeRatesMock
+    })),
+    WalletSettingsManager: jest.fn().mockImplementation(() => ({
+        get: jest.fn().mockResolvedValue({ currency: 'USD' })
     }))
 }))
-
-jest.mock(
-    '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager',
-    () => ({
-        WalletSettingsManager: jest.fn().mockImplementation(() => ({
-            get: jest.fn().mockResolvedValue({ currency: 'USD' })
-        }))
-    })
-)
 
 describe('CurrencyConverter cache behaviour', () => {
     let cc: CurrencyConverter

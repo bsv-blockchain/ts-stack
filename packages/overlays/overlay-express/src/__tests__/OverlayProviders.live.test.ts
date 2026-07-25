@@ -19,7 +19,8 @@ describeLive('Overlay providers live integration', () => {
     expect(header?.height).toBe(height)
     expect(header?.hash).toMatch(/^[0-9a-f]{64}$/)
     expect(header?.merkleRoot).toMatch(/^[0-9a-f]{64}$/)
-    await expect(chaintracks.isValidRootForHeight(header!.merkleRoot, height)).resolves.toBe(true)
+    if (header === undefined) throw new Error('header was not returned')
+    await expect(chaintracks.isValidRootForHeight(header.merkleRoot, height)).resolves.toBe(true)
   })
 
   test('fetches and validates a real mined mainnet Arcade proof', async () => {
@@ -34,6 +35,9 @@ describeLive('Overlay providers live integration', () => {
     expect(proof?.txid).toBe(txid)
     expect(proof?.blockHeight).toBeGreaterThan(0)
     expect(proof?.merkleRoot).toMatch(/^[0-9a-f]{64}$/)
-    await expect(chaintracks.isValidRootForHeight(proof!.merkleRoot, proof!.blockHeight!)).resolves.toBe(true)
+    if (proof === undefined || proof.blockHeight === undefined) {
+      throw new Error('complete proof was not returned')
+    }
+    await expect(chaintracks.isValidRootForHeight(proof.merkleRoot, proof.blockHeight)).resolves.toBe(true)
   })
 })

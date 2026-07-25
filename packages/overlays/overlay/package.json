@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "type": "module",
   "description": "BSV Blockchain Overlay Services Engine",
   "main": "dist/cjs/mod.js",
@@ -39,8 +39,8 @@
     "test": "npm run build && jest",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
-    "lint": "ts-standard --fix src/**/*.ts",
-    "lint:ci": "ts-standard src/**/*.ts",
+    "lint": "oxlint src",
+    "lint:ci": "oxlint src",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
     "prepublish": "npm run build",
@@ -65,19 +65,19 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay#readme",
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.1",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11",
-    "ts-standard": "^12.0.2",
-    "ts2md": "^0.2.0",
+    "ts-jest": "^29.4.12",
+    "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "dependencies": {
-    "@bsv/gasp": "^1.3.0",
-    "knex": "^3.2.10"
+    "@bsv/gasp": "workspace:^",
+    "knex": "^3.3.0"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

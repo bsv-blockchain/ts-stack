@@ -154,7 +154,7 @@ export class ProtoWallet {
     const linkageProofBin = [
       ...linkageProof.R.encode(true),
       ...linkageProof.SPrime.encode(true),
-      ...linkageProof.z.toArray()
+      ...linkageProof.z.toArray('be', 32)
     ] as number[]
     const revelationTime = new Date().toISOString()
     const { ciphertext: encryptedLinkage } = await this.encrypt({

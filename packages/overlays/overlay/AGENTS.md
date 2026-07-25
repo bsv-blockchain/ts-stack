@@ -48,7 +48,10 @@ const engine = new Engine(
 )
 
 // 2. Submitting transactions with topics
-const topics = JSON.parse(req.headers['x-topics'])
+const topicsHeader = req.headers['x-topics']
+const topics = topicsHeader.trim().startsWith('[')
+  ? JSON.parse(topicsHeader)
+  : topicsHeader.split(',').map(topic => topic.trim())
 const taggedBEEF = { beef: Array.from(req.body), topics }
 await engine.submit(taggedBEEF, (steak) => res.status(200).json(steak))
 
@@ -106,7 +109,7 @@ class CustomLookupService implements LookupService {
 - `knex` — SQL query builder (for KnexStorage)
 
 **Dev:**
-- jest, ts-jest, typescript, ts-standard
+- jest, ts-jest, typescript, Oxlint
 
 ## Common pitfalls / gotchas
 

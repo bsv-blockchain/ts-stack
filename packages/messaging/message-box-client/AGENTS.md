@@ -128,7 +128,7 @@ expect(token).toHaveProperty('amount', 5)
 
 - `@bsv/authsocket-client` ^2.0.2 — WebSocket auth
 - `@bsv/sdk` ^2.0.14 — Wallet, crypto, auth
-- Dev: jest, ts-jest, ts-standard, webpack, supertest
+- Dev: jest, ts-jest, Oxlint, webpack, supertest
 
 ## Common pitfalls / gotchas
 

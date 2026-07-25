@@ -164,7 +164,7 @@ class ResponseWriterWrapper {
  */
 export class ExpressTransport implements Transport {
   peer?: Peer
-  allowAuthenticated: boolean
+  allowUnauthenticated: boolean
   openNonGeneralHandles: Record<string, Array<{ res: Response, next: Function }>> = {}
   openGeneralHandles: Record<string, { next: Function, res: Response }> = {}
   openNextHandlers: Record<string, NextFunction> = {}
@@ -188,9 +188,21 @@ export class ExpressTransport implements Transport {
     logger?: typeof console,
     logLevel?: LogLevel
   ) {
-    this.allowAuthenticated = allowUnauthenticated
+    this.allowUnauthenticated = allowUnauthenticated
     this.logger = logger
     this.logLevel = logLevel || 'error' // Default to 'error' if not provided
+  }
+
+  /**
+   * @deprecated Use `allowUnauthenticated`. This compatibility alias will be
+   * removed in the next major release.
+   */
+  get allowAuthenticated (): boolean {
+    return this.allowUnauthenticated
+  }
+
+  set allowAuthenticated (value: boolean) {
+    this.allowUnauthenticated = value
   }
 
   /**
@@ -785,9 +797,9 @@ export class ExpressTransport implements Transport {
     this.log(
       'warn',
       'No Auth headers found on request. Checking allowUnauthenticated setting.',
-      { allowAuthenticated: this.allowAuthenticated }
+      { allowUnauthenticated: this.allowUnauthenticated }
     )
-    if (this.allowAuthenticated) {
+    if (this.allowUnauthenticated) {
       req.auth = { identityKey: 'unknown' }
       next()
     } else {

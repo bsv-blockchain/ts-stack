@@ -145,7 +145,10 @@ app.get(`/getDocumentationForLookupServiceProvider`, async (req, res) => {
 app.post(`/submit`, async (req, res) => {
   try {
     // Parse out the topics and construct the tagged BEEF
-    const topics = JSON.parse(req.headers['x-topics'] as string)
+    const topicsHeader = req.headers['x-topics'] as string
+    const topics = topicsHeader.trim().startsWith('[')
+      ? JSON.parse(topicsHeader)
+      : topicsHeader.split(',').map(topic => topic.trim())
     const taggedBEEF: TaggedBEEF = {
       beef: Array.from(req.body as number[]),
       topics

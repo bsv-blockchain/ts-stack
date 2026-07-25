@@ -121,7 +121,8 @@ Features may be deprecated before removal:
 
 ## Dependencies
 
-ts-stack pins dependencies to minor versions:
+ts-stack declares compatible public semver ranges and keeps internal workspace
+links canonical:
 
 ```json
 {
@@ -132,9 +133,13 @@ ts-stack pins dependencies to minor versions:
 }
 ```
 
-This allows:
-- Patch updates automatically (bug fixes)
-- Requires manual update for minor/major (new features/breaking changes)
+This allows compatible minor and patch updates while reserving major upgrades
+for explicit migrations. Runtime, development, and optional references to other
+workspace packages use `workspace:^`; published peer dependencies use a broad
+public range such as `^2`.
+
+See [Dependency and Release Policy](../reference/dependency-policy.md) for the
+audit gate, supply-chain controls, residual advisory policy, and release flow.
 
 ## Publishing
 

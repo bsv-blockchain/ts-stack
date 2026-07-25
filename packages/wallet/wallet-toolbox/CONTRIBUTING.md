@@ -68,7 +68,7 @@ Thank you for considering contributing to the BSV Blockchain Libraries Project! 
 
 ## Coding Conventions
 
-- **Code Style**: We use `ts-standard` for our TypeScript coding style. Run `npm run lint` to ensure your code adheres to this style.
+- **Code Style**: We use `Oxlint` for our TypeScript coding style. Run `npm run lint` to ensure your code adheres to this style.
   
 - **No Runtime Dependencies**: All code should be maintained within this library. Do not introduce external dependencies.
   

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Canonical BSV overlay topic managers and lookup services",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,25 +13,25 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "ts-standard --fix src/**/*.ts",
+    "lint": "oxlint src",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.1.1",
+    "@bsv/overlay": "workspace:^",
     "@bsv/templates": "workspace:^",
-    "mongodb": "^7.3.0"
+    "mongodb": "^7.5.0"
   },
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.1",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
-    "ts-jest": "^29.4.11",
-    "ts-standard": "^12.0.0",
+    "ts-jest": "^29.4.12",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "oxlint": "^1.75.0"
   },
   "license": "Open BSV",
   "author": "BSV Blockchain Association",

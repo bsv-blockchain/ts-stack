@@ -176,7 +176,7 @@ export class WABTransport {
   }
 
   createCorrelationId (): string | undefined {
-    return this.telemetry.enabled === true ? this.telemetry.createCorrelationId() : undefined
+    return this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined
   }
 
   async request<T>(path: string, options: WABRequestOptions): Promise<T> {

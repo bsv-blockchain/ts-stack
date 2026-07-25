@@ -4,9 +4,9 @@ title: "@bsv/overlay-topics"
 kind: package
 domain: overlays
 npm: "@bsv/overlay-topics"
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "1.6.1"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["overlay", "topics", "uhrp"]
 ---

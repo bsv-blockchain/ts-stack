@@ -1,5 +1,5 @@
 import ProtoWallet from '../../wallet/ProtoWallet'
-import { Utils, PrivateKey, Hash, Random } from '../../primitives/index'
+import { Utils, PrivateKey, Hash, Random, BigNumber, Schnorr } from '../../primitives/index'
 import { createNonce, verifyNonce } from '../../auth/utils'
 
 const sampleData = [3, 1, 4, 1, 5, 9]
@@ -450,6 +450,36 @@ describe('ProtoWallet', () => {
     })
   })
   describe('ProtoWallet Key Linkage Revelation', () => {
+    it('encodes the Schnorr z scalar as a fixed 32-byte value', async () => {
+      const proverKey = PrivateKey.fromRandom()
+      const counterpartyKey = PrivateKey.fromRandom()
+      const verifierKey = PrivateKey.fromRandom()
+      const proofPoint = PrivateKey.fromRandom().toPublicKey()
+      const proofSpy = jest.spyOn(Schnorr.prototype, 'generateProof').mockReturnValue({
+        R: proofPoint,
+        SPrime: proofPoint,
+        z: new BigNumber(1)
+      })
+
+      try {
+        const revelation = await new ProtoWallet(proverKey).revealCounterpartyKeyLinkage({
+          counterparty: counterpartyKey.toPublicKey().toString(),
+          verifier: verifierKey.toPublicKey().toString()
+        })
+        const { plaintext: proof } = await new ProtoWallet(verifierKey).decrypt({
+          ciphertext: revelation.encryptedLinkageProof,
+          protocolID: [2, 'counterparty linkage revelation'],
+          keyID: revelation.revelationTime,
+          counterparty: proverKey.toPublicKey().toString()
+        })
+
+        expect(proof).toHaveLength(98)
+        expect(proof.slice(-32)).toEqual([...Array(31).fill(0), 1])
+      } finally {
+        proofSpy.mockRestore()
+      }
+    })
+
     it('Validates the revealCounterpartyKeyLinkage function', async () => {
       // Initialize keys
       const proverKey = PrivateKey.fromRandom()

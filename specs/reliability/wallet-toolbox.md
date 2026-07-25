@@ -13,7 +13,7 @@
 ## Build and Test
 - Build command: `npm run build` (tsc --build)
 - Test command: `npm test` (build + jest, excludes man.test.ts)
-- Lint command: `npm run lint` (prettier --write; no ts-standard lint:ci target)
+- Lint command: `npm run lint` (Oxlint over `src` and `benchmarks`)
 - Coverage command: `npm run test:coverage`
 - Benchmark command: None defined
 - Last baseline date: 2026-04-24

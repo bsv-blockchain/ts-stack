@@ -4,9 +4,9 @@ title: "@bsv/overlay-express"
 kind: package
 domain: overlays
 npm: "@bsv/overlay-express"
-version: "1.0.0"
-last_updated: "2026-06-27"
-last_verified: "2026-06-27"
+version: "2.4.2"
+last_updated: "2026-07-24"
+last_verified: "2026-07-24"
 status: stable
 tags: ["overlay", "express", "http"]
 ---
