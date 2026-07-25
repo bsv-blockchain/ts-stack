@@ -19,6 +19,23 @@
       "removeWhen": "Remove after the supported Jest dependency graph adopts minimatch 10.2.5 or newer and natively resolves brace-expansion 5.0.8 or newer."
     },
     {
+      "id": "openapi-typescript-redocly-overrides",
+      "category": "override",
+      "target": "tools/codegen/node/package.json overrides for @redocly/openapi-core@1.34.17",
+      "owner": "ts-stack-maintainers",
+      "reason": "The latest openapi-typescript release still depends on Redocly 1.x ranges that resolve vulnerable js-yaml and minimatch paths, so the isolated codegen lock substitutes compatible patched releases and verifies the generated output byte-for-byte.",
+      "evidence": [
+        "tools/codegen/node/package.json#overrides",
+        "tools/codegen/node/package-lock.json",
+        "https://github.com/advisories/GHSA-52cp-r559-cp3m",
+        "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "https://github.com/openapi-ts/openapi-typescript/blob/openapi-typescript%407.13.0/packages/openapi-typescript/package.json"
+      ],
+      "created": "2026-07-25",
+      "reviewBy": "2026-08-25",
+      "removeWhen": "Remove when a supported openapi-typescript release natively resolves non-vulnerable js-yaml, minimatch, and brace-expansion versions, then regenerate and compare every committed output."
+    },
+    {
       "id": "conformance-intended-skips",
       "category": "skipped-test",
       "target": "211 conformance cases reported skipped at baseline",

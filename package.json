@@ -15,6 +15,8 @@
     "health:check": "node --test scripts/repository-health.test.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
     "health:report": "node scripts/repository-health.mjs --format markdown",
     "audit:security": "pnpm audit --audit-level=high",
+    "codegen": "node scripts/generate-openapi-types.mjs",
+    "codegen:check": "node scripts/generate-openapi-types.mjs --check",
     "conformance": "node conformance/runner/src/runner.js",
     "docs:asyncapi": "node scripts/generate-asyncapi-html.mjs",
     "docs:dev": "pnpm --filter docs-site dev",

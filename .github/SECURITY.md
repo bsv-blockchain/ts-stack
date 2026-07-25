@@ -69,6 +69,11 @@ Reporters who follow this process responsibly will be credited in the security a
 This repository follows the MBGA reliability and security programme:
 - Tier 0 packages target RL5 (fuzz/property tests, threat model, signed artifacts, SBOM)
 - Tier 1 packages target RL4+ with security findings tracked to closure
-- Supply chain: lockfile enforced in CI, Dependabot enabled, license compliance checked
+- Supply chain controls currently enforce frozen lockfiles, deny dependency
+  lifecycle scripts by default in CI, explicitly rebuild audited native/build
+  tools, run dependency review and high/critical audits, and enable Dependabot
+  security updates. License enforcement, SBOMs, and signed container artifacts
+  remain tracked completion gates in the repository health program; they are
+  not represented here as already complete.
 
 See `specs/reliability/` for per-package security status.

@@ -32,6 +32,15 @@ test('workspace discovery exactly matches the 37-project registry', () => {
   assert.ok(
     projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers')
   )
+  assert.deepEqual(projects.dependencyAutomation.firstParty, {
+    pattern: '@bsv/*',
+    owner: 'ts-stack-maintainers',
+    dependabotPolicy: 'ignored',
+    updateMechanism: 'scripts/sync-versions.mjs',
+    releaseWorkflow: '.github/workflows/release.yaml',
+    verification: 'scripts/check-versions.mjs',
+    rationale: 'First-party versions are updated as one release-aware graph after packages are published; generic Dependabot PRs cannot safely coordinate unpublished sibling versions.'
+  })
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
@@ -166,4 +175,52 @@ test('exception JSON schema is checked in and references the active schema versi
   assert.equal(schema.properties.schemaVersion.const, 1)
   assert.ok(schema.properties.exceptions.items.required.includes('reviewBy'))
   assert.ok(schema.properties.exceptions.items.required.includes('removeWhen'))
+})
+
+test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen read-only', () => {
+  const workflowDirectory = path.join(REPOSITORY_ROOT, '.github/workflows')
+  const workflowFiles = fs.readdirSync(workflowDirectory)
+    .filter(file => /\.(?:yml|yaml)$/.test(file))
+    .sort()
+  assert.ok(workflowFiles.length > 0)
+
+  for (const file of workflowFiles) {
+    const source = fs.readFileSync(path.join(workflowDirectory, file), 'utf8')
+    const actionReferences = [...source.matchAll(/^\s*-\s+uses:\s+([^\s#]+)/gm)]
+      .map(match => match[1])
+      .filter(reference => !reference.startsWith('./'))
+    for (const reference of actionReferences) {
+      assert.match(
+        reference,
+        /@[0-9a-f]{40}$/,
+        `${file} action reference must use a full immutable commit SHA: ${reference}`
+      )
+    }
+
+    const frozenInstalls = source.match(
+      /pnpm install --frozen-lockfile[^\n]*/g
+    ) ?? []
+    for (const install of frozenInstalls) {
+      assert.match(
+        install,
+        /--ignore-scripts(?:\s|$)/,
+        `${file} full-workspace install must deny implicit lifecycle scripts`
+      )
+    }
+    assert.doesNotMatch(source, /(?:@latest|\bnpx\s+--yes\b|\bpip install\b|\bgo install\b)/)
+  }
+
+  const codegen = fs.readFileSync(
+    path.join(workflowDirectory, 'codegen.yml'),
+    'utf8'
+  )
+  assert.match(codegen, /^permissions: \{\}$/m)
+  assert.doesNotMatch(codegen, /contents:\s*write|git-auto-commit|git push/)
+  for (const lockfile of [
+    'tools/codegen/go.sum',
+    'tools/codegen/node/package-lock.json',
+    'tools/codegen/uv.lock'
+  ]) {
+    assert.match(codegen, new RegExp(lockfile.replaceAll('.', '\\.')))
+  }
 })

@@ -19,14 +19,17 @@ multi-ecosystem-groups:
 
 updates:
   - package-ecosystem: npm
-    directory: /
+    directories:
+      - /
+      - /tools/codegen/node
     patterns:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
     rebase-strategy: auto
     ignore:
       # First-party workspace versions are reconciled after publishing by
-      # scripts/sync-versions.mjs and the release workflow.
+      # scripts/sync-versions.mjs and the release workflow. Ownership and
+      # enforcement are recorded in projects.json#dependencyAutomation.
       - dependency-name: '@bsv/*'
     groups:
       root-security:
@@ -54,6 +57,8 @@ updates:
     multi-ecosystem-group: monthly-stack-maintenance
     rebase-strategy: auto
     ignore:
+      # Same release-aware first-party policy as the root workspace; see
+      # governance/repository-health/projects.json#dependencyAutomation.
       - dependency-name: '@bsv/*'
     groups:
       infra-security:
@@ -62,6 +67,20 @@ updates:
           - '*'
         exclude-patterns:
           - '@bsv/*'
+
+  - package-ecosystem: gomod
+    directory: /tools/codegen
+    patterns:
+      - '*'
+    multi-ecosystem-group: monthly-stack-maintenance
+    rebase-strategy: auto
+
+  - package-ecosystem: uv
+    directory: /tools/codegen
+    patterns:
+      - '*'
+    multi-ecosystem-group: monthly-stack-maintenance
+    rebase-strategy: auto
 
   - package-ecosystem: github-actions
     directory: /

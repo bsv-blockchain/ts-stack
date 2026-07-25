@@ -137,6 +137,37 @@ function validateGeneratedArtifacts(registry) {
   return errors
 }
 
+function validateDependencyAutomation(registry) {
+  const policy = registry?.dependencyAutomation?.firstParty
+  const prefix = 'projects.json dependencyAutomation.firstParty'
+  if (!policy || typeof policy !== 'object') {
+    return [`${prefix} must be an object`]
+  }
+
+  const errors = []
+  const expected = {
+    pattern: '@bsv/*',
+    dependabotPolicy: 'ignored',
+    updateMechanism: 'scripts/sync-versions.mjs',
+    releaseWorkflow: '.github/workflows/release.yaml',
+    verification: 'scripts/check-versions.mjs'
+  }
+  for (const [field, value] of Object.entries(expected)) {
+    if (policy[field] !== value) {
+      errors.push(`${prefix}.${field} must be ${JSON.stringify(value)}`)
+    }
+  }
+  if (!isNonEmptyString(policy.owner) ||
+      !registry.ownerDefinitions?.[policy.owner]) {
+    errors.push(`${prefix} references unknown owner ${JSON.stringify(policy.owner)}`)
+  }
+  if (!isNonEmptyString(policy.rationale) ||
+      policy.rationale.trim().length < 40) {
+    errors.push(`${prefix}.rationale must be at least 40 characters`)
+  }
+  return errors
+}
+
 function validateProjectMetadata(project, registry) {
   const errors = []
   const prefix = `projects.json entry ${project.path ?? '<missing path>'}`
@@ -201,7 +232,10 @@ export function validateProjectRegistry(registry, discovered) {
   if (!registry?.ownerDefinitions || typeof registry.ownerDefinitions !== 'object') {
     errors.push('projects.json ownerDefinitions must be an object')
   }
-  errors.push(...validateGeneratedArtifacts(registry))
+  errors.push(
+    ...validateDependencyAutomation(registry),
+    ...validateGeneratedArtifacts(registry)
+  )
   if (!registry?.profiles || typeof registry.profiles !== 'object') {
     errors.push('projects.json profiles must be an object')
   }

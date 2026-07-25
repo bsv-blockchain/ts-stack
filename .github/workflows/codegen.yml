@@ -1,123 +1,68 @@
-name: Codegen — OpenAPI → Go, TypeScript, Python types
+name: Codegen — reproducible OpenAPI types
+
 on:
   push:
+    branches: [main]
     paths:
       - 'specs/**/*.yaml'
+      - 'conformance/generated/**'
+      - 'scripts/generate-openapi-types.mjs'
+      - 'tools/codegen/**'
+      - 'package.json'
+      - '.github/workflows/codegen.yml'
+  pull_request:
     branches: [main]
+    paths:
+      - 'specs/**/*.yaml'
+      - 'conformance/generated/**'
+      - 'scripts/generate-openapi-types.mjs'
+      - 'tools/codegen/**'
+      - 'package.json'
+      - '.github/workflows/codegen.yml'
   workflow_dispatch:
 
+concurrency:
+  group: codegen-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
-  generate:
+  verify:
+    name: Verify committed generated types
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      # ── Go types (oapi-codegen) ───────────────────────────────────────────
-      # NOTE: oapi-codegen does not yet support OpenAPI 3.1 nullable syntax
-      # (type: [string, null]). Steps are continue-on-error until resolved.
-      # Upstream: https://github.com/oapi-codegen/oapi-codegen/issues/373
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          go-version: '1.22'
-      - name: Install oapi-codegen
-        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
-      - name: Generate Go types from overlay spec
-        continue-on-error: true
-        run: |
-          mkdir -p conformance/generated/overlay
-          oapi-codegen -generate types -package overlay \
-            specs/overlay/overlay-http.yaml \
-            > conformance/generated/overlay/types.gen.go
-      - name: Generate Go types from ARC spec
-        continue-on-error: true
-        run: |
-          mkdir -p conformance/generated/broadcast
-          oapi-codegen -generate types -package broadcast \
-            specs/broadcast/arc.yaml \
-            > conformance/generated/broadcast/types.gen.go
-      - name: Generate Go types from message-box spec
-        continue-on-error: true
-        run: |
-          mkdir -p conformance/generated/messaging
-          oapi-codegen -generate types -package messaging \
-            specs/messaging/message-box-http.yaml \
-            > conformance/generated/messaging/types.gen.go
+          persist-credentials: false
 
-      # ── TypeScript types (openapi-typescript) ────────────────────────────
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24'
-      - name: Generate TS types from overlay spec
-        run: |
-          mkdir -p conformance/generated/overlay
-          npx --yes openapi-typescript@latest specs/overlay/overlay-http.yaml \
-            -o conformance/generated/overlay/types.gen.d.ts
-      - name: Generate TS types from ARC spec
-        run: |
-          mkdir -p conformance/generated/broadcast
-          npx --yes openapi-typescript@latest specs/broadcast/arc.yaml \
-            -o conformance/generated/broadcast/types.gen.d.ts
-      - name: Generate TS types from message-box spec
-        run: |
-          mkdir -p conformance/generated/messaging
-          npx --yes openapi-typescript@latest specs/messaging/message-box-http.yaml \
-            -o conformance/generated/messaging/types.gen.d.ts
+          cache: npm
+          cache-dependency-path: tools/codegen/node/package-lock.json
 
-      # ── Python types (datamodel-code-generator / pydantic v2) ────────────
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
+          go-version-file: tools/codegen/go.mod
+          cache-dependency-path: tools/codegen/go.sum
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version-file: tools/codegen/pyproject.toml
           python-version: '3.12'
-      - name: Install datamodel-code-generator
-        run: pip install datamodel-code-generator
-      - name: Generate Python types from overlay spec
-        run: |
-          mkdir -p conformance/generated/overlay
-          datamodel-codegen \
-            --input specs/overlay/overlay-http.yaml \
-            --input-file-type openapi \
-            --output conformance/generated/overlay/models.py \
-            --output-model-type pydantic_v2.BaseModel
-      - name: Generate Python types from ARC spec
-        run: |
-          mkdir -p conformance/generated/broadcast
-          datamodel-codegen \
-            --input specs/broadcast/arc.yaml \
-            --input-file-type openapi \
-            --output conformance/generated/broadcast/models.py \
-            --output-model-type pydantic_v2.BaseModel
-      - name: Generate Python types from message-box spec
-        run: |
-          mkdir -p conformance/generated/messaging
-          datamodel-codegen \
-            --input specs/messaging/message-box-http.yaml \
-            --input-file-type openapi \
-            --output conformance/generated/messaging/models.py \
-            --output-model-type pydantic_v2.BaseModel
+          enable-cache: true
+          cache-dependency-glob: tools/codegen/uv.lock
 
-      # ── Rust placeholders (no Cargo workspace in this repo) ──────────────
-      - name: Create Rust codegen placeholder files
-        run: |
-          mkdir -p conformance/generated/overlay conformance/generated/broadcast conformance/generated/messaging
-          cat > conformance/generated/overlay/types.rs.TODO <<'EOF'
-          # To generate Rust types for the overlay spec:
-          # cargo add typify
-          # typify specs/overlay/overlay-http.yaml > src/types.rs
-          EOF
-          cat > conformance/generated/broadcast/types.rs.TODO <<'EOF'
-          # To generate Rust types for the broadcast (ARC) spec:
-          # cargo add typify
-          # typify specs/broadcast/arc.yaml > src/types.rs
-          EOF
-          cat > conformance/generated/messaging/types.rs.TODO <<'EOF'
-          # To generate Rust types for the messaging spec:
-          # cargo add typify
-          # typify specs/messaging/message-box-http.yaml > src/types.rs
-          EOF
+      - name: Install locked Node tooling without lifecycle scripts
+        working-directory: tools/codegen/node
+        run: npm ci --ignore-scripts
 
-      # ── Single commit for all generated files ────────────────────────────
-      - uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
-        with:
-          commit_message: "chore(codegen): regenerate types from OpenAPI specs"
-          file_pattern: "conformance/generated/**"
+      - name: Reject high and critical Node codegen advisories
+        working-directory: tools/codegen/node
+        run: npm audit --audit-level=high
+
+      - name: Verify generated types are byte-for-byte current
+        run: node scripts/generate-openapi-types.mjs --check
