@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
+    "test:coverage": "jest --coverage --coverageReporters=text --coverageReporters=lcov",
     "lint": "oxlint src",
     "lint:ci": "oxlint src",
     "clean": "rm -rf dist coverage",
