@@ -77,14 +77,23 @@ for (const pkg of pkgList) {
   const d = JSON.parse(raw)
   const testCommand = d.scripts?.test
   const coverageCommand = d.scripts?.['test:coverage']
-  if (
-    typeof testCommand === 'string' &&
-    testCommand.includes('--passWithNoTests') &&
-    typeof coverageCommand === 'string' &&
-    !coverageCommand.includes('--passWithNoTests')
-  ) {
-    console.log(`COVERAGE MISMATCH  ${d.name} allows an empty test suite but its test:coverage script does not`)
-    coverageMismatches++
+  if (typeof testCommand === 'string' && typeof coverageCommand === 'string') {
+    const missingCoverageBehaviors = [
+      '--passWithNoTests',
+      '--experimental-vm-modules'
+    ].filter(option => testCommand.includes(option) && !coverageCommand.includes(option))
+
+    if (
+      coverageCommand.includes('--coverageReporters') &&
+      !coverageCommand.includes('--coverageReporters=lcov')
+    ) {
+      missingCoverageBehaviors.push('--coverageReporters=lcov')
+    }
+
+    if (missingCoverageBehaviors.length > 0) {
+      console.log(`COVERAGE MISMATCH  ${d.name} test:coverage is missing ${missingCoverageBehaviors.join(', ')}`)
+      coverageMismatches++
+    }
   }
 
   for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {

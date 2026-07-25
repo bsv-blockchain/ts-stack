@@ -30,7 +30,7 @@
     "build:umd": "webpack --config webpack.config.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.ts --watchman=false",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.integration.ts --watchman=false",
-    "test:coverage": "jest --coverage --coverageReporters=text --coverageReporters=html",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.ts --watchman=false --coverage --coverageReporters=text --coverageReporters=html --coverageReporters=lcov",
     "test:watch": "jest --watch",
     "lint": "oxlint src",
     "clean": "rimraf dist node_modules && npm install"
