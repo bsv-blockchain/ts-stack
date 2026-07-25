@@ -51,7 +51,7 @@ export class BeefParty extends Beef {
    * @returns `true` if `party` has already been added to this `BeefParty`.
    */
   isParty (party: string): boolean {
-    return Object.prototype.hasOwnProperty.call(this.knownTo, party)
+    return Object.hasOwn(this.knownTo, party)
   }
 
   /**
