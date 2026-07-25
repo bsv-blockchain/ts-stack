@@ -1,8 +1,12 @@
 import { Chain } from '../../../../sdk/types'
 import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
-import { asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
-import { ChaintracksClientApi } from '../Api/ChaintracksClientApi'
-import { ChaintracksStorageApi } from '../Api/ChaintracksStorageApi'
+import { asString, asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
+import {
+  ChaintracksClientApi,
+  ChaintracksInfoApi,
+  HeaderListener,
+  ReorgListener
+} from '../Api/ChaintracksClientApi'
 import { Chaintracks } from '../Chaintracks'
 import { ChaintracksService } from '../ChaintracksService'
 import { ChaintracksServiceClient } from '../ChaintracksServiceClient'
@@ -10,189 +14,242 @@ import {
   blockHash,
   deserializeBaseBlockHeaders,
   genesisBuffer,
-  serializeBaseBlockHeader
+  genesisHeader,
+  serializeBaseBlockHeader,
+  serializeBaseBlockHeaders
 } from '../util/blockHeaderUtilities'
 
-type ClientClass = 'ChaintracksSingletonClient' | 'Chaintracks' | 'ChaintracksServiceClient' | undefined
-let clientClass: ClientClass
+const chain: Chain = 'main'
+const fixtureHeaders = createFixtureHeaders()
 
-clientClass = 'Chaintracks'
-// clientClass = "ChaintracksSingletonClient"
-// clientClass = "ChaintracksServiceClient"
-const includeLocalServiceClient = true
-const includeLocalServiceChaintracks = true
-const includeNpmRegistryClient = false
-const includeGcrTestClient = false
-describe('ChaintracksClientApi tests', () => {
-  jest.setTimeout(999999999)
-
-  const chain: Chain = 'main'
-
+describe('ChaintracksClientApi deterministic contract', () => {
   const clients: Array<{ client: ChaintracksClientApi, chain: Chain }> = []
-
   let localService: ChaintracksService
-  let localServiceStorage: ChaintracksStorageApi
-  let localServiceClient: ChaintracksClientApi
+  let fixtureChaintracks: FixtureChaintracks
   let firstTip: BlockHeader
-
   let logSpy: jest.SpyInstance
-  const capturedLogs: string[] = []
+
   beforeAll(async () => {
-    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
-      capturedLogs.push(args.map(String).join(' '))
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    fixtureChaintracks = new FixtureChaintracks(chain, fixtureHeaders)
+    localService = new ChaintracksService({
+      ...ChaintracksService.createChaintracksServiceOptions(chain),
+      chaintracks: fixtureChaintracks as unknown as Chaintracks
     })
 
-    if (includeLocalServiceChaintracks || includeLocalServiceClient) {
-      localService = new ChaintracksService(ChaintracksService.createChaintracksServiceOptions(chain))
-      localServiceStorage = localService.chaintracks['storageEngine'] as ChaintracksStorageApi
-      await localService.startJsonRpcServer()
+    // Each Jest worker has a separate process ID, avoiding collisions when
+    // package tests execute in parallel.
+    await localService.startJsonRpcServer(30000 + (process.pid % 10000))
+    const localServiceClient = new ChaintracksServiceClient(
+      chain,
+      `http://localhost:${localService.port}`,
+      {}
+    )
 
-      if (includeLocalServiceClient) {
-        localServiceClient = new ChaintracksServiceClient(chain, `http://localhost:${localService.port}`, {})
-        clients.push({ client: localServiceClient, chain })
-      }
-
-      if (includeLocalServiceChaintracks) {
-        clients.push({ client: localService.chaintracks, chain })
-      }
-    }
-
-    if (includeGcrTestClient) {
-      const gcr = new ChaintracksServiceClient('test', 'https://testnet-chaintracks.babbage.systems', {})
-      clients.push({ client: gcr, chain: 'test' })
-    }
-    if (includeGcrTestClient) {
-      const gcr = new ChaintracksServiceClient('main', 'https://mainnet-chaintracks.babbage.systems', {})
-      clients.push({ client: gcr, chain: 'main' })
-    }
-
-    if (includeNpmRegistryClient) {
-      clients.push({ client: makeNpmRegistryClient(chain), chain })
-    }
-
-    const ft = await clients[0].client.findChainTipHeader()
-    if (!ft) throw new Error('No chain tip found')
-    firstTip = ft
+    clients.push(
+      { client: localServiceClient, chain },
+      { client: fixtureChaintracks, chain }
+    )
+    firstTip = await clients[0].client.findChainTipHeader()
   })
 
   afterAll(async () => {
     await localService?.stopJsonRpcServer()
+    logSpy?.mockRestore()
   })
 
-  test('0 getChain', async () => {
+  test('reports its chain', async () => {
     for (const { client, chain } of clients) {
-      const gotChain = await client.getChain()
-      expect(gotChain).toBe(chain)
+      await expect(client.getChain()).resolves.toBe(chain)
     }
   })
 
-  test('1 getInfo', async () => {
+  test('reports deterministic bulk and live ranges', async () => {
     for (const { client, chain } of clients) {
       const gotInfo = await client.getInfo()
-      expect(gotInfo.chain).toBe(chain)
-      expect(gotInfo.heightBulk).toBeGreaterThan(700000)
-      expect(gotInfo.heightLive).toBeGreaterThanOrEqual(firstTip.height - 2)
+      expect(gotInfo).toMatchObject({
+        chain,
+        heightBulk: 800001,
+        heightLive: 800003
+      })
     }
   })
 
-  test('2 getPresentHeight', async () => {
-    for (const { client, chain } of clients) {
-      const presentHeight = await client.getPresentHeight()
-      expect(presentHeight).toBeGreaterThanOrEqual(firstTip.height - 2)
+  test('reports present and current height', async () => {
+    for (const { client } of clients) {
+      await expect(client.getPresentHeight()).resolves.toBe(firstTip.height)
+      await expect(client.currentHeight()).resolves.toBe(firstTip.height)
     }
   })
 
-  test('3 getHeaders', async () => {
-    for (const { client, chain } of clients) {
+  test('returns linked headers across bulk and live ranges', async () => {
+    for (const { client } of clients) {
       const info = await client.getInfo()
-      const h0 = info.heightBulk + 1
-      const h1 = info.heightLive || 10
-      const bulkHeaders = await getHeaders(h0 - 2, 2)
-      expect(bulkHeaders.length).toBe(2)
-      expect(bulkHeaders[1].previousHash === blockHash(bulkHeaders[0])).toBe(true)
-      const bothHeaders = await getHeaders(h0 - 1, 2)
-      expect(bothHeaders.length).toBe(2)
-      expect(bothHeaders[1].previousHash === blockHash(bothHeaders[0])).toBe(true)
-      const liveHeaders = await getHeaders(h0 - 0, 2)
-      expect(liveHeaders.length).toBe(2)
-      expect(liveHeaders[1].previousHash === blockHash(liveHeaders[0])).toBe(true)
-      const partHeaders = await getHeaders(h1, 2)
-      expect(partHeaders.length).toBe(1)
+      const firstLiveHeight = info.heightBulk + 1
+      const cases = [
+        { height: firstLiveHeight - 2, count: 2, expected: 2 },
+        { height: firstLiveHeight - 1, count: 2, expected: 2 },
+        { height: firstLiveHeight, count: 2, expected: 2 },
+        { height: info.heightLive, count: 2, expected: 1 }
+      ]
 
-      async function getHeaders (h: number, c: number): Promise<BaseBlockHeader[]> {
-        const data = asUint8Array(await client.getHeaders(h, c))
-        const headers = deserializeBaseBlockHeaders(data)
-        return headers
+      for (const { height, count, expected } of cases) {
+        const headers = deserializeBaseBlockHeaders(asUint8Array(await client.getHeaders(height, count)))
+        expect(headers).toHaveLength(expected)
+        if (headers.length === 2) {
+          expect(headers[1].previousHash).toBe(blockHash(headers[0]))
+        }
       }
     }
   })
 
-  test('4 findChainTipHeader', async () => {
-    for (const { client, chain } of clients) {
-      const tipHeader = await client.findChainTipHeader()
-      expect(tipHeader.height >= firstTip.height).toBe(true)
+  test('finds the chain tip header and hash', async () => {
+    for (const { client } of clients) {
+      await expect(client.findChainTipHeader()).resolves.toEqual(firstTip)
+      await expect(client.findChainTipHash()).resolves.toBe(firstTip.hash)
     }
   })
 
-  test('5 findChainTipHash', async () => {
-    for (const { client, chain } of clients) {
-      const hash = await client.findChainTipHash()
-      expect(hash.length === 64).toBe(true)
-    }
-  })
-
-  test('6 findHeaderForHeight', async () => {
+  test('finds headers by height and returns undefined for a missing height', async () => {
     for (const { client, chain } of clients) {
       const header0 = await client.findHeaderForHeight(0)
-      expect(header0 !== undefined).toBe(true)
-      if (header0 != null) {
-        expect(genesisBuffer(chain)).toEqual(serializeBaseBlockHeader(header0))
-      }
+      expect(header0).toBeDefined()
+      expect(genesisBuffer(chain)).toEqual(serializeBaseBlockHeader(header0!))
 
-      const header = await client.findHeaderForHeight(firstTip.height)
-      expect((header != null) && header.height === firstTip.height).toBe(true)
-
-      const missing = await client.findHeaderForHeight(99999999)
-      expect(missing === undefined).toBe(true)
+      await expect(client.findHeaderForHeight(firstTip.height)).resolves.toEqual(firstTip)
+      await expect(client.findHeaderForHeight(99999999)).resolves.toBeUndefined()
     }
   })
 
-  test('7 addHeader', async () => {
-    for (const { client, chain } of clients) {
-      const t = await client.findChainTipHeader()
-      const h: BaseBlockHeader = {
-        version: t.version,
-        previousHash: t.previousHash,
-        merkleRoot: t.merkleRoot,
-        time: t.time,
-        bits: t.bits,
-        nonce: t.nonce
-      }
-      await client.addHeader(h)
+  test('finds headers by hash and returns undefined for a missing hash', async () => {
+    for (const { client } of clients) {
+      await expect(client.findHeaderForBlockHash(firstTip.hash)).resolves.toEqual(firstTip)
+      await expect(client.findHeaderForBlockHash('ff'.repeat(32))).resolves.toBeUndefined()
     }
   })
 
-  /*
-  const headers: BlockHeader[] = []
-  const headerListener: HeaderListener = (header) => { headers.push(header) }
-
-  test("subscribeHeaders", async () => {
-      const id = await client.subscribeHeaders(headerListener)
-      expect(typeof id === 'string').toBe(true)
-      expect(await client.unsubscribe(id)).toBe(true)
+  test('validates merkle roots at a height', async () => {
+    for (const { client } of clients) {
+      await expect(client.isValidRootForHeight(firstTip.merkleRoot, firstTip.height)).resolves.toBe(true)
+      await expect(client.isValidRootForHeight('ff'.repeat(32), firstTip.height)).resolves.toBe(false)
+    }
   })
 
-  const reorgs: ({ depth: number, oldTip: BlockHeader, newTip: BlockHeader })[] = []
-  const reorgListener: ReorgListener = (depth, oldTip, newTip) => { reorgs.push({ depth, oldTip, newTip }) }
-
-  test("subscribeReorgs", async () => {
-      const id = await client.subscribeReorgs(reorgListener)
-      expect(typeof id === 'string').toBe(true)
-      expect(await client.unsubscribe(id)).toBe(true)
+  test('reports listening and synchronization state', async () => {
+    for (const { client } of clients) {
+      await expect(client.startListening()).resolves.toBeUndefined()
+      await expect(client.listening()).resolves.toBeUndefined()
+      await expect(client.isListening()).resolves.toBe(true)
+      await expect(client.isSynchronized()).resolves.toBe(true)
+    }
   })
-  */
+
+  test('accepts a submitted header', async () => {
+    const header: BaseBlockHeader = {
+      version: firstTip.version,
+      previousHash: firstTip.hash,
+      merkleRoot: 'ee'.repeat(32),
+      time: firstTip.time + 1,
+      bits: firstTip.bits,
+      nonce: firstTip.nonce + 1
+    }
+
+    for (const { client } of clients) {
+      await expect(client.addHeader(header)).resolves.toBeUndefined()
+    }
+  })
 })
 
-function makeNpmRegistryClient (chain: Chain) {
-  return new ChaintracksServiceClient(chain, `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`)
+class FixtureChaintracks implements ChaintracksClientApi {
+  readonly byHeight = new Map<number, BlockHeader>()
+  readonly byHash = new Map<string, BlockHeader>()
+  readonly tip: BlockHeader
+  readonly submittedHeaders: BaseBlockHeader[] = []
+
+  constructor (
+    public readonly chain: Chain,
+    headers: BlockHeader[]
+  ) {
+    for (const header of headers) {
+      this.byHeight.set(header.height, header)
+      this.byHash.set(header.hash, header)
+    }
+    this.tip = headers.at(-1)!
+  }
+
+  async makeAvailable (): Promise<void> {}
+  async destroy (): Promise<void> {}
+  async getChain (): Promise<Chain> { return this.chain }
+
+  async getInfo (): Promise<ChaintracksInfoApi> {
+    return {
+      chain: this.chain,
+      heightBulk: 800001,
+      heightLive: this.tip.height,
+      storage: 'FixtureChaintracks',
+      bulkIngestors: ['FixtureBulkIngestor'],
+      liveIngestors: ['FixtureLiveIngestor'],
+      packages: []
+    }
+  }
+
+  async getPresentHeight (): Promise<number> { return this.tip.height }
+  async currentHeight (): Promise<number> { return this.tip.height }
+
+  async getHeaders (height: number, count: number): Promise<string> {
+    const headers: BlockHeader[] = []
+    for (let current = height; current < height + count; current++) {
+      const header = this.byHeight.get(current)
+      if (header == null) break
+      headers.push(header)
+    }
+    return asString(serializeBaseBlockHeaders(headers))
+  }
+
+  async findChainTipHeader (): Promise<BlockHeader> { return this.tip }
+  async findChainTipHash (): Promise<string> { return this.tip.hash }
+  async findHeaderForHeight (height: number): Promise<BlockHeader | undefined> { return this.byHeight.get(height) }
+  async findHeaderForBlockHash (hash: string): Promise<BlockHeader | undefined> { return this.byHash.get(hash) }
+  async findLiveHeaderForBlockHash (hash: string): Promise<BlockHeader | undefined> { return this.byHash.get(hash) }
+
+  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
+    return this.byHeight.get(height)?.merkleRoot === root
+  }
+
+  async addHeader (header: BaseBlockHeader): Promise<void> {
+    this.submittedHeaders.push(header)
+  }
+
+  async startListening (): Promise<void> {}
+  async listening (): Promise<void> {}
+  async isListening (): Promise<boolean> { return true }
+  async isSynchronized (): Promise<boolean> { return true }
+  async subscribeHeaders (_listener: HeaderListener): Promise<string> { return 'fixture-header-subscription' }
+  async subscribeReorgs (_listener: ReorgListener): Promise<string> { return 'fixture-reorg-subscription' }
+  async unsubscribe (_subscriptionId: string): Promise<boolean> { return true }
+}
+
+function createFixtureHeaders (): BlockHeader[] {
+  const headers: BlockHeader[] = [genesisHeader(chain)]
+  let previousHash = '11'.repeat(32)
+
+  for (let height = 800000; height <= 800003; height++) {
+    const base: BaseBlockHeader = {
+      version: 1,
+      previousHash,
+      merkleRoot: height.toString(16).padStart(64, '0'),
+      time: 1700000000 + height,
+      bits: 486604799,
+      nonce: height
+    }
+    const header: BlockHeader = {
+      ...base,
+      height,
+      hash: blockHash(base)
+    }
+    headers.push(header)
+    previousHash = header.hash
+  }
+
+  return headers
 }
