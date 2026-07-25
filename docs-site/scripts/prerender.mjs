@@ -15,9 +15,10 @@ function routeOutput(routePath) {
     throw new Error(`Unsafe static route path: ${routePath}`)
   }
 
-  const relativeRoute = routePath === '/'
-    ? ''
-    : routePath.slice(1, routePath.endsWith('/') ? -1 : undefined)
+  let relativeRoute = routePath.slice(1)
+  if (relativeRoute.endsWith('/')) {
+    relativeRoute = relativeRoute.slice(0, -1)
+  }
   return relativeRoute ? resolve(distRoot, relativeRoute, 'index.html') : resolve(distRoot, 'index.html')
 }
 
