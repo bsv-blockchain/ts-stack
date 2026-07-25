@@ -174,9 +174,10 @@ Package-level docs start at [`docs/packages/index.md`](docs/packages/index.md). 
 The main CI workflow performs one frozen install and full package build, then
 runs non-coverage tests and the SDK, DID, wallet-toolbox, VeriFast, and other
 affected coverage suites in parallel. Wallet-toolbox coverage is split into
-three deterministic Jest shards, while its contention-sensitive monitor suite
-runs in a fourth isolated lane. Coverage artifacts are normalized and aggregated
-before one Codecov upload and the optional SonarCloud scan. Packages with a
+four deterministic Jest shards, while its formerly network-sensitive monitor
+suite runs in a fifth isolated lane. The remaining coverage-capable packages
+are split across two deterministic lanes. Coverage artifacts are normalized
+and aggregated before one Codecov upload and the optional SonarCloud scan. Packages with a
 `test:coverage` script execute their assertions in a coverage lane; packages
 without one are selected dynamically by
 [`scripts/run-ci-tests.mjs`](scripts/run-ci-tests.mjs), so each affected suite
