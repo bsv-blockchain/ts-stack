@@ -13,6 +13,32 @@ import {
     isRecord
 } from "../security/requestValidation";
 import { log } from "../logger";
+import { User } from "../types";
+
+type PresentedUser =
+    | { success: true; user: User }
+    | { success: false; status: 400 | 404; message: string };
+
+async function resolvePresentedUser(body: unknown): Promise<PresentedUser> {
+    if (!isRecord(body) || !isHexIdentifier(body.presentationKey)) {
+        return {
+            success: false,
+            status: 400,
+            message: "A 32-byte presentationKey is required."
+        };
+    }
+    const user = await UserService.getUserByPresentationKey(body.presentationKey);
+    return user
+        ? { success: true, user }
+        : { success: false, status: 404, message: "User not found" };
+}
+
+function sendPresentedUserFailure(
+    res: Response,
+    resolution: PresentedUser & { success: false }
+) {
+    return res.status(resolution.status).json({ message: resolution.message });
+}
 
 export class UserController {
     /**
@@ -21,20 +47,14 @@ export class UserController {
      */
     public static async listLinkedMethods(req: Request, res: Response) {
         try {
-            if (!isRecord(req.body)) {
-                return res.status(400).json({ message: "Request body must be a JSON object." });
-            }
-            const { presentationKey } = req.body;
-            if (!isHexIdentifier(presentationKey)) {
-                return res.status(400).json({ message: "A 32-byte presentationKey is required." });
+            const resolution = await resolvePresentedUser(req.body);
+            if (!resolution.success) {
+                return sendPresentedUserFailure(res, resolution);
             }
 
-            const user = await UserService.getUserByPresentationKey(presentationKey);
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            const authMethods = await UserService.getAuthMethodsByUserId(user.id);
+            const authMethods = await UserService.getAuthMethodsByUserId(
+                resolution.user.id
+            );
             res.json({ authMethods });
         } catch (error: any) {
             log.error({ operation: 'controller.user.list_linked_methods', err: error, outcome: 'error' }, 'listLinkedMethods failed');
@@ -85,20 +105,14 @@ export class UserController {
      */
     public static async deleteUser(req: Request, res: Response) {
         try {
-            if (!isRecord(req.body)) {
-                return res.status(400).json({ message: "Request body must be a JSON object." });
-            }
-            const { presentationKey } = req.body;
-            if (!isHexIdentifier(presentationKey)) {
-                return res.status(400).json({ message: "A 32-byte presentationKey is required." });
+            const resolution = await resolvePresentedUser(req.body);
+            if (!resolution.success) {
+                return sendPresentedUserFailure(res, resolution);
             }
 
-            const user = await UserService.getUserByPresentationKey(presentationKey);
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            await UserService.deleteUserByPresentationKey(user.presentationKey);
+            await UserService.deleteUserByPresentationKey(
+                resolution.user.presentationKey
+            );
             res.json({ success: true, message: "User (and all linked data) deleted." });
         } catch (error: any) {
             log.error({ operation: 'controller.user.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
