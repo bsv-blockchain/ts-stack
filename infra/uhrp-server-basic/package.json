@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-lite",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -28,10 +28,10 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
-    "@bsv/auth-express-middleware": "^2.1.1",
-    "@bsv/payment-express-middleware": "^2.1.0",
-    "@bsv/sdk": "^2.1.9",
-    "@bsv/wallet-toolbox-client": "^2.4.3",
+    "@bsv/auth-express-middleware": "^2.1.2",
+    "@bsv/payment-express-middleware": "^2.1.1",
+    "@bsv/sdk": "^2.2.0",
+    "@bsv/wallet-toolbox-client": "^2.4.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",

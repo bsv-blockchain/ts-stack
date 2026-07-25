@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.12",
+  "version": "2.0.13",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -53,9 +53,9 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@bsv/payment-express-middleware": "^2.1.0",
-    "@bsv/sdk": "^2.1.9",
-    "@bsv/wallet-toolbox": "^2.4.3",
+    "@bsv/payment-express-middleware": "^2.1.1",
+    "@bsv/sdk": "^2.2.0",
+    "@bsv/wallet-toolbox": "^2.4.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
