@@ -281,7 +281,10 @@ export class CredentialIssuer {
     const errors: string[] = []
 
     // Check W3C context
-    if (vc['@context'].length === 0 || !vc['@context'].includes(VC_CONTEXT)) {
+    const contexts = vc['@context']
+    const hasW3cContext = Array.isArray(contexts) &&
+      contexts.some(context => typeof context === 'string' && context === VC_CONTEXT)
+    if (!hasW3cContext) {
       errors.push('Missing W3C VC context')
     }
 

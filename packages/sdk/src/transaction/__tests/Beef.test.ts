@@ -324,6 +324,22 @@ describe('Beef tests', () => {
     }
   })
 
+  test('6a_BeefParty safely tracks object prototype property names', () => {
+    const bp = new BeefParty(['__proto__', 'constructor'])
+
+    bp.addKnownTxidsForParty('__proto__', ['__proto__', 'constructor'])
+    bp.addKnownTxidsForParty('constructor', ['prototype'])
+
+    expect(bp.isParty('__proto__')).toBe(true)
+    expect(bp.isParty('constructor')).toBe(true)
+    expect(bp.isParty('toString')).toBe(false)
+    expect(bp.getKnownTxidsForParty('__proto__')).toEqual(['__proto__', 'constructor'])
+    expect(bp.getKnownTxidsForParty('constructor')).toEqual(['prototype'])
+    expect(Object.getPrototypeOf(bp.knownTo)).toBeNull()
+    expect(Object.getPrototypeOf(bp.knownTo.__proto__)).toBeNull()
+    expect((Object.prototype as Record<string, unknown>).prototype).toBeUndefined()
+  })
+
   test('6b_trimKnownTxids_removes_unreferenced_bumps', async () => {
     // Create a beef with multiple transactions and bumps
     const beef = Beef.fromString(beefs[0])

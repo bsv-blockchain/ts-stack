@@ -22,11 +22,16 @@ import { Beef } from './Beef.js'
  *
  */
 export class BeefParty extends Beef {
+  private static newPartyRecord (): Record<string, boolean> {
+    return Object.create(null) as Record<string, boolean>
+  }
+
   /**
    * keys are party identifiers.
    * values are records of txids with truthy value for which the party already has validity proof.
    */
-  knownTo: Record<string, Record<string, boolean>> = {}
+  knownTo: Record<string, Record<string, boolean>> =
+    Object.create(null) as Record<string, Record<string, boolean>>
 
   /**
    *
@@ -46,8 +51,7 @@ export class BeefParty extends Beef {
    * @returns `true` if `party` has already been added to this `BeefParty`.
    */
   isParty (party: string): boolean {
-    const r = Object.keys(this.knownTo).includes(party)
-    return r
+    return Object.hasOwn(this.knownTo, party)
   }
 
   /**
@@ -58,7 +62,7 @@ export class BeefParty extends Beef {
     if (this.isParty(party)) {
       throw new Error(`Party ${party} already exists.`)
     }
-    this.knownTo[party] = {}
+    this.knownTo[party] = BeefParty.newPartyRecord()
   }
 
   /**

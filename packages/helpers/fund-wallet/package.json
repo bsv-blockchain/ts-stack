@@ -17,7 +17,7 @@
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
-    "dev": "ALLOW_SELF_SIGNED_LOCALHOST=true node dist/index.js",
+    "dev": "node dist/index.js",
     "test": "exit 0"
   },
   "dependencies": {
