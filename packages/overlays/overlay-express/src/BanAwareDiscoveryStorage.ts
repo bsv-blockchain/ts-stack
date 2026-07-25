@@ -1,4 +1,5 @@
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
+import { serializeLogValue } from '@bsv/overlay'
 import { BanService } from './BanService.js'
 
 type SHIPStorage = InstanceType<typeof DiscoveryServices.SHIPStorage>
@@ -24,11 +25,11 @@ export class BanAwareSHIPStorage {
 
   async storeSHIPRecord (txid: string, outputIndex: number, identityKey: string, domain: string, topic: string): Promise<void> {
     if (await this.banService.isOutpointBanned(txid, outputIndex)) {
-      this.logger.log(`[BAN] Blocked banned outpoint ${txid}.${outputIndex} from SHIP storage`)
+      this.logger.log(`[BAN] Blocked banned outpoint from SHIP storage: txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
       return
     }
     if (await this.banService.isDomainBanned(domain)) {
-      this.logger.log(`[BAN] Blocked banned domain ${domain} from SHIP storage (${txid}.${outputIndex})`)
+      this.logger.log(`[BAN] Blocked banned domain from SHIP storage: domain=${serializeLogValue(domain)} txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
       return
     }
     return await this.wrapped.storeSHIPRecord(txid, outputIndex, identityKey, domain, topic)
@@ -67,11 +68,11 @@ export class BanAwareSLAPStorage {
 
   async storeSLAPRecord (txid: string, outputIndex: number, identityKey: string, domain: string, service: string): Promise<void> {
     if (await this.banService.isOutpointBanned(txid, outputIndex)) {
-      this.logger.log(`[BAN] Blocked banned outpoint ${txid}.${outputIndex} from SLAP storage`)
+      this.logger.log(`[BAN] Blocked banned outpoint from SLAP storage: txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
       return
     }
     if (await this.banService.isDomainBanned(domain)) {
-      this.logger.log(`[BAN] Blocked banned domain ${domain} from SLAP storage (${txid}.${outputIndex})`)
+      this.logger.log(`[BAN] Blocked banned domain from SLAP storage: domain=${serializeLogValue(domain)} txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
       return
     }
     return await this.wrapped.storeSLAPRecord(txid, outputIndex, identityKey, domain, service)

@@ -6,7 +6,9 @@ import {
   LookupService,
   TopicManager,
   KnexStorageMigrations,
-  Advertiser
+  Advertiser,
+  serializeErrorForLog,
+  serializeLogValue
 } from '@bsv/overlay'
 import {
   ARC,
@@ -32,7 +34,6 @@ import { MongoClient, Db } from 'mongodb'
 import makeUserInterface, { type UIConfig } from './makeUserInterface.js'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import chalk from 'chalk'
-import util from 'node:util'
 import { v4 as uuidv4 } from 'uuid'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
@@ -1383,16 +1384,16 @@ export default class OverlayExpress {
    */
   private formatBodyForLog (body: any, okPrefix: string): string {
     if (Buffer.isBuffer(body)) {
-      return chalk.green(`${okPrefix} binary body (${String(body.byteLength)} bytes)`)
+      return chalk.green(`${okPrefix} binary body (${serializeLogValue(body.byteLength)} bytes)`)
     }
     if (typeof body === 'string') {
-      return chalk.green(`${okPrefix} string body (${String(Buffer.byteLength(body, 'utf8'))} bytes)`)
+      return chalk.green(`${okPrefix} string body (${serializeLogValue(Buffer.byteLength(body, 'utf8'))} bytes)`)
     }
     if (body != null && typeof body === 'object') {
       const keys = Array.isArray(body) ? body.length : Object.keys(body).length
-      return chalk.green(`${okPrefix} structured body (${String(keys)} top-level item(s))`)
+      return chalk.green(`${okPrefix} structured body (${serializeLogValue(keys)} top-level item(s))`)
     }
-    return chalk.green(`${okPrefix} ${typeof body}`)
+    return chalk.green(`${okPrefix} type=${serializeLogValue(typeof body)}`)
   }
 
   private redactHeadersForLog (headers: Record<string, any>): Record<string, any> {
@@ -1413,10 +1414,8 @@ export default class OverlayExpress {
       const startTime = Date.now()
 
       // Log incoming request details
-      this.logger.log(chalk.magenta.bold(`Incoming Request: ${String(req.method)} ${String(req.originalUrl)}`))
-      // Pretty-print headers
-      this.logger.log(chalk.cyan('Headers:'))
-      this.logger.log(util.inspect(this.redactHeadersForLog(req.headers), { colors: true, depth: null }))
+      this.logger.log(chalk.magenta.bold(`Incoming Request: method=${serializeLogValue(req.method)} url=${serializeLogValue(req.originalUrl)}`))
+      this.logger.log(chalk.cyan(`Headers: ${serializeLogValue(this.redactHeadersForLog(req.headers))}`))
 
       // Handle request body
       if (req.body != null && Object.keys(req.body).length > 0) {
@@ -1437,11 +1436,10 @@ export default class OverlayExpress {
         const duration = Date.now() - startTime
         this.logger.log(
           chalk.magenta.bold(
-            `Outgoing Response: ${String(req.method)} ${String(req.originalUrl)} - Status: ${String(res.statusCode)} - Duration: ${String(duration)}ms`
+            `Outgoing Response: method=${serializeLogValue(req.method)} url=${serializeLogValue(req.originalUrl)} status=${serializeLogValue(res.statusCode)} durationMs=${serializeLogValue(duration)}`
           )
         )
-        this.logger.log(chalk.cyan('Response Headers:'))
-        this.logger.log(util.inspect(this.redactHeadersForLog(res.getHeaders()), { colors: true, depth: null }))
+        this.logger.log(chalk.cyan(`Response Headers: ${serializeLogValue(this.redactHeadersForLog(res.getHeaders()))}`))
 
         // Handle response body
         if (responseBody != null) {
@@ -1667,7 +1665,7 @@ export default class OverlayExpress {
             res.status(200).json(steak)
           }
         } catch (error) {
-          console.error(chalk.red('Error in /submit:'), error)
+          this.logger.error(chalk.red(`Error in /submit: error=${serializeErrorForLog(error)}`))
           return res.status(400).json({
             status: 'error',
             message: publicErrorMessage(error)
@@ -1736,7 +1734,7 @@ export default class OverlayExpress {
           res.setHeader('Content-Type', 'application/octet-stream')
           return res.status(200).send(Buffer.from(writer.toArray()))
         } catch (error) {
-          console.error(chalk.red('Error in /lookup:'), error)
+          this.logger.error(chalk.red(`Error in /lookup: error=${serializeErrorForLog(error)}`))
           return res.status(400).json({
             status: 'error',
             message: publicErrorMessage(error)
@@ -1810,7 +1808,7 @@ export default class OverlayExpress {
             })
             return res.status(200).json({ status: 'success', message: 'Transaction status updated' })
           } catch (error) {
-            console.error(chalk.red('Error in /arc-ingest:'), error)
+            this.logger.error(chalk.red(`Error in /arc-ingest: error=${serializeErrorForLog(error)}`))
             return res.status(400).json({
               status: 'error',
               message: publicErrorMessage(error)
@@ -2472,7 +2470,7 @@ export default class OverlayExpress {
 
     // 404 handler for all other routes
     this.app.use((req, res) => {
-      this.logger.log(chalk.red('404 Not Found:'), req.url)
+      this.logger.log(chalk.red(`404 Not Found: url=${serializeLogValue(req.url)}`))
       res.status(404).json({
         status: 'error',
         code: 'ERR_ROUTE_NOT_FOUND',

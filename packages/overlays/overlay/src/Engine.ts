@@ -41,6 +41,7 @@ import {
   extractMerkleProofMetadata
 } from './BASM.js'
 import { BASMRemote } from './BASMRemote.js'
+import { serializeErrorForLog, serializeLogValue } from './SafeLog.js'
 
 const DEFAULT_GASP_SYNC_LIMIT = 10000
 const DEFAULT_BASM_RANGE_LIMIT = 1024
@@ -167,7 +168,7 @@ export class Engine {
       }
       return header.blockHash
     } catch (error) {
-      this.logger.warn(`Unable to resolve BASM block hash for height ${blockHeight}: ${error instanceof Error ? error.message : String(error)}`)
+      this.logger.warn(`Unable to resolve BASM block hash: height=${serializeLogValue(blockHeight)} error=${serializeErrorForLog(error)}`)
       return undefined
     }
   }
@@ -303,7 +304,7 @@ export class Engine {
 
     if (toHeight - fromHeight + 1 > DEFAULT_BASM_RANGE_LIMIT) {
       // Bound the work per pass; the next trigger resumes from the new tip.
-      this.logger.warn(`[BASM] capping anchor chain extension for "${topic}" at ${DEFAULT_BASM_RANGE_LIMIT} blocks (requested ${fromHeight}..${toHeight}); will continue on the next pass`)
+      this.logger.warn(`[BASM] capping anchor chain extension: topic=${serializeLogValue(topic)} limit=${serializeLogValue(DEFAULT_BASM_RANGE_LIMIT)} requestedFrom=${serializeLogValue(fromHeight)} requestedTo=${serializeLogValue(toHeight)}; will continue on the next pass`)
       toHeight = fromHeight + DEFAULT_BASM_RANGE_LIMIT - 1
     }
 
@@ -319,7 +320,7 @@ export class Engine {
       // canonical re-resolution from the header resolver instead of reusing it.
       const blockHash = blockHashHints.get(height) ?? (forceResolve ? undefined : existing?.blockHash) ?? await this.resolveBlockHash(height)
       if (blockHash === undefined) {
-        this.logger.warn(`[BASM] unable to resolve block hash for "${topic}" at height ${height}; halting chain extension`)
+        this.logger.warn(`[BASM] unable to resolve block hash: topic=${serializeLogValue(topic)} height=${serializeLogValue(height)}; halting chain extension`)
         return
       }
 
@@ -571,7 +572,7 @@ export class Engine {
           admissibleOutputs
         }
       } catch (error) {
-        this.logger.error('Error validating topic during submit:', error)
+        this.logger.error(`Error validating topic during submit: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(error)}`)
         failedTopics.add(topic)
         return {
           topic,

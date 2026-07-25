@@ -5,7 +5,8 @@ import {
   SpendNotificationMode,
   OutputAdmittedByTopic,
   OutputSpent,
-  LookupServiceMetaData
+  LookupServiceMetaData,
+  serializeLogValue
 } from '@bsv/overlay'
 import { PushDrop, Utils, LookupQuestion } from '@bsv/sdk'
 import { BanService } from './BanService.js'
@@ -41,7 +42,7 @@ export class BanAwareLookupWrapper implements LookupService {
 
       // Check if the specific outpoint is banned
       if (await this.banService.isOutpointBanned(txid, outputIndex)) {
-        this.logger.log(`[BAN] Blocked banned outpoint ${txid}.${outputIndex} from ${this.protocol}`)
+        this.logger.log(`[BAN] Blocked banned outpoint from lookup admission: txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)} protocol=${serializeLogValue(this.protocol)}`)
         return
       }
 
@@ -51,7 +52,7 @@ export class BanAwareLookupWrapper implements LookupService {
         if (result.fields.length >= 3) {
           const domain = Utils.toUTF8(result.fields[2])
           if (await this.banService.isDomainBanned(domain)) {
-            this.logger.log(`[BAN] Blocked banned domain ${domain} from ${this.protocol} (${txid}.${outputIndex})`)
+            this.logger.log(`[BAN] Blocked banned domain from lookup admission: domain=${serializeLogValue(domain)} protocol=${serializeLogValue(this.protocol)} txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
             return
           }
         }

@@ -578,12 +578,20 @@ describe('BSV Overlay Services Engine', () => {
         // still gate the broadcast (this is the rejected-transfer shape).
         mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
-          throw new Error('rule violation')
+          throw new Error('rule violation\r\nFORGED')
         })
         const broadcaster = makeBroadcaster()
         const engine = makeEngine(broadcaster)
+        const logger = {
+          ...console,
+          error: jest.fn()
+        }
+        engine.logger = logger
         await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
         expect(broadcaster.broadcast).not.toHaveBeenCalled()
+        const message = logger.error.mock.calls[0][0] as string
+        expect(message).toContain('rule violation\\r\\nFORGED')
+        expect(message).not.toMatch(/[\r\n\u2028\u2029]/)
       })
 
       it('broadcasts a consume-only transaction that retains nothing (history purge)', async () => {

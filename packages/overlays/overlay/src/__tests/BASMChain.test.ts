@@ -112,6 +112,28 @@ function makeEngine (
 }
 
 describe('BRC-136 BASM anchor chain continuity', () => {
+  it('serializes topic and resolver failures as single-line log fields', async () => {
+    const store: FakeStore = { anchors: new Map(), admitted: new Map() }
+    const engine = makeEngine(store, {
+      resolver: async () => {
+        throw new Error('resolver failed\r\nFORGED')
+      }
+    })
+    const logger = {
+      ...console,
+      warn: jest.fn()
+    }
+    engine.logger = logger
+
+    await (engine as any).rebuildTopicAnchorChain('tm_test\r\nFORGED', 0, 1024)
+
+    const messages = logger.warn.mock.calls.map(call => call[0] as string)
+    expect(messages).toHaveLength(3)
+    expect(messages.join(' ')).toContain('tm_test\\r\\nFORGED')
+    expect(messages.join(' ')).toContain('resolver failed\\r\\nFORGED')
+    expect(messages.every(message => !/[\r\n\u2028\u2029]/.test(message))).toBe(true)
+  })
+
   it('extends the chain with empty anchors so the TAC never resets across blocks with no admitted txs', async () => {
     const store: FakeStore = { anchors: new Map(), admitted: new Map() }
 

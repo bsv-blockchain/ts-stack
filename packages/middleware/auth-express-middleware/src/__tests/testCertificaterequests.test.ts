@@ -30,11 +30,9 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     })
     await new Promise<void>((resolve, reject) => {
       if (server.listening) {
-        console.log('Test server is running on http://localhost:3001')
         resolve()
       } else {
         server.once('listening', () => {
-          console.log('Test server is running on http://localhost:3001')
           resolve()
         })
         server.once('error', reject)
@@ -100,22 +98,16 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     )
     walletWithCerts.addMasterCertificate(masterCert)
     const authFetch = new AuthFetch(walletWithCerts)
-    let res
-    try {
-      res = await authFetch.fetch(
-        'http://localhost:3001/cert-protected-endpoint', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({ message: 'Hello protected Route!' })
-        })
-    } catch (error) {
-      console.error('Error during fetch:', error)
-    }
+    const res = await authFetch.fetch(
+      'http://localhost:3001/cert-protected-endpoint', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ message: 'Hello protected Route!' })
+      })
     expect(res.status).toBe(200)
     const body = await res.text()
     expect(body).toBeDefined()
-    console.log(body)
   }, 300000)
 })
