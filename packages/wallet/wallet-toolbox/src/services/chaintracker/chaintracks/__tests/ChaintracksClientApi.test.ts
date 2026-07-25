@@ -1,198 +1,296 @@
 import { Chain } from '../../../../sdk/types'
 import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
-import { asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
+import { asString, asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
+import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { ChaintracksClientApi } from '../Api/ChaintracksClientApi'
-import { ChaintracksStorageApi } from '../Api/ChaintracksStorageApi'
 import { Chaintracks } from '../Chaintracks'
 import { ChaintracksService } from '../ChaintracksService'
 import { ChaintracksServiceClient } from '../ChaintracksServiceClient'
+import { createDefaultNoDbChaintracksOptions } from '../createDefaultNoDbChaintracksOptions'
+import { BulkIngestorWhatsOnChainCdn } from '../Ingest/BulkIngestorWhatsOnChainCdn'
+import { LiveIngestorWhatsOnChainPoll } from '../Ingest/LiveIngestorWhatsOnChainPoll'
+import { WhatsOnChainServices, WocGetHeadersHeader } from '../Ingest/WhatsOnChainServices'
+import { BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
+import { ChaintracksFs } from '../util/ChaintracksFs'
 import {
   blockHash,
   deserializeBaseBlockHeaders,
+  deserializeBlockHeaders,
   genesisBuffer,
   serializeBaseBlockHeader
 } from '../util/blockHeaderUtilities'
 
-type ClientClass = 'ChaintracksSingletonClient' | 'Chaintracks' | 'ChaintracksServiceClient' | undefined
-let clientClass: ClientClass
+const chain: Chain = 'main'
+const fixtureRoot = './src/services/chaintracker/chaintracks/__tests/data/cdnTest499'
+const fixtureCdnUrl = 'https://fixture.invalid/blockheaders/'
 
-clientClass = 'Chaintracks'
-// clientClass = "ChaintracksSingletonClient"
-// clientClass = "ChaintracksServiceClient"
-const includeLocalServiceClient = true
-const includeLocalServiceChaintracks = true
-const includeNpmRegistryClient = false
-const includeGcrTestClient = false
-describe('ChaintracksClientApi tests', () => {
-  jest.setTimeout(999999999)
-
-  const chain: Chain = 'main'
-
+describe('ChaintracksClientApi deterministic contract', () => {
   const clients: Array<{ client: ChaintracksClientApi, chain: Chain }> = []
-
   let localService: ChaintracksService
-  let localServiceStorage: ChaintracksStorageApi
-  let localServiceClient: ChaintracksClientApi
+  let localChaintracks: Chaintracks
   let firstTip: BlockHeader
-
   let logSpy: jest.SpyInstance
-  const capturedLogs: string[] = []
+
   beforeAll(async () => {
-    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
-      capturedLogs.push(args.map(String).join(' '))
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const { filesInfo, fileData, headers } = await loadFixtureChain()
+    const fixtureFetch = new FixtureFetch(filesInfo, fileData)
+    const options = createDefaultNoDbChaintracksOptions(
+      chain,
+      '',
+      100,
+      10,
+      fixtureFetch as unknown as ChaintracksFetchApi,
+      fixtureCdnUrl,
+      2,
+      2,
+      100,
+      100,
+      36
+    )
+    options.logging = () => {}
+
+    const bulkWoc = options.bulkIngestors.find(
+      ingestor => ingestor instanceof BulkIngestorWhatsOnChainCdn
+    ) as BulkIngestorWhatsOnChainCdn
+    WhatsOnChainServices.chainInfo[chain] = undefined
+    WhatsOnChainServices.chainInfoTime[chain] = undefined
+    bulkWoc.woc.woc.getChainInfo = async () => ({
+      chain,
+      blocks: headers.at(-1)!.height,
+      headers: headers.at(-1)!.height,
+      bestblockhash: headers.at(-1)!.hash,
+      difficulty: 1,
+      mediantime: headers.at(-1)!.time,
+      verificationprogress: 1,
+      pruned: false,
+      chainwork: ''
     })
 
-    if (includeLocalServiceChaintracks || includeLocalServiceClient) {
-      localService = new ChaintracksService(ChaintracksService.createChaintracksServiceOptions(chain))
-      localServiceStorage = localService.chaintracks['storageEngine'] as ChaintracksStorageApi
-      await localService.startJsonRpcServer()
+    const liveWoc = options.liveIngestors[0] as LiveIngestorWhatsOnChainPoll
+    const headersByHash = new Map(headers.map(header => [header.hash, header]))
+    liveWoc.woc.getHeaders = async () => headers.slice(-2).map(toWocHeader)
+    liveWoc.woc.getHeaderByHash = async hash => headersByHash.get(hash)
 
-      if (includeLocalServiceClient) {
-        localServiceClient = new ChaintracksServiceClient(chain, `http://localhost:${localService.port}`, {})
-        clients.push({ client: localServiceClient, chain })
-      }
+    localChaintracks = new Chaintracks(options)
+    localService = new ChaintracksService({
+      ...ChaintracksService.createChaintracksServiceOptions(chain),
+      chaintracks: localChaintracks
+    })
 
-      if (includeLocalServiceChaintracks) {
-        clients.push({ client: localService.chaintracks, chain })
-      }
-    }
+    // Each Jest worker has a separate process ID, avoiding collisions when
+    // package tests execute in parallel.
+    await localService.startJsonRpcServer(30000 + (process.pid % 10000))
+    const localServiceClient = new ChaintracksServiceClient(
+      chain,
+      `http://localhost:${localService.port}`,
+      {}
+    )
 
-    if (includeGcrTestClient) {
-      const gcr = new ChaintracksServiceClient('test', 'https://testnet-chaintracks.babbage.systems', {})
-      clients.push({ client: gcr, chain: 'test' })
-    }
-    if (includeGcrTestClient) {
-      const gcr = new ChaintracksServiceClient('main', 'https://mainnet-chaintracks.babbage.systems', {})
-      clients.push({ client: gcr, chain: 'main' })
-    }
-
-    if (includeNpmRegistryClient) {
-      clients.push({ client: makeNpmRegistryClient(chain), chain })
-    }
-
-    const ft = await clients[0].client.findChainTipHeader()
-    if (!ft) throw new Error('No chain tip found')
-    firstTip = ft
+    clients.push(
+      { client: localServiceClient, chain },
+      { client: localChaintracks, chain }
+    )
+    firstTip = await clients[0].client.findChainTipHeader()
   })
 
   afterAll(async () => {
     await localService?.stopJsonRpcServer()
+    logSpy?.mockRestore()
   })
 
-  test('0 getChain', async () => {
+  test('reports its chain', async () => {
     for (const { client, chain } of clients) {
-      const gotChain = await client.getChain()
-      expect(gotChain).toBe(chain)
+      await expect(client.getChain()).resolves.toBe(chain)
     }
   })
 
-  test('1 getInfo', async () => {
+  test('reports deterministic bulk and live ranges', async () => {
     for (const { client, chain } of clients) {
       const gotInfo = await client.getInfo()
-      expect(gotInfo.chain).toBe(chain)
-      expect(gotInfo.heightBulk).toBeGreaterThan(700000)
-      expect(gotInfo.heightLive).toBeGreaterThanOrEqual(firstTip.height - 2)
+      expect(gotInfo).toMatchObject({
+        chain,
+        heightBulk: 497,
+        heightLive: 499
+      })
     }
   })
 
-  test('2 getPresentHeight', async () => {
-    for (const { client, chain } of clients) {
-      const presentHeight = await client.getPresentHeight()
-      expect(presentHeight).toBeGreaterThanOrEqual(firstTip.height - 2)
+  test('reports present and current height', async () => {
+    for (const { client } of clients) {
+      await expect(client.getPresentHeight()).resolves.toBe(firstTip.height)
+      await expect(client.currentHeight()).resolves.toBe(firstTip.height)
     }
   })
 
-  test('3 getHeaders', async () => {
-    for (const { client, chain } of clients) {
+  test('returns linked headers across bulk and live ranges', async () => {
+    for (const { client } of clients) {
       const info = await client.getInfo()
-      const h0 = info.heightBulk + 1
-      const h1 = info.heightLive || 10
-      const bulkHeaders = await getHeaders(h0 - 2, 2)
-      expect(bulkHeaders.length).toBe(2)
-      expect(bulkHeaders[1].previousHash === blockHash(bulkHeaders[0])).toBe(true)
-      const bothHeaders = await getHeaders(h0 - 1, 2)
-      expect(bothHeaders.length).toBe(2)
-      expect(bothHeaders[1].previousHash === blockHash(bothHeaders[0])).toBe(true)
-      const liveHeaders = await getHeaders(h0 - 0, 2)
-      expect(liveHeaders.length).toBe(2)
-      expect(liveHeaders[1].previousHash === blockHash(liveHeaders[0])).toBe(true)
-      const partHeaders = await getHeaders(h1, 2)
-      expect(partHeaders.length).toBe(1)
+      const firstLiveHeight = info.heightBulk + 1
+      const cases = [
+        { height: firstLiveHeight - 2, count: 2, expected: 2 },
+        { height: firstLiveHeight - 1, count: 2, expected: 2 },
+        { height: firstLiveHeight, count: 2, expected: 2 },
+        { height: info.heightLive, count: 2, expected: 1 }
+      ]
 
-      async function getHeaders (h: number, c: number): Promise<BaseBlockHeader[]> {
-        const data = asUint8Array(await client.getHeaders(h, c))
-        const headers = deserializeBaseBlockHeaders(data)
-        return headers
+      for (const { height, count, expected } of cases) {
+        const headers = deserializeBaseBlockHeaders(asUint8Array(await client.getHeaders(height, count)))
+        expect(headers).toHaveLength(expected)
+        if (headers.length === 2) {
+          expect(headers[1].previousHash).toBe(blockHash(headers[0]))
+        }
       }
     }
   })
 
-  test('4 findChainTipHeader', async () => {
-    for (const { client, chain } of clients) {
-      const tipHeader = await client.findChainTipHeader()
-      expect(tipHeader.height >= firstTip.height).toBe(true)
+  test('finds the chain tip header and hash', async () => {
+    for (const { client } of clients) {
+      await expect(client.findChainTipHeader()).resolves.toEqual(firstTip)
+      await expect(client.findChainTipHash()).resolves.toBe(firstTip.hash)
     }
   })
 
-  test('5 findChainTipHash', async () => {
-    for (const { client, chain } of clients) {
-      const hash = await client.findChainTipHash()
-      expect(hash.length === 64).toBe(true)
-    }
-  })
-
-  test('6 findHeaderForHeight', async () => {
+  test('finds headers by height and returns undefined for a missing height', async () => {
     for (const { client, chain } of clients) {
       const header0 = await client.findHeaderForHeight(0)
-      expect(header0 !== undefined).toBe(true)
-      if (header0 != null) {
-        expect(genesisBuffer(chain)).toEqual(serializeBaseBlockHeader(header0))
-      }
+      expect(header0).toBeDefined()
+      expect(genesisBuffer(chain)).toEqual(serializeBaseBlockHeader(header0!))
 
-      const header = await client.findHeaderForHeight(firstTip.height)
-      expect((header != null) && header.height === firstTip.height).toBe(true)
-
-      const missing = await client.findHeaderForHeight(99999999)
-      expect(missing === undefined).toBe(true)
+      await expect(client.findHeaderForHeight(firstTip.height)).resolves.toEqual(firstTip)
+      await expect(client.findHeaderForHeight(99999999)).resolves.toBeUndefined()
     }
   })
 
-  test('7 addHeader', async () => {
-    for (const { client, chain } of clients) {
-      const t = await client.findChainTipHeader()
-      const h: BaseBlockHeader = {
-        version: t.version,
-        previousHash: t.previousHash,
-        merkleRoot: t.merkleRoot,
-        time: t.time,
-        bits: t.bits,
-        nonce: t.nonce
-      }
-      await client.addHeader(h)
+  test('finds headers by hash and returns undefined for a missing hash', async () => {
+    for (const { client } of clients) {
+      await expect(client.findHeaderForBlockHash(firstTip.hash)).resolves.toEqual(firstTip)
+      await expect(client.findHeaderForBlockHash('ff'.repeat(32))).resolves.toBeUndefined()
     }
   })
 
-  /*
-  const headers: BlockHeader[] = []
-  const headerListener: HeaderListener = (header) => { headers.push(header) }
-
-  test("subscribeHeaders", async () => {
-      const id = await client.subscribeHeaders(headerListener)
-      expect(typeof id === 'string').toBe(true)
-      expect(await client.unsubscribe(id)).toBe(true)
+  test('validates merkle roots at a height', async () => {
+    for (const { client } of clients) {
+      await expect(client.isValidRootForHeight(firstTip.merkleRoot, firstTip.height)).resolves.toBe(true)
+      await expect(client.isValidRootForHeight('ff'.repeat(32), firstTip.height)).resolves.toBe(false)
+    }
   })
 
-  const reorgs: ({ depth: number, oldTip: BlockHeader, newTip: BlockHeader })[] = []
-  const reorgListener: ReorgListener = (depth, oldTip, newTip) => { reorgs.push({ depth, oldTip, newTip }) }
-
-  test("subscribeReorgs", async () => {
-      const id = await client.subscribeReorgs(reorgListener)
-      expect(typeof id === 'string').toBe(true)
-      expect(await client.unsubscribe(id)).toBe(true)
+  test('reports listening and synchronization state', async () => {
+    for (const { client } of clients) {
+      await expect(client.startListening()).resolves.toBeUndefined()
+      await expect(client.listening()).resolves.toBeUndefined()
+      await expect(client.isListening()).resolves.toBe(true)
+      await expect(client.isSynchronized()).resolves.toBe(true)
+    }
   })
-  */
+
+  test('validates the deterministic chain from tip to genesis', async () => {
+    await expect(localChaintracks.validate()).resolves.toBe(true)
+  })
+
+  test('manages direct header and reorganization subscriptions', async () => {
+    const headerSubscription = await localChaintracks.subscribeHeaders(() => {})
+    const reorgSubscription = await localChaintracks.subscribeReorgs(() => {})
+
+    await expect(localChaintracks.unsubscribe(headerSubscription)).resolves.toBe(true)
+    await expect(localChaintracks.unsubscribe(reorgSubscription)).resolves.toBe(true)
+    await expect(localChaintracks.unsubscribe('missing-subscription')).resolves.toBe(false)
+  })
+
+  test('accepts a submitted header', async () => {
+    const header: BaseBlockHeader = {
+      version: firstTip.version,
+      previousHash: firstTip.hash,
+      merkleRoot: 'ee'.repeat(32),
+      time: firstTip.time + 1,
+      bits: firstTip.bits,
+      nonce: firstTip.nonce + 1
+    }
+
+    for (const { client } of clients) {
+      await expect(client.addHeader(header)).resolves.toBeUndefined()
+    }
+  })
 })
 
-function makeNpmRegistryClient (chain: Chain) {
-  return new ChaintracksServiceClient(chain, `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`)
+class FixtureFetch {
+  constructor (
+    private readonly filesInfo: BulkHeaderFilesInfo,
+    private readonly fileData: Map<string, Uint8Array>
+  ) {}
+
+  async fetchJson<R> (url: string): Promise<R> {
+    if (url.endsWith('mainNetBlockHeaders.json')) {
+      return {
+        ...this.filesInfo,
+        files: this.filesInfo.files.slice(0, 4).map(file => ({ ...file }))
+      } as R
+    }
+    if (url.endsWith('/block/headers/resources')) {
+      return {
+        files: [`${fixtureCdnUrl}400_499_headers`]
+      } as R
+    }
+    throw new Error(`Unexpected fixture JSON request: ${url}`)
+  }
+
+  async download (url: string): Promise<Uint8Array> {
+    const requestedName = url.split('/').at(-1)!
+    const fileName = requestedName === '400_499_headers' ? 'mainNet_4.headers' : requestedName
+    const data = this.fileData.get(fileName)
+    if (data == null) throw new Error(`Unexpected fixture download request: ${url}`)
+    return data
+  }
+
+  pathJoin (baseUrl: string, subpath: string): string {
+    let baseEnd = baseUrl.length
+    while (baseEnd > 0 && baseUrl[baseEnd - 1] === '/') baseEnd--
+
+    let subpathStart = 0
+    while (subpathStart < subpath.length && subpath[subpathStart] === '/') subpathStart++
+
+    return `${baseUrl.slice(0, baseEnd)}/${subpath.slice(subpathStart)}`
+  }
+}
+
+async function loadFixtureChain (): Promise<{
+  filesInfo: BulkHeaderFilesInfo
+  fileData: Map<string, Uint8Array>
+  headers: BlockHeader[]
+}> {
+  const infoData = await ChaintracksFs.readFile(`${fixtureRoot}/mainNetBlockHeaders.json`)
+  const filesInfo = JSON.parse(asString(infoData, 'utf8')) as BulkHeaderFilesInfo
+  const fileData = new Map<string, Uint8Array>()
+  const headers: BlockHeader[] = []
+
+  for (const file of filesInfo.files) {
+    const data = await ChaintracksFs.readFile(`${fixtureRoot}/${file.fileName}`)
+    fileData.set(file.fileName, data)
+    headers.push(...deserializeBlockHeaders(file.firstHeight, data))
+  }
+
+  return { filesInfo, fileData, headers }
+}
+
+function toWocHeader (header: BlockHeader): WocGetHeadersHeader {
+  return {
+    hash: header.hash,
+    confirmations: 1,
+    size: 80,
+    height: header.height,
+    version: header.version,
+    versionHex: header.version.toString(16),
+    merkleroot: header.merkleRoot,
+    time: header.time,
+    mediantime: header.time,
+    nonce: header.nonce,
+    bits: header.bits.toString(16),
+    difficulty: 1,
+    chainwork: '',
+    previousblockhash: header.previousHash,
+    nextblockhash: '',
+    nTx: 0,
+    num_tx: 0
+  }
 }

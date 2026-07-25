@@ -156,6 +156,7 @@ export const NAV: NavSection[] = [
     items: [
       { label: 'Overview', href: '/reference/' },
       { label: 'BRC index', href: '/reference/brc-index/' },
+      { label: 'Repository health', href: '/reference/repository-health/' },
     ],
   },
   {

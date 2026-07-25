@@ -11,6 +11,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repository-health:
+    name: Repository health contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24.x
+
+      - name: Test repository health controls
+        run: node --test scripts/repository-health.test.mjs
+
+      - name: Enforce inventory, exception, baseline, and contract ratchets
+        run: >-
+          node scripts/repository-health.mjs
+          --format text
+          --summary-file "$GITHUB_STEP_SUMMARY"
+
   prepare:
     name: Build, lint, and policy
     runs-on: ubuntu-latest
@@ -66,7 +88,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.github/workflows/ci\.yml|scripts/(run-ci-tests|normalize-lcov-paths)\.mjs)$'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.github/workflows/ci\.yml|governance/repository-health/|scripts/(repository-health|run-ci-tests|normalize-lcov-paths)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"
@@ -746,6 +768,7 @@ jobs:
     name: merge-gate
     if: always()
     needs:
+      - repository-health
       - build-and-test
       - infra
       - docs-validate
@@ -756,17 +779,19 @@ jobs:
     steps:
       - name: Verify every required CI result
         env:
+          HEALTH_RESULT: ${{ needs.repository-health.result }}
           BUILD_RESULT: ${{ needs.build-and-test.result }}
           INFRA_RESULT: ${{ needs.infra.result }}
           DOCS_RESULT: ${{ needs.docs-validate.result }}
           CONFORMANCE_RESULT: ${{ needs.conformance.result }}
           DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
         run: |
-          if [[ "$BUILD_RESULT" != "success" ||
+          if [[ "$HEALTH_RESULT" != "success" ||
+                "$BUILD_RESULT" != "success" ||
                 "$INFRA_RESULT" != "success" ||
                 "$DOCS_RESULT" != "success" ||
                 "$CONFORMANCE_RESULT" != "success" ]]; then
-            echo "::error::Required CI failed: build=$BUILD_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
+            echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
             exit 1
           fi
           if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then

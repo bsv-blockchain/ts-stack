@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bsv-blockchain/ts-stack/governance/repository-health/exception.schema.json",
+  "title": "TS Stack temporary exception registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "lastReviewed",
+    "exceptions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "lastReviewed": {
+      "type": "string",
+      "format": "date"
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "category",
+          "target",
+          "owner",
+          "reason",
+          "evidence",
+          "created",
+          "reviewBy",
+          "removeWhen"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]+$"
+          },
+          "category": {
+            "enum": [
+              "advisory",
+              "coverage",
+              "dependency-hold",
+              "lint",
+              "override",
+              "quality-rule",
+              "security",
+              "skipped-test",
+              "toolchain"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 20
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "created": {
+            "type": "string",
+            "format": "date"
+          },
+          "reviewBy": {
+            "type": "string",
+            "format": "date"
+          },
+          "removeWhen": {
+            "type": "string",
+            "minLength": 10
+          }
+        }
+      }
+    }
+  }
+}
