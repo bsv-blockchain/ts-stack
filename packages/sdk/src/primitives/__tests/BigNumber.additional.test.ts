@@ -10,6 +10,12 @@ describe('BigNumber – additional coverage', () => {
     expect(() => bn.expand(Number.POSITIVE_INFINITY)).toThrow(
       'Expand size must be a non-negative safe integer within the supported word limit'
     )
+
+    const sparse = new BigNumber(1).expand(1_048_576)
+    const oversizedProduct = sparse.mul(sparse)
+    expect(() => oversizedProduct.words).toThrow(
+      'BigNumber word length exceeds the supported limit'
+    )
   })
 
   describe('negative setter', () => {
