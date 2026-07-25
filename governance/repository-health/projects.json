@@ -51,7 +51,7 @@
       "reviewPolicy": "Review the specification and renderer changes; verify regeneration is deterministic in the docs build."
     },
     {
-      "path": "packages/verifast/src/wasm/bdk-core.{mjs,browser.mjs,umd.js,wasm,umd.wasm,d.ts,browser.d.ts}",
+      "path": "packages/verifast/src/wasm/bdk-core.*",
       "owner": "ts-stack-maintainers",
       "sourceInputs": [
         "packages/verifast/README.md#reproducible-wasm-build"

@@ -29,6 +29,8 @@ export type { LogLevel } from './authMiddlewareHelpers.js'
 export { isLogLevelEnabled, getLogMethod } from './authMiddlewareHelpers.js'
 export { writeBodyToWriter } from './authMiddlewareHelpers.js'
 
+const WELL_KNOWN_AUTH_PATH = '/.well-known/auth'
+
 export interface AuthRequest extends Request {
   auth?: {
     identityKey: PubKeyHex
@@ -421,7 +423,11 @@ export class ExpressTransport implements Transport {
         this.log('error', 'No Peer set in ExpressTransport! Cannot handle request.')
         throw new Error('You must set a Peer before you can handle incoming requests!')
       }
-      if (req.path === '/.well-known/auth') {
+      // BRC-104 authentication begins on this intentionally public handshake
+      // endpoint, before a session can exist. This is protocol dispatch, not a
+      // protected-route authorization check. Every other request still takes
+      // the signed general-message path or the explicit unauthenticated policy.
+      if (req.path === WELL_KNOWN_AUTH_PATH) {
         await this.handleWellKnownAuth(req, res, next, onCertificatesReceived)
       } else if (req.headers['x-bsv-auth-request-id']) {
         this.handleGeneralMessage(req, res, next)
