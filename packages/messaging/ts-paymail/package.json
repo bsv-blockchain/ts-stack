@@ -125,7 +125,7 @@
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

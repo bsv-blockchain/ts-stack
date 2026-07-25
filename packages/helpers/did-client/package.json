@@ -42,7 +42,7 @@
     "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "webpack": "^5.109.0",
     "webpack-cli": "^7.2.1",
     "oxlint": "^1.75.0"
@@ -51,7 +51,7 @@
     "@bsv/wallet-toolbox-client": "workspace:^"
   },
   "overrides": {
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "repository": {
     "type": "git",

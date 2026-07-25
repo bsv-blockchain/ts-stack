@@ -58,7 +58,7 @@ jobs:
       id-token: write          # OIDC: assume the seller-account publisher role (no static keys)
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
       - name: Require WAB_MP_ROLE_ARN
         run: |
@@ -82,7 +82,7 @@ jobs:
           echo "Resolved WAB version: $VERSION (Marketplace title: v$VERSION)"
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ vars.WAB_MP_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -117,7 +117,7 @@ jobs:
 
       # Same safety net as infra-release.yaml: infra lockfiles lag @bsv/* publishes and
       # Dockerfile `npm ci` hard-fails (or builds stale deps) without a refresh.
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         if: steps.exists.outputs.already == 'false'
         with:
           node-version: 24
