@@ -1,6 +1,7 @@
 import type { BdkWasmModule } from '../BdkVerifierTypes.js'
 import {
   createWorkerRequestHandler,
+  isBdkWorkerRequest,
   type BdkWorkerRequest,
   type BdkWorkerResponse
 } from '../workers/BdkWorkerProtocol.js'
@@ -22,6 +23,86 @@ function mockModule (): BdkWasmModule {
     VerifyScript: () => ({ domain: 0, code: 0 })
   }
 }
+
+describe('BDK worker protocol validation', () => {
+  it('accepts each supported request shape', () => {
+    expect(isBdkWorkerRequest({
+      id: 0,
+      operation: 'preload',
+      verificationTables: new Uint8Array()
+    })).toBe(true)
+    expect(isBdkWorkerRequest({
+      id: 1,
+      operation: 'verifyScripts',
+      payload: {
+        extendedTransactions: new Uint8Array(),
+        transactionOffsets: new Uint32Array(),
+        utxoHeights: new Int32Array(),
+        heightOffsets: new Uint32Array(),
+        blockHeights: new Int32Array(),
+        consensus: new Uint8Array(),
+        customFlags: new Uint32Array(),
+        customFlagOffsets: new Uint32Array(),
+        network: 0
+      }
+    })).toBe(true)
+    expect(isBdkWorkerRequest({
+      id: 2,
+      operation: 'verifySpends',
+      payload: {
+        transactions: new Uint8Array(),
+        transactionOffsets: new Uint32Array(),
+        inputIndices: new Uint32Array(),
+        lockingScripts: new Uint8Array(),
+        lockingScriptOffsets: new Uint32Array(),
+        sourceSatoshis: new Float64Array(),
+        utxoHeights: new Int32Array(),
+        blockHeights: new Int32Array(),
+        consensus: new Uint8Array(),
+        hasCustomFlags: new Uint8Array(),
+        customFlags: new Uint32Array(),
+        network: 5
+      }
+    })).toBe(true)
+    expect(isBdkWorkerRequest({
+      id: 3,
+      operation: 'verifyDigests',
+      payload: {
+        publicKeys: new Uint8Array(),
+        publicKeyOffsets: new Uint32Array(),
+        digests: new Uint8Array(),
+        signatures: new Uint8Array(),
+        signatureOffsets: new Uint32Array()
+      }
+    })).toBe(true)
+  })
+
+  it.each([
+    null,
+    { id: -1, operation: 'preload' },
+    { id: 1.5, operation: 'preload' },
+    { id: 1, operation: 'unknown' },
+    { id: 1, operation: 'preload', verificationTables: [] },
+    { id: 1, operation: 'verifyDigests', payload: {} },
+    {
+      id: 1,
+      operation: 'verifyScripts',
+      payload: {
+        extendedTransactions: new Uint8Array(),
+        transactionOffsets: new Uint32Array(),
+        utxoHeights: new Int32Array(),
+        heightOffsets: new Uint32Array(),
+        blockHeights: new Int32Array(),
+        consensus: new Uint8Array(),
+        customFlags: new Uint32Array(),
+        customFlagOffsets: new Uint32Array(),
+        network: 6
+      }
+    }
+  ])('rejects malformed request data: %p', value => {
+    expect(isBdkWorkerRequest(value)).toBe(false)
+  })
+})
 
 describe('BDK worker warm-up', () => {
   it('does not construct a worker pool before batch warm-up', async () => {

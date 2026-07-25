@@ -60,6 +60,89 @@ export type BdkWorkerResponse =
 
 export type WorkerModuleFactory = () => Promise<BdkWasmModule>
 
+function isObject (value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function hasTypedArrays (
+  value: unknown,
+  fields: ReadonlyArray<readonly [
+    string,
+    new (length?: number) => ArrayBufferView
+  ]>
+): value is Record<string, unknown> {
+  if (!isObject(value)) return false
+  return fields.every(([field, Type]) => value[field] instanceof Type)
+}
+
+function hasNetwork (value: Record<string, unknown>): boolean {
+  return Number.isInteger(value.network) &&
+    Number(value.network) >= 0 &&
+    Number(value.network) <= 5
+}
+
+/**
+ * Validate data at the dedicated-worker boundary before it reaches WASM.
+ *
+ * Structured cloning preserves the typed-array classes used by this protocol.
+ * The WASM adapter remains responsible for validating cross-field lengths and
+ * offsets because it has the operation-specific semantic context.
+ */
+export function isBdkWorkerRequest (value: unknown): value is BdkWorkerRequest {
+  if (
+    !isObject(value) ||
+    !Number.isSafeInteger(value.id) ||
+    Number(value.id) < 0 ||
+    typeof value.operation !== 'string'
+  ) {
+    return false
+  }
+
+  if (value.operation === 'preload') {
+    return value.verificationTables === undefined ||
+      value.verificationTables instanceof Uint8Array
+  }
+  if (!isObject(value.payload)) return false
+
+  switch (value.operation) {
+    case 'verifyScripts':
+      return hasTypedArrays(value.payload, [
+        ['extendedTransactions', Uint8Array],
+        ['transactionOffsets', Uint32Array],
+        ['utxoHeights', Int32Array],
+        ['heightOffsets', Uint32Array],
+        ['blockHeights', Int32Array],
+        ['consensus', Uint8Array],
+        ['customFlags', Uint32Array],
+        ['customFlagOffsets', Uint32Array]
+      ]) && hasNetwork(value.payload)
+    case 'verifySpends':
+      return hasTypedArrays(value.payload, [
+        ['transactions', Uint8Array],
+        ['transactionOffsets', Uint32Array],
+        ['inputIndices', Uint32Array],
+        ['lockingScripts', Uint8Array],
+        ['lockingScriptOffsets', Uint32Array],
+        ['sourceSatoshis', Float64Array],
+        ['utxoHeights', Int32Array],
+        ['blockHeights', Int32Array],
+        ['consensus', Uint8Array],
+        ['hasCustomFlags', Uint8Array],
+        ['customFlags', Uint32Array]
+      ]) && hasNetwork(value.payload)
+    case 'verifyDigests':
+      return hasTypedArrays(value.payload, [
+        ['publicKeys', Uint8Array],
+        ['publicKeyOffsets', Uint32Array],
+        ['digests', Uint8Array],
+        ['signatures', Uint8Array],
+        ['signatureOffsets', Uint32Array]
+      ])
+    default:
+      return false
+  }
+}
+
 function requiredMethod<K extends keyof BdkWasmModule> (
   module: BdkWasmModule,
   method: K
