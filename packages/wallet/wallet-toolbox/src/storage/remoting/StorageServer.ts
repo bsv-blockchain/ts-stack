@@ -378,9 +378,6 @@ export class StorageServer {
     logObj?: Record<string, unknown>
   ): Promise<RpcDispatchResult> {
     if (!storageRpcMethods.has(method)) return { found: false }
-    if (typeof (this as any)[method] === 'function') {
-      throw new TypeError('Server method dispatch not used in this approach.')
-    }
 
     const storageMethod = method === 'findOutputBaskets'
       ? 'findOutputBasketsAuth'
@@ -393,7 +390,7 @@ export class StorageServer {
 
     const logger = this.createRpcLogger(method, params)
     try {
-      const result = await storageHandler.call(this.storage, ...(params || []))
+      const result = await storageHandler.call(this.storage, ...params)
       this.finishRpcLogging(logger, result)
       return { found: true, result }
     } catch (error: unknown) {

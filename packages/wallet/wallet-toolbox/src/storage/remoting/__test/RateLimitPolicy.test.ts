@@ -65,6 +65,26 @@ describe('StorageServer rate-limit policy', () => {
     expect(() => configureTrustProxy(app, 1.5)).toThrow(/non-negative integer/)
   })
 
+  test('uses safe defaults and falls back to the socket address for unauthenticated identities', () => {
+    expect(rateLimitOptions({ windowMs: 1_000, limit: 5 })).toMatchObject({
+      windowMs: 1_000,
+      limit: 5,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false
+    })
+
+    const app = express()
+    configureTrustProxy(app, undefined)
+    expect(app.get('trust proxy')).toBe(false)
+
+    const request = {
+      auth: { identityKey: 'unknown' },
+      ip: undefined,
+      socket: { remoteAddress: '127.0.0.1' }
+    }
+    expect(authenticatedIdentityKey(request as any)).toBe('ip:127.0.0.1')
+  })
+
   test('StorageServer rejects over-budget work before authentication', async () => {
     const server = new StorageServer({} as any, {
       port: 0,
