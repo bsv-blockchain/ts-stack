@@ -232,8 +232,10 @@ export function validateProjectRegistry(registry, discovered) {
   if (!registry?.ownerDefinitions || typeof registry.ownerDefinitions !== 'object') {
     errors.push('projects.json ownerDefinitions must be an object')
   }
-  errors.push(...validateDependencyAutomation(registry))
-  errors.push(...validateGeneratedArtifacts(registry))
+  errors.push(
+    ...validateDependencyAutomation(registry),
+    ...validateGeneratedArtifacts(registry)
+  )
   if (!registry?.profiles || typeof registry.profiles !== 'object') {
     errors.push('projects.json profiles must be an object')
   }

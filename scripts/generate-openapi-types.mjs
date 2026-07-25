@@ -54,9 +54,10 @@ function executable (name) {
 }
 
 function run (command, args, options = {}) {
-  const resolvedCommand = options.exactPath === true
-    ? process.platform === 'win32' ? `${command}.cmd` : command
-    : executable(command)
+  let resolvedCommand = executable(command)
+  if (options.exactPath === true) {
+    resolvedCommand = process.platform === 'win32' ? `${command}.cmd` : command
+  }
   const result = spawnSync(resolvedCommand, args, {
     cwd: options.cwd ?? ROOT,
     encoding: 'utf8',
