@@ -644,7 +644,17 @@ jobs:
 
       - name: Build Linux image
         if: matrix.run && matrix.component != 'uhrp-server-cloud-bucket/notifier'
-        run: docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}"
+        run: |
+          for attempt in 1 2 3; do
+            if docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Docker build attempt $attempt failed; retrying after $((attempt * 5)) seconds."
+              sleep $((attempt * 5))
+            fi
+          done
+          exit 1
 
   docs-validate:
     name: Docs Site Validation
