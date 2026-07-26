@@ -96,6 +96,10 @@ updates:
     rebase-strategy: auto
     ignore:
       - dependency-name: node
+      # This documentation placeholder is replaced by each operator. Keep its
+      # directory monitored so the real MySQL example continues to receive
+      # digest and version updates.
+      - dependency-name: your-registry/wallet-infra
 
   # Dependabot discovers readable Node version updates here. This file is never
   # built; repository health requires its version, the governed digest, and all
