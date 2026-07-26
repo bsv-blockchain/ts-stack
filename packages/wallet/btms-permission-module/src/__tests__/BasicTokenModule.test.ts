@@ -294,6 +294,17 @@ describe('BasicTokenModule authorization boundary', () => {
     expect(prompt).toHaveBeenCalledTimes(2)
   })
 
+  it('ignores unrelated and malformed labels before extracting a BTMS asset label', async () => {
+    const prompt = jest.fn().mockResolvedValue(true)
+    const module = new BasicTokenModule(prompt)
+
+    await request(module, 'listActions', {
+      labels: [42, 'ordinary label', 'p btms assetId asset.0']
+    })
+
+    expect(JSON.parse(prompt.mock.calls[0][1])).toMatchObject({ assetId: 'asset.0' })
+  })
+
   it('clears sensitive authorization state when disposed', async () => {
     const prompt = jest.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
@@ -395,6 +406,16 @@ describe('BasicTokenModule security primitives', () => {
       hasTokenOutputs: false,
       outputChangeAmount: 0,
       outputSendAmount: 0
+    })
+  })
+
+  it('reports no BEEF amount when inputs are present but none resolve to tokens', () => {
+    const module = state(new BasicTokenModule(jest.fn()))
+    expect(
+      module.parseInputAmounts({ description: 'Inspect inputs', inputBEEF: [], inputs: [] })
+    ).toMatchObject({
+      inputAmountSource: 'none',
+      totalInputAmount: 0
     })
   })
 
@@ -519,6 +540,34 @@ describe('BasicTokenModule security primitives', () => {
       decoded([Array.from(Buffer.from('asset.0')), Array.from(Buffer.from('-1'))])
     )
     expect(module.parseTokenLockingScript('00')).toBeNull()
+
+    decode.mockReturnValueOnce(
+      decoded([
+        Array.from(Buffer.from('asset.0')),
+        Array.from(Buffer.from('25')),
+        Array.from(Buffer.from('signature-like metadata'))
+      ])
+    )
+    expect(module.parseTokenLockingScript('00')).toMatchObject({ metadata: undefined })
+
+    decode.mockReturnValueOnce(
+      decoded([
+        Array.from(Buffer.from('asset.0')),
+        Array.from(Buffer.from('25')),
+        Array.from(Buffer.from('[1,2,3]'))
+      ])
+    )
+    expect(module.parseTokenLockingScript('00')).toMatchObject({ metadata: undefined })
+
+    decode.mockReturnValueOnce(
+      decoded([
+        Array.from(Buffer.from('asset.0')),
+        Array.from(Buffer.from('25')),
+        Array.from(Buffer.from('{malformed'))
+      ])
+    )
+    expect(module.parseTokenLockingScript('00')).toMatchObject({ metadata: undefined })
+
     expect(module.parseTokenLockingScript('not hex')).toBeNull()
   })
 
@@ -537,6 +586,12 @@ describe('BasicTokenModule security primitives', () => {
     preimage[105] = 0
     expect(module.isIssuanceFromPreimage(preimage)).toBe(true)
     expect(module.isIssuanceFromPreimage([1, 2, 3])).toBe(false)
+    const oversizedScript = Array.from({ length: 157 }, () => 0)
+    oversizedScript.splice(104, 3, 0xfd, 0x11, 0x27)
+    expect(module.isIssuanceFromPreimage(oversizedScript)).toBe(false)
+    const truncatedScript = Array.from({ length: 157 }, () => 0)
+    truncatedScript[104] = 0xfc
+    expect(module.isIssuanceFromPreimage(truncatedScript)).toBe(false)
 
     const prompt = jest.fn()
     await expect(

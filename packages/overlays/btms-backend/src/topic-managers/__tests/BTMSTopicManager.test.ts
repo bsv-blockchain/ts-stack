@@ -1,5 +1,5 @@
 import BTMSTopicManager from '../BTMSTopicManager'
-import { LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils } from '@bsv/sdk'
+import { Beef, LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils } from '@bsv/sdk'
 
 /**
  * Helper to create a simple PushDrop-style locking script for testing.
@@ -60,6 +60,52 @@ function expectAdmitted(
   })
 }
 
+interface TopicManagerInternals {
+  decodeToken: (
+    lockingScript: LockingScript
+  ) => { assetIdField: string; amount: number; metadata?: string } | undefined
+  collectPreviousUTXOs: (
+    transaction: Transaction,
+    beef: Beef,
+    previousCoins: number[]
+  ) => Array<{
+    txid: string
+    outputIndex: number
+    lockingScript: LockingScript
+    coinIndex: number
+  }>
+  buildAssetAllowances: (
+    previousUTXOs: Array<{
+      txid: string
+      outputIndex: number
+      lockingScript: LockingScript
+      coinIndex: number
+    }>
+  ) => Record<string, { amount: number; metadata: string | undefined }>
+  collectAdmissibleOutputIndexes: (
+    transaction: Transaction,
+    allowances: Record<string, { amount: number; metadata: string | undefined }>
+  ) => number[]
+  collectAdmittedAssetIds: (
+    transaction: Transaction,
+    outputIndexes: number[],
+    txid: string
+  ) => Set<string>
+  collectRetainedCoinIndexes: (
+    previousUTXOs: Array<{
+      txid: string
+      outputIndex: number
+      lockingScript: LockingScript
+      coinIndex: number
+    }>,
+    admittedAssetIds: Set<string>
+  ) => number[]
+}
+
+function internals(manager: BTMSTopicManager): TopicManagerInternals {
+  return manager as unknown as TopicManagerInternals
+}
+
 describe('BTMS Topic Manager', () => {
   let manager: BTMSTopicManager
   let testPrivKey: PrivateKey
@@ -69,6 +115,10 @@ describe('BTMS Topic Manager', () => {
     manager = new BTMSTopicManager()
     testPrivKey = PrivateKey.fromRandom()
     testPubKey = testPrivKey.toPublicKey()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   describe('Issuance outputs', () => {
@@ -717,6 +767,152 @@ describe('BTMS Topic Manager', () => {
         { outputsToAdmit: [0, 1, 2, 3, 4, 5], coinsToRetain: [0, 1, 2, 3, 4] },
         [0, 1, 2, 3, 4, 5]
       )
+    })
+  })
+
+  describe('Defensive transaction parsing', () => {
+    it('resolves detached source transactions and skips unusable previous coins', () => {
+      const sourceTx = new Transaction()
+      const lockingScript = createPushDropScript(testPubKey, ['ISSUE', '10'])
+      sourceTx.addOutput({ lockingScript, satoshis: 1 })
+      const sourceTxid = sourceTx.id('hex')
+      const transaction = {
+        inputs: [
+          undefined,
+          { sourceOutputIndex: 0, sourceTXID: sourceTxid },
+          { sourceOutputIndex: 4, sourceTransaction: sourceTx },
+          { sourceOutputIndex: 0 }
+        ]
+      } as unknown as Transaction
+      const beef = {
+        findTxid: jest.fn().mockReturnValue({ tx: sourceTx })
+      } as unknown as Beef
+
+      expect(internals(manager).collectPreviousUTXOs(transaction, beef, [0, 1, 2, 3])).toEqual([
+        { coinIndex: 1, lockingScript, outputIndex: 0, txid: sourceTxid }
+      ])
+      expect((beef as unknown as { findTxid: jest.Mock }).findTxid).toHaveBeenCalledWith(sourceTxid)
+    })
+
+    it('isolates malformed previous UTXOs while accumulating valid allowances', () => {
+      const skip = new LockingScript()
+      const first = new LockingScript()
+      const second = new LockingScript()
+      const malformed = new LockingScript()
+      const subject = internals(manager)
+      subject.decodeToken = jest.fn(lockingScript => {
+        if (lockingScript === skip) return undefined
+        if (lockingScript === first) return { assetIdField: 'asset.0', amount: 4, metadata: 'm' }
+        if (lockingScript === second) return { assetIdField: 'asset.0', amount: 6, metadata: 'm' }
+        throw new Error('malformed token')
+      })
+      const log = jest.spyOn(console, 'log').mockImplementation()
+
+      expect(
+        subject.buildAssetAllowances(
+          [skip, first, second, malformed].map((lockingScript, coinIndex) => ({
+            coinIndex,
+            lockingScript,
+            outputIndex: coinIndex,
+            txid: 'ab'.repeat(32)
+          }))
+        )
+      ).toEqual({ 'asset.0': { amount: 10, metadata: 'm' } })
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to decode previous UTXO'),
+        expect.any(Error)
+      )
+    })
+
+    it('admits only valid issuance and allowance-preserving outputs', () => {
+      const scripts = Array.from({ length: 7 }, () => new LockingScript())
+      const subject = internals(manager)
+      subject.decodeToken = jest.fn(lockingScript => {
+        const index = scripts.indexOf(lockingScript)
+        if (index === 0) return undefined
+        if (index === 1) return { assetIdField: 'ISSUE', amount: 20 }
+        if (index === 2) return { assetIdField: 'asset.0', amount: 4, metadata: 'm' }
+        if (index === 3) return { assetIdField: 'asset.0', amount: 7, metadata: 'm' }
+        if (index === 4) return { assetIdField: 'missing.0', amount: 1 }
+        if (index === 5) return { assetIdField: 'other.0', amount: 1, metadata: 'wrong' }
+        throw new Error('malformed output')
+      })
+      const debug = jest.spyOn(console, 'debug').mockImplementation()
+      const transaction = {
+        outputs: scripts.map(lockingScript => ({ lockingScript }))
+      } as unknown as Transaction
+
+      expect(
+        subject.collectAdmissibleOutputIndexes(transaction, {
+          'asset.0': { amount: 10, metadata: 'm' },
+          'other.0': { amount: 2, metadata: 'expected' }
+        })
+      ).toEqual([1, 2])
+      expect(debug).toHaveBeenCalledWith(expect.stringContaining('Skipping output 6'))
+    })
+
+    it('retains only coins whose decoded assets were admitted', () => {
+      const admitted = new LockingScript()
+      const ignored = new LockingScript()
+      const skipped = new LockingScript()
+      const malformed = new LockingScript()
+      const subject = internals(manager)
+      subject.decodeToken = jest.fn(lockingScript => {
+        if (lockingScript === admitted) return { assetIdField: 'asset.0', amount: 1 }
+        if (lockingScript === ignored) return { assetIdField: 'other.0', amount: 1 }
+        if (lockingScript === skipped) return undefined
+        throw new Error('malformed previous coin')
+      })
+      const debug = jest.spyOn(console, 'debug').mockImplementation()
+      const previousUTXOs = [admitted, ignored, skipped, malformed].map(
+        (lockingScript, coinIndex) => ({
+          coinIndex,
+          lockingScript,
+          outputIndex: 0,
+          txid: 'cd'.repeat(32)
+        })
+      )
+
+      expect(subject.collectRetainedCoinIndexes(previousUTXOs, new Set(['asset.0']))).toEqual([0])
+      expect(debug).toHaveBeenCalledWith(expect.stringContaining('Skipping previous coin'))
+    })
+
+    it('canonicalizes admitted issuance assets and tolerates mutable malformed outputs', () => {
+      const issuance = new LockingScript()
+      const undecodable = new LockingScript()
+      const malformed = new LockingScript()
+      const subject = internals(manager)
+      subject.decodeToken = jest.fn(lockingScript => {
+        if (lockingScript === issuance) return { assetIdField: 'ISSUE', amount: 1 }
+        if (lockingScript === undecodable) return undefined
+        throw new Error('mutated output')
+      })
+      const transaction = {
+        outputs: [
+          { lockingScript: issuance },
+          undefined,
+          { lockingScript: undecodable },
+          { lockingScript: malformed }
+        ]
+      } as unknown as Transaction
+
+      expect(subject.collectAdmittedAssetIds(transaction, [0, 1, 2, 3], 'ef'.repeat(32))).toEqual(
+        new Set([`${'ef'.repeat(32)}.0`])
+      )
+    })
+
+    it('fails closed when a parsed transaction has no output array', async () => {
+      jest
+        .spyOn(Transaction, 'fromBEEF')
+        .mockReturnValue({ outputs: undefined } as unknown as Transaction)
+      const warn = jest.spyOn(console, 'warn').mockImplementation()
+
+      await expect(manager.identifyAdmissibleOutputs([], [1])).resolves.toEqual({
+        outputsToAdmit: [],
+        coinsToRetain: [],
+        coinsRemoved: []
+      })
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Missing parameter: outputs'))
     })
   })
 })

@@ -890,11 +890,7 @@ export class BasicTokenModule implements PermissionsModule {
       const { value: scriptLength, nextOffset: scriptDataOffset } = varint
 
       // Validate scriptLength
-      if (
-        scriptLength < 0 ||
-        scriptLength > 10000 ||
-        scriptDataOffset + scriptLength > preimage.length
-      ) {
+      if (scriptLength > 10000 || scriptDataOffset + scriptLength > preimage.length) {
         return false
       }
 
