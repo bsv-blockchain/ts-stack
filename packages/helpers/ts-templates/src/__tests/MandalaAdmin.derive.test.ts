@@ -21,7 +21,10 @@ describe('MandalaAdmin canonicalize/commitment', () => {
   it('locks the output to keyID = commitment(data) with counterparty self by default', async () => {
     const calls: any[] = []
     const wallet: any = {
-      getPublicKey: async (args: any) => { calls.push(args); return { publicKey: '02' + 'a'.repeat(64) } }
+      getPublicKey: async (args: any) => {
+        calls.push(args)
+        return { publicKey: '02' + 'a'.repeat(64) }
+      }
     }
     const data = { kind: 'issue', assetId: 'x.0', amount: 10 } as const
     await MandalaAdmin.lock({ wallet, data })

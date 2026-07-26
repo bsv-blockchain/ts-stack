@@ -8,7 +8,7 @@ import { serializeSdJwt } from './format.js'
 export class SdJwtVcIssuer {
   // Implements draft-ietf-oauth-sd-jwt-vc section 2.2.2 JWT Claims Set and
   // RFC 9901 section 4.1 Issuer-Signed JWT.
-  static async create (params: SdJwtVcCreateParams): Promise<SdJwtVc> {
+  static async create(params: SdJwtVcCreateParams): Promise<SdJwtVc> {
     assertNoRegisteredClaimCollisions(params.claims)
     const now = params.issuedAt ?? Math.floor(Date.now() / 1000)
     const payload: JsonObject = {
@@ -58,7 +58,7 @@ const REGISTERED_SD_JWT_VC_CLAIMS = new Set([
   '...'
 ])
 
-function assertNoRegisteredClaimCollisions (claims: JsonObject): void {
+function assertNoRegisteredClaimCollisions(claims: JsonObject): void {
   for (const key of Object.keys(claims)) {
     if (REGISTERED_SD_JWT_VC_CLAIMS.has(key)) {
       throw new Error(`Claim "${key}" is managed by SD-JWT VC metadata`)

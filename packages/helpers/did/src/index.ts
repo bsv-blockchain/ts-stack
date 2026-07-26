@@ -11,14 +11,8 @@ export {
   applyDisclosures,
   selectDisclosures
 } from './sd-jwt/disclosures.js'
-export {
-  parseSdJwt,
-  serializeSdJwt
-} from './sd-jwt/format.js'
-export {
-  createKeyBindingJwt,
-  verifyKeyBindingJwt
-} from './sd-jwt/keyBinding.js'
+export { parseSdJwt, serializeSdJwt } from './sd-jwt/format.js'
+export { createKeyBindingJwt, verifyKeyBindingJwt } from './sd-jwt/keyBinding.js'
 export {
   publicKeyToJwk,
   privateKeyToJwk,
@@ -26,11 +20,7 @@ export {
   signCompact,
   verifyCompact
 } from './utils/crypto.js'
-export {
-  decodeJwt,
-  signJwt,
-  verifyJwt
-} from './utils/jwt.js'
+export { decodeJwt, signJwt, verifyJwt } from './utils/jwt.js'
 export {
   base64UrlDecode,
   base64UrlDecodeJson,

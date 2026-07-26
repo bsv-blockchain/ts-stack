@@ -1,6 +1,10 @@
 import {
-  createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
-  decodeScriptNumChunk, encodeAssetId, decodeAssetId
+  createMinimallyEncodedScriptChunk,
+  encodeScriptNum,
+  decodeScriptNum,
+  decodeScriptNumChunk,
+  encodeAssetId,
+  decodeAssetId
 } from '../mandala-encoding.js'
 
 describe('mandala-encoding', () => {

@@ -8,26 +8,30 @@ import { selectDisclosures } from './disclosures.js'
 const store: SdJwtVc[] = []
 
 export class SdJwtVcHolder {
-  static store (sdJwtVc: SdJwtVc): void {
+  static store(sdJwtVc: SdJwtVc): void {
     store.push(sdJwtVc)
   }
 
-  static getAll (): SdJwtVc[] {
+  static getAll(): SdJwtVc[] {
     return [...store]
   }
 
-  static clear (): void {
+  static clear(): void {
     store.length = 0
   }
 
-  static async generatePresentation (
+  static async generatePresentation(
     sdJwtVc: SdJwtVc | string,
     disclosedClaims: string[],
     options: GeneratePresentationOptions = {}
   ): Promise<SdJwtPresentation> {
     const parsed = parseSdJwt(typeof sdJwtVc === 'string' ? sdJwtVc : sdJwtVc.sdJwt)
     const issuerPayload = decodeJwt(parsed.issuerSignedJwt).payload
-    const selectedDisclosures = selectDisclosures(issuerPayload, parsed.disclosures, disclosedClaims)
+    const selectedDisclosures = selectDisclosures(
+      issuerPayload,
+      parsed.disclosures,
+      disclosedClaims
+    )
     const selectedSdJwt = serializeSdJwt(parsed.issuerSignedJwt, selectedDisclosures)
 
     if (options.holderPrivateKey == null) {

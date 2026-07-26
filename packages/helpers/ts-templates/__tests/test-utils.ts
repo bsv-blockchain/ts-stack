@@ -1,6 +1,6 @@
 import { PrivateKey, WalletInterface, ChainTracker, ProtoWallet } from '@bsv/sdk'
 
-export async function makeWallet (
+export async function makeWallet(
   privateKey: string = PrivateKey.fromRandom().toString()
 ): Promise<WalletInterface> {
   const wallet = new ProtoWallet(PrivateKey.fromString(privateKey))

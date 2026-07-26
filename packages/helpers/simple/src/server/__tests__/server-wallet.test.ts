@@ -29,7 +29,9 @@ const noopMethods = (): Record<string, unknown> => ({})
 jest.mock('../../modules/tokens', () => ({ createTokenMethods: jest.fn(noopMethods) }))
 jest.mock('../../modules/inscriptions', () => ({ createInscriptionMethods: jest.fn(noopMethods) }))
 jest.mock('../../modules/messagebox', () => ({ createMessageBoxMethods: jest.fn(noopMethods) }))
-jest.mock('../../modules/certification', () => ({ createCertificationMethods: jest.fn(noopMethods) }))
+jest.mock('../../modules/certification', () => ({
+  createCertificationMethods: jest.fn(noopMethods)
+}))
 jest.mock('../../modules/overlay', () => ({ createOverlayMethods: jest.fn(noopMethods) }))
 jest.mock('../../modules/did', () => ({ createDIDMethods: jest.fn(noopMethods) }))
 jest.mock('../../modules/credentials', () => ({ createCredentialMethods: jest.fn(noopMethods) }))
@@ -70,10 +72,7 @@ describe('ServerWallet.create', () => {
     const { StorageClient } = require('@bsv/wallet-toolbox')
     StorageClient.mockClear()
     await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
-    expect(StorageClient).toHaveBeenCalledWith(
-      expect.anything(),
-      'https://storage.babbage.systems'
-    )
+    expect(StorageClient).toHaveBeenCalledWith(expect.anything(), 'https://storage.babbage.systems')
   })
 
   it('forwards a custom storage URL to the StorageClient', async () => {
@@ -83,10 +82,7 @@ describe('ServerWallet.create', () => {
       privateKey: VALID_PRIVATE_KEY,
       storageUrl: 'https://example.test/storage'
     })
-    expect(StorageClient).toHaveBeenCalledWith(
-      expect.anything(),
-      'https://example.test/storage'
-    )
+    expect(StorageClient).toHaveBeenCalledWith(expect.anything(), 'https://example.test/storage')
   })
 })
 
@@ -118,10 +114,12 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
     await wallet.receivePayment(payment)
 
     expect(internalizeAction).toHaveBeenCalledTimes(1)
-    expect(internalizeAction).toHaveBeenCalledWith(expect.objectContaining({
-      tx: [1, 2, 3, 4],
-      labels: ['server_funding']
-    }))
+    expect(internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tx: [1, 2, 3, 4],
+        labels: ['server_funding']
+      })
+    )
   })
 
   it('converts a Uint8Array tx to a number[] before forwarding', async () => {
@@ -136,9 +134,11 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
 
     await wallet.receivePayment(payment)
 
-    expect(internalizeAction).toHaveBeenCalledWith(expect.objectContaining({
-      tx: [5, 6, 7]
-    }))
+    expect(internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tx: [5, 6, 7]
+      })
+    )
   })
 
   it('uses the supplied description when provided', async () => {
@@ -152,9 +152,11 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
       description: 'custom description'
     })
 
-    expect(internalizeAction).toHaveBeenCalledWith(expect.objectContaining({
-      description: 'custom description'
-    }))
+    expect(internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'custom description'
+      })
+    )
   })
 
   it('falls back to a synthesized description when none is supplied', async () => {
@@ -167,9 +169,11 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
       outputIndex: 0
     })
 
-    expect(internalizeAction).toHaveBeenCalledWith(expect.objectContaining({
-      description: expect.stringContaining(SENDER.substring(0, 20))
-    }))
+    expect(internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining(SENDER.substring(0, 20))
+      })
+    )
   })
 
   it('falls back to a synthesized description when description is empty', async () => {
@@ -183,9 +187,11 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
       description: ''
     })
 
-    expect(internalizeAction).toHaveBeenCalledWith(expect.objectContaining({
-      description: expect.stringContaining(SENDER.substring(0, 20))
-    }))
+    expect(internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining(SENDER.substring(0, 20))
+      })
+    )
   })
 
   it('emits the legacy "server_funding" label and "wallet payment" protocol', async () => {
@@ -200,14 +206,16 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
 
     const call = internalizeAction.mock.calls[0][0]
     expect(call.labels).toEqual(['server_funding'])
-    expect(call.outputs).toEqual([{
-      outputIndex: 2,
-      protocol: 'wallet payment',
-      paymentRemittance: {
-        senderIdentityKey: SENDER,
-        derivationPrefix: 'p',
-        derivationSuffix: 's'
+    expect(call.outputs).toEqual([
+      {
+        outputIndex: 2,
+        protocol: 'wallet payment',
+        paymentRemittance: {
+          senderIdentityKey: SENDER,
+          derivationPrefix: 'p',
+          derivationSuffix: 's'
+        }
       }
-    }])
+    ])
   })
 })

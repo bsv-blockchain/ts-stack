@@ -24,7 +24,11 @@ const PROTECTED_SD_JWT_VC_CLAIMS = new Set([
 ])
 
 // Implements RFC 9901 section 4.2.1 Disclosures for Object Properties.
-export function createDisclosure (claimName: string, claimValue: JsonValue, salt = randomSalt()): DisclosureRecord {
+export function createDisclosure(
+  claimName: string,
+  claimValue: JsonValue,
+  salt = randomSalt()
+): DisclosureRecord {
   const disclosure = base64UrlEncodeJson([salt, claimName, claimValue])
   return {
     disclosure,
@@ -37,19 +41,28 @@ export function createDisclosure (claimName: string, claimValue: JsonValue, salt
 
 // Implements RFC 9901 sections 4.2.4 and 4.2.6 by replacing selected object
 // properties with their disclosure digests and recursively processing nested objects.
-export function makeSdPayload (
+export function makeSdPayload(
   payload: JsonObject,
   disclosureFrame: DisclosureFrame = {}
-): { payload: JsonObject, disclosures: DisclosureRecord[] } {
+): { payload: JsonObject; disclosures: DisclosureRecord[] } {
   const disclosures: DisclosureRecord[] = []
   const transformed = transformObject(payload, disclosureFrame, [], disclosures, true)
   if (disclosures.length > 0) transformed._sd_alg = 'sha-256'
   return { payload: transformed, disclosures }
 }
 
-export function parseDisclosure (disclosure: string): { salt: string, claimName: string, claimValue: JsonValue } {
+export function parseDisclosure(disclosure: string): {
+  salt: string
+  claimName: string
+  claimValue: JsonValue
+} {
   const parsed = base64UrlDecodeJson<unknown>(disclosure)
-  if (!Array.isArray(parsed) || parsed.length !== 3 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') {
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 3 ||
+    typeof parsed[0] !== 'string' ||
+    typeof parsed[1] !== 'string'
+  ) {
     throw new Error('Invalid object-property Disclosure')
   }
   return {
@@ -59,20 +72,20 @@ export function parseDisclosure (disclosure: string): { salt: string, claimName:
   }
 }
 
-export function disclosureDigest (disclosure: string): string {
+export function disclosureDigest(disclosure: string): string {
   return sha256Base64Url(disclosure)
 }
 
-export function collectDigestPaths (payload: JsonValue, path: string[] = []): Map<string, string[]> {
+export function collectDigestPaths(payload: JsonValue, path: string[] = []): Map<string, string[]> {
   const out = new Map<string, string[]>()
   collectDigestPathsInto(payload, path, out)
   return out
 }
 
-export function applyDisclosures (
+export function applyDisclosures(
   payload: JsonObject,
   disclosures: string[]
-): { payload: JsonObject, disclosedClaims: JsonObject, disclosurePaths: Map<string, string[]> } {
+): { payload: JsonObject; disclosedClaims: JsonObject; disclosurePaths: Map<string, string[]> } {
   assertSupportedSdAlg(payload)
   const digestPaths = collectDigestPaths(payload)
   const cloned = cloneJson(payload)
@@ -95,7 +108,7 @@ export function applyDisclosures (
   return { payload: cloned, disclosedClaims, disclosurePaths: digestPaths }
 }
 
-export function selectDisclosures (
+export function selectDisclosures(
   issuerSignedJwtPayload: JsonObject,
   disclosures: string[],
   disclosedClaims: string[]
@@ -103,7 +116,7 @@ export function selectDisclosures (
   const wanted = new Set(disclosedClaims)
   const digestPaths = collectDigestPaths(issuerSignedJwtPayload)
 
-  return disclosures.filter((disclosure) => {
+  return disclosures.filter(disclosure => {
     const digest = disclosureDigest(disclosure)
     const path = digestPaths.get(digest)
     if (path == null) return false
@@ -113,7 +126,7 @@ export function selectDisclosures (
   })
 }
 
-function transformObject (
+function transformObject(
   value: JsonObject,
   frame: DisclosureFrame,
   path: string[],
@@ -148,7 +161,11 @@ function transformObject (
   return out
 }
 
-function collectDigestPathsInto (value: JsonValue, path: string[], out: Map<string, string[]>): void {
+function collectDigestPathsInto(
+  value: JsonValue,
+  path: string[],
+  out: Map<string, string[]>
+): void {
   if (Array.isArray(value)) {
     value.forEach((item, index) => collectDigestPathsInto(item, [...path, String(index)], out))
     return
@@ -168,7 +185,7 @@ function collectDigestPathsInto (value: JsonValue, path: string[], out: Map<stri
   }
 }
 
-function setAtPath (target: JsonObject, path: string[], value: JsonValue): void {
+function setAtPath(target: JsonObject, path: string[], value: JsonValue): void {
   let cursor = target
   for (let i = 0; i < path.length - 1; i++) {
     const segment = path[i]
@@ -181,7 +198,7 @@ function setAtPath (target: JsonObject, path: string[], value: JsonValue): void 
   cursor[lastSegment] = value
 }
 
-function stripSdMetadata (value: JsonValue): void {
+function stripSdMetadata(value: JsonValue): void {
   if (Array.isArray(value)) {
     value.forEach(item => stripSdMetadata(item))
     return
@@ -192,7 +209,7 @@ function stripSdMetadata (value: JsonValue): void {
   Object.values(value).forEach(item => stripSdMetadata(item as JsonValue))
 }
 
-function assertSupportedSdAlg (value: JsonValue): void {
+function assertSupportedSdAlg(value: JsonValue): void {
   if (Array.isArray(value)) {
     value.forEach(item => assertSupportedSdAlg(item))
     return
@@ -206,10 +223,10 @@ function assertSupportedSdAlg (value: JsonValue): void {
   Object.values(value).forEach(item => assertSupportedSdAlg(item as JsonValue))
 }
 
-function cloneJson<T extends JsonValue> (value: T): T {
+function cloneJson<T extends JsonValue>(value: T): T {
   return structuredClone(value)
 }
 
-function isPlainObject (value: unknown): value is JsonObject {
+function isPlainObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

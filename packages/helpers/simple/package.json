@@ -66,6 +66,7 @@
   "scripts": {
     "build": "tsdown src/index.ts src/browser.ts src/server.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform node --tsconfig tsconfig.build.json --unbundle",
     "dev": "pnpm build --watch",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/simple/src/**/*.ts\" \"packages/helpers/simple/*.{cjs,json,ts}\"",
     "lint": "oxlint src --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports CertificationError,Certifier,CredentialError,CredentialIssuer,CredentialSchema,DID,DIDError,MemoryRevocationStore,MessageBoxError,Overlay,SimpleError,TransactionError,WalletCore,WalletError,createWallet,toVerifiableCredential,toVerifiablePresentation --entry-exports \"./browser=Certifier|CredentialIssuer|CredentialSchema|DID|MemoryRevocationStore|Overlay|WalletCore|createWallet|toVerifiableCredential|toVerifiablePresentation;./server=FileRevocationStore|ServerWallet|generatePrivateKey|JsonFileStore|IdentityRegistry|DIDResolverService|ServerWalletManager|createIdentityRegistryHandler|createDIDResolverHandler|createServerWalletHandler|createCredentialIssuerHandler\"",
     "prepublishOnly": "pnpm build",

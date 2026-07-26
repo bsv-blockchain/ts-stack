@@ -14,11 +14,7 @@
  * exposing `ServerWallet.create`).
  */
 
-import {
-  PrivateKey,
-  KeyDeriver,
-  WalletInterface
-} from '@bsv/sdk'
+import { PrivateKey, KeyDeriver, WalletInterface } from '@bsv/sdk'
 import {
   Wallet as ToolboxWallet,
   WalletStorageManager,
@@ -28,11 +24,7 @@ import {
   Chain
 } from '@bsv/wallet-toolbox'
 import { WalletCore } from '../core/WalletCore'
-import {
-  WalletDefaults,
-  ServerWalletConfig,
-  IncomingPayment
-} from '../core/types'
+import { WalletDefaults, ServerWalletConfig, IncomingPayment } from '../core/types'
 import { createTokenMethods } from '../modules/tokens'
 import { createInscriptionMethods } from '../modules/inscriptions'
 import { createMessageBoxMethods } from '../modules/messagebox'
@@ -48,12 +40,12 @@ import { createCredentialMethods } from '../modules/credentials'
 class _ServerWallet extends WalletCore {
   private readonly client: ToolboxWallet
 
-  constructor (client: ToolboxWallet, identityKey: string, defaults?: Partial<WalletDefaults>) {
+  constructor(client: ToolboxWallet, identityKey: string, defaults?: Partial<WalletDefaults>) {
     super(identityKey, defaults)
     this.client = client
   }
 
-  getClient (): WalletInterface {
+  getClient(): WalletInterface {
     return this.client as unknown as WalletInterface
   }
 
@@ -61,26 +53,27 @@ class _ServerWallet extends WalletCore {
    * @deprecated Use `receiveDirectPayment()` instead. Kept for backward compatibility.
    * Internalizes a payment using the `wallet payment` protocol with `server_funding` label.
    */
-  async receivePayment (payment: IncomingPayment): Promise<void> {
-    const tx = payment.tx instanceof Uint8Array
-      ? Array.from(payment.tx)
-      : payment.tx
+  async receivePayment(payment: IncomingPayment): Promise<void> {
+    const tx = payment.tx instanceof Uint8Array ? Array.from(payment.tx) : payment.tx
 
-    const description = (payment.description != null && payment.description !== '')
-      ? payment.description
-      : `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`
+    const description =
+      payment.description != null && payment.description !== ''
+        ? payment.description
+        : `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`
 
     await this.client.internalizeAction({
       tx,
-      outputs: [{
-        outputIndex: payment.outputIndex,
-        protocol: 'wallet payment',
-        paymentRemittance: {
-          senderIdentityKey: payment.senderIdentityKey,
-          derivationPrefix: payment.derivationPrefix,
-          derivationSuffix: payment.derivationSuffix
+      outputs: [
+        {
+          outputIndex: payment.outputIndex,
+          protocol: 'wallet payment',
+          paymentRemittance: {
+            senderIdentityKey: payment.senderIdentityKey,
+            derivationPrefix: payment.derivationPrefix,
+            derivationSuffix: payment.derivationSuffix
+          }
         }
-      }],
+      ],
       description,
       labels: ['server_funding']
     } as any)
@@ -91,21 +84,21 @@ class _ServerWallet extends WalletCore {
 // Composed ServerWallet type
 // ============================================================================
 
-export type ServerWallet = _ServerWallet
-& ReturnType<typeof createTokenMethods>
-& ReturnType<typeof createInscriptionMethods>
-& ReturnType<typeof createMessageBoxMethods>
-& ReturnType<typeof createCertificationMethods>
-& ReturnType<typeof createOverlayMethods>
-& ReturnType<typeof createDIDMethods>
-& ReturnType<typeof createCredentialMethods>
+export type ServerWallet = _ServerWallet &
+  ReturnType<typeof createTokenMethods> &
+  ReturnType<typeof createInscriptionMethods> &
+  ReturnType<typeof createMessageBoxMethods> &
+  ReturnType<typeof createCertificationMethods> &
+  ReturnType<typeof createOverlayMethods> &
+  ReturnType<typeof createDIDMethods> &
+  ReturnType<typeof createCredentialMethods>
 
 // ============================================================================
 // Static factory on the ServerWallet namespace
 // ============================================================================
 
 export namespace ServerWallet {
-  export async function create (config: ServerWalletConfig): Promise<ServerWallet> {
+  export async function create(config: ServerWalletConfig): Promise<ServerWallet> {
     const privateKey = PrivateKey.fromHex(config.privateKey)
     const keyDeriver = new KeyDeriver(privateKey)
     const identityKey = keyDeriver.identityKey
@@ -121,7 +114,9 @@ export namespace ServerWallet {
     await storageClient.makeAvailable()
     await storageManager.addWalletStorageProvider(storageClient)
 
-    const wallet = new _ServerWallet(toolboxWallet, identityKey, { network: config.network ?? 'main' })
+    const wallet = new _ServerWallet(toolboxWallet, identityKey, {
+      network: config.network ?? 'main'
+    })
 
     Object.assign(wallet, createTokenMethods(wallet))
     Object.assign(wallet, createInscriptionMethods(wallet))

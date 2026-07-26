@@ -9,7 +9,7 @@ export interface DecodedJwt {
   signature: string
 }
 
-export function signJwt (
+export function signJwt(
   header: JsonObject,
   payload: JsonObject,
   privateKey: PrivateKeyInput,
@@ -23,7 +23,7 @@ export function signJwt (
   return `${signingInput}.${signCompact(signingInput, privateKey, alg)}`
 }
 
-export function decodeJwt (jwt: string): DecodedJwt {
+export function decodeJwt(jwt: string): DecodedJwt {
   const parts = jwt.split('.')
   if (parts.length !== 3) throw new Error('Invalid compact JWT')
   return {
@@ -34,7 +34,7 @@ export function decodeJwt (jwt: string): DecodedJwt {
   }
 }
 
-export function verifyJwt (jwt: string, publicKey: PublicKeyInput | Jwk): DecodedJwt {
+export function verifyJwt(jwt: string, publicKey: PublicKeyInput | Jwk): DecodedJwt {
   const decoded = decodeJwt(jwt)
   const alg = decoded.header.alg
   if (typeof alg !== 'string' || alg !== 'ES256K') throw new Error('Unsupported JOSE algorithm')

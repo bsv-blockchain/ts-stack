@@ -62,7 +62,11 @@ export class DIDClient {
   async createDID(
     serialNumber: string,
     subject: PubKeyHex,
-    opts: { wallet?: WalletInterface, derivationPrefix?: Base64String, derivationSuffix?: Base64String } = {}
+    opts: {
+      wallet?: WalletInterface
+      derivationPrefix?: Base64String
+      derivationSuffix?: Base64String
+    } = {}
   ): Promise<BroadcastResponse | BroadcastFailure> {
     const wallet = opts.wallet ?? this.wallet
 
@@ -87,20 +91,19 @@ export class DIDClient {
     // 3. Craft the transaction
     const { tx } = await wallet.createAction({
       description: 'Create new DID token',
-      outputs: [{
-        lockingScript: lockingScript.toHex(),
-        satoshis: 1,
-        outputDescription: 'DID token',
-        basket: 'did',
-        tags: [
-          `did-token-subject-${subject}`,
-          `did-token-serialNumber-${serialNumber}`
-        ],
-        customInstructions: JSON.stringify({
-          derivationPrefix,
-          derivationSuffix
-        })
-      }],
+      outputs: [
+        {
+          lockingScript: lockingScript.toHex(),
+          satoshis: 1,
+          outputDescription: 'DID token',
+          basket: 'did',
+          tags: [`did-token-subject-${subject}`, `did-token-serialNumber-${serialNumber}`],
+          customInstructions: JSON.stringify({
+            derivationPrefix,
+            derivationSuffix
+          })
+        }
+      ],
       options: { acceptDelayedBroadcast: this.acceptDelayedBroadcast, randomizeOutputs: false }
     })
     if (!tx) throw new Error('Failed to create DID transaction')
@@ -118,7 +121,7 @@ export class DIDClient {
   /**
    * Revokes a DID token by serial number or outpoint.
    * Handles all the complexity of finding the token, getting BEEF, and spending it.
-   * 
+   *
    * @param opts Revocation options
    * @param opts.serialNumber The serial number of the DID token (preferred method)
    * @param opts.outpoint The outpoint of the DID token (fallback method)
@@ -207,9 +210,7 @@ export class DIDClient {
       }
     }
 
-    const subjectTag = output.tags?.find((tag: string) =>
-      tag.startsWith('did-token-subject-')
-    )
+    const subjectTag = output.tags?.find((tag: string) => tag.startsWith('did-token-subject-'))
     const subject = subjectTag?.substring('did-token-subject-'.length)
 
     if (!subject) {
@@ -224,11 +225,13 @@ export class DIDClient {
     const { signableTransaction } = await this.wallet.createAction({
       description: 'Revoke DID',
       inputBEEF: walletOutputs.BEEF,
-      inputs: [{
-        outpoint: output.outpoint,
-        unlockingScriptLength: 74,
-        inputDescription: 'Redeem DID token'
-      }],
+      inputs: [
+        {
+          outpoint: output.outpoint,
+          unlockingScriptLength: 74,
+          inputDescription: 'Redeem DID token'
+        }
+      ],
       options: { acceptDelayedBroadcast: this.acceptDelayedBroadcast, randomizeOutputs: false }
     })
     if (!signableTransaction) throw new Error('Unable to build DID revoke transaction')
@@ -265,7 +268,13 @@ export class DIDClient {
    * Supports pagination and sorting via `limit`, `skip`, `sortOrder`.
    */
   async findDID(
-    query: DIDQuery & { limit?: number; skip?: number; sortOrder?: 'asc' | 'desc'; startDate?: string; endDate?: string } = {},
+    query: DIDQuery & {
+      limit?: number
+      skip?: number
+      sortOrder?: 'asc' | 'desc'
+      startDate?: string
+      endDate?: string
+    } = {},
     opts: { resolver?: LookupResolver; wallet?: WalletInterface; includeBeef?: boolean } = {}
   ): Promise<Array<DIDRecord & { beef?: number[] }>> {
     const { includeBeef = true, ...restOpts } = opts
@@ -284,7 +293,9 @@ export class DIDClient {
     // 2. Resolve via lookup service
     const resolver =
       restOpts.resolver ??
-      new LookupResolver({ networkPreset: this.networkPreset ?? (await wallet.getNetwork({})).network })
+      new LookupResolver({
+        networkPreset: this.networkPreset ?? (await wallet.getNetwork({})).network
+      })
 
     const answer = await resolver.query({ service: this.overlayService, query: lookupQuery })
 

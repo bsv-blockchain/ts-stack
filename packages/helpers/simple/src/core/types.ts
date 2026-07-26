@@ -235,7 +235,10 @@ export interface OverlayInfo {
 export interface OverlayBroadcastResult {
   success: boolean
   txid?: string
-  steak?: Record<string, { outputsToAdmit: number[], coinsToRetain: number[], coinsRemoved?: number[] }>
+  steak?: Record<
+    string,
+    { outputsToAdmit: number[]; coinsToRetain: number[]; coinsRemoved?: number[] }
+  >
   code?: string
   description?: string
 }
@@ -327,7 +330,7 @@ export interface DIDVerificationMethodV2 {
   id: string
   type: string
   controller: string
-  publicKeyJwk: { kty: string, crv: string, x: string, y: string }
+  publicKeyJwk: { kty: string; crv: string; x: string; y: string }
 }
 
 export interface DIDService {
@@ -388,8 +391,7 @@ export interface DIDUpdateOptions {
 // ============================================================================
 
 export type CredentialFieldType =
-  | 'text' | 'email' | 'date' | 'number'
-  | 'textarea' | 'checkbox' | 'select'
+  'text' | 'email' | 'date' | 'number' | 'textarea' | 'checkbox' | 'select'
 
 export interface CredentialFieldSchema {
   key: string
@@ -398,7 +400,7 @@ export interface CredentialFieldSchema {
   required?: boolean
   placeholder?: string
   format?: string
-  options?: Array<{ value: string, label: string }>
+  options?: Array<{ value: string; label: string }>
   helpText?: string
   group?: string
 }
@@ -409,7 +411,7 @@ export interface CredentialSchemaConfig {
   description?: string
   certificateTypeBase64?: string
   fields: CredentialFieldSchema[]
-  fieldGroups?: Array<{ key: string, label: string }>
+  fieldGroups?: Array<{ key: string; label: string }>
   validate?: (values: Record<string, string>) => string | null
   computedFields?: (values: Record<string, string>) => Record<string, string>
 }

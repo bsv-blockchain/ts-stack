@@ -7,13 +7,16 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: {
-        module: 'commonjs',
-        moduleResolution: 'bundler',
-        target: 'es2022',
-        lib: ['es2022']
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'bundler',
+          target: 'es2022',
+          lib: ['es2022']
+        }
       }
-    }]
+    ]
   }
 }

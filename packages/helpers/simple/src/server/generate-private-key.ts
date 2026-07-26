@@ -10,6 +10,6 @@
 
 import { PrivateKey } from '@bsv/sdk'
 
-export function generatePrivateKey (): string {
+export function generatePrivateKey(): string {
   return PrivateKey.fromRandom().toHex()
 }

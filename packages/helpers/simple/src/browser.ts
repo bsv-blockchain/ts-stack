@@ -30,14 +30,14 @@ class _BrowserWallet extends WalletCore {
 // Composed BrowserWallet type (base + all modules)
 // ============================================================================
 
-export type BrowserWallet = _BrowserWallet
-  & ReturnType<typeof createTokenMethods>
-  & ReturnType<typeof createInscriptionMethods>
-  & ReturnType<typeof createMessageBoxMethods>
-  & ReturnType<typeof createCertificationMethods>
-  & ReturnType<typeof createOverlayMethods>
-  & ReturnType<typeof createDIDMethods>
-  & ReturnType<typeof createCredentialMethods>
+export type BrowserWallet = _BrowserWallet &
+  ReturnType<typeof createTokenMethods> &
+  ReturnType<typeof createInscriptionMethods> &
+  ReturnType<typeof createMessageBoxMethods> &
+  ReturnType<typeof createCertificationMethods> &
+  ReturnType<typeof createOverlayMethods> &
+  ReturnType<typeof createDIDMethods> &
+  ReturnType<typeof createCredentialMethods>
 
 // ============================================================================
 // Factory function

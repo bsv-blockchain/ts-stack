@@ -15,6 +15,6 @@ export const DEFAULT_CONFIG: WalletDefaults = {
   didProtocolID: [0 as SecurityLevel, 'bsvdid']
 }
 
-export function mergeDefaults (partial: Partial<WalletDefaults>): WalletDefaults {
+export function mergeDefaults(partial: Partial<WalletDefaults>): WalletDefaults {
   return { ...DEFAULT_CONFIG, ...partial }
 }

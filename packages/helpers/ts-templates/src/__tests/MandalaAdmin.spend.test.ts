@@ -9,7 +9,12 @@ import { ProtoWallet, PrivateKey, Transaction, Spend, LockingScript, OP } from '
 describe('MandalaAdmin spend round-trip (interpreter)', () => {
   const data = { kind: 'issue', assetId: `${'a'.repeat(64)}.0`, amount: 5 } as const
 
-  const buildSpend = (lock: LockingScript, unlock: any, spendTx: Transaction, srcTx: Transaction): Spend =>
+  const buildSpend = (
+    lock: LockingScript,
+    unlock: any,
+    spendTx: Transaction,
+    srcTx: Transaction
+  ): Spend =>
     new Spend({
       sourceTXID: srcTx.id('hex'),
       sourceOutputIndex: 0,
@@ -37,12 +42,18 @@ describe('MandalaAdmin spend round-trip (interpreter)', () => {
     spendTx.inputs[0].unlockingScriptTemplate = MandalaAdmin.unlock({ wallet: wallet as any, data })
     await spendTx.sign()
 
-    expect(buildSpend(lock, spendTx.inputs[0].unlockingScript!, spendTx, srcTx).validate()).toBe(true)
+    expect(buildSpend(lock, spendTx.inputs[0].unlockingScript!, spendTx, srcTx).validate()).toBe(
+      true
+    )
   })
 
   it('CHECKSIG verifies a publicData admin output (prefix is dropped)', async () => {
     const wallet = new ProtoWallet(PrivateKey.fromRandom())
-    const lock = await MandalaAdmin.lock({ wallet: wallet as any, data, publicData: { label: 'Gold' } })
+    const lock = await MandalaAdmin.lock({
+      wallet: wallet as any,
+      data,
+      publicData: { label: 'Gold' }
+    })
 
     const srcTx = new Transaction()
     srcTx.addOutput({ lockingScript: lock, satoshis: 1 })
@@ -53,7 +64,9 @@ describe('MandalaAdmin spend round-trip (interpreter)', () => {
     spendTx.inputs[0].unlockingScriptTemplate = MandalaAdmin.unlock({ wallet: wallet as any, data })
     await spendTx.sign()
 
-    expect(buildSpend(lock, spendTx.inputs[0].unlockingScript!, spendTx, srcTx).validate()).toBe(true)
+    expect(buildSpend(lock, spendTx.inputs[0].unlockingScript!, spendTx, srcTx).validate()).toBe(
+      true
+    )
   })
 
   it('transfers admin: granter locks to a new admin who spends it', async () => {
@@ -72,9 +85,15 @@ describe('MandalaAdmin spend round-trip (interpreter)', () => {
     spendTx.addOutput({ lockingScript: new LockingScript([{ op: OP.OP_TRUE }]), satoshis: 1 })
 
     // New admin spends, deriving against the granter's identity.
-    spendTx.inputs[0].unlockingScriptTemplate = MandalaAdmin.unlock({ wallet: newAdmin as any, data, counterparty: granterId })
+    spendTx.inputs[0].unlockingScriptTemplate = MandalaAdmin.unlock({
+      wallet: newAdmin as any,
+      data,
+      counterparty: granterId
+    })
     await spendTx.sign()
 
-    expect(buildSpend(lock, spendTx.inputs[0].unlockingScript!, spendTx, srcTx).validate()).toBe(true)
+    expect(buildSpend(lock, spendTx.inputs[0].unlockingScript!, spendTx, srcTx).validate()).toBe(
+      true
+    )
   })
 })

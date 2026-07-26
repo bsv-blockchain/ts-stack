@@ -43,7 +43,8 @@
   "scripts": {
     "build": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
     "dev": "pnpm build --watch",
-    "lint": "oxlint src __tests__ --deny-warnings",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/ts-templates/src/**/*.ts\" \"packages/helpers/ts-templates/__tests/*.ts\" \"packages/helpers/ts-templates/*.{js,json,ts}\"",
+    "lint": "oxlint src __tests --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports ADMIN_PROTOCOL,Bsv21Token,DstasToken,MandalaAdmin,MandalaToken,MultiPushDrop,OpReturn,P2MSKH,StasToken",
     "prepublishOnly": "pnpm build",
     "test": "jest",

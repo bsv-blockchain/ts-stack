@@ -24,7 +24,9 @@ describe('DstasToken.decode (against real dxs-bsv-token-sdk output)', () => {
     expect(DstasToken.isDstas(LockingScript.fromHex(DSTAS_PLAIN_HEX))).toBe(true)
     expect(DstasToken.isDstas(LockingScript.fromHex(`76a914${DSTAS_OWNER}88ac`))).toBe(false)
     // classic STAS prefix is 76a914… not a 20-byte owner push, and short.
-    expect(DstasToken.isDstas(LockingScript.fromHex(`76a914${DSTAS_OWNER}88ac69` + 'ac'.repeat(8)))).toBe(false)
+    expect(
+      DstasToken.isDstas(LockingScript.fromHex(`76a914${DSTAS_OWNER}88ac69` + 'ac'.repeat(8)))
+    ).toBe(false)
   })
 
   it('throws on a short / non-DSTAS script', () => {

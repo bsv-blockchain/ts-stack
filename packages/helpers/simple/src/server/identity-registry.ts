@@ -6,11 +6,7 @@
  */
 
 import { join } from 'node:path'
-import {
-  IdentityRegistryConfig,
-  IdentityRegistryStore,
-  RegistryEntry
-} from '../core/types'
+import { IdentityRegistryConfig, IdentityRegistryStore, RegistryEntry } from '../core/types'
 import { JsonFileStore } from './json-file-store'
 import {
   HandlerRequest,
@@ -27,17 +23,17 @@ import {
 class FileIdentityRegistryStore implements IdentityRegistryStore {
   private readonly store: JsonFileStore<RegistryEntry[]>
 
-  constructor (filePath?: string) {
+  constructor(filePath?: string) {
     this.store = new JsonFileStore<RegistryEntry[]>(
       filePath ?? join(process.cwd(), '.identity-registry.json')
     )
   }
 
-  load (): RegistryEntry[] {
+  load(): RegistryEntry[] {
     return this.store.load() ?? []
   }
 
-  save (entries: RegistryEntry[]): void {
+  save(entries: RegistryEntry[]): void {
     this.store.save(entries)
   }
 }
@@ -58,13 +54,13 @@ export class IdentityRegistry {
   private readonly validateTag?: (tag: string, identityKey: string) => string | null
   private readonly maxTagsPerIdentity: number
 
-  constructor (config?: IdentityRegistryConfig) {
+  constructor(config?: IdentityRegistryConfig) {
     this.store = config?.store ?? new FileIdentityRegistryStore()
     this.validateTag = config?.validateTag
     this.maxTagsPerIdentity = config?.maxTagsPerIdentity ?? Infinity
   }
 
-  lookup (query: string): Array<{ tag: string, identityKey: string }> {
+  lookup(query: string): Array<{ tag: string; identityKey: string }> {
     const q = query.trim().toLowerCase()
     if (q === '') return []
     const entries = this.store.load()
@@ -73,17 +69,22 @@ export class IdentityRegistry {
       .map(e => ({ tag: e.tag, identityKey: e.identityKey }))
   }
 
-  list (identityKey: string): Array<{ tag: string, createdAt: string }> {
+  list(identityKey: string): Array<{ tag: string; createdAt: string }> {
     const entries = this.store.load()
     return entries
       .filter(e => e.identityKey === identityKey)
       .map(e => ({ tag: e.tag, createdAt: e.createdAt }))
   }
 
-  register (tag: string, identityKey: string): RegistryResult {
+  register(tag: string, identityKey: string): RegistryResult {
     const normalizedTag = tag.trim()
     if (normalizedTag === '') {
-      return { success: false, message: 'Tag cannot be empty', tag: normalizedTag, error: 'Tag cannot be empty' }
+      return {
+        success: false,
+        message: 'Tag cannot be empty',
+        tag: normalizedTag,
+        error: 'Tag cannot be empty'
+      }
     }
 
     // Custom validation
@@ -98,8 +99,13 @@ export class IdentityRegistry {
 
     // Check tag ownership
     const existing = entries.find(e => e.tag.toLowerCase() === normalizedTag.toLowerCase())
-    if ((existing != null) && existing.identityKey !== identityKey) {
-      return { success: false, message: `Tag "${normalizedTag}" is already registered to another identity`, tag: normalizedTag, error: `Tag "${normalizedTag}" is already registered to another identity` }
+    if (existing != null && existing.identityKey !== identityKey) {
+      return {
+        success: false,
+        message: `Tag "${normalizedTag}" is already registered to another identity`,
+        tag: normalizedTag,
+        error: `Tag "${normalizedTag}" is already registered to another identity`
+      }
     }
     if (existing?.identityKey === identityKey) {
       return { success: true, message: 'Tag already registered', tag: normalizedTag }
@@ -109,7 +115,12 @@ export class IdentityRegistry {
     if (this.maxTagsPerIdentity !== Infinity) {
       const count = entries.filter(e => e.identityKey === identityKey).length
       if (count >= this.maxTagsPerIdentity) {
-        return { success: false, message: `Maximum ${this.maxTagsPerIdentity} tags per identity`, tag: normalizedTag, error: `Maximum ${this.maxTagsPerIdentity} tags per identity` }
+        return {
+          success: false,
+          message: `Maximum ${this.maxTagsPerIdentity} tags per identity`,
+          tag: normalizedTag,
+          error: `Maximum ${this.maxTagsPerIdentity} tags per identity`
+        }
       }
     }
 
@@ -118,14 +129,19 @@ export class IdentityRegistry {
     return { success: true, message: 'Tag registered', tag: normalizedTag }
   }
 
-  revoke (tag: string, identityKey: string): RegistryResult {
+  revoke(tag: string, identityKey: string): RegistryResult {
     const normalizedTag = tag.trim()
     const entries = this.store.load()
     const idx = entries.findIndex(
       e => e.tag.toLowerCase() === normalizedTag.toLowerCase() && e.identityKey === identityKey
     )
     if (idx === -1) {
-      return { success: false, message: 'Tag not found or does not belong to this identity', tag: normalizedTag, error: 'Tag not found or does not belong to this identity' }
+      return {
+        success: false,
+        message: 'Tag not found or does not belong to this identity',
+        tag: normalizedTag,
+        error: 'Tag not found or does not belong to this identity'
+      }
     }
     entries.splice(idx, 1)
     this.store.save(entries)
@@ -137,61 +153,78 @@ export class IdentityRegistry {
 // Next.js handler factory
 // ============================================================================
 
-export function createIdentityRegistryHandler (config?: IdentityRegistryConfig): ReturnType<typeof toNextHandlers> {
+export function createIdentityRegistryHandler(
+  config?: IdentityRegistryConfig
+): ReturnType<typeof toNextHandlers> {
   const registry = new IdentityRegistry(config)
 
   const coreHandlers = {
-    async GET (req: HandlerRequest): Promise<HandlerResponse> {
+    async GET(req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const action = params.get('action')
 
       try {
         if (action === 'lookup') {
           const query = (params.get('query') ?? '').trim()
-          if (query === '') return jsonResponse({ success: false, error: 'Missing query parameter' }, 400)
+          if (query === '')
+            return jsonResponse({ success: false, error: 'Missing query parameter' }, 400)
           const results = registry.lookup(query)
           return jsonResponse({ success: true, query, results })
         }
         if (action === 'list') {
           const identityKey = params.get('identityKey')
-          if (identityKey == null || identityKey === '') return jsonResponse({ success: false, error: 'Missing identityKey parameter' }, 400)
+          if (identityKey == null || identityKey === '')
+            return jsonResponse({ success: false, error: 'Missing identityKey parameter' }, 400)
           const tags = registry.list(identityKey)
           return jsonResponse({ success: true, tags })
         }
         return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
-        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse(
+          { success: false, error: `${String(action)} failed: ${(error as Error).message}` },
+          500
+        )
       }
     },
 
-    async POST (req: HandlerRequest): Promise<HandlerResponse> {
+    async POST(req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const action = params.get('action')
 
       try {
         const body = await req.json()
-        const { tag, identityKey } = body as { tag?: string, identityKey?: string }
-        if ((tag == null || tag === '') || (identityKey == null || identityKey === '')) {
-          return jsonResponse({ success: false, error: 'Missing required fields: tag, identityKey' }, 400)
+        const { tag, identityKey } = body as { tag?: string; identityKey?: string }
+        if (tag == null || tag === '' || identityKey == null || identityKey === '') {
+          return jsonResponse(
+            { success: false, error: 'Missing required fields: tag, identityKey' },
+            400
+          )
         }
 
         if (action === 'register') {
           const result = registry.register(tag, identityKey)
           return jsonResponse(
-            (result.error == null) ? { success: true, message: result.message, tag: result.tag } : { success: false, error: result.error },
+            result.error == null
+              ? { success: true, message: result.message, tag: result.tag }
+              : { success: false, error: result.error },
             result.success ? 200 : 409
           )
         }
         if (action === 'revoke') {
           const result = registry.revoke(tag, identityKey)
           return jsonResponse(
-            (result.error == null) ? { success: true, message: result.message, tag: result.tag } : { success: false, error: result.error },
+            result.error == null
+              ? { success: true, message: result.message, tag: result.tag }
+              : { success: false, error: result.error },
             result.success ? 200 : 404
           )
         }
         return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
-        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse(
+          { success: false, error: `${String(action)} failed: ${(error as Error).message}` },
+          500
+        )
       }
     }
   }

@@ -45,22 +45,22 @@ export interface Bsv21TokenDecoded {
 
 class HexReader {
   pos = 0
-  constructor (public readonly hex: string) {}
-  readByteHex (): string | null {
+  constructor(public readonly hex: string) {}
+  readByteHex(): string | null {
     if (this.pos + 2 > this.hex.length) return null
     const b = this.hex.substring(this.pos, this.pos + 2)
     this.pos += 2
     return b
   }
 
-  readBytesHex (n: number): string | null {
+  readBytesHex(n: number): string | null {
     if (this.pos + n * 2 > this.hex.length) return null
     const out = this.hex.substring(this.pos, this.pos + n * 2)
     this.pos += n * 2
     return out
   }
 
-  readPushHex (): string | null {
+  readPushHex(): string | null {
     const op = this.readByteHex()
     if (op === null) return null
     const code = Number.parseInt(op, 16)
@@ -72,13 +72,16 @@ class HexReader {
       return this.readBytesHex(Number.parseInt(lenHex, 16))
     }
     if (code === 0x4d) {
-      const b1 = this.readByteHex(); const b2 = this.readByteHex()
+      const b1 = this.readByteHex()
+      const b2 = this.readByteHex()
       if (b1 === null || b2 === null) return null
       return this.readBytesHex(Number.parseInt(b2 + b1, 16))
     }
     if (code === 0x4e) {
-      const b1 = this.readByteHex(); const b2 = this.readByteHex()
-      const b3 = this.readByteHex(); const b4 = this.readByteHex()
+      const b1 = this.readByteHex()
+      const b2 = this.readByteHex()
+      const b3 = this.readByteHex()
+      const b4 = this.readByteHex()
       if (b1 === null || b2 === null || b3 === null || b4 === null) return null
       return this.readBytesHex(Number.parseInt(b4 + b3 + b2 + b1, 16))
     }
@@ -86,7 +89,7 @@ class HexReader {
   }
 }
 
-function hexToUtf8 (hex: string): string {
+function hexToUtf8(hex: string): string {
   if (hex === '') return ''
   try {
     return Utils.toUTF8(Utils.toArray(hex, 'hex'))
@@ -96,7 +99,7 @@ function hexToUtf8 (hex: string): string {
 }
 
 /** Reads the ord-inscription envelope up to and including OP_ENDIF, returning its JSON payload. */
-function readOrdEnvelope (r: HexReader): any {
+function readOrdEnvelope(r: HexReader): any {
   if (r.readPushHex() !== ORD_TAG_HEX) throw new Error('not a BSV-21 script: missing "ord" tag')
 
   // Content-type field id: accept canonical OP_1 (0x51) or non-minimal push-of-0x01.
@@ -108,7 +111,8 @@ function readOrdEnvelope (r: HexReader): any {
   }
 
   const ctHex = r.readPushHex()
-  if (ctHex === null || hexToUtf8(ctHex) !== CONTENT_TYPE) throw new Error('not a BSV-21 script: wrong content-type')
+  if (ctHex === null || hexToUtf8(ctHex) !== CONTENT_TYPE)
+    throw new Error('not a BSV-21 script: wrong content-type')
 
   if (r.readByteHex() !== '00') throw new Error('not a BSV-21 script: missing OP_0 separator')
 
@@ -127,7 +131,7 @@ function readOrdEnvelope (r: HexReader): any {
 }
 
 /** Reads the trailing standard P2PKH owner lock, returning the owner hash160 (hex). */
-function readP2pkhOwner (r: HexReader): string {
+function readP2pkhOwner(r: HexReader): string {
   const dup = r.readByteHex()
   const hash160Op = r.readByteHex()
   const pushLen = r.readByteHex()
@@ -143,7 +147,7 @@ function readP2pkhOwner (r: HexReader): string {
 }
 
 /** Parses the optional `dec` field, accepted as a number or a digit string in [0, 18]. */
-function parseDecimals (payload: any): number | undefined {
+function parseDecimals(payload: any): number | undefined {
   if (typeof payload.dec === 'number' && Number.isFinite(payload.dec)) return payload.dec
   if (typeof payload.dec === 'string' && /^\d+$/.test(payload.dec)) {
     const n = Number.parseInt(payload.dec, 10)
@@ -153,7 +157,7 @@ function parseDecimals (payload: any): number | undefined {
 }
 
 export class Bsv21Token {
-  static isBsv21 (script: LockingScript): boolean {
+  static isBsv21(script: LockingScript): boolean {
     try {
       Bsv21Token.decode(script)
       return true
@@ -166,10 +170,11 @@ export class Bsv21Token {
    * Decodes a BSV-21 locking script.
    * @throws if the script is not a recognisable BSV-21 output.
    */
-  static decode (script: LockingScript): Bsv21TokenDecoded {
+  static decode(script: LockingScript): Bsv21TokenDecoded {
     const lower = script.toHex().toLowerCase()
     if (lower.length < 60) throw new Error('not a BSV-21 script: too short')
-    if (!lower.startsWith(OP_FALSE_HEX + OP_IF_HEX)) throw new Error('not a BSV-21 script: missing OP_FALSE OP_IF')
+    if (!lower.startsWith(OP_FALSE_HEX + OP_IF_HEX))
+      throw new Error('not a BSV-21 script: missing OP_FALSE OP_IF')
 
     const r = new HexReader(lower)
     r.pos = 4 // past OP_FALSE OP_IF
@@ -178,7 +183,8 @@ export class Bsv21Token {
     const ownerHash160 = readP2pkhOwner(r)
 
     const amt: string | undefined = payload.amt
-    if (typeof amt !== 'string' || !/^\d+$/.test(amt)) throw new Error('not a BSV-21 script: bad amount')
+    if (typeof amt !== 'string' || !/^\d+$/.test(amt))
+      throw new Error('not a BSV-21 script: bad amount')
 
     const isMint = payload.op === 'deploy+mint'
     const dec = parseDecimals(payload)

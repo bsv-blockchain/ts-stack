@@ -39,7 +39,7 @@ const LEGACY_KEY_TYPE = 'EcdsaSecp256k1VerificationKey2019'
 // Utility Functions
 // ============================================================================
 
-function base64url (bytes: number[]): string {
+function base64url(bytes: number[]): string {
   let encoded = Utils.toBase64(bytes).split('+').join('-').split('/').join('_')
   while (encoded.endsWith('=')) {
     encoded = encoded.slice(0, -1)
@@ -47,7 +47,7 @@ function base64url (bytes: number[]): string {
   return encoded
 }
 
-function pubKeyToJwk (compressedHex: string): { kty: string, crv: string, x: string, y: string } {
+function pubKeyToJwk(compressedHex: string): { kty: string; crv: string; x: string; y: string } {
   const pubKey = PublicKey.fromString(compressedHex)
   const xBytes = pubKey.getX().toArray('be', 32)
   const yBytes = pubKey.getY().toArray('be', 32)
@@ -59,7 +59,7 @@ function pubKeyToJwk (compressedHex: string): { kty: string, crv: string, x: str
   }
 }
 
-function buildOpReturn (identityCode: string, payload: string): Script {
+function buildOpReturn(identityCode: string, payload: string): Script {
   return new Script()
     .writeOpCode(OP.OP_FALSE)
     .writeOpCode(OP.OP_RETURN)
@@ -68,11 +68,11 @@ function buildOpReturn (identityCode: string, payload: string): Script {
     .writeBin(Utils.toArray(payload, 'utf8'))
 }
 
-function generateIdentityCode (): string {
+function generateIdentityCode(): string {
   return Utils.toHex(Random(16))
 }
 
-function parseOpReturnSegments (scriptHex: string): string[] {
+function parseOpReturnSegments(scriptHex: string): string[] {
   try {
     const script = Script.fromHex(scriptHex)
     const chunks = script.chunks
@@ -108,7 +108,7 @@ const WOC_RATE_LIMIT_MS = 350
 const WOC_MAX_HOPS = 100
 
 /** Return a DIDResolutionResult for a legacy pubkey-based DID. */
-function resolveLegacyDID (identityKey: string): DIDResolutionResult {
+function resolveLegacyDID(identityKey: string): DIDResolutionResult {
   const legacyDoc = DID.fromIdentityKey(identityKey) // NOSONAR — legacy DID resolution requires deprecated API
   return {
     didDocument: {
@@ -129,13 +129,16 @@ function resolveLegacyDID (identityKey: string): DIDResolutionResult {
 }
 
 /** Try a proxy resolver; return result or null if unavailable / no match. */
-async function tryProxyResolver (didString: string, proxyUrl: string | undefined): Promise<DIDResolutionResult | null> {
+async function tryProxyResolver(
+  didString: string,
+  proxyUrl: string | undefined
+): Promise<DIDResolutionResult | null> {
   if (proxyUrl == null || proxyUrl === '') return null
   try {
     const response = await fetch(`${proxyUrl}?did=${encodeURIComponent(didString)}`)
     if (!response.ok) return null
     const data: any = await response.json()
-    if ((data.didDocument != null) || (data.didDocumentMetadata?.deactivated === true)) {
+    if (data.didDocument != null || data.didDocumentMetadata?.deactivated === true) {
       return data as DIDResolutionResult
     }
   } catch {
@@ -145,7 +148,10 @@ async function tryProxyResolver (didString: string, proxyUrl: string | undefined
 }
 
 /** Try the universal resolver directly; return result or null if unavailable. */
-async function tryDirectResolver (didString: string, resolverUrl: string | undefined): Promise<DIDResolutionResult | null> {
+async function tryDirectResolver(
+  didString: string,
+  resolverUrl: string | undefined
+): Promise<DIDResolutionResult | null> {
   if (resolverUrl == null || resolverUrl === '') return null
   try {
     const response = await fetch(`${resolverUrl}/1.0/identifiers/${didString}`)
@@ -172,7 +178,7 @@ async function tryDirectResolver (didString: string, resolverUrl: string | undef
 }
 
 /** Find the latest chain-state custom-instructions entry for a given DID. */
-function findLatestChainStateForDID (outputs: any[], didString: string): any | null {
+function findLatestChainStateForDID(outputs: any[], didString: string): any | null {
   let latestCI: any = null
   for (const output of outputs) {
     if ((output as any).customInstructions == null) continue
@@ -186,7 +192,10 @@ function findLatestChainStateForDID (outputs: any[], didString: string): any | n
 }
 
 /** Find the active chain state and its outpoint for a given DID. */
-function findActiveChainState (outputs: any[], didString: string): { chainCI: any, chainOutpoint: string } | null {
+function findActiveChainState(
+  outputs: any[],
+  didString: string
+): { chainCI: any; chainOutpoint: string } | null {
   for (const output of outputs) {
     if ((output as any).customInstructions == null) continue
     try {
@@ -200,10 +209,9 @@ function findActiveChainState (outputs: any[], didString: string): { chainCI: an
 }
 
 /** Build a DIDResolutionResult for a deactivated DID from stored CI. */
-function buildDeactivatedResolutionResult (ci: any, didString: string): DIDResolutionResult {
-  const doc = (ci.subjectKey == null)
-    ? null
-    : DID.buildDocument(ci.issuanceTxid, ci.subjectKey, didString)
+function buildDeactivatedResolutionResult(ci: any, didString: string): DIDResolutionResult {
+  const doc =
+    ci.subjectKey == null ? null : DID.buildDocument(ci.issuanceTxid, ci.subjectKey, didString)
   return {
     didDocument: doc,
     didDocumentMetadata: { deactivated: true },
@@ -212,8 +220,13 @@ function buildDeactivatedResolutionResult (ci: any, didString: string): DIDResol
 }
 
 /** Build a DIDResolutionResult for an active DID from stored CI. */
-function buildActiveResolutionResult (ci: any, didString: string): DIDResolutionResult {
-  const document = DID.buildDocument(ci.issuanceTxid, ci.subjectKey, didString, ci.services ?? undefined)
+function buildActiveResolutionResult(ci: any, didString: string): DIDResolutionResult {
+  const document = DID.buildDocument(
+    ci.issuanceTxid,
+    ci.subjectKey,
+    didString,
+    ci.services ?? undefined
+  )
   if (ci.additionalKeys != null) {
     appendAdditionalKeys(document, ci.additionalKeys as string[], didString)
   }
@@ -225,7 +238,11 @@ function buildActiveResolutionResult (ci: any, didString: string): DIDResolution
 }
 
 /** Append additional verification-method keys to a DID document (mutates document). */
-function appendAdditionalKeys (document: DIDDocumentV2, additionalKeys: string[], did: string): void {
+function appendAdditionalKeys(
+  document: DIDDocumentV2,
+  additionalKeys: string[],
+  did: string
+): void {
   for (let i = 0; i < additionalKeys.length; i++) {
     document.verificationMethod.push({
       id: `${did}#key-${i + 2}`,
@@ -240,7 +257,7 @@ function appendAdditionalKeys (document: DIDDocumentV2, additionalKeys: string[]
  * Rate-limiter for WoC API calls.
  * Returns a fetch-like function that throttles to at most one call per WOC_RATE_LIMIT_MS.
  */
-function makeWocFetcher (): (url: string) => Promise<Response> {
+function makeWocFetcher(): (url: string) => Promise<Response> {
   let lastCall = 0
   return async (url: string): Promise<Response> => {
     const elapsed = Date.now() - lastCall
@@ -253,7 +270,7 @@ function makeWocFetcher (): (url: string) => Promise<Response> {
 }
 
 /** Extract BSVDID OP_RETURN segments from a WoC transaction's vout array. */
-function extractBsvdidSegments (vout: any[]): string[] {
+function extractBsvdidSegments(vout: any[]): string[] {
   for (const out of vout) {
     const hex = out?.scriptPubKey?.hex as string | undefined
     if (hex == null || hex === '') continue
@@ -264,19 +281,24 @@ function extractBsvdidSegments (vout: any[]): string[] {
 }
 
 /** Follow the WoC spend index to find the next txid spending output 0. */
-async function fetchNextTxidViaSpend (currentTxid: string, wocFetch: (url: string) => Promise<Response>): Promise<string | null> {
+async function fetchNextTxidViaSpend(
+  currentTxid: string,
+  wocFetch: (url: string) => Promise<Response>
+): Promise<string | null> {
   try {
     const resp = await wocFetch(`${WOC_API}/tx/${currentTxid}/out/0/spend`)
     if (resp.ok && resp.status !== 404) {
       const data: any = await resp.json()
       return data?.txid ?? null
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return null
 }
 
 /** Follow address history to find the next txid in the chain. */
-async function fetchNextTxidViaHistory (
+async function fetchNextTxidViaHistory(
   txData: any,
   visited: Set<string>,
   wocFetch: (url: string) => Promise<Response>
@@ -286,7 +308,7 @@ async function fetchNextTxidViaHistory (
   try {
     const resp = await wocFetch(`${WOC_API}/address/${String(out0Addr)}/history`)
     if (!resp.ok) return null
-    const history = await resp.json() as Array<{ tx_hash: string, height: number }>
+    const history = (await resp.json()) as Array<{ tx_hash: string; height: number }>
     const candidates = history
       .filter(e => !visited.has(e.tx_hash))
       .sort((a, b) => b.height - a.height)
@@ -308,7 +330,7 @@ interface WocChainState {
  * Process one hop in the WoC chain-follow loop.
  * Returns the payload that caused early exit (revocation), or null to continue.
  */
-function processWocSegments (
+function processWocSegments(
   segments: string[],
   txData: any,
   currentTxid: string,
@@ -339,13 +361,15 @@ function processWocSegments (
       state.lastDocument = JSON.parse(payload) as DIDDocumentV2
       state.lastDocTxid = currentTxid
       state.updated = timestamp
-    } catch { /* Not valid JSON — skip */ }
+    } catch {
+      /* Not valid JSON — skip */
+    }
   }
   return null
 }
 
 /** Resolve a DID by following the UTXO chain on WhatsOnChain (extracted logic). */
-async function resolveChainOnWoC (txid: string): Promise<DIDResolutionResult> {
+async function resolveChainOnWoC(txid: string): Promise<DIDResolutionResult> {
   const notFound: DIDResolutionResult = {
     didDocument: null,
     didDocumentMetadata: {},
@@ -390,7 +414,11 @@ async function resolveChainOnWoC (txid: string): Promise<DIDResolutionResult> {
   if (state.lastDocument != null) {
     return {
       didDocument: state.lastDocument,
-      didDocumentMetadata: { created: state.created, updated: state.updated, versionId: state.lastDocTxid },
+      didDocumentMetadata: {
+        created: state.created,
+        updated: state.updated,
+        versionId: state.lastDocTxid
+      },
       didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
     }
   }
@@ -401,7 +429,8 @@ async function resolveChainOnWoC (txid: string): Promise<DIDResolutionResult> {
       didDocumentMetadata: { created: state.created },
       didResolutionMetadata: {
         error: 'notYetAvailable',
-        message: 'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
+        message:
+          'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
       }
     }
   }
@@ -413,11 +442,12 @@ async function resolveChainOnWoC (txid: string): Promise<DIDResolutionResult> {
 // DID Utility Class (standalone — no wallet dependency)
 // ============================================================================
 
-export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
+export class DID {
+  // eslint-disable-line @typescript-eslint/no-extraneous-class
   /**
    * Parse a did:bsv: string and extract the identifier (txid).
    */
-  static parse (didString: string): DIDParseResult {
+  static parse(didString: string): DIDParseResult {
     if (didString === '' || !didString.startsWith(DID_PREFIX)) {
       throw new DIDError(`Invalid DID: must start with "${DID_PREFIX}"`)
     }
@@ -431,13 +461,15 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
       // Legacy pubkey-based DID
       return { method: 'bsv', identifier }
     }
-    throw new DIDError('Invalid DID: identifier must be a 64-character lowercase hex txid or 66-character hex public key')
+    throw new DIDError(
+      'Invalid DID: identifier must be a 64-character lowercase hex txid or 66-character hex public key'
+    )
   }
 
   /**
    * Validate a did:bsv: string format.
    */
-  static isValid (didString: string): boolean {
+  static isValid(didString: string): boolean {
     try {
       DID.parse(didString)
       return true
@@ -449,7 +481,7 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
   /**
    * Create a DID string from a transaction ID.
    */
-  static fromTxid (txid: string): string {
+  static fromTxid(txid: string): string {
     if (!/^[0-9a-f]{64}$/.test(txid)) {
       throw new DIDError('Invalid txid: must be 64 lowercase hex characters')
     }
@@ -459,7 +491,7 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
   /**
    * Build a W3C DID Document (V2 spec-compliant, JsonWebKey2020).
    */
-  static buildDocument (
+  static buildDocument(
     txid: string,
     subjectPubKeyHex: string,
     controllerDID?: string,
@@ -486,7 +518,7 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
       doc.controller = controllerDID
     }
 
-    if ((services != null) && services.length > 0) {
+    if (services != null && services.length > 0) {
       doc.service = services
     }
 
@@ -497,7 +529,7 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
    * @deprecated Use DID.buildDocument() for spec-compliant documents.
    * Generate a legacy DID Document from an identity key (compressed public key hex).
    */
-  static fromIdentityKey (identityKey: string): DIDDocument {
+  static fromIdentityKey(identityKey: string): DIDDocument {
     if (identityKey === '' || !/^[0-9a-fA-F]{66}$/.test(identityKey)) {
       throw new DIDError('Invalid identity key: must be a 66-character hex compressed public key')
     }
@@ -525,7 +557,7 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
   /**
    * Get the certificate type used for DID persistence.
    */
-  static getCertificateType (): string {
+  static getCertificateType(): string {
     return Utils.toBase64(Utils.toArray('did:bsv', 'utf8'))
   }
 }
@@ -534,7 +566,7 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
 // Wallet-integrated DID methods
 // ============================================================================
 
-async function spendChainOutput (params: {
+async function spendChainOutput(params: {
   client: any
   basket: string
   currentOutpoint: string
@@ -548,7 +580,7 @@ async function spendChainOutput (params: {
     customInstructions?: string
     tags?: string[]
   }>
-}): Promise<{ txid: string, tx: any }> {
+}): Promise<{ txid: string; tx: any }> {
   const { client, basket, currentOutpoint, chainKeyHex, description, newOutputs } = params
   const chainKey = PrivateKey.fromHex(chainKeyHex)
 
@@ -560,33 +592,36 @@ async function spendChainOutput (params: {
   } as any)
 
   const beef = new Beef()
-  beef.mergeBeef((result).BEEF as number[])
+  beef.mergeBeef(result.BEEF as number[])
   const inputBEEF = beef.toBinary()
 
   // Create action with custom input (chain UTXO to spend)
   const response = await client.createAction({
     description,
     inputBEEF,
-    inputs: [{
-      outpoint: currentOutpoint,
-      unlockingScriptLength: 108, // P2PKH: sig 73 + push 1 + pubkey 33 + push 1
-      inputDescription: 'DID chain UTXO'
-    }],
+    inputs: [
+      {
+        outpoint: currentOutpoint,
+        unlockingScriptLength: 108, // P2PKH: sig 73 + push 1 + pubkey 33 + push 1
+        inputDescription: 'DID chain UTXO'
+      }
+    ],
     outputs: newOutputs,
     options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
   } as any)
 
-  if ((response)?.signableTransaction == null) {
+  if (response?.signableTransaction == null) {
     throw new DIDError('Expected signableTransaction for chain spend')
   }
 
-  const signable = (response).signableTransaction
+  const signable = response.signableTransaction
   const txToSign = Transaction.fromBEEF(signable.tx)
   txToSign.inputs[0].unlockingScriptTemplate = new P2PKH().unlock(chainKey, 'all', false)
   await txToSign.sign()
 
   const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-  if (unlockingScript == null || unlockingScript === '') throw new DIDError('Failed to generate unlocking script')
+  if (unlockingScript == null || unlockingScript === '')
+    throw new DIDError('Failed to generate unlocking script')
 
   const finalResult = await client.signAction({
     reference: signable.reference,
@@ -594,16 +629,16 @@ async function spendChainOutput (params: {
   })
 
   return {
-    txid: (finalResult).txid ?? '',
-    tx: (finalResult).tx
+    txid: finalResult.txid ?? '',
+    tx: finalResult.tx
   }
 }
 
-export function createDIDMethods (core: WalletCore): ReturnType<typeof _buildDIDMethods> {
+export function createDIDMethods(core: WalletCore): ReturnType<typeof _buildDIDMethods> {
   return _buildDIDMethods(core)
 }
 
-function _buildDIDMethods (core: WalletCore): {
+function _buildDIDMethods(core: WalletCore): {
   createDID: (options?: DIDCreateOptions) => Promise<DIDCreateResult>
   resolveDID: (didString: string) => Promise<DIDResolutionResult>
   _resolveFromBasket: (didString: string) => Promise<DIDResolutionResult | null>
@@ -618,7 +653,7 @@ function _buildDIDMethods (core: WalletCore): {
    * Build a P2PKH locking script for a tracking output (goes into basket).
    * Locked to the wallet's own identity key so it's recognized as spendable.
    */
-  function buildTrackingScript (): string {
+  function buildTrackingScript(): string {
     const identityKey = core.getIdentityKey()
     const address = PublicKey.fromString(identityKey).toAddress()
     return new P2PKH().lock(address).toHex()
@@ -636,7 +671,7 @@ function _buildDIDMethods (core: WalletCore): {
      * This produces a followable output-0-spend chain that external resolvers
      * (WhatsOnChain, Teranode Universal Resolver) can discover.
      */
-    async createDID (options?: DIDCreateOptions): Promise<DIDCreateResult> {
+    async createDID(options?: DIDCreateOptions): Promise<DIDCreateResult> {
       try {
         const client = core.getClient()
         const basket = options?.basket ?? core.defaults.didBasket
@@ -717,7 +752,8 @@ function _buildDIDMethods (core: WalletCore): {
           await new Promise(resolve => setTimeout(resolve, 500))
         }
 
-        if (!found) { // eslint-disable-line @typescript-eslint/strict-boolean-expressions
+        if (!found) {
+          // eslint-disable-line @typescript-eslint/strict-boolean-expressions
           throw new DIDError('Issuance output not found in basket after retries')
         }
 
@@ -771,7 +807,7 @@ function _buildDIDMethods (core: WalletCore): {
      * Resolve a did:bsv DID to its DID Document.
      * Tries Teranode Universal Resolver first, falls back to WhatsOnChain.
      */
-    async resolveDID (didString: string): Promise<DIDResolutionResult> {
+    async resolveDID(didString: string): Promise<DIDResolutionResult> {
       const parsed = DID.parse(didString)
 
       // Legacy pubkey-based DID — return legacy document immediately
@@ -803,7 +839,7 @@ function _buildDIDMethods (core: WalletCore): {
      * Resolve a DID from the local basket (for DIDs we own).
      * @internal
      */
-    async _resolveFromBasket (didString: string): Promise<DIDResolutionResult | null> {
+    async _resolveFromBasket(didString: string): Promise<DIDResolutionResult | null> {
       const client = core.getClient()
       const basket = core.defaults.didBasket
 
@@ -833,7 +869,7 @@ function _buildDIDMethods (core: WalletCore): {
      * Resolve a DID by following the UTXO chain on WhatsOnChain.
      * @internal
      */
-    async _resolveViaWhatsOnChain (txid: string): Promise<DIDResolutionResult> {
+    async _resolveViaWhatsOnChain(txid: string): Promise<DIDResolutionResult> {
       try {
         return await resolveChainOnWoC(txid)
       } catch (error) {
@@ -852,7 +888,7 @@ function _buildDIDMethods (core: WalletCore): {
      * Update a DID document by spending the current chain UTXO.
      * Creates a new chain UTXO (out 0) + OP_RETURN with updated document (out 1).
      */
-    async updateDID (options: DIDUpdateOptions): Promise<DIDCreateResult> {
+    async updateDID(options: DIDUpdateOptions): Promise<DIDCreateResult> {
       try {
         const client = core.getClient()
         DID.parse(options.did)
@@ -927,7 +963,7 @@ function _buildDIDMethods (core: WalletCore): {
      * Out 0: OP_RETURN revocation marker (chain terminates).
      * Out 1: P2PKH to wallet identity key (local bookkeeping).
      */
-    async deactivateDID (didString: string): Promise<{ txid: string }> {
+    async deactivateDID(didString: string): Promise<{ txid: string }> {
       try {
         const client = core.getClient()
         DID.parse(didString)
@@ -989,7 +1025,7 @@ function _buildDIDMethods (core: WalletCore): {
     /**
      * List all DIDs owned by this wallet.
      */
-    async listDIDs (): Promise<DIDChainState[]> {
+    async listDIDs(): Promise<DIDChainState[]> {
       try {
         const client = core.getClient()
         const basket = core.defaults.didBasket
@@ -1007,7 +1043,7 @@ function _buildDIDMethods (core: WalletCore): {
           if ((output as any).customInstructions == null) continue
           try {
             const ci = JSON.parse((output as any).customInstructions)
-            if ((ci.did == null) || (ci.identityCode == null)) continue
+            if (ci.did == null || ci.identityCode == null) continue
 
             // Skip pending issuance outputs (consumed by document TX)
             if (ci.status === 'pending') continue
@@ -1035,7 +1071,7 @@ function _buildDIDMethods (core: WalletCore): {
      * @deprecated Use createDID() for spec-compliant DIDs.
      * Get this wallet's legacy DID Document (identity-key based).
      */
-    getDID (): DIDDocument {
+    getDID(): DIDDocument {
       return DID.fromIdentityKey(core.getIdentityKey()) // NOSONAR — deprecated method intentionally uses deprecated API
     },
 
@@ -1043,7 +1079,7 @@ function _buildDIDMethods (core: WalletCore): {
      * @deprecated Use createDID() for spec-compliant DIDs.
      * Register a legacy DID as a BSV certificate.
      */
-    async registerDID (options?: { persist?: boolean }): Promise<DIDDocument> {
+    async registerDID(options?: { persist?: boolean }): Promise<DIDDocument> {
       const { Certifier } = await import('./certification')
       const identityKey = core.getIdentityKey()
       const didDoc = DID.fromIdentityKey(identityKey) // NOSONAR — deprecated method intentionally uses deprecated API

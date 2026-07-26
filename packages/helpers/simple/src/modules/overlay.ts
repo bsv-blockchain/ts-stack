@@ -31,7 +31,7 @@ export class Overlay {
   private readonly resolver: LookupResolver
   private readonly config: OverlayConfig
 
-  private constructor (
+  private constructor(
     config: OverlayConfig,
     broadcaster: TopicBroadcaster,
     resolver: LookupResolver
@@ -42,7 +42,7 @@ export class Overlay {
     this.resolver = resolver
   }
 
-  static async create (config: OverlayConfig): Promise<Overlay> {
+  static async create(config: OverlayConfig): Promise<Overlay> {
     if (config.topics.length === 0) {
       throw new Error('At least one topic is required')
     }
@@ -81,14 +81,14 @@ export class Overlay {
     return new Overlay(config, broadcaster, resolver)
   }
 
-  getInfo (): OverlayInfo {
+  getInfo(): OverlayInfo {
     return {
       topics: [...this.topics],
       network: this.config.network ?? 'mainnet'
     }
   }
 
-  addTopic (topic: string): void {
+  addTopic(topic: string): void {
     if (!topic.startsWith('tm_')) {
       throw new Error(`Topic "${topic}" must start with "tm_" prefix`)
     }
@@ -98,7 +98,7 @@ export class Overlay {
     }
   }
 
-  removeTopic (topic: string): void {
+  removeTopic(topic: string): void {
     const index = this.topics.indexOf(topic)
     if (index > -1) {
       this.topics.splice(index, 1)
@@ -108,27 +108,29 @@ export class Overlay {
     }
   }
 
-  private rebuildBroadcaster (): void {
+  private rebuildBroadcaster(): void {
     const network = this.config.network ?? 'mainnet'
     const broadcasterConfig: SHIPBroadcasterConfig = {
       networkPreset: network,
       resolver: this.resolver
     }
     if (this.config.requireAckFromAllHosts !== undefined) {
-      broadcasterConfig.requireAcknowledgmentFromAllHostsForTopics = this.config.requireAckFromAllHosts
+      broadcasterConfig.requireAcknowledgmentFromAllHostsForTopics =
+        this.config.requireAckFromAllHosts
     }
     if (this.config.requireAckFromAnyHost !== undefined) {
-      broadcasterConfig.requireAcknowledgmentFromAnyHostForTopics = this.config.requireAckFromAnyHost
+      broadcasterConfig.requireAcknowledgmentFromAnyHostForTopics =
+        this.config.requireAckFromAnyHost
     }
     this.broadcaster = new TopicBroadcaster(this.topics, broadcasterConfig)
   }
 
   // Submit a pre-built Transaction to overlay topics
-  async broadcast (tx: Transaction, topics?: string[]): Promise<OverlayBroadcastResult> {
+  async broadcast(tx: Transaction, topics?: string[]): Promise<OverlayBroadcastResult> {
     let broadcaster = this.broadcaster
 
     // If per-call topics are provided, create a one-off broadcaster
-    if ((topics != null) && topics.length > 0) {
+    if (topics != null && topics.length > 0) {
       for (const t of topics) {
         if (!t.startsWith('tm_')) {
           throw new Error(`Topic "${t}" must start with "tm_" prefix`)
@@ -158,13 +160,13 @@ export class Overlay {
   }
 
   // Query a lookup service
-  async query (service: string, query: unknown, timeout?: number): Promise<LookupAnswer> {
+  async query(service: string, query: unknown, timeout?: number): Promise<LookupAnswer> {
     const question: LookupQuestion = { service, query }
     return await this.resolver.query(question, timeout)
   }
 
   // Convenience: query + extract parsed outputs
-  async lookupOutputs (service: string, query: unknown): Promise<OverlayOutput[]> {
+  async lookupOutputs(service: string, query: unknown): Promise<OverlayOutput[]> {
     const answer = await this.query(service, query)
     if (answer.type !== 'output-list' || answer.outputs == null) {
       return []
@@ -177,23 +179,35 @@ export class Overlay {
   }
 
   // Access raw SDK objects for advanced use
-  getBroadcaster (): TopicBroadcaster { return this.broadcaster }
-  getResolver (): LookupResolver { return this.resolver }
+  getBroadcaster(): TopicBroadcaster {
+    return this.broadcaster
+  }
+  getResolver(): LookupResolver {
+    return this.resolver
+  }
 }
 
 // ============================================================================
 // Wallet-integrated overlay methods
 // ============================================================================
 
-export function createOverlayMethods (core: WalletCore): {
+export function createOverlayMethods(core: WalletCore): {
   advertiseSHIP: (domain: string, topic: string, basket?: string) => Promise<TransactionResult>
   advertiseSLAP: (domain: string, service: string, basket?: string) => Promise<TransactionResult>
-  broadcastAction: (overlay: Overlay, actionOptions: { outputs: any[], description?: string }, topics?: string[]) => Promise<{ txid: string, broadcast: OverlayBroadcastResult }>
+  broadcastAction: (
+    overlay: Overlay,
+    actionOptions: { outputs: any[]; description?: string },
+    topics?: string[]
+  ) => Promise<{ txid: string; broadcast: OverlayBroadcastResult }>
   withRetry: <T>(operation: () => Promise<T>, overlay: Overlay, maxRetries?: number) => Promise<T>
 } {
   return {
     // Create a SHIP advertisement: "I host topic X at domain Y"
-    async advertiseSHIP (domain: string, topic: string, basket?: string): Promise<TransactionResult> {
+    async advertiseSHIP(
+      domain: string,
+      topic: string,
+      basket?: string
+    ): Promise<TransactionResult> {
       if (!topic.startsWith('tm_')) {
         throw new Error(`Topic "${topic}" must start with "tm_" prefix`)
       }
@@ -201,12 +215,14 @@ export function createOverlayMethods (core: WalletCore): {
       const lockingScript = await template.lock('SHIP', domain, topic)
       const result = await core.getClient().createAction({
         description: `SHIP advertisement: ${topic} at ${domain}`,
-        outputs: [{
-          lockingScript: lockingScript.toHex(),
-          satoshis: 1,
-          outputDescription: 'SHIP token',
-          ...(basket == null ? {} : { basket })
-        }],
+        outputs: [
+          {
+            lockingScript: lockingScript.toHex(),
+            satoshis: 1,
+            outputDescription: 'SHIP token',
+            ...(basket == null ? {} : { basket })
+          }
+        ],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       return {
@@ -216,7 +232,11 @@ export function createOverlayMethods (core: WalletCore): {
     },
 
     // Create a SLAP advertisement: "I provide lookup service X at domain Y"
-    async advertiseSLAP (domain: string, service: string, basket?: string): Promise<TransactionResult> {
+    async advertiseSLAP(
+      domain: string,
+      service: string,
+      basket?: string
+    ): Promise<TransactionResult> {
       if (!service.startsWith('ls_')) {
         throw new Error(`Service "${service}" must start with "ls_" prefix`)
       }
@@ -224,12 +244,14 @@ export function createOverlayMethods (core: WalletCore): {
       const lockingScript = await template.lock('SLAP', domain, service)
       const result = await core.getClient().createAction({
         description: `SLAP advertisement: ${service} at ${domain}`,
-        outputs: [{
-          lockingScript: lockingScript.toHex(),
-          satoshis: 1,
-          outputDescription: 'SLAP token',
-          ...(basket == null ? {} : { basket })
-        }],
+        outputs: [
+          {
+            lockingScript: lockingScript.toHex(),
+            satoshis: 1,
+            outputDescription: 'SLAP token',
+            ...(basket == null ? {} : { basket })
+          }
+        ],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       return {
@@ -239,11 +261,11 @@ export function createOverlayMethods (core: WalletCore): {
     },
 
     // Create action + broadcast to overlay in one step
-    async broadcastAction (
+    async broadcastAction(
       overlay: Overlay,
-      actionOptions: { outputs: any[], description?: string },
+      actionOptions: { outputs: any[]; description?: string },
       topics?: string[]
-    ): Promise<{ txid: string, broadcast: OverlayBroadcastResult }> {
+    ): Promise<{ txid: string; broadcast: OverlayBroadcastResult }> {
       const result = await core.getClient().createAction({
         description: actionOptions.description ?? 'Overlay broadcast',
         outputs: actionOptions.outputs,
@@ -256,7 +278,11 @@ export function createOverlayMethods (core: WalletCore): {
     },
 
     // Double-spend retry wrapper
-    async withRetry<T>(operation: () => Promise<T>, overlay: Overlay, maxRetries?: number): Promise<T> {
+    async withRetry<T>(
+      operation: () => Promise<T>,
+      overlay: Overlay,
+      maxRetries?: number
+    ): Promise<T> {
       return await withDoubleSpendRetry(operation, overlay.getBroadcaster(), maxRetries)
     }
   }

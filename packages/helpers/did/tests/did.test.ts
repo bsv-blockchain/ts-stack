@@ -3,7 +3,9 @@ import { BsvDid, decodeDidKey, publicKeyFromDid } from '../src/index.js'
 
 describe('BsvDid', () => {
   test('creates a secp256k1 did:key and DID Document', () => {
-    const privateKey = PrivateKey.fromHex('0000000000000000000000000000000000000000000000000000000000000001')
+    const privateKey = PrivateKey.fromHex(
+      '0000000000000000000000000000000000000000000000000000000000000001'
+    )
     const publicKey = privateKey.toPublicKey().toDER() as number[]
     const did = BsvDid.fromPublicKey(publicKey)
     const decoded = decodeDidKey(did)

@@ -8,12 +8,12 @@ const WALLET_BALANCE_BASKET = '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e
 class TestWallet extends WalletCore {
   private mockClient: any
 
-  constructor (mockClient: any, identityKey?: string) {
+  constructor(mockClient: any, identityKey?: string) {
     super(identityKey ?? VALID_KEY_1)
     this.mockClient = mockClient
   }
 
-  getClient (): WalletInterface {
+  getClient(): WalletInterface {
     return this.mockClient as unknown as WalletInterface
   }
 }
@@ -213,9 +213,7 @@ describe('WalletCore getBalance', () => {
     it('should handle single output basket', async () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 1,
-        outputs: [
-          { satoshis: 1, spendable: true, outpoint: 'a.0' }
-        ]
+        outputs: [{ satoshis: 1, spendable: true, outpoint: 'a.0' }]
       })
       const wallet = new TestWallet(mockClient)
 

@@ -30,11 +30,11 @@ export class ServerWalletManager {
   private readonly storageUrl: string
   private readonly defaultRequestSatoshis: number
   private readonly requestMemo: string
-  private readonly store: JsonFileStore<{ privateKey: string, identityKey: string }>
+  private readonly store: JsonFileStore<{ privateKey: string; identityKey: string }>
   private wallet: any = null
   private initPromise: Promise<any> | null = null
 
-  constructor (config?: ServerWalletManagerConfig) {
+  constructor(config?: ServerWalletManagerConfig) {
     this.envVar = config?.envVar ?? 'SERVER_PRIVATE_KEY'
     this.keyFile = config?.keyFile ?? join(process.cwd(), '.server-wallet.json')
     this.network = config?.network ?? 'main'
@@ -44,7 +44,7 @@ export class ServerWalletManager {
     this.store = new JsonFileStore(this.keyFile)
   }
 
-  async getWallet (): Promise<any> {
+  async getWallet(): Promise<any> {
     if (this.wallet != null) return this.wallet
     if (this.initPromise != null) return await this.initPromise
 
@@ -72,7 +72,7 @@ export class ServerWalletManager {
     return await this.initPromise
   }
 
-  getStatus (): { saved: boolean, identityKey: string | null } {
+  getStatus(): { saved: boolean; identityKey: string | null } {
     const data = this.store.load()
     return {
       saved: data !== null,
@@ -80,7 +80,7 @@ export class ServerWalletManager {
     }
   }
 
-  reset (): void {
+  reset(): void {
     this.wallet = null
     this.initPromise = null
     this.store.delete()
@@ -91,11 +91,13 @@ export class ServerWalletManager {
 // Next.js handler factory
 // ============================================================================
 
-export function createServerWalletHandler (config?: ServerWalletManagerConfig): ReturnType<typeof toNextHandlers> {
+export function createServerWalletHandler(
+  config?: ServerWalletManagerConfig
+): ReturnType<typeof toNextHandlers> {
   const manager = new ServerWalletManager(config)
 
   const coreHandlers = {
-    async GET (req: HandlerRequest): Promise<HandlerResponse> {
+    async GET(req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const action = params.get('action') ?? 'create'
 
@@ -122,7 +124,10 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
         if (action === 'request') {
           const wallet = await manager.getWallet()
           const satoshisStr = params.get('satoshis')
-          const satoshis = (satoshisStr != null && satoshisStr !== '') ? Number.parseInt(satoshisStr, 10) : (config?.defaultRequestSatoshis ?? 1000)
+          const satoshis =
+            satoshisStr != null && satoshisStr !== ''
+              ? Number.parseInt(satoshisStr, 10)
+              : (config?.defaultRequestSatoshis ?? 1000)
           const request = wallet.createPaymentRequest({
             satoshis,
             memo: config?.requestMemo ?? 'Server wallet funding'
@@ -140,9 +145,15 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
           const basket = params.get('basket') ?? 'default'
           const result = await client.listOutputs({ basket })
           const outputList = result?.outputs ?? []
-          const totalSatoshis = outputList.reduce((sum: number, o: any) => sum + ((o.satoshis as number | undefined) ?? 0), 0)
+          const totalSatoshis = outputList.reduce(
+            (sum: number, o: any) => sum + ((o.satoshis as number | undefined) ?? 0),
+            0
+          )
           const spendable = outputList.filter((o: any) => o.spendable !== false)
-          const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + ((o.satoshis as number | undefined) ?? 0), 0)
+          const spendableSatoshis = spendable.reduce(
+            (sum: number, o: any) => sum + ((o.satoshis as number | undefined) ?? 0),
+            0
+          )
           return jsonResponse({
             success: true,
             basket,
@@ -176,11 +187,14 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
         if (action === 'create') {
           manager.reset()
         }
-        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse(
+          { success: false, error: `${String(action)} failed: ${(error as Error).message}` },
+          500
+        )
       }
     },
 
-    async POST (req: HandlerRequest): Promise<HandlerResponse> {
+    async POST(req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const action = params.get('action') ?? 'receive'
 
@@ -189,11 +203,20 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
           const wallet = await manager.getWallet()
           const body = await req.json()
           const { tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex } = body
-          if ((tx == null) || (senderIdentityKey == null) || (derivationPrefix == null) || (derivationSuffix == null)) {
-            return jsonResponse({
-              success: false,
-              error: 'Missing required fields: tx, senderIdentityKey, derivationPrefix, derivationSuffix'
-            }, 400)
+          if (
+            tx == null ||
+            senderIdentityKey == null ||
+            derivationPrefix == null ||
+            derivationSuffix == null
+          ) {
+            return jsonResponse(
+              {
+                success: false,
+                error:
+                  'Missing required fields: tx, senderIdentityKey, derivationPrefix, derivationSuffix'
+              },
+              400
+            )
           }
           await wallet.receivePayment({
             tx,
@@ -211,7 +234,10 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
         }
         return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
-        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse(
+          { success: false, error: `${String(action)} failed: ${(error as Error).message}` },
+          500
+        )
       }
     }
   }
