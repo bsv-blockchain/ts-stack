@@ -74,4 +74,22 @@ describe('runPrompts', () => {
     expect(askedKeys).not.toContain('name') // set by flag
     expect(c.name).toBe('fromFlag')
   })
+
+  test('add mode without a manifest offers every capability', async () => {
+    let offeredCapabilityCount = 0
+    const c = await runPrompts(
+      { existing: null, flags: { mode: 'add', name: 'untracked-project' } },
+      async (field, options) => {
+        if (field.key === 'capabilities') {
+          offeredCapabilityCount = options.length
+          return []
+        }
+        return undefined
+      }
+    )
+
+    expect(offeredCapabilityCount).toBeGreaterThan(0)
+    expect(c.mode).toBe('add')
+    expect(c.name).toBe('untracked-project')
+  })
 })

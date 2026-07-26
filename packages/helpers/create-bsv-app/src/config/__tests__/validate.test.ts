@@ -5,6 +5,10 @@ import { resolveConfig, ConfigError, formatConfigError } from '../validate'
 const minimal = { name: 'demo', stack: { frontend: { framework: 'react' } } }
 
 describe('resolveConfig', () => {
+  test('rejects non-object configuration input', () => {
+    expect(() => resolveConfig(null)).toThrow(/config must be an object/i)
+  })
+
   test('applies defaults to a minimal valid config', () => {
     const c = resolveConfig(minimal)
     expect(c).toEqual({
@@ -67,6 +71,26 @@ describe('resolveConfig', () => {
         bsvDir: '../escape'
       })
     ).toThrow(ConfigError)
+  })
+
+  test('rejects unsafe target paths', () => {
+    expect(() =>
+      resolveConfig({
+        name: 'x',
+        stack: { frontend: { framework: 'react' } },
+        targets: { client: '../escape' }
+      })
+    ).toThrow(/targets.client must be a safe relative path/i)
+  })
+
+  test('repository starters reject generated capability selection', () => {
+    expect(() =>
+      resolveConfig({
+        name: 'x',
+        starter: 'brc102-frontend',
+        capabilities: ['wallet-login']
+      })
+    ).toThrow(/does not accept generated capabilities/i)
   })
 
   test('normalizes packageManager and network with defaults', () => {

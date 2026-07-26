@@ -74,10 +74,21 @@ describe('parseArgs', () => {
     expect(a.draft.mode).toBe('add')
   })
 
+  test('validates mode, backend, and package-manager values', () => {
+    expect(parseArgs(['--package-manager', 'pnpm']).draft.packageManager).toBe('pnpm')
+    expect(() => parseArgs(['--package-manager', 'maven'])).toThrow(/npm, pnpm, yarn, or bun/i)
+    expect(() => parseArgs(['--mode', 'replace'])).toThrow(/new or add/i)
+    expect(() => parseArgs(['--backend', 'fastify'])).toThrow(/express or none/i)
+  })
+
   test('new/add subcommands set the mode and allow one positional target', () => {
     expect(parseArgs(['new', 'my-app']).draft.mode).toBe('new')
     expect(parseArgs(['new', 'my-app']).dir).toBe('my-app')
     expect(parseArgs(['add']).draft.mode).toBe('add')
+  })
+
+  test('rejects conflicting mode flags and subcommands', () => {
+    expect(() => parseArgs(['--mode', 'new', 'add'])).toThrow(/conflicting mode/i)
   })
 
   test('rejects unknown options, invalid enum values, and extra positionals', () => {
