@@ -1,11 +1,12 @@
 # ---- Build stage ----
-FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+# Base version 24.18.0-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 
 # Native deps (better-sqlite3) compile from source on Alpine (musl, no prebuilt
 # binaries) — needs python3/make/g++.
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache g++ make python3
 
 # Copy package files first for better layer caching
 COPY package*.json ./
@@ -27,7 +28,7 @@ RUN npm run build
 RUN cp out/knexfile.js ./knexfile.js
 
 # ---- Production stage ----
-FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 # Install nginx from the repository associated with the pinned Alpine base.
 RUN apk add --no-cache nginx && \
@@ -39,7 +40,7 @@ WORKDIR /app
 # better-sqlite3 compiles from source on Alpine; add the toolchain just for the
 # install, then remove it in the same layer to keep the image slim.
 COPY --chown=root:root --chmod=0444 package*.json ./
-RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+RUN apk add --no-cache --virtual .build-deps g++ make python3 \
  && npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3 \
  && apk del .build-deps \

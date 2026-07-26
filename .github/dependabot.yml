@@ -68,9 +68,9 @@ updates:
         exclude-patterns:
           - '@bsv/*'
 
-  # Keep every digest-pinned service base in the coordinated maintenance PR.
-  # Version tags remain beside digests for reviewability; the digest is the
-  # immutable build input enforced by repository controls.
+  # Keep deployment manifests current. Runtime Dockerfiles are digest-only, so
+  # ignore their bare `node` dependency here: a digest-only Dependabot update
+  # would incorrectly resolve the registry's `latest` tag.
   - package-ecosystem: docker
     directories:
       - /infra
@@ -84,6 +84,18 @@ updates:
       - /infra/wab/deploy
       - /infra/wallet-infra
       - /infra/wallet-infra/guides/kube_samples
+    patterns:
+      - '*'
+    multi-ecosystem-group: monthly-stack-maintenance
+    rebase-strategy: auto
+    ignore:
+      - dependency-name: node
+
+  # Dependabot discovers readable Node version updates here. This file is never
+  # built; repository health requires its version, the governed digest, and all
+  # release Dockerfiles to move together before the grouped PR can merge.
+  - package-ecosystem: docker
+    directory: /governance
     patterns:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance

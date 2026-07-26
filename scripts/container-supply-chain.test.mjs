@@ -6,6 +6,7 @@ import test from 'node:test'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
 const REGISTRY_PATH = join(REPOSITORY_ROOT, 'governance/container-images.json')
+const BASE_REFRESH_DOCKERFILE_PATH = join(REPOSITORY_ROOT, 'governance/Dockerfile.container-bases')
 const INFRA_RELEASE_PATH = join(REPOSITORY_ROOT, '.github/workflows/infra-release.yaml')
 const MARKETPLACE_RELEASE_PATH = join(REPOSITORY_ROOT, '.github/workflows/wab-marketplace-release.yml')
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
@@ -44,6 +45,15 @@ test('container registry exactly owns every release Dockerfile and immutable bas
   const allowedBases = new Set(
     registry.baseImages.flatMap(base => base.references.map(reference => `${reference}@${base.digest}`))
   )
+  const refreshBases = readFileSync(BASE_REFRESH_DOCKERFILE_PATH, 'utf8')
+    .split('\n')
+    .filter(line => line.startsWith('FROM '))
+    .map(line => line.split(/\s+/)[1])
+    .sort()
+  const expectedRefreshBases = registry.baseImages
+    .flatMap(base => base.references.map(reference => `${reference}:${base.version}`))
+    .sort()
+  assert.deepEqual(refreshBases, expectedRefreshBases)
 
   for (const component of registry.components) {
     assert.match(component.name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
@@ -54,6 +64,12 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     assert.ok(existsSync(join(REPOSITORY_ROOT, component.path, 'package-lock.json')))
 
     const dockerfile = readRepositoryFile(`${component.path}/Dockerfile`)
+    for (const base of registry.baseImages) {
+      assert.ok(
+        dockerfile.includes(base.version),
+        `${component.name} must document governed base version ${base.version}`
+      )
+    }
     const bases = dockerfile
       .split('\n')
       .filter(line => line.startsWith('FROM '))
@@ -164,6 +180,8 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   const scorecard = readFileSync(SCORECARD_PATH, 'utf8')
 
   assert.match(dependabot, /package-ecosystem: docker/)
+  assert.match(dependabot, /directory: \/governance/)
+  assert.match(dependabot, /dependency-name: node/)
   for (const component of registry.components) {
     assert.match(dependabot, new RegExp(`- /${component.path.replaceAll('/', '\\/')}`))
   }

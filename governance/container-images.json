@@ -8,8 +8,8 @@
       "version": "24.18.0-alpine3.24",
       "digest": "sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd",
       "references": [
-        "node:24.18.0-alpine3.24",
-        "public.ecr.aws/docker/library/node:24.18.0-alpine3.24"
+        "node",
+        "public.ecr.aws/docker/library/node"
       ],
       "refreshOwner": "dependabot-docker",
       "verification": "Resolve each reference through its registry and require the same multi-platform digest before merge."

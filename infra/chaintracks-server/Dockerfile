@@ -1,11 +1,12 @@
 # Build stage
-FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+# Base version 24.18.0-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 
 # better-sqlite3 (transitive via @bsv/wallet-toolbox) ships no musl prebuilt for
 # Node 24 — needs python3/make/g++ to compile from source on Alpine.
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache g++ make python3
 
 # Copy package files
 COPY package*.json ./
@@ -23,14 +24,14 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 WORKDIR /app
 
 # Install better-sqlite3 native build tools (see builder stage). The pinned
 # base is refreshed by reviewed Dependabot changes instead of mutating it with
 # a time-dependent apk upgrade. The toolchain is removed after npm ci below.
-RUN apk add --no-cache --virtual .build-deps python3 make g++
+RUN apk add --no-cache --virtual .build-deps g++ make python3
 
 # Copy package files
 COPY package*.json ./

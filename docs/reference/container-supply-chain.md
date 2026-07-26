@@ -23,7 +23,7 @@ artifact that reaches a registry.
 `governance/container-images.json` is the complete release inventory. It owns:
 
 - the seven Docker build contexts and their `linux/amd64` platform;
-- the exact version-and-digest-pinned Node base image;
+- the exact digest-pinned Node base and its human-readable expected version;
 - OCI title, description, license, and documentation metadata; and
 - the GHCR or GHCR-plus-Marketplace release route for each component.
 
@@ -31,6 +31,14 @@ artifact that reaches a registry.
 unregistered Dockerfiles, mutable bases, `apk upgrade`, uncommitted lockfile
 resolution, incomplete OCI metadata, unpinned deployment examples, and loss of
 the scan, attestation, signature, Docker Dependabot, or Scorecard controls.
+
+`governance/Dockerfile.container-bases` is dependency-discovery metadata, not a
+build context. Dependabot proposes readable Node version changes there. The
+health contract then requires the registry's expected version and digest plus
+every digest-only release `FROM` instruction to be reconciled in the same PR.
+Runtime Dockerfiles deliberately omit the tag because Docker uses the digest as
+the actual identity; keeping both on `FROM` is ambiguous and triggers the
+Docker analyzer rule against mixed tag-and-digest references.
 
 Package locks under `infra/**/package-lock.json` are committed release inputs.
 Release workflows never rewrite them. A stale or inconsistent lock therefore
@@ -106,11 +114,13 @@ submits the catalog change and waits for a terminal success state.
 
 For a base-image refresh:
 
-1. verify the version and multi-platform digest directly against each registry;
-2. update `governance/container-images.json` and every matching `FROM` line in
-   one PR;
-3. let the complete image matrix build and scan;
-4. merge only when repository health and security analysis pass.
+1. start from the Dependabot change in
+   `governance/Dockerfile.container-bases`;
+2. verify that version's multi-platform digest directly against each registry;
+3. update `governance/container-images.json` and every matching digest-only
+   `FROM` line in one PR;
+4. let the complete image matrix build and scan;
+5. merge only when repository health and security analysis pass.
 
 Roll back a deployment by selecting a previously verified image digest, not by
 moving or reusing a release tag. Retain the failing digest and workflow URL in
