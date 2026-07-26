@@ -14,7 +14,7 @@ const MAX_BUFFER_BYTES = 20 * 1024 * 1024
 
 function optionValue(arguments_, name, fallback = '') {
   const index = arguments_.indexOf(name)
-  return index === -1 ? fallback : arguments_[index + 1] ?? fallback
+  return index === -1 ? fallback : (arguments_[index + 1] ?? fallback)
 }
 
 function csvOption(arguments_, name, fallback) {
@@ -41,9 +41,7 @@ async function run(command, arguments_, options = {}) {
       ...options
     })
   } catch (error) {
-    throw new Error(
-      `${command} ${arguments_.join(' ')} failed:\n${commandError(error)}`
-    )
+    throw new Error(`${command} ${arguments_.join(' ')} failed:\n${commandError(error)}`)
   }
 }
 
@@ -51,55 +49,69 @@ function isDeclarationFile(file) {
   return /\.d\.[cm]?ts$/i.test(file)
 }
 
-export function validatePackedFiles(packResult, manifest) {
-  const files = (packResult.files ?? []).map(file => file.path)
+function requiredFileErrors(files) {
+  return ['package.json', 'LICENSE.txt'].flatMap(requiredFile =>
+    files.filter(file => file === requiredFile).length === 1
+      ? []
+      : [`tarball must contain exactly one root ${requiredFile}`]
+  )
+}
+
+function readmeErrors(files) {
+  return files.some(file => /^readme(?:\.[^.]+)?$/i.test(file))
+    ? []
+    : ['tarball must contain a root README']
+}
+
+function packedFileErrors(file) {
   const errors = []
-  const required = ['package.json', 'LICENSE.txt']
-
-  for (const requiredFile of required) {
-    if (files.filter(file => file === requiredFile).length !== 1) {
-      errors.push(`tarball must contain exactly one root ${requiredFile}`)
-    }
+  if (
+    /(^|\/)(?:__tests__|tests?|coverage)(?:\/|$)/i.test(file) ||
+    /\.(?:spec|test)\.[cm]?[jt]sx?$/i.test(file)
+  ) {
+    errors.push(`tarball contains test artifact ${file}`)
   }
-  if (!files.some(file => /^readme(?:\.[^.]+)?$/i.test(file))) {
-    errors.push('tarball must contain a root README')
+  if (/\.tsbuildinfo$/i.test(file)) {
+    errors.push(`tarball contains compiler cache ${file}`)
   }
-
-  for (const file of files) {
-    if (/(^|\/)(?:__tests__|tests?|coverage)(?:\/|$)/i.test(file) ||
-        /\.(?:spec|test)\.[cm]?[jt]sx?$/i.test(file)) {
-      errors.push(`tarball contains test artifact ${file}`)
-    }
-    if (/\.tsbuildinfo$/i.test(file)) {
-      errors.push(`tarball contains compiler cache ${file}`)
-    }
-    if (/\.[cm]?tsx?$/i.test(file) && !isDeclarationFile(file)) {
-      errors.push(`tarball contains uncompiled TypeScript source ${file}`)
-    }
-    if (/(^|\/)(?:package-lock|pnpm-lock|yarn\.lock)(?:\.json|\.yaml)?$/i.test(file)) {
-      errors.push(`tarball contains a package-manager lockfile ${file}`)
-    }
+  if (/\.[cm]?tsx?$/i.test(file) && !isDeclarationFile(file)) {
+    errors.push(`tarball contains uncompiled TypeScript source ${file}`)
   }
+  if (/(^|\/)(?:package-lock|pnpm-lock|yarn\.lock)(?:\.json|\.yaml)?$/i.test(file)) {
+    errors.push(`tarball contains a package-manager lockfile ${file}`)
+  }
+  return errors
+}
 
+function identityErrors(packResult, manifest) {
+  const errors = []
   if (packResult.name !== manifest.name) {
     errors.push(
       `tarball name ${JSON.stringify(packResult.name)} does not match ` +
-      JSON.stringify(manifest.name)
+        JSON.stringify(manifest.name)
     )
   }
   if (packResult.version !== manifest.version) {
     errors.push(
       `tarball version ${JSON.stringify(packResult.version)} does not match ` +
-      JSON.stringify(manifest.version)
+        JSON.stringify(manifest.version)
     )
   }
   return errors
 }
 
+export function validatePackedFiles(packResult, manifest) {
+  const files = (packResult.files ?? []).map(file => file.path)
+  return [
+    ...requiredFileErrors(files),
+    ...readmeErrors(files),
+    ...files.flatMap(packedFileErrors),
+    ...identityErrors(packResult, manifest)
+  ]
+}
+
 async function packPackage(packageDirectory) {
-  const temporaryDirectory = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'ts-stack-package-artifact-')
-  )
+  const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-artifact-'))
   const { stdout } = await run(
     'pnpm',
     ['pack', '--json', '--pack-destination', temporaryDirectory],
@@ -125,10 +137,7 @@ async function checkPublint(tarballPath) {
     import('publint/utils')
   ])
   const buffer = await fs.readFile(tarballPath)
-  const tarball = buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength
-  )
+  const tarball = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
   const result = await publint({
     level: 'suggestion',
     pack: { tarball },
@@ -140,11 +149,10 @@ async function checkPublint(tarballPath) {
 }
 
 async function checkTypes(tarballPath) {
-  const [{ checkPackage, createPackageFromTarballData }, { problemKindInfo }] =
-    await Promise.all([
-      import('@arethetypeswrong/core'),
-      import('@arethetypeswrong/core/problems')
-    ])
+  const [{ checkPackage, createPackageFromTarballData }, { problemKindInfo }] = await Promise.all([
+    import('@arethetypeswrong/core'),
+    import('@arethetypeswrong/core/problems')
+  ])
   const tarball = new Uint8Array(await fs.readFile(tarballPath))
   const result = await checkPackage(createPackageFromTarballData(tarball))
   if (!result.types) {
@@ -157,7 +165,7 @@ async function checkTypes(tarballPath) {
     })
     throw new Error(
       `@arethetypeswrong/core found ${problems.length} strict type problem(s):\n` +
-      problems.join('\n')
+        problems.join('\n')
     )
   }
 }
@@ -174,9 +182,7 @@ function exportValidation(expectedExports) {
 }
 
 async function checkConsumer(tarballPath, manifest, modes, expectedExports) {
-  const consumerDirectory = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'ts-stack-package-consumer-')
-  )
+  const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-consumer-'))
   try {
     await fs.writeFile(
       path.join(consumerDirectory, 'package.json'),
@@ -211,10 +217,7 @@ async function checkConsumer(tarballPath, manifest, modes, expectedExports) {
     if (modes.includes('cjs')) {
       await run(
         'node',
-        [
-          '--eval',
-          `const loaded = require(${JSON.stringify(manifest.name)});\n${validation}`
-        ],
+        ['--eval', `const loaded = require(${JSON.stringify(manifest.name)});\n${validation}`],
         { cwd: consumerDirectory }
       )
     }
@@ -239,12 +242,7 @@ export async function checkPackageArtifact({
       throw new Error(errors.join('\n'))
     }
     await checkTypes(packed.tarballPath)
-    await checkConsumer(
-      packed.tarballPath,
-      manifest,
-      modes,
-      expectedExports
-    )
+    await checkConsumer(packed.tarballPath, manifest, modes, expectedExports)
     return manifest
   } finally {
     await fs.rm(packed.temporaryDirectory, { recursive: true, force: true })
@@ -252,9 +250,7 @@ export async function checkPackageArtifact({
 }
 
 async function main(arguments_) {
-  const target = arguments_[0] && !arguments_[0].startsWith('-')
-    ? arguments_[0]
-    : '.'
+  const target = arguments_[0] && !arguments_[0].startsWith('-') ? arguments_[0] : '.'
   const packageDirectory = path.resolve(process.cwd(), target)
   const modes = csvOption(arguments_, '--modes', 'esm,cjs')
   const expectedExports = csvOption(arguments_, '--exports', '')
@@ -265,13 +261,15 @@ async function main(arguments_) {
   })
   console.log(
     `Verified ${manifest.name}@${manifest.version}: packed payload, publint, ` +
-    `strict type resolution, and ${modes.join('/')} clean consumers.`
+      `strict type resolution, and ${modes.join('/')} clean consumers.`
   )
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  main(process.argv.slice(2)).catch(error => {
+  try {
+    await main(process.argv.slice(2))
+  } catch (error) {
     console.error(error.message)
     process.exitCode = 1
-  })
+  }
 }
