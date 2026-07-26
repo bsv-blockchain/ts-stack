@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Beef, Transaction, P2PKH, PrivateKey, Script, Utils } from '@bsv/sdk'
+import { Beef, Transaction, P2PKH, PrivateKey, Script } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
 import {
   send402,
   validatePayment,
   createPaymentMiddleware,
-  type PaymentRequest,
   type PaymentResponse,
   type PaymentResult,
   type PaymentError
@@ -15,6 +14,9 @@ import { HEADERS } from './constants.js'
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const IDENTITY_KEY = '03f8104e2b313136ef1b84fcd9c8aadb775beb89a8207c942b31ab89e160ba4c86'
+const NONCE = 'YWJjMTIzbm9uY2U='
 
 /** Builds a minimal valid BEEF containing a single transaction with one output. */
 function makeBEEF(satoshis: number): { beefBase64: string; txid: string } {
@@ -38,14 +40,26 @@ function makeBEEF(satoshis: number): { beefBase64: string; txid: string } {
 }
 
 /** Builds a minimal mock PaymentResponse with vitest spies. */
-function makeRes(): PaymentResponse & { _status: number; _headers: Record<string, string>; _ended: boolean } {
+function makeRes(): PaymentResponse & {
+  _status: number
+  _headers: Record<string, string>
+  _ended: boolean
+} {
   const r = {
     _status: 0,
     _headers: {} as Record<string, string>,
     _ended: false,
-    status(code: number) { r._status = code; return r },
-    set(headers: Record<string, string>) { Object.assign(r._headers, headers); return r },
-    end() { r._ended = true }
+    status(code: number) {
+      r._status = code
+      return r
+    },
+    set(headers: Record<string, string>) {
+      Object.assign(r._headers, headers)
+      return r
+    },
+    end() {
+      r._ended = true
+    }
   }
   return r
 }
@@ -53,9 +67,9 @@ function makeRes(): PaymentResponse & { _status: number; _headers: Record<string
 /** Minimal headers for a valid validatePayment call. */
 function validHeaders(beefBase64: string, now = Date.now()): Record<string, string> {
   return {
-    [HEADERS.SENDER]: 'sender-key',
+    [HEADERS.SENDER]: IDENTITY_KEY,
     [HEADERS.BEEF]: beefBase64,
-    [HEADERS.NONCE]: 'abc123nonce',
+    [HEADERS.NONCE]: NONCE,
     [HEADERS.TIME]: String(now),
     [HEADERS.VOUT]: '0'
   }
@@ -64,8 +78,10 @@ function validHeaders(beefBase64: string, now = Date.now()): Record<string, stri
 /** Builds a minimal wallet mock that accepts a payment (no replay). */
 function makeWallet(opts: { isMerge?: boolean } = {}): WalletInterface {
   return {
-    internalizeAction: vi.fn().mockResolvedValue({ accepted: true, isMerge: opts.isMerge ?? false }),
-    getPublicKey: vi.fn().mockResolvedValue({ publicKey: 'server-identity-key' }),
+    internalizeAction: vi
+      .fn()
+      .mockResolvedValue({ accepted: true, isMerge: opts.isMerge ?? false }),
+    getPublicKey: vi.fn().mockResolvedValue({ publicKey: IDENTITY_KEY }),
     createAction: vi.fn(),
     // Fulfil the interface shape — unused methods
     abortAction: vi.fn(),
@@ -94,7 +110,7 @@ function makeWallet(opts: { isMerge?: boolean } = {}): WalletInterface {
     proveCertificate: vi.fn(),
     relinquishCertificate: vi.fn(),
     discoverByIdentityKey: vi.fn(),
-    discoverByAttributes: vi.fn(),
+    discoverByAttributes: vi.fn()
   } as unknown as WalletInterface
 }
 
@@ -105,32 +121,47 @@ function makeWallet(opts: { isMerge?: boolean } = {}): WalletInterface {
 describe('send402', () => {
   it('sets x-bsv-sats header as a string', () => {
     const res = makeRes()
-    send402(res, 'my-key', 100)
+    send402(res, IDENTITY_KEY, 100)
     expect(res._headers[HEADERS.SATS]).toBe('100')
   })
 
   it('sets x-bsv-server header to the identity key', () => {
     const res = makeRes()
-    send402(res, 'my-key', 100)
-    expect(res._headers[HEADERS.SERVER]).toBe('my-key')
+    send402(res, IDENTITY_KEY, 100)
+    expect(res._headers[HEADERS.SERVER]).toBe(IDENTITY_KEY)
   })
 
   it('responds with HTTP 402', () => {
     const res = makeRes()
-    send402(res, 'my-key', 100)
+    send402(res, IDENTITY_KEY, 100)
     expect(res._status).toBe(402)
   })
 
   it('calls end()', () => {
     const res = makeRes()
-    send402(res, 'my-key', 100)
+    send402(res, IDENTITY_KEY, 100)
     expect(res._ended).toBe(true)
   })
 
   it('converts large satoshi values to strings correctly', () => {
     const res = makeRes()
-    send402(res, 'key', 21_000_000 * 100_000_000)
+    send402(res, IDENTITY_KEY, 21_000_000 * 100_000_000)
     expect(res._headers[HEADERS.SATS]).toBe('2100000000000000')
+  })
+
+  it('rejects missing identity keys and invalid prices', () => {
+    for (const key of [
+      '',
+      'not-a-key',
+      `04${'1'.repeat(128)}`,
+      `02${'f'.repeat(64)}`,
+      `02${'0'.repeat(64)}`
+    ]) {
+      expect(() => send402(makeRes(), key, 100)).toThrow('identity key')
+    }
+    for (const sats of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => send402(makeRes(), IDENTITY_KEY, sats)).toThrow('positive safe integer')
+    }
   })
 })
 
@@ -195,9 +226,9 @@ describe('validatePayment', () => {
   it('accepts array-valued headers by using the first element', async () => {
     const wallet = makeWallet()
     const headers: Record<string, string | string[]> = {
-      [HEADERS.SENDER]: ['sender-key', 'ignored'],
+      [HEADERS.SENDER]: [IDENTITY_KEY, 'ignored'],
       [HEADERS.BEEF]: [beefBase64, 'ignored'],
-      [HEADERS.NONCE]: ['nonce', 'ignored'],
+      [HEADERS.NONCE]: [NONCE, 'ignored'],
       [HEADERS.TIME]: [String(now), 'ignored'],
       [HEADERS.VOUT]: ['0', 'ignored']
     }
@@ -213,6 +244,57 @@ describe('validatePayment', () => {
     const headers = { ...validHeaders(beefBase64, now), [HEADERS.TIME]: 'not-a-number' }
     const result = await validatePayment({ path: '/test', headers }, wallet, 100)
     expect(result).toBeNull()
+  })
+
+  it('returns null for non-canonical time and vout values', async () => {
+    const wallet = makeWallet()
+    for (const [header, value] of [
+      [HEADERS.TIME, '1e3'],
+      [HEADERS.TIME, '9007199254740992'],
+      [HEADERS.VOUT, '0junk'],
+      [HEADERS.VOUT, '-1'],
+      [HEADERS.VOUT, '01']
+    ] as const) {
+      const headers = { ...validHeaders(beefBase64, now), [header]: value }
+      expect(await validatePayment({ path: '/test', headers }, wallet, 100)).toBeNull()
+    }
+  })
+
+  it('returns null for oversized identity, nonce, time, and vout headers', async () => {
+    const wallet = makeWallet()
+    for (const [header, value] of [
+      [HEADERS.SENDER, 's'.repeat(131)],
+      [HEADERS.NONCE, 'n'.repeat(513)],
+      [HEADERS.TIME, '1'.repeat(17)],
+      [HEADERS.VOUT, '1'.repeat(11)]
+    ] as const) {
+      const headers = { ...validHeaders(beefBase64, now), [header]: value }
+      expect(await validatePayment({ path: '/test', headers }, wallet, 100)).toBeNull()
+    }
+  })
+
+  it('returns null for malformed identity and nonce headers', async () => {
+    const wallet = makeWallet()
+    for (const [header, value] of [
+      [HEADERS.SENDER, 'sender-key'],
+      [HEADERS.SENDER, `04${'1'.repeat(128)}`],
+      [HEADERS.NONCE, 'not base64'],
+      [HEADERS.NONCE, 'abc123nonce']
+    ] as const) {
+      const headers = { ...validHeaders(beefBase64, now), [header]: value }
+      expect(await validatePayment({ path: '/test', headers }, wallet, 100)).toBeNull()
+    }
+  })
+
+  it('returns null for invalid required amounts and payment windows', async () => {
+    const wallet = makeWallet()
+    const request = { path: '/test', headers: validHeaders(beefBase64, now) }
+    for (const required of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(await validatePayment(request, wallet, required)).toBeNull()
+    }
+    for (const window of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(await validatePayment(request, wallet, 100, window)).toBeNull()
+    }
   })
 
   it('returns null when timestamp is exactly at the window boundary (strictly outside)', async () => {
@@ -266,6 +348,15 @@ describe('validatePayment', () => {
     const result = await validatePayment({ path: '/test', headers }, wallet, 100)
     expect(result).toBeNull()
     vi.restoreAllMocks()
+  })
+
+  it('returns null instead of throwing for malformed BEEF', async () => {
+    const wallet = makeWallet()
+    const headers = {
+      ...validHeaders(beefBase64, now),
+      [HEADERS.BEEF]: 'not-valid-beef'
+    }
+    await expect(validatePayment({ path: '/test', headers }, wallet, 100)).resolves.toBeNull()
   })
 
   // --- Output value checks ---
@@ -338,11 +429,11 @@ describe('validatePayment', () => {
   it('PaymentError reason includes the txid', async () => {
     const wallet = makeWallet({ isMerge: true })
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const result = await validatePayment(
+    const result = (await validatePayment(
       { path: '/test', headers: validHeaders(beefBase64, now) },
       wallet,
       100
-    ) as PaymentError
+    )) as PaymentError
     expect(result.reason).toContain(txid)
     vi.restoreAllMocks()
   })
@@ -350,11 +441,11 @@ describe('validatePayment', () => {
   it('PaymentError reason mentions replay', async () => {
     const wallet = makeWallet({ isMerge: true })
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const result = await validatePayment(
+    const result = (await validatePayment(
       { path: '/test', headers: validHeaders(beefBase64, now) },
       wallet,
       100
-    ) as PaymentError
+    )) as PaymentError
     expect(result.reason.toLowerCase()).toContain('replay')
     vi.restoreAllMocks()
   })
@@ -364,11 +455,11 @@ describe('validatePayment', () => {
   it('returns PaymentResult with accepted: true on success', async () => {
     const wallet = makeWallet()
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const result = await validatePayment(
+    const result = (await validatePayment(
       { path: '/test', headers: validHeaders(beefBase64, now) },
       wallet,
       100
-    ) as PaymentResult
+    )) as PaymentResult
     expect(result.accepted).toBe(true)
     vi.restoreAllMocks()
   })
@@ -376,11 +467,11 @@ describe('validatePayment', () => {
   it('returns the correct txid on success', async () => {
     const wallet = makeWallet()
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const result = await validatePayment(
+    const result = (await validatePayment(
       { path: '/test', headers: validHeaders(beefBase64, now) },
       wallet,
       100
-    ) as PaymentResult
+    )) as PaymentResult
     expect(result.txid).toBe(txid)
     vi.restoreAllMocks()
   })
@@ -388,12 +479,12 @@ describe('validatePayment', () => {
   it('returns the sender identity key on success', async () => {
     const wallet = makeWallet()
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const result = await validatePayment(
+    const result = (await validatePayment(
       { path: '/test', headers: validHeaders(beefBase64, now) },
       wallet,
       100
-    ) as PaymentResult
-    expect(result.senderIdentityKey).toBe('sender-key')
+    )) as PaymentResult
+    expect(result.senderIdentityKey).toBe(IDENTITY_KEY)
     vi.restoreAllMocks()
   })
 
@@ -401,11 +492,11 @@ describe('validatePayment', () => {
     const wallet = makeWallet()
     const { beefBase64: bigBEEF } = makeBEEF(500)
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const result = await validatePayment(
+    const result = (await validatePayment(
       { path: '/test', headers: validHeaders(bigBEEF, now) },
       wallet,
       100
-    ) as PaymentResult
+    )) as PaymentResult
     expect(result.satoshisPaid).toBe(500)
     vi.restoreAllMocks()
   })
@@ -414,9 +505,20 @@ describe('validatePayment', () => {
     const wallet = makeWallet()
     // Build a BEEF with two outputs; pay into output index 1
     const tx = new Transaction()
-    tx.addInput({ sourceTXID: '0'.repeat(64), sourceOutputIndex: 0xffffffff, unlockingScript: Script.fromHex('00'), sequence: 0xffffffff })
-    tx.addOutput({ lockingScript: new P2PKH().lock(PrivateKey.fromRandom().toPublicKey().toAddress()), satoshis: 1 })
-    tx.addOutput({ lockingScript: new P2PKH().lock(PrivateKey.fromRandom().toPublicKey().toAddress()), satoshis: 200 })
+    tx.addInput({
+      sourceTXID: '0'.repeat(64),
+      sourceOutputIndex: 0xffffffff,
+      unlockingScript: Script.fromHex('00'),
+      sequence: 0xffffffff
+    })
+    tx.addOutput({
+      lockingScript: new P2PKH().lock(PrivateKey.fromRandom().toPublicKey().toAddress()),
+      satoshis: 1
+    })
+    tx.addOutput({
+      lockingScript: new P2PKH().lock(PrivateKey.fromRandom().toPublicKey().toAddress()),
+      satoshis: 200
+    })
     const beef = new Beef()
     beef.mergeTransaction(tx)
     const b64 = Buffer.from(beef.toBinary()).toString('base64')
@@ -426,9 +528,7 @@ describe('validatePayment', () => {
     await validatePayment({ path: '/p', headers }, wallet, 200)
     expect(wallet.internalizeAction).toHaveBeenCalledWith(
       expect.objectContaining({
-        outputs: expect.arrayContaining([
-          expect.objectContaining({ outputIndex: 1 })
-        ])
+        outputs: expect.arrayContaining([expect.objectContaining({ outputIndex: 1 })])
       })
     )
     vi.restoreAllMocks()
@@ -453,11 +553,7 @@ describe('validatePayment', () => {
     vi.spyOn(Date, 'now').mockReturnValue(now)
     const timeStr = String(now)
     const expectedSuffix = Buffer.from(timeStr).toString('base64')
-    await validatePayment(
-      { path: '/test', headers: validHeaders(beefBase64, now) },
-      wallet,
-      100
-    )
+    await validatePayment({ path: '/test', headers: validHeaders(beefBase64, now) }, wallet, 100)
     expect(wallet.internalizeAction).toHaveBeenCalledWith(
       expect.objectContaining({
         outputs: expect.arrayContaining([
@@ -503,9 +599,17 @@ describe('createPaymentMiddleware', () => {
       _status: 200,
       _headers: {} as Record<string, string>,
       _ended: false,
-      status(code: number) { r._status = code; return r },
-      set(headers: Record<string, string>) { Object.assign(r._headers, headers); return r },
-      end() { r._ended = true }
+      status(code: number) {
+        r._status = code
+        return r
+      },
+      set(headers: Record<string, string>) {
+        Object.assign(r._headers, headers)
+        return r
+      },
+      end() {
+        r._ended = true
+      }
     }
     return r
   }
@@ -639,37 +743,49 @@ describe('createPaymentMiddleware', () => {
     expect(res._status).toBe(500)
   })
 
-  it('falls back to send402 when error occurs after identity key is set', async () => {
+  it('responds with 402 when payment validation throws after identity initialization', async () => {
     // First request succeeds to prime the identity key
     const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => 100 })
     await middleware(makeReq(validHeaders(beefBase64, now)), makeExpressRes(), vi.fn())
 
     // Now make internalizeAction throw
-    ;(wallet.internalizeAction as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('db error'))
+    ;(wallet.internalizeAction as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('db error')
+    )
     const res = makeExpressRes()
     await middleware(makeReq(validHeaders(beefBase64, now)), res, vi.fn())
     expect(res._status).toBe(402)
   })
 
-  it('uses fallback price of 100 when calculatePrice returns undefined inside catch', async () => {
-    let callCount = 0
-    const flaky = {
+  it('responds with 500 when the wallet returns an invalid identity key', async () => {
+    const brokenWallet = {
       ...makeWallet(),
-      // First call (identity key fetch) succeeds; second (internalizeAction) throws
-      internalizeAction: vi.fn().mockRejectedValue(new Error('boom'))
+      getPublicKey: vi.fn().mockResolvedValue({ publicKey: 'not-a-public-key' })
     } as unknown as WalletInterface
-
-    // Prime identity key with a succeeding run first using the normal wallet
-    const middleware = createPaymentMiddleware({
-      wallet: flaky,
-      calculatePrice: () => { callCount++; return callCount === 1 ? 100 : undefined }
-    })
-
-    // Run 1: triggers identity key fetch but internalizeAction will throw → catch
+    const middleware = createPaymentMiddleware({ wallet: brokenWallet, calculatePrice: () => 100 })
     const res = makeExpressRes()
-    // Give it a full valid request so it gets past the BEEF check and into validatePayment
-    await middleware(makeReq(validHeaders(beefBase64, now)), res, vi.fn())
-    // Either 402 with fallback price or 500 — it won't be 200
-    expect([402, 500]).toContain(res._status)
+    await middleware(makeReq(), res, vi.fn())
+    expect(res._status).toBe(500)
+  })
+
+  it('responds with 500 instead of inventing a payment price when pricing fails', async () => {
+    const middleware = createPaymentMiddleware({
+      wallet,
+      calculatePrice: () => {
+        throw new Error('pricing unavailable')
+      }
+    })
+    const res = makeExpressRes()
+    await middleware(makeReq(), res, vi.fn())
+    expect(res._status).toBe(500)
+  })
+
+  it('responds with 500 for invalid configured prices', async () => {
+    for (const price of [-1, 1.5, Number.POSITIVE_INFINITY]) {
+      const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => price })
+      const res = makeExpressRes()
+      await middleware(makeReq(), res, vi.fn())
+      expect(res._status).toBe(500)
+    }
   })
 })

@@ -148,9 +148,9 @@
     {
       "id": "placeholder-and-pass-with-no-tests",
       "category": "skipped-test",
-      "target": "Four passWithNoTests manifests, one no-op test, and one failing placeholder test",
+      "target": "Four passWithNoTests manifests",
       "owner": "ts-stack-maintainers",
-      "reason": "Several packages can currently report success without discovering tests, while one example package contains the default failing placeholder; the package-contract ratchet keeps each case visible until real coverage exists.",
+      "reason": "Several packages can currently report success without discovering tests; the package-contract ratchet and baseline inventory keep each case visible until real coverage exists.",
       "evidence": [
         "governance/repository-health/baselines.json#testExceptions",
         "governance/repository-health/contract-baseline.json",
@@ -158,7 +158,7 @@
       ],
       "created": "2026-07-24",
       "reviewBy": "2026-08-24",
-      "removeWhen": "Every affected profile has meaningful tests or a permanent documented profile decision, with no passWithNoTests, no-op, or default placeholder command."
+      "removeWhen": "Every affected profile has meaningful tests or a permanent documented profile decision, with no passWithNoTests command."
     },
     {
       "id": "legacy-sonar-analysis-suppressions",

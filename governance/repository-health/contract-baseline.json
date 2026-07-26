@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 119,
+  "findingCount": 108,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -78,26 +78,6 @@
     {
       "id": "packages/helpers/did::missing-script::typecheck",
       "message": "Profile dual-runtime-library requires script typecheck"
-    },
-    {
-      "id": "packages/helpers/fund-wallet::missing-script::format:check",
-      "message": "Profile cli requires script format:check"
-    },
-    {
-      "id": "packages/helpers/fund-wallet::missing-script::lint",
-      "message": "Profile cli requires script lint"
-    },
-    {
-      "id": "packages/helpers/fund-wallet::missing-script::pack:check",
-      "message": "Profile cli requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/fund-wallet::missing-script::test:coverage",
-      "message": "Profile cli requires script test:coverage"
-    },
-    {
-      "id": "packages/helpers/fund-wallet::missing-script::typecheck",
-      "message": "Profile cli requires script typecheck"
     },
     {
       "id": "packages/helpers/simple::missing-script::format:check",
@@ -186,30 +166,6 @@
     {
       "id": "packages/messaging/ts-paymail/docs/examples::missing-script::typecheck",
       "message": "Profile examples requires script typecheck"
-    },
-    {
-      "id": "packages/messaging/ts-paymail/docs/examples::placeholder-quality-script::test",
-      "message": "test is a failing placeholder, not a quality check"
-    },
-    {
-      "id": "packages/middleware/402-pay::missing-script::format:check",
-      "message": "Profile dual-runtime-library requires script format:check"
-    },
-    {
-      "id": "packages/middleware/402-pay::missing-script::lint",
-      "message": "Profile dual-runtime-library requires script lint"
-    },
-    {
-      "id": "packages/middleware/402-pay::missing-script::pack:check",
-      "message": "Profile dual-runtime-library requires script pack:check"
-    },
-    {
-      "id": "packages/middleware/402-pay::missing-script::test:coverage",
-      "message": "Profile dual-runtime-library requires script test:coverage"
-    },
-    {
-      "id": "packages/middleware/402-pay::missing-script::typecheck",
-      "message": "Profile dual-runtime-library requires script typecheck"
     },
     {
       "id": "packages/middleware/auth-express-middleware::missing-script::format:check",

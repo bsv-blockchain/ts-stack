@@ -7,7 +7,7 @@ Command-line faucet/funding tool for development and testing. Funds a remote wal
 ## Public API surface
 
 ### CLI Entry Point
-Run as CLI-only; no programmatic TypeScript API exported. Executable: `fund-metanet` (or `npx fund-wallet`).
+Run as CLI-only; no programmatic TypeScript API exported. Executable: `fund-metanet` (for example, `npx --package @bsv/fund-wallet fund-metanet`).
 
 ### Command-Line Flags
 - `--chain <network>` — Required: 'test' or 'main'
@@ -26,25 +26,25 @@ Run as CLI-only; no programmatic TypeScript API exported. Executable: `fund-meta
 
 ```bash
 # Check balance only
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
   --private-key 0123456789abcdef...
 
 # Fund with 10,000 satoshis
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain test \
   --private-key <hex> \
   --satoshis 10000
 
 # Custom storage provider
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
   --private-key <hex> \
   --storage-url https://custom-store.example.com \
   --satoshis 5000
 
 # Interactive mode (no args)
-npx fund-wallet
+npx --package @bsv/fund-wallet fund-metanet
 # Prompts: chain? storage URL? private key? satoshis?
 ```
 
@@ -60,24 +60,23 @@ npx fund-wallet
 ## Dependencies
 
 **Runtime:**
-- `@bsv/sdk` ^2.0.14 (PrivateKey, Transaction building)
-- `@bsv/wallet-toolbox` ^2.1.22 (ServerWallet for local funding)
-- `chalk` ^5.4.1 (colored CLI output)
-- `dotenv` ^16.5.0 (environment variable loading)
+- `@bsv/sdk` ^2.1.6 peer (private keys and transaction construction)
+- `@bsv/wallet-toolbox` workspace-compatible release (wallet and storage integration)
+- `chalk` ^5.6.2 (colored CLI output)
 - Node.js built-ins `node:crypto` and `node:readline`
 
 **Dev:**
-- TypeScript, @types/node
+- TypeScript, Vitest with V8 coverage, oxlint, tsdown, @types/node
 
 ## Common pitfalls / gotchas
 
 1. **Metanet Desktop not running** — If `--satoshis` is provided but Metanet Desktop is not running/installed, tool fails with "not installed or not running"
-2. **Private key format** — Must be valid hex string; invalid format rejected upfront
+2. **Private key format** — Must be exactly 64 hex characters and valid secp256k1 key material
 3. **Network mismatch** — If you specify `--chain test` but try to connect to main network storage, balance will be 0
-4. **Storage URL validation** — Must start with `https://`; HTTP not allowed for security
+4. **Storage URL validation** — Must be credential-free HTTPS; HTTP and embedded credentials are rejected
 5. **Balance fetch only** — No Metanet Desktop needed if you omit `--satoshis`
 6. **No signature verification** — Tool assumes storage URL is trustworthy; no BEEF validation on receive
-7. **Interactive mode parsing** — Yes/No prompts are case-insensitive; numeric inputs must be valid integers
+7. **Numeric parsing** — Funding amounts must be non-negative safe integers
 
 ## Spec conformance
 
@@ -91,9 +90,11 @@ npx fund-wallet
 ```
 fund-wallet/
   src/
-    index.ts                    # CLI entrypoint (main execution)
+    index.ts                    # Executable entrypoint
+    cli.ts                      # Parsing, validation, prompts, and funding flow
+    index.test.ts               # Unit and wallet-contract coverage
   dist/
-    index.js                    # Compiled CLI (executable via bin.fund-metanet)
+    index.mjs                   # Compiled CLI (executable via bin.fund-metanet)
 ```
 
 ## Integration points

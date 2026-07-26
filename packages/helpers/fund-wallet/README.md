@@ -4,16 +4,17 @@ A command-line tool to fund a Metanet wallet with Bitcoin SV (BSV).
 
 ## Installation
 
-This tool can be run directly using npx without installation:
+Run the package directly without a global installation:
 
 ```bash
-npx fund-wallet
+npx --package @bsv/fund-wallet fund-metanet
 ```
 
 Or install globally:
 
 ```bash
-npm install -g fund-metanet
+npm install --global @bsv/fund-wallet
+fund-metanet --help
 ```
 
 ## Usage
@@ -23,25 +24,25 @@ npm install -g fund-metanet
 Run the tool with command-line arguments for quick, non-interactive funding:
 
 ```bash
-npx fund-wallet --chain <network> --private-key <hex> [OPTIONS]
+fund-metanet --chain <network> --private-key <hex> [OPTIONS]
 ```
 
 #### Required Arguments
 
 - `--chain <network>` - Network to use: `test` or `main`
-- `--private-key <hex>` - Wallet private key in hexadecimal format
+- `--private-key <hex>` - Wallet private key as exactly 32 bytes (64 hexadecimal characters)
 
 #### Optional Arguments
 
-- `--storage-url <url>` - Storage provider URL (default: `https://store-us-1.bsvb.tech`)
-- `--satoshis <amount>` - Amount to fund in satoshis (omit to check balance only)
+- `--storage-url <url>` - Credential-free HTTPS storage provider URL (default: `https://store-us-1.bsvb.tech`)
+- `--satoshis <amount>` - Non-negative safe-integer amount to fund (omit or use `0` to check balance only)
 
 ### Interactive Mode
 
 Run without arguments to use interactive prompts:
 
 ```bash
-npx fund-wallet
+npx --package @bsv/fund-wallet fund-metanet
 ```
 
 The tool will prompt you for:
@@ -55,7 +56,7 @@ The tool will prompt you for:
 Display usage information:
 
 ```bash
-npx fund-wallet --help
+npx --package @bsv/fund-wallet fund-metanet --help
 ```
 
 ## Examples
@@ -63,7 +64,7 @@ npx fund-wallet --help
 ### Fund a wallet with 1000 satoshis
 
 ```bash
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
   --private-key 0123456789abcdef... \
   --satoshis 1000
@@ -74,7 +75,7 @@ npx fund-wallet \
 Omit the `--satoshis` argument to check the balance without funding:
 
 ```bash
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
   --private-key 0123456789abcdef...
 ```
@@ -82,7 +83,7 @@ npx fund-wallet \
 ### Use a custom storage provider
 
 ```bash
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain main \
   --private-key 0123456789abcdef... \
   --storage-url https://store-us-1.bsvb.tech \
@@ -92,7 +93,7 @@ npx fund-wallet \
 ### Test network example
 
 ```bash
-npx fund-wallet \
+npx --package @bsv/fund-wallet fund-metanet \
   --chain test \
   --private-key 0123456789abcdef... \
   --satoshis 10000
@@ -100,7 +101,7 @@ npx fund-wallet \
 
 ## Requirements
 
-- **Node.js** - Required to run the tool
+- **Node.js 22 or newer**
 - **Metanet Desktop** - Must be installed and running for funding operations
   - Download: https://metanet.bsvb.tech
   - Note: Metanet Desktop is only required when funding (not for balance checks)
@@ -117,24 +118,26 @@ npx fund-wallet \
 ## Security Notes
 
 - Private keys are sensitive information - handle with care
+- The CLI validates the key as exactly 32-byte secp256k1 key material and does not echo it in errors.
+- Storage URLs must use HTTPS and cannot contain embedded credentials.
 - Storage connections use Node.js's normal trusted certificate authorities and
   reject invalid or self-signed TLS certificates. For a private development
   authority, configure Node.js with `NODE_EXTRA_CA_CERTS` rather than disabling
   certificate verification.
 - Use test network for development and testing
 - Never share your private keys
-- Consider using environment variables for private keys in scripts
+- Avoid placing private keys in shell history; use an appropriate secret-injection mechanism for automation.
 
 ## Error Messages
 
 - `❌ Invalid network` - Network must be either "test" or "main"
-- `❌ Invalid storage URL` - URL must start with "https://"
-- `❌ Invalid private key` - Private key must be valid hexadecimal format
+- `❌ Invalid storage URL` - URL must be credential-free and use HTTPS
+- `❌ Invalid private key` - Private key must be exactly 64 hex characters and valid secp256k1 key material
 - `❌ Metanet Desktop is not installed or not running` - Start Metanet Desktop before funding
 
 ## License
 
-See package.json for license information.
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
 
 ## Related Projects
 

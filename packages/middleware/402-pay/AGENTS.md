@@ -11,7 +11,7 @@ BRC-121 HTTP 402 Payment Required handler for client and server. Client-side: au
   - `opts.wallet: WalletInterface` — Wallet to accept payment into
   - `opts.calculatePrice(path: string): number | undefined` — Return satoshi price or undefined to skip payment
   - Sets `req.payment` on success
-- `validatePayment(req: Request, wallet: WalletInterface): Promise<PaymentResult | null>` — Validate incoming payment headers
+- `validatePayment(req: PaymentRequest, wallet: WalletInterface, requiredSats: number, paymentWindowMs?: number): Promise<PaymentResult | PaymentError | null>` — Validate incoming payment headers
 - `send402(res: Response, serverIdentityKey: string, satoshis: number): void` — Send 402 response with payment request headers
 
 ### Client (@bsv/402-pay/client)
@@ -23,7 +23,8 @@ BRC-121 HTTP 402 Payment Required handler for client and server. Client-side: au
 
 ### Types
 - `PaymentMiddlewareOptions` — Middleware configuration
-- `PaymentResult` — Parsed payment { sats: number, sender: string, txid: string, ... }
+- `PaymentResult` — Accepted payment with `satoshisPaid`, `senderIdentityKey`, and `txid`
+- `PaymentError` — Explicit replay rejection with a safe reason
 - `PaymentHeaders` — Five required headers { x-bsv-beef, x-bsv-sender, x-bsv-nonce, x-bsv-time, x-bsv-vout }
 - `Payment402Options` — Client configuration
 - `PaymentRequest` — Server's 402 request
@@ -54,7 +55,7 @@ app.use('/articles/:slug', createPaymentMiddleware({
 app.get('/articles/:slug', (req, res) => {
   // req.payment is set if payment was accepted
   if (req.payment) {
-    res.json({ article: 'Paid content here', paidBy: req.payment.sender })
+    res.json({ article: 'Paid content here', paidBy: req.payment.senderIdentityKey })
   } else {
     res.json({ article: 'Free content' })
   }
@@ -64,9 +65,14 @@ app.get('/articles/:slug', (req, res) => {
 import { validatePayment, send402 } from '@bsv/402-pay/server'
 
 app.get('/premium', async (req, res) => {
-  const result = await validatePayment(req, wallet)
+  const requiredSatoshis = 100
+  const result = await validatePayment(req, wallet, requiredSatoshis)
   if (!result) {
-    send402(res, serverIdentityKey, 100)  // Request 100 sats
+    send402(res, serverIdentityKey, requiredSatoshis)
+    return
+  }
+  if (!result.accepted) {
+    send402(res, serverIdentityKey, requiredSatoshis)
     return
   }
   res.json({ content: 'Premium stuff', tx: result.txid })
@@ -117,19 +123,19 @@ const res = await fetch('https://example.com/articles/foo', { headers })
   1. Timestamp freshness — `x-bsv-time` must be within 30 seconds of server
   2. Transaction uniqueness — `internalizeAction` returns `isMerge: true` for duplicates
 - **Key Derivation** — Client derives payment pubkey via BRC-29 using server's identity key + nonce + timestamp
-- **Caching** — Client can cache paid content per URL to avoid re-payment within timeout
+- **Caching** — Client can cache successful paid GET content per URL to avoid re-payment within timeout
 - **P2PKH Script** — Payment is always P2PKH: `OP_DUP OP_HASH160 <hash> OP_EQUALVERIFY OP_CHECKSIG`
 
 ## Dependencies
 
 **Runtime:**
-- `@bsv/sdk` ^2.0.14 (PublicKey, Utils, Random, WalletInterface, WalletClient)
+- `@bsv/sdk` ^2.1.6 (PublicKey, Utils, Random, WalletInterface)
 
 **Peer:**
 - `@bsv/sdk` (peer dependency; application must provide)
 
 **Dev:**
-- TypeScript, Vitest, @types/node
+- TypeScript, Vitest with V8 coverage, oxlint, tsdown, @types/node
 
 ## Common pitfalls / gotchas
 
@@ -141,6 +147,7 @@ const res = await fetch('https://example.com/articles/foo', { headers })
 6. **Wallet not available** — Client-side `create402Fetch` requires working WalletClient; fails if wallet is not installed/running
 7. **calculatePrice undefined** — If price calculator returns undefined, payment is skipped (content is free)
 8. **Server clock skew** — If server and client clocks differ by >30 seconds, payment fails; use NTP
+9. **Browser CORS** — The service owns CORS policy. Expose `x-bsv-sats` and `x-bsv-server` and allow the five client payment headers for trusted/configured origins; the package does not impose an origin allowlist.
 
 ## Spec conformance
 
