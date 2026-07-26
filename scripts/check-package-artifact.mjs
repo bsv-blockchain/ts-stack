@@ -8,9 +8,6 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { publint } from 'publint'
-import { formatMessage } from 'publint/utils'
-
 const execFileAsync = promisify(execFile)
 const SCRIPT_PATH = fileURLToPath(import.meta.url)
 const REPOSITORY_ROOT = path.resolve(path.dirname(SCRIPT_PATH), '..')
@@ -125,6 +122,10 @@ async function packPackage(packageDirectory) {
 }
 
 async function checkPublint(tarballPath) {
+  const [{ publint }, { formatMessage }] = await Promise.all([
+    import('publint'),
+    import('publint/utils')
+  ])
   const buffer = await fs.readFile(tarballPath)
   const tarball = buffer.buffer.slice(
     buffer.byteOffset,
