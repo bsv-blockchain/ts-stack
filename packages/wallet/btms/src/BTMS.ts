@@ -1,4 +1,26 @@
-import { WalletClient, Transaction, Beef, Utils, TopicBroadcaster, LookupResolver, LockingScript, CreateActionArgs, CreateActionOutput, ListOutputsResult, ListOutputsArgs, ListActionsResult, TXIDHexString, HexString, PubKeyHex, LabelStringUnder300Bytes, OutputTagStringUnder300Bytes, Random, WalletInterface, CommsLayer, AtomicBEEF } from '@bsv/sdk'
+import {
+  WalletClient,
+  Transaction,
+  Beef,
+  Utils,
+  TopicBroadcaster,
+  LookupResolver,
+  LockingScript,
+  CreateActionArgs,
+  CreateActionOutput,
+  ListOutputsResult,
+  ListOutputsArgs,
+  ListActionsResult,
+  TXIDHexString,
+  HexString,
+  PubKeyHex,
+  LabelStringUnder300Bytes,
+  OutputTagStringUnder300Bytes,
+  Random,
+  WalletInterface,
+  CommsLayer,
+  AtomicBEEF
+} from '@bsv/sdk'
 
 import { BTMSToken } from './BTMSToken.js'
 import { parseCustomInstructions } from './utils.js'
@@ -48,23 +70,23 @@ import {
 
 /**
  * BTMS - Basic Token Management System
- * 
+ *
  * @example
  * ```typescript
  * // Create a BTMS instance
  * const btms = new BTMS()
- * 
+ *
  * // Issue new tokens
  * const result = await btms.issue(1000, { name: 'GOLD', description: 'A test token' })
  * console.log('Asset ID:', result.assetId)
- * 
+ *
  * // Check balance
  * const balance = await btms.getBalance(result.assetId)
  * console.log('Balance:', balance)
- * 
+ *
  * // Send tokens
  * await btms.send(result.assetId, recipientPubKey, 100)
- * 
+ *
  * // List all assets
  * const assets = await btms.listAssets()
  * ```
@@ -82,15 +104,11 @@ export class BTMS {
 
   constructor(config: BTMSConfig = {}) {
     // Apply defaults
-    this.wallet = (config.wallet ?? new WalletClient('auto'))
+    this.wallet = config.wallet ?? new WalletClient('auto')
     this.networkPreset = config.networkPreset ?? 'mainnet'
     this.comms = config.comms
 
-    this.tokenTemplate = new BTMSToken(
-      this.wallet,
-      BTMS_PROTOCOL_ID,
-      this.originator
-    )
+    this.tokenTemplate = new BTMSToken(this.wallet, BTMS_PROTOCOL_ID, this.originator)
   }
 
   /**
@@ -100,11 +118,7 @@ export class BTMS {
   setOriginator(originator: string): void {
     this.originator = originator
     // Recreate token template with new originator
-    this.tokenTemplate = new BTMSToken(
-      this.wallet,
-      BTMS_PROTOCOL_ID,
-      this.originator
-    )
+    this.tokenTemplate = new BTMSToken(this.wallet, BTMS_PROTOCOL_ID, this.originator)
   }
 
   // ---------------------------------------------------------------------------
@@ -113,15 +127,15 @@ export class BTMS {
 
   /**
    * Issue new BTMS tokens.
-   * 
+   *
    * Creates a new token with the specified amount and optional metadata.
    * The token will be stored in basket 'p btms <assetId>' where assetId is
    * the canonical txid.0 format determined after transaction creation.
-   * 
+   *
    * @param amount - Number of tokens to issue (positive integer)
    * @param metadata - Optional metadata including name, description, iconURL, etc.
    * @returns Issue result with txid and assetId
-   * 
+   *
    * @example
    * ```typescript
    * const result = await btms.issue(1000000, {
@@ -206,25 +220,27 @@ export class BTMS {
           `${BTMS_LABEL_PREFIX}assetId ${assetId}`,
           `${BTMS_LABEL_PREFIX}counterparty ${counterparty}`
         ],
-        outputs: [{
-          outputIndex: 0,
-          protocol: 'basket insertion',
-          insertionRemittance: {
-            basket: BTMS_BASKET,
-            customInstructions: JSON.stringify({
-              derivationPrefix,
-              derivationSuffix
-            }),
-            tags: [
-              'btms_type_issue',
-              'btms_direction_incoming',
-              timestampTag,
-              monthTag,
-              `btms_assetid_${assetId}`,
-              `btms_counterparty_${counterparty}`
-            ]
+        outputs: [
+          {
+            outputIndex: 0,
+            protocol: 'basket insertion',
+            insertionRemittance: {
+              basket: BTMS_BASKET,
+              customInstructions: JSON.stringify({
+                derivationPrefix,
+                derivationSuffix
+              }),
+              tags: [
+                'btms_type_issue',
+                'btms_direction_incoming',
+                timestampTag,
+                monthTag,
+                `btms_assetid_${assetId}`,
+                `btms_counterparty_${counterparty}`
+              ]
+            }
           }
-        }],
+        ],
         description: `Issue ${amount} ${tokenName}`
       })
 
@@ -259,11 +275,11 @@ export class BTMS {
 
   /**
    * Send tokens to a recipient.
-   * 
+   *
    * Selects UTXOs to cover the amount, creates transfer outputs,
    * and broadcasts the transaction. If a messenger is configured,
    * also sends the token data to the recipient.
-   * 
+   *
    * @param assetId - The asset to send
    * @param recipient - Recipient's identity public key
    * @param amount - Amount to send
@@ -363,13 +379,14 @@ export class BTMS {
         inputDescription: `Spend ${u.token.amount} tokens`
       }))
 
-      const completeInputBeef = inputBeef instanceof Beef
-        ? await this.ensureCompleteInputBeef(
-          selected.map(u => ({ txid: u.txid, outputIndex: u.outputIndex })),
-          inputBeef,
-          assetId
-        )
-        : inputBeef
+      const completeInputBeef =
+        inputBeef instanceof Beef
+          ? await this.ensureCompleteInputBeef(
+              selected.map(u => ({ txid: u.txid, outputIndex: u.outputIndex })),
+              inputBeef,
+              assetId
+            )
+          : inputBeef
 
       // Create the action with BEEF from overlay
       const createArgs: CreateActionArgs = {
@@ -398,7 +415,10 @@ export class BTMS {
       }
 
       const spends = await this.buildSpendsForInputs(selected, signableTransaction.tx)
-      const { tx: signedTx, txid } = await this.signAndBroadcast(signableTransaction.reference, spends)
+      const { tx: signedTx, txid } = await this.signAndBroadcast(
+        signableTransaction.reference,
+        spends
+      )
 
       // Build token data for recipient
       const tokenForRecipient: TokenForRecipient = {
@@ -447,22 +467,22 @@ export class BTMS {
 
   /**
    * Burn (destroy) tokens permanently.
-   * 
+   *
    * This operation spends token UTXOs without creating corresponding outputs,
    * effectively destroying the tokens. This is useful when tokens represent
    * claims on physical assets that have been redeemed (e.g., trading gold
    * tokens for physical gold).
-   * 
+   *
    * @param assetId - The asset to burn
    * @param amount - Amount to burn (if undefined, burns entire balance)
    * @param options - Optional change strategy for remaining balance
    * @returns Burn result with transaction details
-   * 
+   *
    * @example
    * ```typescript
    * // Burn 50 tokens
    * const result = await btms.burn('abc123.0', 50)
-   * 
+   *
    * // Burn entire balance
    * const result = await btms.burn('abc123.0')
    * ```
@@ -495,11 +515,16 @@ export class BTMS {
       const amountToBurn = amount ?? totalAvailable
 
       if (amountToBurn > totalAvailable) {
-        throw new Error(`Insufficient balance. Have ${totalAvailable}, trying to burn ${amountToBurn}`)
+        throw new Error(
+          `Insufficient balance. Have ${totalAvailable}, trying to burn ${amountToBurn}`
+        )
       }
 
       // Select UTXOs to cover the amount to burn
-      const { selected, totalInput, inputBeef } = await this.selectAndVerifyUTXOs(utxos, amountToBurn)
+      const { selected, totalInput, inputBeef } = await this.selectAndVerifyUTXOs(
+        utxos,
+        amountToBurn
+      )
 
       // Get metadata from first selected UTXO (for change output if needed)
       const metadata = selected[0].token.metadata
@@ -527,18 +552,20 @@ export class BTMS {
       const inputs = selected.map((u, i) => ({
         outpoint: u.outpoint,
         unlockingScriptLength: 74,
-        inputDescription: i === 0
-          ? `Burn ${amountToBurn} tokens (from UTXO with ${u.token.amount})`
-          : `Input ${u.token.amount} tokens for burn`
+        inputDescription:
+          i === 0
+            ? `Burn ${amountToBurn} tokens (from UTXO with ${u.token.amount})`
+            : `Input ${u.token.amount} tokens for burn`
       }))
 
-      const completeInputBeef = inputBeef instanceof Beef
-        ? await this.ensureCompleteInputBeef(
-          selected.map(u => ({ txid: u.txid, outputIndex: u.outputIndex })),
-          inputBeef,
-          assetId
-        )
-        : inputBeef
+      const completeInputBeef =
+        inputBeef instanceof Beef
+          ? await this.ensureCompleteInputBeef(
+              selected.map(u => ({ txid: u.txid, outputIndex: u.outputIndex })),
+              inputBeef,
+              assetId
+            )
+          : inputBeef
 
       // Create the action
       const createArgs: CreateActionArgs = {
@@ -596,7 +623,7 @@ export class BTMS {
 
   /**
    * List incoming token payments (requires comms layer).
-   * 
+   *
    * @param assetId - Optional filter by asset ID
    * @returns List of incoming payments
    */
@@ -630,10 +657,10 @@ export class BTMS {
 
   /**
    * Accept an incoming token.
-   * 
+   *
    * Verifies the token on the overlay, internalizes it into the wallet,
    * and acknowledges receipt via the messenger.
-   * 
+   *
    * @param token - The incoming token to accept
    * @returns Accept result
    */
@@ -678,7 +705,7 @@ export class BTMS {
       if (decoded.lockingPublicKey !== derivedPubKey) {
         throw new Error(
           `Key derivation mismatch: expected ${decoded.lockingPublicKey}, derived ${derivedPubKey}. ` +
-          `Cannot unlock this token with the provided customInstructions.`
+            `Cannot unlock this token with the provided customInstructions.`
         )
       }
 
@@ -771,11 +798,7 @@ export class BTMS {
       }
 
       // Verify the token exists on the overlay (fetch BEEF if possible)
-      const overlayLookup = await this.lookupTokenOnOverlay(
-        token.txid,
-        token.outputIndex,
-        true
-      )
+      const overlayLookup = await this.lookupTokenOnOverlay(token.txid, token.outputIndex, true)
 
       // Re-broadcast if token is not on overlay
       if (!overlayLookup.found && token.beef) {
@@ -787,19 +810,20 @@ export class BTMS {
         }
       }
 
-      const inputBeef = overlayLookup.beef
-        ?? (token.beef ? Beef.fromBinary(Utils.toArray(token.beef)) : undefined)
+      const inputBeef =
+        overlayLookup.beef ?? (token.beef ? Beef.fromBinary(Utils.toArray(token.beef)) : undefined)
 
       if (!inputBeef) {
         throw new Error('Missing BEEF data required to refund token')
       }
 
-      const completeInputBeef = inputBeef instanceof Beef
-        ? await this.ensureCompleteInputBeef(
-          [{ txid: token.txid, outputIndex: token.outputIndex }],
-          inputBeef
-        )
-        : inputBeef
+      const completeInputBeef =
+        inputBeef instanceof Beef
+          ? await this.ensureCompleteInputBeef(
+              [{ txid: token.txid, outputIndex: token.outputIndex }],
+              inputBeef
+            )
+          : inputBeef
 
       // Validate ability to unlock this token
       const { keyID } = parseCustomInstructions(
@@ -818,7 +842,7 @@ export class BTMS {
       if (decoded.lockingPublicKey !== derivedPubKey) {
         throw new Error(
           `Key derivation mismatch: expected ${decoded.lockingPublicKey}, derived ${derivedPubKey}. ` +
-          `Cannot unlock this token with the provided customInstructions.`
+            `Cannot unlock this token with the provided customInstructions.`
         )
       }
 
@@ -913,7 +937,10 @@ export class BTMS {
       }
 
       const spends = await this.buildSpendsForInputs([selectedUtxo], signableTransaction.tx)
-      const { tx: signedTx, txid } = await this.signAndBroadcast(signableTransaction.reference, spends)
+      const { tx: signedTx, txid } = await this.signAndBroadcast(
+        signableTransaction.reference,
+        spends
+      )
 
       const tokenForRecipient: TokenForRecipient = {
         txid,
@@ -965,7 +992,7 @@ export class BTMS {
 
   /**
    * Get the balance of a specific asset.
-   * 
+   *
    * @param assetId - The asset to check
    * @returns Total spendable balance
    */
@@ -977,11 +1004,13 @@ export class BTMS {
   /**
    * Get info for a specific asset by ID using a targeted tag-based query.
    * Uses the assetId label to efficiently find outputs for this asset.
-   * 
+   *
    * @param assetId - The asset ID to look up
    * @returns Asset info with name and metadata, or null if not found
    */
-  async getAssetInfo(assetId: string): Promise<{ name?: string; metadata?: BTMSAssetMetadata } | null> {
+  async getAssetInfo(
+    assetId: string
+  ): Promise<{ name?: string; metadata?: BTMSAssetMetadata } | null> {
     if (!BTMSToken.isValidAssetId(assetId)) return null
     return await this.lookupAssetMetadataOnOverlay(assetId)
   }
@@ -1012,18 +1041,16 @@ export class BTMS {
       const decoded = BTMSToken.decode(lockingScript)
       if (!decoded.valid) return null
 
-      const resolvedAssetId = decoded.assetId === ISSUE_MARKER
-        ? `${tx.id('hex')}.${output.outputIndex}`
-        : decoded.assetId
+      const resolvedAssetId =
+        decoded.assetId === ISSUE_MARKER ? `${tx.id('hex')}.${output.outputIndex}` : decoded.assetId
 
       if (resolvedAssetId !== assetId) {
         return null
       }
 
       if (decoded.metadata) {
-        const meta = typeof decoded.metadata === 'string'
-          ? JSON.parse(decoded.metadata)
-          : decoded.metadata
+        const meta =
+          typeof decoded.metadata === 'string' ? JSON.parse(decoded.metadata) : decoded.metadata
         return { name: meta?.name, metadata: meta }
       }
       return { name: undefined, metadata: undefined }
@@ -1034,7 +1061,7 @@ export class BTMS {
 
   /**
    * List all assets owned by this wallet.
-   * 
+   *
    * @returns List of assets with balances
    */
   async listAssets(): Promise<BTMSAsset[]> {
@@ -1048,7 +1075,7 @@ export class BTMS {
   }
 
   /** Scan basket outputs and populate `assetIds` + `assetBalances`. */
-  private async collectOwnedTokensIntoBalances (
+  private async collectOwnedTokensIntoBalances(
     assetIds: Set<string>,
     assetBalances: Map<string, AssetAccumulator>
   ): Promise<void> {
@@ -1066,12 +1093,14 @@ export class BTMS {
       }
       for (const assetId of assetBalances.keys()) assetIds.add(assetId)
     } catch (error) {
-      console.warn(`[BTMS] listAssets failed to read wallet outputs: ${error instanceof Error ? error.message : String(error)}`)
+      console.warn(
+        `[BTMS] listAssets failed to read wallet outputs: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
   /** Fetch pending incoming messages and add their asset IDs to `assetIds`. */
-  private async collectIncomingMessages (assetIds: Set<string>): Promise<IncomingToken[]> {
+  private async collectIncomingMessages(assetIds: Set<string>): Promise<IncomingToken[]> {
     const allIncoming: IncomingToken[] = []
     if (!this.comms) return allIncoming
     try {
@@ -1089,7 +1118,7 @@ export class BTMS {
   }
 
   /** Build the final `BTMSAsset[]` from accumulated data. */
-  private buildAssetList (
+  private buildAssetList(
     assetIds: Set<string>,
     assetBalances: Map<string, AssetAccumulator>,
     allIncoming: IncomingToken[]
@@ -1109,17 +1138,13 @@ export class BTMS {
 
   /**
    * Get transaction history for an asset.
-   * 
+   *
    * @param assetId - The asset to query
    * @param limit - Maximum number of transactions to return
    * @param offset - Number of transactions to skip (for pagination)
    * @returns Transaction history with pagination info
    */
-  async getTransactions(
-    assetId: string,
-    limit = 50,
-    offset = 0
-  ): Promise<GetTransactionsResult> {
+  async getTransactions(assetId: string, limit = 50, offset = 0): Promise<GetTransactionsResult> {
     const result: ListActionsResult = await this.wallet.listActions({
       labels: [`${BTMS_LABEL_PREFIX}assetId ${assetId}`],
       labelQueryMode: 'all',
@@ -1136,7 +1161,7 @@ export class BTMS {
 
   /**
    * Get all spendable token UTXOs for an asset.
-   * 
+   *
    * @param assetId - The asset to query
    * @param includeBeef - Whether to include full transaction data (for spending)
    * @returns List of spendable token outputs and optional BEEF
@@ -1144,7 +1169,7 @@ export class BTMS {
   async getSpendableTokens(
     assetId: string,
     includeBeef = false
-  ): Promise<{ tokens: BTMSTokenOutput[], beef?: Beef }> {
+  ): Promise<{ tokens: BTMSTokenOutput[]; beef?: Beef }> {
     const pages = await this.listOutputsPaged({
       basket: BTMS_BASKET,
       tags: ['btms_type_issue', 'btms_type_change', 'btms_type_receive'],
@@ -1169,8 +1194,14 @@ export class BTMS {
   }
 
   /** Attempt to decode one basket output into a `BTMSTokenOutput` for the given asset. */
-  private tryDecodeSpendableOutput (
-    output: { outpoint: string; spendable?: boolean; satoshis?: number; lockingScript?: string; customInstructions?: string },
+  private tryDecodeSpendableOutput(
+    output: {
+      outpoint: string
+      spendable?: boolean
+      satoshis?: number
+      lockingScript?: string
+      customInstructions?: string
+    },
     pageBEEF: number[] | Uint8Array | undefined,
     assetId: string,
     includeBeef: boolean
@@ -1263,15 +1294,15 @@ export class BTMS {
 
   /**
    * Prove ownership of tokens to a verifier.
-   * 
+   *
    * Creates a cryptographic proof that the caller owns the specified tokens
    * by revealing key linkage information that only the owner could produce.
-   * 
+   *
    * @param assetId - The asset to prove ownership of
    * @param amount - The amount to prove (must have sufficient balance)
    * @param verifier - The verifier's identity public key
    * @returns Ownership proof that can be verified by the verifier
-   * 
+   *
    * @example
    * ```typescript
    * const proof = await btms.proveOwnership('abc123.0', 100, verifierPubKey)
@@ -1367,16 +1398,16 @@ export class BTMS {
 
   /**
    * Verify an ownership proof from a prover.
-   * 
+   *
    * Validates that:
    * 1. The key linkage is valid for each token
    * 2. The tokens exist on the overlay
    * 3. The total amount matches the claimed amount
    * 4. All tokens belong to the claimed prover
-   * 
+   *
    * @param proof - The ownership proof to verify
    * @returns Verification result
-   * 
+   *
    * @example
    * ```typescript
    * const result = await btms.verifyOwnership(proof)
@@ -1429,7 +1460,7 @@ export class BTMS {
 
   /**
    * Lookup a token on the overlay network.
-   * 
+   *
    * @param txid - Transaction ID
    * @param outputIndex - Output index
    * @param includeBeef - Whether to return BEEF data
@@ -1506,7 +1537,11 @@ export class BTMS {
     const spends: Record<number, { unlockingScript: string }> = {}
     for (let i = 0; i < selected.length; i++) {
       const utxo = selected[i]
-      const { keyID, senderIdentityKey } = parseCustomInstructions(utxo.customInstructions, utxo.txid, utxo.outputIndex)
+      const { keyID, senderIdentityKey } = parseCustomInstructions(
+        utxo.customInstructions,
+        utxo.txid,
+        utxo.outputIndex
+      )
       const counterparty = senderIdentityKey ?? 'self'
       const unlocker = this.tokenTemplate.createUnlocker(keyID, counterparty)
       const unlockingScript = await unlocker.sign(txForSigning, i)
@@ -1556,10 +1591,14 @@ export class BTMS {
         }
 
         lastError = (broadcastResult as any).description || `status: ${broadcastResult.status}`
-        console.warn(`[BTMS] Broadcast attempt ${attempt}/${maxAttempts} failed for ${context}: ${lastError}`)
+        console.warn(
+          `[BTMS] Broadcast attempt ${attempt}/${maxAttempts} failed for ${context}: ${lastError}`
+        )
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
-        console.warn(`[BTMS] Broadcast attempt ${attempt}/${maxAttempts} threw for ${context}: ${lastError}`)
+        console.warn(
+          `[BTMS] Broadcast attempt ${attempt}/${maxAttempts} threw for ${context}: ${lastError}`
+        )
       }
     }
 
@@ -1670,7 +1709,7 @@ export class BTMS {
   // ---------------------------------------------------------------------------
 
   /** Assert that all selected UTXOs carry the same metadata. */
-  private assertConsistentMetadata (
+  private assertConsistentMetadata(
     selected: Array<{ token: { metadata?: unknown } }>,
     metadata: unknown
   ): void {
@@ -1683,7 +1722,7 @@ export class BTMS {
   }
 
   /** Build change `CreateActionOutput` entries for a send or burn. */
-  private async buildChangeOutputs (
+  private async buildChangeOutputs(
     context: ChangeContext,
     changeStrategy: ChangeStrategyOptions | undefined,
     derivationPrefix: string,
@@ -1706,7 +1745,10 @@ export class BTMS {
       result.push({
         satoshis: DEFAULT_TOKEN_SATOSHIS,
         lockingScript: changeScript.toHex(),
-        customInstructions: JSON.stringify({ derivationPrefix, derivationSuffix: changeDerivationSuffix }),
+        customInstructions: JSON.stringify({
+          derivationPrefix,
+          derivationSuffix: changeDerivationSuffix
+        }),
         basket: BTMS_BASKET,
         outputDescription: `Change: ${changeOutput.amount} tokens`,
         tags: [
@@ -1725,7 +1767,7 @@ export class BTMS {
    * Sign and broadcast a burn transaction.
    * When burning all tokens (no change outputs), overlay rejection is treated as success.
    */
-  private async signAndBroadcastBurn (
+  private async signAndBroadcastBurn(
     reference: string,
     spends: Record<number, { unlockingScript: string }>,
     changeAmount: number
@@ -1736,8 +1778,8 @@ export class BTMS {
     } catch (broadcastError: any) {
       const errorMsg: string = broadcastError?.message ?? ''
       const isBurnAll = changeAmount === 0
-      const isOverlayRejection = errorMsg.includes('No host acknowledged') ||
-        errorMsg.includes('not in admitted outputs')
+      const isOverlayRejection =
+        errorMsg.includes('No host acknowledged') || errorMsg.includes('not in admitted outputs')
       if (!isBurnAll || !isOverlayRejection) throw broadcastError
 
       // Sign-only path for burn-all (overlay won't admit with no outputs)
@@ -1749,7 +1791,7 @@ export class BTMS {
   }
 
   /** Verify a single proven token and return its amount contribution. */
-  private async verifySingleProvenToken (
+  private async verifySingleProvenToken(
     provenToken: ProvenToken,
     expectedAssetId: string,
     prover: PubKeyHex
@@ -1757,13 +1799,21 @@ export class BTMS {
     const decoded = BTMSToken.decode(provenToken.output.lockingScript)
     if (!decoded.valid) throw new Error('Invalid token in proof')
 
-    verifyProvenTokenAssetId(decoded, provenToken.output.txid, provenToken.output.outputIndex, expectedAssetId)
+    verifyProvenTokenAssetId(
+      decoded,
+      provenToken.output.txid,
+      provenToken.output.outputIndex,
+      expectedAssetId
+    )
 
     if (provenToken.linkage.prover !== prover) {
       throw new Error('Token linkage prover does not match proof prover')
     }
 
-    const lookupResult = await this.lookupTokenOnOverlay(provenToken.output.txid, provenToken.output.outputIndex)
+    const lookupResult = await this.lookupTokenOnOverlay(
+      provenToken.output.txid,
+      provenToken.output.outputIndex
+    )
     if (!lookupResult.found) throw new Error('Token not found on overlay')
 
     const { plaintext: linkage } = await this.wallet.decrypt({
@@ -1779,11 +1829,11 @@ export class BTMS {
 
   /**
    * Select and verify UTXOs on the overlay.
-   * 
+   *
    * Selects UTXOs first using the specified strategy, then verifies only
    * the selected ones on the overlay. If any fail verification, retries
    * with remaining UTXOs.
-   * 
+   *
    * @param utxos - Available UTXOs to select from
    * @param amount - Target amount to cover
    * @param options - Selection options including strategy
@@ -1826,9 +1876,15 @@ export class BTMS {
       if (invalidUtxos.length > 0) {
         const needsBeef = invalidUtxos.some(utxo => !utxo.beef)
         const assetId = selected[0]?.token.assetId
-        const beefMap = needsBeef && assetId
-          ? new Map((await this.getSpendableTokens(assetId, true)).tokens.map(utxo => [utxo.outpoint, utxo]))
-          : new Map<string, BTMSTokenOutput>()
+        const beefMap =
+          needsBeef && assetId
+            ? new Map(
+                (await this.getSpendableTokens(assetId, true)).tokens.map(utxo => [
+                  utxo.outpoint,
+                  utxo
+                ])
+              )
+            : new Map<string, BTMSTokenOutput>()
         const invalidWithBeef = invalidUtxos.map(utxo => beefMap.get(utxo.outpoint) ?? utxo)
 
         const rebroadcastResults: VerificationResult[] = await Promise.all(
@@ -1869,7 +1925,7 @@ export class BTMS {
   }
 
   /** Resolve the locking-script hex for one page output (handles BEEF and plain-script modes). */
-  private resolveScriptHex (
+  private resolveScriptHex(
     output: { outpoint: string; lockingScript?: string },
     pageBEEF: number[] | Uint8Array | undefined,
     includeBeef: boolean
@@ -1882,9 +1938,10 @@ export class BTMS {
   }
 
   /** Attempt to re-broadcast a UTXO and return whether it was admitted by the overlay. */
-  private async tryRebroadcastUtxo (
-    utxo: { beef?: number[] | Uint8Array; txid: string }
-  ): Promise<{ found: boolean; beef?: Beef }> {
+  private async tryRebroadcastUtxo(utxo: {
+    beef?: number[] | Uint8Array
+    txid: string
+  }): Promise<{ found: boolean; beef?: Beef }> {
     if (!utxo.beef) return { found: false }
     try {
       const beefArr = Array.isArray(utxo.beef) ? utxo.beef : Utils.toArray(utxo.beef)
@@ -1906,7 +1963,7 @@ export class BTMS {
 
   /**
    * Select UTXOs to cover a target amount using a configurable strategy.
-   * 
+   *
    * @param utxos - Available UTXOs to select from
    * @param amount - Target amount to cover
    * @param options - Selection options including strategy
@@ -1980,7 +2037,7 @@ export class BTMS {
 
   /**
    * Compute change outputs using the specified strategy.
-   * 
+   *
    * @param context - Change context with amounts and asset info
    * @param options - Change strategy options
    * @returns Array of change outputs to create
@@ -1995,11 +2052,7 @@ export class BTMS {
       return []
     }
 
-    const {
-      strategy = 'single',
-      splitCount = 2,
-      minOutputAmount = 1
-    } = options
+    const { strategy = 'single', splitCount = 2, minOutputAmount = 1 } = options
 
     // If a custom strategy object is provided, use it
     if (typeof strategy === 'object' && 'computeChange' in strategy) {
@@ -2037,7 +2090,7 @@ export class BTMS {
     }
 
     const perOutput = Math.floor(changeAmount / actualCount)
-    const remainder = changeAmount - (perOutput * actualCount)
+    const remainder = changeAmount - perOutput * actualCount
 
     const outputs: ChangeOutput[] = []
     for (let i = 0; i < actualCount; i++) {
@@ -2068,7 +2121,7 @@ export class BTMS {
     }
 
     const outputs: ChangeOutput[] = []
-    let remaining = changeAmount - (actualCount * minOutputAmount) // Reserve minimum for each
+    let remaining = changeAmount - actualCount * minOutputAmount // Reserve minimum for each
 
     // Distribute using Benford-like distribution
     for (let i = 0; i < actualCount - 1; i++) {
@@ -2083,7 +2136,7 @@ export class BTMS {
     // Shuffle to avoid predictable ordering
     for (let i = outputs.length - 1; i > 0; i--) {
       const j = BTMS.randomInt(i + 1)
-        ;[outputs[i], outputs[j]] = [outputs[j], outputs[i]]
+      ;[outputs[i], outputs[j]] = [outputs[j], outputs[i]]
     }
 
     return outputs
@@ -2104,7 +2157,7 @@ export class BTMS {
     const shuffled = [...items]
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = BTMS.randomInt(i + 1)
-        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
     return shuffled
   }
@@ -2116,14 +2169,8 @@ export class BTMS {
 
     while (true) {
       const bytes = Random(4)
-      const value = (
-        (bytes[0] << 24) |
-        (bytes[1] << 16) |
-        (bytes[2] << 8) |
-        bytes[3]
-      ) >>> 0
+      const value = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0
       if (value < limit) return value % maxExclusive
     }
   }
-
 }

@@ -1,16 +1,3 @@
 {
-  "files": [],
-  "compilerOptions": {
-    "types": ["jest"],
-    "esModuleInterop": true,
-    "module": "ESNext"
-  },
-  "references": [
-    {
-      "path": "tsconfig.esm.json"
-    },
-    {
-      "path": "tsconfig.types.json"
-    }
-  ]
+  "extends": "./tsconfig.typecheck.json"
 }

@@ -30,11 +30,7 @@ import { BTMS } from '../BTMS.js'
 // eslint-disable-next-line import/first
 import { BTMSToken } from '../BTMSToken.js'
 // eslint-disable-next-line import/first
-import {
-  BTMS_LABEL_PREFIX,
-  BTMS_BASKET,
-  ISSUE_MARKER
-} from '../constants.js'
+import { BTMS_LABEL_PREFIX, BTMS_BASKET, ISSUE_MARKER } from '../constants.js'
 // eslint-disable-next-line import/first
 import { PrivateKey, ProtoWallet, Transaction } from '@bsv/sdk'
 // eslint-disable-next-line import/first
@@ -63,19 +59,21 @@ const MOCK_MONTH_TAG = 'btms_month_2026-01'
 const MOCK_TIMESTAMP_TAG = `btms_timestamp_${new Date('2026-01-15T00:00:00.000Z').getTime()}`
 
 // Helper to create mock atomic BEEF (simplified for testing)
-function createMockAtomicBEEF (txid: string): number[] {
+function createMockAtomicBEEF(_txid: string): number[] {
   // This is a simplified mock - real BEEF would be more complex
-  return new Array(100).fill(0)
+  return Array.from({ length: 100 }, () => 0)
 }
 
 // Create a mock wallet for testing
-function createMockWallet (overrides: Partial<{
-  createActionResult: Partial<CreateActionResult>
-  signActionResult: Partial<SignActionResult>
-  listActionsResult: Partial<ListActionsResult>
-  listOutputsResult: Partial<ListOutputsResult>
-  identityKey: string
-}> = {}): WalletInterface & { calls: Record<string, any[]> } {
+function createMockWallet(
+  overrides: Partial<{
+    createActionResult: Partial<CreateActionResult>
+    signActionResult: Partial<SignActionResult>
+    listActionsResult: Partial<ListActionsResult>
+    listOutputsResult: Partial<ListOutputsResult>
+    identityKey: string
+  }> = {}
+): WalletInterface & { calls: Record<string, any[]> } {
   const calls: Record<string, any[]> = {
     createAction: [],
     signAction: [],
@@ -89,14 +87,14 @@ function createMockWallet (overrides: Partial<{
   const wallet = {
     calls,
 
-    async getPublicKey (args: GetPublicKeyArgs): Promise<GetPublicKeyResult> {
+    async getPublicKey(args: GetPublicKeyArgs): Promise<GetPublicKeyResult> {
       calls.getPublicKey.push(args)
       return {
         publicKey: overrides.identityKey ?? MOCK_IDENTITY_KEY
       }
     },
 
-    async createAction (args: CreateActionArgs): Promise<CreateActionResult> {
+    async createAction(args: CreateActionArgs): Promise<CreateActionResult> {
       calls.createAction.push(args)
 
       // If outputs exist, return a signable transaction (for send flow)
@@ -118,7 +116,7 @@ function createMockWallet (overrides: Partial<{
       }
     },
 
-    async signAction (args: SignActionArgs): Promise<SignActionResult> {
+    async signAction(args: SignActionArgs): Promise<SignActionResult> {
       calls.signAction.push(args)
       return {
         txid: MOCK_TXID,
@@ -127,7 +125,7 @@ function createMockWallet (overrides: Partial<{
       }
     },
 
-    async listActions (args: ListActionsArgs): Promise<ListActionsResult> {
+    async listActions(args: ListActionsArgs): Promise<ListActionsResult> {
       calls.listActions.push(args)
       return {
         totalActions: 0,
@@ -136,7 +134,7 @@ function createMockWallet (overrides: Partial<{
       }
     },
 
-    async listOutputs (args: ListOutputsArgs): Promise<ListOutputsResult> {
+    async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult> {
       calls.listOutputs.push(args)
       return {
         totalOutputs: 0,
@@ -145,38 +143,80 @@ function createMockWallet (overrides: Partial<{
       }
     },
 
-    async internalizeAction (args: any): Promise<any> {
+    async internalizeAction(args: any): Promise<any> {
       calls.internalizeAction.push(args)
       return { accepted: true }
     },
 
-    async relinquishOutput (args: any): Promise<any> {
+    async relinquishOutput(args: any): Promise<any> {
       calls.relinquishOutput.push(args)
       return { relinquished: true }
     },
 
     // Stub other required methods
-    async isAuthenticated () { return { authenticated: true } },
-    async waitForAuthentication () { return { authenticated: true } },
-    async getNetwork () { return { network: 'mainnet' as const } },
-    async getVersion () { return { version: '1.0.0' } },
-    async getHeight () { return { height: 800000 } },
-    async getHeaderForHeight () { return { header: '00'.repeat(80) } },
-    async revealCounterpartyKeyLinkage () { return {} as any },
-    async revealSpecificKeyLinkage () { return {} as any },
-    async encrypt () { return { ciphertext: [] } },
-    async decrypt () { return { plaintext: [] } },
-    async createHmac () { return { hmac: [] } },
-    async verifyHmac () { return { valid: true } },
-    async createSignature () { return { signature: [] } },
-    async verifySignature () { return { valid: true } },
-    async abortAction () { return { aborted: true } },
-    async acquireCertificate () { return {} as any },
-    async listCertificates () { return { totalCertificates: 0, certificates: [] } },
-    async proveCertificate () { return {} as any },
-    async relinquishCertificate () { return { relinquished: true } },
-    async discoverByIdentityKey () { return { totalCertificates: 0, certificates: [] } },
-    async discoverByAttributes () { return { totalCertificates: 0, certificates: [] } }
+    async isAuthenticated() {
+      return { authenticated: true }
+    },
+    async waitForAuthentication() {
+      return { authenticated: true }
+    },
+    async getNetwork() {
+      return { network: 'mainnet' as const }
+    },
+    async getVersion() {
+      return { version: '1.0.0' }
+    },
+    async getHeight() {
+      return { height: 800000 }
+    },
+    async getHeaderForHeight() {
+      return { header: '00'.repeat(80) }
+    },
+    async revealCounterpartyKeyLinkage() {
+      return {} as any
+    },
+    async revealSpecificKeyLinkage() {
+      return {} as any
+    },
+    async encrypt() {
+      return { ciphertext: [] }
+    },
+    async decrypt() {
+      return { plaintext: [] }
+    },
+    async createHmac() {
+      return { hmac: [] }
+    },
+    async verifyHmac() {
+      return { valid: true }
+    },
+    async createSignature() {
+      return { signature: [] }
+    },
+    async verifySignature() {
+      return { valid: true }
+    },
+    async abortAction() {
+      return { aborted: true }
+    },
+    async acquireCertificate() {
+      return {} as any
+    },
+    async listCertificates() {
+      return { totalCertificates: 0, certificates: [] }
+    },
+    async proveCertificate() {
+      return {} as any
+    },
+    async relinquishCertificate() {
+      return { relinquished: true }
+    },
+    async discoverByIdentityKey() {
+      return { totalCertificates: 0, certificates: [] }
+    },
+    async discoverByAttributes() {
+      return { totalCertificates: 0, certificates: [] }
+    }
   } as unknown as WalletInterface & { calls: Record<string, any[]> }
 
   return wallet
@@ -232,7 +272,7 @@ describe('BTMS', () => {
       const btms = new BTMS({ wallet: mockWallet, comms: mockComms as any })
 
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({
         found: true,
         beef: { toBinary: () => new Uint8Array([1, 2, 3]) }
       })
@@ -297,7 +337,7 @@ describe('BTMS', () => {
         expect(messageBody.amount).toBe(100)
       } finally {
         jest.useRealTimers()
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
         BTMSToken.decode = originalDecode
         Transaction.fromAtomicBEEF = originalFromAtomicBEEF
         BTMSToken.prototype.createUnlocker = originalCreateUnlocker
@@ -446,7 +486,11 @@ describe('BTMS', () => {
       expect(mockWallet.calls.listOutputs.length).toBeGreaterThan(0)
       const listOutputsCall = mockWallet.calls.listOutputs[0] as ListOutputsArgs
       expect(listOutputsCall.basket).toBe(BTMS_BASKET)
-      expect(listOutputsCall.tags).toEqual(['btms_type_issue', 'btms_type_change', 'btms_type_receive'])
+      expect(listOutputsCall.tags).toEqual([
+        'btms_type_issue',
+        'btms_type_change',
+        'btms_type_receive'
+      ])
       expect(listOutputsCall.tagQueryMode).toBe('any')
     })
 
@@ -488,9 +532,9 @@ describe('BTMS', () => {
       ]
 
       const mockWallet = createMockWallet()
-      ; (mockWallet as any).listOutputs = jest.fn(async (args: ListOutputsArgs) => {
-        const offset = (args.offset ?? 0)
-        const limit = (args.limit ?? 1000)
+      ;(mockWallet as any).listOutputs = jest.fn(async (args: ListOutputsArgs) => {
+        const offset = args.offset ?? 0
+        const limit = args.limit ?? 1000
         return {
           totalOutputs: outputs.length,
           outputs: outputs.slice(offset, offset + limit)
@@ -501,10 +545,20 @@ describe('BTMS', () => {
       const originalDecode = BTMSToken.decode
       BTMSToken.decode = jest.fn((lockingScript: any) => {
         if (lockingScript === 'asset-a') {
-          return { valid: true, assetId: assetA, amount: 1, lockingPublicKey: MOCK_IDENTITY_KEY } as any
+          return {
+            valid: true,
+            assetId: assetA,
+            amount: 1,
+            lockingPublicKey: MOCK_IDENTITY_KEY
+          } as any
         }
         if (lockingScript === 'asset-b') {
-          return { valid: true, assetId: assetB, amount: 1, lockingPublicKey: MOCK_IDENTITY_KEY } as any
+          return {
+            valid: true,
+            assetId: assetB,
+            amount: 1,
+            lockingPublicKey: MOCK_IDENTITY_KEY
+          } as any
         }
         return { valid: false, error: 'invalid' } as any
       }) as any
@@ -538,7 +592,11 @@ describe('BTMS', () => {
       expect(mockWallet.calls.listOutputs.length).toBe(1)
       const listOutputsCall = mockWallet.calls.listOutputs[0] as ListOutputsArgs
       expect(listOutputsCall.basket).toBe(BTMS_BASKET)
-      expect(listOutputsCall.tags).toEqual(['btms_type_issue', 'btms_type_change', 'btms_type_receive'])
+      expect(listOutputsCall.tags).toEqual([
+        'btms_type_issue',
+        'btms_type_change',
+        'btms_type_receive'
+      ])
       expect(listOutputsCall.tagQueryMode).toBe('any')
       expect(listOutputsCall.include).toBe('locking scripts')
       expect(listOutputsCall.includeTags).toBe(true)
@@ -575,10 +633,20 @@ describe('BTMS', () => {
       const originalDecode = BTMSToken.decode
       BTMSToken.decode = jest.fn((lockingScript: any) => {
         if (lockingScript === 'issue-a' || lockingScript?.toHex?.() === 'issue-a') {
-          return { valid: true, assetId: ISSUE_MARKER, amount: 10, lockingPublicKey: MOCK_IDENTITY_KEY } as any
+          return {
+            valid: true,
+            assetId: ISSUE_MARKER,
+            amount: 10,
+            lockingPublicKey: MOCK_IDENTITY_KEY
+          } as any
         }
         if (lockingScript === 'issue-b' || lockingScript?.toHex?.() === 'issue-b') {
-          return { valid: true, assetId: ISSUE_MARKER, amount: 20, lockingPublicKey: MOCK_IDENTITY_KEY } as any
+          return {
+            valid: true,
+            assetId: ISSUE_MARKER,
+            amount: 20,
+            lockingPublicKey: MOCK_IDENTITY_KEY
+          } as any
         }
         return { valid: false, error: 'invalid' } as any
       }) as any
@@ -622,9 +690,9 @@ describe('BTMS', () => {
       }))
 
       const mockWallet = createMockWallet()
-      ; (mockWallet as any).listOutputs = jest.fn(async (args: ListOutputsArgs) => {
-        const offset = (args.offset ?? 0)
-        const limit = (args.limit ?? 1000)
+      ;(mockWallet as any).listOutputs = jest.fn(async (args: ListOutputsArgs) => {
+        const offset = args.offset ?? 0
+        const limit = args.limit ?? 1000
         return {
           totalOutputs: outputs.length,
           outputs: outputs.slice(offset, offset + limit)
@@ -656,34 +724,33 @@ describe('BTMS', () => {
       const mockWallet = createMockWallet({
         listActionsResult: {
           totalActions: 1,
-          actions: [{
-            txid: MOCK_TXID,
-            labels: [
-              `${BTMS_LABEL_PREFIX}type send`,
-              `${BTMS_LABEL_PREFIX}assetId ${assetId}`
-            ],
-            status: 'completed',
-            outputs: [
-              {
-                outputIndex: 0,
-                satoshis: 1,
-                lockingScript: 'bad-send-script',
-                tags: ['btms_type_send']
-              },
-              {
-                outputIndex: 1,
-                satoshis: 1,
-                lockingScript: 'change-script',
-                tags: ['btms_type_change']
-              }
-            ],
-            inputs: [
-              {
-                sourceOutpoint: `${'3'.repeat(64)}.0`,
-                sourceLockingScript: 'input-script'
-              }
-            ]
-          }] as any
+          actions: [
+            {
+              txid: MOCK_TXID,
+              labels: [`${BTMS_LABEL_PREFIX}type send`, `${BTMS_LABEL_PREFIX}assetId ${assetId}`],
+              status: 'completed',
+              outputs: [
+                {
+                  outputIndex: 0,
+                  satoshis: 1,
+                  lockingScript: 'bad-send-script',
+                  tags: ['btms_type_send']
+                },
+                {
+                  outputIndex: 1,
+                  satoshis: 1,
+                  lockingScript: 'change-script',
+                  tags: ['btms_type_change']
+                }
+              ],
+              inputs: [
+                {
+                  sourceOutpoint: `${'3'.repeat(64)}.0`,
+                  sourceLockingScript: 'input-script'
+                }
+              ]
+            }
+          ] as any
         }
       })
 
@@ -789,7 +856,7 @@ describe('BTMS', () => {
 
       btms.getSpendableTokens = jest.fn().mockResolvedValue({ tokens: [utxoA, utxoB] })
       const originalSelectAndVerify = (btms as any).selectAndVerifyUTXOs
-        ; (btms as any).selectAndVerifyUTXOs = jest.fn().mockResolvedValue({
+      ;(btms as any).selectAndVerifyUTXOs = jest.fn().mockResolvedValue({
         selected: [utxoA, utxoB],
         totalInput: 80,
         inputBeef: { toBinary: () => new Uint8Array([1, 2, 3]) }
@@ -801,7 +868,7 @@ describe('BTMS', () => {
         expect(result.success).toBe(false)
         expect(result.error).toContain('Metadata mismatch')
       } finally {
-        ; (btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
+        ;(btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
       }
     })
   })
@@ -813,7 +880,7 @@ describe('BTMS', () => {
     const GOLD_ASSET_ID = MOCK_TXID + '.0'
 
     // Helper to create mock UTXOs for testing
-    function createMockUTXOs (amounts: number[]): any[] {
+    function createMockUTXOs(amounts: number[]): any[] {
       return amounts.map((amount, i) => ({
         outpoint: `${'abcdef'[i % 6].repeat(64)}.0`,
         txid: 'abcdef'[i % 6].repeat(64),
@@ -913,7 +980,7 @@ describe('BTMS', () => {
     it('should handle many small UTXOs', () => {
       // UTXOs: 10 x 10 gold = 100 total - need 55
       // Greedy: all same size, selects first 6 (60 >= 55)
-      const utxos = createMockUTXOs(new Array(10).fill(10))
+      const utxos = createMockUTXOs(Array.from({ length: 10 }, () => 10))
       const result = BTMS.selectUTXOs(utxos, 55)
 
       expect(result.selected.length).toBe(6)
@@ -939,11 +1006,13 @@ describe('BTMS', () => {
       const btms = new BTMS({ wallet: mockWallet })
 
       // Mock getSpendableTokens to return controlled UTXOs
-      btms.getSpendableTokens = jest.fn().mockResolvedValue({ tokens: createMockUTXOs([20, 30, 10]) })
+      btms.getSpendableTokens = jest
+        .fn()
+        .mockResolvedValue({ tokens: createMockUTXOs([20, 30, 10]) })
 
       // Mock selectAndVerifyUTXOs to return the verification result
       const originalSelectAndVerify = (btms as any).selectAndVerifyUTXOs
-        ; (btms as any).selectAndVerifyUTXOs = jest.fn().mockResolvedValue({
+      ;(btms as any).selectAndVerifyUTXOs = jest.fn().mockResolvedValue({
         selected: createMockUTXOs([20, 30, 10]),
         totalInput: 60,
         inputBeef: { toBinary: () => new Uint8Array([1, 2, 3]) }
@@ -958,7 +1027,7 @@ describe('BTMS', () => {
         expect(result.error).toContain('Have 60')
         expect(result.error).toContain('need 61')
       } finally {
-        ; (btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
+        ;(btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
       }
     })
   })
@@ -1041,7 +1110,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId, amount: 50, metadata: undefined }
         }
       ]
@@ -1107,7 +1179,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId, amount: 50, metadata: undefined }
         }
       ]
@@ -1190,7 +1265,7 @@ describe('BTMS', () => {
 
       // Mock lookupTokenOnOverlay to return not found
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
 
       // Mock Transaction.fromBEEF to avoid BEEF validation
       const mockTx = { toBEEF: jest.fn().mockReturnValue([1, 2, 3]) }
@@ -1198,7 +1273,10 @@ describe('BTMS', () => {
       Transaction.fromBEEF = jest.fn().mockReturnValue(mockTx)
 
       // Configure the mocked TopicBroadcaster to return error
-      mockTopicBroadcasterBroadcast.mockResolvedValue({ status: 'error', description: 'Network error' })
+      mockTopicBroadcasterBroadcast.mockResolvedValue({
+        status: 'error',
+        description: 'Network error'
+      })
 
       const incomingToken = {
         txid: MOCK_TXID as any,
@@ -1228,7 +1306,7 @@ describe('BTMS', () => {
         expect(result.error).toContain('Token not found on overlay and broadcast failed!')
       } finally {
         // Restore mocks
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
         BTMSToken.decode = originalDecode
         Transaction.fromBEEF = originalFromBEEF
         mockTopicBroadcasterBroadcast.mockReset()
@@ -1243,7 +1321,7 @@ describe('BTMS', () => {
 
       // Mock lookupTokenOnOverlay to return found
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
 
       const incomingToken = {
         txid: MOCK_TXID as any,
@@ -1286,7 +1364,7 @@ describe('BTMS', () => {
       } finally {
         jest.useRealTimers()
         // Restore mocks
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
         BTMSToken.decode = originalDecode
       }
     })
@@ -1296,7 +1374,7 @@ describe('BTMS', () => {
       const btms = new BTMS({ wallet: mockWallet })
 
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
 
       const incomingToken = {
         txid: MOCK_TXID as any,
@@ -1326,7 +1404,7 @@ describe('BTMS', () => {
         expect(mockWallet.calls.internalizeAction).toHaveLength(1)
         expect(mockTopicBroadcasterBroadcast).not.toHaveBeenCalled()
       } finally {
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
         BTMSToken.decode = originalDecode
       }
     })
@@ -1337,7 +1415,7 @@ describe('BTMS', () => {
 
       // Mock lookupTokenOnOverlay to return not found
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
 
       // Mock Transaction.fromBEEF to avoid BEEF validation
       const mockTx = { toBEEF: jest.fn().mockReturnValue([1, 2, 3]) }
@@ -1376,7 +1454,7 @@ describe('BTMS', () => {
         expect(mockWallet.calls.internalizeAction).toHaveLength(1)
       } finally {
         // Restore mocks
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
         BTMSToken.decode = originalDecode
         Transaction.fromBEEF = originalFromBEEF
         mockTopicBroadcasterBroadcast.mockReset()
@@ -1408,7 +1486,10 @@ describe('BTMS', () => {
               outputIndex: 0,
               lockingScript: '00',
               satoshis: 1,
-              customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' })
+              customInstructions: JSON.stringify({
+                derivationPrefix: 'test',
+                derivationSuffix: 'test'
+              })
             })
           },
           {
@@ -1421,7 +1502,10 @@ describe('BTMS', () => {
               outputIndex: 1,
               lockingScript: '00',
               satoshis: 1,
-              customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' })
+              customInstructions: JSON.stringify({
+                derivationPrefix: 'test',
+                derivationSuffix: 'test'
+              })
             })
           }
         ])
@@ -1451,7 +1535,10 @@ describe('BTMS', () => {
               outputIndex: 0,
               lockingScript: '00',
               satoshis: 1,
-              customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' })
+              customInstructions: JSON.stringify({
+                derivationPrefix: 'test',
+                derivationSuffix: 'test'
+              })
             })
           },
           {
@@ -1464,7 +1551,10 @@ describe('BTMS', () => {
               outputIndex: 1,
               lockingScript: '00',
               satoshis: 1,
-              customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' })
+              customInstructions: JSON.stringify({
+                derivationPrefix: 'test',
+                derivationSuffix: 'test'
+              })
             })
           }
         ])
@@ -1491,7 +1581,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId: MOCK_ASSET_ID, amount: 50, metadata: undefined }
         },
         {
@@ -1501,7 +1594,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId: MOCK_ASSET_ID, amount: 50, metadata: undefined }
         }
       ]
@@ -1568,7 +1664,10 @@ describe('BTMS', () => {
               satoshis: 1,
               lockingScript: '00',
               spendable: true,
-              customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+              customInstructions: JSON.stringify({
+                derivationPrefix: 'test',
+                derivationSuffix: 'test'
+              }),
               tags: ['btms_received']
             }
           ]
@@ -1589,13 +1688,16 @@ describe('BTMS', () => {
 
       // Mock selectAndVerifyUTXOs to avoid BEEF handling complexity
       const originalSelectAndVerify = (btms as any).selectAndVerifyUTXOs
-        ; (btms as any).selectAndVerifyUTXOs = jest.fn().mockResolvedValue({
+      ;(btms as any).selectAndVerifyUTXOs = jest.fn().mockResolvedValue({
         selected: [
           {
             txid: MOCK_TXID,
             outputIndex: 0,
             outpoint: `${MOCK_TXID}.0`,
-            customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+            customInstructions: JSON.stringify({
+              derivationPrefix: 'test',
+              derivationSuffix: 'test'
+            }),
             token: { assetId: MOCK_ASSET_ID, amount: 50, metadata: undefined }
           }
         ],
@@ -1629,7 +1731,7 @@ describe('BTMS', () => {
         expect(result.amountBurned).toBe(0)
       } finally {
         BTMSToken.decode = originalDecode
-        ; (btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
+        ;(btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
         Transaction.fromAtomicBEEF = originalFromAtomicBEEF
         mockTopicBroadcasterBroadcast.mockReset()
       }
@@ -1694,7 +1796,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId: MOCK_ASSET_ID, amount: 50, metadata: undefined }
         }
       ]
@@ -1754,7 +1859,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId: MOCK_ASSET_ID, amount: 50, metadata: undefined }
         }
       ]
@@ -1813,7 +1921,10 @@ describe('BTMS', () => {
           satoshis: 1,
           lockingScript: '00',
           spendable: true,
-          customInstructions: JSON.stringify({ derivationPrefix: 'test', derivationSuffix: 'test' }),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          }),
           token: { assetId: MOCK_ASSET_ID, amount: 100, metadata: undefined }
         }
       ]
@@ -1877,7 +1988,7 @@ describe('Ownership Proof', () => {
   const MOCK_VERIFIER_KEY = '03' + 'd'.repeat(64)
 
   // Helper to create mock UTXOs for testing
-  function createMockUTXOs (amounts: number[]): any[] {
+  function createMockUTXOs(amounts: number[]): any[] {
     return amounts.map((amount, i) => ({
       outpoint: `${'abcdef'[i % 6].repeat(64)}.0`,
       txid: 'abcdef'[i % 6].repeat(64) as any,
@@ -1950,7 +2061,9 @@ describe('Ownership Proof', () => {
       const btms = new BTMS({ wallet: mockWallet })
 
       // Mock getSpendableTokens to return controlled UTXOs
-      btms.getSpendableTokens = jest.fn().mockResolvedValue({ tokens: createMockUTXOs([20, 30, 10]) })
+      btms.getSpendableTokens = jest
+        .fn()
+        .mockResolvedValue({ tokens: createMockUTXOs([20, 30, 10]) })
 
       const result = await btms.proveOwnership(GOLD_ASSET_ID, 100, MOCK_VERIFIER_KEY)
 
@@ -1961,8 +2074,8 @@ describe('Ownership Proof', () => {
     it('should select tokens using greedy algorithm', async () => {
       const mockUTXOs = createMockUTXOs([20, 30, 10])
       const mockWallet = createMockWallet()
-        // Add revealSpecificKeyLinkage to mock
-        ; (mockWallet as any).revealSpecificKeyLinkage = jest.fn().mockResolvedValue({
+      // Add revealSpecificKeyLinkage to mock
+      ;(mockWallet as any).revealSpecificKeyLinkage = jest.fn().mockResolvedValue({
         prover: MOCK_IDENTITY_KEY,
         verifier: MOCK_VERIFIER_KEY,
         counterparty: MOCK_IDENTITY_KEY,
@@ -1978,7 +2091,7 @@ describe('Ownership Proof', () => {
 
       // Mock lookupTokenOnOverlay to return found
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
 
       try {
         const result = await btms.proveOwnership(GOLD_ASSET_ID, 31, MOCK_VERIFIER_KEY)
@@ -1991,7 +2104,7 @@ describe('Ownership Proof', () => {
         expect(result.proof?.prover).toBe(MOCK_IDENTITY_KEY)
         expect(result.proof?.verifier).toBe(MOCK_VERIFIER_KEY)
       } finally {
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
       }
     })
 
@@ -2006,7 +2119,7 @@ describe('Ownership Proof', () => {
         encryptedLinkageProof: [4, 5, 6],
         proofType: 1
       }
-        ; (mockWallet as any).revealSpecificKeyLinkage = jest.fn().mockResolvedValue(mockLinkage)
+      ;(mockWallet as any).revealSpecificKeyLinkage = jest.fn().mockResolvedValue(mockLinkage)
 
       const btms = new BTMS({ wallet: mockWallet })
 
@@ -2015,7 +2128,7 @@ describe('Ownership Proof', () => {
 
       // Mock lookupTokenOnOverlay to return found
       const originalLookup = (btms as any).lookupTokenOnOverlay
-        ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
 
       try {
         const result = await btms.proveOwnership(GOLD_ASSET_ID, 50, MOCK_VERIFIER_KEY)
@@ -2030,7 +2143,7 @@ describe('Ownership Proof', () => {
           proofType: 1
         })
       } finally {
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
       }
     })
   })
@@ -2070,23 +2183,25 @@ describe('Ownership Proof', () => {
       const proof = {
         prover: MOCK_RECIPIENT_KEY,
         verifier: MOCK_IDENTITY_KEY,
-        tokens: [{
-          output: {
-            txid: MOCK_TXID,
-            outputIndex: 0,
-            lockingScript: 'invalid-script',
-            satoshis: 1
-          },
-          keyID: 'test-key',
-          linkage: {
-            prover: MOCK_RECIPIENT_KEY,
-            verifier: MOCK_IDENTITY_KEY,
-            counterparty: MOCK_RECIPIENT_KEY,
-            encryptedLinkage: [1, 2, 3],
-            encryptedLinkageProof: [4, 5, 6],
-            proofType: 1
+        tokens: [
+          {
+            output: {
+              txid: MOCK_TXID,
+              outputIndex: 0,
+              lockingScript: 'invalid-script',
+              satoshis: 1
+            },
+            keyID: 'test-key',
+            linkage: {
+              prover: MOCK_RECIPIENT_KEY,
+              verifier: MOCK_IDENTITY_KEY,
+              counterparty: MOCK_RECIPIENT_KEY,
+              encryptedLinkage: [1, 2, 3],
+              encryptedLinkageProof: [4, 5, 6],
+              proofType: 1
+            }
           }
-        }],
+        ],
         amount: 100,
         assetId: GOLD_ASSET_ID
       }
@@ -2114,23 +2229,25 @@ describe('Ownership Proof', () => {
         const proof = {
           prover: MOCK_RECIPIENT_KEY,
           verifier: MOCK_IDENTITY_KEY,
-          tokens: [{
-            output: {
-              txid: MOCK_TXID,
-              outputIndex: 0,
-              lockingScript: 'mock-script',
-              satoshis: 1
-            },
-            keyID: 'test-key',
-            linkage: {
-              prover: 'different-prover', // Mismatched prover
-              verifier: MOCK_IDENTITY_KEY,
-              counterparty: MOCK_RECIPIENT_KEY,
-              encryptedLinkage: [1, 2, 3],
-              encryptedLinkageProof: [4, 5, 6],
-              proofType: 1
+          tokens: [
+            {
+              output: {
+                txid: MOCK_TXID,
+                outputIndex: 0,
+                lockingScript: 'mock-script',
+                satoshis: 1
+              },
+              keyID: 'test-key',
+              linkage: {
+                prover: 'different-prover', // Mismatched prover
+                verifier: MOCK_IDENTITY_KEY,
+                counterparty: MOCK_RECIPIENT_KEY,
+                encryptedLinkage: [1, 2, 3],
+                encryptedLinkageProof: [4, 5, 6],
+                proofType: 1
+              }
             }
-          }],
+          ],
           amount: 100,
           assetId: GOLD_ASSET_ID
         }
@@ -2147,7 +2264,7 @@ describe('Ownership Proof', () => {
 
     it('should reject proofs containing duplicate outpoints', async () => {
       const mockWallet = createMockWallet({ identityKey: MOCK_IDENTITY_KEY })
-      ; (mockWallet as any).decrypt = jest.fn().mockResolvedValue({ plaintext: [1] })
+      ;(mockWallet as any).decrypt = jest.fn().mockResolvedValue({ plaintext: [1] })
       const btms = new BTMS({ wallet: mockWallet })
 
       const originalDecode = BTMSToken.decode
@@ -2159,7 +2276,7 @@ describe('Ownership Proof', () => {
       }) as any
 
       const originalLookup = (btms as any).lookupTokenOnOverlay
-      ; (btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
 
       const duplicateOutput = {
         txid: MOCK_TXID,
@@ -2206,7 +2323,7 @@ describe('Ownership Proof', () => {
         expect(result.valid).toBe(false)
         expect(result.error).toContain('Duplicate token outpoint')
       } finally {
-        ; (btms as any).lookupTokenOnOverlay = originalLookup
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
         BTMSToken.decode = originalDecode
       }
     })
@@ -2257,29 +2374,31 @@ describe('Ownership Proof', () => {
         const proofFromAliceToBob = {
           prover: aliceKey,
           verifier: bobKey, // Intended for Bob, not Charlie
-          tokens: [{
-            output: {
-              txid: MOCK_TXID,
-              outputIndex: 0,
-              lockingScript: 'mock-script',
-              satoshis: 1
-            },
-            keyID,
-            linkage: {
-              prover: linkageFromAliceToBob.prover,
-              verifier: linkageFromAliceToBob.verifier,
-              counterparty: linkageFromAliceToBob.counterparty,
-              encryptedLinkage: linkageFromAliceToBob.encryptedLinkage,
-              encryptedLinkageProof: linkageFromAliceToBob.encryptedLinkageProof,
-              proofType: linkageFromAliceToBob.proofType
+          tokens: [
+            {
+              output: {
+                txid: MOCK_TXID,
+                outputIndex: 0,
+                lockingScript: 'mock-script',
+                satoshis: 1
+              },
+              keyID,
+              linkage: {
+                prover: linkageFromAliceToBob.prover,
+                verifier: linkageFromAliceToBob.verifier,
+                counterparty: linkageFromAliceToBob.counterparty,
+                encryptedLinkage: linkageFromAliceToBob.encryptedLinkage,
+                encryptedLinkageProof: linkageFromAliceToBob.encryptedLinkageProof,
+                proofType: linkageFromAliceToBob.proofType
+              }
             }
-          }],
+          ],
           amount: 100,
           assetId: GOLD_ASSET_ID
         }
 
-          // Mock lookupTokenOnOverlay to pass
-          ; (charlie as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+        // Mock lookupTokenOnOverlay to pass
+        ;(charlie as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
 
         // Charlie tries to verify by pretending to be Bob (bypassing verifier check)
         const originalGetIdentityKey = charlie.getIdentityKey
@@ -2299,7 +2418,7 @@ describe('Ownership Proof', () => {
 
         // BONUS: Verify Bob CAN successfully decrypt the same linkage
         const bob = new BTMS({ wallet: bobWallet as any })
-          ; (bob as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+        ;(bob as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
 
         const bobResult = await bob.verifyOwnership(proofFromAliceToBob as any)
 

@@ -169,7 +169,18 @@ async function checkPublint(tarballPath) {
     .map(message => formatMessage(message, result.pkg, { color: false }))
 }
 
-async function checkTypes(tarballPath) {
+export function typeProblemsForModes(problems, modes) {
+  return problems.filter(
+    problem =>
+      !(
+        problem.kind === 'NoResolution' &&
+        problem.resolutionKind === 'node16-cjs' &&
+        !modes.includes('cjs')
+      )
+  )
+}
+
+async function checkTypes(tarballPath, modes) {
   const [{ checkPackage, createPackageFromTarballData }, { problemKindInfo }] = await Promise.all([
     import('@arethetypeswrong/core'),
     import('@arethetypeswrong/core/problems')
@@ -179,8 +190,9 @@ async function checkTypes(tarballPath) {
   if (!result.types) {
     throw new Error('@arethetypeswrong/core found no package types')
   }
-  if (result.problems.length > 0) {
-    const problems = result.problems.map(problem => {
+  const relevantProblems = typeProblemsForModes(result.problems, modes)
+  if (relevantProblems.length > 0) {
+    const problems = relevantProblems.map(problem => {
       const title = problemKindInfo[problem.kind]?.title ?? problem.kind
       return `${title}: ${JSON.stringify(problem)}`
     })
@@ -292,7 +304,7 @@ export async function checkPackageArtifact({
     if (errors.length > 0) {
       throw new Error(errors.join('\n'))
     }
-    if (validateTypes) await checkTypes(packed.tarballPath)
+    if (validateTypes) await checkTypes(packed.tarballPath, modes)
     await checkConsumer(packed.tarballPath, manifest, modes, entryExports, binName, binArguments)
     return manifest
   } finally {

@@ -7,7 +7,7 @@ import docs from '../docs/BTMSTopicManagerDocs.js'
  * @public
  */
 export default class BTMSTopicManager implements TopicManager {
-  private isLikelySignatureField (field: number[]): boolean {
+  private isLikelySignatureField(field: number[]): boolean {
     if (field.length < 40) {
       return false
     }
@@ -31,7 +31,9 @@ export default class BTMSTopicManager implements TopicManager {
     return printable / Math.max(asText.length, 1) < 0.8
   }
 
-  private decodeToken (lockingScript: LockingScript): { assetIdField: string, amount: number, metadata?: string } | undefined {
+  private decodeToken(
+    lockingScript: LockingScript
+  ): { assetIdField: string; amount: number; metadata?: string } | undefined {
     const decoded = PushDrop.decode(lockingScript)
     if (decoded.fields.length < 2 || decoded.fields.length > 4) {
       return undefined
@@ -54,14 +56,14 @@ export default class BTMSTopicManager implements TopicManager {
     return { assetIdField, amount, metadata }
   }
 
-  private canonicalAssetId (assetIdField: string, txid: string, outputIndex: number): string {
+  private canonicalAssetId(assetIdField: string, txid: string, outputIndex: number): string {
     if (assetIdField === 'ISSUE') {
       return `${txid}.${outputIndex}`
     }
     return assetIdField
   }
 
-  private parseTokenAmount (raw: string): number | undefined {
+  private parseTokenAmount(raw: string): number | undefined {
     const amount = Number(raw)
     if (!Number.isInteger(amount) || amount < 1) {
       return undefined
@@ -75,7 +77,10 @@ export default class BTMSTopicManager implements TopicManager {
    * @param previousCoins - The previous coins to consider (indices into the BEEF's input transactions)
    * @returns A promise that resolves with the admittance instructions
    */
-  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs(
+    beef: number[],
+    previousCoins: number[]
+  ): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     const coinsToRetain: number[] = []
     const coinsRemoved: number[] = []
@@ -131,7 +136,8 @@ export default class BTMSTopicManager implements TopicManager {
       // For each asset, we track the amount we are allowed to spend.
       // It is valid to spend any asset issuance output, with the full amount of the issuance.
       // It is also valid to spend any output with an asset ID, and we add those together across all the previous UTXOs to get the total amount for that asset.
-      const maxNumberOfEachAsset: Record<string, { amount: number, metadata: string | undefined }> = {}
+      const maxNumberOfEachAsset: Record<string, { amount: number; metadata: string | undefined }> =
+        {}
 
       for (const p of previousUTXOs) {
         try {
@@ -153,7 +159,10 @@ export default class BTMSTopicManager implements TopicManager {
             }
           }
         } catch (e) {
-          console.log(`[BTMSTopicManager] Failed to decode previous UTXO ${p.txid}.${p.outputIndex}:`, e)
+          console.log(
+            `[BTMSTopicManager] Failed to decode previous UTXO ${p.txid}.${p.outputIndex}:`,
+            e
+          )
           continue
         }
       }
@@ -228,7 +237,7 @@ export default class BTMSTopicManager implements TopicManager {
               }
               const outputAssetId = this.canonicalAssetId(decodedCurrent.assetIdField, txid, i)
               return outputAssetId === assetId
-            } catch (_e) {
+            } catch {
               // Output script is not a valid BTMS token; exclude from matching
               return false
             }
@@ -239,11 +248,13 @@ export default class BTMSTopicManager implements TopicManager {
           }
         } catch (e) {
           // Previous UTXO cannot be decoded; skip it
-          console.debug(`[BTMSTopicManager] Skipping previous coin ${p.txid}.${p.outputIndex}: ${e}`)
+          console.debug(
+            `[BTMSTopicManager] Skipping previous coin ${p.txid}.${p.outputIndex}: ${e}`
+          )
           continue
         }
       }
-      coinsRemoved.push(...previousCoins.filter((coinIndex) => !coinsToRetain.includes(coinIndex)))
+      coinsRemoved.push(...previousCoins.filter(coinIndex => !coinsToRetain.includes(coinIndex)))
 
       return {
         outputsToAdmit,
@@ -263,7 +274,7 @@ export default class BTMSTopicManager implements TopicManager {
   /**
    * Returns the documentation for the tokenization protocol
    */
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return docs
   }
 
@@ -271,7 +282,7 @@ export default class BTMSTopicManager implements TopicManager {
    * Get metadata about the topic manager
    * @returns A promise that resolves to an object containing metadata
    */
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

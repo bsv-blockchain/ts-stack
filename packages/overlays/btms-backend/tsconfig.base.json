@@ -1,9 +1,6 @@
 {
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "ESNext"
-    ],
+    "lib": ["dom", "ESNext"],
     "module": "NodeNext",
     "target": "esnext",
     "moduleResolution": "NodeNext",
@@ -20,14 +17,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "files": [
-    "mod.ts"
-  ],
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "dist",
-    "*/**/__tests"
-  ]
+  "files": ["mod.ts"],
+  "include": ["src"],
+  "exclude": ["dist", "*/**/__tests"]
 }

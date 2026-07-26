@@ -12,7 +12,9 @@ describe('BTMSToken', () => {
   describe('decode', () => {
     it('should return invalid for non-PushDrop scripts', () => {
       // A simple P2PKH script is not a valid BTMS token
-      const p2pkhScript = LockingScript.fromASM('OP_DUP OP_HASH160 ' + 'aa'.repeat(20) + ' OP_EQUALVERIFY OP_CHECKSIG')
+      const p2pkhScript = LockingScript.fromASM(
+        'OP_DUP OP_HASH160 ' + 'aa'.repeat(20) + ' OP_EQUALVERIFY OP_CHECKSIG'
+      )
       const result = BTMSToken.decode(p2pkhScript)
 
       expect(result.valid).toBe(false)

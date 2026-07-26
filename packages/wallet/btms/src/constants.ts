@@ -1,6 +1,6 @@
 /**
  * BTMS Protocol Constants
- * 
+ *
  * Constants used throughout the BTMS core library.
  * These align with the BTMSTopicManager protocol.
  */
@@ -32,7 +32,7 @@ export const BTMS_MESSAGE_BOX = 'btms_tokens'
 
 /**
  * BTMS Protocol ID for wallet operations
- * 
+ *
  * Format: [securityLevel, protocolName]
  * - Security level 0: No special security requirements
  * - Protocol name "p btms": Matches the basket prefix for consistency
@@ -45,12 +45,12 @@ export const BTMS_PROTOCOL_ID: WalletProtocol = [0, 'p btms']
 
 /**
  * Basket name for all BTMS tokens
- * 
+ *
  * All BTMS token outputs are stored in a single basket: "p btms"
  * Individual assets are differentiated by:
  * - Tags: btms_issue, btms_change, btms_received, btms_send
  * - Token script content (assetId encoded in the token)
- * 
+ *
  * This architecture allows efficient querying:
  * - Single listOutputs call to get all BTMS tokens
  * - Filter by tags to get owned tokens (issue/change/received)
@@ -64,7 +64,6 @@ export const BTMS_BASKET = 'p btms' as BasketStringUnder300Bytes
 
 /** Prefix for BTMS P-labels (BRC-111 format: `p <moduleId> <payload>`) */
 export const BTMS_LABEL_PREFIX = 'p btms '
-
 
 // ---------------------------------------------------------------------------
 // Output Tag Constants

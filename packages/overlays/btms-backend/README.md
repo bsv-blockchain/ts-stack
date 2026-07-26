@@ -9,15 +9,15 @@ BTMS is a UTXO-based token protocol built on the BSV blockchain that enables the
 ## Role in BTMS
 
 The backend is the BTMS overlay network layer:
+
 - **Topic Manager** enforces protocol validity.
 - **Lookup Service** indexes token state for queries.
 
-## Related Docs
+## Related Documentation
 
-- Project index: [`../README.md`](../README.md)
-- Main developer package (`@bsv/btms`): [`../core/README.md`](../core/README.md)
-- Frontend app and live deployment (`https://btms.metanet.app`): [`../frontend/README.md`](../frontend/README.md)
-- CARS deployment config: [`../deployment-info.json`](../deployment-info.json)
+- [ts-stack repository overview](../../../README.md)
+- [BTMS library](../../wallet/btms/README.md)
+- [BTMS wallet permission module](../../wallet/btms-permission-module/README.md)
 
 ## Features
 
@@ -39,7 +39,7 @@ npm install
 The `BTMSTopicManager` validates transactions and determines which outputs should be admitted to the overlay:
 
 ```typescript
-import { BTMSTopicManager } from '@bsv/backend'
+import { BTMSTopicManager } from '@bsv/btms-backend'
 
 const topicManager = new BTMSTopicManager()
 
@@ -53,7 +53,7 @@ const result = await topicManager.identifyAdmissibleOutputs(beef, previousCoins)
 The `BTMSLookupService` indexes admitted tokens and provides query capabilities:
 
 ```typescript
-import BTMSLookupServiceFactory from '@bsv/backend'
+import { BTMSLookupServiceFactory } from '@bsv/btms-backend'
 import { MongoClient } from 'mongodb'
 
 const client = new MongoClient('mongodb://localhost:27017')
@@ -118,6 +118,7 @@ npm run lint
 ## API Documentation
 
 For detailed API documentation, see:
+
 - [Topic Manager Docs](./src/docs/BTMSTopicManagerDocs.ts)
 - [Lookup Service Docs](./src/docs/BTMSLookupDocs.ts)
 
@@ -156,6 +157,7 @@ The storage manager automatically creates the following indexes:
 BTMS overlay backend is designed to be deployed as a CARS project. The `deployment-info.json` file defines the topic managers and lookup services to use:
 
 Example:
+
 ```json
 {
   "schema": "bsv-app",
@@ -184,7 +186,7 @@ Example:
 
 ## License
 
-See LICENSE.txt
+Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).
 
 ## Support
 
