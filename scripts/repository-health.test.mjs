@@ -204,17 +204,26 @@ test('exception JSON schema is checked in and references the active schema versi
   assert.ok(schema.properties.exceptions.items.required.includes('removeWhen'))
 })
 
-test('TypeScript majors remain a coordinated migration until the owned hold is removed', () => {
+test('runtime, compiler, and database majors remain coordinated migrations', () => {
   const dependabot = fs.readFileSync(
     path.join(REPOSITORY_ROOT, '.github/dependabot.yml'),
     'utf8'
   )
   const exceptions = readJson(path.join(healthDirectory, 'exceptions.json'))
+  const majorHolds = [
+    ...dependabot.matchAll(
+      /- dependency-name: ([^\n]+)\s+update-types:\s+- version-update:semver-major/g
+    )
+  ].map(match => match[1].replaceAll("'", '').trim())
 
-  assert.match(
-    dependabot,
-    /dependency-name: typescript\s+update-types:\s+- version-update:semver-major/
+  assert.equal(
+    majorHolds.filter(dependency => dependency === 'typescript').length,
+    2,
+    'TypeScript majors must be held in both root and standalone infra npm scopes'
   )
+  assert.ok(majorHolds.includes('node'), 'Node majors require an owned runtime migration')
+  assert.ok(majorHolds.includes('mysql'), 'MySQL majors require an owned data migration')
+  assert.ok(majorHolds.includes('mongo'), 'MongoDB majors require an owned data migration')
   assert.ok(
     exceptions.exceptions.some(item => item.id === 'typescript-7-coordinated-migration')
   )

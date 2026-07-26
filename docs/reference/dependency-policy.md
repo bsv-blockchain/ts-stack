@@ -42,6 +42,31 @@ standardization wave must remove or upgrade that peer constraint, run the
 workspace-wide TypeScript 7 migration, and only then change this baseline;
 forcing the compiler through an incompatible peer range is not permitted.
 
+## Automation boundaries
+
+Dependabot proposes one coordinated multi-ecosystem maintenance PR each month.
+Patch and minor updates remain automated across the root workspace, standalone
+infrastructure lockfiles, deployment images, code generators, and GitHub
+Actions. First-party `@bsv/*` versions remain owned by the release graph.
+
+Major changes that alter a runtime, compiler, or persisted-data contract are
+held from the routine monthly PR until their focused migration is ready:
+
+- TypeScript majors are held in both root and standalone infrastructure npm
+  scopes.
+- Node majors are held in the governed container-base manifest so CI, release,
+  and every runtime image move together.
+- MySQL and MongoDB majors are held until backup/restore, supported upgrade
+  paths, application compatibility, live validation, and rollback have been
+  exercised.
+
+These holds delay only semver-major updates; compatible maintenance releases
+continue to flow. Removing a hold requires updating its supported-version
+documentation and completing the relevant migration evidence in the program
+tracker. GitHub Actions are pinned to immutable commit SHAs with accurate
+release-version comments; a generated action bump is still reviewed for
+permissions, runtime changes, and behavior before merge.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:

@@ -66,6 +66,12 @@ updates:
       # Same release-aware first-party policy as the root workspace; see
       # governance/repository-health/projects.json#dependencyAutomation.
       - dependency-name: '@bsv/*'
+      # Keep every standalone service on the same coordinated compiler major
+      # as the root workspace. TypeScript 7 currently conflicts with ts-jest
+      # and is tracked as an explicit migration in issue #324.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     groups:
       infra-security:
         applies-to: security-updates
@@ -96,6 +102,15 @@ updates:
     rebase-strategy: auto
     ignore:
       - dependency-name: node
+      # Database majors require backup/restore, upgrade-path, rollback, and
+      # application compatibility validation. Patch and minor refreshes remain
+      # automated; major migrations are tracked explicitly in issue #324.
+      - dependency-name: mysql
+        update-types:
+          - version-update:semver-major
+      - dependency-name: mongo
+        update-types:
+          - version-update:semver-major
       # This documentation placeholder is replaced by each operator. Keep its
       # directory monitored so the real MySQL example continues to receive
       # digest and version updates.
@@ -110,6 +125,13 @@ updates:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
     rebase-strategy: auto
+    ignore:
+      # Node 24 is the owned contributor, CI, release, and container runtime.
+      # A Node major moves only as a coordinated stack migration; patch/minor
+      # image refreshes continue through this governed manifest.
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: gomod
     directory: /tools/codegen
