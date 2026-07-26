@@ -495,6 +495,59 @@ describe('ExpressTransport hardening', () => {
     expect(transport.openGeneralHandles.has(REQUEST_ID)).toBe(false)
   })
 
+  it('buffers and signs an authenticated text response with its inferred content type', async () => {
+    const debug = jest.fn()
+    const logger = {
+      log: jest.fn(),
+      debug,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn()
+    } as unknown as typeof console
+    const peer = peerMock()
+    const transport = new ExpressTransport(false, logger, 'debug')
+    transport.peer = peer
+    const res = responseMock()
+    const originalSend = res.send
+
+    ;(transport as any).setupAuthenticatedResponse(
+      validGeneralRequest(),
+      res,
+      jest.fn(),
+      IDENTITY_KEY,
+      REQUEST_ID
+    )
+    await flushPromises()
+
+    res.text('authenticated response')
+    await flushPromises()
+
+    expect(peer.toPeer).toHaveBeenCalledWith(
+      responsePayload(200, {}, Utils.toArray('authenticated response', 'utf8')),
+      IDENTITY_KEY
+    )
+    expect(debug).toHaveBeenCalledWith(
+      '[ExpressTransport] [DEBUG] Sending general message response',
+      {
+        responseStatus: 200,
+        responseHeaderCount: 1,
+        responseBodyLength: 22
+      }
+    )
+
+    await transport.send({
+      messageType: 'general',
+      version: '1',
+      identityKey: IDENTITY_KEY,
+      nonce: 'AQ==',
+      yourNonce: 'Ag==',
+      signature: [1],
+      payload: responsePayload(200, {}, Utils.toArray('authenticated response', 'utf8'))
+    })
+
+    expect(originalSend).toHaveBeenCalledWith(Buffer.from('authenticated response'))
+  })
+
   it('restores and ends an authenticated response without a body', async () => {
     const transport = new ExpressTransport()
     const res = responseMock()
