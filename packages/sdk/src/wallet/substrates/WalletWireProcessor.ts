@@ -14,6 +14,29 @@ export default class WalletWireProcessor implements WalletWire {
     this.wallet = wallet
   }
 
+  private recordFromWireEntries<T>(
+    entries: ReadonlyMap<string | number, T>,
+    recordName: string
+  ): Record<string, T> {
+    for (const key of entries.keys()) {
+      if (typeof key !== 'string') {
+        continue
+      }
+
+      const keyLength = Utils.toUint8Array(key, 'utf8').length
+      if (keyLength < 1 || keyLength > 50) {
+        throw new Error(
+          `Invalid ${recordName} key length: expected 1–50 bytes, received ${keyLength}`
+        )
+      }
+      if (key === '__proto__') {
+        throw new Error(`Unsafe ${recordName} key: ${key}`)
+      }
+    }
+
+    return Object.fromEntries(entries)
+  }
+
   private decodeOutpoint(reader: Utils.ReaderUint8Array): string {
     const txidBytes = reader.read(32)
     const txid = Utils.toHex(txidBytes)
@@ -390,7 +413,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Deserialize spends
           const spendCount = paramsReader.readVarIntNum()
-          args.spends = {}
+          const spends = new Map<number, any>()
           for (let i = 0; i < spendCount; i++) {
             const inputIndex = paramsReader.readVarIntNum()
             const spend: any = {}
@@ -410,8 +433,9 @@ export default class WalletWireProcessor implements WalletWire {
               spend.sequenceNumber = undefined
             }
 
-            args.spends[inputIndex] = spend
+            spends.set(inputIndex, spend)
           }
+          args.spends = this.recordFromWireEntries(spends, 'spends')
 
           // Deserialize reference
           const referenceLength = paramsReader.readVarIntNum()
@@ -1604,7 +1628,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Read fields
           const fieldsLength = paramsReader.readVarIntNum()
-          args.fields = {}
+          const fields = new Map<string, string>()
           for (let i = 0; i < fieldsLength; i++) {
             const fieldNameLength = paramsReader.readVarIntNum()
             const fieldNameBytes = paramsReader.read(fieldNameLength)
@@ -1614,8 +1638,9 @@ export default class WalletWireProcessor implements WalletWire {
             const fieldValueBytes = paramsReader.read(fieldValueLength)
             const fieldValue = Utils.toUTF8(fieldValueBytes)
 
-            args.fields[fieldName] = fieldValue
+            fields.set(fieldName, fieldValue)
           }
+          args.fields = this.recordFromWireEntries(fields, 'certificate fields')
 
           // Read privileged parameters
           const privilegedFlag = paramsReader.readInt8()
@@ -1666,7 +1691,7 @@ export default class WalletWireProcessor implements WalletWire {
 
             // args.keyringForSubject
             const keyringEntriesLength = paramsReader.readVarIntNum()
-            args.keyringForSubject = {}
+            const keyringForSubject = new Map<string, string>()
             for (let i = 0; i < keyringEntriesLength; i++) {
               const fieldKeyLength = paramsReader.readVarIntNum()
               const fieldKeyBytes = paramsReader.read(fieldKeyLength)
@@ -1676,8 +1701,12 @@ export default class WalletWireProcessor implements WalletWire {
               const fieldValueBytes = paramsReader.read(fieldValueLength)
               const fieldValue = Utils.toBase64(fieldValueBytes)
 
-              args.keyringForSubject[fieldKey] = fieldValue
+              keyringForSubject.set(fieldKey, fieldValue)
             }
+            args.keyringForSubject = this.recordFromWireEntries(
+              keyringForSubject,
+              'subject keyring'
+            )
           } else {
             // args.certifierUrl
             const certifierUrlLength = paramsReader.readVarIntNum()
@@ -1852,7 +1881,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Read fields
           const fieldsLength = paramsReader.readVarIntNum()
-          cert.fields = {}
+          const fields = new Map<string, string>()
           for (let i = 0; i < fieldsLength; i++) {
             const fieldNameLength = paramsReader.readVarIntNum()
             const fieldNameBytes = paramsReader.read(fieldNameLength)
@@ -1862,8 +1891,9 @@ export default class WalletWireProcessor implements WalletWire {
             const fieldValueBytes = paramsReader.read(fieldValueLength)
             const fieldValue = Utils.toUTF8(fieldValueBytes)
 
-            cert.fields[fieldName] = fieldValue
+            fields.set(fieldName, fieldValue)
           }
+          cert.fields = this.recordFromWireEntries(fields, 'certificate fields')
 
           args.certificate = cert
 
@@ -2002,7 +2032,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Read attributes
           const attributesLength = paramsReader.readVarIntNum()
-          args.attributes = {}
+          const attributes = new Map<string, string>()
           for (let i = 0; i < attributesLength; i++) {
             const fieldKeyLength = paramsReader.readVarIntNum()
             const fieldKeyBytes = paramsReader.read(fieldKeyLength)
@@ -2012,8 +2042,9 @@ export default class WalletWireProcessor implements WalletWire {
             const fieldValueBytes = paramsReader.read(fieldValueLength)
             const fieldValue = Utils.toUTF8(fieldValueBytes)
 
-            args.attributes[fieldKey] = fieldValue
+            attributes.set(fieldKey, fieldValue)
           }
+          args.attributes = this.recordFromWireEntries(attributes, 'attributes')
 
           // Read limit and offset
           const limit = paramsReader.readVarIntNum()

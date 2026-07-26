@@ -111,6 +111,14 @@ describe('utils', () => {
       const actual = toBase58([0, 0, 0, 4])
       expect(actual).toEqual('1115')
     })
+    it.each([
+      [[255]],
+      [[255, 255]],
+      [[0, 255, 0, 255]],
+      [Array.from({ length: 32 }, () => 255)]
+    ])('round-trips boundary byte values', (input) => {
+      expect(fromBase58(toBase58(input))).toEqual(input)
+    })
   })
   describe('base58check encoding and decoding', () => {
     it('should correctly encode and decode data with default prefix', () => {
