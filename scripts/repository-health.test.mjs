@@ -177,6 +177,22 @@ test('exception JSON schema is checked in and references the active schema versi
   assert.ok(schema.properties.exceptions.items.required.includes('removeWhen'))
 })
 
+test('TypeScript majors remain a coordinated migration until the owned hold is removed', () => {
+  const dependabot = fs.readFileSync(
+    path.join(REPOSITORY_ROOT, '.github/dependabot.yml'),
+    'utf8'
+  )
+  const exceptions = readJson(path.join(healthDirectory, 'exceptions.json'))
+
+  assert.match(
+    dependabot,
+    /dependency-name: typescript\s+update-types:\s+- version-update:semver-major/
+  )
+  assert.ok(
+    exceptions.exceptions.some(item => item.id === 'typescript-7-coordinated-migration')
+  )
+})
+
 test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen read-only', () => {
   const workflowDirectory = path.join(REPOSITORY_ROOT, '.github/workflows')
   const workflowFiles = fs.readdirSync(workflowDirectory)

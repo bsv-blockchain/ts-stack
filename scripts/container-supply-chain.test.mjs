@@ -51,7 +51,7 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     .map(line => line.split(/\s+/)[1])
     .sort()
   const expectedRefreshBases = registry.baseImages
-    .flatMap(base => base.references.map(reference => `${reference}:${base.version}`))
+    .flatMap(base => base.references.map(reference => `${reference}:${base.version}@${base.digest}`))
     .sort()
   assert.deepEqual(refreshBases, expectedRefreshBases)
 
@@ -178,6 +178,8 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   const registry = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'))
   const dependabot = readFileSync(DEPENDABOT_PATH, 'utf8')
   const scorecard = readFileSync(SCORECARD_PATH, 'utf8')
+  const workflows = trackedFiles('.github/workflows/*.yml', '.github/workflows/*.yaml')
+  const trackedPythonBytecode = trackedFiles('**/__pycache__/**', '**/*.pyc', '**/*.pyo')
 
   assert.match(dependabot, /package-ecosystem: docker/)
   assert.match(dependabot, /directory: \/governance/)
@@ -204,4 +206,15 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   assert.match(scorecard, /github\/codeql-action\/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81/)
   assert.match(scorecard, /security-events: write/)
   assert.match(scorecard, /id-token: write/)
+
+  for (const workflow of workflows) {
+    assert.match(
+      readRepositoryFile(workflow),
+      /^permissions:\s*(?:\{\}\s*)?$/m,
+      `${workflow} must declare a least-privilege top-level token default`
+    )
+  }
+
+  assert.deepEqual(trackedPythonBytecode, [])
+  assert.ok(existsSync(join(REPOSITORY_ROOT, 'LICENSE.md')))
 })

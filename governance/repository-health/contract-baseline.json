@@ -1,12 +1,8 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-25",
-  "findingCount": 242,
+  "findingCount": 241,
   "findings": [
-    {
-      "id": ".::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
     {
       "id": ".::missing-script::format:check",
       "message": "Profile monorepo requires script format:check"

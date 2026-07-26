@@ -19,6 +19,8 @@ on:
       - 'infra/v*'
   workflow_dispatch:
 
+permissions: {}
+
 concurrency:
   group: infra-release
   cancel-in-progress: false
