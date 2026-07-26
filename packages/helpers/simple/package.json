@@ -9,8 +9,23 @@
     "access": "public"
   },
   "description": "Simplified, modular helper library for BSV blockchain development",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "typesVersions": {
+    "*": {
+      "browser": [
+        "dist/browser.d.mts"
+      ],
+      "server": [
+        "dist/server.d.mts"
+      ],
+      "*": [
+        "dist/index.d.mts"
+      ]
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
@@ -18,26 +33,47 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./browser": {
-      "types": "./dist/browser.d.ts",
-      "default": "./dist/browser.js"
+      "import": {
+        "types": "./dist/browser.d.mts",
+        "default": "./dist/browser.mjs"
+      },
+      "require": {
+        "types": "./dist/browser.d.cts",
+        "default": "./dist/browser.cjs"
+      }
     },
     "./server": {
-      "types": "./dist/server.d.ts",
-      "default": "./dist/server.js"
+      "import": {
+        "types": "./dist/server.d.mts",
+        "default": "./dist/server.mjs"
+      },
+      "require": {
+        "types": "./dist/server.d.cts",
+        "default": "./dist/server.cjs"
+      }
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsdown src/index.ts src/browser.ts src/server.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform node --tsconfig tsconfig.build.json --unbundle",
+    "dev": "pnpm build --watch",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports CertificationError,Certifier,CredentialError,CredentialIssuer,CredentialSchema,DID,DIDError,MemoryRevocationStore,MessageBoxError,Overlay,SimpleError,TransactionError,WalletCore,WalletError,createWallet,toVerifiableCredential,toVerifiablePresentation --entry-exports \"./browser=Certifier|CredentialIssuer|CredentialSchema|DID|MemoryRevocationStore|Overlay|WalletCore|createWallet|toVerifiableCredential|toVerifiablePresentation;./server=FileRevocationStore|ServerWallet|generatePrivateKey|JsonFileStore|IdentityRegistry|DIDResolverService|ServerWalletManager|createIdentityRegistryHandler|createDIDResolverHandler|createServerWalletHandler|createCredentialIssuerHandler\"",
+    "prepublishOnly": "pnpm build",
     "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",
-    "lint": "oxlint src",
-    "lint:ci": "oxlint src",
-    "prepublishOnly": "npm run build"
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "keywords": [
     "bsv",
@@ -56,9 +92,6 @@
     "@bsv/wallet-toolbox": "workspace:^",
     "@bsv/wallet-toolbox-client": "workspace:^"
   },
-  "overrides": {
-    "minimatch": "^10.2.1"
-  },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
@@ -66,6 +99,7 @@
     "dotenv": "^17.4.2",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3",
     "oxlint": "^1.75.0"
   },

@@ -2,9 +2,22 @@ import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assembleBaseFile, assembleAndWrite, bsvImport, newBuilder, MAIN_TEMPLATE, APP_TEMPLATE } from '../base-app.js'
+import {
+  assembleBaseFile,
+  assembleAndWrite,
+  bsvImport,
+  newBuilder,
+  MAIN_TEMPLATE,
+  APP_TEMPLATE
+} from '../base-app.js'
 
-const CTX = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: {}, layout: 'monorepo' as const }
+const CTX = {
+  name: 'd',
+  network: 'test' as const,
+  bsvDir: 'src/bsv',
+  stack: {},
+  layout: 'monorepo' as const
+}
 
 describe('assembleBaseFile', () => {
   test('fills imports + wrap, removes empty markers', () => {
@@ -54,25 +67,49 @@ describe('bsvImport', () => {
     expect(bsvImport({ ...CTX, bsvDir: 'src/helpers' }, 'Home')).toBe('./helpers/Home')
   })
   test("non-src bsvDir → '../' relative path", () => {
-    expect(bsvImport({ ...CTX, bsvDir: 'lib/bsv' }, 'loginRoute.js')).toBe('../lib/bsv/loginRoute.js')
+    expect(bsvImport({ ...CTX, bsvDir: 'lib/bsv' }, 'loginRoute.js')).toBe(
+      '../lib/bsv/loginRoute.js'
+    )
   })
 })
 
 describe('assembleAndWrite', () => {
   let dir: string
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-base-')) })
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
-  const cap = (edit: (b: any) => void): any => ({ id: 'm', roles: [], files: () => ({}), npmDependencies: () => ({}), agentsSection: () => '', baseEdits: ({ builder }: any) => edit(builder) })
-  const ctx = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: {}, layout: 'monorepo' as const }
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cba-base-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+  const cap = (edit: (b: any) => void): any => ({
+    id: 'm',
+    roles: [],
+    files: () => ({}),
+    npmDependencies: () => ({}),
+    agentsSection: () => '',
+    baseEdits: ({ builder }: any) => edit(builder)
+  })
+  const ctx = {
+    name: 'd',
+    network: 'test' as const,
+    bsvDir: 'src/bsv',
+    stack: {},
+    layout: 'monorepo' as const
+  }
 
   test('writes main.tsx + App.tsx + Home to clientDir and index.ts + config to serverDir', () => {
-    const caps = [cap((b: any) => {
-      b.main.wraps.push({ open: '<W>', close: '</W>' })
-      b.app.routes.push({ path: '/x', component: 'X', importPath: './bsv/X', label: 'X demo' })
-      b.server.routes.push('app.get("/y", h)')
-      b.server.setup.push('attachWs(server)')
-    })]
-    const r = assembleAndWrite(caps, ctx, { clientDir: join(dir, 'client'), serverDir: join(dir, 'server') })
+    const caps = [
+      cap((b: any) => {
+        b.main.wraps.push({ open: '<W>', close: '</W>' })
+        b.app.routes.push({ path: '/x', component: 'X', importPath: './bsv/X', label: 'X demo' })
+        b.server.routes.push('app.get("/y", h)')
+        b.server.setup.push('attachWs(server)')
+      })
+    ]
+    const r = assembleAndWrite(caps, ctx, {
+      clientDir: join(dir, 'client'),
+      serverDir: join(dir, 'server')
+    })
     const appTsx = readFileSync(join(dir, 'client/src/App.tsx'), 'utf8')
     expect(appTsx).toContain('<Route path="/x" element={<X />} />') // generated from the descriptor
     expect(appTsx).toContain("import { X } from './bsv/X'") // import generated too
@@ -95,15 +132,19 @@ describe('assembleAndWrite', () => {
     const cfg = readFileSync(join(dir, 'server/src/bsv/config.ts'), 'utf8')
     expect(cfg).toContain('SERVER_PRIVATE_KEY')
     expect(cfg).toContain('CLIENT_ORIGIN')
-    expect(r.client).toEqual(expect.arrayContaining(['src/main.tsx', 'src/App.tsx', 'src/bsv/Home.tsx']))
+    expect(r.client).toEqual(
+      expect.arrayContaining(['src/main.tsx', 'src/App.tsx', 'src/bsv/Home.tsx'])
+    )
     expect(r.server).toEqual(['src/index.ts', 'src/bsv/config.ts'])
   })
 
   test('multi-line insertions are indented to the marker column (main.tsx wrap, nested)', () => {
-    const caps = [cap((b: any) => {
-      b.main.imports.push("import { P } from './bsv/P'")
-      b.main.wraps.push({ open: '<P>', close: '</P>' })
-    })]
+    const caps = [
+      cap((b: any) => {
+        b.main.imports.push("import { P } from './bsv/P'")
+        b.main.wraps.push({ open: '<P>', close: '</P>' })
+      })
+    ]
     assembleAndWrite(caps, ctx, { clientDir: join(dir, 'client') })
     const mainTsx = readFileSync(join(dir, 'client/src/main.tsx'), 'utf8')
     // <P> at the marker's 4-space column, <App /> nested at 6, no column-0 ragged lines

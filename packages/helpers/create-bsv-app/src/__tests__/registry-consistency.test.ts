@@ -2,7 +2,16 @@ import { describe, expect, test } from '@jest/globals'
 import { registry, resolveCapabilities } from '../registry'
 import type { Role } from '../types'
 
-const ctx = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: { frontend: { framework: 'react' as const, variant: 'react-ts' }, backend: { framework: 'express' as const } }, layout: 'monorepo' as const }
+const ctx = {
+  name: 'd',
+  network: 'test' as const,
+  bsvDir: 'src/bsv',
+  stack: {
+    frontend: { framework: 'react' as const, variant: 'react-ts' },
+    backend: { framework: 'express' as const }
+  },
+  layout: 'monorepo' as const
+}
 
 describe('registry consistency', () => {
   test('ids are unique', () => {

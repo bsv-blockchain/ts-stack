@@ -2,7 +2,13 @@ import { describe, expect, test } from '@jest/globals'
 import { walletLogin } from '../wallet-login'
 import { newBuilder } from '../../scaffold/base-app'
 
-const ctx = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: {}, layout: 'monorepo' as const }
+const ctx = {
+  name: 'd',
+  network: 'test' as const,
+  bsvDir: 'src/bsv',
+  stack: {},
+  layout: 'monorepo' as const
+}
 
 describe('wallet-login', () => {
   test('requires wallet-connect; roles client + server', () => {
@@ -43,7 +49,12 @@ describe('wallet-login', () => {
     expect((walletLogin.files(ctx).client ?? []).map(f => f.path)).toContain('WalletLogin.tsx')
     const b = newBuilder()
     walletLogin.baseEdits?.({ builder: b, ctx })
-    expect(b.app.routes).toContainEqual({ path: '/login', component: 'WalletLogin', importPath: './bsv/WalletLogin', label: 'Wallet login' })
+    expect(b.app.routes).toContainEqual({
+      path: '/login',
+      component: 'WalletLogin',
+      importPath: './bsv/WalletLogin',
+      label: 'Wallet login'
+    })
     expect(b.server.routes.join()).toContain('/api/login')
     expect(b.server.imports.join()).toContain('loginRoute')
   })
@@ -53,7 +64,7 @@ describe('wallet-login', () => {
     expect(page?.content).toContain('Signing a login proof')
     expect(page?.content).toContain('the server trusts this identity')
   })
-  test('agentsSection has the How it works / How it\'s used / Future integrations structure + JWT session sketch', () => {
+  test("agentsSection has the How it works / How it's used / Future integrations structure + JWT session sketch", () => {
     const md = walletLogin.agentsSection(ctx)
     expect(md).toContain('### How it works')
     expect(md).toContain("### How it's used")

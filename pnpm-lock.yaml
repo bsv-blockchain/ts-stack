@@ -14,12 +14,18 @@ importers:
       '@arethetypeswrong/core':
         specifier: 0.18.5
         version: 0.18.5
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       prettier:
         specifier: 3.9.6
         version: 3.9.6
       publint:
         specifier: 0.3.22
         version: 0.3.22
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -245,9 +251,9 @@ importers:
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@6.0.3)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.22)(tsx@4.23.1)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -282,21 +288,18 @@ importers:
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
-      ts-loader:
-        specifier: ^9.6.2
-        version: 9.6.2(typescript@6.0.3)(webpack@5.109.0)
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@6.0.3)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.22)(tsx@4.23.1)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
       webpack:
         specifier: ^5.109.0
-        version: 5.109.0(webpack-cli@7.2.1)
+        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
       webpack-cli:
         specifier: ^7.2.1
         version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack-bundle-analyzer@5.3.1)(webpack@5.109.0)
@@ -365,6 +368,9 @@ importers:
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.22)(tsx@4.23.1)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -389,9 +395,9 @@ importers:
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@6.0.3)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.22)(tsx@4.23.1)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -440,7 +446,7 @@ importers:
         version: 6.0.3
       webpack:
         specifier: ^5.109.0
-        version: 5.109.0(webpack-cli@7.2.1)
+        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
       webpack-cli:
         specifier: ^7.2.1
         version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack-bundle-analyzer@5.3.1)(webpack@5.109.0)
@@ -483,7 +489,7 @@ importers:
         version: 6.0.3
       webpack:
         specifier: ^5.109.0
-        version: 5.109.0(webpack-cli@7.2.1)
+        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
       webpack-cli:
         specifier: ^7.2.1
         version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack-bundle-analyzer@5.3.1)(webpack@5.109.0)
@@ -541,7 +547,7 @@ importers:
         version: 6.0.3
       webpack:
         specifier: ^5.109.0
-        version: 5.109.0(webpack-cli@7.2.1)
+        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
       webpack-bundle-analyzer:
         specifier: ^5.3.1
         version: 5.3.1
@@ -1127,7 +1133,7 @@ importers:
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
       ts-loader:
         specifier: ^9.6.2
-        version: 9.6.2(typescript@6.0.3)(webpack@5.109.0)
+        version: 9.6.2(typescript@6.0.3)(webpack@5.109.0(esbuild@0.28.1))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -13383,13 +13389,15 @@ snapshots:
     optionalDependencies:
       esbuild: 0.28.1
 
-  minimizer-webpack-plugin@5.6.1(webpack@5.109.0):
+  minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(webpack@5.109.0):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.49.0
-      webpack: 5.109.0(webpack-cli@7.2.1)
+      webpack: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
+    optionalDependencies:
+      esbuild: 0.28.1
 
   minipass@7.1.3: {}
 
@@ -14682,7 +14690,7 @@ snapshots:
       picomatch: 4.0.5
       source-map: 0.7.6
       typescript: 6.0.3
-      webpack: 5.109.0(webpack-cli@7.2.1)
+      webpack: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
 
   ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3):
     dependencies:
@@ -15045,7 +15053,7 @@ snapshots:
       import-local: 3.2.0
       interpret: 3.1.1
       rechoir: 0.8.0
-      webpack: 5.109.0(webpack-cli@7.2.1)
+      webpack: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
       webpack-merge: 6.0.1
     optionalDependencies:
       json5: 2.2.3
@@ -15096,7 +15104,7 @@ snapshots:
       - postcss
       - uglify-js
 
-  webpack@5.109.0(webpack-cli@7.2.1):
+  webpack@5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -15112,7 +15120,7 @@ snapshots:
       events: 3.3.0
       graceful-fs: 4.2.11
       mime-db: 1.54.0
-      minimizer-webpack-plugin: 5.6.1(webpack@5.109.0)
+      minimizer-webpack-plugin: 5.6.1(esbuild@0.28.1)(webpack@5.109.0)
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3

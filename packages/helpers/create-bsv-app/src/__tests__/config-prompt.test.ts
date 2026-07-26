@@ -10,7 +10,18 @@ describe('runPrompts', () => {
     const capabilityOptions: FieldOption[] = []
     const ask: Ask = async (field, options) => {
       if (field.key === 'capabilities') capabilityOptions.push(...options)
-      const scripted: Record<string, unknown> = { mode: 'new', name: 'demo', frontend: 'react', frontendVariant: 'react-ts', backend: 'none', bsvDir: 'src/bsv', capabilities: ['wallet-login'], glue: false, packageManager: 'npm', network: 'test' }
+      const scripted: Record<string, unknown> = {
+        mode: 'new',
+        name: 'demo',
+        frontend: 'react',
+        frontendVariant: 'react-ts',
+        backend: 'none',
+        bsvDir: 'src/bsv',
+        capabilities: ['wallet-login'],
+        glue: false,
+        packageManager: 'npm',
+        network: 'test'
+      }
       return scripted[field.key]
     }
     const c = await runPrompts({ existing: null, flags: {} }, ask)
@@ -26,9 +37,19 @@ describe('runPrompts', () => {
   })
 
   test('add mode: locks fields from the manifest, only asks capabilities, unions', async () => {
-    const existing: ProjectManifest = { version: 1, name: 'demo', network: 'test', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, bsvDir: 'src/bsv', capabilities: ['wallet-login'] }
+    const existing: ProjectManifest = {
+      version: 1,
+      name: 'demo',
+      network: 'test',
+      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-login']
+    }
     const askedKeys: string[] = []
-    const ask: Ask = async (field) => { askedKeys.push(field.key); return field.key === 'capabilities' ? [] : undefined }
+    const ask: Ask = async field => {
+      askedKeys.push(field.key)
+      return field.key === 'capabilities' ? [] : undefined
+    }
     const c = await runPrompts({ existing, flags: {} }, ask)
     expect(askedKeys).not.toContain('frontend') // locked / hidden in add mode
     expect(c.mode).toBe('add')
@@ -38,7 +59,16 @@ describe('runPrompts', () => {
 
   test('flags prefill skips asking that field', async () => {
     const askedKeys: string[] = []
-    const ask: Ask = async (field) => { askedKeys.push(field.key); return field.key === 'name' ? 'fromPrompt' : field.key === 'frontend' ? 'react' : field.key === 'capabilities' ? ['wallet-login'] : undefined }
+    const ask: Ask = async field => {
+      askedKeys.push(field.key)
+      return field.key === 'name'
+        ? 'fromPrompt'
+        : field.key === 'frontend'
+          ? 'react'
+          : field.key === 'capabilities'
+            ? ['wallet-login']
+            : undefined
+    }
     const c = await runPrompts({ existing: null, flags: { mode: 'new', name: 'fromFlag' } }, ask)
     expect(askedKeys).not.toContain('mode') // set by flag
     expect(askedKeys).not.toContain('name') // set by flag

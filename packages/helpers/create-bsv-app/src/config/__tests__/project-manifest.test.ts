@@ -3,19 +3,33 @@ import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { manifestFromConfig, readProjectManifest, writeProjectManifest, mergeCapabilityIds, remainingCapabilityIds, readValidManifest } from '../project-manifest'
+import {
+  manifestFromConfig,
+  readProjectManifest,
+  writeProjectManifest,
+  mergeCapabilityIds,
+  remainingCapabilityIds,
+  readValidManifest
+} from '../project-manifest'
 import type { ProjectConfig } from '../model'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-m-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-m-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 const config: ProjectConfig = {
   mode: 'new',
   name: 'demo',
   dir: '.',
   starter: 'custom',
-  stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } },
+  stack: {
+    frontend: { framework: 'react', variant: 'react-ts' },
+    backend: { framework: 'express' }
+  },
   targets: { client: 'client', server: 'server' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-login'],
@@ -80,30 +94,62 @@ describe('manifest ops', () => {
   })
 
   test('readValidManifest throws on malformed file (capabilities not array)', () => {
-    writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify({
-      version: 1, name: 'test', network: 'test', stack: {}, bsvDir: 'src/bsv', capabilities: 'oops'
-    }) + '\n')
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 1,
+        name: 'test',
+        network: 'test',
+        stack: {},
+        bsvDir: 'src/bsv',
+        capabilities: 'oops'
+      }) + '\n'
+    )
     expect(() => readValidManifest(dir)).toThrow('malformed bsv-scaffold.json')
   })
 
   test('readValidManifest throws on wrong version', () => {
-    writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify({
-      version: 3, name: 'test', network: 'test', stack: {}, bsvDir: 'src/bsv', capabilities: []
-    }) + '\n')
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 3,
+        name: 'test',
+        network: 'test',
+        stack: {},
+        bsvDir: 'src/bsv',
+        capabilities: []
+      }) + '\n'
+    )
     expect(() => readValidManifest(dir)).toThrow('malformed bsv-scaffold.json')
   })
 
   test('readValidManifest throws on path-traversal bsvDir', () => {
-    writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify({
-      version: 1, name: 'test', network: 'test', stack: {}, bsvDir: '../escape', capabilities: []
-    }) + '\n')
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 1,
+        name: 'test',
+        network: 'test',
+        stack: {},
+        bsvDir: '../escape',
+        capabilities: []
+      }) + '\n'
+    )
     expect(() => readValidManifest(dir)).toThrow('malformed bsv-scaffold.json')
   })
 
   test('readValidManifest throws on unsupported frontend framework', () => {
-    writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify({
-      version: 1, name: 'test', network: 'test', stack: { frontend: { framework: 'svelte' } }, bsvDir: 'src/bsv', capabilities: []
-    }) + '\n')
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 1,
+        name: 'test',
+        network: 'test',
+        stack: { frontend: { framework: 'svelte' } },
+        bsvDir: 'src/bsv',
+        capabilities: []
+      }) + '\n'
+    )
     expect(() => readValidManifest(dir)).toThrow('malformed bsv-scaffold.json')
   })
 })

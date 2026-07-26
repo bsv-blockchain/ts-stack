@@ -28,8 +28,10 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",
+    "esbuild": "0.28.1",
     "prettier": "3.9.6",
     "publint": "0.3.22",
+    "vite": "8.1.5",
     "yaml": "^2.9.0"
   },
   "engines": {

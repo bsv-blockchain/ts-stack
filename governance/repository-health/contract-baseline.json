@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 83,
+  "findingCount": 70,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -40,72 +40,20 @@
       "message": "Profile documentation-site requires script test"
     },
     {
-      "id": "packages/helpers/create-bsv-app::missing-script::format:check",
-      "message": "Profile cli requires script format:check"
-    },
-    {
-      "id": "packages/helpers/create-bsv-app::missing-script::pack:check",
-      "message": "Profile cli requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/create-bsv-app::missing-script::typecheck",
-      "message": "Profile cli requires script typecheck"
-    },
-    {
       "id": "packages/helpers/did-client::missing-script::format:check",
       "message": "Profile browser-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/did-client::missing-script::pack:check",
-      "message": "Profile browser-library requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/did-client::missing-script::test:browser",
-      "message": "Profile browser-library requires script test:browser"
-    },
-    {
-      "id": "packages/helpers/did-client::missing-script::typecheck",
-      "message": "Profile browser-library requires script typecheck"
     },
     {
       "id": "packages/helpers/did::missing-script::format:check",
       "message": "Profile dual-runtime-library requires script format:check"
     },
     {
-      "id": "packages/helpers/did::missing-script::pack:check",
-      "message": "Profile dual-runtime-library requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/did::missing-script::typecheck",
-      "message": "Profile dual-runtime-library requires script typecheck"
-    },
-    {
       "id": "packages/helpers/simple::missing-script::format:check",
       "message": "Profile browser-library requires script format:check"
     },
     {
-      "id": "packages/helpers/simple::missing-script::pack:check",
-      "message": "Profile browser-library requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/simple::missing-script::test:browser",
-      "message": "Profile browser-library requires script test:browser"
-    },
-    {
-      "id": "packages/helpers/simple::missing-script::typecheck",
-      "message": "Profile browser-library requires script typecheck"
-    },
-    {
       "id": "packages/helpers/ts-templates::missing-script::format:check",
       "message": "Profile dual-runtime-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/ts-templates::missing-script::pack:check",
-      "message": "Profile dual-runtime-library requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/ts-templates::missing-script::typecheck",
-      "message": "Profile dual-runtime-library requires script typecheck"
     },
     {
       "id": "packages/messaging/authsocket-client::missing-script::format:check",

@@ -24,7 +24,7 @@ describe('MandalaAdmin lock/decode', () => {
 
   it('decode throws when the hash push is not 20 bytes', async () => {
     const script = await MandalaAdmin.lock({ wallet: wallet as any, data })
-    script.chunks[2] = { op: 19, data: new Array(19).fill(1) }
+    script.chunks[2] = { op: 19, data: Array.from({ length: 19 }, () => 1) }
     expect(() => MandalaAdmin.decode(script)).toThrow()
   })
 

@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { PackageManager } from '../config/model.js'
 import { writeFiles } from '../engine.js'
 
-function runnerSource (packageManager: PackageManager): string {
+function runnerSource(packageManager: PackageManager): string {
   return `import { spawn, spawnSync } from 'node:child_process'
 
 const packageManager = ${JSON.stringify(packageManager)}
@@ -42,7 +42,11 @@ await Promise.all(children.map(child => new Promise(resolve => child.on('exit', 
 `
 }
 
-export function writeRootRunner (name: string, targetDir: string, packageManager: PackageManager): string[] {
+export function writeRootRunner(
+  name: string,
+  targetDir: string,
+  packageManager: PackageManager
+): string[] {
   const pkg = {
     name,
     private: true,

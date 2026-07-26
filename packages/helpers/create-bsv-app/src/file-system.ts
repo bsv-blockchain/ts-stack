@@ -10,11 +10,11 @@ import {
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
-function hasErrorCode (error: unknown, code: string): boolean {
+function hasErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }
 
-export function readUtf8FileIfExists (file: string): string | undefined {
+export function readUtf8FileIfExists(file: string): string | undefined {
   try {
     return readFileSync(file, 'utf8')
   } catch (error) {
@@ -23,7 +23,7 @@ export function readUtf8FileIfExists (file: string): string | undefined {
   }
 }
 
-export function writeUtf8FileExclusive (file: string, content: string): boolean {
+export function writeUtf8FileExclusive(file: string, content: string): boolean {
   try {
     writeFileSync(file, content, { encoding: 'utf8', flag: 'wx' })
     return true
@@ -33,7 +33,7 @@ export function writeUtf8FileExclusive (file: string, content: string): boolean 
   }
 }
 
-export function writeUtf8FileAtomic (file: string, content: string): void {
+export function writeUtf8FileAtomic(file: string, content: string): void {
   const temporary = join(dirname(file), `.${basename(file)}.${process.pid}.${randomUUID()}.tmp`)
   let descriptor: number | undefined
 

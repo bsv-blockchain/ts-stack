@@ -1,4 +1,4 @@
-import { MultiPushDrop } from '../src/MultiPushDrop'
+import { MultiPushDrop } from '../src/MultiPushDrop.js'
 import { OP, WalletInterface, PubKeyHex, SecurityLevel, Transaction, CompletedProtoWallet, PrivateKey, Utils, Script, Spend, LockingScript, UnlockingScript } from '@bsv/sdk'
 
 // Helper function like createDecodeRedeem from PushDrop tests

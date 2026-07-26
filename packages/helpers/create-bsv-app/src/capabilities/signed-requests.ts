@@ -97,7 +97,7 @@ export async function verifySignedRequest (
 }
 `
 
-function agentsSection (_ctx: CapabilityContext): string {
+function agentsSection(_ctx: CapabilityContext): string {
   return `## signed-requests
 
 Authenticate individual API calls: sign a proof bound to a route (\`action\`) + request \`body\`, send it with the request, verify it server-side. Same proof primitive as login, plus a body — one round-trip, no handshake, framework-agnostic.
@@ -122,7 +122,8 @@ Authenticate individual API calls: sign a proof bound to a route (\`action\`) + 
 export const signedRequests: Capability = {
   id: 'signed-requests',
   title: 'Signed requests (per-call BRC-103 auth)',
-  description: 'Sign API calls bound to a route + body; verify with a framework-agnostic function. Builds on wallet-connect.',
+  description:
+    'Sign API calls bound to a route + body; verify with a framework-agnostic function. Builds on wallet-connect.',
   requires: ['wallet-connect'],
   roles: ['client', 'server'],
   files: () => ({
@@ -133,13 +134,20 @@ export const signedRequests: Capability = {
     ],
     server: [{ path: 'verifySignedRequest.ts', content: VERIFY }]
   }),
-  baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
-    builder.app.routes.push({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: bsvImport(ctx, 'SignedRequestDemo'), label: 'Signed request demo' })
+  baseEdits: ({ builder, ctx }: { builder: BaseBuilder; ctx: CapabilityContext }) => {
+    builder.app.routes.push({
+      path: '/signed-demo',
+      component: 'SignedRequestDemo',
+      importPath: bsvImport(ctx, 'SignedRequestDemo'),
+      label: 'Signed request demo'
+    })
     builder.server.imports.push(
       `import { verifySignedRequest } from '${bsvImport(ctx, 'verifySignedRequest.js')}'`,
       `import { consumeNonce } from '${bsvImport(ctx, 'nonceStore.js')}'`
     )
-    builder.server.routes.push("app.post('/api/echo', async (req, res) => { const { proof, body } = req.body; const r = await verifySignedRequest(serverWallet, proof, { action: 'echo', body }, consumeNonce); res.status(r.valid ? 200 : 401).json(r) })")
+    builder.server.routes.push(
+      "app.post('/api/echo', async (req, res) => { const { proof, body } = req.body; const r = await verifySignedRequest(serverWallet, proof, { action: 'echo', body }, consumeNonce); res.status(r.valid ? 200 : 401).json(r) })"
+    )
   },
   npmDependencies: () => ({
     client: { react: '>=18' },

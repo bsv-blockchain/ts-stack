@@ -5,11 +5,26 @@ import type { ProjectManifest } from '../project-manifest'
 
 describe('draftToConfigInput', () => {
   test('maps react frontend + express backend to a nested stack', () => {
-    const input = draftToConfigInput({ mode: 'new', name: 'demo', frontend: 'react', frontendVariant: 'react-ts', backend: 'express', capabilities: ['wallet-login'] }) as any
-    expect(input.stack).toEqual({ frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } })
+    const input = draftToConfigInput({
+      mode: 'new',
+      name: 'demo',
+      frontend: 'react',
+      frontendVariant: 'react-ts',
+      backend: 'express',
+      capabilities: ['wallet-login']
+    }) as any
+    expect(input.stack).toEqual({
+      frontend: { framework: 'react', variant: 'react-ts' },
+      backend: { framework: 'express' }
+    })
   })
   test("omits 'none' targets", () => {
-    const input = draftToConfigInput({ mode: 'new', name: 'demo', frontend: 'none', backend: 'express' }) as any
+    const input = draftToConfigInput({
+      mode: 'new',
+      name: 'demo',
+      frontend: 'none',
+      backend: 'express'
+    }) as any
     expect(input.stack).toEqual({ backend: { framework: 'express' } })
   })
 })
@@ -23,7 +38,9 @@ describe('resolveDraft', () => {
   })
 
   test('a new project with no targets is rejected by resolveConfig', () => {
-    expect(() => resolveDraft({ mode: 'new', name: 'demo', frontend: 'none', backend: 'none' })).toThrow(/frontend or a backend/i)
+    expect(() =>
+      resolveDraft({ mode: 'new', name: 'demo', frontend: 'none', backend: 'none' })
+    ).toThrow(/frontend or a backend/i)
   })
 })
 
@@ -32,7 +49,14 @@ describe('seedDraft', () => {
     expect(seedDraft(null, {}).mode).toBe('new')
   })
   test('existing manifest, no mode flag → add, locked from manifest', () => {
-    const m: ProjectManifest = { version: 1, name: 'demo', network: 'test', stack: { backend: { framework: 'express' } }, bsvDir: 'src/bsv', capabilities: ['wallet-login'] }
+    const m: ProjectManifest = {
+      version: 1,
+      name: 'demo',
+      network: 'test',
+      stack: { backend: { framework: 'express' } },
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-login']
+    }
     const d = seedDraft(m, {})
     expect(d.mode).toBe('add')
     expect(d.backend).toBe('express')
@@ -41,7 +65,14 @@ describe('seedDraft', () => {
     expect(d.capabilities).toEqual(['wallet-login'])
   })
   test('mode flag overrides the manifest default', () => {
-    const m: ProjectManifest = { version: 1, name: 'x', network: 'test', stack: {}, bsvDir: 'src/bsv', capabilities: [] }
+    const m: ProjectManifest = {
+      version: 1,
+      name: 'x',
+      network: 'test',
+      stack: {},
+      bsvDir: 'src/bsv',
+      capabilities: []
+    }
     expect(seedDraft(m, { mode: 'new' }).mode).toBe('new')
   })
 })

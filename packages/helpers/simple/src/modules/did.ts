@@ -6,7 +6,6 @@ import {
   Script,
   OP,
   Random,
-  SecurityLevel,
   Transaction,
   Beef
 } from '@bsv/sdk'

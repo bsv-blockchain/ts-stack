@@ -6,10 +6,21 @@ export type Network = 'main' | 'test'
 export type Mode = 'new' | 'add'
 export type Layout = 'frontend-only' | 'backend-only' | 'monorepo' | 'none'
 
-export interface FrontendTarget { framework: FrontendFramework, variant: string }
-export interface BackendTarget { framework: BackendFramework }
-export interface Stack { frontend?: FrontendTarget, backend?: BackendTarget }
-export interface TargetPaths { client?: string, server?: string }
+export interface FrontendTarget {
+  framework: FrontendFramework
+  variant: string
+}
+export interface BackendTarget {
+  framework: BackendFramework
+}
+export interface Stack {
+  frontend?: FrontendTarget
+  backend?: BackendTarget
+}
+export interface TargetPaths {
+  client?: string
+  server?: string
+}
 
 export interface ProjectConfig {
   mode: Mode
@@ -26,11 +37,11 @@ export interface ProjectConfig {
   network: Network
 }
 
-export function isMonorepo (stack: Stack): boolean {
+export function isMonorepo(stack: Stack): boolean {
   return stack.frontend != null && stack.backend != null
 }
 
-export function layoutOf (stack: Stack): Layout {
+export function layoutOf(stack: Stack): Layout {
   const fe = stack.frontend != null
   const be = stack.backend != null
   if (fe && be) return 'monorepo'
@@ -39,7 +50,7 @@ export function layoutOf (stack: Stack): Layout {
   return 'none'
 }
 
-export function defaultTargetPaths (stack: Stack): TargetPaths {
+export function defaultTargetPaths(stack: Stack): TargetPaths {
   const layout = layoutOf(stack)
   if (layout === 'frontend-only') return { client: '' }
   if (layout === 'backend-only') return { server: '' }

@@ -96,7 +96,7 @@ export function loginRoute (serverWallet: { verifySignature: (args: any) => Prom
 }
 `
 
-function agentsSection (_ctx: CapabilityContext): string {
+function agentsSection(_ctx: CapabilityContext): string {
   return `## wallet-login
 
 Passwordless login: the connected wallet signs a proof with \`action: 'login'\`, the server verifies it, and you get a trusted \`identityKey\` — no password, no shared secret.
@@ -133,7 +133,8 @@ res.cookie('session', token, { httpOnly: true, sameSite: 'lax' }) // or return i
 export const walletLogin: Capability = {
   id: 'wallet-login',
   title: 'Wallet login (passwordless, BRC-103 proof)',
-  description: 'Prove identity with the connected wallet; server verifies the proof. Builds on wallet-connect.',
+  description:
+    'Prove identity with the connected wallet; server verifies the proof. Builds on wallet-connect.',
   requires: ['wallet-connect'],
   roles: ['client', 'server'],
   files: () => ({
@@ -143,8 +144,13 @@ export const walletLogin: Capability = {
     ],
     server: [{ path: 'loginRoute.ts', content: ROUTE }]
   }),
-  baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
-    builder.app.routes.push({ path: '/login', component: 'WalletLogin', importPath: bsvImport(ctx, 'WalletLogin'), label: 'Wallet login' })
+  baseEdits: ({ builder, ctx }: { builder: BaseBuilder; ctx: CapabilityContext }) => {
+    builder.app.routes.push({
+      path: '/login',
+      component: 'WalletLogin',
+      importPath: bsvImport(ctx, 'WalletLogin'),
+      label: 'Wallet login'
+    })
     builder.server.imports.push(`import { loginRoute } from '${bsvImport(ctx, 'loginRoute.js')}'`)
     builder.server.routes.push("app.post('/api/login', loginRoute(serverWallet))")
   },

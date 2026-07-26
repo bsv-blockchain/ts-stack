@@ -10,41 +10,51 @@
     "access": "public"
   },
   "type": "module",
-  "main": "dist/cjs/mod.js",
-  "module": "dist/esm/mod.js",
-  "types": "dist/types/mod.d.ts",
+  "main": "./dist/mod.cjs",
+  "module": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
   "files": [
     "dist",
-    "src",
-    "mod.ts",
     "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/mod.d.ts",
+        "default": "./dist/mod.js"
+      },
+      "require": {
+        "types": "./dist/mod.d.cts",
+        "default": "./dist/mod.cjs"
+      }
     },
     "./*.ts": {
-      "types": "./dist/types/src/*.d.ts",
-      "import": "./dist/esm/src/*.js",
-      "require": "./dist/cjs/src/*.js"
+      "import": {
+        "types": "./dist/src/*.d.ts",
+        "default": "./dist/src/*.js"
+      },
+      "require": {
+        "types": "./dist/src/*.d.cts",
+        "default": "./dist/src/*.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "npm run build && jest --passWithNoTests",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
-    "lint:ci": "oxlint src",
-    "lint": "oxlint src",
-    "build": "npm run build:ts && npm run build:umd",
-    "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "build": "pnpm build:ts && pnpm build:umd",
+    "build:ts": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
     "build:umd": "webpack --config webpack.config.js",
-    "dev": "tsc -b -w",
-    "prepublish": "npm run build",
-    "doc": "ts2md"
+    "dev": "pnpm build:ts --watch",
+    "doc": "ts2md",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports DIDClient",
+    "prepublishOnly": "pnpm build",
+    "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "author": "Peer-to-peer Privacy Systems Research, LLC",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -56,9 +66,8 @@
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "ts-jest": "^29.4.12",
-    "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
-    "tsconfig-to-dual-package": "^1.2.0",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3",
     "webpack": "^5.109.0",
     "webpack-cli": "^7.2.1",
@@ -66,9 +75,6 @@
   },
   "dependencies": {
     "@bsv/wallet-toolbox-client": "workspace:^"
-  },
-  "overrides": {
-    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",

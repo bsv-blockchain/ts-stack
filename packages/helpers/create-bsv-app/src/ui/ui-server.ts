@@ -17,25 +17,29 @@ import { layoutOf } from '../config/model.js'
 import type { Capability } from '../types.js'
 import { getStarter } from '../starters.js'
 
-export interface UiServer { url: string, done: Promise<RunResult>, close: () => void }
+export interface UiServer {
+  url: string
+  done: Promise<RunResult>
+  close: () => void
+}
 
-async function readBody (req: IncomingMessage): Promise<string> {
+async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
   return Buffer.concat(chunks).toString('utf8')
 }
 
-function sendJson (res: ServerResponse, status: number, body: unknown): void {
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' })
   res.end(JSON.stringify(body))
 }
 
-function serveIndex (res: ServerResponse, html: string): void {
+function serveIndex(res: ServerResponse, html: string): void {
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
   res.end(html)
 }
 
-async function handleGenerate (
+async function handleGenerate(
   req: IncomingMessage,
   res: ServerResponse,
   existing: ProjectManifest | null,
@@ -61,7 +65,7 @@ async function handleGenerate (
 }
 
 // Base files touched by glue-wiring in new-mode: main.tsx/App.tsx (frontend) and server/src/index.ts (backend).
-function baseGluePaths (layout: Layout): string[] {
+function baseGluePaths(layout: Layout): string[] {
   const paths: string[] = []
   if (layout === 'frontend-only' || layout === 'monorepo') {
     const cp = layout === 'monorepo' ? 'client/' : ''
@@ -74,7 +78,7 @@ function baseGluePaths (layout: Layout): string[] {
   return paths
 }
 
-function planPaths (config: ProjectConfig, caps: Capability[]): string[] {
+function planPaths(config: ProjectConfig, caps: Capability[]): string[] {
   if (getStarter(config.starter)?.kind === 'repository') return [MANIFEST_FILE]
   const placement = planPlacement(config, caps)
   const rawPaths: string[] = [...placement.utilFiles, ...placement.glueFiles].map(f => f.path)
@@ -83,7 +87,7 @@ function planPaths (config: ProjectConfig, caps: Capability[]): string[] {
   return [...new Set(rawPaths)]
 }
 
-async function handlePlan (
+async function handlePlan(
   req: IncomingMessage,
   res: ServerResponse,
   existing: ProjectManifest | null,
@@ -93,7 +97,10 @@ async function handlePlan (
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
     const config = resolveDraft(seedDraft(existing, draft))
     const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
-    const files = planPaths(config, caps).map(p => ({ path: p, status: existsSync(join(targetDir, p)) ? 'edit' as const : 'new' as const }))
+    const files = planPaths(config, caps).map(p => ({
+      path: p,
+      status: existsSync(join(targetDir, p)) ? ('edit' as const) : ('new' as const)
+    }))
     sendJson(res, 200, { files })
   } catch (err) {
     if (err instanceof ConfigError) {
@@ -105,28 +112,50 @@ async function handlePlan (
   }
 }
 
-export async function startUiServer (
-  opts: { existing: ProjectManifest | null, targetDir: string, deps?: { runCommand?: RunCommand } }
-): Promise<UiServer> {
+export async function startUiServer(opts: {
+  existing: ProjectManifest | null
+  targetDir: string
+  deps?: { runCommand?: RunCommand }
+}): Promise<UiServer> {
   const { existing, targetDir } = opts
-  const included = existing === null
-    ? listCapabilities().filter(c => c.defaultSelected === true).map(c => ({ label: c.title }))
-    : []
-  const html = buildPage({ schema: serializeSchema(existing), seed: seedDraft(existing, {}), included })
+  const included =
+    existing === null
+      ? listCapabilities()
+          .filter(c => c.defaultSelected === true)
+          .map(c => ({ label: c.title }))
+      : []
+  const html = buildPage({
+    schema: serializeSchema(existing),
+    seed: seedDraft(existing, {}),
+    included
+  })
 
   let resolveDone: (r: RunResult) => void = () => {}
-  const done = new Promise<RunResult>((resolve) => { resolveDone = resolve })
+  const done = new Promise<RunResult>(resolve => {
+    resolveDone = resolve
+  })
 
   const server = createServer((req, res) => {
     void (async () => {
       if (req.method === 'GET' && (req.url === '/' || req.url === '')) return serveIndex(res, html)
-      if (req.method === 'POST' && req.url === '/generate') return await handleGenerate(req, res, existing, targetDir, opts.deps?.runCommand, resolveDone)
-      if (req.method === 'POST' && req.url === '/plan') return await handlePlan(req, res, existing, targetDir)
+      if (req.method === 'POST' && req.url === '/generate')
+        return await handleGenerate(
+          req,
+          res,
+          existing,
+          targetDir,
+          opts.deps?.runCommand,
+          resolveDone
+        )
+      if (req.method === 'POST' && req.url === '/plan')
+        return await handlePlan(req, res, existing, targetDir)
       sendJson(res, 404, { error: 'not found' })
     })()
   })
 
-  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
+  await new Promise<void>(resolve => {
+    server.listen(0, '127.0.0.1', resolve)
+  })
   const { port } = server.address() as AddressInfo
   const url = `http://127.0.0.1:${port}`
   return { url, done, close: () => server.close() }
@@ -139,10 +168,16 @@ export interface RunUiOpts {
   openBrowser?: (url: string) => void
 }
 
-export async function runUi (opts: RunUiOpts): Promise<RunResult> {
-  const srv = await startUiServer({ existing: opts.existing, targetDir: opts.targetDir, deps: { runCommand: opts.runCommand } })
+export async function runUi(opts: RunUiOpts): Promise<RunResult> {
+  const srv = await startUiServer({
+    existing: opts.existing,
+    targetDir: opts.targetDir,
+    deps: { runCommand: opts.runCommand }
+  })
   const open = opts.openBrowser ?? ((url: string) => defaultOpenBrowser(url))
-  console.log(`\ncreate-bsv-app UI: ${srv.url}\nFill the form and press Generate (or Ctrl-C to cancel).`)
+  console.log(
+    `\ncreate-bsv-app UI: ${srv.url}\nFill the form and press Generate (or Ctrl-C to cancel).`
+  )
   open(srv.url)
   try {
     return await srv.done

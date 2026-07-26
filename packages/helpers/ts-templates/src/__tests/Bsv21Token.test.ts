@@ -1,4 +1,4 @@
-import { Bsv21Token } from '../Bsv21Token'
+import { Bsv21Token } from '../Bsv21Token.js'
 import { LockingScript, Utils } from '@bsv/sdk'
 
 const OWNER = 'ab'.repeat(20)

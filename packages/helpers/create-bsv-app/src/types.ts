@@ -26,11 +26,11 @@ export interface RouteDef {
 }
 
 export interface BaseBuilder {
-  main: { imports: string[], wraps: Array<{ open: string, close: string }> }
-  app: { imports: string[], routes: RouteDef[] }
+  main: { imports: string[]; wraps: Array<{ open: string; close: string }> }
+  app: { imports: string[]; routes: RouteDef[] }
   // server.routes: express handlers on `app`. server.setup: code needing the raw
   // `http.Server` (e.g. a WebSocket upgrade) — runs after `const server = http.createServer(app)`.
-  server: { imports: string[], routes: string[], setup: string[] }
+  server: { imports: string[]; routes: string[]; setup: string[] }
 }
 
 export interface Capability {
@@ -44,7 +44,7 @@ export interface Capability {
   defaultSelected?: boolean
   files: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
   glue?: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
-  baseEdits?: (args: { builder: BaseBuilder, ctx: CapabilityContext }) => void
+  baseEdits?: (args: { builder: BaseBuilder; ctx: CapabilityContext }) => void
   npmDependencies: (ctx: CapabilityContext) => Partial<Record<Role, Record<string, string>>>
   agentsSection: (ctx: CapabilityContext) => string
 }

@@ -2,10 +2,17 @@
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process'
 import type { RunCommand } from './base-scaffolder.js'
 
-export interface SpawnResult { status: number | null, error?: Error }
-export type SpawnSyncFn = (command: string, args: string[], options: SpawnSyncOptions) => SpawnResult
+export interface SpawnResult {
+  status: number | null
+  error?: Error
+}
+export type SpawnSyncFn = (
+  command: string,
+  args: string[],
+  options: SpawnSyncOptions
+) => SpawnResult
 
-export function makeRunCommand (spawn: SpawnSyncFn): RunCommand {
+export function makeRunCommand(spawn: SpawnSyncFn): RunCommand {
   return (command, args, opts) => {
     const res = spawn(command, args, {
       cwd: opts.cwd,
@@ -17,8 +24,11 @@ export function makeRunCommand (spawn: SpawnSyncFn): RunCommand {
       shell: process.platform === 'win32' // npm/pnpm/yarn/bun are .cmd shims on Windows
     })
     if (res.error != null) throw res.error
-    if (res.status !== 0) throw new Error(`command failed (${String(res.status)}): ${command} ${args.join(' ')}`)
+    if (res.status !== 0)
+      throw new Error(`command failed (${String(res.status)}): ${command} ${args.join(' ')}`)
   }
 }
 
-export const defaultRunCommand: RunCommand = makeRunCommand((command, args, options) => spawnSync(command, args, options))
+export const defaultRunCommand: RunCommand = makeRunCommand((command, args, options) =>
+  spawnSync(command, args, options)
+)

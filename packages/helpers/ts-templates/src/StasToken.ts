@@ -121,7 +121,10 @@ export class StasToken {
       flagsHex = pushes[0]?.length === 2 ? pushes[0] : null
       const symbolHex = pushes[1] ?? null
       symbol = (symbolHex != null && symbolHex !== '')
-        ? (hexToUtf8(symbolHex).replace(/[\x00- ]/g, '').trim() || null)
+        ? (Array.from(hexToUtf8(symbolHex))
+            .filter(character => character.charCodeAt(0) > 0x20)
+            .join('')
+            .trim() || null)
         : null
     }
 

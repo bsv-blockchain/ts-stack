@@ -5,9 +5,22 @@ describe('unified starter catalogue', () => {
   test('contains the generated starters and every legacy example except Convo', () => {
     const ids = listStarters().map(starter => starter.id)
     expect(ids).toEqual([
-      'custom', 'react', 'express', 'full-stack',
-      'brc102-frontend', 'brc102-backend', 'pollr', 'meter', 'metamarket', 'todo',
-      'marscast', 'coinflip', 'postboard', 'locksmith', 'peerpay', 'atfinder'
+      'custom',
+      'react',
+      'express',
+      'full-stack',
+      'brc102-frontend',
+      'brc102-backend',
+      'pollr',
+      'meter',
+      'metamarket',
+      'todo',
+      'marscast',
+      'coinflip',
+      'postboard',
+      'locksmith',
+      'peerpay',
+      'atfinder'
     ])
     expect(ids.some(id => id.toLowerCase().includes('convo'))).toBe(false)
     expect(new Set(ids).size).toBe(ids.length)

@@ -2,7 +2,13 @@ import { describe, expect, test } from '@jest/globals'
 import { signedRequests } from '../signed-requests'
 import { newBuilder } from '../../scaffold/base-app'
 
-const ctx = { name: 'demo', network: 'test' as const, bsvDir: 'src/bsv', stack: {}, layout: 'monorepo' as const }
+const ctx = {
+  name: 'demo',
+  network: 'test' as const,
+  bsvDir: 'src/bsv',
+  stack: {},
+  layout: 'monorepo' as const
+}
 
 describe('signed-requests (variant)', () => {
   test('requires wallet-connect', () => {
@@ -11,7 +17,11 @@ describe('signed-requests (variant)', () => {
   })
   test('client helper binds proof to { action, body }', () => {
     const client = signedRequests.files(ctx).client ?? []
-    expect(client.map(f => f.path).sort()).toEqual(['SignedRequestDemo.tsx', 'signedRequest.ts', 'useSignedRequest.ts'])
+    expect(client.map(f => f.path).sort()).toEqual([
+      'SignedRequestDemo.tsx',
+      'signedRequest.ts',
+      'useSignedRequest.ts'
+    ])
     const helper = client.find(f => f.path === 'signedRequest.ts')
     expect(helper?.content).toContain('createAuthProof')
     expect(helper?.content).toContain('body')
@@ -39,13 +49,20 @@ describe('signed-requests (variant)', () => {
   test('baseEdits adds route descriptor and server verify route', () => {
     const builder = newBuilder()
     signedRequests.baseEdits?.({ builder, ctx })
-    expect(builder.app.routes).toContainEqual({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: './bsv/SignedRequestDemo', label: 'Signed request demo' })
+    expect(builder.app.routes).toContainEqual({
+      path: '/signed-demo',
+      component: 'SignedRequestDemo',
+      importPath: './bsv/SignedRequestDemo',
+      label: 'Signed request demo'
+    })
     expect(builder.server.routes.join()).toContain('verifySignedRequest')
     expect(builder.server.routes.join()).toContain('consumeNonce')
     expect(builder.server.routes.join()).not.toContain('async () => true')
   })
   test('demo page renders a removable step-by-step activity log', () => {
-    const page = (signedRequests.files(ctx).client ?? []).find(f => f.path === 'SignedRequestDemo.tsx')
+    const page = (signedRequests.files(ctx).client ?? []).find(
+      f => f.path === 'SignedRequestDemo.tsx'
+    )
     expect(page?.content).toContain('demo activity log (safe to delete)')
     expect(page?.content).toContain('Signing a request proof')
   })

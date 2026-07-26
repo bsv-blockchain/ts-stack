@@ -171,12 +171,7 @@ async function checkPublint(tarballPath) {
 
 export function typeProblemsForModes(problems, modes) {
   return problems.filter(
-    problem =>
-      !(
-        problem.kind === 'NoResolution' &&
-        problem.resolutionKind === 'node16-cjs' &&
-        !modes.includes('cjs')
-      )
+    problem => !(problem.resolutionKind === 'node16-cjs' && !modes.includes('cjs'))
   )
 }
 

@@ -1,6 +1,6 @@
 import { Transaction, UnlockingScript, MerklePath, P2PKH, PrivateKey, PublicKey } from '@bsv/sdk';
-import { MockChain, makeWallet } from './test-utils';
-import { P2MSKH } from '../src/P2MSKH';
+import { MockChain, makeWallet } from './test-utils.js';
+import { P2MSKH } from '../src/P2MSKH.js';
 
 const key = PrivateKey.fromRandom()
 

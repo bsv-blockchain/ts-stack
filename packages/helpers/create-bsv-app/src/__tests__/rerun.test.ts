@@ -7,8 +7,12 @@ import { readValidManifest } from '../config/project-manifest'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-re-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-re-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 describe('re-run add flow', () => {
   // Items 3 & 4: use wallet-login layout; strict dedup assertion + loginRoute/useWalletLogin + AGENTS.md
@@ -16,7 +20,22 @@ describe('re-run add flow', () => {
     // First run: scaffold new project with wallet-connect + wallet-login (monorepo with backend)
     const fake: RunCommand = () => {}
     await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--backend', 'express', '--frontend', 'react', '--capabilities', 'wallet-connect,wallet-login', '--skip-install', '--yes'],
+      [
+        '--dir',
+        dir,
+        '--mode',
+        'new',
+        '--name',
+        'demo',
+        '--backend',
+        'express',
+        '--frontend',
+        'react',
+        '--capabilities',
+        'wallet-connect,wallet-login',
+        '--skip-install',
+        '--yes'
+      ],
       undefined,
       { runCommand: fake }
     )
@@ -31,9 +50,14 @@ describe('re-run add flow', () => {
     expect(existsSync(join(dir, 'client/src/bsv/useWalletLogin.tsx'))).toBe(true)
 
     // Second run: --yes add (mode auto-detected from manifest), same capabilities — union with dedup
-    await run(
-      ['--dir', dir, '--capabilities', 'wallet-connect,wallet-login', '--skip-install', '--yes']
-    )
+    await run([
+      '--dir',
+      dir,
+      '--capabilities',
+      'wallet-connect,wallet-login',
+      '--skip-install',
+      '--yes'
+    ])
 
     const after = readValidManifest(dir)
     if (after == null) throw new Error('manifest not written after second run')
@@ -49,12 +73,27 @@ describe('re-run add flow', () => {
   test('second run via provider: existing manifest passed, capabilities unioned', async () => {
     const fake: RunCommand = () => {}
     await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--backend', 'express', '--capabilities', 'wallet-connect,wallet-login', '--skip-install', '--yes'],
+      [
+        '--dir',
+        dir,
+        '--mode',
+        'new',
+        '--name',
+        'demo',
+        '--backend',
+        'express',
+        '--capabilities',
+        'wallet-connect,wallet-login',
+        '--skip-install',
+        '--yes'
+      ],
       undefined,
       { runCommand: fake }
     )
 
-    const provider = async (ctx: { existing: import('../config/project-manifest').ProjectManifest | null }): Promise<import('../config/model').ProjectConfig> => {
+    const provider = async (ctx: {
+      existing: import('../config/project-manifest').ProjectManifest | null
+    }): Promise<import('../config/model').ProjectConfig> => {
       const existing = ctx.existing
       if (existing == null) throw new Error('expected existing manifest')
       return {

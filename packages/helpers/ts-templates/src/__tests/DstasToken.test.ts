@@ -1,6 +1,6 @@
-import { DstasToken } from '../DstasToken'
+import { DstasToken } from '../DstasToken.js'
 import { LockingScript } from '@bsv/sdk'
-import { DSTAS_PLAIN_HEX, DSTAS_FROZEN_HEX, DSTAS_OWNER, DSTAS_TOKEN_ID } from './dstas-fixtures'
+import { DSTAS_PLAIN_HEX, DSTAS_FROZEN_HEX, DSTAS_OWNER, DSTAS_TOKEN_ID } from './dstas-fixtures.js'
 
 describe('DstasToken.decode (against real dxs-bsv-token-sdk output)', () => {
   it('recovers owner, tokenId, flags from a real DSTAS script', () => {

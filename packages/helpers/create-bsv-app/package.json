@@ -4,23 +4,34 @@
   "sideEffects": false,
   "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "bin": {
     "create-bsv-app": "dist/index.js"
   },
   "files": [
     "dist",
     ".claude",
+    "README.md",
     "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsc",
+    "clean": "rm -rf dist coverage",
+    "dev": "node dist/index.js",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/create-bsv-app/src/**/*.ts\" \"packages/helpers/create-bsv-app/README.md\" \"packages/helpers/create-bsv-app/*.{cjs,js,json}\"",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes cli --bin create-bsv-app --bin-args --help",
+    "prepublishOnly": "pnpm build",
     "test": "jest",
     "test:coverage": "jest --coverage --coverageReporters=text --coverageReporters=lcov",
-    "lint": "oxlint src",
-    "lint:ci": "oxlint src",
-    "clean": "rm -rf dist coverage",
-    "dev": "node dist/index.js"
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0"

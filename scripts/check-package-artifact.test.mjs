@@ -59,10 +59,11 @@ test('packed artifact policy rejects source, tests, caches, locks, and identity 
 test('strict type policy ignores only the unsupported CommonJS mode for ESM-only packages', () => {
   const problems = [
     { kind: 'NoResolution', entrypoint: '.', resolutionKind: 'node16-cjs' },
+    { kind: 'CJSResolvesToESM', entrypoint: '.', resolutionKind: 'node16-cjs' },
     { kind: 'NoResolution', entrypoint: '.', resolutionKind: 'node16-esm' },
     { kind: 'UntypedResolution', entrypoint: '.', resolutionKind: 'bundler' }
   ]
 
-  assert.deepEqual(typeProblemsForModes(problems, ['esm']), problems.slice(1))
+  assert.deepEqual(typeProblemsForModes(problems, ['esm']), problems.slice(2))
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs']), problems)
 })

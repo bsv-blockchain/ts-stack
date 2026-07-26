@@ -2,19 +2,54 @@ import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseArgs, run } from '../cli'
+import { CLI_HELP, parseArgs, run } from '../cli'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 import type { RunResult } from '../pipeline'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-cli-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-cli-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 describe('parseArgs', () => {
+  test('documents the executable usage and all supported flag groups', () => {
+    expect(CLI_HELP).toContain('Usage: create-bsv-app')
+    expect(CLI_HELP).toContain('--starter <name>')
+    expect(CLI_HELP).toContain('--capabilities <names>')
+    expect(CLI_HELP).toContain('-h, --help')
+  })
+
   test('collects config flags into draft + control flags', () => {
-    const a = parseArgs(['--dir', 'x', '--mode', 'new', '--frontend', 'react', '--capabilities', 'wallet-login', '--yes'])
+    const a = parseArgs([
+      '--dir',
+      'x',
+      '--mode',
+      'new',
+      '--frontend',
+      'react',
+      '--variant',
+      'react-ts',
+      '--bsv-dir',
+      'src/bsv',
+      '--capabilities',
+      'wallet-login',
+      '--glue',
+      '--install',
+      '--yes'
+    ])
     expect(a).toMatchObject({ dir: 'x', yes: true, force: false })
-    expect(a.draft).toMatchObject({ mode: 'new', frontend: 'react', capabilities: ['wallet-login'] })
+    expect(a.draft).toMatchObject({
+      mode: 'new',
+      frontend: 'react',
+      frontendVariant: 'react-ts',
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-login'],
+      glue: true,
+      install: true
+    })
   })
 
   test('defaults: yes=false, force=false, draft={}', () => {
@@ -89,7 +124,9 @@ describe('parseArgs', () => {
 describe('run --yes new (flags)', () => {
   test('modern new <dir> form derives the project name from the target', async () => {
     const target = join(dir, 'friendly-name')
-    await run(['new', target, '--starter', 'express', '--skip-install', '--yes'], undefined, { runCommand: () => {} })
+    await run(['new', target, '--starter', 'express', '--skip-install', '--yes'], undefined, {
+      runCommand: () => {}
+    })
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
     expect(manifest.name).toBe('friendly-name')
     expect(manifest.starter.id).toBe('express')
@@ -97,9 +134,23 @@ describe('run --yes new (flags)', () => {
 
   test('scaffolds new react project with wallet-connect via fake runCommand', async () => {
     const calls: string[][] = []
-    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    const fake: RunCommand = (command, args) => {
+      calls.push([command, ...args])
+    }
     const res = await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--frontend', 'react', '--capabilities', 'wallet-connect', '--yes'],
+      [
+        '--dir',
+        dir,
+        '--mode',
+        'new',
+        '--name',
+        'demo',
+        '--frontend',
+        'react',
+        '--capabilities',
+        'wallet-connect',
+        '--yes'
+      ],
       undefined,
       { runCommand: fake }
     )
@@ -117,9 +168,23 @@ describe('run --yes new (flags)', () => {
   // Item 1: new-mode with --capabilities wallet-login expands requires → wallet-connect + wallet-login
   test('new-mode --capabilities wallet-login pre-seeds wallet-connect (requires expansion)', async () => {
     const calls: string[][] = []
-    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    const fake: RunCommand = (command, args) => {
+      calls.push([command, ...args])
+    }
     const res = await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--frontend', 'react', '--capabilities', 'wallet-login', '--yes'],
+      [
+        '--dir',
+        dir,
+        '--mode',
+        'new',
+        '--name',
+        'demo',
+        '--frontend',
+        'react',
+        '--capabilities',
+        'wallet-login',
+        '--yes'
+      ],
       undefined,
       { runCommand: fake }
     )
@@ -138,7 +203,20 @@ describe('run --yes new --no-glue with a variant', () => {
   test('emits the contexts (so the hook compiles) but skips the main.tsx wiring', async () => {
     const fake: RunCommand = () => {}
     const res = await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--frontend', 'react', '--capabilities', 'wallet-login', '--no-glue', '--yes'],
+      [
+        '--dir',
+        dir,
+        '--mode',
+        'new',
+        '--name',
+        'demo',
+        '--frontend',
+        'react',
+        '--capabilities',
+        'wallet-login',
+        '--no-glue',
+        '--yes'
+      ],
       undefined,
       { runCommand: fake }
     )
@@ -155,9 +233,23 @@ describe('run --yes add (existing manifest)', () => {
   test('adds wallet-connect to existing express project (no runCommand called)', async () => {
     // First: scaffold new express project with wallet-connect
     const newCalls: string[][] = []
-    const fake: RunCommand = () => { newCalls.push([]) }
+    const fake: RunCommand = () => {
+      newCalls.push([])
+    }
     await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'myapp', '--backend', 'express', '--capabilities', 'wallet-connect', '--yes'],
+      [
+        '--dir',
+        dir,
+        '--mode',
+        'new',
+        '--name',
+        'myapp',
+        '--backend',
+        'express',
+        '--capabilities',
+        'wallet-connect',
+        '--yes'
+      ],
       undefined,
       { runCommand: fake }
     )
@@ -166,7 +258,10 @@ describe('run --yes add (existing manifest)', () => {
 
     // Second: add-mode run — existing manifest detected, no runCommand needed
     const addCalls: string[][] = []
-    const fakeAdd: RunCommand = () => { addCalls.push([]); throw new Error('runCommand should not be called in add mode') }
+    const fakeAdd: RunCommand = () => {
+      addCalls.push([])
+      throw new Error('runCommand should not be called in add mode')
+    }
     await run(
       ['--dir', dir, '--capabilities', 'wallet-connect', '--skip-install', '--yes'],
       undefined,
@@ -185,12 +280,16 @@ describe('run --yes add (existing manifest)', () => {
     const fake: RunCommand = () => {}
     // Use --file add-mode with only wallet-login (no wallet-connect in the config)
     const cfgPath = join(dir, 'config.json')
-    writeFileSync(cfgPath, JSON.stringify({
-      mode: 'add',
-      name: 'addtest',
-      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
-      capabilities: ['wallet-login']
-    }), 'utf8')
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'add',
+        name: 'addtest',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        capabilities: ['wallet-login']
+      }),
+      'utf8'
+    )
     const res = await run(['--dir', addDir, '--file', cfgPath], undefined, { runCommand: fake })
     // wallet-login is placed (its own client file)
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
@@ -206,15 +305,21 @@ describe('run --yes add (existing manifest)', () => {
 describe('run --file (direct manifest door)', () => {
   test('new-mode config file scaffolds via fake runCommand', async () => {
     const calls: string[][] = []
-    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    const fake: RunCommand = (command, args) => {
+      calls.push([command, ...args])
+    }
     const cfgPath = join(dir, 'config.json')
     const target = join(dir, 'app') // keep target empty (config.json lives in parent)
-    writeFileSync(cfgPath, JSON.stringify({
-      mode: 'new',
-      name: 'from-file',
-      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
-      capabilities: ['wallet-login']
-    }), 'utf8')
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'new',
+        name: 'from-file',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        capabilities: ['wallet-login']
+      }),
+      'utf8'
+    )
     const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: fake })
     expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     // new-mode expands requires: wallet-login → wallet-connect + wallet-login, auth.ts from wallet-connect
@@ -227,12 +332,16 @@ describe('run --file (direct manifest door)', () => {
     const fake: RunCommand = () => {}
     const cfgPath = join(dir, 'cfg.json')
     const target = join(dir, 'app0')
-    writeFileSync(cfgPath, JSON.stringify({
-      mode: 'new',
-      name: 'zero',
-      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
-      capabilities: []
-    }), 'utf8')
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'new',
+        name: 'zero',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        capabilities: []
+      }),
+      'utf8'
+    )
     const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: fake })
     expect(res.written).toContain('src/bsv/auth.ts')
     expect(res.written).toContain('src/bsv/WalletContext.tsx')
@@ -245,18 +354,26 @@ describe('run --file (direct manifest door)', () => {
     const target = join(dir, 'reproduce')
     mkdirSync(target, { recursive: true })
     const manifestPath = join(target, 'bsv-scaffold.json')
-    writeFileSync(manifestPath, JSON.stringify({
-      version: 1,
-      name: 'reproduced',
-      network: 'test',
-      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
-      bsvDir: 'src/bsv',
-      capabilities: ['wallet-connect', 'wallet-login']
-    }), 'utf8')
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        version: 1,
+        name: 'reproduced',
+        network: 'test',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        bsvDir: 'src/bsv',
+        capabilities: ['wallet-connect', 'wallet-login']
+      }),
+      'utf8'
+    )
     const calls: string[][] = []
-    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    const fake: RunCommand = (command, args) => {
+      calls.push([command, ...args])
+    }
     // A lone manifest must NOT trip the empty-dir guard; new mode runs the base generator.
-    const res = await run(['--dir', target, '--file', manifestPath], undefined, { runCommand: fake })
+    const res = await run(['--dir', target, '--file', manifestPath], undefined, {
+      runCommand: fake
+    })
     expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     expect(res.written).toContain('src/bsv/auth.ts')
     // the existing manifest is rewritten (regenerated from the config)
@@ -269,8 +386,18 @@ describe('run --file (direct manifest door)', () => {
     mkdirSync(target, { recursive: true })
     writeFileSync(join(target, 'README.md'), '# pre-existing', 'utf8')
     const cfgPath = join(dir, 'c.json')
-    writeFileSync(cfgPath, JSON.stringify({ mode: 'new', name: 'x', stack: { frontend: { framework: 'react', variant: 'react-ts' } } }), 'utf8')
-    await expect(run(['--dir', target, '--file', cfgPath], undefined, { runCommand: () => {} })).rejects.toThrow(/not empty/i)
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'new',
+        name: 'x',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } }
+      }),
+      'utf8'
+    )
+    await expect(
+      run(['--dir', target, '--file', cfgPath], undefined, { runCommand: () => {} })
+    ).rejects.toThrow(/not empty/i)
   })
 
   test('new-mode scaffolds into a freshly git-init-ed dir (a lone .git does not count as non-empty)', async () => {
@@ -278,20 +405,36 @@ describe('run --file (direct manifest door)', () => {
     mkdirSync(join(target, '.git'), { recursive: true }) // simulate `git init`
     writeFileSync(join(target, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf8')
     const cfgPath = join(dir, 'g.json')
-    writeFileSync(cfgPath, JSON.stringify({ mode: 'new', name: 'g', stack: { backend: { framework: 'express' } } }), 'utf8')
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({ mode: 'new', name: 'g', stack: { backend: { framework: 'express' } } }),
+      'utf8'
+    )
     const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: () => {} })
     expect(res.written).toContain('bsv-scaffold.json') // scaffolded, no "not empty" error
     expect(existsSync(join(target, '.git', 'HEAD'))).toBe(true) // .git left untouched
   })
 
   test('--mode add overrides a file whose mode is new (runs add, no base generator)', async () => {
-    const fakeAdd: RunCommand = () => { throw new Error('runCommand should not run in add mode') }
+    const fakeAdd: RunCommand = () => {
+      throw new Error('runCommand should not run in add mode')
+    }
     const cfgPath = join(dir, 'newish.json')
     // file declares mode:new + a frontend, but --mode add must override → add path
-    writeFileSync(cfgPath, JSON.stringify({
-      mode: 'new', name: 'ov', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: ['wallet-login'], install: false
-    }), 'utf8')
-    const res = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'], undefined, { runCommand: fakeAdd })
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'new',
+        name: 'ov',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        capabilities: ['wallet-login'],
+        install: false
+      }),
+      'utf8'
+    )
+    const res = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'], undefined, {
+      runCommand: fakeAdd
+    })
     // add mode: only wallet-login's own files, no wallet-connect floor pulled in
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     expect(res.written).not.toContain('src/bsv/auth.ts')
@@ -300,15 +443,21 @@ describe('run --file (direct manifest door)', () => {
   })
 
   test('add-mode config file places wallet-login files only (no auth.ts, expandRequires:false)', async () => {
-    const fakeAdd: RunCommand = () => { throw new Error('runCommand should not be called in add mode') }
+    const fakeAdd: RunCommand = () => {
+      throw new Error('runCommand should not be called in add mode')
+    }
     const cfgPath = join(dir, 'config.json')
-    writeFileSync(cfgPath, JSON.stringify({
-      mode: 'add',
-      name: 'add-from-file',
-      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
-      capabilities: ['wallet-login'],
-      install: false
-    }), 'utf8')
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mode: 'add',
+        name: 'add-from-file',
+        stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+        capabilities: ['wallet-login'],
+        install: false
+      }),
+      'utf8'
+    )
     const res = await run(['--dir', dir, '--file', cfgPath], undefined, { runCommand: fakeAdd })
     // wallet-login in add-mode: no auth.ts (that's wallet-connect's file)
     expect(res.written).not.toContain('src/bsv/auth.ts')
@@ -326,7 +475,9 @@ describe('run interactive (no --yes)', () => {
 
   test('calls provider with existing=null for fresh dir, uses returned config', async () => {
     const calls: string[][] = []
-    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    const fake: RunCommand = (command, args) => {
+      calls.push([command, ...args])
+    }
     const provider = async (): Promise<import('../config/model').ProjectConfig> => ({
       mode: 'new',
       name: 'interactive-test',
@@ -351,9 +502,18 @@ describe('run interactive (no --yes)', () => {
 describe('run --ui', () => {
   test('delegates to the injected startUi with existing + targetDir and returns its result', async () => {
     const seen: Array<{ targetDir: string }> = []
-    const stub = async (o: { existing: unknown, targetDir: string, runCommand?: unknown }): Promise<RunResult> => {
+    const stub = async (o: {
+      existing: unknown
+      targetDir: string
+      runCommand?: unknown
+    }): Promise<RunResult> => {
       seen.push({ targetDir: o.targetDir })
-      return { targetDir: o.targetDir, deps: { root: {}, client: {}, server: {} }, written: ['src/bsv/auth.ts'], skipped: [] }
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: ['src/bsv/auth.ts'],
+        skipped: []
+      }
     }
     const res = await run(['--dir', dir, '--ui'], undefined, { startUi: stub })
     expect(seen).toEqual([{ targetDir: dir }])

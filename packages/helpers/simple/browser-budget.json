@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/simple",
+  "entry": "./browser",
+  "requiredExports": [
+    "Certifier",
+    "CredentialIssuer",
+    "CredentialSchema",
+    "DID",
+    "MemoryRevocationStore",
+    "Overlay",
+    "WalletCore",
+    "createWallet",
+    "toVerifiableCredential",
+    "toVerifiablePresentation"
+  ],
+  "prohibitedExports": [
+    "DIDResolverService",
+    "FileRevocationStore",
+    "IdentityRegistry",
+    "JsonFileStore",
+    "ServerWallet",
+    "ServerWalletManager"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 750000,
+      "gzip": 185000,
+      "brotli": 150000
+    },
+    "esbuild": {
+      "raw": 585000,
+      "gzip": 171000,
+      "brotli": 144000
+    }
+  }
+}

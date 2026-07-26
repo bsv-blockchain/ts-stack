@@ -1,15 +1,16 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import webpack from 'webpack'
 
 // Get __dirname equivalent in ES Modules
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 export default {
-  entry: './dist/esm/mod.js',
+  entry: './dist/mod.js',
   output: {
-    filename: 'bundle.js', // Output single bundled file
-    path: path.resolve(__dirname, 'dist', 'umd'), // Output directory
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist', 'umd'),
     library: 'did-client',
     libraryTarget: 'umd',
     globalObject: 'this'
@@ -18,15 +19,13 @@ export default {
     extensions: ['.ts', '.js'] // Resolve both TypeScript and JavaScript files
   },
   mode: 'production',
-  module: {
-    rules: [
-      {
-        test: /\.ts$/, // Use ts-loader to transpile TypeScript files
-        use: 'ts-loader',
-        exclude: /node_modules/
-      }
-    ]
-  },
+  target: 'web',
+  devtool: 'source-map',
+  plugins: [
+    new webpack.DefinePlugin({
+      'typeof require': JSON.stringify('undefined')
+    })
+  ],
   optimization: {
     minimize: true
   },
