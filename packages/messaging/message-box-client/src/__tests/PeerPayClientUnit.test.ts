@@ -23,15 +23,18 @@ const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
   }
 }
 
-const createMockWalletClient = (): jest.Mocked<WalletInterface> => ({
-  getPublicKey: jest.fn(),
-  createAction: jest.fn(),
-  internalizeAction: jest.fn(),
-  createHmac: jest.fn<() => Promise<CreateHmacResult>>().mockResolvedValue({
-    hmac: [1, 2, 3, 4, 5]
-  }),
-  verifyHmac: jest.fn<() => Promise<{ valid: true }>>().mockResolvedValue({ valid: true as const })
-} as unknown as jest.Mocked<WalletInterface>)
+const createMockWalletClient = (): jest.Mocked<WalletInterface> =>
+  ({
+    getPublicKey: jest.fn(),
+    createAction: jest.fn(),
+    internalizeAction: jest.fn(),
+    createHmac: jest.fn<() => Promise<CreateHmacResult>>().mockResolvedValue({
+      hmac: [1, 2, 3, 4, 5]
+    }),
+    verifyHmac: jest
+      .fn<() => Promise<{ valid: true }>>()
+      .mockResolvedValue({ valid: true as const })
+  }) as unknown as jest.Mocked<WalletInterface>
 
 describe('PeerPayClient Unit Tests', () => {
   let peerPayClient: PeerPayClient
@@ -75,21 +78,24 @@ describe('PeerPayClient Unit Tests', () => {
     it('should throw an error if recipient public key cannot be derived', async () => {
       mockWalletClient.getPublicKey.mockResolvedValue({ publicKey: '' }) // Empty key
 
-      await expect(peerPayClient.createPaymentToken({ recipient: 'invalid', amount: 5 }))
-        .rejects.toThrow('Failed to derive recipient’s public key')
+      await expect(
+        peerPayClient.createPaymentToken({ recipient: 'invalid', amount: 5 })
+      ).rejects.toThrow('Failed to derive recipient’s public key')
     })
 
     it('should throw an error if amount is <= 0', async () => {
-      (mockWalletClient.getPublicKey as jest.MockedFunction<typeof mockWalletClient.getPublicKey>)
-        .mockResolvedValue({
-          publicKey: PrivateKey.fromRandom().toPublicKey().toString()
-        })
+      ;(
+        mockWalletClient.getPublicKey as jest.MockedFunction<typeof mockWalletClient.getPublicKey>
+      ).mockResolvedValue({
+        publicKey: PrivateKey.fromRandom().toPublicKey().toString()
+      })
 
-      await expect(peerPayClient.createPaymentToken({
-        recipient: PrivateKey.fromRandom().toPublicKey().toString(),
-        amount: 0
-      }))
-        .rejects.toThrow('Invalid payment details: recipient and valid amount are required')
+      await expect(
+        peerPayClient.createPaymentToken({
+          recipient: PrivateKey.fromRandom().toPublicKey().toString(),
+          amount: 0
+        })
+      ).rejects.toThrow('Invalid payment details: recipient and valid amount are required')
     })
   })
 
@@ -107,11 +113,14 @@ describe('PeerPayClient Unit Tests', () => {
       await peerPayClient.sendPayment(payment)
       console.log('[TEST] sendPayment finished.')
 
-      expect(sendMessageSpy).toHaveBeenCalledWith({
-        recipient: 'recipientKey',
-        messageBox: 'payment_inbox',
-        body: expect.any(String)
-      }, undefined)
+      expect(sendMessageSpy).toHaveBeenCalledWith(
+        {
+          recipient: 'recipientKey',
+          messageBox: 'payment_inbox',
+          body: expect.any(String)
+        },
+        undefined
+      )
     }, 10000)
   })
 
@@ -136,11 +145,14 @@ describe('PeerPayClient Unit Tests', () => {
       await peerPayClient.sendLivePayment(payment)
 
       expect(peerPayClient.createPaymentToken).toHaveBeenCalledWith(payment)
-      expect(peerPayClient.sendLiveMessage).toHaveBeenCalledWith({
-        recipient: 'recipientKey',
-        messageBox: 'payment_inbox',
-        body: '{"customInstructions":{"derivationPrefix":"prefix","derivationSuffix":"suffix"},"transaction":[1,2,3,4,5],"amount":2}'
-      }, undefined)
+      expect(peerPayClient.sendLiveMessage).toHaveBeenCalledWith(
+        {
+          recipient: 'recipientKey',
+          messageBox: 'payment_inbox',
+          body: '{"customInstructions":{"derivationPrefix":"prefix","derivationSuffix":"suffix"},"transaction":[1,2,3,4,5],"amount":2}'
+        },
+        undefined
+      )
     })
   })
 
@@ -360,7 +372,9 @@ describe('PeerPayClient Unit Tests', () => {
 
       expect(requests).toHaveLength(1)
       expect(requests[0].requestId).toBe('req-other')
-      expect(ackSpy).toHaveBeenCalledWith({ messageIds: expect.arrayContaining(['original-msg', 'cancel-msg']) })
+      expect(ackSpy).toHaveBeenCalledWith({
+        messageIds: expect.arrayContaining(['original-msg', 'cancel-msg'])
+      })
     })
 
     it('discards malformed messages (invalid JSON) and acknowledges them', async () => {
@@ -393,9 +407,11 @@ describe('PeerPayClient Unit Tests', () => {
 
       expect(requests).toHaveLength(1)
       expect(requests[0].requestId).toBe('req-good')
-      expect(ackSpy).toHaveBeenCalledWith(expect.objectContaining({
-        messageIds: expect.arrayContaining(['bad-msg'])
-      }))
+      expect(ackSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageIds: expect.arrayContaining(['bad-msg'])
+        })
+      )
     })
 
     it('discards messages with missing required fields and acknowledges them', async () => {
@@ -413,9 +429,11 @@ describe('PeerPayClient Unit Tests', () => {
       const requests = await peerPayClient.listIncomingPaymentRequests()
 
       expect(requests).toHaveLength(0)
-      expect(ackSpy).toHaveBeenCalledWith(expect.objectContaining({
-        messageIds: expect.arrayContaining(['incomplete-msg'])
-      }))
+      expect(ackSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageIds: expect.arrayContaining(['incomplete-msg'])
+        })
+      )
     })
 
     it('only cancels requests from the same sender', async () => {
@@ -504,11 +522,16 @@ describe('PeerPayClient Unit Tests', () => {
       ])
       const ackSpy = jest.spyOn(peerPayClient, 'acknowledgeMessage').mockResolvedValue('ok')
 
-      const requests = await peerPayClient.listIncomingPaymentRequests(undefined, { minAmount: 1000, maxAmount: 10000 })
+      const requests = await peerPayClient.listIncomingPaymentRequests(undefined, {
+        minAmount: 1000,
+        maxAmount: 10000
+      })
 
       expect(requests).toHaveLength(1)
       expect(requests[0].requestId).toBe('req-ok')
-      expect(ackSpy).toHaveBeenCalledWith({ messageIds: expect.arrayContaining(['too-small', 'too-large']) })
+      expect(ackSpy).toHaveBeenCalledWith({
+        messageIds: expect.arrayContaining(['too-small', 'too-large'])
+      })
     })
   })
 
@@ -539,7 +562,11 @@ describe('PeerPayClient Unit Tests', () => {
       )
 
       const responseBody = JSON.parse((sendMessageSpy.mock.calls[0][0] as any).body)
-      expect(responseBody).toMatchObject({ requestId: 'req-id-1', status: 'paid', amountPaid: 5000 })
+      expect(responseBody).toMatchObject({
+        requestId: 'req-id-1',
+        status: 'paid',
+        amountPaid: 5000
+      })
 
       expect(ackSpy).toHaveBeenCalledWith({ messageIds: ['req-msg-1'] })
     })
@@ -588,7 +615,11 @@ describe('PeerPayClient Unit Tests', () => {
       )
 
       const responseBody = JSON.parse((sendMessageSpy.mock.calls[0][0] as any).body)
-      expect(responseBody).toMatchObject({ requestId: 'req-id-2', status: 'declined', note: 'Not today' })
+      expect(responseBody).toMatchObject({
+        requestId: 'req-id-2',
+        status: 'declined',
+        note: 'Not today'
+      })
 
       expect(ackSpy).toHaveBeenCalledWith({ messageIds: ['req-msg-2'] })
     })
@@ -618,14 +649,20 @@ describe('PeerPayClient Unit Tests', () => {
 
       expect(responses).toHaveLength(2)
       expect(responses[0]).toMatchObject({ requestId: 'req-1', status: 'paid', amountPaid: 5000 })
-      expect(responses[1]).toMatchObject({ requestId: 'req-2', status: 'declined', note: 'No funds' })
+      expect(responses[1]).toMatchObject({
+        requestId: 'req-2',
+        status: 'declined',
+        note: 'No funds'
+      })
     })
   })
 
   // Test: listenForLivePaymentRequests
   describe('listenForLivePaymentRequests', () => {
     it('calls listenForLiveMessages on payment_requests box and converts messages to IncomingPaymentRequest', async () => {
-      const listenSpy = jest.spyOn(peerPayClient, 'listenForLiveMessages').mockResolvedValue(undefined)
+      const listenSpy = jest
+        .spyOn(peerPayClient, 'listenForLiveMessages')
+        .mockResolvedValue(undefined)
       const onRequest = jest.fn()
 
       await peerPayClient.listenForLivePaymentRequests({ onRequest })
@@ -635,7 +672,7 @@ describe('PeerPayClient Unit Tests', () => {
       )
 
       // Simulate a message arriving by calling the onMessage callback
-      const { onMessage } = (listenSpy.mock.calls[0][0] as any)
+      const { onMessage } = listenSpy.mock.calls[0][0] as any
       onMessage({
         messageId: 'live-msg-1',
         sender: 'sender1',
@@ -660,7 +697,9 @@ describe('PeerPayClient Unit Tests', () => {
   // Test: listenForLivePaymentRequestResponses
   describe('listenForLivePaymentRequestResponses', () => {
     it('calls listenForLiveMessages on payment_request_responses box and parses responses', async () => {
-      const listenSpy = jest.spyOn(peerPayClient, 'listenForLiveMessages').mockResolvedValue(undefined)
+      const listenSpy = jest
+        .spyOn(peerPayClient, 'listenForLiveMessages')
+        .mockResolvedValue(undefined)
       const onResponse = jest.fn()
 
       await peerPayClient.listenForLivePaymentRequestResponses({ onResponse })
@@ -670,7 +709,7 @@ describe('PeerPayClient Unit Tests', () => {
       )
 
       // Simulate a message arriving
-      const { onMessage } = (listenSpy.mock.calls[0][0] as any)
+      const { onMessage } = listenSpy.mock.calls[0][0] as any
       onMessage({
         messageId: 'live-resp-1',
         sender: 'payer1',
@@ -688,7 +727,9 @@ describe('PeerPayClient Unit Tests', () => {
   // Test: allowPaymentRequestsFrom
   describe('allowPaymentRequestsFrom', () => {
     it('calls setMessageBoxPermission with messageBox=payment_requests and recipientFee=0', async () => {
-      const setPermSpy = jest.spyOn(peerPayClient, 'setMessageBoxPermission').mockResolvedValue(undefined)
+      const setPermSpy = jest
+        .spyOn(peerPayClient, 'setMessageBoxPermission')
+        .mockResolvedValue(undefined)
 
       await peerPayClient.allowPaymentRequestsFrom({ identityKey: 'trustedKey' })
 
@@ -703,7 +744,9 @@ describe('PeerPayClient Unit Tests', () => {
   // Test: blockPaymentRequestsFrom
   describe('blockPaymentRequestsFrom', () => {
     it('calls setMessageBoxPermission with recipientFee=-1', async () => {
-      const setPermSpy = jest.spyOn(peerPayClient, 'setMessageBoxPermission').mockResolvedValue(undefined)
+      const setPermSpy = jest
+        .spyOn(peerPayClient, 'setMessageBoxPermission')
+        .mockResolvedValue(undefined)
 
       await peerPayClient.blockPaymentRequestsFrom({ identityKey: 'blockedKey' })
 
@@ -785,12 +828,14 @@ describe('PeerPayClient Unit Tests', () => {
     })
 
     it('throws if amount <= 0', async () => {
-      await expect(peerPayClient.requestPayment({
-        recipient: 'recipientKey',
-        amount: 0,
-        description: 'Bad request',
-        expiresAt: Date.now() + 60000
-      })).rejects.toThrow()
+      await expect(
+        peerPayClient.requestPayment({
+          recipient: 'recipientKey',
+          amount: 0,
+          description: 'Bad request',
+          expiresAt: Date.now() + 60000
+        })
+      ).rejects.toThrow()
     })
   })
 

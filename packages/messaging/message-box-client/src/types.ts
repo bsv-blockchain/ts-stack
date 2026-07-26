@@ -1,4 +1,18 @@
-import { AtomicBEEF, Base64String, BasketStringUnder300Bytes, BEEF, BooleanDefaultTrue, DescriptionString5to50Bytes, HexString, LabelStringUnder300Bytes, LockingScript, OutputTagStringUnder300Bytes, PositiveIntegerOrZero, PubKeyHex, WalletInterface } from '@bsv/sdk'
+import {
+  AtomicBEEF,
+  Base64String,
+  BasketStringUnder300Bytes,
+  BEEF,
+  BooleanDefaultTrue,
+  DescriptionString5to50Bytes,
+  HexString,
+  LabelStringUnder300Bytes,
+  LockingScript,
+  OutputTagStringUnder300Bytes,
+  PositiveIntegerOrZero,
+  PubKeyHex,
+  WalletInterface
+} from '@bsv/sdk'
 
 /**
  * Configuration options for initializing a MessageBoxClient.
@@ -278,7 +292,7 @@ export interface TokenToken {
   assetId: string
   /** Token units as a string (bigint-safe). */
   amount: string
-  customInstructions: { derivationPrefix: Base64String, derivationSuffix: Base64String }
+  customInstructions: { derivationPrefix: Base64String; derivationSuffix: Base64String }
   transaction: AtomicBEEF
   outputIndex?: number
   /** Broadcast txid of the transfer, surfaced by the adapter (explorer links). */

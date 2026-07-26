@@ -18,17 +18,13 @@ export interface FeeCalculationResult {
  * Get server delivery fee for a message box type
  */
 export async function getServerDeliveryFee(messageBox: string): Promise<number> {
-  try {
-    const serverFee = await runtimeDeps.knex('server_fees')
-      .where({ message_box: messageBox })
-      .select('delivery_fee')
-      .first()
+  const serverFee = await runtimeDeps
+    .knex('server_fees')
+    .where({ message_box: messageBox })
+    .select('delivery_fee')
+    .first()
 
-    return serverFee?.delivery_fee ?? 0
-  } catch (error) {
-    Logger.error('[ERROR] Error getting server delivery fee:', error)
-    return 0
-  }
+  return serverFee?.delivery_fee ?? 0
 }
 
 /**
@@ -40,15 +36,13 @@ export async function getRecipientFee(
   messageBox: string
 ): Promise<number> {
   try {
-    // Debug parameter types
-    Logger.log(`[DEBUG] getRecipientFee params - recipient: ${typeof recipient} (${JSON.stringify(recipient)}), sender: ${typeof sender} (${JSON.stringify(sender)}), messageBox: ${typeof messageBox} (${JSON.stringify(messageBox)})`)
-
     // First try sender-specific permission
     if (sender != null) {
-      const senderSpecific = await runtimeDeps.knex('message_permissions')
+      const senderSpecific = await runtimeDeps
+        .knex('message_permissions')
         .where({
           recipient: String(recipient),
-          sender: String(sender),
+          sender_scope: String(sender),
           message_box: String(messageBox)
         })
         .select('recipient_fee')
@@ -60,10 +54,11 @@ export async function getRecipientFee(
     }
 
     // Fallback to box-wide default
-    const boxWideDefault = await runtimeDeps.knex('message_permissions')
+    const boxWideDefault = await runtimeDeps
+      .knex('message_permissions')
       .where({
         recipient: String(recipient),
-        sender: null, // Box-wide default
+        sender_scope: '', // Box-wide default
         message_box: String(messageBox)
       })
       .select('recipient_fee')
@@ -73,22 +68,14 @@ export async function getRecipientFee(
       return boxWideDefault.recipient_fee
     }
 
-    // Auto-create box-wide default if none exists
+    // Defaults are policy, not stored user preferences. Avoid inserting
+    // implicit rows on a read path (which can race and create duplicate
+    // box-wide NULL-sender rows in SQL databases).
     const defaultFee = getSmartDefaultFee(String(messageBox))
-    await runtimeDeps.knex('message_permissions').insert({
-      recipient: String(recipient),
-      sender: null,
-      message_box: String(messageBox),
-      recipient_fee: defaultFee,
-      created_at: new Date(),
-      updated_at: new Date()
-    })
-
-    Logger.log(`[DEBUG] Created box-wide default permission for ${recipient}/${messageBox} with fee ${defaultFee}`)
     return defaultFee
   } catch (error) {
     Logger.error('[ERROR] Error getting recipient fee:', error)
-    return 0 // Block on error
+    throw new Error('Unable to determine recipient permission')
   }
 }
 
@@ -118,16 +105,18 @@ export async function setMessagePermission(
     const now = new Date()
 
     // Use upsert (insert or update)
-    await runtimeDeps.knex('message_permissions')
+    await runtimeDeps
+      .knex('message_permissions')
       .insert({
         recipient,
         sender,
+        sender_scope: sender ?? '',
         message_box: messageBox,
         recipient_fee: recipientFee,
         created_at: now,
         updated_at: now
       })
-      .onConflict(['recipient', 'sender', 'message_box'])
+      .onConflict(['recipient', 'message_box', 'sender_scope'])
       .merge({
         recipient_fee: recipientFee,
         updated_at: now

@@ -33,7 +33,8 @@ export async function sendFCMNotification(
     Logger.log('[DEBUG] Payload:', payload)
 
     // Look up all active FCM tokens for this recipient
-    const deviceRegistrations = await runtimeDeps.knex('device_registrations')
+    const deviceRegistrations = await runtimeDeps
+      .knex('device_registrations')
       .where({
         identity_key: recipient,
         active: true
@@ -48,13 +49,19 @@ export async function sendFCMNotification(
     Logger.log(`[DEBUG] Found ${deviceRegistrations.length} active device(s) for ${recipient}`)
 
     // Send notification to all registered devices
-    const sendPromises = deviceRegistrations.map(async (device) => {
+    const sendPromises = deviceRegistrations.map(async device => {
       try {
-        Logger.log(`[DEBUG] Sending to ${device.platform ?? 'unknown'} device: ${device.device_id ?? 'unknown'}`)
+        Logger.log(
+          `[DEBUG] Sending to ${device.platform ?? 'unknown'} device: ${device.device_id ?? 'unknown'}`
+        )
 
         const messaging = getFirebaseMessaging()
         if (messaging == null) {
-          return { success: false, token: device.fcm_token, error: 'Firebase Messaging not initialized (ENABLE_FIREBASE != true)' }
+          return {
+            success: false,
+            token: device.fcm_token,
+            error: 'Firebase Messaging not initialized (ENABLE_FIREBASE != true)'
+          }
         }
 
         await messaging.send({
@@ -75,44 +82,45 @@ export async function sendFCMNotification(
           apns: {
             headers: {
               'apns-push-type': 'alert', // required for iOS 13+
-              'apns-priority': '10',     // deliver immediately
+              'apns-priority': '10' // deliver immediately
               // optional: 'apns-topic': '<your app bundle id>'  // FCM fills this automatically
             },
             payload: {
               aps: {
                 'mutable-content': 1,
-                alert: {                 // include an alert so NSE can modify it
+                alert: {
+                  // include an alert so NSE can modify it
                   title: payload.title,
-                  body: payload.messageId,
-                },
+                  body: payload.messageId
+                }
                 // do NOT set 'content-available': 1 unless you also want background fetch
               },
               // custom keys your NSE can read:
               messageId: payload.messageId,
-              originator: payload.originator ?? 'unknown',
-            },
-          },
+              originator: payload.originator ?? 'unknown'
+            }
+          }
         })
 
         // Update last_used timestamp on successful send
-        await runtimeDeps.knex('device_registrations')
-          .where('fcm_token', device.fcm_token)
-          .update({
-            last_used: new Date(),
-            updated_at: new Date()
-          })
+        await runtimeDeps.knex('device_registrations').where('fcm_token', device.fcm_token).update({
+          last_used: new Date(),
+          updated_at: new Date()
+        })
 
         return { success: true, token: device.fcm_token }
       } catch (error) {
         Logger.error(`[FCM ERROR] Failed to send to token ${device.fcm_token.slice(-10)}:`, error)
 
         // Mark token as inactive if it's invalid
-        if (error instanceof Error && (
-          error.message.includes('registration-token-not-registered') ||
-          error.message.includes('invalid-registration-token')
-        )) {
+        if (
+          error instanceof Error &&
+          (error.message.includes('registration-token-not-registered') ||
+            error.message.includes('invalid-registration-token'))
+        ) {
           Logger.log(`[DEBUG] Marking invalid token as inactive: ...${device.fcm_token.slice(-10)}`)
-          await runtimeDeps.knex('device_registrations')
+          await runtimeDeps
+            .knex('device_registrations')
             .where('fcm_token', device.fcm_token)
             .update({
               active: false,
@@ -120,7 +128,11 @@ export async function sendFCMNotification(
             })
         }
 
-        return { success: false, token: device.fcm_token, error: error instanceof Error ? error.message : String(error) }
+        return {
+          success: false,
+          token: device.fcm_token,
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
@@ -128,7 +140,9 @@ export async function sendFCMNotification(
     const successCount = results.filter(r => r.success).length
     const failureCount = results.length - successCount
 
-    Logger.log(`[DEBUG] FCM notification results: ${successCount} successful, ${failureCount} failed`)
+    Logger.log(
+      `[DEBUG] FCM notification results: ${successCount} successful, ${failureCount} failed`
+    )
 
     // Consider it successful if at least one device received the notification
     if (successCount > 0) {

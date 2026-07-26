@@ -13,15 +13,12 @@ export const runtimeDeps: {
   knex: null as unknown as Knex
 }
 
-export function bindMessageBoxRuntime (deps: {
-  knex: Knex
-  wallet?: WalletInterface
-}): void {
+export function bindMessageBoxRuntime(deps: { knex: Knex; wallet?: WalletInterface }): void {
   runtimeDeps.knex = deps.knex
   runtimeDeps.wallet = deps.wallet
 }
 
-export async function getWallet (): Promise<WalletInterface> {
+export async function getWallet(): Promise<WalletInterface> {
   if (runtimeDeps.wallet == null) {
     throw new Error('Wallet is not initialized')
   }

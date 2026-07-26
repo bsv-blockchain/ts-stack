@@ -47,18 +47,22 @@ class MessageObject(BaseModel):
         None,
         description='Preferred plural form. Takes precedence over `recipient` when both are present.',
     )
-    messageBox: str = Field(
+    messageBox: constr(min_length=1, max_length=128) = Field(
         ...,
         description='Named message box (e.g. `payment_inbox`, `notifications`).',
         examples=['payment_inbox'],
     )
-    messageId: str | list[str] = Field(
+    messageId: (
+        constr(min_length=1, max_length=256)
+        | list[constr(min_length=1, max_length=256)]
+    ) = Field(
         ...,
         description='Unique identifier(s) for the message(s) — typically an HMAC. When\n`recipients` has more than one entry, `messageId` must be an array\nof the same length with one ID per recipient.\n',
         examples=['xyz123'],
     )
-    body: str | dict[str, Any] = Field(
-        ..., description='Message payload. Strings and JSON objects are both accepted.'
+    body: str = Field(
+        ...,
+        description='Serialized message payload. The official client serializes object\nbodies before sending them.\n',
     )
 
 

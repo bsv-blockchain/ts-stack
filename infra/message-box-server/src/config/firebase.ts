@@ -1,4 +1,11 @@
-import { initializeApp, getApps, getApp, cert, applicationDefault, type App } from 'firebase-admin/app'
+import {
+  initializeApp,
+  getApps,
+  getApp,
+  cert,
+  applicationDefault,
+  type App
+} from 'firebase-admin/app'
 import { getMessaging, type Messaging, type Message } from 'firebase-admin/messaging'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import * as path from 'path'
@@ -18,7 +25,10 @@ export function initializeFirebase(): App | null {
   const enableFirebase = process.env.ENABLE_FIREBASE
 
   if (enableFirebase !== 'true') {
-    log.info({ operation: 'firebase.init', enable_firebase: enableFirebase ?? 'unset' }, 'Firebase disabled, skipping initialization')
+    log.info(
+      { operation: 'firebase.init', enable_firebase: enableFirebase ?? 'unset' },
+      'Firebase disabled, skipping initialization'
+    )
     return null
   }
 
@@ -39,38 +49,73 @@ export function initializeFirebase(): App | null {
     let firebaseCredential: any // Will be assigned based on auth method
 
     if (serviceAccountJson != null && serviceAccountJson !== '') {
-      log.info({ operation: 'firebase.init', credential_source: 'env' }, 'Using Firebase service account from environment variable')
+      log.info(
+        { operation: 'firebase.init', credential_source: 'env' },
+        'Using Firebase service account from environment variable'
+      )
       try {
-        log.debug({ operation: 'firebase.init', service_account_json_length: serviceAccountJson.length }, 'Service account JSON length')
+        log.debug(
+          { operation: 'firebase.init', service_account_json_length: serviceAccountJson.length },
+          'Service account JSON length'
+        )
 
         // Debug credential functions
-        log.debug({ operation: 'firebase.init', cert_function_type: typeof cert }, 'cert function type')
-        log.debug({ operation: 'firebase.init', application_default_function_type: typeof applicationDefault }, 'applicationDefault function type')
+        log.debug(
+          { operation: 'firebase.init', cert_function_type: typeof cert },
+          'cert function type'
+        )
+        log.debug(
+          {
+            operation: 'firebase.init',
+            application_default_function_type: typeof applicationDefault
+          },
+          'applicationDefault function type'
+        )
 
         const serviceAccount = JSON.parse(serviceAccountJson)
-        log.debug({ operation: 'firebase.init', service_account_keys: Object.keys(serviceAccount ?? {}) }, 'Parsed service account keys')
+        log.debug(
+          { operation: 'firebase.init', service_account_keys: Object.keys(serviceAccount ?? {}) },
+          'Parsed service account keys'
+        )
 
         if (serviceAccount == null || typeof serviceAccount !== 'object') {
           throw new Error('Parsed service account is not a valid object')
         }
 
-        if (serviceAccount.private_key == null || serviceAccount.client_email == null || serviceAccount.project_id == null) {
-          throw new Error('Service account missing required fields (private_key, client_email, project_id)')
+        if (
+          serviceAccount.private_key == null ||
+          serviceAccount.client_email == null ||
+          serviceAccount.project_id == null
+        ) {
+          throw new Error(
+            'Service account missing required fields (private_key, client_email, project_id)'
+          )
         }
 
         firebaseCredential = cert(serviceAccount)
         log.info({ operation: 'firebase.init' }, 'Firebase credential created successfully')
       } catch (parseError) {
-        log.error({ operation: 'firebase.init', outcome: 'error', err: parseError }, 'Firebase service account parsing failed')
-        throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${(parseError instanceof Error) ? parseError.message : 'Invalid JSON'}`)
+        log.error(
+          { operation: 'firebase.init', outcome: 'error', err: parseError },
+          'Firebase service account parsing failed'
+        )
+        throw new Error(
+          `Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`
+        )
       }
     } else if (serviceAccountPath != null && serviceAccountPath !== '') {
-      log.info({ operation: 'firebase.init', credential_source: 'file' }, 'Using Firebase service account key file')
+      log.info(
+        { operation: 'firebase.init', credential_source: 'file' },
+        'Using Firebase service account key file'
+      )
       const absolutePath = path.resolve(process.cwd(), serviceAccountPath)
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       firebaseCredential = cert(require(absolutePath))
     } else {
-      log.info({ operation: 'firebase.init', credential_source: 'default' }, 'Using Firebase default credentials')
+      log.info(
+        { operation: 'firebase.init', credential_source: 'default' },
+        'Using Firebase default credentials'
+      )
       firebaseCredential = applicationDefault()
     }
 
@@ -87,7 +132,10 @@ export function initializeFirebase(): App | null {
     log.info({ operation: 'firebase.init' }, 'Firebase Admin SDK initialized successfully')
     return firebaseApp
   } catch (error) {
-    log.error({ operation: 'firebase.init', outcome: 'error', err: error }, 'Firebase initialization failed')
+    log.error(
+      { operation: 'firebase.init', outcome: 'error', err: error },
+      'Firebase initialization failed'
+    )
     throw error
   }
 }
@@ -107,24 +155,22 @@ export function getFirebaseMessaging(): Messaging | null {
  */
 export function getFirebaseFirestore(): Firestore {
   if (firebaseApp == null) {
-    throw new Error(
-      'Firebase not initialized. Call initializeFirebase() first.'
-    )
+    throw new Error('Firebase not initialized. Call initializeFirebase() first.')
   }
   return getFirestore(firebaseApp)
 }
 
 interface FCMPayload {
-  title: string;
-  body: string;
-  icon?: string;
-  badge?: number;
-  data?: Record<string, string>;
+  title: string
+  body: string
+  icon?: string
+  badge?: number
+  data?: Record<string, string>
 }
 
 interface SendNotificationResult {
-  success: boolean;
-  messageId: string;
+  success: boolean
+  messageId: string
 }
 
 /**
@@ -132,7 +178,7 @@ interface SendNotificationResult {
  */
 export async function sendNotification(
   fcmToken: string,
-  payload: FCMPayload,
+  payload: FCMPayload
 ): Promise<SendNotificationResult> {
   try {
     const messaging = getFirebaseMessaging()
@@ -146,38 +192,44 @@ export async function sendNotification(
       notification: {
         title: payload.title,
         body: payload.body,
-        ...(payload.icon && { imageUrl: payload.icon }),
+        ...(payload.icon && { imageUrl: payload.icon })
       },
       data: payload.data || {},
       android: {
-        priority: "high",
+        priority: 'high',
         notification: {
-          clickAction: "OPEN_ACTIVITY_1",
-          ...(payload.badge && { notificationCount: payload.badge }),
-        },
+          clickAction: 'OPEN_ACTIVITY_1',
+          ...(payload.badge && { notificationCount: payload.badge })
+        }
       },
       apns: {
         headers: {
-          "apns-priority": "10",
+          'apns-priority': '10'
         },
         payload: {
           aps: {
             alert: {
               title: payload.title,
-              body: payload.body,
+              body: payload.body
             },
-            sound: "default",
-            badge: payload.badge || 1,
-          },
-        },
-      },
-    };
+            sound: 'default',
+            badge: payload.badge || 1
+          }
+        }
+      }
+    }
 
-    const response = await messaging.send(message);
-    log.info({ operation: 'firebase.send_notification', message_id: response }, 'Notification sent successfully')
-    return { success: true, messageId: response };
+    const response = await messaging.send(message)
+    log.info(
+      { operation: 'firebase.send_notification', message_id: response },
+      'Notification sent successfully'
+    )
+    return { success: true, messageId: response }
   } catch (error) {
-    log.error({ operation: 'firebase.send_notification', outcome: 'error', err: error }, 'Failed to send notification')
-    throw error;
+    log.error(
+      { operation: 'firebase.send_notification', outcome: 'error', err: error },
+      'Failed to send notification'
+    )
+    throw error
   }
 }

@@ -14,13 +14,21 @@ import { AuthRequest } from '@bsv/auth-express-middleware'
 import { log } from '../utils/logger.js'
 import { runtimeDeps } from '../runtimeDeps.js'
 
+export const MAX_LIST_MESSAGE_BOX_BYTES = 128
+export const MAX_LIST_MESSAGES_PAGE_SIZE = 1_000
+export const MAX_LIST_MESSAGES_OFFSET = 100_000
+
 /**
  * @interface ListMessagesRequest
  * @extends Request
  * @description Extends Express Request to include `auth` identity and expected `messageBox` body property.
  */
 interface ListMessagesRequest extends AuthRequest {
-  body: { messageBox?: string }
+  body: {
+    messageBox?: string
+    limit?: number
+    offset?: number
+  }
 }
 
 /**
@@ -29,7 +37,8 @@ interface ListMessagesRequest extends AuthRequest {
  *   post:
  *     summary: Retrieve messages from a specific messageBox
  *     description: |
- *       Returns all stored messages for the specified messageBox that belong to the authenticated identity.
+ *       Returns one deterministic, bounded page of stored messages for the specified messageBox
+ *       that belong to the authenticated identity.
  *       If the box does not exist or has no messages, an empty array is returned.
  *     tags:
  *       - Message
@@ -85,7 +94,9 @@ interface ListMessagesRequest extends AuthRequest {
 export default {
   type: 'post',
   path: '/listMessages',
-  get knex () { return runtimeDeps.knex },
+  get knex() {
+    return runtimeDeps.knex
+  },
   summary: 'Use this route to list messages from your messageBox.',
   parameters: {
     messageBox: 'The name of the messageBox you would like to list messages from.'
@@ -101,35 +112,44 @@ export default {
     ]
   },
   /**
- * @function func
- * @description
- * Express handler for listing stored messages in a specified messageBox.
- *
- * Input:
- * - `req.body.messageBox`: Name of the messageBox to retrieve messages from.
- * - `req.auth.identityKey`: Authenticated user’s public identity key.
- *
- * Behavior:
- * - Checks if the specified messageBox exists for the identity.
- * - If found, returns all messages in that messageBox.
- * - If not found, returns an empty array.
- * - Normalizes all message bodies to strings for consistent output.
- *
- * Output:
- * - 200 with `{ status: 'success', messages: [...] }`
- * - 400 if input is missing or malformed.
- * - 500 on internal server/database errors.
- *
- * @param {ListMessagesRequest} req - Authenticated request containing the messageBox name
- * @param {Response} res - Express response object
- * @returns {Promise<Response>} JSON response containing message records or an error
- */
+   * @function func
+   * @description
+   * Express handler for listing stored messages in a specified messageBox.
+   *
+   * Input:
+   * - `req.body.messageBox`: Name of the messageBox to retrieve messages from.
+   * - `req.auth.identityKey`: Authenticated user’s public identity key.
+   *
+   * Behavior:
+   * - Checks if the specified messageBox exists for the identity.
+   * - If found, returns one deterministic page from that messageBox.
+   * - If not found, returns an empty array.
+   * - Normalizes all message bodies to strings for consistent output.
+   *
+   * Output:
+   * - 200 with `{ status: 'success', messages: [...] }`
+   * - 400 if input is missing or malformed.
+   * - 500 on internal server/database errors.
+   *
+   * @param {ListMessagesRequest} req - Authenticated request containing the messageBox name
+   * @param {Response} res - Express response object
+   * @returns {Promise<Response>} JSON response containing message records or an error
+   */
   func: async (req: ListMessagesRequest, res: Response): Promise<Response> => {
     try {
       const { messageBox } = req.body
+      const identityKey = req.auth?.identityKey
+
+      if (identityKey == null || identityKey.trim() === '') {
+        return res.status(401).json({
+          status: 'error',
+          code: 'ERR_AUTHENTICATION_REQUIRED',
+          description: 'Authentication required.'
+        })
+      }
 
       // Validate a messageBox is provided and is a string
-      if (messageBox == null || messageBox === '') {
+      if (messageBox == null || (typeof messageBox === 'string' && messageBox.trim() === '')) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_MESSAGEBOX_REQUIRED',
@@ -145,11 +165,38 @@ export default {
         })
       }
 
+      const normalizedMessageBox = messageBox.trim()
+      if (Buffer.byteLength(normalizedMessageBox, 'utf8') > MAX_LIST_MESSAGE_BOX_BYTES) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_MESSAGEBOX',
+          description: `MessageBox names must not exceed ${MAX_LIST_MESSAGE_BOX_BYTES} bytes.`
+        })
+      }
+
+      const limit = req.body.limit ?? MAX_LIST_MESSAGES_PAGE_SIZE
+      const offset = req.body.offset ?? 0
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_MESSAGES_PAGE_SIZE) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_LIMIT',
+          description: `limit must be an integer between 1 and ${MAX_LIST_MESSAGES_PAGE_SIZE}.`
+        })
+      }
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_LIST_MESSAGES_OFFSET) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_OFFSET',
+          description: `offset must be an integer between 0 and ${MAX_LIST_MESSAGES_OFFSET}.`
+        })
+      }
+
       // Find the messageBox ID for this user
-      const [messageBoxRecord] = await runtimeDeps.knex('messageBox')
+      const [messageBoxRecord] = await runtimeDeps
+        .knex('messageBox')
         .where({
-          identityKey: req.auth?.identityKey,
-          type: messageBox
+          identityKey,
+          type: normalizedMessageBox
         })
         .select('messageBoxId')
 
@@ -157,17 +204,28 @@ export default {
       if (messageBoxRecord === undefined) {
         return res.status(200).json({
           status: 'success',
-          messages: []
+          messages: [],
+          limit,
+          offset,
+          hasMore: false
         })
       }
 
-      // Retrieve all messages associated with the messageBox
-      const messages = await runtimeDeps.knex('messages')
+      // Retrieve one bounded, deterministic page.
+      const messageRows = await runtimeDeps
+        .knex('messages')
         .where({
-          recipient: req.auth?.identityKey,
+          recipient: identityKey,
           messageBoxId: messageBoxRecord.messageBoxId
         })
         .select('messageId', 'body', 'sender', 'created_at', 'updated_at')
+        .orderBy('created_at', 'asc')
+        .orderBy('messageId', 'asc')
+        .limit(limit + 1)
+        .offset(offset)
+
+      const hasMore = messageRows.length > limit
+      const messages = messageRows.slice(0, limit)
 
       // Normalize all message bodies to strings and convert to camelCase
       const formattedMessages = messages.map(message => ({
@@ -181,7 +239,10 @@ export default {
       // Return a list of matching messages
       return res.status(200).json({
         status: 'success',
-        messages: formattedMessages
+        messages: formattedMessages,
+        limit,
+        offset,
+        hasMore
       })
     } catch (e) {
       log.error({ operation: 'messages.list', outcome: 'error', err: e }, 'Failed to list messages')

@@ -11,24 +11,40 @@
  */
 
 import { MessageBoxClient } from './MessageBoxClient.js'
-import { PeerMessage, PaymentRequestMessage, PaymentRequestResponse, IncomingPaymentRequest, PaymentRequestLimits, DEFAULT_PAYMENT_REQUEST_MIN_AMOUNT, DEFAULT_PAYMENT_REQUEST_MAX_AMOUNT } from './types.js'
-import { WalletInterface, AtomicBEEF, AuthFetch, Base64String, OriginatorDomainNameStringUnder250Bytes, Brc29RemittanceModule, createNonce } from '@bsv/sdk'
+import {
+  PeerMessage,
+  PaymentRequestMessage,
+  PaymentRequestResponse,
+  IncomingPaymentRequest,
+  PaymentRequestLimits,
+  DEFAULT_PAYMENT_REQUEST_MIN_AMOUNT,
+  DEFAULT_PAYMENT_REQUEST_MAX_AMOUNT
+} from './types.js'
+import {
+  WalletInterface,
+  AtomicBEEF,
+  AuthFetch,
+  Base64String,
+  OriginatorDomainNameStringUnder250Bytes,
+  Brc29RemittanceModule,
+  createNonce
+} from '@bsv/sdk'
 
 import * as Logger from './Utils/logger.js'
 
-function toNumberArray (tx: AtomicBEEF): number[] {
+function toNumberArray(tx: AtomicBEEF): number[] {
   return Array.isArray(tx) ? tx : Array.from(tx)
 }
 
-function hexToBytes (hex: string): number[] {
+function hexToBytes(hex: string): number[] {
   const matches = hex.match(/.{1,2}/g)
   return (matches ?? []).map(byte => Number.parseInt(byte, 16))
 }
 
-function safeParse<T> (input: any): T | undefined {
+function safeParse<T>(input: any): T | undefined {
   try {
     return typeof input === 'string' ? JSON.parse(input) : input
-  } catch (_parseError) {
+  } catch {
     Logger.error('[PP CLIENT] Failed to parse input in safeParse:', input)
     return undefined
   }
@@ -38,13 +54,17 @@ function safeParse<T> (input: any): T | undefined {
  * Validates that a parsed object has the required fields for a PaymentRequestMessage.
  * Returns true for both new requests (has amount, description, expiresAt) and cancellations (has cancelled: true).
  */
-function isValidPaymentRequestMessage (obj: any): obj is PaymentRequestMessage {
+function isValidPaymentRequestMessage(obj: any): obj is PaymentRequestMessage {
   if (typeof obj !== 'object' || obj === null) return false
   if (typeof obj.requestId !== 'string') return false
   if (typeof obj.senderIdentityKey !== 'string') return false
   if (typeof obj.requestProof !== 'string') return false
   if (obj.cancelled === true) return true
-  return typeof obj.amount === 'number' && typeof obj.description === 'string' && typeof obj.expiresAt === 'number'
+  return (
+    typeof obj.amount === 'number' &&
+    typeof obj.description === 'string' &&
+    typeof obj.expiresAt === 'number'
+  )
 }
 
 export const STANDARD_PAYMENT_MESSAGEBOX = 'payment_inbox'
@@ -103,8 +123,13 @@ export class PeerPayClient extends MessageBoxClient {
   private readonly messageBox: string
   private readonly settlementModule: Brc29RemittanceModule
 
-  constructor (config: PeerPayClientConfig) {
-    const { messageBoxHost = 'https://message-box-us-1.bsvb.tech', walletClient, enableLogging = false, originator } = config
+  constructor(config: PeerPayClientConfig) {
+    const {
+      messageBoxHost = 'https://message-box-us-1.bsvb.tech',
+      walletClient,
+      enableLogging = false,
+      originator
+    } = config
 
     // 🔹 Pass enableLogging to MessageBoxClient
     super({ host: messageBoxHost, walletClient, enableLogging, originator })
@@ -124,8 +149,13 @@ export class PeerPayClient extends MessageBoxClient {
     })
   }
 
-  private get authFetchInstance (): AuthFetch {
-    this._authFetchInstance ??= new AuthFetch(this.peerPayWalletClient, undefined, undefined, this.originator)
+  private get authFetchInstance(): AuthFetch {
+    this._authFetchInstance ??= new AuthFetch(
+      this.peerPayWalletClient,
+      undefined,
+      undefined,
+      this.originator
+    )
     return this._authFetchInstance
   }
 
@@ -137,7 +167,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} params.identityKey - The identity key to allow payment requests from.
    * @returns {Promise<void>} Resolves when the permission is set.
    */
-  async allowPaymentRequestsFrom ({ identityKey }: { identityKey: string }): Promise<void> {
+  async allowPaymentRequestsFrom({ identityKey }: { identityKey: string }): Promise<void> {
     await this.setMessageBoxPermission({
       messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
       sender: identityKey,
@@ -153,7 +183,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} params.identityKey - The identity key to block payment requests from.
    * @returns {Promise<void>} Resolves when the permission is set.
    */
-  async blockPaymentRequestsFrom ({ identityKey }: { identityKey: string }): Promise<void> {
+  async blockPaymentRequestsFrom({ identityKey }: { identityKey: string }): Promise<void> {
     await this.setMessageBoxPermission({
       messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
       sender: identityKey,
@@ -170,8 +200,10 @@ export class PeerPayClient extends MessageBoxClient {
    *
    * @returns {Promise<Array<{ identityKey: string, allowed: boolean }>>} Resolved with the list of permissions.
    */
-  async listPaymentRequestPermissions (): Promise<Array<{ identityKey: string, allowed: boolean }>> {
-    const permissions = await this.listMessageBoxPermissions({ messageBox: PAYMENT_REQUESTS_MESSAGEBOX })
+  async listPaymentRequestPermissions(): Promise<Array<{ identityKey: string; allowed: boolean }>> {
+    const permissions = await this.listMessageBoxPermissions({
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX
+    })
     // Filter to only per-sender entries (sender is not null/empty).
     // Use the status field returned by the server to determine allowed state.
     return permissions
@@ -194,10 +226,10 @@ export class PeerPayClient extends MessageBoxClient {
    * @returns {Promise<PaymentToken>} A valid payment token containing transaction details.
    * @throws {Error} If the recipient's public key cannot be derived.
    */
-  async createPaymentToken (payment: PaymentParams): Promise<PaymentToken> {
+  async createPaymentToken(payment: PaymentParams): Promise<PaymentToken> {
     if (payment.amount <= 0) {
       throw new Error('Invalid payment details: recipient and valid amount are required')
-    };
+    }
 
     const result = await this.settlementModule.buildSettlement(
       {
@@ -249,7 +281,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @returns {Promise<any>} Resolves with the payment result.
    * @throws {Error} If the recipient is missing or the amount is invalid.
    */
-  async sendPayment (payment: PaymentParams, hostOverride?: string): Promise<any> {
+  async sendPayment(payment: PaymentParams, hostOverride?: string): Promise<any> {
     if (payment.recipient == null || payment.recipient.trim() === '' || payment.amount <= 0) {
       throw new Error('Invalid payment details: recipient and valid amount are required')
     }
@@ -257,11 +289,14 @@ export class PeerPayClient extends MessageBoxClient {
     const paymentToken = await this.createPaymentToken(payment)
 
     // Ensure the recipient is included before sendings
-    await this.sendMessage({
-      recipient: payment.recipient,
-      messageBox: this.messageBox,
-      body: JSON.stringify(paymentToken)
-    }, hostOverride)
+    await this.sendMessage(
+      {
+        recipient: payment.recipient,
+        messageBox: this.messageBox,
+        body: JSON.stringify(paymentToken)
+      },
+      hostOverride
+    )
   }
 
   /**
@@ -278,25 +313,31 @@ export class PeerPayClient extends MessageBoxClient {
    * @returns {Promise<void>} Resolves when the payment has been sent.
    * @throws {Error} If payment token generation fails.
    */
-  async sendLivePayment (payment: PaymentParams, overrideHost?: string): Promise<void> {
+  async sendLivePayment(payment: PaymentParams, overrideHost?: string): Promise<void> {
     const paymentToken = await this.createPaymentToken(payment)
 
     try {
       // Attempt WebSocket first
-      await this.sendLiveMessage({
-        recipient: payment.recipient,
-        messageBox: this.messageBox,
-        body: JSON.stringify(paymentToken)
-      }, overrideHost)
+      await this.sendLiveMessage(
+        {
+          recipient: payment.recipient,
+          messageBox: this.messageBox,
+          body: JSON.stringify(paymentToken)
+        },
+        overrideHost
+      )
     } catch (err) {
       Logger.warn('[PP CLIENT] sendLiveMessage failed, falling back to HTTP:', err)
 
       // Fallback to HTTP if WebSocket fails
-      await this.sendMessage({
-        recipient: payment.recipient,
-        messageBox: this.messageBox,
-        body: JSON.stringify(paymentToken)
-      }, overrideHost)
+      await this.sendMessage(
+        {
+          recipient: payment.recipient,
+          messageBox: this.messageBox,
+          body: JSON.stringify(paymentToken)
+        },
+        overrideHost
+      )
     }
   }
 
@@ -312,7 +353,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [obj.overrideHost] - Optional host override for WebSocket connection.
    * @returns {Promise<void>} Resolves when the listener is successfully set up.
    */
-  async listenForLivePayments ({
+  async listenForLivePayments({
     onPayment,
     overrideHost
   }: {
@@ -350,7 +391,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @returns {Promise<any>} Resolves with the payment result if successful.
    * @throws {Error} If payment processing fails.
    */
-  async acceptPayment (payment: IncomingPayment): Promise<any> {
+  async acceptPayment(payment: IncomingPayment): Promise<any> {
     try {
       Logger.log(`[PP CLIENT] Processing payment: ${JSON.stringify(payment, null, 2)}`)
 
@@ -382,7 +423,9 @@ export class PeerPayClient extends MessageBoxClient {
 
       const paymentResult = acceptResult.receiptData?.internalizeResult
 
-      Logger.log(`[PP CLIENT] Payment internalized successfully: ${JSON.stringify(paymentResult, null, 2)}`)
+      Logger.log(
+        `[PP CLIENT] Payment internalized successfully: ${JSON.stringify(paymentResult, null, 2)}`
+      )
       Logger.log(`[PP CLIENT] Acknowledging payment with messageId: ${payment.messageId}`)
 
       await this.acknowledgeMessage({ messageIds: [payment.messageId] })
@@ -404,7 +447,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {IncomingPayment} payment - The payment object containing transaction details.
    * @returns {Promise<void>} Resolves when the payment is either acknowledged or refunded.
    */
-  async rejectPayment (payment: IncomingPayment): Promise<void> {
+  async rejectPayment(payment: IncomingPayment): Promise<void> {
     Logger.log(`[PP CLIENT] Rejecting payment: ${JSON.stringify(payment, null, 2)}`)
 
     if (payment.token.amount - 1000 < 1000) {
@@ -413,7 +456,9 @@ export class PeerPayClient extends MessageBoxClient {
       try {
         Logger.log(`[PP CLIENT] Attempting to acknowledge message ${payment.messageId}...`)
         if (this.authFetch === null || this.authFetch === undefined) {
-          Logger.warn('[PP CLIENT] Warning: authFetch is undefined! Ensure PeerPayClient is initialized correctly.')
+          Logger.warn(
+            '[PP CLIENT] Warning: authFetch is undefined! Ensure PeerPayClient is initialized correctly.'
+          )
         }
         Logger.log('[PP CLIENT] authFetch instance:', this.authFetch)
         const response = await this.acknowledgeMessage({ messageIds: [payment.messageId] })
@@ -426,9 +471,13 @@ export class PeerPayClient extends MessageBoxClient {
           typeof (error as { message: unknown }).message === 'string' &&
           (error as { message: string }).message.includes('401')
         ) {
-          Logger.warn(`[PP CLIENT] Authentication issue while acknowledging: ${(error as { message: string }).message}`)
+          Logger.warn(
+            `[PP CLIENT] Authentication issue while acknowledging: ${(error as { message: string }).message}`
+          )
         } else {
-          Logger.error(`[PP CLIENT] Error acknowledging message: ${(error as { message: string }).message}`)
+          Logger.error(
+            `[PP CLIENT] Error acknowledging message: ${(error as { message: string }).message}`
+          )
           throw error // Only throw if it's another type of error
         }
       }
@@ -439,7 +488,9 @@ export class PeerPayClient extends MessageBoxClient {
     Logger.log('[PP CLIENT] Accepting payment before refunding...')
     await this.acceptPayment(payment)
 
-    Logger.log(`[PP CLIENT] Sending refund of ${payment.token.amount - 1000} to ${payment.sender}...`)
+    Logger.log(
+      `[PP CLIENT] Sending refund of ${payment.token.amount - 1000} to ${payment.sender}...`
+    )
     await this.sendPayment({
       recipient: payment.sender,
       amount: payment.token.amount - 1000 // Deduct fee
@@ -452,7 +503,9 @@ export class PeerPayClient extends MessageBoxClient {
       await this.acknowledgeMessage({ messageIds: [payment.messageId] })
       Logger.log('[PP CLIENT] Acknowledgment after refund successful.')
     } catch (error: any) {
-      Logger.error(`[PP CLIENT] Error acknowledging message after refund: ${(error as { message: string }).message}`)
+      Logger.error(
+        `[PP CLIENT] Error acknowledging message after refund: ${(error as { message: string }).message}`
+      )
     }
   }
 
@@ -465,18 +518,20 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [overrideHost] - Optional host override to list payments from
    * @returns {Promise<IncomingPayment[]>} Resolves with an array of pending payments.
    */
-  async listIncomingPayments (overrideHost?: string): Promise<IncomingPayment[]> {
+  async listIncomingPayments(overrideHost?: string): Promise<IncomingPayment[]> {
     const messages = await this.listMessages({ messageBox: this.messageBox, host: overrideHost })
-    return messages.map((msg: any) => {
-      const parsedToken = safeParse<PaymentToken>(msg.body)
-      if (parsedToken == null) return null
+    return messages
+      .map((msg: any) => {
+        const parsedToken = safeParse<PaymentToken>(msg.body)
+        if (parsedToken == null) return null
 
-      return {
-        messageId: msg.messageId,
-        sender: msg.sender,
-        token: parsedToken
-      }
-    }).filter((p): p is IncomingPayment => p != null)
+        return {
+          messageId: msg.messageId,
+          sender: msg.sender,
+          token: parsedToken
+        }
+      })
+      .filter((p): p is IncomingPayment => p != null)
   }
 
   /**
@@ -487,9 +542,13 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [hostOverride] - Optional host override for the message box server.
    * @returns {Promise<PaymentRequestResponse[]>} Resolves with an array of payment request responses.
    */
-  async listPaymentRequestResponses (hostOverride?: string): Promise<PaymentRequestResponse[]> {
-    const messages = await this.listMessages({ messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX, host: hostOverride })
-    return messages.map((msg: any) => safeParse<PaymentRequestResponse>(msg.body))
+  async listPaymentRequestResponses(hostOverride?: string): Promise<PaymentRequestResponse[]> {
+    const messages = await this.listMessages({
+      messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
+      host: hostOverride
+    })
+    return messages
+      .map((msg: any) => safeParse<PaymentRequestResponse>(msg.body))
       .filter((r): r is PaymentRequestResponse => r != null)
   }
 
@@ -504,7 +563,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [params.overrideHost] - Optional host override for the WebSocket connection.
    * @returns {Promise<void>} Resolves when the listener is established.
    */
-  async listenForLivePaymentRequests ({
+  async listenForLivePaymentRequests({
     onRequest,
     overrideHost
   }: {
@@ -541,7 +600,7 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [params.overrideHost] - Optional host override for the WebSocket connection.
    * @returns {Promise<void>} Resolves when the listener is established.
    */
-  async listenForLivePaymentRequestResponses ({
+  async listenForLivePaymentRequestResponses({
     onResponse,
     overrideHost
   }: {
@@ -570,8 +629,8 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [hostOverride] - Optional host override for the message box server.
    * @returns {Promise<void>} Resolves when payment is sent and acknowledgment is complete.
    */
-  async fulfillPaymentRequest (
-    params: { request: IncomingPaymentRequest, note?: string },
+  async fulfillPaymentRequest(
+    params: { request: IncomingPaymentRequest; note?: string },
     hostOverride?: string
   ): Promise<void> {
     const { request, note } = params
@@ -585,11 +644,14 @@ export class PeerPayClient extends MessageBoxClient {
       ...(note != null && { note })
     }
 
-    await this.sendMessage({
-      recipient: request.sender,
-      messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
-      body: JSON.stringify(response)
-    }, hostOverride)
+    await this.sendMessage(
+      {
+        recipient: request.sender,
+        messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
+        body: JSON.stringify(response)
+      },
+      hostOverride
+    )
 
     await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride })
   }
@@ -604,8 +666,8 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [hostOverride] - Optional host override for the message box server.
    * @returns {Promise<void>} Resolves when the response is sent and request is acknowledged.
    */
-  async declinePaymentRequest (
-    params: { request: IncomingPaymentRequest, note?: string },
+  async declinePaymentRequest(
+    params: { request: IncomingPaymentRequest; note?: string },
     hostOverride?: string
   ): Promise<void> {
     const { request, note } = params
@@ -616,11 +678,14 @@ export class PeerPayClient extends MessageBoxClient {
       ...(note != null && { note })
     }
 
-    await this.sendMessage({
-      recipient: request.sender,
-      messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
-      body: JSON.stringify(response)
-    }, hostOverride)
+    await this.sendMessage(
+      {
+        recipient: request.sender,
+        messageBox: PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
+        body: JSON.stringify(response)
+      },
+      hostOverride
+    )
 
     await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride })
   }
@@ -640,10 +705,10 @@ export class PeerPayClient extends MessageBoxClient {
    * @returns {Promise<{ requestId: string }>} The generated requestId for this request.
    * @throws {Error} If amount is <= 0.
    */
-  async requestPayment (
-    params: { recipient: string, amount: number, description: string, expiresAt: number },
+  async requestPayment(
+    params: { recipient: string; amount: number; description: string; expiresAt: number },
     hostOverride?: string
-  ): Promise<{ requestId: string, requestProof: string }> {
+  ): Promise<{ requestId: string; requestProof: string }> {
     if (params.amount <= 0) {
       throw new Error('Invalid payment request: amount must be greater than 0')
     }
@@ -652,13 +717,18 @@ export class PeerPayClient extends MessageBoxClient {
     const senderIdentityKey = await this.getIdentityKey()
 
     const proofData = Array.from(new TextEncoder().encode(requestId + params.recipient))
-    const { hmac } = await this.peerPayWalletClient.createHmac({
-      data: proofData,
-      protocolID: [2, 'payment request auth'],
-      keyID: requestId,
-      counterparty: params.recipient
-    }, this.originator)
-    const requestProof = Array.from(hmac).map(b => b.toString(16).padStart(2, '0')).join('')
+    const { hmac } = await this.peerPayWalletClient.createHmac(
+      {
+        data: proofData,
+        protocolID: [2, 'payment request auth'],
+        keyID: requestId,
+        counterparty: params.recipient
+      },
+      this.originator
+    )
+    const requestProof = Array.from(hmac)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
 
     const body: PaymentRequestMessage = {
       requestId,
@@ -670,15 +740,18 @@ export class PeerPayClient extends MessageBoxClient {
     }
 
     try {
-      await this.sendMessage({
-        recipient: params.recipient,
-        messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
-        body: JSON.stringify(body)
-      }, hostOverride)
+      await this.sendMessage(
+        {
+          recipient: params.recipient,
+          messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+          body: JSON.stringify(body)
+        },
+        hostOverride
+      )
     } catch (err: any) {
       // Translate HTTP 403 (permission denied) into a user-friendly message.
       if (typeof err?.message === 'string' && err.message.includes('403')) {
-        throw new Error('Payment request blocked — you are not on the recipient\'s whitelist.')
+        throw new Error("Payment request blocked — you are not on the recipient's whitelist.")
       }
       throw err
     }
@@ -699,17 +772,20 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {PaymentRequestLimits} [limits] - Optional min/max satoshi limits for filtering.
    * @returns {Promise<IncomingPaymentRequest[]>} Resolves with active, valid payment requests.
    */
-  async listIncomingPaymentRequests (
+  async listIncomingPaymentRequests(
     hostOverride?: string,
     limits?: PaymentRequestLimits
   ): Promise<IncomingPaymentRequest[]> {
-    const messages = await this.listMessages({ messageBox: PAYMENT_REQUESTS_MESSAGEBOX, host: hostOverride })
+    const messages = await this.listMessages({
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      host: hostOverride
+    })
     const myIdentityKey = await this.getIdentityKey()
     const now = Date.now()
 
     // Parse and validate all messages, collecting malformed ones for ack
     const malformedMessageIds: string[] = []
-    const parsed: Array<{ messageId: string, sender: string, body: PaymentRequestMessage }> = []
+    const parsed: Array<{ messageId: string; sender: string; body: PaymentRequestMessage }> = []
 
     for (const msg of messages) {
       const body = safeParse<PaymentRequestMessage>(msg.body)
@@ -727,18 +803,25 @@ export class PeerPayClient extends MessageBoxClient {
       if (item.body.cancelled === true) {
         // Verify cancellation HMAC proof
         try {
-          const proofData = Array.from(new TextEncoder().encode(item.body.requestId + myIdentityKey))
-          await this.peerPayWalletClient.verifyHmac({
-            data: proofData,
-            hmac: hexToBytes(item.body.requestProof),
-            protocolID: [2, 'payment request auth'],
-            keyID: item.body.requestId,
-            counterparty: item.sender
-          }, this.originator)
+          const proofData = Array.from(
+            new TextEncoder().encode(item.body.requestId + myIdentityKey)
+          )
+          await this.peerPayWalletClient.verifyHmac(
+            {
+              data: proofData,
+              hmac: hexToBytes(item.body.requestProof),
+              protocolID: [2, 'payment request auth'],
+              keyID: item.body.requestId,
+              counterparty: item.sender
+            },
+            this.originator
+          )
           cancelledRequests.set(item.body.requestId, item.sender)
           cancelMessageIds.push(item.messageId)
         } catch {
-          Logger.warn(`[PP CLIENT] Invalid cancellation proof for requestId=${item.body.requestId}, discarding`)
+          Logger.warn(
+            `[PP CLIENT] Invalid cancellation proof for requestId=${item.body.requestId}, discarding`
+          )
           malformedMessageIds.push(item.messageId)
         }
       }
@@ -778,13 +861,16 @@ export class PeerPayClient extends MessageBoxClient {
       // Verify HMAC proof — ensures message came from claimed sender
       try {
         const proofData = Array.from(new TextEncoder().encode(requestId + myIdentityKey))
-        await this.peerPayWalletClient.verifyHmac({
-          data: proofData,
-          hmac: hexToBytes(item.body.requestProof),
-          protocolID: [2, 'payment request auth'],
-          keyID: requestId,
-          counterparty: item.sender
-        }, this.originator)
+        await this.peerPayWalletClient.verifyHmac(
+          {
+            data: proofData,
+            hmac: hexToBytes(item.body.requestProof),
+            protocolID: [2, 'payment request auth'],
+            keyID: requestId,
+            counterparty: item.sender
+          },
+          this.originator
+        )
       } catch {
         Logger.warn(`[PP CLIENT] Invalid requestProof for requestId=${requestId}, discarding`)
         malformedMessageIds.push(item.messageId)
@@ -835,8 +921,8 @@ export class PeerPayClient extends MessageBoxClient {
    * @param {string} [hostOverride] - Optional host override for the message box server.
    * @returns {Promise<void>} Resolves when the cancellation message has been sent.
    */
-  async cancelPaymentRequest (
-    params: { recipient: string, requestId: string, requestProof: string },
+  async cancelPaymentRequest(
+    params: { recipient: string; requestId: string; requestProof: string },
     hostOverride?: string
   ): Promise<void> {
     const senderIdentityKey = await this.getIdentityKey()
@@ -848,10 +934,13 @@ export class PeerPayClient extends MessageBoxClient {
       cancelled: true
     }
 
-    await this.sendMessage({
-      recipient: params.recipient,
-      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
-      body: JSON.stringify(body)
-    }, hostOverride)
+    await this.sendMessage(
+      {
+        recipient: params.recipient,
+        messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+        body: JSON.stringify(body)
+      },
+      hostOverride
+    )
   }
 }

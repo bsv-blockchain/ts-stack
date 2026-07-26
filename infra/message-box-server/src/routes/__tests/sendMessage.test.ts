@@ -21,8 +21,8 @@ import AxiosMockAdapter from 'axios-mock-adapter'
 
 global.fetch = jest.fn()
 
-const testKnex = (knexLib as any).default?.(knexConfig.development) ??
-  (knexLib as any)(knexConfig.development)
+const testKnex =
+  (knexLib as any).default?.(knexConfig.development) ?? (knexLib as any)(knexConfig.development)
 bindMessageBoxRuntime({ knex: testKnex })
 const knex = sendMessage.knex
 let queryTracker: Tracker
@@ -53,7 +53,7 @@ const mockRes: jest.Mocked<Response> = {
 let validReq: SendMessageRequest
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 let validRes: { status: string }
-let validMessageBox: { messageBoxId: number, type: string }
+let validMessageBox: { messageBoxId: number; type: string }
 
 describe('sendMessage', () => {
   // Capture original console methods
@@ -127,11 +127,13 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_MESSAGE_REQUIRED',
-      description: 'Please provide a valid message to send!'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_MESSAGE_REQUIRED',
+        description: 'Please provide a valid message to send!'
+      })
+    )
   })
 
   it('Throws an error if message is not an object', async () => {
@@ -139,11 +141,13 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGEBOX',
-      description: 'Invalid message box.'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGEBOX',
+        description: 'Invalid message box.'
+      })
+    )
   })
 
   it('Throws an error if recipient is missing', async () => {
@@ -153,11 +157,13 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_RECIPIENT_REQUIRED',
-      description: 'Missing recipient(s). Provide "recipient" or "recipients".'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_RECIPIENT_REQUIRED',
+        description: 'Missing recipient(s). Provide "recipient" or "recipients".'
+      })
+    )
   })
 
   it('Throws an error if recipient is not a string', async () => {
@@ -167,10 +173,12 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_RECIPIENT_KEY'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_RECIPIENT_KEY'
+      })
+    )
   })
 
   it('Returns error if messageBox is missing', async () => {
@@ -180,10 +188,12 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGEBOX'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGEBOX'
+      })
+    )
   })
 
   it('Throws an error if messageBox is not a string', async () => {
@@ -193,11 +203,13 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGEBOX',
-      description: 'Invalid message box.'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGEBOX',
+        description: 'Invalid message box.'
+      })
+    )
   })
 
   it('Throws an error if the message body is not a string', async () => {
@@ -207,11 +219,13 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGE_BODY',
-      description: 'Invalid message body.'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGE_BODY',
+        description: 'Invalid message body.'
+      })
+    )
   })
 
   it('Returns error if message body is missing', async () => {
@@ -221,11 +235,13 @@ describe('sendMessage', () => {
 
     await sendMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGE_BODY',
-      description: 'Invalid message body.'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGE_BODY',
+        description: 'Invalid message body.'
+      })
+    )
   })
 
   it('rejects recipient fan-out above the service limit', async () => {
@@ -235,9 +251,11 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'ERR_TOO_MANY_RECIPIENTS'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_TOO_MANY_RECIPIENTS'
+      })
+    )
   })
 
   it('rejects message-box names above the byte limit', async () => {
@@ -246,9 +264,11 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'ERR_MESSAGEBOX_TOO_LARGE'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_MESSAGEBOX_TOO_LARGE'
+      })
+    )
   })
 
   it('rejects message IDs above the byte limit', async () => {
@@ -257,9 +277,11 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'ERR_INVALID_MESSAGEID'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_INVALID_MESSAGEID'
+      })
+    )
   })
 
   it('rejects message bodies above the byte limit before database work', async () => {
@@ -268,9 +290,11 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(413)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      code: 'ERR_MESSAGE_BODY_TOO_LARGE'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_MESSAGE_BODY_TOO_LARGE'
+      })
+    )
   })
 
   it('Returns base price for an empty message', () => {
@@ -326,11 +350,13 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_MESSAGEID_REQUIRED',
-      description: 'Missing messageId.'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_MESSAGEID_REQUIRED',
+        description: 'Missing messageId.'
+      })
+    )
   })
 
   it('Creates a messageBox when it does not exist', async () => {
@@ -349,9 +375,11 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success'
+      })
+    )
   })
 
   it('Silently ignores duplicate messages via onConflict().ignore()', async () => {
@@ -370,9 +398,11 @@ describe('sendMessage', () => {
     await sendMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success'
+      })
+    )
   })
 
   it('Returns internal error if unexpected error occurs', async () => {
@@ -390,27 +420,34 @@ describe('sendMessage', () => {
 
     // Ensure the response body is set
     expect(mockRes.json).toHaveBeenCalledTimes(1)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INTERNAL'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INTERNAL'
+      })
+    )
   })
-
 
   it('creates a new messageBox when one does not exist for recipient', async () => {
     queryTracker.on('query', (q, step) => {
-      if (step === 1) q.response(undefined) // messageBox not found
-      else if (step === 2) q.response(1) // messageBox insert
-      else if (step === 3) q.response({ messageBoxId: 42 }) // get messageBoxId for message insert
-      else if (step === 4) q.response(1) // insert message
+      if (step === 1)
+        q.response(undefined) // messageBox not found
+      else if (step === 2)
+        q.response(1) // messageBox insert
+      else if (step === 3)
+        q.response({ messageBoxId: 42 }) // get messageBoxId for message insert
+      else if (step === 4)
+        q.response(1) // insert message
       else q.response([])
     })
 
     await sendMessage.func(validReq, mockRes)
 
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success'
+      })
+    )
   })
 })

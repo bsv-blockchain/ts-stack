@@ -4,13 +4,14 @@ import { WalletClient } from '@bsv/sdk'
 import { webcrypto } from 'crypto'
 import { expect, test, describe, beforeAll } from '@jest/globals'
 
-(global as any).self = { crypto: webcrypto }
+;(global as any).self = { crypto: webcrypto }
 
 jest.setTimeout(20000)
 
-const walletClient = new WalletClient('json-api', 'https://message-box-us-1.bsvb.tech')
+const integrationHost = process.env.MESSAGE_BOX_INTEGRATION_HOST!
+const walletClient = new WalletClient('json-api', process.env.MESSAGE_BOX_WALLET_ORIGINATOR!)
 const messageBoxClient = new MessageBoxClient({
-  host: 'https://message-box-us-1.bsvb.tech',
+  host: integrationHost,
   walletClient,
   enableLogging: true,
   networkPreset: 'local'
@@ -83,14 +84,11 @@ describe('Encryption Integration Tests', () => {
     expect(sendResult.status).toBe('success')
 
     // Manually fetch raw HTTP response
-    const fetch = await messageBoxClient.authFetch.fetch(
-      'https://message-box-us-1.bsvb.tech/listMessages',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageBox })
-      }
-    )
+    const fetch = await messageBoxClient.authFetch.fetch(`${integrationHost}/listMessages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageBox })
+    })
 
     const raw = await fetch.json()
     const rawBody = raw.messages.at(-1)?.body

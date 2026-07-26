@@ -30,10 +30,6 @@ RUN cp out/knexfile.js ./knexfile.js
 # ---- Production stage ----
 FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
-# Install nginx from the repository associated with the pinned Alpine base.
-RUN apk add --no-cache nginx && \
-    chown -R nginx:www-data /var/lib/nginx
-
 WORKDIR /app
 
 # Copy package files and install production deps only.
@@ -50,10 +46,8 @@ RUN apk add --no-cache --virtual .build-deps g++ make python3 \
 COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
 COPY --from=builder --chown=root:root --chmod=0444 /app/knexfile.js ./knexfile.js
 
-# Copy nginx config
-COPY ./nginx.conf /etc/nginx/nginx.conf
-
-# Expose the API port
+# The Node process serves HTTP and WebSocket traffic directly. Operators can
+# place a platform/load-balancer proxy in front of the container.
 EXPOSE 8080
 
 USER node

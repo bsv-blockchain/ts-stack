@@ -8,7 +8,12 @@
  * without hitting a real server.
  */
 
-import { PeerPayClient, PAYMENT_REQUESTS_MESSAGEBOX, PAYMENT_REQUEST_RESPONSES_MESSAGEBOX, STANDARD_PAYMENT_MESSAGEBOX } from '../PeerPayClient.js'
+import {
+  PeerPayClient,
+  PAYMENT_REQUESTS_MESSAGEBOX,
+  PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
+  STANDARD_PAYMENT_MESSAGEBOX
+} from '../PeerPayClient.js'
 import { PeerMessage } from '../types.js'
 import { PrivateKey, WalletInterface } from '@bsv/sdk'
 import { jest } from '@jest/globals'
@@ -43,7 +48,7 @@ const createMockWalletClient = (): MockWallet => ({
   encrypt: jest.fn(),
   decrypt: jest.fn(),
   revealCounterpartyKeyLinkage: jest.fn(),
-  revealSpecificKeyLinkage: jest.fn(),
+  revealSpecificKeyLinkage: jest.fn()
 })
 
 // ---------------------------------------------------------------------------
@@ -58,11 +63,14 @@ class MockMessageBus {
   // key: `${recipient}::${messageBox}`
   private readonly store = new Map<string, PeerMessage[]>()
 
-  private key (recipient: string, messageBox: string): string {
+  private key(recipient: string, messageBox: string): string {
     return `${recipient}::${messageBox}`
   }
 
-  send (params: { recipient: string, messageBox: string, body: string, sender: string }): { status: string, messageId: string } {
+  send(params: { recipient: string; messageBox: string; body: string; sender: string }): {
+    status: string
+    messageId: string
+  } {
     const { recipient, messageBox, body, sender } = params
     const k = this.key(recipient, messageBox)
     const messageId = `msg-${++this.counter}`
@@ -77,11 +85,11 @@ class MockMessageBus {
     return { status: 'success', messageId }
   }
 
-  list (recipient: string, messageBox: string): PeerMessage[] {
+  list(recipient: string, messageBox: string): PeerMessage[] {
     return this.store.get(this.key(recipient, messageBox)) ?? []
   }
 
-  ack (recipient: string, messageBox: string, messageIds: string[]): void {
+  ack(recipient: string, messageBox: string, messageIds: string[]): void {
     const k = this.key(recipient, messageBox)
     const msgs = this.store.get(k)
     if (msgs == null) return
@@ -90,7 +98,7 @@ class MockMessageBus {
   }
 
   /** Convenience: clear everything */
-  reset (): void {
+  reset(): void {
     this.store.clear()
     this.counter = 0
   }
@@ -109,7 +117,7 @@ class MockMessageBus {
  * sendPayment is mocked to be a no-op so tests that call fulfillPaymentRequest
  * don't need a real wallet.
  */
-function createWiredClient (params: {
+function createWiredClient(params: {
   bus: MockMessageBus
   identityKey: string
   walletClient: MockWallet
@@ -126,7 +134,8 @@ function createWiredClient (params: {
 
   // Wire sendMessage: route to the bus using the current client identity as sender
   jest.spyOn(client, 'sendMessage').mockImplementation(async (sendParams: any) => {
-    const body = typeof sendParams.body === 'string' ? sendParams.body : JSON.stringify(sendParams.body)
+    const body =
+      typeof sendParams.body === 'string' ? sendParams.body : JSON.stringify(sendParams.body)
     return bus.send({
       recipient: sendParams.recipient,
       messageBox: sendParams.messageBox,
@@ -145,7 +154,11 @@ function createWiredClient (params: {
   jest.spyOn(client, 'acknowledgeMessage').mockImplementation(async (ackParams: any) => {
     const { messageIds } = ackParams
     // Attempt to ack from all known messageBoxes
-    for (const mb of [PAYMENT_REQUESTS_MESSAGEBOX, PAYMENT_REQUEST_RESPONSES_MESSAGEBOX, STANDARD_PAYMENT_MESSAGEBOX]) {
+    for (const mb of [
+      PAYMENT_REQUESTS_MESSAGEBOX,
+      PAYMENT_REQUEST_RESPONSES_MESSAGEBOX,
+      STANDARD_PAYMENT_MESSAGEBOX
+    ]) {
       bus.ack(identityKey, mb, messageIds)
     }
     return 'acknowledged'
@@ -182,7 +195,11 @@ describe('PeerPayClient — Integration: payment request flow', () => {
   // Test 1: Full round-trip — request → fulfill → requester sees paid response
   // -------------------------------------------------------------------------
   it('Test 1: full round-trip: request → fulfill → requester sees paid response', async () => {
-    const requester = createWiredClient({ bus, identityKey: REQUESTER_KEY, walletClient: mockWalletRequester })
+    const requester = createWiredClient({
+      bus,
+      identityKey: REQUESTER_KEY,
+      walletClient: mockWalletRequester
+    })
     const payer = createWiredClient({ bus, identityKey: PAYER_KEY, walletClient: mockWalletPayer })
 
     // Requester sends a payment request to payer
@@ -214,7 +231,11 @@ describe('PeerPayClient — Integration: payment request flow', () => {
   // Test 2: Full round-trip — request → decline → requester sees declined
   // -------------------------------------------------------------------------
   it('Test 2: full round-trip: request → decline → requester sees declined response', async () => {
-    const requester = createWiredClient({ bus, identityKey: REQUESTER_KEY, walletClient: mockWalletRequester })
+    const requester = createWiredClient({
+      bus,
+      identityKey: REQUESTER_KEY,
+      walletClient: mockWalletRequester
+    })
     const payer = createWiredClient({ bus, identityKey: PAYER_KEY, walletClient: mockWalletPayer })
 
     const { requestId } = await requester.requestPayment({
@@ -238,7 +259,11 @@ describe('PeerPayClient — Integration: payment request flow', () => {
   // Test 3: Request → cancel → payer no longer sees the request
   // -------------------------------------------------------------------------
   it('Test 3: request → cancel → payer no longer sees the request', async () => {
-    const requester = createWiredClient({ bus, identityKey: REQUESTER_KEY, walletClient: mockWalletRequester })
+    const requester = createWiredClient({
+      bus,
+      identityKey: REQUESTER_KEY,
+      walletClient: mockWalletRequester
+    })
     const payer = createWiredClient({ bus, identityKey: PAYER_KEY, walletClient: mockWalletPayer })
 
     const { requestId, requestProof } = await requester.requestPayment({
@@ -275,7 +300,12 @@ describe('PeerPayClient — Integration: payment request flow', () => {
       senderIdentityKey: REQUESTER_KEY,
       requestProof: 'mock-proof'
     })
-    bus.send({ recipient: PAYER_KEY, messageBox: PAYMENT_REQUESTS_MESSAGEBOX, body: expiredBody, sender: REQUESTER_KEY })
+    bus.send({
+      recipient: PAYER_KEY,
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      body: expiredBody,
+      sender: REQUESTER_KEY
+    })
 
     // Also inject a valid request so the filter has something to keep
     const validBody = JSON.stringify({
@@ -286,7 +316,12 @@ describe('PeerPayClient — Integration: payment request flow', () => {
       senderIdentityKey: REQUESTER_KEY,
       requestProof: 'mock-proof'
     })
-    bus.send({ recipient: PAYER_KEY, messageBox: PAYMENT_REQUESTS_MESSAGEBOX, body: validBody, sender: REQUESTER_KEY })
+    bus.send({
+      recipient: PAYER_KEY,
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      body: validBody,
+      sender: REQUESTER_KEY
+    })
 
     const requests = await payer.listIncomingPaymentRequests()
     expect(requests).toHaveLength(1)
@@ -308,7 +343,12 @@ describe('PeerPayClient — Integration: payment request flow', () => {
       senderIdentityKey: REQUESTER_KEY,
       requestProof: 'mock-proof'
     })
-    bus.send({ recipient: PAYER_KEY, messageBox: PAYMENT_REQUESTS_MESSAGEBOX, body: smallBody, sender: REQUESTER_KEY })
+    bus.send({
+      recipient: PAYER_KEY,
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      body: smallBody,
+      sender: REQUESTER_KEY
+    })
 
     // Inject a valid request that passes the filter
     const okBody = JSON.stringify({
@@ -319,9 +359,17 @@ describe('PeerPayClient — Integration: payment request flow', () => {
       senderIdentityKey: REQUESTER_KEY,
       requestProof: 'mock-proof'
     })
-    bus.send({ recipient: PAYER_KEY, messageBox: PAYMENT_REQUESTS_MESSAGEBOX, body: okBody, sender: REQUESTER_KEY })
+    bus.send({
+      recipient: PAYER_KEY,
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      body: okBody,
+      sender: REQUESTER_KEY
+    })
 
-    const requests = await payer.listIncomingPaymentRequests(undefined, { minAmount: 1000, maxAmount: 10000 })
+    const requests = await payer.listIncomingPaymentRequests(undefined, {
+      minAmount: 1000,
+      maxAmount: 10000
+    })
     expect(requests).toHaveLength(1)
     expect(requests[0].requestId).toBe('req-ok')
 
@@ -349,7 +397,12 @@ describe('PeerPayClient — Integration: payment request flow', () => {
       senderIdentityKey: REQUESTER_KEY,
       requestProof: 'mock-proof'
     })
-    bus.send({ recipient: PAYER_KEY, messageBox: PAYMENT_REQUESTS_MESSAGEBOX, body: largeBody, sender: REQUESTER_KEY })
+    bus.send({
+      recipient: PAYER_KEY,
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      body: largeBody,
+      sender: REQUESTER_KEY
+    })
 
     // Inject a valid request that passes the filter
     const okBody = JSON.stringify({
@@ -360,9 +413,17 @@ describe('PeerPayClient — Integration: payment request flow', () => {
       senderIdentityKey: REQUESTER_KEY,
       requestProof: 'mock-proof'
     })
-    bus.send({ recipient: PAYER_KEY, messageBox: PAYMENT_REQUESTS_MESSAGEBOX, body: okBody, sender: REQUESTER_KEY })
+    bus.send({
+      recipient: PAYER_KEY,
+      messageBox: PAYMENT_REQUESTS_MESSAGEBOX,
+      body: okBody,
+      sender: REQUESTER_KEY
+    })
 
-    const requests = await payer.listIncomingPaymentRequests(undefined, { minAmount: 1000, maxAmount: 10000 })
+    const requests = await payer.listIncomingPaymentRequests(undefined, {
+      minAmount: 1000,
+      maxAmount: 10000
+    })
     expect(requests).toHaveLength(1)
     expect(requests[0].requestId).toBe('req-ok-2')
 

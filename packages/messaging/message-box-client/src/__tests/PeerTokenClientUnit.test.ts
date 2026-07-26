@@ -4,13 +4,16 @@ import { TokenSettlementAdapter } from '../TokenSettlementAdapter.js'
 import { PrivateKey, type WalletInterface } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
-const createMockWalletClient = (): jest.Mocked<WalletInterface> => ({
-  getPublicKey: jest.fn(),
-  createAction: jest.fn(),
-  internalizeAction: jest.fn(),
-  createHmac: jest.fn<() => Promise<{ hmac: number[] }>>().mockResolvedValue({ hmac: [1, 2, 3] }),
-  verifyHmac: jest.fn<() => Promise<{ valid: true }>>().mockResolvedValue({ valid: true as const })
-} as unknown as jest.Mocked<WalletInterface>)
+const createMockWalletClient = (): jest.Mocked<WalletInterface> =>
+  ({
+    getPublicKey: jest.fn(),
+    createAction: jest.fn(),
+    internalizeAction: jest.fn(),
+    createHmac: jest.fn<() => Promise<{ hmac: number[] }>>().mockResolvedValue({ hmac: [1, 2, 3] }),
+    verifyHmac: jest
+      .fn<() => Promise<{ valid: true }>>()
+      .mockResolvedValue({ valid: true as const })
+  }) as unknown as jest.Mocked<WalletInterface>
 
 const ARTIFACT = {
   customInstructions: { derivationPrefix: 'cHJl', derivationSuffix: 'c3Vm' },
@@ -23,9 +26,11 @@ const ARTIFACT = {
 
 const makeStubAdapter = (): TokenSettlementAdapter => ({
   protocol: 'stas',
-  buildTokenSettlement: jest.fn<TokenSettlementAdapter['buildTokenSettlement']>()
+  buildTokenSettlement: jest
+    .fn<TokenSettlementAdapter['buildTokenSettlement']>()
     .mockResolvedValue({ action: 'settle', artifact: ARTIFACT }),
-  acceptTokenSettlement: jest.fn<TokenSettlementAdapter['acceptTokenSettlement']>()
+  acceptTokenSettlement: jest
+    .fn<TokenSettlementAdapter['acceptTokenSettlement']>()
     .mockResolvedValue({ action: 'accept', receiptData: { internalizeResult: 'ok' } })
 })
 
@@ -53,8 +58,18 @@ describe('PeerTokenClient Unit Tests', () => {
 
   describe('createTokenToken', () => {
     it('delegates to the adapter and returns the artifact fields', async () => {
-      const token = await client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
-      expect(token).toMatchObject({ protocol: 'stas', assetId: 'TEST', amount: '1000', outputIndex: 0 })
+      const token = await client.createTokenToken({
+        recipient,
+        protocol: 'stas',
+        source: SOURCE,
+        amount: '1000'
+      })
+      expect(token).toMatchObject({
+        protocol: 'stas',
+        assetId: 'TEST',
+        amount: '1000',
+        outputIndex: 0
+      })
       expect(token.transaction).toEqual([1, 2, 3])
       expect(adapter.buildTokenSettlement).toHaveBeenCalledTimes(1)
     })
@@ -67,7 +82,8 @@ describe('PeerTokenClient Unit Tests', () => {
 
     it('throws when the adapter terminates', async () => {
       ;(adapter.buildTokenSettlement as jest.Mock).mockResolvedValue({
-        action: 'terminate', termination: { code: 'stas.frozen', message: 'frozen UTXO' }
+        action: 'terminate',
+        termination: { code: 'stas.frozen', message: 'frozen UTXO' }
       } as never)
       await expect(
         client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
@@ -76,15 +92,26 @@ describe('PeerTokenClient Unit Tests', () => {
 
     it('surfaces the broadcast txid from the artifact', async () => {
       ;(adapter.buildTokenSettlement as jest.Mock).mockResolvedValue({
-        action: 'settle', artifact: { ...ARTIFACT, txid: 'cd'.repeat(32) }
+        action: 'settle',
+        artifact: { ...ARTIFACT, txid: 'cd'.repeat(32) }
       } as never)
-      const token = await client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
+      const token = await client.createTokenToken({
+        recipient,
+        protocol: 'stas',
+        source: SOURCE,
+        amount: '1000'
+      })
       expect(token.txid).toBe('cd'.repeat(32))
     })
 
     it('passes dryRun through to the adapter context', async () => {
-      await client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' }, true)
-      const ctx = (adapter.buildTokenSettlement as jest.Mock).mock.calls[0][1] as { dryRun?: boolean }
+      await client.createTokenToken(
+        { recipient, protocol: 'stas', source: SOURCE, amount: '1000' },
+        true
+      )
+      const ctx = (adapter.buildTokenSettlement as jest.Mock).mock.calls[0][1] as {
+        dryRun?: boolean
+      }
       expect(ctx.dryRun).toBe(true)
     })
   })
@@ -97,12 +124,21 @@ describe('PeerTokenClient Unit Tests', () => {
       const arg = (sendSpy.mock.calls[0] as any)[0]
       expect(arg.messageBox).toBe(STANDARD_TOKEN_MESSAGEBOX)
       expect(arg.recipient).toBe(recipient)
-      expect(JSON.parse(arg.body)).toMatchObject({ protocol: 'stas', assetId: 'TEST', amount: '1000' })
+      expect(JSON.parse(arg.body)).toMatchObject({
+        protocol: 'stas',
+        assetId: 'TEST',
+        amount: '1000'
+      })
     })
 
     it('returns the sent token', async () => {
       jest.spyOn(client, 'sendMessage' as any).mockResolvedValue(undefined as never)
-      const token = await client.sendToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
+      const token = await client.sendToken({
+        recipient,
+        protocol: 'stas',
+        source: SOURCE,
+        amount: '1000'
+      })
       expect(token).toMatchObject({ protocol: 'stas', assetId: 'TEST', amount: '1000' })
     })
 
@@ -115,7 +151,9 @@ describe('PeerTokenClient Unit Tests', () => {
 
   describe('acceptToken', () => {
     it('delegates to the adapter and acknowledges the message', async () => {
-      const ackSpy = jest.spyOn(client, 'acknowledgeMessage' as any).mockResolvedValue(undefined as never)
+      const ackSpy = jest
+        .spyOn(client, 'acknowledgeMessage' as any)
+        .mockResolvedValue(undefined as never)
       const incoming = {
         messageId: 'msg-1',
         sender: PrivateKey.fromRandom().toPublicKey().toString(),
@@ -132,10 +170,32 @@ describe('PeerTokenClient Unit Tests', () => {
     it('reads via listMessagesLite (mainnet bypass) with the configured host', async () => {
       const liteSpy = jest.spyOn(client, 'listMessagesLite' as any).mockResolvedValue([] as never)
       await client.listIncomingTokens()
-      expect(liteSpy).toHaveBeenCalledWith(expect.objectContaining({
-        messageBox: STANDARD_TOKEN_MESSAGEBOX,
-        host: 'https://message-box-us-1.bsvb.tech'
-      }))
+      expect(liteSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageBox: STANDARD_TOKEN_MESSAGEBOX,
+          host: 'https://message-box-us-1.bsvb.tech'
+        })
+      )
     })
+  })
+
+  describe('request proof validation', () => {
+    it.each(['', '0', 'zz', '123x'])(
+      'rejects malformed hexadecimal proofs without calling the wallet (%s)',
+      async requestProof => {
+        const wallet = createMockWalletClient()
+        wallet.getPublicKey.mockResolvedValue({ publicKey: recipient })
+        const proofClient = new PeerTokenClient({ walletClient: wallet, adapters: [adapter] })
+
+        await expect(
+          proofClient.verifyTokenRequestProof({
+            requestId: 'request-1',
+            sender: recipient,
+            requestProof
+          })
+        ).resolves.toBe(false)
+        expect(wallet.verifyHmac).not.toHaveBeenCalled()
+      }
+    )
   })
 })

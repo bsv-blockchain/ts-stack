@@ -4,6 +4,9 @@ import { Logger } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { setMessagePermission } from '../../utils/messagePermissions.js'
 
+export const MAX_PERMISSION_MESSAGE_BOX_BYTES = 128
+export const MAX_RECIPIENT_FEE = 2_147_483_647
+
 export interface SetPermissionRequestType extends AuthRequest {
   body: {
     sender?: string // Optional - if not provided, sets box-wide default
@@ -75,7 +78,8 @@ export default {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_REQUEST',
-          description: 'messageBox (string) and recipientFee (number) are required. sender (string) is optional for box-wide settings.'
+          description:
+            'messageBox (string) and recipientFee (number) are required. sender (string) is optional for box-wide settings.'
         })
       }
 
@@ -94,27 +98,40 @@ export default {
       }
 
       // Validate recipientFee value
-      if (!Number.isInteger(recipientFee)) {
+      if (
+        !Number.isSafeInteger(recipientFee) ||
+        recipientFee < -1 ||
+        recipientFee > MAX_RECIPIENT_FEE
+      ) {
         Logger.log('[DEBUG] Invalid recipientFee value - must be integer')
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_FEE_VALUE',
-          description: 'recipientFee must be an integer (-1, 0, or positive number).'
+          description: `recipientFee must be -1, 0, or a positive integer no greater than ${MAX_RECIPIENT_FEE}.`
         })
       }
 
       // Validate messageBox value
-      if (typeof messageBox !== 'string' || messageBox.trim() === '') {
+      if (
+        typeof messageBox !== 'string' ||
+        messageBox.trim() === '' ||
+        Buffer.byteLength(messageBox.trim(), 'utf8') > MAX_PERMISSION_MESSAGE_BOX_BYTES
+      ) {
         Logger.log('[DEBUG] Invalid messageBox value')
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_BOX',
-          description: 'messageBox must be a non-empty string.'
+          description: `messageBox must be a non-empty string of at most ${MAX_PERMISSION_MESSAGE_BOX_BYTES} bytes.`
         })
       }
 
       // Set the message permission (convert undefined sender to null for box-wide)
-      const success = await setMessagePermission(recipient, sender ?? null, messageBox, recipientFee)
+      const success = await setMessagePermission(
+        recipient,
+        sender ?? null,
+        messageBox.trim(),
+        recipientFee
+      )
 
       if (success == null) {
         return res.status(500).json({
@@ -125,7 +142,9 @@ export default {
       }
 
       const isBoxWide = sender == null
-      Logger.log(`[DEBUG] Successfully updated message permission: ${sender ?? 'BOX-WIDE'} -> ${recipient} (${messageBox}), fee: ${recipientFee}`)
+      Logger.log(
+        `[DEBUG] Successfully updated message permission: ${sender ?? 'BOX-WIDE'} -> ${recipient} (${messageBox}), fee: ${recipientFee}`
+      )
 
       let description: string
       const senderText = isBoxWide ? 'all senders' : sender

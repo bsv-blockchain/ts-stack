@@ -1,0 +1,52 @@
+import {
+  messageBoxEndpoint,
+  normalizeMessageBoxHost,
+  normalizeOverlayMessageBoxHost
+} from '../host.js'
+
+describe('Message Box host validation', () => {
+  it.each([
+    ['https://message.example.org/', 'https://message.example.org'],
+    ['http://localhost:8080/api/', 'http://localhost:8080/api'],
+    [' https://message.example.org/prefix/// ', 'https://message.example.org/prefix']
+  ])('normalizes explicitly configured host %s', (input, expected) => {
+    expect(normalizeMessageBoxHost(input)).toBe(expected)
+  })
+
+  it.each([
+    'message.example.org',
+    'file:///tmp/socket',
+    'https://user:secret@message.example.org',
+    'https://message.example.org?redirect=https://attacker.example',
+    'https://message.example.org/#fragment',
+    ''
+  ])('rejects unsafe or ambiguous configured host %s', input => {
+    expect(() => normalizeMessageBoxHost(input)).toThrow()
+  })
+
+  it('preserves an operator-controlled route prefix when building endpoints', () => {
+    expect(messageBoxEndpoint('https://message.example.org/api/', '/sendMessage')).toBe(
+      'https://message.example.org/api/sendMessage'
+    )
+  })
+
+  it.each([
+    'http://message.example.org',
+    'https://localhost:8080',
+    'https://127.0.0.1',
+    'https://10.0.0.4',
+    'https://172.16.0.1',
+    'https://192.168.1.1',
+    'https://[::1]',
+    'https://service.internal',
+    'https://message.example.com'
+  ])('rejects unsafe overlay destination %s', input => {
+    expect(normalizeOverlayMessageBoxHost(input)).toBeUndefined()
+  })
+
+  it('accepts and canonicalizes a public HTTPS overlay destination', () => {
+    expect(normalizeOverlayMessageBoxHost('https://message.example.org/api/')).toBe(
+      'https://message.example.org/api'
+    )
+  })
+})

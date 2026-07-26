@@ -3,14 +3,15 @@ import { MessageBoxClient } from '../../MessageBoxClient.js'
 import { WalletClient } from '@bsv/sdk'
 import { webcrypto } from 'crypto'
 
-(global as any).self = { crypto: webcrypto }
+;(global as any).self = { crypto: webcrypto }
 
 jest.setTimeout(20000)
 
-const MESSAGEBOX_HOST = 'http://localhost:5001'
+const MESSAGEBOX_HOST = process.env.MESSAGE_BOX_INTEGRATION_HOST!
+const walletOriginator = process.env.MESSAGE_BOX_WALLET_ORIGINATOR!
 
-const walletA = new WalletClient('json-api', 'localhost')
-const walletB = new WalletClient('json-api', 'localhost')
+const walletA = new WalletClient('json-api', walletOriginator)
+const walletB = new WalletClient('json-api', walletOriginator)
 
 const clientA = new MessageBoxClient({
   host: MESSAGEBOX_HOST,

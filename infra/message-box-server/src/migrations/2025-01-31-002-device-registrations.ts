@@ -2,7 +2,7 @@ import { Knex } from 'knex'
 
 export async function up(knex: Knex): Promise<void> {
   // Create device registrations table for FCM push notifications
-  await knex.schema.createTable('device_registrations', (table) => {
+  await knex.schema.createTable('device_registrations', table => {
     table.increments('id').primary()
     table.timestamp('created_at').defaultTo(knex.fn.now())
     table.timestamp('updated_at').defaultTo(knex.fn.now())

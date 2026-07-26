@@ -6,10 +6,7 @@ import {
   rateLimitOptions
 } from '../security/rateLimitPolicy.js'
 
-async function withServer (
-  app: Express,
-  run: (url: string) => Promise<void>
-): Promise<void> {
+async function withServer(app: Express, run: (url: string) => Promise<void>): Promise<void> {
   const server = app.listen(0, '127.0.0.1')
   await new Promise<void>((resolve, reject) => {
     server.once('listening', resolve)
@@ -17,11 +14,12 @@ async function withServer (
   })
   try {
     const address = server.address()
-    if (address == null || typeof address === 'string') throw new Error('missing test server address')
+    if (address == null || typeof address === 'string')
+      throw new Error('missing test server address')
     await run(`http://127.0.0.1:${address.port}`)
   } finally {
     await new Promise<void>((resolve, reject) => {
-      server.close(error => error == null ? resolve() : reject(error))
+      server.close(error => (error == null ? resolve() : reject(error)))
     })
   }
 }
@@ -39,16 +37,24 @@ describe('rate-limit security policy', () => {
       }
       next()
     })
-    app.use(rateLimit(rateLimitOptions(
-      'TEST_RATE_LIMIT',
-      { windowMs: 60_000, limit: 1 },
-      { keyGenerator: authenticatedIdentityKey }
-    )))
+    app.use(
+      rateLimit(
+        rateLimitOptions(
+          'TEST_RATE_LIMIT',
+          { windowMs: 60_000, limit: 1 },
+          { keyGenerator: authenticatedIdentityKey }
+        )
+      )
+    )
     app.get('/protected', (_req, res) => res.sendStatus(204))
 
     await withServer(app, async url => {
-      expect((await fetch(`${url}/protected`, { headers: { 'x-test-identity': 'alice' } })).status).toBe(204)
-      expect((await fetch(`${url}/protected`, { headers: { 'x-test-identity': 'bob' } })).status).toBe(204)
+      expect(
+        (await fetch(`${url}/protected`, { headers: { 'x-test-identity': 'alice' } })).status
+      ).toBe(204)
+      expect(
+        (await fetch(`${url}/protected`, { headers: { 'x-test-identity': 'bob' } })).status
+      ).toBe(204)
       const rejected = await fetch(`${url}/protected`, { headers: { 'x-test-identity': 'alice' } })
       expect(rejected.status).toBe(429)
       expect(rejected.headers.has('ratelimit')).toBe(true)
@@ -68,9 +74,11 @@ describe('rate-limit security policy', () => {
     expect(() => configureTrustProxy(app, '11')).toThrow(/TRUST_PROXY_HOPS/)
 
     process.env.TEST_RATE_LIMIT_MAX = '0'
-    expect(() => rateLimitOptions('TEST_RATE_LIMIT', {
-      windowMs: 60_000,
-      limit: 1
-    })).toThrow(/positive integer/)
+    expect(() =>
+      rateLimitOptions('TEST_RATE_LIMIT', {
+        windowMs: 60_000,
+        limit: 1
+      })
+    ).toThrow(/positive integer/)
   })
 })

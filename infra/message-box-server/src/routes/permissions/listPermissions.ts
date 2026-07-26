@@ -3,6 +3,10 @@ import { AuthRequest } from '@bsv/auth-express-middleware'
 import { Logger } from '../../utils/logger.js'
 import { runtimeDeps } from '../../runtimeDeps.js'
 
+export const MAX_PERMISSION_PAGE_SIZE = 100
+export const MAX_PERMISSION_OFFSET = 100_000
+const MAX_MESSAGE_BOX_BYTES = 128
+
 export interface ListPermissionsRequest extends AuthRequest {
   query: {
     messageBox?: string // Optional messageBox filter
@@ -33,7 +37,7 @@ export interface ListPermissionsRequest extends AuthRequest {
  *         schema:
  *           type: integer
  *           minimum: 1
- *           maximum: 1000
+ *           maximum: 100
  *           default: 100
  *         description: Maximum number of permissions to return
  *       - in: query
@@ -120,51 +124,69 @@ export default {
       // Parse and validate query parameters
       const { messageBox, limit: limitStr, offset: offsetStr, createdAtOrder } = req.query
 
-      const limit = limitStr != null ? Number.parseInt(limitStr, 10) : 100
-      const offset = offsetStr != null ? Number.parseInt(offsetStr, 10) : 0
-      const sortOrder = createdAtOrder === 'asc' ? 'asc' : 'desc' // Default to 'desc'
+      const limit = limitStr != null ? Number(limitStr) : MAX_PERMISSION_PAGE_SIZE
+      const offset = offsetStr != null ? Number(offsetStr) : 0
+      const sortOrder = createdAtOrder ?? 'desc'
 
       // Validate pagination parameters
-      if (Number.isNaN(limit) || limit < 1 || limit > 1000) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PERMISSION_PAGE_SIZE) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_LIMIT',
-          description: 'Limit must be a number between 1 and 1000'
+          description: `limit must be an integer between 1 and ${MAX_PERMISSION_PAGE_SIZE}.`
         })
       }
 
-      if (Number.isNaN(offset) || offset < 0) {
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_PERMISSION_OFFSET) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_OFFSET',
-          description: 'Offset must be a non-negative number'
+          description: `offset must be an integer between 0 and ${MAX_PERMISSION_OFFSET}.`
+        })
+      }
+
+      if (sortOrder !== 'asc' && sortOrder !== 'desc') {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_SORT_ORDER',
+          description: 'createdAtOrder must be asc or desc.'
+        })
+      }
+
+      if (
+        messageBox != null &&
+        (typeof messageBox !== 'string' ||
+          messageBox.trim() === '' ||
+          Buffer.byteLength(messageBox.trim(), 'utf8') > MAX_MESSAGE_BOX_BYTES)
+      ) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_MESSAGE_BOX',
+          description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
         })
       }
 
       // Validate identity key format
       const recipientKey = req.auth.identityKey
 
-      Logger.log(`[DEBUG] Listing permissions for recipient: ${recipientKey}, messageBox: ${messageBox ?? 'all'}, limit: ${limit}, offset: ${offset}, createdAtOrder: ${sortOrder}`)
+      Logger.log(
+        `[DEBUG] Listing permissions for recipient: ${recipientKey}, messageBox: ${messageBox ?? 'all'}, limit: ${limit}, offset: ${offset}, createdAtOrder: ${sortOrder}`
+      )
 
       // Build base query
-      let query = runtimeDeps.knex('message_permissions')
-        .select([
-          'sender',
-          'message_box',
-          'recipient_fee',
-          'created_at',
-          'updated_at'
-        ])
+      let query = runtimeDeps
+        .knex('message_permissions')
+        .select(['sender', 'message_box', 'recipient_fee', 'created_at', 'updated_at'])
         .where('recipient', recipientKey)
         .orderBy([
           { column: 'message_box', order: 'asc' },
-          { column: 'sender', order: 'asc', nulls: 'first' }, // Box-wide (null) first
+          { column: 'sender_scope', order: 'asc' }, // Box-wide (empty scope) first
           { column: 'created_at', order: sortOrder }
         ])
 
       // Apply messageBox filter if provided
       if (messageBox != null) {
-        query = query.where('message_box', messageBox)
+        query = query.where('message_box', messageBox.trim())
       }
 
       // Get total count for pagination info (before applying limit/offset)
@@ -173,9 +195,7 @@ export default {
       const total = Number.parseInt(String(totalCount), 10)
 
       // Apply pagination
-      const permissions = await query
-        .limit(limit)
-        .offset(offset)
+      const permissions = await query.limit(limit).offset(offset)
 
       Logger.log(`[DEBUG] Found ${permissions.length} permissions (${total} total)`)
 

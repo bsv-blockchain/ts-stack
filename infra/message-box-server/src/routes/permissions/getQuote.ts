@@ -5,11 +5,13 @@ import { AuthRequest } from '@bsv/auth-express-middleware'
 import { getRecipientFee, getServerDeliveryFee } from '../../utils/messagePermissions.js'
 
 export const MAX_QUOTE_RECIPIENTS = 100
+export const QUOTE_CONCURRENCY = 10
+const MAX_MESSAGE_BOX_BYTES = 128
 
 export interface GetQuoteRequest extends AuthRequest {
   query: {
     recipient: string | string[] // identityKey of recipient or array of recipients
-    messageBox?: string           // messageBox type
+    messageBox?: string // messageBox type
   }
 }
 
@@ -77,6 +79,17 @@ export default {
           status: 'error',
           code: 'ERR_MISSING_PARAMETERS',
           description: 'recipient and messageBox parameters are required.'
+        })
+      }
+      if (
+        typeof messageBox !== 'string' ||
+        messageBox.trim() === '' ||
+        Buffer.byteLength(messageBox, 'utf8') > MAX_MESSAGE_BOX_BYTES
+      ) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_MESSAGE_BOX',
+          description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
         })
       }
 
@@ -155,24 +168,33 @@ export default {
         return 'payment_required'
       }
 
-      for (const r of recipients) {
-        const recipientFee = await getRecipientFee(r, sender, messageBox)
-        const status = feeToStatus(recipientFee)
+      for (let offset = 0; offset < MAX_QUOTE_RECIPIENTS; offset += QUOTE_CONCURRENCY) {
+        const batch = recipients.slice(offset, offset + QUOTE_CONCURRENCY)
+        if (batch.length === 0) break
 
-        quotesByRecipient.push({
-          recipient: r,
-          messageBox,
-          deliveryFee: perMessageDeliveryFee,
-          recipientFee,
-          status
-        })
+        const recipientFees = await Promise.all(
+          batch.map(async recipientKey => ({
+            recipient: recipientKey,
+            recipientFee: await getRecipientFee(recipientKey, sender, messageBox)
+          }))
+        )
 
-        // Aggregate: count deliveryFee per intended message, and recipientFee if not blocked
-        totalDeliveryFees += perMessageDeliveryFee
-        if (recipientFee === -1) {
-          blockedRecipients.push(r)
-        } else {
-          totalRecipientFees += recipientFee
+        for (const { recipient: recipientKey, recipientFee } of recipientFees) {
+          const status = feeToStatus(recipientFee)
+          quotesByRecipient.push({
+            recipient: recipientKey,
+            messageBox,
+            deliveryFee: perMessageDeliveryFee,
+            recipientFee,
+            status
+          })
+
+          totalDeliveryFees += perMessageDeliveryFee
+          if (recipientFee === -1) {
+            blockedRecipients.push(recipientKey)
+          } else {
+            totalRecipientFees += recipientFee
+          }
         }
       }
 

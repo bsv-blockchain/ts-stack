@@ -29,10 +29,7 @@
  */
 
 import { PubKeyHex } from '@bsv/sdk'
-import type {
-  CommsLayer as SdkCommsLayer,
-  PeerMessage as SdkRemittancePeerMessage
-} from '@bsv/sdk'
+import type { CommsLayer as SdkCommsLayer, PeerMessage as SdkRemittancePeerMessage } from '@bsv/sdk'
 import type { MessageBoxClient } from './MessageBoxClient.js'
 import type { PeerMessage as MessageBoxPeerMessage } from './types.js'
 
@@ -51,7 +48,7 @@ export class RemittanceAdapter implements SdkCommsLayer {
    * Creates a new RemittanceAdapter
    * @param messageBox - The MessageBoxClient instance to adapt
    */
-  constructor(private readonly messageBox: MessageBoxClient) { }
+  constructor(private readonly messageBox: MessageBoxClient) {}
 
   /**
    * Sends a message over the store-and-forward channel
@@ -60,14 +57,17 @@ export class RemittanceAdapter implements SdkCommsLayer {
    * @returns The transport message ID
    */
   async sendMessage(
-    args: { recipient: PubKeyHex, messageBox: string, body: string },
+    args: { recipient: PubKeyHex; messageBox: string; body: string },
     hostOverride?: string
   ): Promise<string> {
-    const result = await this.messageBox.sendMessage({
-      recipient: args.recipient,
-      messageBox: args.messageBox,
-      body: args.body
-    }, hostOverride)
+    const result = await this.messageBox.sendMessage(
+      {
+        recipient: args.recipient,
+        messageBox: args.messageBox,
+        body: args.body
+      },
+      hostOverride
+    )
 
     return result.messageId
   }
@@ -80,14 +80,17 @@ export class RemittanceAdapter implements SdkCommsLayer {
    * @returns The transport message ID
    */
   async sendLiveMessage(
-    args: { recipient: PubKeyHex, messageBox: string, body: string },
+    args: { recipient: PubKeyHex; messageBox: string; body: string },
     hostOverride?: string
   ): Promise<string> {
-    const result = await this.messageBox.sendLiveMessage({
-      recipient: args.recipient,
-      messageBox: args.messageBox,
-      body: args.body
-    }, hostOverride)
+    const result = await this.messageBox.sendLiveMessage(
+      {
+        recipient: args.recipient,
+        messageBox: args.messageBox,
+        body: args.body
+      },
+      hostOverride
+    )
 
     return result.messageId
   }
@@ -101,7 +104,10 @@ export class RemittanceAdapter implements SdkCommsLayer {
    * @param args - List parameters (messageBox, optional host)
    * @returns Array of peer messages with stringified bodies
    */
-  async listMessages(args: { messageBox: string, host?: string }): Promise<RemittancePeerMessage[]> {
+  async listMessages(args: {
+    messageBox: string
+    host?: string
+  }): Promise<RemittancePeerMessage[]> {
     const defaultRecipient = await this.messageBox.getIdentityKey()
     const messages = await this.messageBox.listMessages({
       messageBox: args.messageBox,
@@ -139,8 +145,8 @@ export class RemittanceAdapter implements SdkCommsLayer {
     })
   }
 
-  private toRemittancePeerMessage (
-    msg: MessageBoxPeerMessage & { recipient?: string, messageBox?: string },
+  private toRemittancePeerMessage(
+    msg: MessageBoxPeerMessage & { recipient?: string; messageBox?: string },
     fallbackMessageBox: string,
     fallbackRecipient: PubKeyHex
   ): RemittancePeerMessage {
@@ -153,7 +159,7 @@ export class RemittanceAdapter implements SdkCommsLayer {
     }
   }
 
-  private toBodyString (body: unknown): string {
+  private toBodyString(body: unknown): string {
     if (typeof body === 'string') return body
     try {
       return JSON.stringify(body) ?? ''
