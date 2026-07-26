@@ -20,7 +20,7 @@ export interface MultiSigInstructions {
 }
 
 function concatPubkeys(pubkeys: PublicKey[]): number[] {
-  return pubkeys.map(p => p.toDER() as number[]).flat()
+  return pubkeys.flatMap(p => p.toDER() as number[])
 }
 
 function numberFromScriptChunk(chunk: ScriptChunk): number {

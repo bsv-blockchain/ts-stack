@@ -13,7 +13,7 @@ interface QrModel {
 interface QrFactory {
   create: (
     payload: string,
-    options: { errorCorrectionLevel?: QrCodeOptions['errorCorrectionLevel'] }
+    options: { errorCorrectionLevel: NonNullable<QrCodeOptions['errorCorrectionLevel']> }
   ) => QrModel
 }
 
@@ -66,12 +66,8 @@ function renderSvg(modules: QrBitMatrix, options: QrCodeOptions): string {
 
 function escapeAttribute(value: string): string {
   return value
-    .split('&')
-    .join('&amp;')
-    .split('"')
-    .join('&quot;')
-    .split('<')
-    .join('&lt;')
-    .split('>')
-    .join('&gt;')
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
 }
