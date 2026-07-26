@@ -13,9 +13,7 @@ for (const [file, expectedHash] of expected) {
   const bytes = await readFile(new URL(`../src/wasm/${file}`, import.meta.url))
   const actualHash = createHash('sha256').update(bytes).digest('hex')
   if (actualHash !== expectedHash) {
-    throw new Error(
-      `${file} SHA-256 mismatch: expected ${expectedHash}, received ${actualHash}`
-    )
+    throw new Error(`${file} SHA-256 mismatch: expected ${expectedHash}, received ${actualHash}`)
   }
 }
 

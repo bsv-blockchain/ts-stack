@@ -4,7 +4,7 @@ import { StorageAdminStats, StorageProvider } from '../storage/StorageProvider'
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export abstract class Format {
-  static alignLeft (v: string | number, fixedWidth: number): string {
+  static alignLeft(v: string | number, fixedWidth: number): string {
     v = v.toString()
     if (v.length > fixedWidth) {
       return v.slice(0, fixedWidth - 1) + '…'
@@ -12,7 +12,7 @@ export abstract class Format {
     return v.toString().padEnd(fixedWidth)
   }
 
-  static alignRight (v: string | number, fixedWidth: number): string {
+  static alignRight(v: string | number, fixedWidth: number): string {
     v = v.toString()
     if (v.length > fixedWidth) {
       return '…' + v.slice(-fixedWidth + 1)
@@ -20,7 +20,7 @@ export abstract class Format {
     return v.toString().padStart(fixedWidth)
   }
 
-  static alignMiddle (v: string | number, fixedWidth: number): string {
+  static alignMiddle(v: string | number, fixedWidth: number): string {
     v = v.toString()
     if (v.length === fixedWidth) return v
     const l = Math.ceil(fixedWidth / 2)
@@ -33,7 +33,7 @@ export abstract class Format {
     return `${ar(v.slice(0, pl), l)}${al(v.slice(-pr), r)}`
   }
 
-  static satoshis (s: number): string {
+  static satoshis(s: number): string {
     const minus = s < 0 ? '-' : ''
     s = Math.abs(s)
     const a = s.toString().split('')
@@ -46,7 +46,7 @@ export abstract class Format {
     return minus + v
   }
 
-  static toLogStringTransaction (tx: Transaction): string {
+  static toLogStringTransaction(tx: Transaction): string {
     const txid = tx.id('hex')
     try {
       let log = ''
@@ -75,30 +75,30 @@ export abstract class Format {
       h += `${al('Inputs', 30)} ${ar('Vin/', 5)} ${'Outputs'}\n`
       h += `${al('Outpoint', 17)} ${ar('Satoshis', 12)} ${ar('Vout', 5)} ${ar('Satoshis', 12)} ${al('Lock Script', 23)}\n`
       return h + log
-    } catch (_error: unknown) {
+    } catch {
       return `Transaction with txid ${txid} is invalid`
     }
   }
 
-  static toLogStringBeefTxid (beef: Beef, txid: string): string {
+  static toLogStringBeefTxid(beef: Beef, txid: string): string {
     const tx = beef.findAtomicTransaction(txid)
     if (tx == null) return `Transaction ${txid} not found in beef`
     return Format.toLogStringTransaction(tx)
   }
 
-  static async toLogStringTableTransaction (tx: TableTransaction, storage: StorageProvider): Promise<string> {
+  static async toLogStringTableTransaction(tx: TableTransaction, storage: StorageProvider): Promise<string> {
     if (tx.txid == null || tx.txid === '') return `Transaction ${tx.transactionId} has no txid`
     try {
       const beef = await storage.getBeefForTransaction(tx.txid, { minProofLevel: 1 })
       const log = Format.toLogStringBeefTxid(beef, tx.txid)
       const h = `transactionId:${tx.transactionId} userId:${tx.userId} ${tx.status} satoshis:${sa(tx.satoshis)}\n`
       return h + log
-    } catch (_error: unknown) {
+    } catch {
       return `Transaction ${tx.transactionId} with txid ${tx.txid} is invalid`
     }
   }
 
-  static toLogStringAdminStats (s: StorageAdminStats): string {
+  static toLogStringAdminStats(s: StorageAdminStats): string {
     let log = `StorageAdminStats: ${s.when} ${s.requestedBy}\n`
     log += `  ${al('', 13)} ${ar('Day', 18)} ${ar('Month', 18)} ${ar('Total', 18)}\n`
     log += dmt('users', s.usersDay, s.usersMonth, s.usersTotal)
@@ -121,7 +121,7 @@ export abstract class Format {
 
     return log
 
-    function dmt (l: string, d: number | string, m: number | string, t: number | string): string {
+    function dmt(l: string, d: number | string, m: number | string, t: number | string): string {
       return `  ${al(l, 13)} ${ar(d, 18)} ${ar(m, 18)} ${ar(t, 18)}\n`
     }
   }

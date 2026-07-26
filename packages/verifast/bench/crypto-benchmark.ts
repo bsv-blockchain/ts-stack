@@ -13,12 +13,12 @@ import BdkVerifier from '../src/BdkVerifier.js'
 const SAMPLES = 25
 const ITERATIONS = 100
 
-function median (values: number[]): number {
+function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-async function measure (
+async function measure(
   operation: () => Promise<void>,
   iterations: number = ITERATIONS
 ): Promise<number> {
@@ -34,19 +34,15 @@ async function measure (
   return median(samples)
 }
 
-function printComparison (
-  name: string,
-  javascriptMs: number,
-  wasmMs: number
-): void {
+function printComparison(name: string, javascriptMs: number, wasmMs: number): void {
   console.log(
     `${name.padEnd(30)} ${javascriptMs.toFixed(4).padStart(10)}  ` +
-    `${wasmMs.toFixed(4).padStart(10)}  ` +
-    `${(javascriptMs / wasmMs).toFixed(2).padStart(7)}x`
+      `${wasmMs.toFixed(4).padStart(10)}  ` +
+      `${(javascriptMs / wasmMs).toFixed(2).padStart(7)}x`
   )
 }
 
-async function main (): Promise<void> {
+async function main(): Promise<void> {
   const privateKey = new PrivateKey(42)
   const privateKeyBytes = Uint8Array.from(privateKey.toArray('be', 32))
   const publicKey = privateKey.toPublicKey()
@@ -102,7 +98,7 @@ async function main (): Promise<void> {
         }
       }),
       await measure(async () => {
-        if (!await verifier.verifyDigest(publicKeyBytes, digest, signatureBytes)) {
+        if (!(await verifier.verifyDigest(publicKeyBytes, digest, signatureBytes))) {
           throw new Error('BDK rejected benchmark signature')
         }
       })
@@ -202,11 +198,13 @@ async function main (): Promise<void> {
     }, 1)
     console.log('\n250-signature packed batch (milliseconds per complete batch):')
     console.log(`SDK JS: ${sdkBatch.toFixed(3)}`)
-    console.log(`BDK 1 worker: ${wasmBatch.toFixed(3)} (${(sdkBatch / wasmBatch).toFixed(2)}x vs JS)`)
+    console.log(
+      `BDK 1 worker: ${wasmBatch.toFixed(3)} (${(sdkBatch / wasmBatch).toFixed(2)}x vs JS)`
+    )
     console.log(
       `BDK 4 workers: ${parallelBatch.toFixed(3)} ` +
-      `(${(sdkBatch / parallelBatch).toFixed(2)}x vs JS; ` +
-      `${(wasmBatch / parallelBatch).toFixed(2)}x vs one worker)`
+        `(${(sdkBatch / parallelBatch).toFixed(2)}x vs JS; ` +
+        `${(wasmBatch / parallelBatch).toFixed(2)}x vs one worker)`
     )
   } finally {
     unregisterAsyncCryptoBackend(parallelVerifier)

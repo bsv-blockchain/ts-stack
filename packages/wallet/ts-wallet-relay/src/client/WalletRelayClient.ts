@@ -1,5 +1,11 @@
 import type { WalletInterface } from '@bsv/sdk'
-import type { SessionInfo, WalletRequest, WalletResponse, RequestLogEntry, WalletMethodName } from '../types.js'
+import type {
+  SessionInfo,
+  WalletRequest,
+  WalletResponse,
+  RequestLogEntry,
+  WalletMethodName
+} from '../types.js'
 import { WALLET_METHOD_NAMES } from '../types.js'
 
 export interface WalletRelayClientOptions {
@@ -40,26 +46,29 @@ export interface WalletRelayClientOptions {
 }
 
 export type WalletRelayErrorCode =
-  | 'SESSION_NOT_CONNECTED'  // no active session or session not in connected state
-  | 'REQUEST_TIMEOUT'        // mobile did not respond within 30 s
-  | 'SESSION_DISCONNECTED'   // mobile dropped while the request was in-flight
-  | 'INVALID_TOKEN'          // desktopToken mismatch — likely a client config issue
-  | 'NETWORK_ERROR'          // fetch failed or unexpected HTTP error
+  | 'SESSION_NOT_CONNECTED' // no active session or session not in connected state
+  | 'REQUEST_TIMEOUT' // mobile did not respond within 30 s
+  | 'SESSION_DISCONNECTED' // mobile dropped while the request was in-flight
+  | 'INVALID_TOKEN' // desktopToken mismatch — likely a client config issue
+  | 'NETWORK_ERROR' // fetch failed or unexpected HTTP error
 
 export class WalletRelayError extends Error {
-  constructor(message: string, public readonly code: WalletRelayErrorCode) {
+  constructor(
+    message: string,
+    public readonly code: WalletRelayErrorCode
+  ) {
     super(message)
     this.name = 'WalletRelayError'
   }
 }
 
 interface PersistedSession {
-  sessionId:    string
+  sessionId: string
   desktopToken: string
-  qrDataUrl?:   string
-  pairingUri?:  string
-  status:       string
-  savedAt:      number
+  qrDataUrl?: string
+  pairingUri?: string
+  status: string
+  savedAt: number
 }
 
 /**
@@ -111,9 +120,15 @@ export class WalletRelayClient {
     this._onError = options?.onError
   }
 
-  get session(): SessionInfo | null { return this._session }
-  get log(): RequestLogEntry[] { return this._log }
-  get error(): string | null { return this._error }
+  get session(): SessionInfo | null {
+    return this._session
+  }
+  get log(): RequestLogEntry[] {
+    return this._log
+  }
+  get error(): string | null {
+    return this._error
+  }
 
   /**
    * A wallet-interface-compatible proxy that forwards each method call to the
@@ -135,11 +150,15 @@ export class WalletRelayClient {
         method,
         (params: unknown): Promise<unknown> =>
           this.sendRequest(method, params).then(res => {
-            if (res.error) throw Object.assign(new Error(res.error.message), { code: res.error.code })
+            if (res.error)
+              throw Object.assign(new Error(res.error.message), { code: res.error.code })
             return res.result
-          }),
+          })
       ])
-      this._walletProxy = Object.fromEntries(entries) as unknown as Pick<WalletInterface, WalletMethodName>
+      this._walletProxy = Object.fromEntries(entries) as unknown as Pick<
+        WalletInterface,
+        WalletMethodName
+      >
     }
     return this._walletProxy
   }
@@ -160,15 +179,26 @@ export class WalletRelayClient {
 
     try {
       const res = await fetch(`${this._apiUrl}/session/${stored.sessionId}`)
-      if (!res.ok) { this._clearStorage(); return null }
+      if (!res.ok) {
+        this._clearStorage()
+        return null
+      }
       const data = (await res.json()) as SessionInfo
-      if (data.status === 'expired') { this._clearStorage(); return null }
+      if (data.status === 'expired') {
+        this._clearStorage()
+        return null
+      }
 
       this._desktopToken = stored.desktopToken
       // Merge stored QR data (not returned by status polls) back into session
-      const session: SessionInfo = { ...data, qrDataUrl: stored.qrDataUrl, pairingUri: stored.pairingUri }
+      const session: SessionInfo = {
+        ...data,
+        qrDataUrl: stored.qrDataUrl,
+        pairingUri: stored.pairingUri
+      }
       this._setSession(session)
-      const interval = data.status === 'connected' ? this._connectedPollInterval : this._pollInterval
+      const interval =
+        data.status === 'connected' ? this._connectedPollInterval : this._pollInterval
       this._startPolling(stored.sessionId, interval)
       return session
     } catch {
@@ -219,30 +249,42 @@ export class WalletRelayClient {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (this._desktopToken) headers['X-Desktop-Token'] = this._desktopToken
       const res = await fetch(`${this._apiUrl}/request/${this._session.sessionId}`, {
-        method:  'POST',
+        method: 'POST',
         headers,
-        body:    JSON.stringify({ method, params }),
+        body: JSON.stringify({ method, params })
       })
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
         const msg = body.error ?? `HTTP ${res.status}`
         let code: WalletRelayErrorCode
         switch (res.status) {
-          case 401:  code = 'INVALID_TOKEN'; break
-          case 400:  code = 'SESSION_NOT_CONNECTED'; break
-          case 504:  code = msg.toLowerCase().includes('disconnect') ? 'SESSION_DISCONNECTED' : 'REQUEST_TIMEOUT'; break
-          default:   code = 'NETWORK_ERROR'
+          case 401:
+            code = 'INVALID_TOKEN'
+            break
+          case 400:
+            code = 'SESSION_NOT_CONNECTED'
+            break
+          case 504:
+            code = msg.toLowerCase().includes('disconnect')
+              ? 'SESSION_DISCONNECTED'
+              : 'REQUEST_TIMEOUT'
+            break
+          default:
+            code = 'NETWORK_ERROR'
         }
         throw new WalletRelayError(msg, code)
       }
 
-      const rpc = (await res.json()) as { result?: unknown; error?: { code: number; message: string } }
+      const rpc = (await res.json()) as {
+        result?: unknown
+        error?: { code: number; message: string }
+      }
       const response: WalletResponse = {
         requestId,
-        result:    rpc.result,
-        error:     rpc.error,
-        timestamp: Date.now(),
+        result: rpc.result,
+        error: rpc.error,
+        timestamp: Date.now()
       }
       this._resolveLogEntry(requestId, response)
       return response
@@ -251,12 +293,15 @@ export class WalletRelayClient {
       if (err instanceof WalletRelayError) {
         relayErr = err
       } else {
-        relayErr = new WalletRelayError(err instanceof Error ? err.message : 'Request failed', 'NETWORK_ERROR')
+        relayErr = new WalletRelayError(
+          err instanceof Error ? err.message : 'Request failed',
+          'NETWORK_ERROR'
+        )
       }
       this._resolveLogEntry(requestId, {
         requestId,
-        error:     { code: 500, message: relayErr.message },
-        timestamp: Date.now(),
+        error: { code: 500, message: relayErr.message },
+        timestamp: Date.now()
       })
       throw relayErr
     }
@@ -275,9 +320,11 @@ export class WalletRelayClient {
       try {
         await fetch(`${this._apiUrl}/session/${this._session.sessionId}`, {
           method: 'DELETE',
-          headers: { 'X-Desktop-Token': this._desktopToken },
+          headers: { 'X-Desktop-Token': this._desktopToken }
         })
-      } catch { /* ignore — local teardown proceeds regardless */ }
+      } catch {
+        /* ignore — local teardown proceeds regardless */
+      }
     }
     this._desktopToken = null
   }
@@ -301,7 +348,10 @@ export class WalletRelayClient {
         const updated = (await res.json()) as SessionInfo
         this._setSession({ ...this._session!, ...updated })
         if (updated.status === 'expired') {
-          if (++this._expiredCount >= 2) { this._stopPolling(); this._clearStorage() }
+          if (++this._expiredCount >= 2) {
+            this._stopPolling()
+            this._clearStorage()
+          }
         } else {
           this._expiredCount = 0
           // Slow down once connected; speed back up if mobile disconnects
@@ -336,19 +386,23 @@ export class WalletRelayClient {
     if (!this._persistSession || !this._session) return
     try {
       const entry: PersistedSession = {
-        sessionId:    this._session.sessionId,
+        sessionId: this._session.sessionId,
         desktopToken: this._desktopToken ?? '',
-        qrDataUrl:    this._session.qrDataUrl,
-        pairingUri:   this._session.pairingUri,
-        status:       this._session.status,
-        savedAt:      Date.now(),
+        qrDataUrl: this._session.qrDataUrl,
+        pairingUri: this._session.pairingUri,
+        status: this._session.status,
+        savedAt: Date.now()
       }
       sessionStorage.setItem(this._storageKey, JSON.stringify(entry))
-    } catch { /* SSR or storage unavailable */ }
+    } catch {
+      /* SSR or storage unavailable */
+    }
   }
 
   private _clearStorage(): void {
-    try { sessionStorage.removeItem(this._storageKey) } catch {}
+    try {
+      sessionStorage.removeItem(this._storageKey)
+    } catch {}
   }
 
   private _loadFromStorage(): PersistedSession | null {
@@ -361,7 +415,9 @@ export class WalletRelayClient {
         return null
       }
       return entry
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
 
   private _addLogEntry(entry: RequestLogEntry): void {

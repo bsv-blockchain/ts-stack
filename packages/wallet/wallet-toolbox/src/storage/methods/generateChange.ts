@@ -43,7 +43,7 @@ export interface GenerateChangeSdkResult {
  * a change input whose satoshis are covered by a single change output.
  * Mutates both arrays in place.
  */
-function removeChurnPairs (
+function removeChurnPairs(
   allocatedChangeInputs: GenerateChangeSdkChangeInput[],
   changeOutputs: GenerateChangeSdkChangeOutput[]
 ): void {
@@ -61,7 +61,7 @@ function removeChurnPairs (
  * Distribute excess fee satoshis across the change outputs.
  * Returns the updated feeExcessNow (will be 0 after distribution).
  */
-function distributeExcessFees (
+function distributeExcessFees(
   changeOutputs: GenerateChangeSdkChangeOutput[],
   changeInitialSatoshis: number,
   feeExcessNow: number,
@@ -90,7 +90,7 @@ function distributeExcessFees (
  * Remove change outputs below dustFloor, consolidating their satoshis into the largest output.
  * Always keeps at least one output.
  */
-function removeDustOutputs (changeOutputs: GenerateChangeSdkChangeOutput[], dustFloor: number): void {
+function removeDustOutputs(changeOutputs: GenerateChangeSdkChangeOutput[], dustFloor: number): void {
   for (let i = changeOutputs.length - 1; i >= 0; i--) {
     if (changeOutputs[i].satoshis < dustFloor && changeOutputs.length > 1) {
       const [removed] = changeOutputs.splice(i, 1)
@@ -111,7 +111,7 @@ function removeDustOutputs (changeOutputs: GenerateChangeSdkChangeOutput[], dust
  * @param params
  * @returns
  */
-export async function generateChangeSdk (
+export async function generateChangeSdk(
   params: GenerateChangeSdkParams,
   allocateChangeInput: (
     targetSatoshis: number,
@@ -209,11 +209,17 @@ export async function generateChangeSdk (
     const size = (addedChangeInputs?: number, addedChangeOutputs?: number): number => {
       const inputScriptLengths = [
         ...fixedInputs.map(x => x.unlockingScriptLength),
-        ...new Array(r.allocatedChangeInputs.length + (addedChangeInputs || 0)).fill(params.changeUnlockingScriptLength)
+        ...Array.from(
+          { length: r.allocatedChangeInputs.length + (addedChangeInputs || 0) },
+          () => params.changeUnlockingScriptLength
+        )
       ]
       const outputScriptLengths = [
         ...fixedOutputs.map(x => x.lockingScriptLength),
-        ...new Array(r.changeOutputs.length + (addedChangeOutputs || 0)).fill(params.changeLockingScriptLength)
+        ...Array.from(
+          { length: r.changeOutputs.length + (addedChangeOutputs || 0) },
+          () => params.changeLockingScriptLength
+        )
       ]
       const size = transactionSize(inputScriptLengths, outputScriptLengths)
       return size
@@ -350,7 +356,9 @@ export async function generateChangeSdk (
         }
         if (feeExcess() < 0)
         // Not enough available funding even if no change outputs
-        { break }
+        {
+          break
+        }
         // At this point we have a funded transaction, but there may be change outputs that are each costing as change input,
         // resulting in pointless churn of change outputs.
         // And remove change inputs that funded only a single change output (along with that output)...
@@ -404,7 +412,8 @@ export async function generateChangeSdk (
     removeDustOutputs(r.changeOutputs, dustFloor)
 
     r.size = size()
-    ;((r.fee = fee()), (r.satsPerKb = satsPerKb))
+    r.fee = fee()
+    r.satsPerKb = satsPerKb
 
     const { ok, log } = validateGenerateChangeSdkResult(params, r)
     if (!ok) {
@@ -428,10 +437,10 @@ export async function generateChangeSdk (
   }
 }
 
-export function validateGenerateChangeSdkResult (
+export function validateGenerateChangeSdkResult(
   params: GenerateChangeSdkParams,
   r: GenerateChangeSdkResult
-): { ok: boolean, log: string } {
+): { ok: boolean; log: string } {
   let ok = true
   let log = ''
   const sumIn =
@@ -456,7 +465,7 @@ export function validateGenerateChangeSdkResult (
   return { ok, log }
 }
 
-function logGenerateChangeSdkParams (params: GenerateChangeSdkParams, eu?: unknown) {
+function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknown) {
   let s = JSON.stringify(params)
   const euStr = eu != null ? ` error: ${String(eu)}` : ''
   console.log(`generateChangeSdk params length ${s.length}${euStr}`)
@@ -544,7 +553,7 @@ export interface ValidateGenerateChangeSdkParamsResult {
   hasMaxPossibleOutput?: number
 }
 
-export function validateGenerateChangeSdkParams (
+export function validateGenerateChangeSdkParams(
   params: GenerateChangeSdkParams
 ): ValidateGenerateChangeSdkParamsResult {
   if (!Array.isArray(params.fixedInputs)) throw new WERR_INVALID_PARAMETER('fixedInputs', 'an array of objects')
@@ -564,7 +573,7 @@ export function validateGenerateChangeSdkParams (
       if (r.hasMaxPossibleOutput !== undefined) {
         throw new WERR_INVALID_PARAMETER(
           `fixedOutputs[${i}].satoshis`,
-          'valid satoshis amount. Only one \'maxPossibleSatoshis\' output allowed.'
+          "valid satoshis amount. Only one 'maxPossibleSatoshis' output allowed."
         )
       }
       r.hasMaxPossibleOutput = i
@@ -572,7 +581,7 @@ export function validateGenerateChangeSdkParams (
   })
 
   params.feeModel = validateStorageFeeModel(params.feeModel)
-  if (params.feeModel.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('feeModel.model', '\'sat/kb\'')
+  if (params.feeModel.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('feeModel.model', "'sat/kb'")
 
   Validation.validateOptionalInteger(params.targetNetCount, 'targetNetCount')
 
@@ -589,7 +598,7 @@ export interface GenerateChangeSdkStorageChange extends GenerateChangeSdkChangeI
   spendable: boolean
 }
 
-export function generateChangeSdkMakeStorage (availableChange: GenerateChangeSdkChangeInput[]): {
+export function generateChangeSdkMakeStorage(availableChange: GenerateChangeSdkChangeInput[]): {
   allocateChangeInput: (
     targetSatoshis: number,
     exactSatoshis?: number

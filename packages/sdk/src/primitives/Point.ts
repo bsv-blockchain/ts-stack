@@ -3,19 +3,18 @@ import JPoint from './JacobianPoint.js'
 import BigNumber from './BigNumber.js'
 import { toArray, toHex } from './utils.js'
 
-function ctSwap (
-  swap: bigint,
-  a: JacobianPointBI,
-  b: JacobianPointBI
-): void {
+function ctSwap(swap: bigint, a: JacobianPointBI, b: JacobianPointBI): void {
   const mask = -swap
   const swapX = (a.X ^ b.X) & mask
   const swapY = (a.Y ^ b.Y) & mask
   const swapZ = (a.Z ^ b.Z) & mask
 
-  a.X ^= swapX; b.X ^= swapX
-  a.Y ^= swapY; b.Y ^= swapY
-  a.Z ^= swapZ; b.Z ^= swapZ
+  a.X ^= swapX
+  b.X ^= swapX
+  a.Y ^= swapY
+  b.Y ^= swapY
+  a.Z ^= swapZ
+  b.Z ^= swapZ
 }
 
 // -----------------------------------------------------------------------------
@@ -29,11 +28,11 @@ export const BI_THREE = 3n
 export const BI_FOUR = 4n
 export const BI_EIGHT = 8n
 
-export const P_BIGINT = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn
-export const N_BIGINT = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n
+export const P_BIGINT = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn
+export const N_BIGINT = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
 export const MASK_256 = (1n << 256n) - 1n // 0xffff…ffff (256 sones)
 
-export function red (x: bigint): bigint {
+export function red(x: bigint): bigint {
   // first fold
   let hi = x >> 256n
   x = (x & MASK_256) + (hi << 32n) + hi * 977n
@@ -47,13 +46,21 @@ export function red (x: bigint): bigint {
   return x
 }
 
-export const biMod = (a: bigint): bigint => red((a % P_BIGINT + P_BIGINT) % P_BIGINT)
+export const biMod = (a: bigint): bigint => red(((a % P_BIGINT) + P_BIGINT) % P_BIGINT)
 export const biModSub = (a: bigint, b: bigint): bigint => (a >= b ? a - b : P_BIGINT - (b - a))
 export const biModMul = (a: bigint, b: bigint): bigint => red(a * b)
 export const biModAdd = (a: bigint, b: bigint): bigint => red(a + b)
-export const biModInv = (a: bigint): bigint => { // binary‑ext GCD
-  let lm = BI_ONE; let hm = BI_ZERO; let low = biMod(a); let high = P_BIGINT
-  while (low > BI_ONE) { const r = high / low; [lm, hm] = [hm - lm * r, lm]; [low, high] = [high - low * r, low] }
+export const biModInv = (a: bigint): bigint => {
+  // binary‑ext GCD
+  let lm = BI_ONE
+  let hm = BI_ZERO
+  let low = biMod(a)
+  let high = P_BIGINT
+  while (low > BI_ONE) {
+    const r = high / low
+    ;[lm, hm] = [hm - lm * r, lm]
+    ;[low, high] = [high - low * r, low]
+  }
   return biMod(lm)
 }
 export const biModSqr = (a: bigint): bigint => biModMul(a, a)
@@ -93,13 +100,21 @@ const toBigInt = (x: BigNumber | number | number[] | string): bigint => {
 }
 
 // Generator point coordinates as bigint constants
-export const GX_BIGINT = BigInt('0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
-export const GY_BIGINT = BigInt('0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8')
+export const GX_BIGINT = BigInt(
+  '0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+)
+export const GY_BIGINT = BigInt(
+  '0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'
+)
 
 // Cache for precomputed windowed tables keyed by 'window:x:y'
 const WNAF_TABLE_CACHE: Map<string, JacobianPointBI[]> = new Map()
 
-export interface JacobianPointBI { X: bigint, Y: bigint, Z: bigint }
+export interface JacobianPointBI {
+  X: bigint
+  Y: bigint
+  Z: bigint
+}
 
 export const jpDouble = (P: JacobianPointBI): JacobianPointBI => {
   const { X: X1, Y: Y1, Z: Z1 } = P
@@ -109,10 +124,7 @@ export const jpDouble = (P: JacobianPointBI): JacobianPointBI => {
   const S = biModMul(BI_FOUR, biModMul(X1, Y1sq))
   const M = biModMul(BI_THREE, biModMul(X1, X1))
   const X3 = biModSub(biModMul(M, M), biModMul(BI_TWO, S))
-  const Y3 = biModSub(
-    biModMul(M, biModSub(S, X3)),
-    biModMul(BI_EIGHT, biModMul(Y1sq, Y1sq))
-  )
+  const Y3 = biModSub(biModMul(M, biModSub(S, X3)), biModMul(BI_EIGHT, biModMul(Y1sq, Y1sq)))
   const Z3 = biModMul(BI_TWO, biModMul(Y1, Z1))
   return { X: X3, Y: Y3, Z: Z3 }
 }
@@ -158,7 +170,7 @@ export const jpNeg = (P: JacobianPointBI): JacobianPointBI => {
 // coordinates.  Returns Q = k * P0 as a JacobianPoint.
 export const scalarMultiplyWNAF = (
   k: bigint,
-  P0: { x: bigint, y: bigint },
+  P0: { x: bigint; y: bigint },
   window: number = 5
 ): JacobianPointBI => {
   const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`
@@ -166,7 +178,7 @@ export const scalarMultiplyWNAF = (
   if (tbl === undefined) {
     // Convert affine to Jacobian and pre-compute odd multiples
     const tblSize = 1 << (window - 1) // e.g. w=5 → 16 entries
-    tbl = new Array(tblSize)
+    tbl = Array.from({ length: tblSize })
     const P: JacobianPointBI = { X: P0.x, Y: P0.y, Z: BI_ONE }
     tbl[0] = P
     const twoP = jpDouble(P)
@@ -217,8 +229,10 @@ export const modMulN = (a: bigint, b: bigint): bigint => modN(a * b)
 
 /** modular inverse modulo n with plain extended‑gcd (not constant‑time) */
 export const modInvN = (a: bigint): bigint => {
-  let lm = 1n; let hm = 0n
-  let low = modN(a); let high = N_BIGINT
+  let lm = 1n
+  let hm = 0n
+  let low = modN(a)
+  let high = N_BIGINT
   while (low > 1n) {
     const q = high / low
     ;[lm, hm] = [hm - lm * q, lm]
@@ -244,7 +258,7 @@ export default class Point extends BasePoint {
   y: BigNumber | null
   inf: boolean
 
-  static _assertOnCurve (p: Point): Point {
+  static _assertOnCurve(p: Point): Point {
     if (!p.validate()) {
       throw new Error('Invalid point')
     }
@@ -267,7 +281,7 @@ export default class Point extends BasePoint {
    * const derPoint = [ 2, 18, 123, 108, 125, 83, 1, 251, 164, 214, 16, 119, 200, 216, 210, 193, 251, 193, 129, 67, 97, 146, 210, 216, 77, 254, 18, 6, 150, 190, 99, 198, 128 ];
    * const point = Point.fromDER(derPoint);
    */
-  static fromDER (bytes: number[]): Point {
+  static fromDER(bytes: number[]): Point {
     const len = 32
     if (
       (bytes[0] === 0x04 || bytes[0] === 0x06 || bytes[0] === 0x07) &&
@@ -283,19 +297,11 @@ export default class Point extends BasePoint {
         }
       }
 
-      const res = new Point(
-        bytes.slice(1, 1 + len),
-        bytes.slice(1 + len, 1 + 2 * len)
-      )
+      const res = new Point(bytes.slice(1, 1 + len), bytes.slice(1 + len, 1 + 2 * len))
 
       return Point._assertOnCurve(res)
-    } else if (
-      (bytes[0] === 0x02 || bytes[0] === 0x03) &&
-      bytes.length - 1 === len
-    ) {
-      return Point._assertOnCurve(
-        Point.fromX(bytes.slice(1, 1 + len), bytes[0] === 0x03)
-      )
+    } else if ((bytes[0] === 0x02 || bytes[0] === 0x03) && bytes.length - 1 === len) {
+      return Point._assertOnCurve(Point.fromX(bytes.slice(1, 1 + len), bytes[0] === 0x03))
     }
     throw new Error('Unknown point format')
   }
@@ -317,7 +323,7 @@ export default class Point extends BasePoint {
    * const pointStr = 'abcdef';
    * const point = Point.fromString(pointStr);
    */
-  static fromString (str: string): Point {
+  static fromString(str: string): Point {
     const bytes = toArray(str, 'hex')
     return Point._assertOnCurve(Point.fromDER(bytes))
   }
@@ -337,7 +343,7 @@ export default class Point extends BasePoint {
    * const xCoordinate = new BigNumber('10');
    * const point = Point.fromX(xCoordinate, true);
    */
-  static fromX (x: BigNumber | number | number[] | string, odd: boolean): Point {
+  static fromX(x: BigNumber | number | number[] | string, odd: boolean): Point {
     let xBigInt = toBigInt(x)
     xBigInt = biMod(xBigInt)
 
@@ -373,7 +379,7 @@ export default class Point extends BasePoint {
    * const serializedPoint = '{"x":52,"y":15}';
    * const point = Point.fromJSON(serializedPoint, true);
    */
-  static fromJSON (obj: string | any[], isRed: boolean): Point {
+  static fromJSON(obj: string | any[], isRed: boolean): Point {
     if (typeof obj === 'string') {
       obj = JSON.parse(obj)
     }
@@ -399,9 +405,7 @@ export default class Point extends BasePoint {
         typeof pre.doubles === 'object' && pre.doubles !== null
           ? {
               step: pre.doubles.step,
-              points: [res].concat(
-                pre.doubles.points.map(obj2point)
-              )
+              points: [res].concat(pre.doubles.points.map(obj2point))
             }
           : undefined,
 
@@ -409,9 +413,7 @@ export default class Point extends BasePoint {
         typeof pre.naf === 'object' && pre.naf !== null
           ? {
               wnd: pre.naf.wnd,
-              points: [res].concat(
-                pre.naf.points.map(obj2point)
-              )
+              points: [res].concat(pre.naf.points.map(obj2point))
             }
           : undefined
     }
@@ -429,7 +431,7 @@ export default class Point extends BasePoint {
    * new Point('abc123', 'def456');
    * new Point(null, null); // Generates Infinity point.
    */
-  constructor (
+  constructor(
     x: BigNumber | number | number[] | string | null,
     y: BigNumber | number | number[] | string | null,
     isRed: boolean = true
@@ -475,7 +477,7 @@ export default class Point extends BasePoint {
    * const aPoint = new Point(x, y);
    * const isValid = aPoint.validate();
    */
-  validate (): boolean {
+  validate(): boolean {
     if (this.inf || this.x == null || this.y == null) return false
 
     try {
@@ -507,7 +509,7 @@ export default class Point extends BasePoint {
    * const encodedPointArray = aPoint.encode();
    * const encodedPointHex = aPoint.encode(true, 'hex');
    */
-  encode (compact: boolean = true, enc?: 'hex'): number[] | string {
+  encode(compact: boolean = true, enc?: 'hex'): number[] | string {
     if (this.inf) {
       if (enc === 'hex') return '00'
       return [0x00]
@@ -538,7 +540,7 @@ export default class Point extends BasePoint {
    * const aPoint = new Point(x, y);
    * const stringPoint = aPoint.toString();
    */
-  toString (): string {
+  toString(): string {
     return this.encode(true, 'hex') as string
   }
 
@@ -552,13 +554,13 @@ export default class Point extends BasePoint {
    * const aPoint = new Point(x, y);
    * const jsonPoint = aPoint.toJSON();
    */
-  toJSON (): [
+  toJSON(): [
     BigNumber | null,
     BigNumber | null,
     {
-      doubles: { step: any, points: any[] } | undefined
-      naf: { wnd: any, points: any[] } | undefined
-    }?,
+      doubles: { step: any; points: any[] } | undefined
+      naf: { wnd: any; points: any[] } | undefined
+    }?
   ] {
     if (this.precomputed == null) {
       return [this.x, this.y]
@@ -570,19 +572,19 @@ export default class Point extends BasePoint {
       typeof this.precomputed === 'object' && this.precomputed !== null
         ? {
             doubles:
-            this.precomputed.doubles == null
-              ? undefined
-              : {
-                  step: this.precomputed.doubles.step,
-                  points: this.precomputed.doubles.points.slice(1)
-                },
+              this.precomputed.doubles == null
+                ? undefined
+                : {
+                    step: this.precomputed.doubles.step,
+                    points: this.precomputed.doubles.points.slice(1)
+                  },
             naf:
-            this.precomputed.naf == null
-              ? undefined
-              : {
-                  wnd: this.precomputed.naf.wnd,
-                  points: this.precomputed.naf.points.slice(1)
-                }
+              this.precomputed.naf == null
+                ? undefined
+                : {
+                    wnd: this.precomputed.naf.wnd,
+                    points: this.precomputed.naf.points.slice(1)
+                  }
           }
         : undefined
     ]
@@ -598,7 +600,7 @@ export default class Point extends BasePoint {
    * const aPoint = new Point(x, y);
    * console.log(aPoint.inspect());
    */
-  inspect (): string {
+  inspect(): string {
     if (this.isInfinity()) {
       return '<EC Point Infinity>'
     }
@@ -620,7 +622,7 @@ export default class Point extends BasePoint {
    * const p = new Point(null, null);
    * console.log(p.isInfinity()); // outputs: true
    */
-  isInfinity (): boolean {
+  isInfinity(): boolean {
     return this.inf
   }
 
@@ -636,7 +638,7 @@ export default class Point extends BasePoint {
    * const p2 = new Point(2, 3);
    * const result = p1.add(p2);
    */
-  add (p: Point): Point {
+  add(p: Point): Point {
     // O + P = P
     if (this.inf) {
       return p
@@ -690,7 +692,7 @@ export default class Point extends BasePoint {
    * const P = new Point('123', '456');
    * const result = P.dbl();
    * */
-  dbl (): Point {
+  dbl(): Point {
     if (this.inf) return this
     if (this.x === null || this.y === null) {
       throw new Error('Point coordinates cannot be null')
@@ -715,7 +717,7 @@ export default class Point extends BasePoint {
    * const P = new Point('123', '456');
    * const x = P.getX();
    */
-  getX (): BigNumber {
+  getX(): BigNumber {
     return (this.x ?? new BigNumber(0)).fromRed()
   }
 
@@ -726,7 +728,7 @@ export default class Point extends BasePoint {
    * const P = new Point('123', '456');
    * const x = P.getX();
    */
-  getY (): BigNumber {
+  getY(): BigNumber {
     return (this.y ?? new BigNumber(0)).fromRed()
   }
 
@@ -741,7 +743,7 @@ export default class Point extends BasePoint {
    * const p = new Point(1, 2);
    * const result = p.mul(2); // this doubles the Point
    */
-  mul (k: BigNumber | number | number[] | string): Point {
+  mul(k: BigNumber | number | number[] | string): Point {
     if (!BigNumber.isBN(k)) {
       k = new BigNumber(k as number, 16)
     }
@@ -794,7 +796,7 @@ export default class Point extends BasePoint {
     return result
   }
 
-  mulCT (k: BigNumber | number | number[] | string): Point {
+  mulCT(k: BigNumber | number | number[] | string): Point {
     if (!BigNumber.isBN(k)) {
       k = new BigNumber(k as any, 16)
     }
@@ -810,15 +812,9 @@ export default class Point extends BasePoint {
     kBig = biMod(kBig)
     if (kBig === 0n) return new Point(null, null)
 
-    const Px =
-      this === this.curve.g
-        ? GX_BIGINT
-        : BigInt('0x' + this.getX().toString(16))
+    const Px = this === this.curve.g ? GX_BIGINT : BigInt('0x' + this.getX().toString(16))
 
-    const Py =
-      this === this.curve.g
-        ? GY_BIGINT
-        : BigInt('0x' + this.getY().toString(16))
+    const Py = this === this.curve.g ? GY_BIGINT : BigInt('0x' + this.getY().toString(16))
 
     let R0: JacobianPointBI = { X: 0n, Y: 1n, Z: 0n }
     let R1: JacobianPointBI = { X: Px, Y: Py, Z: 1n }
@@ -858,7 +854,7 @@ export default class Point extends BasePoint {
    * const p2 = new Point(2, 3);
    * const result = p1.mulAdd(2, p2, 3);
    */
-  mulAdd (k1: BigNumber, p2: Point, k2: BigNumber): Point {
+  mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point {
     const points = [this, p2]
     const coeffs = [k1, k2]
     return this._endoWnafMulAdd(points, coeffs) as Point
@@ -879,7 +875,7 @@ export default class Point extends BasePoint {
    * const p2 = new Point(2, 3);
    * const result = p1.jmulAdd(2, p2, 3);
    */
-  jmulAdd (k1: BigNumber, p2: Point, k2: BigNumber): JPoint {
+  jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint {
     const points = [this, p2]
     const coeffs = [k1, k2]
     return this._endoWnafMulAdd(points, coeffs, true) as JPoint
@@ -898,11 +894,13 @@ export default class Point extends BasePoint {
    * const p2 = new Point(5, 20);
    * const areEqual = p1.eq(p2); // returns true
    */
-  eq (p: Point): boolean {
+  eq(p: Point): boolean {
     return (
       this === p ||
       (this.inf === p.inf &&
-        (this.inf || ((this.x ?? new BigNumber(0)).cmp(p.x ?? new BigNumber(0)) === 0 && (this.y ?? new BigNumber(0)).cmp(p.y ?? new BigNumber(0)) === 0)))
+        (this.inf ||
+          ((this.x ?? new BigNumber(0)).cmp(p.x ?? new BigNumber(0)) === 0 &&
+            (this.y ?? new BigNumber(0)).cmp(p.y ?? new BigNumber(0)) === 0)))
     )
   }
 
@@ -915,7 +913,7 @@ export default class Point extends BasePoint {
    * const P = new Point('123', '456');
    * const result = P.neg();
    */
-  neg (_precompute?: boolean): Point {
+  neg(_precompute?: boolean): Point {
     if (this.inf) {
       return this
     }
@@ -924,18 +922,20 @@ export default class Point extends BasePoint {
       const pre = this.precomputed
       const negate = (p: Point): Point => p.neg()
       res.precomputed = {
-        naf: pre.naf == null
-          ? undefined
-          : {
-              wnd: pre.naf.wnd,
-              points: pre.naf.points.map(negate) as BasePoint[]
-            },
-        doubles: pre.doubles == null
-          ? undefined
-          : {
-              step: pre.doubles.step,
-              points: pre.doubles.points.map((p) => (p as Point).neg())
-            },
+        naf:
+          pre.naf == null
+            ? undefined
+            : {
+                wnd: pre.naf.wnd,
+                points: pre.naf.points.map(negate) as BasePoint[]
+              },
+        doubles:
+          pre.doubles == null
+            ? undefined
+            : {
+                step: pre.doubles.step,
+                points: pre.doubles.points.map(p => (p as Point).neg())
+              },
         beta: undefined
       }
     }
@@ -957,7 +957,7 @@ export default class Point extends BasePoint {
    * const p = new Point(5, 20);
    * const doubledPoint = p.dblp(10); // returns the point after "doubled" 10 times
    */
-  dblp (k: number): Point {
+  dblp(k: number): Point {
     /* eslint-disable @typescript-eslint/no-this-alias */
     let r: Point = this
     for (let i = 0; i < k; i++) {
@@ -977,7 +977,7 @@ export default class Point extends BasePoint {
    * const point = new Point(xCoordinate, yCoordinate);
    * const jacobianPoint = point.toJ();
    */
-  toJ (): JPoint {
+  toJ(): JPoint {
     if (this.inf) {
       return new JPoint(null, null, null)
     }
@@ -985,7 +985,7 @@ export default class Point extends BasePoint {
     return res
   }
 
-  private _getBeta (): undefined | Point {
+  private _getBeta(): undefined | Point {
     if (typeof this.curve.endo !== 'object') {
       return
     }
@@ -1034,7 +1034,7 @@ export default class Point extends BasePoint {
     return beta
   }
 
-  private _fixedNafMul (k: BigNumber): Point {
+  private _fixedNafMul(k: BigNumber): Point {
     if (typeof this.precomputed !== 'object' || this.precomputed === null) {
       throw new Error('_fixedNafMul requires precomputed values for the point')
     }
@@ -1070,16 +1070,17 @@ export default class Point extends BasePoint {
     return a.toP()
   }
 
-  private _wnafMulAdd (
+  private _wnafMulAdd(
     defW: number,
     points: Point[],
     coeffs: BigNumber[],
     len: number,
     jacobianResult?: boolean
   ): BasePoint {
-    const wndWidth: number[] = this.curve._wnafT1.map(num => num.toNumber()) // Convert BigNumber to number
-    const wnd: Point[][] = this.curve._wnafT2.map(() => []) // Initialize as empty Point[][] array
-    const naf: number[][] = this.curve._wnafT3.map(() => []) // Initialize as empty number[][] array
+    const scratchLength = this.curve._wnafT1.length
+    const wndWidth: number[] = Array.from({ length: scratchLength })
+    const wnd: Point[][] = Array.from({ length: scratchLength }, () => [])
+    const naf: number[][] = Array.from({ length: scratchLength }, () => [])
 
     // Fill all arrays
     let max = 0
@@ -1095,33 +1096,22 @@ export default class Point extends BasePoint {
       const a = i - 1
       const b = i
       if (wndWidth[a] !== 1 || wndWidth[b] !== 1) {
-        naf[a] = this.curve.getNAF(
-          coeffs[a],
-          wndWidth[a],
-          this.curve._bitLength
-        )
-        naf[b] = this.curve.getNAF(
-          coeffs[b],
-          wndWidth[b],
-          this.curve._bitLength
-        )
+        naf[a] = this.curve.getNAF(coeffs[a], wndWidth[a], this.curve._bitLength)
+        naf[b] = this.curve.getNAF(coeffs[b], wndWidth[b], this.curve._bitLength)
         max = Math.max(naf[a].length, max)
         max = Math.max(naf[b].length, max)
         continue
       }
 
-      const comb: any[] = [
-        points[a] /* 1 */,
-        null /* 3 */,
-        null /* 5 */,
-        points[b] /* 7 */
-      ]
+      const comb: any[] = [points[a] /* 1 */, null /* 3 */, null /* 5 */, points[b] /* 7 */]
 
       // Try to avoid Projective points, if possible
       if ((points[a].y ?? new BigNumber(0)).cmp(points[b].y ?? new BigNumber(0)) === 0) {
         comb[1] = points[a].add(points[b])
         comb[2] = points[a].toJ().mixedAdd(points[b].neg())
-      } else if ((points[a].y ?? new BigNumber(0)).cmp((points[b].y ?? new BigNumber(0)).redNeg()) === 0) {
+      } else if (
+        (points[a].y ?? new BigNumber(0)).cmp((points[b].y ?? new BigNumber(0)).redNeg()) === 0
+      ) {
         comb[1] = points[a].toJ().mixedAdd(points[b])
         comb[2] = points[a].add(points[b].neg())
       } else {
@@ -1130,14 +1120,14 @@ export default class Point extends BasePoint {
       }
 
       const index = [
-        -3 /* -1 -1 */, -1 /* -1 0 */, -5 /* -1 1 */, -7 /* 0 -1 */,
-        0 /* 0 0 */, 7 /* 0 1 */, 5 /* 1 -1 */, 1 /* 1 0 */, 3 /* 1 1 */
+        -3 /* -1 -1 */, -1 /* -1 0 */, -5 /* -1 1 */, -7 /* 0 -1 */, 0 /* 0 0 */, 7 /* 0 1 */,
+        5 /* 1 -1 */, 1 /* 1 0 */, 3 /* 1 1 */
       ]
 
       const jsf = this.curve.getJSF(coeffs[a], coeffs[b])
       max = Math.max(jsf[0].length, max)
-      naf[a] = new Array(max)
-      naf[b] = new Array(max)
+      naf[a] = Array.from({ length: max })
+      naf[b] = Array.from({ length: max })
       for (let j = 0; j < max; j++) {
         const ja = Math.trunc(jsf[0][j])
         const jb = Math.trunc(jsf[1][j])
@@ -1157,7 +1147,8 @@ export default class Point extends BasePoint {
         let zero = true
         for (let j = 0; j < len; j++) {
           tmp[j] = new BigNumber(typeof naf[j][i] === 'number' ? naf[j][i] : 0) // Ensure type consistency
-          if (!tmp[j].isZero()) { // Use BigNumber's built-in comparison
+          if (!tmp[j].isZero()) {
+            // Use BigNumber's built-in comparison
             zero = false
           }
         }
@@ -1182,11 +1173,14 @@ export default class Point extends BasePoint {
         const z = tmp[j]
         let p
 
-        if (z.cmpn(0) === 0) { // Check if z is 0
+        if (z.cmpn(0) === 0) {
+          // Check if z is 0
           continue
-        } else if (z.isNeg()) { // If z is negative
+        } else if (z.isNeg()) {
+          // If z is negative
           p = wnd[j][z.neg().sub(one).div(two).toNumber()].neg()
-        } else { // If z is positive
+        } else {
+          // If z is positive
           p = wnd[j][z.sub(one).div(two).toNumber()]
         }
 
@@ -1209,13 +1203,13 @@ export default class Point extends BasePoint {
     }
   }
 
-  private _endoWnafMulAdd (
+  private _endoWnafMulAdd(
     points: Point[],
     coeffs: BigNumber[], // Explicitly type coeffs
     jacobianResult?: boolean
   ): BasePoint {
-    const npoints: Point[] = new Array(points.length * 2)
-    const ncoeffs: BigNumber[] = new Array(points.length * 2)
+    const npoints: Point[] = Array.from({ length: points.length * 2 })
+    const ncoeffs: BigNumber[] = Array.from({ length: points.length * 2 })
     let i: number
     for (i = 0; i < points.length; i++) {
       const split = this.curve._endoSplit(coeffs[i])
@@ -1247,7 +1241,7 @@ export default class Point extends BasePoint {
     return res
   }
 
-  private _hasDoubles (k: BigNumber): boolean {
+  private _hasDoubles(k: BigNumber): boolean {
     if (this.precomputed == null) {
       return false
     }
@@ -1257,15 +1251,10 @@ export default class Point extends BasePoint {
       return false
     }
 
-    return (
-      doubles.points.length >= Math.ceil((k.bitLength() + 1) / doubles.step)
-    )
+    return doubles.points.length >= Math.ceil((k.bitLength() + 1) / doubles.step)
   }
 
-  private _getDoubles (
-    step?: number,
-    power?: number
-  ): { step: number, points: any[] } {
+  private _getDoubles(step?: number, power?: number): { step: number; points: any[] } {
     if (
       typeof this.precomputed === 'object' &&
       this.precomputed !== null &&
@@ -1278,7 +1267,7 @@ export default class Point extends BasePoint {
     const doubles = [this]
     /* eslint-disable @typescript-eslint/no-this-alias */
     let acc: Point = this
-    for (let i = 0; i < (power ?? 0); i += (step ?? 1)) {
+    for (let i = 0; i < (power ?? 0); i += step ?? 1) {
       for (let j = 0; j < (step ?? 1); j++) {
         acc = acc.dbl()
       }
@@ -1290,7 +1279,7 @@ export default class Point extends BasePoint {
     }
   }
 
-  private _getNAFPoints (wnd: number): { wnd: number, points: any[] } {
+  private _getNAFPoints(wnd: number): { wnd: number; points: any[] } {
     if (
       typeof this.precomputed === 'object' &&
       this.precomputed !== null &&

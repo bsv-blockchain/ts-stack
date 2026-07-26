@@ -15,7 +15,7 @@ interface TestBackendGlobal {
   __bsvSdkScriptVerificationBackendV1?: object
 }
 
-function clearDefaultBackends (): void {
+function clearDefaultBackends(): void {
   const registry = globalThis as typeof globalThis & TestBackendGlobal
   delete registry.__bsvSdkAsyncCryptoBackendV1
   delete registry.__bsvSdkScriptVerificationBackendV1
@@ -23,8 +23,10 @@ function clearDefaultBackends (): void {
 
 class MockVector {
   items: number[] = []
-  push_back (value: number): void { this.items.push(value) }
-  delete (): void {}
+  push_back(value: number): void {
+    this.items.push(value)
+  }
+  delete(): void {}
 }
 
 interface MockCall {
@@ -35,7 +37,7 @@ interface MockCall {
   customFlags: number[]
 }
 
-function makeMockModule (result: BdkVerificationResult, calls: MockCall[]): BdkWasmModule {
+function makeMockModule(result: BdkVerificationResult, calls: MockCall[]): BdkWasmModule {
   return {
     VectorUInt8: MockVector,
     VectorInt32: MockVector,
@@ -53,7 +55,7 @@ function makeMockModule (result: BdkVerificationResult, calls: MockCall[]): BdkW
   }
 }
 
-async function buildTx (inputCount = 1): Promise<Transaction> {
+async function buildTx(inputCount = 1): Promise<Transaction> {
   const key = new PrivateKey(42)
   const source = new Transaction()
   source.addInput({
@@ -65,7 +67,10 @@ async function buildTx (inputCount = 1): Promise<Transaction> {
     source.addOutput({ satoshis: 2, lockingScript: new P2PKH().lock(key.toAddress()) })
   }
   source.merklePath = new MerklePath(777, [
-    [{ offset: 0, hash: source.id('hex'), txid: true }, { offset: 1, duplicate: true }]
+    [
+      { offset: 0, hash: source.id('hex'), txid: true },
+      { offset: 1, duplicate: true }
+    ]
   ])
   const tx = new Transaction()
   for (let i = 0; i < inputCount; i++) {
@@ -80,10 +85,11 @@ async function buildTx (inputCount = 1): Promise<Transaction> {
   return tx
 }
 
-function spendForInput (tx: Transaction, inputIndex = 0): Spend {
+function spendForInput(tx: Transaction, inputIndex = 0): Spend {
   const input = tx.inputs[inputIndex]
   const source = input.sourceTransaction
-  if (source === undefined || input.unlockingScript === undefined) throw new Error('missing fixture source data')
+  if (source === undefined || input.unlockingScript === undefined)
+    throw new Error('missing fixture source data')
   const sourceOutput = source.outputs[input.sourceOutputIndex]
   return new Spend({
     sourceTXID: input.sourceTXID ?? source.id('hex'),
@@ -151,31 +157,36 @@ describe('BdkVerifier', () => {
   })
 
   it('makes disposal final', async () => {
-    const verifier = new BdkVerifier(
-      async () => makeMockModule({ domain: 0, code: 0 }, []),
-      { registerAsDefault: false }
-    )
+    const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []), {
+      registerAsDefault: false
+    })
     const tx = await buildTx()
     await verifier.preload()
     verifier.dispose()
 
     expect(verifier.isReady()).toBe(false)
-    expect(verifier.shouldVerifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: false
-    })).toBe(false)
-    await expect(verifier.verifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: false
-    })).rejects.toThrow('disposed')
+    expect(
+      verifier.shouldVerifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: false
+      })
+    ).toBe(false)
+    await expect(
+      verifier.verifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: false
+      })
+    ).rejects.toThrow('disposed')
   })
 
   it('keeps a cold eligible transaction on JS, then selects WASM when ready', async () => {
     const tx = await buildTx()
     let resolveModule: (module: BdkWasmModule) => void = () => {}
-    const pendingModule = new Promise<BdkWasmModule>(resolve => { resolveModule = resolve })
+    const pendingModule = new Promise<BdkWasmModule>(resolve => {
+      resolveModule = resolve
+    })
     let wasmCalls = 0
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     module.VerifyScriptArray = () => {
@@ -201,52 +212,62 @@ describe('BdkVerifier', () => {
   })
 
   it('allows strict always mode to select the backend before it is warm', async () => {
-    const verifier = new BdkVerifier(
-      async () => makeMockModule({ domain: 0, code: 0 }, []),
-      { mode: 'always', registerAsDefault: false }
-    )
-    expect(verifier.shouldVerifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })).toBe(true)
+    const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []), {
+      mode: 'always',
+      registerAsDefault: false
+    })
+    expect(
+      verifier.shouldVerifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })
+    ).toBe(true)
     expect(verifier.isReady()).toBe(false)
   })
 
   it('distinguishes version-1 policy routing from explicit consensus validation', async () => {
     const tx = await buildTx()
-    const verifier = new BdkVerifier(async () =>
-      makeMockModule({ domain: 0, code: 0 }, [])
-    )
+    const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []))
     await verifier.preload()
-    expect(verifier.shouldVerifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: false
-    })).toBe(true)
+    expect(
+      verifier.shouldVerifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: false
+      })
+    ).toBe(true)
 
     const source = tx.inputs[0].sourceTransaction
     if (source === undefined) throw new Error('missing fixture source')
     source.outputs[0].lockingScript = Script.fromASM('OP_CHECKSIG')
-    expect(verifier.shouldVerifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: false
-    })).toBe(false)
-    expect(verifier.shouldVerifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: true
-    })).toBe(true)
+    expect(
+      verifier.shouldVerifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: false
+      })
+    ).toBe(false)
+    expect(
+      verifier.shouldVerifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: true
+      })
+    ).toBe(true)
 
     tx.version = 2
-    expect(verifier.shouldVerifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: true
-    })).toBe(true)
-    expect(verifier.shouldVerifyScripts({
-      tx,
-      blockHeight: 1,
-      consensus: true,
-      memoryLimit: 1024
-    })).toBe(false)
+    expect(
+      verifier.shouldVerifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: true
+      })
+    ).toBe(true)
+    expect(
+      verifier.shouldVerifyScripts({
+        tx,
+        blockHeight: 1,
+        consensus: true,
+        memoryLimit: 1024
+      })
+    ).toBe(false)
   })
 
   it('rejects invalid adaptive routing options', () => {
@@ -257,7 +278,9 @@ describe('BdkVerifier', () => {
   it('applies the same cold-fallback and warm-selection policy to Spend.validateWith', async () => {
     const spend = spendForInput(await buildTx())
     let resolveModule: (module: BdkWasmModule) => void = () => {}
-    const pendingModule = new Promise<BdkWasmModule>(resolve => { resolveModule = resolve })
+    const pendingModule = new Promise<BdkWasmModule>(resolve => {
+      resolveModule = resolve
+    })
     let wasmCalls = 0
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     module.VerifySpendArray = () => {
@@ -278,7 +301,9 @@ describe('BdkVerifier', () => {
   it('uses the bulk-copy ABI when the module provides it', async () => {
     const calls: MockCall[] = []
     const module = makeMockModule({ domain: 0, code: 0 }, [])
-    module.VerifyScript = () => { throw new Error('legacy vector ABI should not be called') }
+    module.VerifyScript = () => {
+      throw new Error('legacy vector ABI should not be called')
+    }
     module.VerifyScriptArray = (extendedTX, utxoHeights, blockHeight, consensus, customFlags) => {
       calls.push({
         extendedTX: Array.from(extendedTX),
@@ -292,15 +317,18 @@ describe('BdkVerifier', () => {
     const tx = await buildTx(2)
     const verifier = new BdkVerifier(async () => module)
 
-    await expect(verifier.verifyScripts({ tx, blockHeight: 800000, consensus: true }))
-      .resolves.toBe(true)
-    expect(calls).toEqual([{
-      extendedTX: tx.toEF(),
-      utxoHeights: [777, 777],
-      blockHeight: 800000,
-      consensus: true,
-      customFlags: []
-    }])
+    await expect(
+      verifier.verifyScripts({ tx, blockHeight: 800000, consensus: true })
+    ).resolves.toBe(true)
+    expect(calls).toEqual([
+      {
+        extendedTX: tx.toEF(),
+        utxoHeights: [777, 777],
+        blockHeight: 800000,
+        consensus: true,
+        customFlags: []
+      }
+    ])
   })
 
   it('marshals EF, heights, and one custom flag word per input', async () => {
@@ -334,24 +362,27 @@ describe('BdkVerifier', () => {
   it('returns false for script and DoS domains', async () => {
     for (const domain of [BdkErrorDomain.SCRIPT, BdkErrorDomain.DOS]) {
       const verifier = new BdkVerifier(async () => makeMockModule({ domain, code: 39 }, []))
-      await expect(verifier.verifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true }))
-        .resolves.toBe(false)
+      await expect(
+        verifier.verifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })
+      ).resolves.toBe(false)
     }
   })
 
   it('throws a typed error for BDK exception and unknown domains', async () => {
     for (const domain of [BdkErrorDomain.EXCEPTION, 99]) {
       const verifier = new BdkVerifier(async () => makeMockModule({ domain, code: 0 }, []))
-      await expect(verifier.verifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true }))
-        .rejects.toBeInstanceOf(BdkVerificationError)
+      await expect(
+        verifier.verifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })
+      ).rejects.toBeInstanceOf(BdkVerificationError)
     }
   })
 
   it('exposes BDK domain and code through the detailed API', async () => {
     const expected = { domain: BdkErrorDomain.SCRIPT, code: 39 }
     const verifier = new BdkVerifier(async () => makeMockModule(expected, []))
-    await expect(verifier.verifyScriptsDetailed({ tx: await buildTx(), blockHeight: 1, consensus: true }))
-      .resolves.toEqual(expected)
+    await expect(
+      verifier.verifyScriptsDetailed({ tx: await buildTx(), blockHeight: 1, consensus: true })
+    ).resolves.toEqual(expected)
   })
 
   it('uses the Chronicle height fallback for an unmined source', async () => {
@@ -391,49 +422,82 @@ describe('BdkVerifier', () => {
       return { domain: 0, code: 0 }
     }
     const verifier = new BdkVerifier(async () => module, { network: 'test' })
-    await expect(verifier.verifyScriptsFromEF({
-      extendedTransaction: ef,
-      utxoHeights: [100],
-      blockHeight: 200,
-      consensus: false
-    })).resolves.toBe(true)
+    await expect(
+      verifier.verifyScriptsFromEF({
+        extendedTransaction: ef,
+        utxoHeights: [100],
+        blockHeight: 200,
+        consensus: false
+      })
+    ).resolves.toBe(true)
     expect(calls).toEqual([ef])
   })
 
-  it.each(['ttn', 'teratestnet', 'terratestnet'] as const)('maps the %s alias to TeraTestNet', async (network) => {
-    const module = makeMockModule({ domain: 0, code: 0 }, [])
-    module.VerifyScriptArrayNetwork = (_bytes, _heights, _blockHeight, _consensus, _flags, networkId) => {
-      expect(networkId).toBe(4)
-      return { domain: 0, code: 0 }
+  it.each(['ttn', 'teratestnet', 'terratestnet'] as const)(
+    'maps the %s alias to TeraTestNet',
+    async network => {
+      const module = makeMockModule({ domain: 0, code: 0 }, [])
+      module.VerifyScriptArrayNetwork = (
+        _bytes,
+        _heights,
+        _blockHeight,
+        _consensus,
+        _flags,
+        networkId
+      ) => {
+        expect(networkId).toBe(4)
+        return { domain: 0, code: 0 }
+      }
+      const verifier = new BdkVerifier(async () => module, { network })
+      await expect(
+        verifier.verifyScriptsFromEF({
+          extendedTransaction: Uint8Array.of(1),
+          utxoHeights: [1],
+          blockHeight: 1,
+          consensus: true
+        })
+      ).resolves.toBe(true)
     }
-    const verifier = new BdkVerifier(async () => module, { network })
-    await expect(verifier.verifyScriptsFromEF({
-      extendedTransaction: Uint8Array.of(1),
-      utxoHeights: [1],
-      blockHeight: 1,
-      consensus: true
-    })).resolves.toBe(true)
-  })
+  )
 
   it('keeps Tera Scaling Test Network distinct from TeraTestNet aliases', async () => {
     const module = makeMockModule({ domain: 0, code: 0 }, [])
-    module.VerifyScriptArrayNetwork = (_bytes, _heights, _blockHeight, _consensus, _flags, networkId) => {
+    module.VerifyScriptArrayNetwork = (
+      _bytes,
+      _heights,
+      _blockHeight,
+      _consensus,
+      _flags,
+      networkId
+    ) => {
       expect(networkId).toBe(5)
       return { domain: 0, code: 0 }
     }
     const verifier = new BdkVerifier(async () => module, { network: 'tstn' })
-    await expect(verifier.verifyScriptsFromEF({
-      extendedTransaction: Uint8Array.of(1),
-      utxoHeights: [1],
-      blockHeight: 1,
-      consensus: true
-    })).resolves.toBe(true)
+    await expect(
+      verifier.verifyScriptsFromEF({
+        extendedTransaction: Uint8Array.of(1),
+        utxoHeights: [1],
+        blockHeight: 1,
+        consensus: true
+      })
+    ).resolves.toBe(true)
   })
 
   it('packs a transaction batch into one ABI call and preserves result order', async () => {
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     let batchCalls = 0
-    module.VerifyScriptBatchArray = (transactions, offsets, heights, heightOffsets, blockHeights, consensus, flags, flagOffsets, network) => {
+    module.VerifyScriptBatchArray = (
+      transactions,
+      offsets,
+      heights,
+      heightOffsets,
+      blockHeights,
+      consensus,
+      flags,
+      flagOffsets,
+      network
+    ) => {
       batchCalls++
       expect(Array.from(offsets)).toEqual([0, 2, 5])
       expect(Array.from(transactions)).toEqual([1, 2, 3, 4, 5])
@@ -447,10 +511,22 @@ describe('BdkVerifier', () => {
       return Int32Array.from([0, 0, 1, 39])
     }
     const verifier = new BdkVerifier(async () => module)
-    await expect(verifier.verifyScriptsBatchFromEF([
-      { extendedTransaction: Uint8Array.of(1, 2), utxoHeights: [10], blockHeight: 30, consensus: true },
-      { extendedTransaction: Uint8Array.of(3, 4, 5), utxoHeights: [20, 21], blockHeight: 31, consensus: false }
-    ])).resolves.toEqual([true, false])
+    await expect(
+      verifier.verifyScriptsBatchFromEF([
+        {
+          extendedTransaction: Uint8Array.of(1, 2),
+          utxoHeights: [10],
+          blockHeight: 30,
+          consensus: true
+        },
+        {
+          extendedTransaction: Uint8Array.of(3, 4, 5),
+          utxoHeights: [20, 21],
+          blockHeight: 31,
+          consensus: false
+        }
+      ])
+    ).resolves.toEqual([true, false])
     expect(batchCalls).toBe(1)
   })
 
@@ -471,25 +547,31 @@ describe('BdkVerifier', () => {
       calls.push('digest')
       return Uint8Array.of(1)
     }
-    const verifier = new BdkVerifier(
-      async () => module,
-      { maxBatchBytes: 1, registerAsDefault: false }
-    )
+    const verifier = new BdkVerifier(async () => module, {
+      maxBatchBytes: 1,
+      registerAsDefault: false
+    })
 
-    await expect(verifier.verifyScriptsBatchFromEF([{
-      extendedTransaction: Uint8Array.of(1, 2),
-      utxoHeights: [10],
-      blockHeight: 30,
-      consensus: true
-    }])).resolves.toEqual([true])
-    await expect(verifier.verifySpendsBatch([
-      { spend, consensus: true }
-    ])).resolves.toEqual([true])
-    await expect(verifier.verifyDigestBatch([{
-      publicKey: Uint8Array.of(2, 3),
-      digest: new Uint8Array(32),
-      signature: Uint8Array.of(4, 5)
-    }])).resolves.toEqual([true])
+    await expect(
+      verifier.verifyScriptsBatchFromEF([
+        {
+          extendedTransaction: Uint8Array.of(1, 2),
+          utxoHeights: [10],
+          blockHeight: 30,
+          consensus: true
+        }
+      ])
+    ).resolves.toEqual([true])
+    await expect(verifier.verifySpendsBatch([{ spend, consensus: true }])).resolves.toEqual([true])
+    await expect(
+      verifier.verifyDigestBatch([
+        {
+          publicKey: Uint8Array.of(2, 3),
+          digest: new Uint8Array(32),
+          signature: Uint8Array.of(4, 5)
+        }
+      ])
+    ).resolves.toEqual([true])
     expect(calls).toEqual(['script', 'spend', 'digest'])
   })
 
@@ -498,15 +580,12 @@ describe('BdkVerifier', () => {
     const spends = [spendForInput(tx, 0), spendForInput(tx, 1)]
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     module.VerifySpendBatchArray = () => Int32Array.from([0, 0, 0, 0])
-    const verifier = new BdkVerifier(
-      async () => module,
-      { registerAsDefault: false }
-    )
+    const verifier = new BdkVerifier(async () => module, { registerAsDefault: false })
     const serialize = jest.spyOn(Spend.prototype, 'toTransactionUint8Array')
 
-    await expect(verifier.verifySpendsBatch(
-      spends.map(spend => ({ spend, consensus: true }))
-    )).resolves.toEqual([true, true])
+    await expect(
+      verifier.verifySpendsBatch(spends.map(spend => ({ spend, consensus: true })))
+    ).resolves.toEqual([true, true])
     expect(serialize).toHaveBeenCalledTimes(1)
     serialize.mockRestore()
   })
@@ -521,7 +600,18 @@ describe('BdkVerifier', () => {
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     let calls = 0
     const consensusValues: boolean[] = []
-    module.VerifySpendArray = (transaction, inputIndex, lockingScript, sourceSatoshis, utxoHeight, blockHeight, consensus, hasFlags, flags, network) => {
+    module.VerifySpendArray = (
+      transaction,
+      inputIndex,
+      lockingScript,
+      sourceSatoshis,
+      utxoHeight,
+      blockHeight,
+      consensus,
+      hasFlags,
+      flags,
+      network
+    ) => {
       calls++
       expect(transaction).toEqual(tx.toUint8Array())
       expect(inputIndex).toBe(0)
@@ -550,9 +640,9 @@ describe('BdkVerifier', () => {
     module.VerifySpendBatchArray = () => new Int32Array()
     const verifier = new BdkVerifier(async () => module)
 
-    await expect(verifier.verifySpend(spend))
-      .rejects.toThrow('non-negative safe integer')
-    await expect(verifier.verifySpendsBatch([{ spend }]))
-      .rejects.toThrow('non-negative safe integer')
+    await expect(verifier.verifySpend(spend)).rejects.toThrow('non-negative safe integer')
+    await expect(verifier.verifySpendsBatch([{ spend }])).rejects.toThrow(
+      'non-negative safe integer'
+    )
   })
 })

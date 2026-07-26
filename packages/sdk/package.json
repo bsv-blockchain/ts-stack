@@ -15,237 +15,512 @@
   "types": "dist/types/mod.d.ts",
   "files": [
     "dist",
-    "src",
+    "!dist/**/*.tsbuildinfo",
     "docs",
-    "mod.ts",
+    "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/types/mod.d.ts",
+        "default": "./dist/esm/mod.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mod.d.ts",
+        "default": "./dist/cjs/mod.js"
+      }
     },
     "./*.ts": {
-      "types": "./dist/types/src/*.d.ts",
-      "import": "./dist/esm/src/*.js",
-      "require": "./dist/cjs/src/*.js"
+      "import": {
+        "types": "./dist/types/src/*.d.ts",
+        "default": "./dist/esm/src/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/*.d.ts",
+        "default": "./dist/cjs/src/*.js"
+      }
     },
     "./primitives": {
-      "import": "./dist/esm/src/primitives/index.js",
-      "require": "./dist/cjs/src/primitives/index.js",
-      "types": "./dist/types/src/primitives/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/primitives/index.d.ts",
+        "default": "./dist/esm/src/primitives/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/index.d.ts",
+        "default": "./dist/cjs/src/primitives/index.js"
+      }
     },
     "./primitives/*": {
-      "import": "./dist/esm/src/primitives/*.js",
-      "require": "./dist/cjs/src/primitives/*.js",
-      "types": "./dist/types/src/primitives/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/primitives/*.d.ts",
+        "default": "./dist/esm/src/primitives/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/*.d.ts",
+        "default": "./dist/cjs/src/primitives/*.js"
+      }
     },
     "./script": {
-      "import": "./dist/esm/src/script/index.js",
-      "require": "./dist/cjs/src/script/index.js",
-      "types": "./dist/types/src/script/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/script/index.d.ts",
+        "default": "./dist/esm/src/script/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/script/index.d.ts",
+        "default": "./dist/cjs/src/script/index.js"
+      }
     },
     "./script/*": {
-      "import": "./dist/esm/src/script/*.js",
-      "require": "./dist/cjs/src/script/*.js",
-      "types": "./dist/types/src/script/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/script/*.d.ts",
+        "default": "./dist/esm/src/script/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/script/*.d.ts",
+        "default": "./dist/cjs/src/script/*.js"
+      }
     },
     "./script/templates": {
-      "import": "./dist/esm/src/script/templates/index.js",
-      "require": "./dist/cjs/src/script/templates/index.js",
-      "types": "./dist/types/src/script/templates/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/script/templates/index.d.ts",
+        "default": "./dist/esm/src/script/templates/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/script/templates/index.d.ts",
+        "default": "./dist/cjs/src/script/templates/index.js"
+      }
     },
     "./script/templates/*": {
-      "import": "./dist/esm/src/script/templates/*.js",
-      "require": "./dist/cjs/src/script/templates/*.js",
-      "types": "./dist/types/src/script/templates/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/script/templates/*.d.ts",
+        "default": "./dist/esm/src/script/templates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/script/templates/*.d.ts",
+        "default": "./dist/cjs/src/script/templates/*.js"
+      }
     },
     "./transaction": {
-      "import": "./dist/esm/src/transaction/index.js",
-      "require": "./dist/cjs/src/transaction/index.js",
-      "types": "./dist/types/src/transaction/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/index.d.ts",
+        "default": "./dist/esm/src/transaction/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/index.d.ts",
+        "default": "./dist/cjs/src/transaction/index.js"
+      }
     },
     "./transaction/*": {
-      "import": "./dist/esm/src/transaction/*.js",
-      "require": "./dist/cjs/src/transaction/*.js",
-      "types": "./dist/types/src/transaction/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/*.d.ts",
+        "default": "./dist/esm/src/transaction/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/*.d.ts",
+        "default": "./dist/cjs/src/transaction/*.js"
+      }
     },
     "./transaction/broadcaster": {
-      "import": "./dist/esm/src/transaction/broadcaster/index.js",
-      "require": "./dist/cjs/src/transaction/broadcaster/index.js",
-      "types": "./dist/types/src/transaction/broadcaster/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/broadcasters/index.d.ts",
+        "default": "./dist/esm/src/transaction/broadcasters/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/broadcasters/index.d.ts",
+        "default": "./dist/cjs/src/transaction/broadcasters/index.js"
+      }
     },
     "./transaction/broadcaster/*": {
-      "import": "./dist/esm/src/transaction/broadcaster/*.js",
-      "require": "./dist/cjs/src/transaction/broadcaster/*.js",
-      "types": "./dist/types/src/transaction/broadcaster/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/esm/src/transaction/broadcasters/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/cjs/src/transaction/broadcasters/*.js"
+      }
+    },
+    "./transaction/broadcasters": {
+      "import": {
+        "types": "./dist/types/src/transaction/broadcasters/index.d.ts",
+        "default": "./dist/esm/src/transaction/broadcasters/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/broadcasters/index.d.ts",
+        "default": "./dist/cjs/src/transaction/broadcasters/index.js"
+      }
+    },
+    "./transaction/broadcasters/*": {
+      "import": {
+        "types": "./dist/types/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/esm/src/transaction/broadcasters/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/cjs/src/transaction/broadcasters/*.js"
+      }
     },
     "./transaction/chaintrackers": {
-      "import": "./dist/esm/src/transaction/chaintrackers/index.js",
-      "require": "./dist/cjs/src/transaction/chaintrackers/index.js",
-      "types": "./dist/types/src/transaction/chaintrackers/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/chaintrackers/index.d.ts",
+        "default": "./dist/esm/src/transaction/chaintrackers/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/chaintrackers/index.d.ts",
+        "default": "./dist/cjs/src/transaction/chaintrackers/index.js"
+      }
     },
     "./transaction/chaintrackers/*": {
-      "import": "./dist/esm/src/transaction/chaintrackers/*.js",
-      "require": "./dist/cjs/src/transaction/chaintrackers/*.js",
-      "types": "./dist/types/src/transaction/chaintrackers/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/chaintrackers/*.d.ts",
+        "default": "./dist/esm/src/transaction/chaintrackers/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/chaintrackers/*.d.ts",
+        "default": "./dist/cjs/src/transaction/chaintrackers/*.js"
+      }
     },
     "./transaction/http": {
-      "import": "./dist/esm/src/transaction/http/index.js",
-      "require": "./dist/cjs/src/transaction/http/index.js",
-      "types": "./dist/types/src/transaction/http/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/http/index.d.ts",
+        "default": "./dist/esm/src/transaction/http/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/http/index.d.ts",
+        "default": "./dist/cjs/src/transaction/http/index.js"
+      }
     },
     "./transaction/http/*": {
-      "import": "./dist/esm/src/transaction/http/*.js",
-      "require": "./dist/cjs/src/transaction/http/*.js",
-      "types": "./dist/types/src/transaction/http/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/http/*.d.ts",
+        "default": "./dist/esm/src/transaction/http/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/http/*.d.ts",
+        "default": "./dist/cjs/src/transaction/http/*.js"
+      }
     },
     "./transaction/fee-model": {
-      "import": "./dist/esm/src/transaction/fee-model/index.js",
-      "require": "./dist/cjs/src/transaction/fee-model/index.js",
-      "types": "./dist/types/src/transaction/fee-model/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/fee-models/index.d.ts",
+        "default": "./dist/esm/src/transaction/fee-models/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/fee-models/index.d.ts",
+        "default": "./dist/cjs/src/transaction/fee-models/index.js"
+      }
     },
     "./transaction/fee-model/*": {
-      "import": "./dist/esm/src/transaction/fee-model/*.js",
-      "require": "./dist/cjs/src/transaction/fee-model/*.js",
-      "types": "./dist/types/src/transaction/fee-model/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/esm/src/transaction/fee-models/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/cjs/src/transaction/fee-models/*.js"
+      }
+    },
+    "./transaction/fee-models": {
+      "import": {
+        "types": "./dist/types/src/transaction/fee-models/index.d.ts",
+        "default": "./dist/esm/src/transaction/fee-models/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/fee-models/index.d.ts",
+        "default": "./dist/cjs/src/transaction/fee-models/index.js"
+      }
+    },
+    "./transaction/fee-models/*": {
+      "import": {
+        "types": "./dist/types/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/esm/src/transaction/fee-models/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/cjs/src/transaction/fee-models/*.js"
+      }
     },
     "./messages": {
-      "import": "./dist/esm/src/messages/index.js",
-      "require": "./dist/cjs/src/messages/index.js",
-      "types": "./dist/types/src/messages/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/messages/index.d.ts",
+        "default": "./dist/esm/src/messages/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/messages/index.d.ts",
+        "default": "./dist/cjs/src/messages/index.js"
+      }
     },
     "./messages/*": {
-      "import": "./dist/esm/src/messages/*.js",
-      "require": "./dist/cjs/src/messages/*.js",
-      "types": "./dist/types/src/messages/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/messages/*.d.ts",
+        "default": "./dist/esm/src/messages/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/messages/*.d.ts",
+        "default": "./dist/cjs/src/messages/*.js"
+      }
     },
     "./compat": {
-      "import": "./dist/esm/src/compat/index.js",
-      "require": "./dist/cjs/src/compat/index.js",
-      "types": "./dist/types/src/compat/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/compat/index.d.ts",
+        "default": "./dist/esm/src/compat/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/compat/index.d.ts",
+        "default": "./dist/cjs/src/compat/index.js"
+      }
     },
     "./compat/*": {
-      "import": "./dist/esm/src/compat/*.js",
-      "require": "./dist/cjs/src/compat/*.js",
-      "types": "./dist/types/src/compat/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/compat/*.d.ts",
+        "default": "./dist/esm/src/compat/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/compat/*.d.ts",
+        "default": "./dist/cjs/src/compat/*.js"
+      }
     },
     "./totp": {
-      "import": "./dist/esm/src/totp/index.js",
-      "require": "./dist/cjs/src/totp/index.js",
-      "types": "./dist/types/src/totp/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/totp/index.d.ts",
+        "default": "./dist/esm/src/totp/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/totp/index.d.ts",
+        "default": "./dist/cjs/src/totp/index.js"
+      }
     },
     "./totp/*": {
-      "import": "./dist/esm/src/totp/*.js",
-      "require": "./dist/cjs/src/totp/*.js",
-      "types": "./dist/types/src/totp/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/totp/*.d.ts",
+        "default": "./dist/esm/src/totp/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/totp/*.d.ts",
+        "default": "./dist/cjs/src/totp/*.js"
+      }
     },
     "./wallet": {
-      "import": "./dist/esm/src/wallet/index.js",
-      "require": "./dist/cjs/src/wallet/index.js",
-      "types": "./dist/types/src/wallet/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/wallet/index.d.ts",
+        "default": "./dist/esm/src/wallet/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/wallet/index.d.ts",
+        "default": "./dist/cjs/src/wallet/index.js"
+      }
     },
     "./wallet/*": {
-      "import": "./dist/esm/src/wallet/*.js",
-      "require": "./dist/cjs/src/wallet/*.js",
-      "types": "./dist/types/src/wallet/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/wallet/*.d.ts",
+        "default": "./dist/esm/src/wallet/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/wallet/*.d.ts",
+        "default": "./dist/cjs/src/wallet/*.js"
+      }
     },
     "./wallet/substrates": {
-      "import": "./dist/esm/src/wallet/substrates/index.js",
-      "require": "./dist/cjs/src/wallet/substrates/index.js",
-      "types": "./dist/types/src/wallet/substrates/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/wallet/substrates/index.d.ts",
+        "default": "./dist/esm/src/wallet/substrates/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/wallet/substrates/index.d.ts",
+        "default": "./dist/cjs/src/wallet/substrates/index.js"
+      }
     },
     "./wallet/substrates/*": {
-      "import": "./dist/esm/src/wallet/substrates/*.js",
-      "require": "./dist/cjs/src/wallet/substrates/*.js",
-      "types": "./dist/types/src/wallet/substrates/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/wallet/substrates/*.d.ts",
+        "default": "./dist/esm/src/wallet/substrates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/wallet/substrates/*.d.ts",
+        "default": "./dist/cjs/src/wallet/substrates/*.js"
+      }
     },
     "./auth": {
-      "import": "./dist/esm/src/auth/index.js",
-      "require": "./dist/cjs/src/auth/index.js",
-      "types": "./dist/types/src/auth/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/auth/index.d.ts",
+        "default": "./dist/esm/src/auth/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/index.d.ts",
+        "default": "./dist/cjs/src/auth/index.js"
+      }
     },
     "./auth/*": {
-      "import": "./dist/esm/src/auth/*.js",
-      "require": "./dist/cjs/src/auth/*.js",
-      "types": "./dist/types/src/auth/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/auth/*.d.ts",
+        "default": "./dist/esm/src/auth/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/*.d.ts",
+        "default": "./dist/cjs/src/auth/*.js"
+      }
     },
     "./auth/certificate": {
-      "import": "./dist/esm/src/auth/certificate/index.js",
-      "require": "./dist/cjs/src/auth/certificate/index.js",
-      "types": "./dist/types/src/auth/certificate/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/auth/certificates/index.d.ts",
+        "default": "./dist/esm/src/auth/certificates/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/certificates/index.d.ts",
+        "default": "./dist/cjs/src/auth/certificates/index.js"
+      }
     },
     "./auth/certificate/*": {
-      "import": "./dist/esm/src/auth/certificate/*.js",
-      "require": "./dist/cjs/src/auth/certificate/*.js",
-      "types": "./dist/types/src/auth/certificate/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/auth/certificates/*.d.ts",
+        "default": "./dist/esm/src/auth/certificates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/certificates/*.d.ts",
+        "default": "./dist/cjs/src/auth/certificates/*.js"
+      }
+    },
+    "./auth/certificates": {
+      "import": {
+        "types": "./dist/types/src/auth/certificates/index.d.ts",
+        "default": "./dist/esm/src/auth/certificates/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/certificates/index.d.ts",
+        "default": "./dist/cjs/src/auth/certificates/index.js"
+      }
+    },
+    "./auth/certificates/*": {
+      "import": {
+        "types": "./dist/types/src/auth/certificates/*.d.ts",
+        "default": "./dist/esm/src/auth/certificates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/certificates/*.d.ts",
+        "default": "./dist/cjs/src/auth/certificates/*.js"
+      }
     },
     "./overlay-tools": {
-      "import": "./dist/esm/src/overlay-tools/index.js",
-      "require": "./dist/cjs/src/overlay-tools/index.js",
-      "types": "./dist/types/src/overlay-tools/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/overlay-tools/index.d.ts",
+        "default": "./dist/esm/src/overlay-tools/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/overlay-tools/index.d.ts",
+        "default": "./dist/cjs/src/overlay-tools/index.js"
+      }
     },
     "./overlay-tools/*": {
-      "import": "./dist/esm/src/overlay-tools/*.js",
-      "require": "./dist/cjs/src/overlay-tools/*.js",
-      "types": "./dist/types/src/overlay-tools/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/overlay-tools/*.d.ts",
+        "default": "./dist/esm/src/overlay-tools/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/overlay-tools/*.d.ts",
+        "default": "./dist/cjs/src/overlay-tools/*.js"
+      }
     },
     "./telemetry": {
-      "import": "./dist/esm/src/telemetry/index.js",
-      "require": "./dist/cjs/src/telemetry/index.js",
-      "types": "./dist/types/src/telemetry/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/telemetry/index.d.ts",
+        "default": "./dist/esm/src/telemetry/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/telemetry/index.d.ts",
+        "default": "./dist/cjs/src/telemetry/index.js"
+      }
     },
     "./telemetry/*": {
-      "import": "./dist/esm/src/telemetry/*.js",
-      "require": "./dist/cjs/src/telemetry/*.js",
-      "types": "./dist/types/src/telemetry/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/telemetry/*.d.ts",
+        "default": "./dist/esm/src/telemetry/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/telemetry/*.d.ts",
+        "default": "./dist/cjs/src/telemetry/*.js"
+      }
     },
     "./storage": {
-      "import": "./dist/esm/src/storage/index.js",
-      "require": "./dist/cjs/src/storage/index.js",
-      "types": "./dist/types/src/storage/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/storage/index.d.ts",
+        "default": "./dist/esm/src/storage/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/storage/index.d.ts",
+        "default": "./dist/cjs/src/storage/index.js"
+      }
     },
     "./storage/*": {
-      "import": "./dist/esm/src/storage/*.js",
-      "require": "./dist/cjs/src/storage/*.js",
-      "types": "./dist/types/src/storage/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/storage/*.d.ts",
+        "default": "./dist/esm/src/storage/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/storage/*.d.ts",
+        "default": "./dist/cjs/src/storage/*.js"
+      }
     },
     "./kvstore": {
-      "import": "./dist/esm/src/kvstore/index.js",
-      "require": "./dist/cjs/src/kvstore/index.js",
-      "types": "./dist/types/src/kvstore/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/kvstore/index.d.ts",
+        "default": "./dist/esm/src/kvstore/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/kvstore/index.d.ts",
+        "default": "./dist/cjs/src/kvstore/index.js"
+      }
     },
     "./kvstore/*": {
-      "import": "./dist/esm/src/kvstore/*.js",
-      "require": "./dist/cjs/src/kvstore/*.js",
-      "types": "./dist/types/src/kvstore/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/kvstore/*.d.ts",
+        "default": "./dist/esm/src/kvstore/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/kvstore/*.d.ts",
+        "default": "./dist/cjs/src/kvstore/*.js"
+      }
     },
     "./remittance": {
-      "import": "./dist/esm/src/remittance/index.js",
-      "require": "./dist/cjs/src/remittance/index.js",
-      "types": "./dist/types/src/remittance/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/remittance/index.d.ts",
+        "default": "./dist/esm/src/remittance/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/remittance/index.d.ts",
+        "default": "./dist/cjs/src/remittance/index.js"
+      }
     },
     "./remittance/*": {
-      "import": "./dist/esm/src/remittance/*.js",
-      "require": "./dist/cjs/src/remittance/*.js",
-      "types": "./dist/types/src/remittance/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/remittance/*.d.ts",
+        "default": "./dist/esm/src/remittance/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/remittance/*.d.ts",
+        "default": "./dist/cjs/src/remittance/*.js"
+      }
     },
     "./umd": {
+      "types": "./dist/types/mod.d.ts",
       "import": "./dist/umd/bundle.js"
     }
   },
   "scripts": {
-    "test": "npm run build && jest",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage --watchman=false",
-    "lint:ci": "oxlint src",
-    "lint": "oxlint src",
-    "build": "npm run build:ts && npm run build:umd",
+    "test": "pnpm build && jest --watchman=false",
+    "test:watch": "pnpm build && jest --watch",
+    "test:coverage": "pnpm build && jest --coverage --watchman=false",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/sdk/README.md\" \"packages/sdk/package.json\" \"packages/sdk/*.{js,json,ts}\"",
+    "lint:ci": "pnpm lint",
+    "lint": "oxlint mod.ts src jest.config.js rspack.config.js --ignore-pattern 'src/**/__test/**' --ignore-pattern 'src/**/__tests/**' --ignore-pattern 'src/**/*.test.ts' --deny-warnings",
+    "pack:check": "pnpm build && node ../../scripts/check-package-artifact.mjs . --exports PrivateKey,PublicKey,Transaction,Script,WalletClient,ProtoWallet,AuthFetch,IdentityClient,LookupResolver,RemittanceManager --esm-only-entrypoints ./umd",
+    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs .",
+    "typecheck": "tsc --build --pretty false",
+    "build": "pnpm build:ts && pnpm build:umd",
     "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "build:umd": "rspack --config rspack.config.js",
     "dev": "tsc -b -w",
-    "prepublish": "npm run build",
+    "prepublishOnly": "pnpm build",
     "doc": "ts2md",
     "docs:serve": "mkdocs serve",
     "docs:build": "mkdocs build"
@@ -282,5 +557,156 @@
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
     "oxlint": "^1.75.0"
+  },
+  "typesVersions": {
+    "*": {
+      "*.ts": [
+        "dist/types/src/*.d.ts"
+      ],
+      "primitives": [
+        "dist/types/src/primitives/index.d.ts"
+      ],
+      "primitives/*": [
+        "dist/types/src/primitives/*.d.ts"
+      ],
+      "script": [
+        "dist/types/src/script/index.d.ts"
+      ],
+      "script/*": [
+        "dist/types/src/script/*.d.ts"
+      ],
+      "script/templates": [
+        "dist/types/src/script/templates/index.d.ts"
+      ],
+      "script/templates/*": [
+        "dist/types/src/script/templates/*.d.ts"
+      ],
+      "transaction": [
+        "dist/types/src/transaction/index.d.ts"
+      ],
+      "transaction/*": [
+        "dist/types/src/transaction/*.d.ts"
+      ],
+      "transaction/broadcaster": [
+        "dist/types/src/transaction/broadcasters/index.d.ts"
+      ],
+      "transaction/broadcaster/*": [
+        "dist/types/src/transaction/broadcasters/*.d.ts"
+      ],
+      "transaction/broadcasters": [
+        "dist/types/src/transaction/broadcasters/index.d.ts"
+      ],
+      "transaction/broadcasters/*": [
+        "dist/types/src/transaction/broadcasters/*.d.ts"
+      ],
+      "transaction/chaintrackers": [
+        "dist/types/src/transaction/chaintrackers/index.d.ts"
+      ],
+      "transaction/chaintrackers/*": [
+        "dist/types/src/transaction/chaintrackers/*.d.ts"
+      ],
+      "transaction/http": [
+        "dist/types/src/transaction/http/index.d.ts"
+      ],
+      "transaction/http/*": [
+        "dist/types/src/transaction/http/*.d.ts"
+      ],
+      "transaction/fee-model": [
+        "dist/types/src/transaction/fee-models/index.d.ts"
+      ],
+      "transaction/fee-model/*": [
+        "dist/types/src/transaction/fee-models/*.d.ts"
+      ],
+      "transaction/fee-models": [
+        "dist/types/src/transaction/fee-models/index.d.ts"
+      ],
+      "transaction/fee-models/*": [
+        "dist/types/src/transaction/fee-models/*.d.ts"
+      ],
+      "messages": [
+        "dist/types/src/messages/index.d.ts"
+      ],
+      "messages/*": [
+        "dist/types/src/messages/*.d.ts"
+      ],
+      "compat": [
+        "dist/types/src/compat/index.d.ts"
+      ],
+      "compat/*": [
+        "dist/types/src/compat/*.d.ts"
+      ],
+      "totp": [
+        "dist/types/src/totp/index.d.ts"
+      ],
+      "totp/*": [
+        "dist/types/src/totp/*.d.ts"
+      ],
+      "wallet": [
+        "dist/types/src/wallet/index.d.ts"
+      ],
+      "wallet/*": [
+        "dist/types/src/wallet/*.d.ts"
+      ],
+      "wallet/substrates": [
+        "dist/types/src/wallet/substrates/index.d.ts"
+      ],
+      "wallet/substrates/*": [
+        "dist/types/src/wallet/substrates/*.d.ts"
+      ],
+      "auth": [
+        "dist/types/src/auth/index.d.ts"
+      ],
+      "auth/*": [
+        "dist/types/src/auth/*.d.ts"
+      ],
+      "auth/certificate": [
+        "dist/types/src/auth/certificates/index.d.ts"
+      ],
+      "auth/certificate/*": [
+        "dist/types/src/auth/certificates/*.d.ts"
+      ],
+      "auth/certificates": [
+        "dist/types/src/auth/certificates/index.d.ts"
+      ],
+      "auth/certificates/*": [
+        "dist/types/src/auth/certificates/*.d.ts"
+      ],
+      "overlay-tools": [
+        "dist/types/src/overlay-tools/index.d.ts"
+      ],
+      "overlay-tools/*": [
+        "dist/types/src/overlay-tools/*.d.ts"
+      ],
+      "telemetry": [
+        "dist/types/src/telemetry/index.d.ts"
+      ],
+      "telemetry/*": [
+        "dist/types/src/telemetry/*.d.ts"
+      ],
+      "storage": [
+        "dist/types/src/storage/index.d.ts"
+      ],
+      "storage/*": [
+        "dist/types/src/storage/*.d.ts"
+      ],
+      "kvstore": [
+        "dist/types/src/kvstore/index.d.ts"
+      ],
+      "kvstore/*": [
+        "dist/types/src/kvstore/*.d.ts"
+      ],
+      "remittance": [
+        "dist/types/src/remittance/index.d.ts"
+      ],
+      "remittance/*": [
+        "dist/types/src/remittance/*.d.ts"
+      ],
+      "umd": [
+        "dist/types/mod.d.ts"
+      ],
+      "*": [
+        "dist/types/mod.d.ts"
+      ]
+    }
   }
 }

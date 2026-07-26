@@ -20,10 +20,10 @@ interface BufferedMessage {
 }
 
 export type Role = 'desktop' | 'mobile'
-export type MessageHandler    = (topic: string, envelope: WireEnvelope, role: Role) => void
-export type TopicValidator    = (topic: string) => boolean
-export type TokenValidator    = (topic: string, token: string | null) => boolean
-export type ConnectHandler    = (topic: string) => void
+export type MessageHandler = (topic: string, envelope: WireEnvelope, role: Role) => void
+export type TopicValidator = (topic: string) => boolean
+export type TokenValidator = (topic: string, token: string | null) => boolean
+export type ConnectHandler = (topic: string) => void
 export type DisconnectHandler = (topic: string, role: Role) => void
 
 export interface WebSocketRelayOptions {
@@ -74,13 +74,12 @@ export class WebSocketRelay {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private readonly server: Server
   private readonly path: string
-  private upgradeListener: ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | null = null
+  private upgradeListener: ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | null =
+    null
 
   constructor(server: Server, options?: WebSocketRelayOptions) {
     // `allowedOrigins` (new) wins over `allowedOrigin` (legacy) when both set.
-    this.isOriginAllowed = compileOriginMatcher(
-      options?.allowedOrigins ?? options?.allowedOrigin
-    )
+    this.isOriginAllowed = compileOriginMatcher(options?.allowedOrigins ?? options?.allowedOrigin)
     this.server = server
     this.path = options?.path ?? '/ws'
     this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 })
@@ -186,7 +185,7 @@ export class WebSocketRelay {
   private handleConnection(ws: WebSocket, req: IncomingMessage): void {
     const url = new URL(req.url ?? '', 'http://localhost')
     const topic = url.searchParams.get('topic')
-    const role  = url.searchParams.get('role') as Role | null
+    const role = url.searchParams.get('role') as Role | null
     const token = url.searchParams.get('token')
 
     if (!topic || !role || (role !== 'desktop' && role !== 'mobile')) {
@@ -213,7 +212,11 @@ export class WebSocketRelay {
 
     // Desktop token — prevents unauthorized clients from squatting the desktop
     // slot and receiving ciphertext traffic.
-    if (role === 'desktop' && this.validateDesktopToken && !this.validateDesktopToken(topic, token)) {
+    if (
+      role === 'desktop' &&
+      this.validateDesktopToken &&
+      !this.validateDesktopToken(topic, token)
+    ) {
       ws.close(1008, 'Invalid or missing desktop token')
       return
     }
@@ -232,9 +235,11 @@ export class WebSocketRelay {
     }
 
     ;(ws as WebSocket & { isAlive: boolean }).isAlive = true
-    ws.on('pong', () => { (ws as WebSocket & { isAlive: boolean }).isAlive = true })
+    ws.on('pong', () => {
+      ;(ws as WebSocket & { isAlive: boolean }).isAlive = true
+    })
 
-    ws.on('message', (data) => {
+    ws.on('message', data => {
       try {
         const envelope = JSON.parse(`${data}`) as WireEnvelope
         if (!envelope.topic || !envelope.ciphertext) return
@@ -285,7 +290,10 @@ export class WebSocketRelay {
   private runHeartbeat(): void {
     for (const ws of this.wss.clients) {
       const ext = ws as WebSocket & { isAlive: boolean }
-      if (!ext.isAlive) { ws.terminate(); continue }
+      if (!ext.isAlive) {
+        ws.terminate()
+        continue
+      }
       ext.isAlive = false
       ws.ping()
     }

@@ -2,7 +2,7 @@ import { BdkVerifier } from '../mod.browser.js'
 import { buildCorpus } from '../bench/corpus.js'
 
 interface BrowserResult {
-  vectors: Array<{ name: string, expected: boolean, js: boolean, bdk: boolean }>
+  vectors: Array<{ name: string; expected: boolean; js: boolean; bdk: boolean }>
   workerBatch: {
     count: number
     allValid: boolean
@@ -31,13 +31,13 @@ declare global {
   }
 }
 
-function renderResult (value: string): void {
+function renderResult(value: string): void {
   const result = document.querySelector('#result')
   if (result === null) throw new Error('missing #result element')
   result.textContent = value
 }
 
-async function verdict (run: () => Promise<boolean>): Promise<boolean> {
+async function verdict(run: () => Promise<boolean>): Promise<boolean> {
   try {
     return await run()
   } catch {
@@ -45,18 +45,21 @@ async function verdict (run: () => Promise<boolean>): Promise<boolean> {
   }
 }
 
-function percentile (values: number[], fraction: number): number {
+function percentile(values: number[], fraction: number): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]
 }
 
-async function timeVerification (tx: Awaited<ReturnType<typeof buildCorpus>>[number]['tx'], verifier?: BdkVerifier): Promise<number> {
+async function timeVerification(
+  tx: Awaited<ReturnType<typeof buildCorpus>>[number]['tx'],
+  verifier?: BdkVerifier
+): Promise<number> {
   const start = performance.now()
   for (let i = 0; i < 50; i++) await tx.verify('scripts only', undefined, undefined, verifier)
   return performance.now() - start
 }
 
-async function run (): Promise<void> {
+async function run(): Promise<void> {
   const verifier = new BdkVerifier({
     batchWorkers: 4,
     batchWorkerThreshold: 32,
@@ -72,7 +75,9 @@ async function run (): Promise<void> {
   const vectors: BrowserResult['vectors'] = []
   for (const { name, tx, expected } of corpus) {
     const js = await verdict(async () => await tx.verify('scripts only'))
-    const bdk = await verdict(async () => await tx.verify('scripts only', undefined, undefined, verifier))
+    const bdk = await verdict(
+      async () => await tx.verify('scripts only', undefined, undefined, verifier)
+    )
     vectors.push({ name, expected, js, bdk })
   }
   await verifier.preloadBatch()
@@ -109,8 +114,8 @@ async function run (): Promise<void> {
       jsP95Ms: percentile(jsTimes, 0.95),
       bdkMedianMs,
       bdkP95Ms: percentile(bdkTimes, 0.95),
-      jsInputsPerSecond: tx.inputs.length * iterations / (jsMedianMs / 1000),
-      bdkInputsPerSecond: tx.inputs.length * iterations / (bdkMedianMs / 1000),
+      jsInputsPerSecond: (tx.inputs.length * iterations) / (jsMedianMs / 1000),
+      bdkInputsPerSecond: (tx.inputs.length * iterations) / (bdkMedianMs / 1000),
       speedup: jsMedianMs / bdkMedianMs
     })
   }
@@ -129,6 +134,7 @@ async function run (): Promise<void> {
 try {
   await run()
 } catch (error) {
-  window.__VERIFAST_ERROR__ = error instanceof Error ? error.stack ?? error.message : String(error)
+  window.__VERIFAST_ERROR__ =
+    error instanceof Error ? (error.stack ?? error.message) : String(error)
   renderResult(window.__VERIFAST_ERROR__)
 }

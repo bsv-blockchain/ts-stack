@@ -22,20 +22,21 @@ import { WERR_INVALID_MERKLE_ROOT, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETE
  * @param txid the transaction hash for which an envelope is requested.
  * @param options
  */
-export async function getBeefForTransaction (
+export async function getBeefForTransaction(
   storage: StorageProvider,
   txid: string,
   options: StorageGetBeefOptions
 ): Promise<Beef> {
-  const beef = options.mergeToBeef instanceof Beef
-    ? options.mergeToBeef
-    : options.mergeToBeef != null
-      ? Beef.fromBinary(options.mergeToBeef)
-      : new Beef()
+  const beef =
+    options.mergeToBeef instanceof Beef
+      ? options.mergeToBeef
+      : options.mergeToBeef != null
+        ? Beef.fromBinary(options.mergeToBeef)
+        : new Beef()
 
   const knownTxids = new Set(options.knownTxids ?? [])
   const scheduled = new Set<string>([txid])
-  let frontier: Array<{ txid: string, depth: number }> = [{ txid, depth: 0 }]
+  let frontier: Array<{ txid: string; depth: number }> = [{ txid, depth: 0 }]
   const requestedConcurrency = options.maxConcurrency ?? 8
   const concurrency = Number.isFinite(requestedConcurrency)
     ? Math.max(1, Math.min(32, Math.floor(requestedConcurrency)))
@@ -43,11 +44,13 @@ export async function getBeefForTransaction (
 
   while (frontier.length > 0) {
     const current = frontier.filter(item => beef.findTxid(item.txid) == null)
-    const resolved = await mapWithConcurrency(current, concurrency, async item =>
-      await resolveBeefForTransaction(storage, item.txid, options, knownTxids, item.depth)
+    const resolved = await mapWithConcurrency(
+      current,
+      concurrency,
+      async item => await resolveBeefForTransaction(storage, item.txid, options, knownTxids, item.depth)
     )
 
-    const next: Array<{ txid: string, depth: number }> = []
+    const next: Array<{ txid: string; depth: number }> = []
     for (let i = 0; i < resolved.length; i++) {
       const result = resolved[i]
       beef.mergeBeef(result.beef)
@@ -64,46 +67,50 @@ export async function getBeefForTransaction (
   return beef
 }
 
-async function mapWithConcurrency<T, R> (
+async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
   mapper: (value: T) => Promise<R>
 ): Promise<R[]> {
-  const results = new Array<R>(values.length)
+  const results = Array.from({ length: values.length }, () => undefined as R)
   let cursor = 0
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-    while (cursor < values.length) {
-      const index = cursor++
-      results[index] = await mapper(values[index])
-    }
-  }))
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (cursor < values.length) {
+        const index = cursor++
+        results[index] = await mapper(values[index])
+      }
+    })
+  )
   return results
 }
 
 /**
  * @returns rawTx if txid known to network, if merkle proof available then also proven result is valid.
  */
-async function getProvenOrRawTxFromServices (
+async function getProvenOrRawTxFromServices(
   storage: StorageProvider,
   txid: string,
   options: StorageGetBeefOptions
 ): Promise<ProvenOrRawTx> {
   const por = await EntityProvenTx.fromTxid(txid, storage.getServices())
-  if ((por.proven != null) && !options.ignoreStorage && !options.ignoreNewProven) {
+  if (por.proven != null && !options.ignoreStorage && !options.ignoreNewProven) {
     por.proven.provenTxId = await storage.insertProvenTx(por.proven.toApi())
   }
   return { proven: por.proven?.toApi(), rawTx: por.rawTx }
 }
 
-async function resolveBeefForTransaction (
+async function resolveBeefForTransaction(
   storage: StorageProvider,
   txid: string,
   options: StorageGetBeefOptions,
   knownTxids: Set<string>,
   recursionDepth: number
-): Promise<{ beef: Beef, dependencies: string[] }> {
+): Promise<{ beef: Beef; dependencies: string[] }> {
   const maxDepth = storage.maxRecursionDepth
-  if (maxDepth && maxDepth <= recursionDepth) { throw new WERR_INVALID_OPERATION(`Maximum BEEF depth exceeded. Limit is ${storage.maxRecursionDepth}`) }
+  if (maxDepth && maxDepth <= recursionDepth) {
+    throw new WERR_INVALID_OPERATION(`Maximum BEEF depth exceeded. Limit is ${storage.maxRecursionDepth}`)
+  }
 
   const beef = new Beef()
 
@@ -129,13 +136,15 @@ async function resolveBeefForTransaction (
     if (knownBeef != null) return { beef: knownBeef, dependencies: [] }
   }
 
-  if (options.ignoreServices) { throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`) }
+  if (options.ignoreServices) {
+    throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`)
+  }
 
   // if storage doesn't know about txid, use services
   // to find it and if it has a proof, remember it.
   const r = await getProvenOrRawTxFromServices(storage, txid, options)
 
-  if ((r.proven != null) && options.minProofLevel !== undefined && options.minProofLevel > recursionDepth) {
+  if (r.proven != null && options.minProofLevel !== undefined && options.minProofLevel > recursionDepth) {
     // ignore proof at this recursion depth
     r.proven = undefined
   }

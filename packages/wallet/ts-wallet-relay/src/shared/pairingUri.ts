@@ -2,7 +2,6 @@ import type { PairingParams, ParseResult } from '../types.js'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { base64urlToBytes } from './encoding.js'
 
-
 /** Default accepted URI schemes for parsePairingUri. */
 export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-browser:'])
 
@@ -13,7 +12,7 @@ function sigPayload(
   topic: string,
   backendIdentityKey: string,
   origin: string,
-  expiry: string | number,
+  expiry: string | number
 ): number[] {
   return Array.from(new TextEncoder().encode(`${topic}|${backendIdentityKey}|${origin}|${expiry}`))
 }
@@ -40,29 +39,40 @@ function sigPayload(
  *   Defaults to `DEFAULT_ACCEPTED_SCHEMAS`. Pass your own set to support custom deep-link
  *   schemes used by third-party wallet apps.
  */
-export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS): ParseResult {
+export function parsePairingUri(
+  raw: string,
+  acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS
+): ParseResult {
   try {
     const url = new URL(raw)
-    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: 'URI scheme is not a recognised wallet pairing scheme' }
+    if (!acceptedSchemas.has(url.protocol))
+      return { params: null, error: 'URI scheme is not a recognised wallet pairing scheme' }
 
     const g = (k: string) => url.searchParams.get(k) ?? ''
-    const topic              = g('topic')
+    const topic = g('topic')
     const backendIdentityKey = g('backendIdentityKey')
-    const protocolID         = g('protocolID')
-    const origin             = g('origin')
-    const expiry             = g('expiry')
-    const sig                = url.searchParams.get('sig') ?? undefined
+    const protocolID = g('protocolID')
+    const origin = g('origin')
+    const expiry = g('expiry')
+    const sig = url.searchParams.get('sig') ?? undefined
 
     if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
       return { params: null, error: 'QR code is missing required fields' }
     }
 
     if (Date.now() / 1000 > Number(expiry)) {
-      return { params: null, error: 'This QR code has expired — ask the desktop to generate a new one' }
+      return {
+        params: null,
+        error: 'This QR code has expired — ask the desktop to generate a new one'
+      }
     }
 
     let originUrl: URL
-    try { originUrl = new URL(origin) } catch { return { params: null, error: 'Origin URL is not valid' } }
+    try {
+      originUrl = new URL(origin)
+    } catch {
+      return { params: null, error: 'Origin URL is not valid' }
+    }
     if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
       return { params: null, error: 'Origin must use http:// or https://' }
     }
@@ -72,8 +82,17 @@ export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string
     }
 
     let proto: unknown
-    try { proto = JSON.parse(protocolID) } catch { return { params: null, error: 'protocolID is not valid JSON' } }
-    if (!Array.isArray(proto) || proto.length !== 2 || typeof proto[0] !== 'number' || typeof proto[1] !== 'string') {
+    try {
+      proto = JSON.parse(protocolID)
+    } catch {
+      return { params: null, error: 'protocolID is not valid JSON' }
+    }
+    if (
+      !Array.isArray(proto) ||
+      proto.length !== 2 ||
+      typeof proto[0] !== 'number' ||
+      typeof proto[1] !== 'string'
+    ) {
       return { params: null, error: 'protocolID must be a [number, string] tuple' }
     }
 
@@ -97,11 +116,11 @@ export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string
 export function buildPairingUri(params: {
   sessionId: string
   backendIdentityKey: string
-  protocolID: string  // JSON.stringify(PROTOCOL_ID)
+  protocolID: string // JSON.stringify(PROTOCOL_ID)
   origin: string
   pairingTtlMs?: number
-  expiry?: number     // Unix seconds override — keeps expiry consistent with signature
-  sig?: string        // base64url DER ECDSA signature
+  expiry?: number // Unix seconds override — keeps expiry consistent with signature
+  sig?: string // base64url DER ECDSA signature
   schema?: string
 }): string {
   const expiry = params.expiry ?? Math.floor((Date.now() + (params.pairingTtlMs ?? 120_000)) / 1000)
@@ -110,7 +129,7 @@ export function buildPairingUri(params: {
     backendIdentityKey: params.backendIdentityKey,
     protocolID: params.protocolID,
     origin: params.origin,
-    expiry: String(expiry),
+    expiry: String(expiry)
   })
   if (params.sig) p.set('sig', params.sig)
   return `${params.schema ?? 'bsv-browser'}://pair?${p.toString()}`
@@ -134,11 +153,11 @@ export async function verifyPairingSignature(params: PairingParams): Promise<boo
   try {
     const anyoneWallet = new ProtoWallet(new PrivateKey(1))
     const { valid } = await anyoneWallet.verifySignature({
-      data:         sigPayload(params.topic, params.backendIdentityKey, params.origin, params.expiry),
-      signature:    base64urlToBytes(params.sig),
-      protocolID:   [0, 'qr pairing'],
-      keyID:        params.topic,
-      counterparty: params.backendIdentityKey,
+      data: sigPayload(params.topic, params.backendIdentityKey, params.origin, params.expiry),
+      signature: base64urlToBytes(params.sig),
+      protocolID: [0, 'qr pairing'],
+      keyID: params.topic,
+      counterparty: params.backendIdentityKey
     })
     return valid
   } catch {

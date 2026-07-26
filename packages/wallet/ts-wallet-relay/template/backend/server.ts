@@ -25,8 +25,11 @@ import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { WalletRelayService } from '@bsv/wallet-relay'
 
-const PORT   = Number(process.env['PORT']   ?? 3000)
-const ORIGIN = process.env['ORIGIN']        ?? 'http://localhost:5173'
+const PORT = Number(process.env['PORT'] ?? 3000)
+const allowedOrigins = process.env['ALLOWED_ORIGINS']
+  ?.split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
 //
@@ -37,13 +40,22 @@ const ORIGIN = process.env['ORIGIN']        ?? 'http://localhost:5173'
 // Generate a key once and store it in .env as WALLET_PRIVATE_KEY:
 //   node --input-type=commonjs -e "const {PrivateKey}=require('@bsv/sdk'); console.log(PrivateKey.fromRandom().toHex())"
 
-if (!process.env['WALLET_PRIVATE_KEY']) throw new Error('WALLET_PRIVATE_KEY environment variable is required')
+if (!process.env['WALLET_PRIVATE_KEY'])
+  throw new Error('WALLET_PRIVATE_KEY environment variable is required')
 const wallet = new ProtoWallet(PrivateKey.fromHex(process.env['WALLET_PRIVATE_KEY']))
 
 // ── Express app ───────────────────────────────────────────────────────────────
 
 const app = express()
-app.use(cors({ origin: ORIGIN }))
+app.use(
+  cors({
+    // Public service by default. Set ALLOWED_ORIGINS to opt into an exact
+    // comma-separated browser allowlist. Authentication remains the
+    // desktopToken + encrypted pairing protocol in either mode.
+    origin: allowedOrigins?.length ? allowedOrigins : true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
+  })
+)
 app.use(express.json())
 
 const server = http.createServer(app)
@@ -53,7 +65,12 @@ const server = http.createServer(app)
 // relayUrl defaults to process.env.RELAY_URL ?? 'ws://localhost:3000'
 // origin   defaults to process.env.ORIGIN   ?? 'http://localhost:5173'
 
-app.locals.walletRelayService = new WalletRelayService({ app, server, wallet })
+app.locals.walletRelayService = new WalletRelayService({
+  app,
+  server,
+  wallet,
+  allowedOrigins: allowedOrigins?.length ? allowedOrigins : undefined
+})
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server    → http://0.0.0.0:${PORT}`)

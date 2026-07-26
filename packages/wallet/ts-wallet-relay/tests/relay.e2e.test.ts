@@ -44,14 +44,14 @@ function stopServer(server: http.Server): Promise<void> {
 async function pairMobile(
   pairingUri: string,
   mobileWallet: ProtoWallet,
-  onRequest?: (method: string, params: unknown) => Promise<unknown>,
+  onRequest?: (method: string, params: unknown) => Promise<unknown>
 ): Promise<WalletPairingSession> {
   const { params, error } = parsePairingUri(pairingUri)
   if (!params) throw new Error(error!)
 
   const session = new WalletPairingSession(mobileWallet, params, {
     implementedMethods: new Set(['getPublicKey', 'createAction']),
-    autoApproveMethods: new Set(['getPublicKey', 'createAction']),
+    autoApproveMethods: new Set(['getPublicKey', 'createAction'])
   })
 
   if (onRequest) session.onRequest(onRequest)
@@ -61,8 +61,14 @@ async function pairMobile(
   await new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('pairMobile timed out')), 5000)
     session
-      .on('connected', () => { clearTimeout(t); resolve() })
-      .on('error',     msg => { clearTimeout(t); reject(new Error(msg)) })
+      .on('connected', () => {
+        clearTimeout(t)
+        resolve()
+      })
+      .on('error', msg => {
+        clearTimeout(t)
+        reject(new Error(msg))
+      })
     void session.connect()
   })
 
@@ -87,7 +93,7 @@ describe('WalletRelayService E2E', () => {
       server,
       wallet: new ProtoWallet(PrivateKey.fromRandom()),
       relayUrl: `ws://localhost:${port}`,
-      origin: `http://localhost:${port}`,
+      origin: `http://localhost:${port}`
     })
   }, 10_000)
 
@@ -111,7 +117,7 @@ describe('WalletRelayService E2E', () => {
     it('GET /api/session returns a pending session', async () => {
       const res = await fetch(`${baseUrl}/api/session`)
       expect(res.ok).toBe(true)
-      const body = await res.json() as { sessionId: string; status: string }
+      const body = (await res.json()) as { sessionId: string; status: string }
       expect(body.sessionId).toBeTruthy()
       expect(body.status).toBe('pending')
     })
@@ -120,7 +126,7 @@ describe('WalletRelayService E2E', () => {
       const created = await service.createSession()
       const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`)
       expect(res.ok).toBe(true)
-      const body = await res.json() as { sessionId: string; status: string; relay: string }
+      const body = (await res.json()) as { sessionId: string; status: string; relay: string }
       expect(body.sessionId).toBe(created.sessionId)
       expect(body.status).toBe('pending')
       expect(body.relay).toMatch(/^ws:\/\//)
@@ -135,11 +141,12 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const capped = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        maxSessions: 1,
+        maxSessions: 1
       })
       try {
         // First session fills the cap
@@ -205,15 +212,19 @@ describe('WalletRelayService E2E', () => {
       const connectedIds: string[] = []
 
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        onSessionConnected: id => connectedIds.push(id),
+        onSessionConnected: id => connectedIds.push(id)
       })
       try {
         const created = await svc.createSession()
-        const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+        const mobile = await pairMobile(
+          created.pairingUri,
+          new ProtoWallet(PrivateKey.fromRandom())
+        )
         expect(connectedIds).toContain(created.sessionId)
         mobile.disconnect()
       } finally {
@@ -228,15 +239,19 @@ describe('WalletRelayService E2E', () => {
       const disconnectedIds: string[] = []
 
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        onSessionDisconnected: id => disconnectedIds.push(id),
+        onSessionDisconnected: id => disconnectedIds.push(id)
       })
       try {
         const created = await svc.createSession()
-        const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+        const mobile = await pairMobile(
+          created.pairingUri,
+          new ProtoWallet(PrivateKey.fromRandom())
+        )
         mobile.disconnect()
         // Allow the WS close event to propagate through the server
         await new Promise(r => setTimeout(r, 100))
@@ -256,13 +271,15 @@ describe('WalletRelayService E2E', () => {
       const { publicKey: expectedKey } = await mobileWallet.getPublicKey({ identityKey: true })
 
       const created = await service.createSession()
-      const mobile = await pairMobile(
-        created.pairingUri, mobileWallet,
-        (_method, params) => mobileWallet.getPublicKey(params as { identityKey: true }),
+      const mobile = await pairMobile(created.pairingUri, mobileWallet, (_method, params) =>
+        mobileWallet.getPublicKey(params as { identityKey: true })
       )
 
       const rpc = await service.sendRequest(
-        created.sessionId, 'getPublicKey', { identityKey: true }, created.desktopToken
+        created.sessionId,
+        'getPublicKey',
+        { identityKey: true },
+        created.desktopToken
       )
 
       expect(rpc.result).toMatchObject({ publicKey: expectedKey })
@@ -273,22 +290,21 @@ describe('WalletRelayService E2E', () => {
       const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
       const created = await service.createSession()
 
-      const mobile = await pairMobile(
-        created.pairingUri, mobileWallet,
-        (_method, params) => mobileWallet.getPublicKey(params as { identityKey: true }),
+      const mobile = await pairMobile(created.pairingUri, mobileWallet, (_method, params) =>
+        mobileWallet.getPublicKey(params as { identityKey: true })
       )
 
       const res = await fetch(`${baseUrl}/api/request/${created.sessionId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Desktop-Token': created.desktopToken,
+          'X-Desktop-Token': created.desktopToken
         },
-        body: JSON.stringify({ method: 'getPublicKey', params: { identityKey: true } }),
+        body: JSON.stringify({ method: 'getPublicKey', params: { identityKey: true } })
       })
 
       expect(res.ok).toBe(true)
-      const body = await res.json() as { result?: { publicKey: string } }
+      const body = (await res.json()) as { result?: { publicKey: string } }
       expect(body.result?.publicKey).toBeTruthy()
       mobile.disconnect()
     }, 10_000)
@@ -297,13 +313,15 @@ describe('WalletRelayService E2E', () => {
       const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
       const created = await service.createSession()
 
-      const mobile = await pairMobile(
-        created.pairingUri, mobileWallet,
-        () => Promise.reject(new Error('wallet unavailable')),
+      const mobile = await pairMobile(created.pairingUri, mobileWallet, () =>
+        Promise.reject(new Error('wallet unavailable'))
       )
 
       const rpc = await service.sendRequest(
-        created.sessionId, 'createAction', {}, created.desktopToken
+        created.sessionId,
+        'createAction',
+        {},
+        created.desktopToken
       )
 
       expect(rpc.error?.message).toBe('wallet unavailable')
@@ -331,11 +349,12 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const unsigned = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        signQrCodes: false,
+        signQrCodes: false
       })
       try {
         const s = await unsigned.createSession()
@@ -395,12 +414,19 @@ describe('WalletRelayService E2E', () => {
       const created = await service.createSession()
 
       const mobile = await pairMobile(
-        created.pairingUri, mobileWallet,
-        () => new Promise(() => { /* intentionally never resolves */ }),
+        created.pairingUri,
+        mobileWallet,
+        () =>
+          new Promise(() => {
+            /* intentionally never resolves */
+          })
       )
 
       const requestPromise = service.sendRequest(
-        created.sessionId, 'getPublicKey', {}, created.desktopToken
+        created.sessionId,
+        'getPublicKey',
+        {},
+        created.desktopToken
       )
 
       // Give the request one tick to register as pending on the server
@@ -418,7 +444,9 @@ describe('WalletRelayService E2E', () => {
 
     it('deleteSession() throws for an invalid desktop token', async () => {
       const created = await service.createSession()
-      expect(() => service.deleteSession(created.sessionId, 'wrong-token')).toThrow('Invalid desktop token')
+      expect(() => service.deleteSession(created.sessionId, 'wrong-token')).toThrow(
+        'Invalid desktop token'
+      )
     })
 
     it('DELETE /api/session/:id returns 204 and marks session expired', async () => {
@@ -427,7 +455,7 @@ describe('WalletRelayService E2E', () => {
 
       const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
         method: 'DELETE',
-        headers: { 'X-Desktop-Token': created.desktopToken },
+        headers: { 'X-Desktop-Token': created.desktopToken }
       })
 
       expect(res.status).toBe(204)
@@ -440,7 +468,7 @@ describe('WalletRelayService E2E', () => {
 
       const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
         method: 'DELETE',
-        headers: { 'X-Desktop-Token': 'wrong-token' },
+        headers: { 'X-Desktop-Token': 'wrong-token' }
       })
 
       expect(res.status).toBe(401)
@@ -450,7 +478,7 @@ describe('WalletRelayService E2E', () => {
       const created = await service.createSession()
 
       const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       })
 
       expect(res.status).toBe(401)
@@ -459,7 +487,7 @@ describe('WalletRelayService E2E', () => {
     it('DELETE /api/session/:id returns 404 for unknown session', async () => {
       const res = await fetch(`${baseUrl}/api/session/does-not-exist`, {
         method: 'DELETE',
-        headers: { 'X-Desktop-Token': 'any-token' },
+        headers: { 'X-Desktop-Token': 'any-token' }
       })
 
       expect(res.status).toBe(404)
@@ -471,15 +499,19 @@ describe('WalletRelayService E2E', () => {
       const disconnectedIds: string[] = []
 
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        onSessionDisconnected: id => disconnectedIds.push(id),
+        onSessionDisconnected: id => disconnectedIds.push(id)
       })
       try {
         const created = await svc.createSession()
-        const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+        const mobile = await pairMobile(
+          created.pairingUri,
+          new ProtoWallet(PrivateKey.fromRandom())
+        )
 
         svc.deleteSession(created.sessionId, created.desktopToken)
 
@@ -504,9 +536,9 @@ describe('WalletRelayService E2E', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Desktop-Token': created.desktopToken,
+          'X-Desktop-Token': created.desktopToken
         },
-        body: JSON.stringify({ method: 'getPublicKey', params: {} }),
+        body: JSON.stringify({ method: 'getPublicKey', params: {} })
       })
 
       expect(res.status).toBe(400)
@@ -524,7 +556,7 @@ describe('WalletRelayService E2E', () => {
       const res = await fetch(`${baseUrl}/api/request/${created.sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Desktop-Token': 'bad-token' },
-        body: JSON.stringify({ method: 'getPublicKey', params: {} }),
+        body: JSON.stringify({ method: 'getPublicKey', params: {} })
       })
 
       expect(res.status).toBe(401)
@@ -538,9 +570,9 @@ describe('WalletRelayService E2E', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Desktop-Token': created.desktopToken,
+          'X-Desktop-Token': created.desktopToken
         },
-        body: JSON.stringify({ method: 'getPublicKey', params: {} }),
+        body: JSON.stringify({ method: 'getPublicKey', params: {} })
       })
 
       expect(res.status).toBe(400)
@@ -563,8 +595,12 @@ describe('WalletRelayService E2E', () => {
 
       // Mobile pairs but its handler never resolves, simulating a stalled wallet
       const mobile = await pairMobile(
-        created.pairingUri, mobileWallet,
-        () => new Promise(() => { /* intentionally never resolves */ }),
+        created.pairingUri,
+        mobileWallet,
+        () =>
+          new Promise(() => {
+            /* intentionally never resolves */
+          })
       )
 
       // Start the request (in-flight on the server)
@@ -572,9 +608,9 @@ describe('WalletRelayService E2E', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Desktop-Token': created.desktopToken,
+          'X-Desktop-Token': created.desktopToken
         },
-        body: JSON.stringify({ method: 'createAction', params: {} }),
+        body: JSON.stringify({ method: 'createAction', params: {} })
       })
 
       // Give the request one tick to register as pending on the server
@@ -585,7 +621,7 @@ describe('WalletRelayService E2E', () => {
 
       const res = await requestPromise
       expect(res.status).toBe(504)
-      const body = await res.json() as { error: string }
+      const body = (await res.json()) as { error: string }
       expect(body.error.toLowerCase()).toMatch(/disconnect/)
     }, 10_000)
   })
@@ -609,10 +645,11 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/
       })
       try {
         const created = await svc.createSession({ origin: 'https://app.example.com' })
@@ -628,15 +665,16 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: ['https://app.example.com'],
+        allowedOrigins: ['https://app.example.com']
       })
       try {
-        await expect(
-          svc.createSession({ origin: 'https://evil.com' })
-        ).rejects.toThrow(/not in the allowedOrigins list/)
+        await expect(svc.createSession({ origin: 'https://evil.com' })).rejects.toThrow(
+          /not in the allowedOrigins list/
+        )
       } finally {
         svc.stop()
         await stopServer(server)
@@ -647,17 +685,18 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/
       })
       try {
         const res = await fetch(`http://localhost:${port}/api/session`, {
-          headers: { Origin: 'https://app.example.com' },
+          headers: { Origin: 'https://app.example.com' }
         })
         expect(res.ok).toBe(true)
-        const body = await res.json() as { pairingUri: string }
+        const body = (await res.json()) as { pairingUri: string }
         const { params } = parsePairingUri(body.pairingUri)
         expect(params?.origin).toBe('https://app.example.com')
       } finally {
@@ -670,14 +709,15 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: ['https://app.example.com'],
+        allowedOrigins: ['https://app.example.com']
       })
       try {
         const res = await fetch(`http://localhost:${port}/api/session`, {
-          headers: { Origin: 'https://evil.com' },
+          headers: { Origin: 'https://evil.com' }
         })
         expect(res.status).toBe(403)
       } finally {
@@ -691,7 +731,7 @@ describe('WalletRelayService E2E', () => {
       // the constructor default rather than rejecting.
       const res = await fetch(`${baseUrl}/api/session`)
       expect(res.ok).toBe(true)
-      const body = await res.json() as { pairingUri: string }
+      const body = (await res.json()) as { pairingUri: string }
       const { params } = parsePairingUri(body.pairingUri)
       expect(params?.origin).toBe(baseUrl)
     })
@@ -700,10 +740,11 @@ describe('WalletRelayService E2E', () => {
       const { app, server } = makeServer()
       const port = await startListening(server)
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/
       })
       try {
         const created = await svc.createSession({ origin: 'https://app.example.com' })
@@ -726,11 +767,12 @@ describe('WalletRelayService E2E', () => {
       const before = server.listenerCount('upgrade')
       const port = await startListening(server)
       const svc = new WalletRelayService({
-        app, server,
+        app,
+        server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
         origin: `http://localhost:${port}`,
-        noServer: true,
+        noServer: true
       })
       // Service attached no upgrade listener of its own.
       expect(server.listenerCount('upgrade')).toBe(before)
@@ -741,9 +783,19 @@ describe('WalletRelayService E2E', () => {
       try {
         const opened = await new Promise<boolean>(resolve => {
           const ws = new WebSocket(`ws://localhost:${port}/ws?topic=t&role=mobile`)
-          const timer = setTimeout(() => { ws.terminate(); resolve(false) }, 1500)
-          ws.on('open',  () => { clearTimeout(timer); ws.close(); resolve(true) })
-          ws.on('error', () => { clearTimeout(timer); resolve(false) })
+          const timer = setTimeout(() => {
+            ws.terminate()
+            resolve(false)
+          }, 1500)
+          ws.on('open', () => {
+            clearTimeout(timer)
+            ws.close()
+            resolve(true)
+          })
+          ws.on('error', () => {
+            clearTimeout(timer)
+            resolve(false)
+          })
         })
         expect(opened).toBe(true)
       } finally {

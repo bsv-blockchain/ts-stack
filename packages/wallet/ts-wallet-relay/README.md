@@ -10,10 +10,10 @@ Lets any web app offer "connect via mobile wallet" as a signing or authenticatio
 
 ## Who needs what
 
-| You are | What you need |
-|---------|---------------|
-| **Web app developer** adding mobile wallet support to a site | Backend: one `WalletRelayService` call. Frontend: `useWalletRelayClient` + `WalletConnectionModal` + `QRDisplay` from `@bsv/wallet-relay/react` |
-| **Mobile wallet developer** adding QR pairing to a wallet app | `WalletPairingSession` from `@bsv/wallet-relay/client` |
+| You are                                                       | What you need                                                                                                                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Web app developer** adding mobile wallet support to a site  | Backend: one `WalletRelayService` call. Frontend: `useWalletRelayClient` + `WalletConnectionModal` + `QRDisplay` from `@bsv/wallet-relay/react` |
+| **Mobile wallet developer** adding QR pairing to a wallet app | `WalletPairingSession` from `@bsv/wallet-relay/client`                                                                                          |
 
 **Most integrators are in the first group.** If you're building a website that lets users connect their mobile BSV wallet, you do not touch the mobile side at all. The `WalletPairingSession` API exists for wallet app developers (like BSV Browser) who are implementing the mobile end of the protocol.
 
@@ -41,6 +41,7 @@ node --input-type=commonjs -e "const {PrivateKey}=require('@bsv/sdk'); console.l
 ```
 
 `.env`:
+
 ```
 WALLET_PRIVATE_KEY=<hex output from above — keep secret, never commit>
 RELAY_URL=ws://localhost:3000
@@ -53,6 +54,8 @@ ORIGIN=http://localhost:5173
 > **Production note:** in a typical deployment, both `RELAY_URL` and `ORIGIN` share the same domain (`wss://yourapp.com` + `https://yourapp.com`). No extra configuration is needed. The relay can freely be on a separate domain or a third-party service — the mobile fetches the relay address from the origin server over HTTPS, making the origin's TLS certificate the trust anchor rather than hostname matching.
 
 > **Multi-app deployments:** one relay can serve N webapps. Pass an `allowedOrigins` allowlist (`string[]`, `RegExp`, or predicate) to `WalletRelayService` and the built-in `GET /api/session` route forwards each browser's `Origin` header into `createSession({ origin })` — every QR points back at the calling webapp instead of the relay's own URL. See [API.md](./API.md#walletrelayservice) for the full option.
+
+> **Public-service default:** when neither `allowedOrigins` nor a constructor `origin` is supplied, the relay accepts browser origins from previously unknown domains. `ORIGIN` remains the fallback URL placed in a QR; setting it as an environment variable does not silently create a WebSocket allowlist. The scaffold mirrors this with public reflected CORS by default and an optional comma-separated `ALLOWED_ORIGINS` whitelist. Origin checks and CORS are deployment controls, not authentication: desktop tokens, topic validation, QR signatures, and encrypted pairing remain enforced in either mode.
 
 > **Local dev with split frontend/backend:** if Vite and your Node server run on different ports, add `MOBILE_ORIGIN=http://<your-lan-ip>:3000` (the backend port) so the mobile device can reach `GET /api/session/:id`. `ORIGIN` stays as the Vite URL for browser CORS. This variable is not needed in production.
 
@@ -112,38 +115,48 @@ import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { WalletRelayService } from '@bsv/wallet-relay'
 
-const ORIGIN = process.env.ORIGIN ?? 'http://localhost:5173'
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(value => value.trim())
 
-const app    = express()
-app.use(cors({
-  origin: ORIGIN,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token'],
-}))
+const app = express()
+app.use(
+  cors({
+    // Public by default; set ALLOWED_ORIGINS to opt into an exact whitelist.
+    origin: allowedOrigins?.length ? allowedOrigins : true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
+  })
+)
 app.use(express.json())
 
 const server = createServer(app)
 const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))
 
-new WalletRelayService({ app, server, wallet })
+new WalletRelayService({
+  app,
+  server,
+  wallet,
+  allowedOrigins: allowedOrigins?.length ? allowedOrigins : undefined
+})
 
 server.listen(3000)
 ```
 
 That's the entire backend. `WalletRelayService` registers four REST routes and the `/ws` WebSocket endpoint automatically:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/session` | Create session, return `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
-| `GET` | `/api/session/:id` | Poll session status |
-| `POST` | `/api/request/:id` | Send a wallet RPC call to the paired mobile |
-| `DELETE` | `/api/session/:id` | Terminate session — closes the mobile's WebSocket so the mobile app is notified |
+| Method   | Path               | Description                                                                         |
+| -------- | ------------------ | ----------------------------------------------------------------------------------- |
+| `GET`    | `/api/session`     | Create session, return `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
+| `GET`    | `/api/session/:id` | Poll session status                                                                 |
+| `POST`   | `/api/request/:id` | Send a wallet RPC call to the paired mobile                                         |
+| `DELETE` | `/api/session/:id` | Terminate session — closes the mobile's WebSocket so the mobile app is notified     |
 
-`relayUrl` and `origin` are optional — they default to `process.env.RELAY_URL` / `process.env.ORIGIN`, then `ws://localhost:3000` / `http://localhost:5173`. For multi-app deployments, also pass `allowedOrigins` (a `string[]`, `RegExp`, or predicate). Without it, the only origin a caller can claim is the constructor `origin`:
+`relayUrl` and `origin` are optional — they default to `process.env.RELAY_URL` / `process.env.ORIGIN`, then `ws://localhost:3000` / `http://localhost:5173`. For multi-app deployments, optionally pass `allowedOrigins` (a `string[]`, `RegExp`, or predicate). With neither `allowedOrigins` nor an explicit constructor `origin`, origin validation is public-by-default. Supplying an explicit constructor `origin` retains the legacy exact-origin restriction:
 
 ```ts
 new WalletRelayService({
-  app, server, wallet,
-  allowedOrigins: ['https://app-a.example.com', 'https://app-b.example.com'],
+  app,
+  server,
+  wallet,
+  allowedOrigins: ['https://app-a.example.com', 'https://app-b.example.com']
   // or: /\.example\.com$/
   // or: (origin) => origin.endsWith('.example.com')
 })
@@ -153,7 +166,7 @@ The built-in `GET /api/session` route forwards the request's `Origin` header int
 
 > **`desktopToken`** is returned by `GET /api/session` and must be sent as an `X-Desktop-Token` header on every `POST /api/request/:id` call. It ensures that only the frontend that created the session can send wallet requests — even if another client somehow learns the `sessionId`. `useWalletRelayClient` / `WalletRelayClient` handle this automatically. If you are calling `relay.sendRequest()` directly from your own route handlers (Next.js, etc.) you must forward the header yourself — see [Next.js setup](#nextjs-setup) below.
 
-> **CORS:** if your frontend and backend run on different origins, you must include `X-Desktop-Token` in your CORS `allowedHeaders`. Without it the browser's preflight check blocks every `POST /api/request/:id` call. The example above already includes it — don't remove it.
+> **CORS and CSP:** if your frontend and backend run on different origins, include `X-Desktop-Token` in CORS `allowedHeaders`; otherwise the browser's preflight blocks `POST /api/request/:id`. Public CORS should reflect the requesting origin without enabling cookie credentials. To opt into a whitelist, apply the same exact origins to CORS and `allowedOrigins`. CSP is owned by the embedding app, not injected by the relay; its `connect-src` must include the configured HTTP(S) origin and WS(S) relay. Do not use CORS or CSP as a substitute for relay authentication.
 
 #### Sharing the server with other WebSocket services
 
@@ -168,14 +181,15 @@ import { WebSocketServer } from 'ws'
 new WalletRelayService({ app, server, wallet, path: '/wallet-ws' })
 
 // Or run your own upgrade dispatcher across several WS services
-const relay  = new WalletRelayService({ app, server, wallet, noServer: true })
+const relay = new WalletRelayService({ app, server, wallet, noServer: true })
 const msgWss = new WebSocketServer({ noServer: true })
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost')
-  if (pathname === '/ws')             relay.handleUpgrade(req, socket, head)
-  else if (pathname === '/messaging') msgWss.handleUpgrade(req, socket, head, ws => msgWss.emit('connection', ws, req))
-  else                                socket.destroy()
+  if (pathname === '/ws') relay.handleUpgrade(req, socket, head)
+  else if (pathname === '/messaging')
+    msgWss.handleUpgrade(req, socket, head, ws => msgWss.emit('connection', ws, req))
+  else socket.destroy()
 })
 ```
 
@@ -188,18 +202,14 @@ In `noServer` mode the relay attaches no `upgrade` listener of its own — you d
 ```tsx
 import { useState, useCallback } from 'react'
 import type { WalletClient } from '@bsv/sdk'
-import {
-  useWalletRelayClient,
-  WalletConnectionModal,
-  QRDisplay,
-} from '@bsv/wallet-relay/react'
+import { useWalletRelayClient, WalletConnectionModal, QRDisplay } from '@bsv/wallet-relay/react'
 
 export function App() {
   const [mode, setMode] = useState<'detecting' | 'local' | 'mobile'>('detecting')
 
   // autoCreate: false — only start a backend session when the user picks the mobile path
   const { session, error, createSession, cancelSession, sendRequest } = useWalletRelayClient({
-    autoCreate: false,
+    autoCreate: false
   })
 
   const handleLocalWallet = useCallback((wallet: WalletClient) => {
@@ -210,7 +220,9 @@ export function App() {
   // Stop polling when the user navigates away from the QR screen
   useEffect(() => {
     if (mode !== 'mobile') return
-    return () => { cancelSession() }
+    return () => {
+      cancelSession()
+    }
   }, [mode])
 
   return (
@@ -218,7 +230,10 @@ export function App() {
       {mode === 'detecting' && (
         <WalletConnectionModal
           onLocalWallet={handleLocalWallet}
-          onMobileQR={() => { setMode('mobile'); void createSession() }}
+          onMobileQR={() => {
+            setMode('mobile')
+            void createSession()
+          }}
         />
       )}
 
@@ -229,15 +244,14 @@ export function App() {
         </>
       )}
 
-      {mode === 'local' && (
-        <>{/* TODO: render your app here using the local wallet */}</>
-      )}
+      {mode === 'local' && <>{/* TODO: render your app here using the local wallet */}</>}
     </>
   )
 }
 ```
 
 `WalletConnectionModal` silently checks for a local BSV wallet first:
+
 - **Local wallet found** → calls `onLocalWallet` immediately, renders nothing
 - **Not found** → renders an install link and a "Connect via Mobile QR" button
 
@@ -249,10 +263,10 @@ export function App() {
 
 The relay WebSocket is decoupled from your origin server — the mobile fetches the relay URL from your origin over HTTPS after scanning the QR. This means the WebSocket relay can run anywhere: a separate persistent service, or a third-party provider (Ably, Pusher, Soketi).
 
-| Deployment | Supported | Notes |
-|---|---|---|
-| Self-hosted / VPS / container | ✓ | Run `WalletRelayService` with built-in WebSocket relay |
-| Vercel / Netlify / serverless | ✓ | REST routes in serverless functions; point `RELAY_URL` at a separate relay service or third-party provider |
+| Deployment                    | Supported | Notes                                                                                                      |
+| ----------------------------- | --------- | ---------------------------------------------------------------------------------------------------------- |
+| Self-hosted / VPS / container | ✓         | Run `WalletRelayService` with built-in WebSocket relay                                                     |
+| Vercel / Netlify / serverless | ✓         | REST routes in serverless functions; point `RELAY_URL` at a separate relay service or third-party provider |
 
 **Relay service** — deploy a minimal Express + `WalletRelayService` on Railway, Render, or Fly.io. This handles the WebSocket connections and session state. Set `RELAY_URL` in your Next.js environment to its `wss://` address.
 
@@ -260,7 +274,7 @@ The relay WebSocket is decoupled from your origin server — the mobile fetches 
 
 ```ts
 // app/api/session/route.ts
-import { relay } from '@/lib/relay'  // your WalletRelayService singleton
+import { relay } from '@/lib/relay' // your WalletRelayService singleton
 
 export async function GET() {
   const info = await relay.createSession()
@@ -297,7 +311,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 import { relay } from '@/lib/relay'
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const { method, params: rpcParams } = await req.json() as { method: string; params: unknown }
+  const { method, params: rpcParams } = (await req.json()) as { method: string; params: unknown }
   const token = req.headers.get('x-desktop-token') ?? undefined
   try {
     const result = await relay.sendRequest(params.id, method, rpcParams, token)
@@ -348,7 +362,7 @@ If you want refreshes to keep the user paired without auto-creating a session fo
 ```tsx
 const { session, wallet, createSession } = useWalletRelayClient({
   autoCreate: false,
-  autoResume: true, // resume on mount only — never auto-create
+  autoResume: true // resume on mount only — never auto-create
 })
 ```
 
@@ -364,13 +378,20 @@ If you are building a BSV wallet app and want to support QR pairing with desktop
 
 ```ts
 import { WalletClient } from '@bsv/sdk'
-import { WalletPairingSession, parsePairingUri, verifyPairingSignature } from '@bsv/wallet-relay/client'
+import {
+  WalletPairingSession,
+  parsePairingUri,
+  verifyPairingSignature
+} from '@bsv/wallet-relay/client'
 
 const result = parsePairingUri(scannedUri)
-if (result.error) { showError(result.error); return }
+if (result.error) {
+  showError(result.error)
+  return
+}
 
 // Verify the QR signature before trusting any of the fields
-if (!await verifyPairingSignature(result.params)) {
+if (!(await verifyPairingSignature(result.params))) {
   showError('QR code signature is invalid — do not connect')
   return
 }
@@ -378,21 +399,23 @@ if (!await verifyPairingSignature(result.params)) {
 // Show result.params.origin to the user — this is the domain they are about to connect to
 await showApprovalUI(result.params.origin)
 
-const wallet  = new WalletClient('auto')
+const wallet = new WalletClient('auto')
 const session = new WalletPairingSession(wallet, result.params, {
   // Defaults to the full BSV Browser method set — override only if needed:
   // implementedMethods: new Set(['getPublicKey', 'createAction']),
   // autoApproveMethods: new Set(['getPublicKey']),
   onApprovalRequired: async (method, params) => await showApprovalModal(method, params),
-  walletMeta: { name: 'My Wallet', version: '1.0' },
+  walletMeta: { name: 'My Wallet', version: '1.0' }
 })
 
 session
   // WalletClient implements WalletInterface but isn't string-indexed — cast required
-  .onRequest(async (method, params) => (wallet as Record<string, (p: unknown) => Promise<unknown>>)[method](params))
-  .on('connected',    () => setStatus('connected'))
+  .onRequest(async (method, params) =>
+    (wallet as Record<string, (p: unknown) => Promise<unknown>>)[method](params)
+  )
+  .on('connected', () => setStatus('connected'))
   .on('disconnected', () => setStatus('disconnected'))
-  .on('error',        msg => setError(msg))
+  .on('error', msg => setError(msg))
 
 // Fetch the relay URL from the origin server over HTTPS — must be called before connect()
 await session.resolveRelay()
@@ -417,14 +440,14 @@ await session.reconnect(Number(lastSeq ?? 0))
 
 `@bsv/wallet-relay/react` exports six items:
 
-| Export | Description |
-|--------|-------------|
-| `useWalletRelayClient` | Session creation, status polling, `wallet` proxy (drop-in `WalletInterface`), `cancelSession` for cleanup on navigation, and `sendRequest` — the main hook for QR pairing |
-| `WalletConnectionModal` | Detects local wallet; shows install link + mobile QR button if none found |
-| `QRDisplay` | QR image with status badge and session refresh |
-| `QRPairingCode` | Tappable QR that opens the `wallet://pair?…` deeplink directly |
-| `RequestLog` | Live request/response log (useful for debugging and demo UIs) |
-| `useQRPairing` | Cross-platform deeplink hook — use directly in React Native |
+| Export                  | Description                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useWalletRelayClient`  | Session creation, status polling, `wallet` proxy (drop-in `WalletInterface`), `cancelSession` for cleanup on navigation, and `sendRequest` — the main hook for QR pairing |
+| `WalletConnectionModal` | Detects local wallet; shows install link + mobile QR button if none found                                                                                                 |
+| `QRDisplay`             | QR image with status badge and session refresh                                                                                                                            |
+| `QRPairingCode`         | Tappable QR that opens the `wallet://pair?…` deeplink directly                                                                                                            |
+| `RequestLog`            | Live request/response log (useful for debugging and demo UIs)                                                                                                             |
+| `useQRPairing`          | Cross-platform deeplink hook — use directly in React Native                                                                                                               |
 
 All visual components are unstyled. Pass `className`, `style`, and per-element props to style them. See [API.md](./API.md) for full prop documentation.
 
@@ -456,15 +479,17 @@ import {
   WalletRequestHandler,
   buildPairingUri,
   encryptEnvelope,
-  decryptEnvelope,
+  decryptEnvelope
 } from '@bsv/wallet-relay'
 
 const sessions = new QRSessionManager()
-const relay    = new WebSocketRelay(server)
-const handler  = new WalletRequestHandler()
+const relay = new WebSocketRelay(server)
+const handler = new WalletRequestHandler()
 
 relay.onValidateTopic(topic => sessions.getSession(topic) !== null)
-relay.onIncoming((topic, envelope, role) => { /* custom logic */ })
+relay.onIncoming((topic, envelope, role) => {
+  /* custom logic */
+})
 sessions.onSessionExpired(id => relay.removeTopic(id))
 ```
 
@@ -488,11 +513,36 @@ All messages use BSV wallet-native ECDH via `@bsv/sdk`. No custom crypto.
 
 ## Entry points
 
-| Import | Environment | Contains |
-|--------|-------------|----------|
-| `@bsv/wallet-relay` | Node.js only | `WalletRelayService`, `WebSocketRelay`, `QRSessionManager`, `WalletRequestHandler`, shared utilities |
-| `@bsv/wallet-relay/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, `WalletMethodName`, shared utilities, no Node.js deps |
-| `@bsv/wallet-relay/react` | React ≥17 | `useWalletRelayClient`, `WalletConnectionModal`, `QRDisplay`, `QRPairingCode`, `RequestLog`, `useQRPairing` |
+| Import                     | Environment            | Contains                                                                                                    |
+| -------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `@bsv/wallet-relay`        | Node.js only           | `WalletRelayService`, `WebSocketRelay`, `QRSessionManager`, `WalletRequestHandler`, shared utilities        |
+| `@bsv/wallet-relay/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, `WalletMethodName`, shared utilities, no Node.js deps          |
+| `@bsv/wallet-relay/react`  | React ≥17              | `useWalletRelayClient`, `WalletConnectionModal`, `QRDisplay`, `QRPairingCode`, `RequestLog`, `useQRPairing` |
+
+---
+
+## Development and Distribution
+
+Run development from the `ts-stack` repository root with Node.js 24.11 or newer
+and pnpm 10:
+
+```bash
+pnpm install
+pnpm --filter @bsv/wallet-relay format:check
+pnpm --filter @bsv/wallet-relay lint
+pnpm --filter @bsv/wallet-relay typecheck
+pnpm --filter @bsv/wallet-relay test:coverage
+pnpm --filter @bsv/wallet-relay pack:check
+pnpm --filter @bsv/wallet-relay test:browser
+```
+
+The coverage gate ratchets all four Jest metrics. `pack:check` installs the
+exact tarball into ESM and CommonJS consumers, validates root/client/React
+entrypoints and conditional declarations, and executes the installed CLI help
+path without writing files. The browser check bundles only `./client` with Vite
+and esbuild, rejects server dependencies, validates source maps, and enforces
+raw, gzip, and Brotli budgets. Publishing and version changes are performed
+only by the repository release workflow.
 
 ---
 

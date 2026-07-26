@@ -1,14 +1,5 @@
-import {
-  Beef,
-  Script,
-  Transaction,
-  Utils,
-  Validation
-} from '@bsv/sdk'
-import {
-  ActionBatchFundingOutput,
-  BeginActionBatchResult
-} from '../../sdk/ActionBatch.interfaces'
+import { Beef, Transaction, Utils, Validation } from '@bsv/sdk'
+import { ActionBatchFundingOutput, BeginActionBatchResult } from '../../sdk/ActionBatch.interfaces'
 import {
   StorageCreateActionResult,
   StorageCreateTransactionSdkInput,
@@ -49,21 +40,18 @@ export interface ActionBatchPlannerState {
   estimatedChangeCount: number
 }
 
-function outpointOf (output: Pick<ActionBatchFundingOutput, 'txid' | 'vout'>): string {
+function outpointOf(output: Pick<ActionBatchFundingOutput, 'txid' | 'vout'>): string {
   if (output.txid == null) throw new WERR_INTERNAL('batch planner output is missing txid')
   return `${output.txid}.${output.vout}`
 }
 
-function randomDerivation (count: number, random: () => number): string {
+function randomDerivation(count: number, random: () => number): string {
   const bytes: number[] = []
   for (let i = 0; i < count; i++) bytes.push(Math.floor(random() * 256))
   return Utils.toBase64(bytes)
 }
 
-function outputFromBeef (
-  beef: Beef,
-  outpoint: { txid: string, vout: number }
-): PlannerOutput | undefined {
+function outputFromBeef(beef: Beef, outpoint: { txid: string; vout: number }): PlannerOutput | undefined {
   const transaction = beef.findTxid(outpoint.txid)?.tx
   if (transaction == null) return undefined
   const output = transaction?.outputs[outpoint.vout]
@@ -89,39 +77,44 @@ function outputFromBeef (
   }
 }
 
-function requireManagedChange (output: PlannerOutput | undefined, name: string): PlannerOutput {
+function requireManagedChange(output: PlannerOutput | undefined, name: string): PlannerOutput {
   if (
-    output == null || !output.change || output.type !== 'P2PKH' ||
-    output.providedBy !== 'storage' || output.purpose !== 'change' ||
-    output.derivationPrefix == null || output.derivationSuffix == null
+    output == null ||
+    !output.change ||
+    output.type !== 'P2PKH' ||
+    output.providedBy !== 'storage' ||
+    output.purpose !== 'change' ||
+    output.derivationPrefix == null ||
+    output.derivationSuffix == null
   ) {
     throw new WERR_INVALID_PARAMETER(name, 'wallet-managed BRC-29 change')
   }
   return output
 }
 
-function resolveInputOutput (
-  state: ActionBatchPlannerState,
-  outpoint: { txid: string, vout: number }
-): PlannerOutput {
+function resolveInputOutput(state: ActionBatchPlannerState, outpoint: { txid: string; vout: number }): PlannerOutput {
   const key = `${outpoint.txid}.${outpoint.vout}`
-  return state.staged.get(key) ?? state.explicit.get(key) ?? state.reserved.get(key) ??
+  return (
+    state.staged.get(key) ??
+    state.explicit.get(key) ??
+    state.reserved.get(key) ??
     (!state.discardedStagedTxids.has(outpoint.txid) ? outputFromBeef(state.sharedBeef, outpoint) : undefined) ??
-    (() => { throw new WERR_INVALID_PARAMETER('inputBEEF', `proof data for ${key}`) })()
+    (() => {
+      throw new WERR_INVALID_PARAMETER('inputBEEF', `proof data for ${key}`)
+    })()
+  )
 }
 
-export function plannerOutputLockingScript (
-  state: ActionBatchPlannerState,
-  output: PlannerOutput
-): number[] {
+export function plannerOutputLockingScript(state: ActionBatchPlannerState, output: PlannerOutput): number[] {
   if (output.lockingScript != null) return asArray(output.lockingScript)
   if (output.txid == null) throw new WERR_INTERNAL('batch planner output is missing txid')
   const script = state.sharedBeef.findTxid(output.txid)?.tx?.outputs[output.vout]?.lockingScript
-  if (script == null) throw new WERR_INTERNAL(`batch planner output ${output.txid}.${output.vout} is missing its script`)
+  if (script == null)
+    throw new WERR_INTERNAL(`batch planner output ${output.txid}.${output.vout} is missing its script`)
   return script.toBinary()
 }
 
-function sdkInputFromExplicit (
+function sdkInputFromExplicit(
   state: ActionBatchPlannerState,
   input: Validation.ValidCreateActionInput,
   vin: number,
@@ -147,7 +140,7 @@ function sdkInputFromExplicit (
   }
 }
 
-function sdkInputFromFunding (
+function sdkInputFromFunding(
   state: ActionBatchPlannerState,
   output: PlannerOutput,
   vin: number,
@@ -170,25 +163,31 @@ function sdkInputFromFunding (
   }
 }
 
-function sourceTransactionFor (state: ActionBatchPlannerState, output: PlannerOutput): number[] | Uint8Array | undefined {
+function sourceTransactionFor(
+  state: ActionBatchPlannerState,
+  output: PlannerOutput
+): number[] | Uint8Array | undefined {
   if (output.sourceTransaction != null) return output.sourceTransaction
   if (output.txid == null) return undefined
   return state.sharedBeef.findTxid(output.txid)?.tx?.toUint8Array()
 }
 
-function trimInputBeef (
+function trimInputBeef(
   state: ActionBatchPlannerState,
   args: Validation.ValidCreateActionArgs,
   inputs: StorageCreateTransactionSdkInput[]
 ): Uint8Array | undefined {
   if (args.options.returnTXIDOnly) return undefined
-  const beef = beefForTxids(state.sharedBeef, inputs.map(input => input.sourceTxid))
+  const beef = beefForTxids(
+    state.sharedBeef,
+    inputs.map(input => input.sourceTxid)
+  )
   if (args.inputBEEF != null) beef.mergeBeef(args.inputBEEF)
   for (const txid of args.options.knownTxids) if (beef.findTxid(txid) != null) beef.makeTxidOnly(txid)
   return beef.toUint8Array()
 }
 
-function requestedOutputs (args: Validation.ValidCreateActionArgs): StorageCreateTransactionSdkOutput[] {
+function requestedOutputs(args: Validation.ValidCreateActionArgs): StorageCreateTransactionSdkOutput[] {
   return args.outputs.map((output, vout) => ({
     ...output,
     vout,
@@ -199,10 +198,10 @@ function requestedOutputs (args: Validation.ValidCreateActionArgs): StorageCreat
 interface FundingPlan {
   allocated: PlannerOutput[]
   changeSatoshis: number[]
-  maxPossibleSatoshisAdjustment?: { fixedOutputIndex: number, satoshis: number }
+  maxPossibleSatoshisAdjustment?: { fixedOutputIndex: number; satoshis: number }
 }
 
-async function planFunding (
+async function planFunding(
   state: ActionBatchPlannerState,
   args: Validation.ValidCreateActionArgs,
   explicit: PlannerOutput[],
@@ -218,8 +217,13 @@ async function planFunding (
       unlockingScriptLength: args.inputs[index].unlockingScriptLength
     })),
     fixedOutputs: [
-      ...args.outputs.map(output => ({ satoshis: output.satoshis, lockingScriptLength: output.lockingScript.length / 2 })),
-      ...(state.begin.commissionSatoshis > 0 ? [{ satoshis: state.begin.commissionSatoshis, lockingScriptLength: 25 }] : [])
+      ...args.outputs.map(output => ({
+        satoshis: output.satoshis,
+        lockingScriptLength: output.lockingScript.length / 2
+      })),
+      ...(state.begin.commissionSatoshis > 0
+        ? [{ satoshis: state.begin.commissionSatoshis, lockingScriptLength: 25 }]
+        : [])
     ],
     feeModel: state.begin.feeModel,
     changeInitialSatoshis: Math.max(1, changeBasket.minimumDesiredUTXOValue),
@@ -229,7 +233,10 @@ async function planFunding (
     targetNetCount: changeBasket.numberOfDesiredUTXOs - state.estimatedChangeCount,
     randomVals: args.randomVals
   }
-  const allocate = async (targetSatoshis: number, exactSatoshis?: number): Promise<GenerateChangeSdkChangeInput | undefined> => {
+  const allocate = async (
+    targetSatoshis: number,
+    exactSatoshis?: number
+  ): Promise<GenerateChangeSdkChangeInput | undefined> => {
     let output = noSend.pop()
     output ??= selectCanonicalChange(
       available.filter(candidate => !allocated.has(candidate.outputId)),
@@ -254,7 +261,7 @@ async function planFunding (
   }
 }
 
-function makeChangeOutputs (
+function makeChangeOutputs(
   state: ActionBatchPlannerState,
   fixedOutputCount: number,
   changeSatoshis: number[],
@@ -274,7 +281,7 @@ function makeChangeOutputs (
   }))
 }
 
-export async function planAction (
+export async function planAction(
   state: ActionBatchPlannerState,
   args: Validation.ValidCreateActionArgs
 ): Promise<ActionBatchPlannedAction> {
@@ -291,7 +298,8 @@ export async function planAction (
   }
   const explicit = args.inputs.map(input => resolveInputOutput(state, input.outpoint))
   for (const output of explicit) {
-    if (output.change) throw new WERR_INVALID_PARAMETER('inputs', 'unmanaged inputs; use noSendChange for managed change')
+    if (output.change)
+      throw new WERR_INVALID_PARAMETER('inputs', 'unmanaged inputs; use noSendChange for managed change')
   }
   const noSendChange = args.options.noSendChange.map(outpoint =>
     requireManagedChange(resolveInputOutput(state, outpoint), `noSendChange ${outpoint.txid}.${outpoint.vout}`)
@@ -320,14 +328,18 @@ export async function planAction (
     outputs[adjustment.fixedOutputIndex].satoshis = adjustment.satoshis
   }
   const fixedOutputCount = outputs.length
-  outputs.push(...makeChangeOutputs(state, fixedOutputCount, funding.changeSatoshis, derivationPrefix, derivationRandom))
+  outputs.push(
+    ...makeChangeOutputs(state, fixedOutputCount, funding.changeSatoshis, derivationPrefix, derivationRandom)
+  )
   // Legacy output randomization starts a fresh deterministic stream. Keeping
   // that boundary is required for byte-for-byte parity with createAction.
   if (args.options.randomizeOutputs) randomizeOutputVouts(outputs, args.randomVals)
 
   const inputs = [
     ...explicit.map((output, vin) => sdkInputFromExplicit(state, args.inputs[vin], vin, output, args.isSignAction)),
-    ...funding.allocated.map((output, index) => sdkInputFromFunding(state, output, explicit.length + index, args.isSignAction))
+    ...funding.allocated.map((output, index) =>
+      sdkInputFromFunding(state, output, explicit.length + index, args.isSignAction)
+    )
   ]
   const consumedOutpoints = funding.allocated.map(outpointOf)
   for (const input of args.inputs) consumedOutpoints.push(`${input.outpoint.txid}.${input.outpoint.vout}`)
@@ -350,19 +362,20 @@ export async function planAction (
   return { dcr, consumedOutpoints, commissionKeyOffset }
 }
 
-export function addPlannerOutputs (
+export function addPlannerOutputs(
   target: Map<string, PlannerOutput>,
   outputs: ActionBatchFundingOutput[],
   basketName?: string
 ): void {
-  for (const output of outputs) target.set(outpointOf(output), {
-    ...output,
-    sourceTransaction: undefined,
-    basketName
-  })
+  for (const output of outputs)
+    target.set(outpointOf(output), {
+      ...output,
+      sourceTransaction: undefined,
+      basketName
+    })
 }
 
-export function stageTransactionOutputs (
+export function stageTransactionOutputs(
   state: ActionBatchPlannerState,
   tx: Transaction,
   dcr: StorageCreateActionResult
@@ -398,6 +411,6 @@ export function stageTransactionOutputs (
   }
 }
 
-export function mergePlannerBeef (state: ActionBatchPlannerState, tx: Transaction): void {
+export function mergePlannerBeef(state: ActionBatchPlannerState, tx: Transaction): void {
   state.sharedBeef.mergeRawTx(tx.toUint8Array())
 }

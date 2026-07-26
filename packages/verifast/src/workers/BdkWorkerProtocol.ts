@@ -37,48 +37,41 @@ export interface DigestBatchPayload {
 
 export type BdkWorkerRequest =
   | {
-    id: number
-    operation: 'preload'
-    verificationTables?: Uint8Array
-  }
-  | { id: number, operation: 'verifyScripts', payload: ScriptBatchPayload }
-  | { id: number, operation: 'verifySpends', payload: SpendBatchPayload }
-  | { id: number, operation: 'verifyDigests', payload: DigestBatchPayload }
+      id: number
+      operation: 'preload'
+      verificationTables?: Uint8Array
+    }
+  | { id: number; operation: 'verifyScripts'; payload: ScriptBatchPayload }
+  | { id: number; operation: 'verifySpends'; payload: SpendBatchPayload }
+  | { id: number; operation: 'verifyDigests'; payload: DigestBatchPayload }
 
-export type BdkWorkerRequestWithoutId =
-  BdkWorkerRequest extends infer Request
-    ? Request extends { id: number }
-      ? Omit<Request, 'id'>
-      : never
+export type BdkWorkerRequestWithoutId = BdkWorkerRequest extends infer Request
+  ? Request extends { id: number }
+    ? Omit<Request, 'id'>
     : never
+  : never
 
 export type BdkWorkerResult = Int32Array | Uint8Array
 
 export type BdkWorkerResponse =
-  | { id: number, result: BdkWorkerResult }
-  | { id: number, error: string }
+  { id: number; result: BdkWorkerResult } | { id: number; error: string }
 
 export type WorkerModuleFactory = () => Promise<BdkWasmModule>
 
-function isObject (value: unknown): value is Record<string, unknown> {
+function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function hasTypedArrays (
+function hasTypedArrays(
   value: unknown,
-  fields: ReadonlyArray<readonly [
-    string,
-    new (length?: number) => ArrayBufferView
-  ]>
+  fields: ReadonlyArray<readonly [string, new (length?: number) => ArrayBufferView]>
 ): value is Record<string, unknown> {
   if (!isObject(value)) return false
   return fields.every(([field, Type]) => value[field] instanceof Type)
 }
 
-function hasNetwork (value: Record<string, unknown>): boolean {
-  return Number.isInteger(value.network) &&
-    Number(value.network) >= 0 &&
-    Number(value.network) <= 5
+function hasNetwork(value: Record<string, unknown>): boolean {
+  return Number.isInteger(value.network) && Number(value.network) >= 0 && Number(value.network) <= 5
 }
 
 /**
@@ -88,7 +81,7 @@ function hasNetwork (value: Record<string, unknown>): boolean {
  * The WASM adapter remains responsible for validating cross-field lengths and
  * offsets because it has the operation-specific semantic context.
  */
-export function isBdkWorkerRequest (value: unknown): value is BdkWorkerRequest {
+export function isBdkWorkerRequest(value: unknown): value is BdkWorkerRequest {
   if (
     !isObject(value) ||
     !Number.isSafeInteger(value.id) ||
@@ -99,37 +92,40 @@ export function isBdkWorkerRequest (value: unknown): value is BdkWorkerRequest {
   }
 
   if (value.operation === 'preload') {
-    return value.verificationTables === undefined ||
-      value.verificationTables instanceof Uint8Array
+    return value.verificationTables === undefined || value.verificationTables instanceof Uint8Array
   }
   if (!isObject(value.payload)) return false
 
   switch (value.operation) {
     case 'verifyScripts':
-      return hasTypedArrays(value.payload, [
-        ['extendedTransactions', Uint8Array],
-        ['transactionOffsets', Uint32Array],
-        ['utxoHeights', Int32Array],
-        ['heightOffsets', Uint32Array],
-        ['blockHeights', Int32Array],
-        ['consensus', Uint8Array],
-        ['customFlags', Uint32Array],
-        ['customFlagOffsets', Uint32Array]
-      ]) && hasNetwork(value.payload)
+      return (
+        hasTypedArrays(value.payload, [
+          ['extendedTransactions', Uint8Array],
+          ['transactionOffsets', Uint32Array],
+          ['utxoHeights', Int32Array],
+          ['heightOffsets', Uint32Array],
+          ['blockHeights', Int32Array],
+          ['consensus', Uint8Array],
+          ['customFlags', Uint32Array],
+          ['customFlagOffsets', Uint32Array]
+        ]) && hasNetwork(value.payload)
+      )
     case 'verifySpends':
-      return hasTypedArrays(value.payload, [
-        ['transactions', Uint8Array],
-        ['transactionOffsets', Uint32Array],
-        ['inputIndices', Uint32Array],
-        ['lockingScripts', Uint8Array],
-        ['lockingScriptOffsets', Uint32Array],
-        ['sourceSatoshis', Float64Array],
-        ['utxoHeights', Int32Array],
-        ['blockHeights', Int32Array],
-        ['consensus', Uint8Array],
-        ['hasCustomFlags', Uint8Array],
-        ['customFlags', Uint32Array]
-      ]) && hasNetwork(value.payload)
+      return (
+        hasTypedArrays(value.payload, [
+          ['transactions', Uint8Array],
+          ['transactionOffsets', Uint32Array],
+          ['inputIndices', Uint32Array],
+          ['lockingScripts', Uint8Array],
+          ['lockingScriptOffsets', Uint32Array],
+          ['sourceSatoshis', Float64Array],
+          ['utxoHeights', Int32Array],
+          ['blockHeights', Int32Array],
+          ['consensus', Uint8Array],
+          ['hasCustomFlags', Uint8Array],
+          ['customFlags', Uint32Array]
+        ]) && hasNetwork(value.payload)
+      )
     case 'verifyDigests':
       return hasTypedArrays(value.payload, [
         ['publicKeys', Uint8Array],
@@ -143,7 +139,7 @@ export function isBdkWorkerRequest (value: unknown): value is BdkWorkerRequest {
   }
 }
 
-function requiredMethod<K extends keyof BdkWasmModule> (
+function requiredMethod<K extends keyof BdkWasmModule>(
   module: BdkWasmModule,
   method: K
 ): NonNullable<BdkWasmModule[K]> {
@@ -154,18 +150,18 @@ function requiredMethod<K extends keyof BdkWasmModule> (
   return implementation as NonNullable<BdkWasmModule[K]>
 }
 
-export function requestTransferables (request: BdkWorkerRequest): ArrayBuffer[] {
+export function requestTransferables(request: BdkWorkerRequest): ArrayBuffer[] {
   if (request.operation === 'preload') return []
   return Object.values(request.payload)
     .filter((value): value is ArrayBufferView => ArrayBuffer.isView(value))
     .map(value => value.buffer as ArrayBuffer)
 }
 
-export function resultTransferables (result: BdkWorkerResult): ArrayBuffer[] {
+export function resultTransferables(result: BdkWorkerResult): ArrayBuffer[] {
   return [result.buffer as ArrayBuffer]
 }
 
-export function createWorkerRequestHandler (
+export function createWorkerRequestHandler(
   factory: WorkerModuleFactory,
   respond: (response: BdkWorkerResponse, transfer: ArrayBuffer[]) => void
 ): (request: BdkWorkerRequest) => Promise<void> {
@@ -244,10 +240,13 @@ export function createWorkerRequestHandler (
       }
       respond({ id: request.id, result }, resultTransferables(result))
     } catch (error) {
-      respond({
-        id: request.id,
-        error: error instanceof Error ? error.message : String(error)
-      }, [])
+      respond(
+        {
+          id: request.id,
+          error: error instanceof Error ? error.message : String(error)
+        },
+        []
+      )
     }
   }
 }

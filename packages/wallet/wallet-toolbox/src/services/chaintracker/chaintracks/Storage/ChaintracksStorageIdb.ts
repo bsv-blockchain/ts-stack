@@ -8,20 +8,11 @@ import { LiveBlockHeader } from '../Api/BlockHeaderApi'
 import { addWork, convertBitsToWork, isMoreWork } from '../util/blockHeaderUtilities'
 
 import { HeightRange } from '../util/HeightRange'
-import { Chain } from '../../../../sdk/types'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
 import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 import { IDBPDatabase, IDBPTransaction, openDB } from 'idb'
 
 import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
-
-interface ChaintracksIdbData {
-  chain: Chain
-  liveHeaders: Map<number, LiveBlockHeader>
-  maxHeaderId: number
-  tipHeaderId: number
-  hashToHeaderId: Map<string, number>
-}
 
 export interface ChaintracksStorageIdbOptions extends ChaintracksStorageBaseOptions {}
 
@@ -34,12 +25,12 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
 
   allStores: string[] = ['live_headers', 'bulk_headers']
 
-  constructor (options: ChaintracksStorageIdbOptions) {
+  constructor(options: ChaintracksStorageIdbOptions) {
     super(options)
     this.dbName = `chaintracks-${this.chain}net`
   }
 
-  override async makeAvailable (): Promise<void> {
+  override async makeAvailable(): Promise<void> {
     if (this.isAvailable && this.hasMigrated) return
     // Not a base class policy, but we want to ensure migrations are run before getting to business.
     if (!this.hasMigrated) {
@@ -52,15 +43,17 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     }
   }
 
-  override async migrateLatest (): Promise<void> {
+  override async migrateLatest(): Promise<void> {
     if (this.db != null) return
     this.db = await this.initDB()
     await super.migrateLatest()
   }
 
-  override async destroy (): Promise<void> { /* intentional no-op: IDB cleanup handled by openDB */ }
+  override async destroy(): Promise<void> {
+    /* intentional no-op: IDB cleanup handled by openDB */
+  }
 
-  override async deleteLiveBlockHeaders (): Promise<void> {
+  override async deleteLiveBlockHeaders(): Promise<void> {
     await this.makeAvailable()
     await this.db?.clear('live_headers')
   }
@@ -74,7 +67,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @param maxHeight delete all records with less or equal `height`
    * @returns number of deleted records
    */
-  override async deleteOlderLiveBlockHeaders (maxHeight: number): Promise<number> {
+  override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['live_headers'])
@@ -106,7 +99,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @returns the active chain tip header
    * @throws an error if there is no tip.
    */
-  override async findChainTipHeader (): Promise<LiveBlockHeader> {
+  override async findChainTipHeader(): Promise<LiveBlockHeader> {
     const header = await this.findChainTipHeaderOrUndefined()
     if (header == null) throw new Error('Database contains no active chain tip header.')
     return header
@@ -117,7 +110,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @returns the active chain tip header
    * @throws an error if there is no tip.
    */
-  override async findChainTipHeaderOrUndefined (): Promise<LiveBlockHeader | undefined> {
+  override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -128,7 +121,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return header
   }
 
-  override async findLiveHeaderForBlockHash (hash: string): Promise<LiveBlockHeader | null> {
+  override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -139,7 +132,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return header
   }
 
-  override async findLiveHeaderForHeaderId (headerId: number): Promise<LiveBlockHeader> {
+  override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -149,7 +142,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return header
   }
 
-  override async findLiveHeaderForHeight (height: number): Promise<LiveBlockHeader | null> {
+  override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -160,7 +153,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return header || null
   }
 
-  override async findLiveHeaderForMerkleRoot (merkleRoot: string): Promise<LiveBlockHeader | null> {
+  override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -171,7 +164,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return header || null
   }
 
-  override async findLiveHeightRange (): Promise<HeightRange> {
+  override async findLiveHeightRange(): Promise<HeightRange> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -189,7 +182,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return range
   }
 
-  override async findMaxHeaderId (): Promise<number> {
+  override async findMaxHeaderId(): Promise<number> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -200,7 +193,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return maxValue
   }
 
-  override async liveHeadersForBulk (count: number): Promise<LiveBlockHeader[]> {
+  override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['live_headers'])
@@ -210,7 +203,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     let cursor = await heightIndex.openCursor(null, 'next')
     const headers: LiveBlockHeader[] = []
 
-    while ((cursor != null) && count > 0) {
+    while (cursor != null && count > 0) {
       const header = this.repairStoredLiveHeader(cursor.value)
       if (header?.isActive) {
         count--
@@ -223,7 +216,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return headers
   }
 
-  override async getLiveHeaders (range: HeightRange): Promise<LiveBlockHeader[]> {
+  override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> {
     if (range.isEmpty) return []
     await this.makeAvailable()
 
@@ -236,7 +229,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
 
     while (cursor != null) {
       const header = this.repairStoredLiveHeader(cursor.value)
-      if ((header != null) && range.contains(header.height)) {
+      if (header != null && range.contains(header.height)) {
         headers.push(header)
       }
       cursor = await cursor.continue()
@@ -246,7 +239,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return headers
   }
 
-  override async insertHeader (header: BlockHeader): Promise<InsertHeaderResult> {
+  override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['live_headers'])
@@ -287,7 +280,8 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
       if (count === 0) {
         // If this is the first live header, the last bulk header (if there is one) is the previous header.
         const lbf = await this.bulkManager.getLastFile()
-        if (lbf == null) throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
+        if (lbf == null)
+          throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
         if (header.previousHash === lbf.lastHash && header.height === lbf.firstHeight + lbf.count) {
           // Valid first live header. Add it.
           const chainWork = addWork(lbf.lastChainWork, convertBitsToWork(header.bits))
@@ -394,7 +388,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return r
   }
 
-  async deleteBulkFile (fileId: number): Promise<number> {
+  async deleteBulkFile(fileId: number): Promise<number> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
@@ -405,7 +399,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return 1
   }
 
-  async insertBulkFile (file: BulkHeaderFileInfo): Promise<number> {
+  async insertBulkFile(file: BulkHeaderFileInfo): Promise<number> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
@@ -417,7 +411,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return file.fileId
   }
 
-  async updateBulkFile (fileId: number, file: BulkHeaderFileInfo): Promise<number> {
+  async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
@@ -429,7 +423,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return 1
   }
 
-  async getBulkFiles (): Promise<BulkHeaderFileInfo[]> {
+  async getBulkFiles(): Promise<BulkHeaderFileInfo[]> {
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
@@ -441,7 +435,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return files
   }
 
-  async getBulkFileData (fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> {
+  async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> {
     if (!Number.isInteger(fileId)) throw new WERR_INVALID_PARAMETER('fileId', 'a valid, integer bulk_files fileId')
     await this.makeAvailable()
 
@@ -473,7 +467,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @param header
    * @returns copy of header with updated properties
    */
-  private repairStoredLiveHeader (header?: LiveBlockHeader): LiveBlockHeader | undefined {
+  private repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined {
     if (header == null) return undefined
     const h: LiveBlockHeader = {
       ...header,
@@ -483,7 +477,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return h
   }
 
-  private prepareStoredLiveHeader (header: LiveBlockHeader, forInsert?: boolean): object {
+  private prepareStoredLiveHeader(header: LiveBlockHeader, forInsert?: boolean): object {
     const h: object = { ...header }
     if (forInsert) delete h['headerId']
 
@@ -495,7 +489,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return h
   }
 
-  async insertLiveHeader (header: LiveBlockHeader): Promise<LiveBlockHeader> {
+  async insertLiveHeader(header: LiveBlockHeader): Promise<LiveBlockHeader> {
     const trx = this.toDbTrxReadWrite(['live_headers'])
     const store = trx.objectStore('live_headers')
 
@@ -508,9 +502,9 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return header
   }
 
-  async initDB (): Promise<IDBPDatabase<ChaintracksStorageIdbSchema>> {
+  async initDB(): Promise<IDBPDatabase<ChaintracksStorageIdbSchema>> {
     const db = await openDB<ChaintracksStorageIdbSchema>(this.dbName, 1, {
-      upgrade (db, oldVersion, newVersion, transaction) {
+      upgrade(db, _oldVersion, _newVersion, _transaction) {
         if (!db.objectStoreNames.contains('live_headers')) {
           const liveHeadersStore = db.createObjectStore('live_headers', {
             keyPath: 'headerId',
@@ -534,7 +528,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return db
   }
 
-  toDbTrxReadOnly (stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], 'readonly'> {
+  toDbTrxReadOnly(stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], 'readonly'> {
     if (this.db == null) throw new Error('not initialized')
     const db = this.db
     const trx = db.transaction(stores || this.allStores, 'readonly')
@@ -542,7 +536,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return trx
   }
 
-  toDbTrxReadWrite (stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], 'readwrite'> {
+  toDbTrxReadWrite(stores: string[]): IDBPTransaction<ChaintracksStorageIdbSchema, string[], 'readwrite'> {
     if (this.db == null) throw new Error('not initialized')
     const db = this.db
     const trx = db.transaction(stores || this.allStores, 'readwrite')

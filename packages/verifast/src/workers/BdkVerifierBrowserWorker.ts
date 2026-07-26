@@ -13,10 +13,11 @@ interface BrowserWorkerScope {
 
 const scope = globalThis as typeof globalThis & BrowserWorkerScope
 const handle = createWorkerRequestHandler(
-  async () => await createBdkModule({
-    locateFile: (path: string, prefix: string): string =>
-      path.endsWith('.wasm') ? `${prefix}bdk-core.wasm` : `${prefix}${path}`
-  }),
+  async () =>
+    await createBdkModule({
+      locateFile: (path: string, prefix: string): string =>
+        path.endsWith('.wasm') ? `${prefix}bdk-core.wasm` : `${prefix}${path}`
+    }),
   (response, transfer) => scope.postMessage(response, transfer)
 )
 scope.onmessage = event => {

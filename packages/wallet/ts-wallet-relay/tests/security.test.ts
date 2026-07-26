@@ -22,9 +22,7 @@ describe('QRSessionManager — desktopToken', () => {
 
   it('generates a unique desktopToken for each session', () => {
     const mgr = new QRSessionManager()
-    const tokens = new Set(
-      Array.from({ length: 20 }, () => mgr.createSession().desktopToken)
-    )
+    const tokens = new Set(Array.from({ length: 20 }, () => mgr.createSession().desktopToken))
     expect(tokens.size).toBe(20)
     mgr.stop()
   })
@@ -141,7 +139,7 @@ describe('compileOriginMatcher', () => {
       const m = compileOriginMatcher([
         'https://app.example.com',
         'https://cities.example.com',
-        'https://eu4.example.com',
+        'https://eu4.example.com'
       ])!
       expect(m('https://app.example.com')).toBe(true)
       expect(m('https://cities.example.com')).toBe(true)
@@ -168,8 +166,8 @@ describe('compileOriginMatcher', () => {
 
     it('rejects origins that do not match the pattern', () => {
       const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.example\.com$/)!
-      expect(m('https://example.com')).toBe(false)        // no subdomain
-      expect(m('http://app.example.com')).toBe(false)     // wrong scheme
+      expect(m('https://example.com')).toBe(false) // no subdomain
+      expect(m('http://app.example.com')).toBe(false) // wrong scheme
       expect(m('https://app.example.com.evil.com')).toBe(false) // trailing
     })
   })

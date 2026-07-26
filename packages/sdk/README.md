@@ -16,8 +16,9 @@ For application-to-wallet integrations, the SDK exposes the BRC-100 `WalletClien
 2. [Getting Started](#getting-started)
 3. [Features & Deliverables](#features--deliverables)
 4. [Documentation](#documentation)
-5. [Contribution Guidelines](#contribution-guidelines)
-6. [Support & Contacts](#support--contacts)
+5. [Development and Distribution](#development-and-distribution)
+6. [Contribution Guidelines](#contribution-guidelines)
+7. [Support & Contacts](#support--contacts)
 
 ## Objective
 
@@ -42,13 +43,15 @@ import { PrivateKey, P2PKH, Transaction, ARC } from '@bsv/sdk'
 
 const privKey = PrivateKey.fromWif('L5EY1SbTvvPNSdCYQe1EJHfXCBBT4PmnF6CDbzCm9iifZptUvDGB')
 
-const sourceTransaction = Transaction.fromHex('0200000001849c6419aec8b65d747cb72282cc02f3fc26dd018b46962f5de48957fac50528020000006a473044022008a60c611f3b48eaf0d07b5425d75f6ce65c3730bd43e6208560648081f9661b0220278fa51877100054d0d08e38e069b0afdb4f0f9d38844c68ee2233ace8e0de2141210360cd30f72e805be1f00d53f9ccd47dfd249cbb65b0d4aee5cfaf005a5258be37ffffffff03d0070000000000001976a914acc4d7c37bc9d0be0a4987483058a2d842f2265d88ac75330100000000001976a914db5b7964eecb19fcab929bf6bd29297ec005d52988ac809f7c09000000001976a914c0b0a42e92f062bdbc6a881b1777eed1213c19eb88ac00000000')
+const sourceTransaction = Transaction.fromHex(
+  '0200000001849c6419aec8b65d747cb72282cc02f3fc26dd018b46962f5de48957fac50528020000006a473044022008a60c611f3b48eaf0d07b5425d75f6ce65c3730bd43e6208560648081f9661b0220278fa51877100054d0d08e38e069b0afdb4f0f9d38844c68ee2233ace8e0de2141210360cd30f72e805be1f00d53f9ccd47dfd249cbb65b0d4aee5cfaf005a5258be37ffffffff03d0070000000000001976a914acc4d7c37bc9d0be0a4987483058a2d842f2265d88ac75330100000000001976a914db5b7964eecb19fcab929bf6bd29297ec005d52988ac809f7c09000000001976a914c0b0a42e92f062bdbc6a881b1777eed1213c19eb88ac00000000'
+)
 
 const version = 1
 const input = {
   sourceTransaction,
   sourceOutputIndex: 0,
-  unlockingScriptTemplate: new P2PKH().unlock(privKey),
+  unlockingScriptTemplate: new P2PKH().unlock(privKey)
 }
 const output = {
   lockingScript: new P2PKH().lock(privKey.toAddress()),
@@ -99,24 +102,52 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
 Comprehensive documentation is available in several formats:
 
 - **[📚 Online Documentation](https://bsv-blockchain.github.io/ts-stack/packages/sdk/)**: Our complete documentation:
-    - **[🚀 Get Started](https://bsv-blockchain.github.io/ts-stack/get-started/)**: Step-by-step lessons to learn by doing
-    - **[🔧 How-To Guides](https://bsv-blockchain.github.io/ts-stack/guides/)**: Practical solutions to specific problems
-    - **[📚 Reference](https://bsv-blockchain.github.io/ts-stack/reference/)**: Complete technical specifications and API documentation
-    - **[🏗️ Architecture](https://bsv-blockchain.github.io/ts-stack/architecture/)**: Architecture and design explanations
+  - **[🚀 Get Started](https://bsv-blockchain.github.io/ts-stack/get-started/)**: Step-by-step lessons to learn by doing
+  - **[🔧 How-To Guides](https://bsv-blockchain.github.io/ts-stack/guides/)**: Practical solutions to specific problems
+  - **[📚 Reference](https://bsv-blockchain.github.io/ts-stack/reference/)**: Complete technical specifications and API documentation
+  - **[🏗️ Architecture](https://bsv-blockchain.github.io/ts-stack/architecture/)**: Architecture and design explanations
 - **[⚡ Examples](https://docs.bsvblockchain.org/guides/sdks/ts/examples)**: Practical code examples
 - **Code Annotations**: The SDK is richly documented with code-level annotations that show up in editors like VSCode
+
+## Development and Distribution
+
+The workspace requires Node.js 24.11 or newer and pnpm 10. Install from the
+repository root, then run the SDK's complete contract:
+
+```bash
+pnpm install
+pnpm --filter @bsv/sdk format:check
+pnpm --filter @bsv/sdk lint
+pnpm --filter @bsv/sdk typecheck
+pnpm --filter @bsv/sdk test:coverage
+pnpm --filter @bsv/sdk pack:check
+pnpm --filter @bsv/sdk test:browser
+```
+
+`pack:check` installs the exact generated tarball into ESM and CommonJS
+consumer projects and verifies public exports and conditional type resolution.
+`test:browser` independently bundles that tarball with Vite and esbuild,
+rejects Node/server dependencies, validates source maps, and enforces measured
+raw, gzip, and Brotli budgets. The package publishes ESM, CommonJS, and a
+classic UMD bundle; TypeScript declarations are selected through matching
+conditional exports.
+
+Publishing is performed only by the repository release workflow after these
+checks pass. Local development and validation must not rewrite versions or
+publish artifacts.
 
 ## Contribution Guidelines
 
 We're always looking for contributors to help us improve the SDK. Whether it's bug reports, feature requests, or pull requests - all contributions are welcome.
 
 1. **Fork & Clone**: Fork this repository and clone it to your local machine.
-2. **Set Up**: Run `npm install` to install all dependencies.
+2. **Set Up**: Run `pnpm install` at the `ts-stack` repository root.
 3. **Make Changes**: Create a new branch and make your changes.
-4. **Test**: Ensure all tests pass by running `npm test`.
+4. **Test**: Run the package checks listed in
+   [Development and Distribution](#development-and-distribution).
 5. **Commit**: Commit your changes and push to your fork.
 6. **Pull Request**: Open a pull request from your fork to this repository.
-For more details, check the [contribution guidelines](./CONTRIBUTING.md).
+   For more details, check the [contribution guidelines](./CONTRIBUTING.md).
 
 For information on past releases, check out the [changelog](./CHANGELOG.md). For future plans, check the [roadmap](./ROADMAP.md)!
 

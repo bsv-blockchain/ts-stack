@@ -22,7 +22,7 @@ export async function encryptEnvelope(
     protocolID: params.protocolID,
     keyID: params.keyID,
     counterparty: params.counterparty,
-    plaintext,
+    plaintext
   })
   return bytesToBase64url(ciphertext)
 }
@@ -41,7 +41,7 @@ export async function decryptEnvelope(
     protocolID: params.protocolID,
     keyID: params.keyID,
     counterparty: params.counterparty,
-    ciphertext,
+    ciphertext
   })
   return new TextDecoder().decode(new Uint8Array(plaintext))
 }

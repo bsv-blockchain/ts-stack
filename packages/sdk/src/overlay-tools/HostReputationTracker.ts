@@ -38,27 +38,27 @@ export class HostReputationTracker {
   private readonly store: KeyValueStore | undefined
   private saveTimer: ReturnType<typeof setTimeout> | null = null
 
-  constructor (store?: KeyValueStore) {
+  constructor(store?: KeyValueStore) {
     this.stats = new Map()
     this.store = store ?? this.getLocalStorageAdapter()
     this.loadFromStorage()
   }
 
-  reset (): void {
+  reset(): void {
     this.stats.clear()
     this.scheduleSave()
   }
 
-  recordSuccess (host: string, latencyMs: number): void {
+  recordSuccess(host: string, latencyMs: number): void {
     const entry = this.getOrCreate(host)
     const now = Date.now()
-    const safeLatency = Number.isFinite(latencyMs) && latencyMs >= 0 ? latencyMs : DEFAULT_LATENCY_MS
+    const safeLatency =
+      Number.isFinite(latencyMs) && latencyMs >= 0 ? latencyMs : DEFAULT_LATENCY_MS
     if (entry.avgLatencyMs === null) {
       entry.avgLatencyMs = safeLatency
     } else {
       entry.avgLatencyMs =
-        (1 - LATENCY_SMOOTHING_FACTOR) * entry.avgLatencyMs +
-        LATENCY_SMOOTHING_FACTOR * safeLatency
+        (1 - LATENCY_SMOOTHING_FACTOR) * entry.avgLatencyMs + LATENCY_SMOOTHING_FACTOR * safeLatency
     }
     entry.lastLatencyMs = safeLatency
     entry.totalSuccesses += 1
@@ -69,7 +69,7 @@ export class HostReputationTracker {
     this.scheduleSave()
   }
 
-  recordFailure (host: string, reason?: unknown): void {
+  recordFailure(host: string, reason?: unknown): void {
     const entry = this.getOrCreate(host)
     const now = Date.now()
     entry.totalFailures += 1
@@ -112,7 +112,7 @@ export class HostReputationTracker {
     this.scheduleSave()
   }
 
-  rankHosts (hosts: string[], now: number = Date.now()): RankedHost[] {
+  rankHosts(hosts: string[], now: number = Date.now()): RankedHost[] {
     const seen = new Map<string, number>()
     hosts.forEach((host, idx) => {
       if (typeof host !== 'string' || host.length === 0) return
@@ -120,7 +120,7 @@ export class HostReputationTracker {
     })
 
     const orderedHosts = Array.from(seen.keys())
-    const ranked = orderedHosts.map((host) => {
+    const ranked = orderedHosts.map(host => {
       const entry = this.getOrCreate(host)
       return {
         ...entry,
@@ -138,16 +138,16 @@ export class HostReputationTracker {
       return (a as any).originalOrder - (b as any).originalOrder
     })
 
-    return ranked.map(({ originalOrder, ...rest }) => rest)
+    return ranked.map(({ originalOrder: _originalOrder, ...rest }) => rest)
   }
 
-  snapshot (host: string): HostReputationEntry | undefined {
+  snapshot(host: string): HostReputationEntry | undefined {
     const entry = this.stats.get(host)
     return entry == null ? undefined : { ...entry }
   }
 
   /** Flushes a pending debounced persistence write immediately. */
-  flush (): void {
+  flush(): void {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
@@ -155,7 +155,7 @@ export class HostReputationTracker {
     this.saveToStorage()
   }
 
-  private getStorage (): any {
+  private getStorage(): any {
     try {
       const g: any = typeof globalThis === 'object' ? globalThis : undefined
       if (g?.localStorage == null) return undefined
@@ -165,20 +165,26 @@ export class HostReputationTracker {
     }
   }
 
-  private getLocalStorageAdapter (): KeyValueStore | undefined {
+  private getLocalStorageAdapter(): KeyValueStore | undefined {
     const s = this.getStorage()
     if (s == null) return undefined
     return {
       get: (key: string) => {
-        try { return s.getItem(key) } catch { return null }
+        try {
+          return s.getItem(key)
+        } catch {
+          return null
+        }
       },
       set: (key: string, value: string) => {
-        try { s.setItem(key, value) } catch { }
+        try {
+          s.setItem(key, value)
+        } catch {}
       }
     }
   }
 
-  private loadFromStorage (): void {
+  private loadFromStorage(): void {
     const s = this.store
     if (s == null) return
     try {
@@ -196,7 +202,7 @@ export class HostReputationTracker {
       if (typeof data !== 'object' || data === null) return
       this.stats.clear()
       for (const k of Object.keys(data)) {
-        const v: any = (data)[k]
+        const v: any = data[k]
         if (v != null && typeof v === 'object') {
           const entry: HostReputationEntry = {
             host: String(v.host ?? k),
@@ -216,7 +222,7 @@ export class HostReputationTracker {
     } catch {}
   }
 
-  private scheduleSave (): void {
+  private scheduleSave(): void {
     if (this.store == null || this.saveTimer !== null) return
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null
@@ -226,7 +232,7 @@ export class HostReputationTracker {
     timer.unref?.()
   }
 
-  private saveToStorage (): void {
+  private saveToStorage(): void {
     const s = this.store
     if (s == null) return
     try {
@@ -239,7 +245,7 @@ export class HostReputationTracker {
     } catch {}
   }
 
-  private computeScore (entry: HostReputationEntry, now: number): number {
+  private computeScore(entry: HostReputationEntry, now: number): number {
     const latency = entry.avgLatencyMs ?? DEFAULT_LATENCY_MS
     const failurePenalty = entry.consecutiveFailures * FAILURE_PENALTY_MS
     const successBonus = Math.min(entry.totalSuccesses * SUCCESS_BONUS_MS, latency / 2)
@@ -248,7 +254,7 @@ export class HostReputationTracker {
     return latency + failurePenalty + backoffPenalty - successBonus
   }
 
-  private getOrCreate (host: string): HostReputationEntry {
+  private getOrCreate(host: string): HostReputationEntry {
     let entry = this.stats.get(host)
     if (entry == null) {
       this.prune(Date.now())
@@ -268,7 +274,7 @@ export class HostReputationTracker {
     return entry
   }
 
-  private prune (now: number): void {
+  private prune(now: number): void {
     for (const [host, entry] of this.stats) {
       if (entry.lastUpdatedAt > 0 && now - entry.lastUpdatedAt > REPUTATION_ENTRY_TTL_MS) {
         this.stats.delete(host)
@@ -277,7 +283,7 @@ export class HostReputationTracker {
     while (this.stats.size > MAX_REPUTATION_ENTRIES) this.evictOldestEntry()
   }
 
-  private evictOldestEntry (): void {
+  private evictOldestEntry(): void {
     let oldestHost: string | undefined
     let oldestUpdatedAt = Number.POSITIVE_INFINITY
     for (const [host, entry] of this.stats) {

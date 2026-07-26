@@ -2,7 +2,7 @@ import Random from './Random.js'
 import { sha256, sha256hmac } from './Hash.js'
 import { toArray, toHex } from './utils.js'
 
-export type P256Point = { x: bigint, y: bigint } | null
+export type P256Point = { x: bigint; y: bigint } | null
 
 type ByteSource = string | Uint8Array | ArrayBufferView
 
@@ -34,12 +34,12 @@ export default class Secp256r1 {
   readonly b = B
   readonly g = G
 
-  private mod (x: bigint, m: bigint = this.p): bigint {
+  private mod(x: bigint, m: bigint = this.p): bigint {
     const v = x % m
     return v >= 0n ? v : v + m
   }
 
-  private modInv (x: bigint, m: bigint): bigint {
+  private modInv(x: bigint, m: bigint): bigint {
     if (x === 0n || m <= 0n) throw new Error('Invalid mod inverse input')
     let [a, b] = [this.mod(x, m), m]
     let [u, v] = [1n, 0n]
@@ -52,7 +52,7 @@ export default class Secp256r1 {
     return this.mod(u, m)
   }
 
-  private modPow (base: bigint, exponent: bigint, modulus: bigint): bigint {
+  private modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
     if (modulus === 1n) return 0n
     let result = 1n
     let b = this.mod(base, modulus)
@@ -65,11 +65,11 @@ export default class Secp256r1 {
     return result
   }
 
-  private isInfinity (p: P256Point): p is null {
+  private isInfinity(p: P256Point): p is null {
     return p === null
   }
 
-  private assertOnCurve (p: P256Point): void {
+  private assertOnCurve(p: P256Point): void {
     if (this.isInfinity(p)) return
     const { x, y } = p
     const left = this.mod(y * y)
@@ -79,7 +79,7 @@ export default class Secp256r1 {
     }
   }
 
-  pointFromAffine (x: bigint, y: bigint): P256Point {
+  pointFromAffine(x: bigint, y: bigint): P256Point {
     const point: P256Point = { x: this.mod(x), y: this.mod(y) }
     this.assertOnCurve(point)
     return point
@@ -88,7 +88,7 @@ export default class Secp256r1 {
   /**
    * Decode a point from compressed or uncompressed hex.
    */
-  pointFromHex (hex: string): P256Point {
+  pointFromHex(hex: string): P256Point {
     if (hex.startsWith(UNCOMPRESSED)) {
       const x = BigInt('0x' + hex.slice(2, 66))
       const y = BigInt('0x' + hex.slice(66))
@@ -100,7 +100,7 @@ export default class Secp256r1 {
       const y = this.modPow(ySq, (this.p + 1n) >> 2n, this.p)
       const isOdd = (y & 1n) === 1n
       const shouldBeOdd = hex.startsWith(COMPRESSED_ODD)
-      const yFinal = (isOdd === shouldBeOdd) ? y : this.p - y
+      const yFinal = isOdd === shouldBeOdd ? y : this.p - y
       return this.pointFromAffine(x, yFinal)
     }
     throw new Error('Invalid point encoding')
@@ -109,7 +109,7 @@ export default class Secp256r1 {
   /**
    * Encode a point to compressed or uncompressed hex. Infinity is encoded as `00`.
    */
-  pointToHex (p: P256Point, compressed = false): string {
+  pointToHex(p: P256Point, compressed = false): string {
     if (this.isInfinity(p)) return '00'
     const xHex = this.to32BytesHex(p.x)
     const yHex = this.to32BytesHex(p.y)
@@ -121,7 +121,7 @@ export default class Secp256r1 {
   /**
    * Add two affine points (handles infinity).
    */
-  private addPoints (p1: P256Point, p2: P256Point): P256Point {
+  private addPoints(p1: P256Point, p2: P256Point): P256Point {
     if (this.isInfinity(p1)) return p2
     if (this.isInfinity(p2)) return p1
 
@@ -141,7 +141,7 @@ export default class Secp256r1 {
     return { x: x3, y: y3 }
   }
 
-  private doublePoint (p: P256Point): P256Point {
+  private doublePoint(p: P256Point): P256Point {
     if (this.isInfinity(p)) return p
     if (p.y === 0n) return null
     const m = this.mod((3n * p.x * p.x + this.a) * this.modInv(2n * p.y, this.p))
@@ -153,14 +153,14 @@ export default class Secp256r1 {
   /**
    * Add two points (handles infinity).
    */
-  add (p1: P256Point, p2: P256Point): P256Point {
+  add(p1: P256Point, p2: P256Point): P256Point {
     return this.addPoints(p1, p2)
   }
 
   /**
    * Scalar multiply an arbitrary point using double-and-add.
    */
-  multiply (point: P256Point, scalar: bigint): P256Point {
+  multiply(point: P256Point, scalar: bigint): P256Point {
     if (scalar === 0n || this.isInfinity(point)) return null
     let k = this.mod(scalar, this.n)
     let result: P256Point = null
@@ -178,18 +178,18 @@ export default class Secp256r1 {
   /**
    * Scalar multiply the base point.
    */
-  multiplyBase (scalar: bigint): P256Point {
+  multiplyBase(scalar: bigint): P256Point {
     return this.multiply(this.g, scalar)
   }
 
   /**
    * Check if a point lies on the curve (including infinity).
    */
-  isOnCurve (p: P256Point): boolean {
+  isOnCurve(p: P256Point): boolean {
     try {
       this.assertOnCurve(p)
       return true
-    } catch (_notOnCurve) {
+    } catch {
       // assertOnCurve throws when the point is not on the curve; return false
       return false
     }
@@ -198,11 +198,11 @@ export default class Secp256r1 {
   /**
    * Generate a new random private key as 32-byte hex.
    */
-  generatePrivateKeyHex (): string {
+  generatePrivateKeyHex(): string {
     return this.to32BytesHex(this.randomScalar())
   }
 
-  private randomScalar (): bigint {
+  private randomScalar(): bigint {
     while (true) {
       const bytes = Random(32)
       const k = BigInt('0x' + toHex(bytes))
@@ -210,13 +210,13 @@ export default class Secp256r1 {
     }
   }
 
-  private normalizePrivateKey (d: bigint): bigint {
+  private normalizePrivateKey(d: bigint): bigint {
     const key = this.mod(d, this.n)
     if (key === 0n) throw new Error('Invalid private key')
     return key
   }
 
-  private toScalar (input: string | bigint): bigint {
+  private toScalar(input: string | bigint): bigint {
     if (typeof input === 'bigint') return this.normalizePrivateKey(input)
     const hex = input.startsWith('0x') ? input.slice(2) : input
     if (!HEX_REGEX.test(hex) || hex.length === 0 || hex.length > 64) {
@@ -226,7 +226,7 @@ export default class Secp256r1 {
     return this.normalizePrivateKey(value)
   }
 
-  publicKeyFromPrivate (privateKey: string | bigint): P256Point {
+  publicKeyFromPrivate(privateKey: string | bigint): P256Point {
     const d = this.toScalar(privateKey)
     return this.multiplyBase(d)
   }
@@ -235,7 +235,11 @@ export default class Secp256r1 {
    * Create an ECDSA signature over a message. Uses SHA-256 unless `prehashed` is true.
    * Returns low-s normalized signature hex parts.
    */
-  sign (message: ByteSource, privateKey: string | bigint, opts: { prehashed?: boolean, nonce?: bigint } = {}): { r: string, s: string } {
+  sign(
+    message: ByteSource,
+    privateKey: string | bigint,
+    opts: { prehashed?: boolean; nonce?: bigint } = {}
+  ): { r: string; s: string } {
     const { prehashed = false, nonce } = opts
     const d = this.toScalar(privateKey)
     const digest = this.normalizeMessage(message, prehashed)
@@ -267,7 +271,12 @@ export default class Secp256r1 {
   /**
    * Verify an ECDSA signature against a message and public key.
    */
-  verify (message: ByteSource, signature: { r: string | bigint, s: string | bigint }, publicKey: P256Point | string, opts: { prehashed?: boolean } = {}): boolean {
+  verify(
+    message: ByteSource,
+    signature: { r: string | bigint; s: string | bigint },
+    publicKey: P256Point | string,
+    opts: { prehashed?: boolean } = {}
+  ): boolean {
     const { prehashed = false } = opts
     let q: P256Point
     try {
@@ -275,7 +284,7 @@ export default class Secp256r1 {
     } catch {
       return false
     }
-    if ((q == null) || !this.isOnCurve(q)) return false
+    if (q == null || !this.isOnCurve(q)) return false
 
     const r = typeof signature.r === 'bigint' ? signature.r : BigInt('0x' + signature.r)
     const s = typeof signature.s === 'bigint' ? signature.s : BigInt('0x' + signature.s)
@@ -291,24 +300,24 @@ export default class Secp256r1 {
     return v === r
   }
 
-  private normalizeMessage (message: ByteSource, prehashed: boolean): Uint8Array {
+  private normalizeMessage(message: ByteSource, prehashed: boolean): Uint8Array {
     const bytes = this.toBytes(message)
     if (prehashed) return bytes
     return new Uint8Array(sha256(bytes))
   }
 
-  private bytesToScalar (bytes: Uint8Array): bigint {
+  private bytesToScalar(bytes: Uint8Array): bigint {
     const hex = toHex(Array.from(bytes))
     return BigInt('0x' + hex) % this.n
   }
 
-  private deterministicNonce (priv: bigint, msgDigest: Uint8Array): bigint {
+  private deterministicNonce(priv: bigint, msgDigest: Uint8Array): bigint {
     const keyBytes = toArray(this.to32BytesHex(priv), 'hex')
     let counter = 0
-    while (counter < 1024) { // safety bound
-      const data = counter === 0
-        ? Array.from(msgDigest)
-        : Array.from(msgDigest).concat([counter & 0xff])
+    while (counter < 1024) {
+      // safety bound
+      const data =
+        counter === 0 ? Array.from(msgDigest) : Array.from(msgDigest).concat([counter & 0xff])
       const hmac = sha256hmac(keyBytes, data)
       const k = BigInt('0x' + toHex(hmac)) % this.n
       if (k > 0n) return k
@@ -317,7 +326,7 @@ export default class Secp256r1 {
     throw new Error('Failed to derive deterministic nonce')
   }
 
-  private toBytes (data: ByteSource): Uint8Array {
+  private toBytes(data: ByteSource): Uint8Array {
     if (typeof data === 'string') {
       const isHex = HEX_REGEX.test(data) && data.length % 2 === 0
       return Uint8Array.from(toArray(data, isHex ? 'hex' : 'utf8'))
@@ -329,7 +338,7 @@ export default class Secp256r1 {
     throw new Error('Unsupported message format')
   }
 
-  private to32BytesHex (num: bigint): string {
+  private to32BytesHex(num: bigint): string {
     return num.toString(16).padStart(64, '0')
   }
 }

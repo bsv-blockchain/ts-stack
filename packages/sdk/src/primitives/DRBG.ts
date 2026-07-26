@@ -30,7 +30,7 @@ export default class DRBG {
   K: number[]
   V: number[]
 
-  constructor (entropy: number[] | string, nonce: number[] | string) {
+  constructor(entropy: number[] | string, nonce: number[] | string) {
     const entropyBytes = toArray(entropy, 'hex')
     const nonceBytes = toArray(nonce, 'hex')
 
@@ -44,8 +44,8 @@ export default class DRBG {
 
     const seedMaterial = entropyBytes.concat(nonceBytes)
 
-    this.K = new Array(32)
-    this.V = new Array(32)
+    this.K = Array.from({ length: 32 })
+    this.V = Array.from({ length: 32 })
     for (let i = 0; i < 32; i++) {
       this.K[i] = 0x00
       this.V[i] = 0x01
@@ -63,7 +63,7 @@ export default class DRBG {
    * @example
    * const hmac = drbg.hmac();
    */
-  hmac (): SHA256HMAC {
+  hmac(): SHA256HMAC {
     return new SHA256HMAC(this.K)
   }
 
@@ -78,7 +78,7 @@ export default class DRBG {
    * @example
    * drbg.update('e13af...');
    */
-  update (seed?: number[]): void {
+  update(seed?: number[]): void {
     let kmac = this.hmac().update(this.V).update([0x00])
     if (seed !== undefined) {
       kmac = kmac.update(seed)
@@ -104,7 +104,7 @@ export default class DRBG {
    * @example
    * const randomHex = drbg.generate(256);
    */
-  generate (len: number): string {
+  generate(len: number): string {
     let temp: number[] = []
     while (temp.length < len) {
       this.V = this.hmac().update(this.V).digest()

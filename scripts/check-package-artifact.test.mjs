@@ -56,6 +56,39 @@ test('packed artifact policy rejects source, tests, caches, locks, and identity 
   assert.ok(errors.some(error => error.includes('tarball version')))
 })
 
+test('packed artifact policy permits only explicitly allowlisted scaffold source', () => {
+  const files = [
+    { path: 'LICENSE.txt' },
+    { path: 'README.md' },
+    { path: 'dist/index.js' },
+    { path: 'dist/index.d.ts' },
+    { path: 'package.json' },
+    { path: 'template/server.ts' },
+    { path: 'src/index.ts' }
+  ]
+  const errors = validatePackedFiles(
+    { name: manifest.name, version: manifest.version, files },
+    manifest,
+    ['template']
+  )
+
+  assert.equal(
+    errors.some(error => error.includes('template/server.ts')),
+    false
+  )
+  assert.equal(
+    errors.some(error => error.includes('src/index.ts')),
+    true
+  )
+  assert.throws(
+    () =>
+      validatePackedFiles({ name: manifest.name, version: manifest.version, files }, manifest, [
+        '../'
+      ]),
+    /invalid allowed source prefix/
+  )
+})
+
 test('strict type policy ignores only the unsupported CommonJS mode for ESM-only packages', () => {
   const problems = [
     { kind: 'NoResolution', entrypoint: '.', resolutionKind: 'node16-cjs' },
@@ -66,4 +99,6 @@ test('strict type policy ignores only the unsupported CommonJS mode for ESM-only
 
   assert.deepEqual(typeProblemsForModes(problems, ['esm']), problems.slice(2))
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs']), problems)
+  assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs'], ['.']), problems.slice(2))
+  assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs'], [], ['.']), [])
 })

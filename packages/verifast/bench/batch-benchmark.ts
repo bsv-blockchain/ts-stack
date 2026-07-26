@@ -1,10 +1,4 @@
-import {
-  MerklePath,
-  P2PKH,
-  PrivateKey,
-  Script,
-  Transaction
-} from '@bsv/sdk'
+import { MerklePath, P2PKH, PrivateKey, Script, Transaction } from '@bsv/sdk'
 import BdkVerifier from '../src/BdkVerifier.js'
 import { buildCorpus, spendsForTransaction } from './corpus.js'
 
@@ -12,12 +6,12 @@ const BATCH_SIZES = [1, 10, 50, 250] as const
 const SCRIPT_SIZES = [1024, 64 * 1024, 1024 * 1024, 4 * 1024 * 1024] as const
 const SAMPLES = 25
 
-function median (values: number[]): number {
+function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-async function measure (operation: () => Promise<void>, samples = SAMPLES): Promise<number> {
+async function measure(operation: () => Promise<void>, samples = SAMPLES): Promise<number> {
   await operation()
   const values: number[] = []
   for (let sample = 0; sample < samples; sample++) {
@@ -28,7 +22,7 @@ async function measure (operation: () => Promise<void>, samples = SAMPLES): Prom
   return median(values)
 }
 
-function measureSync (operation: () => void, iterations: number): number {
+function measureSync(operation: () => void, iterations: number): number {
   const values: number[] = []
   for (let sample = 0; sample < SAMPLES; sample++) {
     const start = performance.now()
@@ -38,7 +32,7 @@ function measureSync (operation: () => void, iterations: number): number {
   return median(values)
 }
 
-async function transactionWithOutputScript (scriptSize: number): Promise<Transaction> {
+async function transactionWithOutputScript(scriptSize: number): Promise<Transaction> {
   const key = new PrivateKey(42)
   const source = new Transaction()
   source.addInput({
@@ -60,7 +54,7 @@ async function transactionWithOutputScript (scriptSize: number): Promise<Transac
   return tx
 }
 
-async function dependentP2pkhChain (length: number): Promise<Transaction> {
+async function dependentP2pkhChain(length: number): Promise<Transaction> {
   const key = new PrivateKey(84)
   let previous = new Transaction()
   previous.addInput({
@@ -73,7 +67,10 @@ async function dependentP2pkhChain (length: number): Promise<Transaction> {
     lockingScript: new P2PKH().lock(key.toAddress())
   })
   previous.merklePath = new MerklePath(800000, [
-    [{ offset: 0, hash: previous.id('hex'), txid: true }, { offset: 1, duplicate: true }]
+    [
+      { offset: 0, hash: previous.id('hex'), txid: true },
+      { offset: 1, duplicate: true }
+    ]
   ])
   for (let index = 0; index < length; index++) {
     const transaction = new Transaction()
@@ -92,7 +89,7 @@ async function dependentP2pkhChain (length: number): Promise<Transaction> {
   return previous
 }
 
-function collectMemory (): { heapMiB: number, rssMiB: number } {
+function collectMemory(): { heapMiB: number; rssMiB: number } {
   globalThis.gc?.()
   const usage = process.memoryUsage()
   return {
@@ -101,7 +98,7 @@ function collectMemory (): { heapMiB: number, rssMiB: number } {
   }
 }
 
-async function main (): Promise<void> {
+async function main(): Promise<void> {
   const verifier = new BdkVerifier({
     maxBatchItems: 250,
     batchWorkers: 1,
@@ -129,7 +126,9 @@ async function main (): Promise<void> {
     await parallelVerifier.preloadBatch()
     console.log(`Node ${process.version}; ${SAMPLES} median samples; real BDK WASM`)
     console.log('\nWarm batch scheduling (milliseconds per complete batch):')
-    console.log('items  Spend 1 worker  Spend 4 workers  speedup  EF 1 worker  EF 4 workers  speedup')
+    console.log(
+      'items  Spend 1 worker  Spend 4 workers  speedup  EF 1 worker  EF 4 workers  speedup'
+    )
     for (const count of BATCH_SIZES) {
       const spends = Array.from({ length: count }, () => ({ spend }))
       const transactions = Array.from({ length: count }, () => efParams)
@@ -155,28 +154,28 @@ async function main (): Promise<void> {
       })
       console.log(
         `${String(count).padStart(5)}  ${spendSingle.toFixed(3).padStart(14)}  ` +
-        `${spendParallel.toFixed(3).padStart(15)}  ${(spendSingle / spendParallel).toFixed(2).padStart(7)}x  ` +
-        `${efSingle.toFixed(3).padStart(11)}  ${efParallel.toFixed(3).padStart(12)}  ` +
-        `${(efSingle / efParallel).toFixed(2).padStart(7)}x`
+          `${spendParallel.toFixed(3).padStart(15)}  ${(spendSingle / spendParallel).toFixed(2).padStart(7)}x  ` +
+          `${efSingle.toFixed(3).padStart(11)}  ${efParallel.toFixed(3).padStart(12)}  ` +
+          `${(efSingle / efParallel).toFixed(2).padStart(7)}x`
       )
     }
 
     const chain = await dependentP2pkhChain(250)
     const chainSingle = await measure(async () => {
-      if (!await chain.verify('scripts only', undefined, undefined, verifier)) {
+      if (!(await chain.verify('scripts only', undefined, undefined, verifier))) {
         throw new Error('single-instance dependent graph was rejected')
       }
     })
     const chainParallel = await measure(async () => {
-      if (!await chain.verify('scripts only', undefined, undefined, parallelVerifier)) {
+      if (!(await chain.verify('scripts only', undefined, undefined, parallelVerifier))) {
         throw new Error('parallel dependent graph was rejected')
       }
     })
     console.log('\n250-transaction dependent graph through Transaction.verify:')
     console.log(
       `one instance ${chainSingle.toFixed(3)} ms; four workers ` +
-      `${chainParallel.toFixed(3)} ms; ` +
-      `${(chainSingle / chainParallel).toFixed(2)}x`
+        `${chainParallel.toFixed(3)} ms; ` +
+        `${(chainSingle / chainParallel).toFixed(2)}x`
     )
 
     console.log('\nEF serialization (milliseconds per call):')
@@ -184,21 +183,32 @@ async function main (): Promise<void> {
     for (const scriptSize of SCRIPT_SIZES) {
       const tx = await transactionWithOutputScript(scriptSize)
       let sequence = 0
-      const legacy = measureSync(() => {
-        tx.lockTime = sequence++ & 1
-        tx.toEF()
-      }, scriptSize >= 1024 * 1024 ? 3 : 15)
-      const typed = measureSync(() => {
-        tx.lockTime = sequence++ & 1
-        tx.toEFBinary()
-      }, scriptSize >= 1024 * 1024 ? 3 : 15)
+      const legacy = measureSync(
+        () => {
+          tx.lockTime = sequence++ & 1
+          tx.toEF()
+        },
+        scriptSize >= 1024 * 1024 ? 3 : 15
+      )
+      const typed = measureSync(
+        () => {
+          tx.lockTime = sequence++ & 1
+          tx.toEFBinary()
+        },
+        scriptSize >= 1024 * 1024 ? 3 : 15
+      )
       tx.toEFBinary()
-      const cached = measureSync(() => { tx.toEFBinary() }, scriptSize >= 1024 * 1024 ? 100 : 1000)
+      const cached = measureSync(
+        () => {
+          tx.toEFBinary()
+        },
+        scriptSize >= 1024 * 1024 ? 100 : 1000
+      )
       const scriptLabel = `${Math.round(scriptSize / 1024)} KiB`.padStart(8)
       console.log(
         `${scriptLabel}  ${String(tx.toEFBinary().byteLength).padStart(9)}  ` +
-        `${legacy.toFixed(3).padStart(13)}  ${typed.toFixed(3).padStart(10)}  ` +
-        `${cached.toFixed(4).padStart(12)}  ${(legacy / typed).toFixed(2).padStart(8)}x`
+          `${legacy.toFixed(3).padStart(13)}  ${typed.toFixed(3).padStart(10)}  ` +
+          `${cached.toFixed(4).padStart(12)}  ${(legacy / typed).toFixed(2).padStart(8)}x`
       )
     }
 
@@ -206,7 +216,9 @@ async function main (): Promise<void> {
     await verifier.verifySpendsBatch(Array.from({ length: 250 }, () => ({ spend })))
     const after = collectMemory()
     console.log('\n250-Spend retained-memory delta after forced GC:')
-    console.log(`heap ${(after.heapMiB - before.heapMiB).toFixed(2)} MiB; RSS ${(after.rssMiB - before.rssMiB).toFixed(2)} MiB`)
+    console.log(
+      `heap ${(after.heapMiB - before.heapMiB).toFixed(2)} MiB; RSS ${(after.rssMiB - before.rssMiB).toFixed(2)} MiB`
+    )
   } finally {
     verifier.dispose()
     parallelVerifier.dispose()

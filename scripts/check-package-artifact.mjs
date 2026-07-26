@@ -67,7 +67,26 @@ function readmeErrors(files) {
     : ['tarball must contain a root README']
 }
 
-function packedFileErrors(file) {
+function normalizeSourcePrefixes(prefixes) {
+  return prefixes.map(prefix => {
+    const normalized = prefix.replace(/\/+$/g, '')
+    if (
+      normalized === '' ||
+      normalized.startsWith('/') ||
+      normalized.includes('\\') ||
+      normalized.split('/').some(segment => segment === '' || segment === '.' || segment === '..')
+    ) {
+      throw new Error(`invalid allowed source prefix ${JSON.stringify(prefix)}`)
+    }
+    return normalized
+  })
+}
+
+function isAllowedSource(file, allowedSourcePrefixes) {
+  return allowedSourcePrefixes.some(prefix => file === prefix || file.startsWith(`${prefix}/`))
+}
+
+function packedFileErrors(file, allowedSourcePrefixes) {
   const errors = []
   if (
     /(^|\/)(?:__tests__|tests?|coverage)(?:\/|$)/i.test(file) ||
@@ -78,7 +97,11 @@ function packedFileErrors(file) {
   if (/\.tsbuildinfo$/i.test(file)) {
     errors.push(`tarball contains compiler cache ${file}`)
   }
-  if (/\.[cm]?tsx?$/i.test(file) && !isDeclarationFile(file)) {
+  if (
+    /\.[cm]?tsx?$/i.test(file) &&
+    !isDeclarationFile(file) &&
+    !isAllowedSource(file, allowedSourcePrefixes)
+  ) {
     errors.push(`tarball contains uncompiled TypeScript source ${file}`)
   }
   if (/(^|\/)(?:package-lock|pnpm-lock|yarn\.lock)(?:\.json|\.yaml)?$/i.test(file)) {
@@ -104,12 +127,13 @@ function identityErrors(packResult, manifest) {
   return errors
 }
 
-export function validatePackedFiles(packResult, manifest) {
+export function validatePackedFiles(packResult, manifest, allowedSourcePrefixes = []) {
+  const normalizedSourcePrefixes = normalizeSourcePrefixes(allowedSourcePrefixes)
   const files = (packResult.files ?? []).map(file => file.path)
   return [
     ...requiredFileErrors(files),
     ...readmeErrors(files),
-    ...files.flatMap(packedFileErrors),
+    ...files.flatMap(file => packedFileErrors(file, normalizedSourcePrefixes)),
     ...identityErrors(packResult, manifest)
   ]
 }
@@ -152,13 +176,25 @@ async function checkPublint(tarballPath) {
     .map(message => formatMessage(message, result.pkg, { color: false }))
 }
 
-export function typeProblemsForModes(problems, modes) {
+export function typeProblemsForModes(
+  problems,
+  modes,
+  esmOnlyEntrypoints = [],
+  untypedAssetEntrypoints = []
+) {
+  const esmOnly = new Set(esmOnlyEntrypoints)
+  const untypedAssets = new Set(untypedAssetEntrypoints)
   return problems.filter(
-    problem => !(problem.resolutionKind === 'node16-cjs' && !modes.includes('cjs'))
+    problem =>
+      !untypedAssets.has(problem.entrypoint) &&
+      !(
+        problem.resolutionKind === 'node16-cjs' &&
+        (!modes.includes('cjs') || esmOnly.has(problem.entrypoint))
+      )
   )
 }
 
-async function checkTypes(tarballPath, modes) {
+async function checkTypes(tarballPath, modes, esmOnlyEntrypoints, untypedAssetEntrypoints) {
   const [{ checkPackage, createPackageFromTarballData }, { problemKindInfo }] = await Promise.all([
     import('@arethetypeswrong/core'),
     import('@arethetypeswrong/core/problems')
@@ -168,7 +204,12 @@ async function checkTypes(tarballPath, modes) {
   if (!result.types) {
     throw new Error('@arethetypeswrong/core found no package types')
   }
-  const relevantProblems = typeProblemsForModes(result.problems, modes)
+  const relevantProblems = typeProblemsForModes(
+    result.problems,
+    modes,
+    esmOnlyEntrypoints,
+    untypedAssetEntrypoints
+  )
   if (relevantProblems.length > 0) {
     const problems = relevantProblems.map(problem => {
       const title = problemKindInfo[problem.kind]?.title ?? problem.kind
@@ -214,7 +255,15 @@ function packageSpecifier(packageName, subpath) {
   return subpath === '.' ? packageName : `${packageName}/${subpath.slice(2)}`
 }
 
-async function checkConsumer(tarballPath, manifest, modes, entryExports, binName, binArguments) {
+async function checkConsumer(
+  tarballPath,
+  manifest,
+  modes,
+  entryExports,
+  binName,
+  binArguments,
+  consumerDependencies
+) {
   const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-consumer-'))
   try {
     await fs.writeFile(
@@ -230,7 +279,8 @@ async function checkConsumer(tarballPath, manifest, modes, entryExports, binName
         '--no-fund',
         '--package-lock=false',
         '--omit=dev',
-        tarballPath
+        tarballPath,
+        ...consumerDependencies
       ],
       { cwd: consumerDirectory }
     )
@@ -270,20 +320,34 @@ export async function checkPackageArtifact({
   entryExports = { '.': expectedExports },
   binName = '',
   binArguments = [],
-  validateTypes = true
+  validateTypes = true,
+  allowedSourcePrefixes = [],
+  esmOnlyEntrypoints = [],
+  consumerDependencies = [],
+  untypedAssetEntrypoints = []
 }) {
   const manifestPath = path.join(packageDirectory, 'package.json')
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
   const packed = await packPackage(packageDirectory)
   try {
-    const payloadErrors = validatePackedFiles(packed.result, manifest)
+    const payloadErrors = validatePackedFiles(packed.result, manifest, allowedSourcePrefixes)
     const publintErrors = await checkPublint(packed.tarballPath)
     const errors = [...payloadErrors, ...publintErrors]
     if (errors.length > 0) {
       throw new Error(errors.join('\n'))
     }
-    if (validateTypes) await checkTypes(packed.tarballPath, modes)
-    await checkConsumer(packed.tarballPath, manifest, modes, entryExports, binName, binArguments)
+    if (validateTypes) {
+      await checkTypes(packed.tarballPath, modes, esmOnlyEntrypoints, untypedAssetEntrypoints)
+    }
+    await checkConsumer(
+      packed.tarballPath,
+      manifest,
+      modes,
+      entryExports,
+      binName,
+      binArguments,
+      consumerDependencies
+    )
     return manifest
   } finally {
     await fs.rm(packed.temporaryDirectory, { recursive: true, force: true })
@@ -299,6 +363,20 @@ async function main(arguments_) {
   const binName = optionValue(arguments_, '--bin')
   const binArguments = csvOption(arguments_, '--bin-args', '')
   const validateTypes = !arguments_.includes('--skip-types')
+  const allowedSourcePrefixes = csvOption(arguments_, '--allow-source-prefixes', '')
+  const esmOnlyEntrypoints = csvOption(arguments_, '--esm-only-entrypoints', '')
+  const untypedAssetEntrypoints = csvOption(arguments_, '--untyped-asset-entrypoints', '')
+  for (const entrypoint of untypedAssetEntrypoints) {
+    if (!entrypoint.startsWith('./')) {
+      throw new Error(`asset entrypoint must start with "./": ${JSON.stringify(entrypoint)}`)
+    }
+  }
+  const consumerDependencies = csvOption(arguments_, '--consumer-dependencies', '')
+  for (const dependency of consumerDependencies) {
+    if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(dependency)) {
+      throw new Error(`invalid consumer dependency ${JSON.stringify(dependency)}`)
+    }
+  }
   const manifest = await checkPackageArtifact({
     packageDirectory,
     modes,
@@ -306,14 +384,30 @@ async function main(arguments_) {
     entryExports,
     binName,
     binArguments,
-    validateTypes
+    validateTypes,
+    allowedSourcePrefixes,
+    esmOnlyEntrypoints,
+    consumerDependencies,
+    untypedAssetEntrypoints
   })
   const validations = [
     'packed payload',
     'publint',
     ...(validateTypes ? ['strict type resolution'] : []),
     `${modes.join('/')} clean consumers`,
-    ...(binName ? [`installed ${binName} executable`] : [])
+    ...(binName ? [`installed ${binName} executable`] : []),
+    ...(allowedSourcePrefixes.length > 0
+      ? [`allowlisted ${allowedSourcePrefixes.join(',')} scaffold source`]
+      : []),
+    ...(esmOnlyEntrypoints.length > 0
+      ? [`ESM-only ${esmOnlyEntrypoints.join(',')} entrypoint`]
+      : []),
+    ...(consumerDependencies.length > 0
+      ? [`consumer peers ${consumerDependencies.join(',')}`]
+      : []),
+    ...(untypedAssetEntrypoints.length > 0
+      ? [`untyped assets ${untypedAssetEntrypoints.join(',')}`]
+      : [])
   ]
   console.log(`Verified ${manifest.name}@${manifest.version}: ${validations.join(', ')}.`)
 }

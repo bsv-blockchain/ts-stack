@@ -1,4 +1,9 @@
-import { DEFAULT_IDENTITY_CLIENT_OPTIONS, defaultIdentity, DisplayableIdentity, KNOWN_IDENTITY_TYPES } from './types/index.js'
+import {
+  DEFAULT_IDENTITY_CLIENT_OPTIONS,
+  defaultIdentity,
+  DisplayableIdentity,
+  KNOWN_IDENTITY_TYPES
+} from './types/index.js'
 import {
   Base64String,
   CertificateFieldNameUnder50Bytes,
@@ -15,7 +20,12 @@ import { BroadcastFailure, BroadcastResponse, Transaction } from '../transaction
 import Certificate from '../auth/certificates/Certificate.js'
 import { PushDrop } from '../script/index.js'
 import { PrivateKey, Utils } from '../primitives/index.js'
-import { LookupResolver, SHIPBroadcaster, TopicBroadcaster, withDoubleSpendRetry } from '../overlay-tools/index.js'
+import {
+  LookupResolver,
+  SHIPBroadcaster,
+  TopicBroadcaster,
+  withDoubleSpendRetry
+} from '../overlay-tools/index.js'
 import { ContactsManager, Contact } from './ContactsManager.js'
 
 /**
@@ -29,12 +39,12 @@ const PARSE_BATCH_SIZE = 32
  * Yield control to the event loop so queued microtasks / timers can run. Uses
  * `scheduler.yield()` when available (Chromium) or a 0ms macrotask fallback.
  */
-async function yieldToEventLoop (): Promise<void> {
+async function yieldToEventLoop(): Promise<void> {
   const sched = (globalThis as any).scheduler
   if (sched != null && typeof sched.yield === 'function') {
     return sched.yield()
   }
-  return await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  return await new Promise<void>(resolve => setTimeout(resolve, 0))
 }
 
 /** Options for {@link IdentityClient.resolveByIdentityKey}. */
@@ -77,9 +87,9 @@ export interface ResolveByAttributesOptions {
 }
 
 /** Normalize either legacy boolean / new options object into a canonical { useContacts, parallel }. */
-function normalizeOpts (
+function normalizeOpts(
   raw: boolean | ResolveByIdentityKeyOptions | ResolveByAttributesOptions | undefined
-): { useContacts: boolean, parallel: boolean } {
+): { useContacts: boolean; parallel: boolean } {
   if (raw === undefined) return { useContacts: false, parallel: false }
   if (typeof raw === 'boolean') return { useContacts: raw, parallel: false }
   const useContacts = raw.overrideWithContacts ?? raw.useContacts ?? false
@@ -92,12 +102,11 @@ function normalizeOpts (
 export class IdentityClient {
   private readonly wallet: WalletInterface
   private readonly contactsManager: ContactsManager
-  constructor (
+  constructor(
     wallet?: WalletInterface,
     private readonly options = DEFAULT_IDENTITY_CLIENT_OPTIONS,
     private readonly originator?: OriginatorDomainNameStringUnder250Bytes
   ) {
-    this.originator = originator
     this.wallet = wallet ?? new WalletClient()
     this.contactsManager = new ContactsManager(this.wallet, this.originator)
   }
@@ -112,19 +121,15 @@ export class IdentityClient {
    * @returns {Promise<object>} A promise that resolves with the broadcast result from the overlay network.
    * @throws {Error} Throws an error if the certificate is invalid, the fields cannot be revealed, or if the broadcast fails.
    */
-  async publiclyRevealAttributes (
+  async publiclyRevealAttributes(
     certificate: WalletCertificate,
     fieldsToReveal: CertificateFieldNameUnder50Bytes[]
   ): Promise<BroadcastResponse | BroadcastFailure> {
     if (Object.keys(certificate.fields).length === 0) {
-      throw new Error(
-        'Public reveal failed: Certificate has no fields to reveal!'
-      )
+      throw new Error('Public reveal failed: Certificate has no fields to reveal!')
     }
     if (fieldsToReveal.length === 0) {
-      throw new Error(
-        'Public reveal failed: You must reveal at least one field!'
-      )
+      throw new Error('Public reveal failed: You must reveal at least one field!')
     }
     try {
       const masterCert = new Certificate(
@@ -137,7 +142,7 @@ export class IdentityClient {
         certificate.signature
       )
       await masterCert.verify()
-    } catch (_certVerificationError) {
+    } catch {
       // Low-level cert error details are suppressed — surface a user-facing message only
       throw new Error('Public reveal failed: Certificate verification failed!')
     }
@@ -155,11 +160,7 @@ export class IdentityClient {
 
     // Build the lockingScript with pushdrop.create() and the transaction with createAction()
     const lockingScript = await new PushDrop(this.wallet, this.originator).lock(
-      [
-        Utils.toArray(
-          JSON.stringify({ ...certificate, keyring: keyringForVerifier })
-        )
-      ],
+      [Utils.toArray(JSON.stringify({ ...certificate, keyring: keyringForVerifier }))],
       this.options.protocolID,
       this.options.keyID,
       'anyone',
@@ -211,7 +212,7 @@ export class IdentityClient {
    * @param args - Arguments for requesting the discovery based on the identity key.
    * @param opts - Boolean (legacy) or options object. Boolean `true` ≡ `{ useContacts: true }`.
    */
-  async resolveByIdentityKey (
+  async resolveByIdentityKey(
     args: DiscoverByIdentityKeyArgs,
     opts: boolean | ResolveByIdentityKeyOptions = false
   ): Promise<DisplayableIdentity[]> {
@@ -253,7 +254,7 @@ export class IdentityClient {
    * @param args - Attributes and optional parameters used to discover certificates.
    * @param opts - Boolean (legacy) or options object. Boolean `true` ≡ `{ useContacts: true }`.
    */
-  async resolveByAttributes (
+  async resolveByAttributes(
     args: DiscoverByAttributesArgs,
     opts: boolean | ResolveByAttributesOptions = false
   ): Promise<DisplayableIdentity[]> {
@@ -275,7 +276,7 @@ export class IdentityClient {
       const certs = certificatesResult?.certificates ?? []
       if (contacts.length === 0) return await IdentityClient.parseIdentities(certs)
       const contactByKey = new Map<PubKeyHex, Contact>(
-        contacts.map((contact) => [contact.identityKey, contact] as const)
+        contacts.map(contact => [contact.identityKey, contact] as const)
       )
       return await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
     }
@@ -288,7 +289,7 @@ export class IdentityClient {
     const certs = certificatesResult?.certificates ?? []
     if (contacts.length === 0) return await IdentityClient.parseIdentities(certs)
     const contactByKey = new Map<PubKeyHex, Contact>(
-      contacts.map((contact) => [contact.identityKey, contact] as const)
+      contacts.map(contact => [contact.identityKey, contact] as const)
     )
     return await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
   }
@@ -299,17 +300,17 @@ export class IdentityClient {
    * can be skipped. Compares string-valued attributes against same-named fields on the contact's
    * decrypted record. Returns the subset of contacts that match every supplied attribute.
    */
-  private matchContactsByAttributes (
+  private matchContactsByAttributes(
     contacts: Contact[],
     args: DiscoverByAttributesArgs
   ): Contact[] {
-    const attrs = (args).attributes
+    const attrs = args.attributes
     if (attrs == null || typeof attrs !== 'object' || Array.isArray(attrs)) return []
     const entries = Object.entries(attrs as Record<string, unknown>).filter(
       ([, v]) => typeof v === 'string' && v.length > 0
     ) as Array<[string, string]>
     if (entries.length === 0) return []
-    return contacts.filter((contact) => {
+    return contacts.filter(contact => {
       const bag: Record<string, unknown> = {
         name: contact.name,
         identityKey: contact.identityKey
@@ -325,9 +326,7 @@ export class IdentityClient {
    * Remove public certificate revelation from overlay services by spending the identity token
    * @param serialNumber - Unique serial number of the certificate to revoke revelation
    */
-  async revokeCertificateRevelation (
-    serialNumber: Base64String
-  ): Promise<void> {
+  async revokeCertificateRevelation(serialNumber: Base64String): Promise<void> {
     // 1. Find existing UTXO
     const lookupResolver = new LookupResolver({
       networkPreset: (await this.wallet.getNetwork({})).network
@@ -339,7 +338,9 @@ export class IdentityClient {
       }
     })
 
-    if (result.type !== 'output-list') { throw new Error('Failed to get lookup result') }
+    if (result.type !== 'output-list') {
+      throw new Error('Failed to get lookup result')
+    }
 
     const topicBroadcaster = new SHIPBroadcaster(['tm_identity'], {
       networkPreset: (await this.wallet.getNetwork({})).network,
@@ -390,10 +391,7 @@ export class IdentityClient {
         'anyone'
       )
 
-      const unlockingScript = await unlocker.sign(
-        partialTx,
-        this.options.outputIndex
-      )
+      const unlockingScript = await unlocker.sign(partialTx, this.options.outputIndex)
 
       const { tx: signedTx } = await this.wallet.signAction(
         {
@@ -426,16 +424,12 @@ export class IdentityClient {
    * @param limit Optional limit on number of contacts to fetch
    * @returns A promise that resolves with an array of contacts
    */
-  public async getContacts (
+  public async getContacts(
     identityKey?: PubKeyHex,
     forceRefresh = false,
     limit = 1000
   ): Promise<Contact[]> {
-    return await this.contactsManager.getContacts(
-      identityKey,
-      forceRefresh,
-      limit
-    )
+    return await this.contactsManager.getContacts(identityKey, forceRefresh, limit)
   }
 
   /**
@@ -443,7 +437,7 @@ export class IdentityClient {
    * @param contact The displayable identity information for the contact
    * @param metadata Optional metadata to store with the contact (ex. notes, aliases, etc)
    */
-  public async saveContact (
+  public async saveContact(
     contact: DisplayableIdentity,
     metadata?: Record<string, any>
   ): Promise<void> {
@@ -454,7 +448,7 @@ export class IdentityClient {
    * Remove a contact from the contacts basket
    * @param identityKey The identity key of the contact to remove
    */
-  public async removeContact (identityKey: PubKeyHex): Promise<void> {
+  public async removeContact(identityKey: PubKeyHex): Promise<void> {
     return await this.contactsManager.removeContact(identityKey)
   }
 
@@ -463,12 +457,12 @@ export class IdentityClient {
    * event loop every {@link PARSE_BATCH_SIZE} entries so large result sets don't hog
    * the main thread. Equivalent to `certs.map(parseIdentity)` for small inputs.
    */
-  static async parseIdentities (certs: IdentityCertificate[]): Promise<DisplayableIdentity[]> {
+  static async parseIdentities(certs: IdentityCertificate[]): Promise<DisplayableIdentity[]> {
     const n = certs.length
     if (n <= PARSE_BATCH_SIZE) {
-      return certs.map((c) => IdentityClient.parseIdentity(c))
+      return certs.map(c => IdentityClient.parseIdentity(c))
     }
-    const out: DisplayableIdentity[] = new Array(n)
+    const out: DisplayableIdentity[] = Array.from({ length: n })
     for (let i = 0; i < n; i++) {
       out[i] = IdentityClient.parseIdentity(certs[i])
       if ((i + 1) % PARSE_BATCH_SIZE === 0) await yieldToEventLoop()
@@ -480,15 +474,15 @@ export class IdentityClient {
    * Same as {@link parseIdentities} but consults a contact override map keyed by subject
    * identity key. Used by `resolveByAttributes` when contacts are loaded.
    */
-  static async parseIdentitiesWithOverrides (
+  static async parseIdentitiesWithOverrides(
     certs: IdentityCertificate[],
     contactByKey: Map<PubKeyHex, Contact>
   ): Promise<DisplayableIdentity[]> {
     const n = certs.length
     if (n <= PARSE_BATCH_SIZE) {
-      return certs.map((cert) => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert))
+      return certs.map(cert => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert))
     }
-    const out: DisplayableIdentity[] = new Array(n)
+    const out: DisplayableIdentity[] = Array.from({ length: n })
     for (let i = 0; i < n; i++) {
       const cert = certs[i]
       out[i] = contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
@@ -502,9 +496,7 @@ export class IdentityClient {
    * @param identityToParse - The Identity Certificate to parse
    * @returns - IdentityToDisplay
    */
-  static parseIdentity (
-    identityToParse: IdentityCertificate
-  ): DisplayableIdentity {
+  static parseIdentity(identityToParse: IdentityCertificate): DisplayableIdentity {
     const { type, decryptedFields, certifierInfo } = identityToParse
     let name, avatarURL, badgeLabel, badgeIconURL, badgeClickURL
 
@@ -558,8 +550,7 @@ export class IdentityClient {
       case KNOWN_IDENTITY_TYPES.anyone:
         name = 'Anyone'
         avatarURL = 'XUT4bpQ6cpBaXi1oMzZsXfpkWGbtp2JTUYAoN7PzhStFJ6wLfoeR'
-        badgeLabel =
-          'Represents the ability for anyone to access this information.'
+        badgeLabel = 'Represents the ability for anyone to access this information.'
         badgeIconURL = 'XUUV39HVPkpmMzYNTx7rpKzJvXfeiVyQWg2vfSpjBAuhunTCA9uG'
         badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // (no dedicated page yet)
         break
@@ -589,9 +580,7 @@ export class IdentityClient {
       name,
       avatarURL,
       abbreviatedKey:
-        identityToParse.subject.length > 0
-          ? `${identityToParse.subject.substring(0, 10)}...`
-          : '',
+        identityToParse.subject.length > 0 ? `${identityToParse.subject.substring(0, 10)}...` : '',
       identityKey: identityToParse.subject,
       badgeIconURL,
       badgeLabel,
@@ -602,7 +591,7 @@ export class IdentityClient {
   /**
    * Helper to check if a value is a non-empty string
    */
-  private static hasValue (value: any): value is string {
+  private static hasValue(value: any): value is string {
     return value !== undefined && value !== null && value !== ''
   }
 
@@ -610,17 +599,17 @@ export class IdentityClient {
    * Try to parse identity information from unknown certificate types
    * by checking common field names
    */
-  private static tryToParseGenericIdentity (
+  private static tryToParseGenericIdentity(
     type: string,
     decryptedFields: Record<string, any>,
     certifierInfo: any
   ): {
-      name: string
-      avatarURL: string
-      badgeLabel: string
-      badgeIconURL: string
-      badgeClickURL: string
-    } {
+    name: string
+    avatarURL: string
+    badgeLabel: string
+    badgeIconURL: string
+    badgeClickURL: string
+  } {
     // Try to construct a name from common field patterns
     const firstName = decryptedFields.firstName
     const lastName = decryptedFields.lastName

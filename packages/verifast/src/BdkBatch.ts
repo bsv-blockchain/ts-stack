@@ -10,7 +10,7 @@ export interface PackedArrays<T extends Uint8Array | Int32Array | Uint32Array> {
   offsets: Uint32Array
 }
 
-export function flagsForInputCount (
+export function flagsForInputCount(
   inputCount: number,
   verifyFlags?: string | string[],
   customFlags?: readonly number[] | Uint32Array
@@ -25,7 +25,7 @@ export function flagsForInputCount (
   return new Uint32Array(inputCount).fill(mapVerifyFlags(verifyFlags))
 }
 
-export function packArrays<T extends Uint8Array | Int32Array | Uint32Array> (
+export function packArrays<T extends Uint8Array | Int32Array | Uint32Array>(
   arrays: readonly T[],
   make: (length: number) => T
 ): PackedArrays<T> {
@@ -45,10 +45,7 @@ export function packArrays<T extends Uint8Array | Int32Array | Uint32Array> (
   return { values, offsets }
 }
 
-export function decodeResults (
-  flat: Int32Array,
-  count: number
-): BdkVerificationResult[] {
+export function decodeResults(flat: Int32Array, count: number): BdkVerificationResult[] {
   if (flat.length !== count * 2) {
     throw new BdkVerificationError({ domain: BdkErrorDomain.EXCEPTION, code: 0 })
   }
@@ -58,7 +55,7 @@ export function decodeResults (
   }))
 }
 
-export function verdict (result: BdkVerificationResult): boolean {
+export function verdict(result: BdkVerificationResult): boolean {
   if (result.domain === BdkErrorDomain.OK) return true
   if (result.domain === BdkErrorDomain.SCRIPT || result.domain === BdkErrorDomain.DOS) return false
   throw new BdkVerificationError(result)

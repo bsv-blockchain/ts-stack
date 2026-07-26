@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 45,
+  "findingCount": 24,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,34 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/network/ts-p2p::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/network/ts-p2p::missing-script::lint",
-      "message": "Profile node-library requires script lint"
-    },
-    {
-      "id": "packages/network/ts-p2p::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/network/ts-p2p::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/overlays/gasp-core::missing-script::format:check",
-      "message": "Profile dual-runtime-library requires script format:check"
-    },
-    {
-      "id": "packages/overlays/gasp-core::missing-script::pack:check",
-      "message": "Profile dual-runtime-library requires script pack:check"
-    },
-    {
-      "id": "packages/overlays/gasp-core::missing-script::typecheck",
-      "message": "Profile dual-runtime-library requires script typecheck"
     },
     {
       "id": "packages/overlays/overlay-discovery-services::missing-script::format:check",
@@ -116,50 +88,6 @@
       "message": "Profile node-library requires script typecheck"
     },
     {
-      "id": "packages/sdk::missing-script::format:check",
-      "message": "Profile browser-library requires script format:check"
-    },
-    {
-      "id": "packages/sdk::missing-script::pack:check",
-      "message": "Profile browser-library requires script pack:check"
-    },
-    {
-      "id": "packages/sdk::missing-script::test:browser",
-      "message": "Profile browser-library requires script test:browser"
-    },
-    {
-      "id": "packages/sdk::missing-script::typecheck",
-      "message": "Profile browser-library requires script typecheck"
-    },
-    {
-      "id": "packages/verifast::missing-script::format:check",
-      "message": "Profile wasm-library requires script format:check"
-    },
-    {
-      "id": "packages/verifast::missing-script::lint",
-      "message": "Profile wasm-library requires script lint"
-    },
-    {
-      "id": "packages/verifast::missing-script::pack:check",
-      "message": "Profile wasm-library requires script pack:check"
-    },
-    {
-      "id": "packages/wallet/ts-wallet-relay::missing-script::format:check",
-      "message": "Profile cli-library requires script format:check"
-    },
-    {
-      "id": "packages/wallet/ts-wallet-relay::missing-script::lint",
-      "message": "Profile cli-library requires script lint"
-    },
-    {
-      "id": "packages/wallet/ts-wallet-relay::missing-script::pack:check",
-      "message": "Profile cli-library requires script pack:check"
-    },
-    {
-      "id": "packages/wallet/ts-wallet-relay::missing-script::test:coverage",
-      "message": "Profile cli-library requires script test:coverage"
-    },
-    {
       "id": "packages/wallet/wallet-toolbox-examples::missing-script::format:check",
       "message": "Profile examples requires script format:check"
     },
@@ -170,18 +98,6 @@
     {
       "id": "packages/wallet/wallet-toolbox-examples::mutating-check-script::lint",
       "message": "lint must not modify the working tree"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
     }
   ]
 }

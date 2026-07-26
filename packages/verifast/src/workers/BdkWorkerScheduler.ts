@@ -1,12 +1,6 @@
-import type {
-  BdkWasmModule,
-  BdkVerifierOptions
-} from '../BdkVerifierTypes.js'
+import type { BdkWasmModule, BdkVerifierOptions } from '../BdkVerifierTypes.js'
 import type BdkWorkerPool from './BdkWorkerPool.js'
-import type {
-  BdkWorkerRequestWithoutId,
-  BdkWorkerResult
-} from './BdkWorkerProtocol.js'
+import type { BdkWorkerRequestWithoutId, BdkWorkerResult } from './BdkWorkerProtocol.js'
 
 /**
  * Optional multi-worker scheduling kept outside the verifier core so
@@ -20,10 +14,8 @@ export default class BdkWorkerScheduler {
   private ready = false
   private loading: Promise<void> | undefined
 
-  constructor (
-    private readonly createPool: (
-      onFailure: (error: Error) => void
-    ) => BdkWorkerPool,
+  constructor(
+    private readonly createPool: (onFailure: (error: Error) => void) => BdkWorkerPool,
     options: BdkVerifierOptions
   ) {
     this.itemThreshold = options.batchWorkerThreshold ?? 32
@@ -31,7 +23,7 @@ export default class BdkWorkerScheduler {
     this.maxBatchBytes = options.maxBatchBytes ?? 32 * 1024 * 1024
   }
 
-  async preload (module: BdkWasmModule): Promise<void> {
+  async preload(module: BdkWasmModule): Promise<void> {
     if (this.ready) return
     if (this.pool === undefined) {
       const created = this.createPool(() => {
@@ -45,24 +37,24 @@ export default class BdkWorkerScheduler {
     }
     const pool = this.pool
     const snapshot = module.ExportVerificationTables?.()
-    this.loading ??= pool.preload(snapshot).then(() => {
-      this.ready = true
-    }).catch(error => {
-      if (this.pool === pool) {
-        pool.terminate()
-        this.pool = undefined
-        this.loading = undefined
-        this.ready = false
-      }
-      throw error
-    })
+    this.loading ??= pool
+      .preload(snapshot)
+      .then(() => {
+        this.ready = true
+      })
+      .catch(error => {
+        if (this.pool === pool) {
+          pool.terminate()
+          this.pool = undefined
+          this.loading = undefined
+          this.ready = false
+        }
+        throw error
+      })
     await this.loading
   }
 
-  shouldUse (
-    itemCount: number,
-    prepare: () => Promise<void>
-  ): boolean {
+  shouldUse(itemCount: number, prepare: () => Promise<void>): boolean {
     if (itemCount < this.itemThreshold) return false
     if (this.ready) return true
     // The first large batch retains the single-instance path while worker
@@ -71,10 +63,7 @@ export default class BdkWorkerScheduler {
     return false
   }
 
-  parallelChunks<T> (
-    items: readonly T[],
-    itemBytes: (item: T) => number
-  ): T[][] {
+  parallelChunks<T>(items: readonly T[], itemBytes: (item: T) => number): T[][] {
     if (items.length === 0) return []
     if (this.pool === undefined) return []
     const sizes = items.map(itemBytes)
@@ -84,8 +73,7 @@ export default class BdkWorkerScheduler {
     for (let index = 0; index < items.length; index++) {
       if (
         chunk.length > 0 &&
-        (chunk.length >= this.maxBatchItems ||
-          chunkBytes + sizes[index] > this.maxBatchBytes)
+        (chunk.length >= this.maxBatchItems || chunkBytes + sizes[index] > this.maxBatchBytes)
       ) {
         chunks.push(chunk)
         chunk = []
@@ -101,10 +89,7 @@ export default class BdkWorkerScheduler {
       let splitBytes = -1
       for (let index = 0; index < chunks.length; index++) {
         if (chunks[index].length < 2) continue
-        const bytes = chunks[index].reduce(
-          (sum, item) => sum + itemBytes(item),
-          0
-        )
+        const bytes = chunks[index].reduce((sum, item) => sum + itemBytes(item), 0)
         if (bytes > splitBytes) {
           splitIndex = index
           splitBytes = bytes
@@ -124,16 +109,14 @@ export default class BdkWorkerScheduler {
     return chunks
   }
 
-  async execute (
-    requests: readonly BdkWorkerRequestWithoutId[]
-  ): Promise<BdkWorkerResult[]> {
+  async execute(requests: readonly BdkWorkerRequestWithoutId[]): Promise<BdkWorkerResult[]> {
     if (this.pool === undefined) {
       throw new Error('BDK worker scheduler is not preloaded')
     }
     return await this.pool.execute(requests)
   }
 
-  terminate (): void {
+  terminate(): void {
     this.pool?.terminate()
     this.pool = undefined
     this.loading = undefined

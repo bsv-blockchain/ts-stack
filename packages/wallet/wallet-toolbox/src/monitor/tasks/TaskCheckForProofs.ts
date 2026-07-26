@@ -27,7 +27,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
    */
   static checkNow = false
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = 0
   ) {
@@ -37,7 +37,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
   /**
    * Normally triggered by checkNow getting set by new block header found event from chaintracks
    */
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: TaskCheckForProofs.checkNow
       // Check only when checkNow flag is set.
@@ -45,7 +45,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     const countsAsAttempt = TaskCheckForProofs.checkNow
     TaskCheckForProofs.checkNow = false
@@ -89,7 +89,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
  * @param reqs
  * @returns reqs partitioned by status
  */
-export async function getProofs (
+export async function getProofs(
   task: WalletMonitorTask,
   reqs: TableProvenTxReq[],
   maxAcceptableHeight: number,
@@ -97,10 +97,10 @@ export async function getProofs (
   countsAsAttempt = false,
   ignoreStatus = false
 ): Promise<{
-    proven: TableProvenTxReq[]
-    invalid: TableProvenTxReq[]
-    log: string
-  }> {
+  proven: TableProvenTxReq[]
+  invalid: TableProvenTxReq[]
+  log: string
+}> {
   const proven: TableProvenTxReq[] = []
   const invalid: TableProvenTxReq[] = []
 
@@ -143,7 +143,7 @@ export async function getProofs (
     }
 
     if (!reqIsValid) {
-      log += ' rawTx doesn\'t hash to txid. status => invalid.\n'
+      log += " rawTx doesn't hash to txid. status => invalid.\n"
       req.notified = false
       req.status = 'invalid'
       await req.updateStorageDynamicProperties(task.storage)
@@ -194,7 +194,7 @@ export async function getProofs (
     // one more time.
     //
     const r: GetMerklePathResult = await task.monitor.services.getMerklePath(req.txid)
-    if ((r.header != null) && r.header.height > maxAcceptableHeight) {
+    if (r.header != null && r.header.height > maxAcceptableHeight) {
       // Ignore proofs from bleeding edge of new blocks as these are the most often re-orged.
       log += ` ignoring possible proof from very new block at height ${r.header.height} ${r.header.hash}\n`
       continue

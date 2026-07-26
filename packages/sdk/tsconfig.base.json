@@ -1,12 +1,7 @@
 {
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "ESNext"
-    ],
-    "types": [
-      "node"
-    ],
+    "lib": ["dom", "ESNext"],
+    "types": ["node"],
     "module": "NodeNext",
     "target": "esnext",
     "moduleResolution": "NodeNext",
@@ -19,20 +14,13 @@
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
     "sourceMap": true,
+    "inlineSources": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "files": [
-    "mod.ts"
-  ],
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "dist",
-    "**/__tests__/**",
-    "**/__tests/**"
-  ]
+  "files": ["mod.ts"],
+  "include": ["src"],
+  "exclude": ["dist", "**/__tests__/**", "**/__tests/**"]
 }

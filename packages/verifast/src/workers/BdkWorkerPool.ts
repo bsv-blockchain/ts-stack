@@ -26,7 +26,7 @@ export default class BdkWorkerPool {
   private nextRequestId = 1
   private closed = false
 
-  constructor (
+  constructor(
     workerCount: number,
     createWorker: () => WorkerAdapter,
     private readonly onFailure?: (error: Error) => void
@@ -40,16 +40,20 @@ export default class BdkWorkerPool {
         if ('error' in response) pending.reject(new Error(response.error))
         else pending.resolve(response.result)
       })
-      worker.onError(error => { this.fail(error) })
-      worker.onExit(error => { this.fail(error) })
+      worker.onError(error => {
+        this.fail(error)
+      })
+      worker.onExit(error => {
+        this.fail(error)
+      })
     }
   }
 
-  get size (): number {
+  get size(): number {
     return this.workers.length
   }
 
-  private async request (
+  private async request(
     worker: WorkerAdapter,
     request: BdkWorkerRequestWithoutId
   ): Promise<BdkWorkerResult> {
@@ -67,39 +71,38 @@ export default class BdkWorkerPool {
     })
   }
 
-  async preload (verificationTables?: Uint8Array): Promise<void> {
+  async preload(verificationTables?: Uint8Array): Promise<void> {
     let sharedTables = verificationTables
-    if (
-      verificationTables !== undefined &&
-      typeof SharedArrayBuffer !== 'undefined'
-    ) {
+    if (verificationTables !== undefined && typeof SharedArrayBuffer !== 'undefined') {
       const buffer = new SharedArrayBuffer(verificationTables.byteLength)
       sharedTables = new Uint8Array(buffer)
       sharedTables.set(verificationTables)
     }
-    await Promise.all(this.workers.map(async worker => {
-      await this.request(worker, {
-        operation: 'preload',
-        verificationTables: sharedTables
+    await Promise.all(
+      this.workers.map(async worker => {
+        await this.request(worker, {
+          operation: 'preload',
+          verificationTables: sharedTables
+        })
       })
-    }))
+    )
   }
 
-  async execute (
-    requests: readonly BdkWorkerRequestWithoutId[]
-  ): Promise<BdkWorkerResult[]> {
+  async execute(requests: readonly BdkWorkerRequestWithoutId[]): Promise<BdkWorkerResult[]> {
     const results: BdkWorkerResult[] = []
     for (let offset = 0; offset < requests.length; offset += this.workers.length) {
-      results.push(...await Promise.all(
-        requests.slice(offset, offset + this.workers.length).map(
-          async (request, index) => await this.request(this.workers[index], request)
-        )
-      ))
+      results.push(
+        ...(await Promise.all(
+          requests
+            .slice(offset, offset + this.workers.length)
+            .map(async (request, index) => await this.request(this.workers[index], request))
+        ))
+      )
     }
     return results
   }
 
-  terminate (): void {
+  terminate(): void {
     if (this.closed) return
     this.closed = true
     const error = new Error('BDK worker pool terminated')
@@ -108,7 +111,7 @@ export default class BdkWorkerPool {
     for (const worker of this.workers) worker.terminate()
   }
 
-  private fail (error: Error): void {
+  private fail(error: Error): void {
     if (this.closed) return
     this.closed = true
     for (const pending of this.pending.values()) pending.reject(error)

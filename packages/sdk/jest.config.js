@@ -9,23 +9,40 @@ export default {
   // Ignore compiled output
   testPathIgnorePatterns: ['dist/'],
   modulePathIgnorePatterns: ['<rootDir>/dist'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/__test/**',
+    '!src/**/__tests/**',
+    '!src/**/*.test.ts'
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 85,
+      lines: 85,
+      statements: 85
+    }
+  },
   transform: {
-    '^.+\\.test.ts?$': ['ts-jest', {
-      useESM: true,
-      diagnostics: false,
-      tsconfig: {
-        // Explicitly enable ES2020 to support BigInt literals
-        target: 'ES2020',
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-        strict: false,
-        strictNullChecks: false,
-        noImplicitAny: false,
-        strictPropertyInitialization: false,
-        skipLibCheck: true,
-        types: ['node', 'jest']
+    '^.+\\.test.ts?$': [
+      'ts-jest',
+      {
+        useESM: true,
+        diagnostics: false,
+        tsconfig: {
+          // Explicitly enable ES2020 to support BigInt literals
+          target: 'ES2020',
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          strict: false,
+          strictNullChecks: false,
+          noImplicitAny: false,
+          strictPropertyInitialization: false,
+          skipLibCheck: true,
+          types: ['node', 'jest']
+        }
       }
-    }]
+    ]
   },
 
   // Tell Jest that files ending in .ts should be treated as ESM modules

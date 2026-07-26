@@ -4,7 +4,10 @@ import type { WalletProtocol, WalletInterface } from '@bsv/sdk'
 // Minimal subset of @bsv/sdk's WalletInterface — satisfied by both ProtoWallet and WalletClient.
 // We only need the three crypto primitives; no blockchain methods required.
 
-export type WalletLike = Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt' | 'createSignature'>
+export type WalletLike = Pick<
+  WalletInterface,
+  'getPublicKey' | 'encrypt' | 'decrypt' | 'createSignature'
+>
 
 // ── Protocol constant ─────────────────────────────────────────────────────────
 
@@ -15,8 +18,8 @@ export const PROTOCOL_ID: WalletProtocol = [0, 'mobile wallet session']
 /** Outer envelope routed by the relay — ciphertext is never decoded by the relay. */
 export interface WireEnvelope {
   topic: string
-  ciphertext: string          // base64url — output of wallet.encrypt
-  mobileIdentityKey?: string  // only present on pairing_approved (bootstrap)
+  ciphertext: string // base64url — output of wallet.encrypt
+  mobileIdentityKey?: string // only present on pairing_approved (bootstrap)
 }
 
 /** Inner RPC request (plaintext after decryption). */
@@ -40,21 +43,21 @@ export interface RpcResponse {
 export type SessionStatus = 'pending' | 'connected' | 'disconnected' | 'expired'
 
 export interface Session {
-  id: string                  // also serves as topic and keyID
+  id: string // also serves as topic and keyID
   status: SessionStatus
   createdAt: number
   expiresAt: number
-  desktopToken: string        // random secret — sent as X-Desktop-Token on POST /api/request/:id
-  mobileIdentityKey?: string  // set once on pairing_approved
-  pairingStartedAt?: number   // set when mobile WS first connects; prevents race-expiry
+  desktopToken: string // random secret — sent as X-Desktop-Token on POST /api/request/:id
+  mobileIdentityKey?: string // set once on pairing_approved
+  pairingStartedAt?: number // set when mobile WS first connects; prevents race-expiry
 }
 
 export interface SessionInfo {
-  sessionId:    string
-  status:       SessionStatus
-  qrDataUrl?:   string   // present on session creation
-  pairingUri?:  string   // present on session creation — use with QRPairingCode / useQRPairing
-  desktopToken?: string  // present on session creation — send as X-Desktop-Token header on POST /api/request/:id
+  sessionId: string
+  status: SessionStatus
+  qrDataUrl?: string // present on session creation
+  pairingUri?: string // present on session creation — use with QRPairingCode / useQRPairing
+  desktopToken?: string // present on session creation — send as X-Desktop-Token header on POST /api/request/:id
 }
 
 // ── Pairing URI ───────────────────────────────────────────────────────────────
@@ -63,15 +66,13 @@ export interface SessionInfo {
 export interface PairingParams {
   topic: string
   backendIdentityKey: string
-  protocolID: string  // JSON-encoded [number, string] tuple
+  protocolID: string // JSON-encoded [number, string] tuple
   origin: string
-  expiry: string      // Unix seconds
-  sig?: string        // base64url DER ECDSA signature over topic|backendIdentityKey|origin|expiry
+  expiry: string // Unix seconds
+  sig?: string // base64url DER ECDSA signature over topic|backendIdentityKey|origin|expiry
 }
 
-export type ParseResult =
-  | { params: PairingParams; error: null }
-  | { params: null; error: string }
+export type ParseResult = { params: PairingParams; error: null } | { params: null; error: string }
 
 // ── Frontend request log types ────────────────────────────────────────────────
 // Used by WalletRelayClient and the React components exported from @bsv/wallet-relay/react.
@@ -96,10 +97,10 @@ export const WALLET_METHOD_NAMES = [
   'verifyHmac',
   'encrypt',
   'decrypt',
-  'verifySignature',
+  'verifySignature'
 ] as const
 
-export type WalletMethodName = typeof WALLET_METHOD_NAMES[number]
+export type WalletMethodName = (typeof WALLET_METHOD_NAMES)[number]
 
 /** A wallet RPC request tracked by WalletRelayClient. */
 export interface WalletRequest {

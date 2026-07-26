@@ -10,37 +10,28 @@ const shared = {
   entryPoints: {
     index: 'src/index.ts',
     client: 'src/client.ts',
-    react: 'src/react.tsx',
+    react: 'src/react.tsx'
   },
-  external: [
-    '@bsv/sdk',
-    'crypto',
-    'express',
-    'http',
-    'qrcode',
-    'react',
-    'react/jsx-runtime',
-    'ws',
-  ],
+  external: ['@bsv/sdk', 'crypto', 'express', 'http', 'qrcode', 'react', 'react/jsx-runtime', 'ws'],
   logLevel: 'info',
   platform: 'node',
   sourcemap: true,
   splitting: false,
-  target: 'es2020',
+  target: 'es2020'
 }
 
 const builds = [
   {
     ...shared,
     format: 'esm',
-    outdir: 'dist',
+    outdir: 'dist'
   },
   {
     ...shared,
     format: 'cjs',
     outExtension: { '.js': '.cjs' },
-    outdir: 'dist',
-  },
+    outdir: 'dist'
+  }
 ]
 
 if (watch) {

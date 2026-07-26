@@ -35,10 +35,10 @@ export type QRDisplayProps = {
 } & React.HTMLAttributes<HTMLDivElement>
 
 const STATUS_TEXT: Record<string, string> = {
-  pending:      'Waiting for mobile...',
-  connected:    'Mobile connected',
+  pending: 'Waiting for mobile...',
+  connected: 'Mobile connected',
   disconnected: 'Mobile disconnected',
-  expired:      'Session expired',
+  expired: 'Session expired'
 }
 
 /**
@@ -78,17 +78,20 @@ export function QRDisplay({
   }
 
   const { status, qrDataUrl, pairingUri } = session
-  const statusText     = STATUS_TEXT[status] ?? status
-  const isExpired      = status === 'expired'
+  const statusText = STATUS_TEXT[status] ?? status
+  const isExpired = status === 'expired'
   const isDisconnected = status === 'disconnected'
 
   return (
     <div data-state={status} {...rootProps}>
-      {qrDataUrl && pairingUri
-        ? <QRPairingCode qrDataUrl={qrDataUrl} pairingUri={pairingUri} {...qrProps} />
-        : children
-      }
-      <span data-qr-status={status} {...statusProps}>{statusText}</span>
+      {qrDataUrl && pairingUri ? (
+        <QRPairingCode qrDataUrl={qrDataUrl} pairingUri={pairingUri} {...qrProps} />
+      ) : (
+        children
+      )}
+      <span data-qr-status={status} {...statusProps}>
+        {statusText}
+      </span>
       {(isExpired || isDisconnected) && (
         <button type="button" onClick={onRefresh} {...refreshButtonProps}>
           Generate new QR

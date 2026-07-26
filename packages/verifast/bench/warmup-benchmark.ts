@@ -5,18 +5,18 @@ import createBdkModule from '../src/wasm/bdk-core.mjs'
 const SAMPLES = 25
 const WORKERS = 4
 
-function median (values: number[]): number {
+function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-async function loadedWorker (): Promise<Worker> {
+async function loadedWorker(): Promise<Worker> {
   const worker = new Worker(new URL('./warmup-worker.mjs', import.meta.url))
   await once(worker, 'message')
   return worker
 }
 
-async function measure (useSnapshot: boolean): Promise<number> {
+async function measure(useSnapshot: boolean): Promise<number> {
   const main = await createBdkModule()
   const workers = await Promise.all(
     Array.from({ length: WORKERS }, async () => await loadedWorker())
@@ -40,7 +40,7 @@ async function measure (useSnapshot: boolean): Promise<number> {
   }
 }
 
-async function main (): Promise<void> {
+async function main(): Promise<void> {
   const independent: number[] = []
   const snapshot: number[] = []
   for (let sample = 0; sample < SAMPLES; sample++) {
@@ -59,7 +59,7 @@ async function main (): Promise<void> {
   console.log(`main generation + snapshot imports: ${snapshotMedian.toFixed(3)} ms`)
   console.log(
     `warm-up reduction: ${((1 - snapshotMedian / independentMedian) * 100).toFixed(1)}% ` +
-    `(${(independentMedian / snapshotMedian).toFixed(2)}x)`
+      `(${(independentMedian / snapshotMedian).toFixed(2)}x)`
   )
 }
 

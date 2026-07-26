@@ -73,7 +73,7 @@ export function QRPairingCode({
   ...divProps
 }: QRPairingCodeProps) {
   const { open } = useQRPairing(pairingUri, {
-    openUrl: onPress ? (uri) => onPress(uri) : undefined,
+    openUrl: onPress ? uri => onPress(uri) : undefined
   })
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -84,20 +84,8 @@ export function QRPairingCode({
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      {...divProps}
-      onClick={open}
-      onKeyDown={handleKeyDown}
-    >
-      {children ?? (
-        <img
-          src={qrDataUrl}
-          alt="Scan with BSV wallet"
-          {...imageProps}
-        />
-      )}
+    <div role="button" tabIndex={0} {...divProps} onClick={open} onKeyDown={handleKeyDown}>
+      {children ?? <img src={qrDataUrl} alt="Scan with BSV wallet" {...imageProps} />}
     </div>
   )
 }

@@ -802,6 +802,9 @@ importers:
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
+      oxlint:
+        specifier: ^1.75.0
+        version: 1.75.0
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
@@ -1137,6 +1140,9 @@ importers:
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
+      oxlint:
+        specifier: ^1.75.0
+        version: 1.75.0
       puppeteer-core:
         specifier: ^25.3.0
         version: 25.3.0(yauzl@3.4.0)
@@ -1217,6 +1223,10 @@ importers:
         version: 6.0.3
 
   packages/wallet/ts-wallet-relay:
+    dependencies:
+      ws:
+        specifier: ^8.21.1
+        version: 8.21.1
     devDependencies:
       '@bsv/sdk':
         specifier: workspace:^
@@ -1260,6 +1270,9 @@ importers:
       jest-environment-jsdom:
         specifier: ^30.4.1
         version: 30.4.1
+      oxlint:
+        specifier: ^1.75.0
+        version: 1.75.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -1275,9 +1288,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-      ws:
-        specifier: ^8.21.1
-        version: 8.21.1
 
   packages/wallet/wallet-toolbox:
     dependencies:

@@ -22,10 +22,7 @@
       "@bsv/sdk": ["../../sdk/dist/types/mod.d.ts"]
     }
   },
-  "include": [
-    "src/**/*",
-    "test/**/*"
-  ],
+  "include": ["src/**/*", "test/**/*"],
   "exclude": [
     "node_modules",
     "out",

@@ -4,11 +4,11 @@ import { TableCertificate } from '../schema/tables/TableCertificate'
 import { AuthId, FindCertificatesArgs } from '../../sdk/WalletStorage.interfaces'
 import { Paged } from '../../sdk/types'
 
-export async function listCertificates (
+export async function listCertificates(
   storage: StorageProvider,
   auth: AuthId,
   vargs: Validation.ValidListCertificatesArgs,
-  originator?: OriginatorDomainNameStringUnder250Bytes
+  _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<ListCertificatesResult> {
   const paged: Paged = { limit: vargs.limit, offset: vargs.offset }
 

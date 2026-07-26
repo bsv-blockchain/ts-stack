@@ -62,8 +62,10 @@ export default class TransactionSignature extends Signature {
    * @param params
    * @returns preimage as a byte array
    */
-  static formatOTDA (params: TransactionSignatureFormatParams): Uint8Array {
-    const isAnyoneCanPay = (params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) === TransactionSignature.SIGHASH_ANYONECANPAY
+  static formatOTDA(params: TransactionSignatureFormatParams): Uint8Array {
+    const isAnyoneCanPay =
+      (params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) ===
+      TransactionSignature.SIGHASH_ANYONECANPAY
     const isSingle = (params.scope & 31) === TransactionSignature.SIGHASH_SINGLE
     const isNone = (params.scope & 31) === TransactionSignature.SIGHASH_NONE
     const isAll = (params.scope & 31) === TransactionSignature.SIGHASH_ALL || (!isSingle && !isNone)
@@ -80,7 +82,14 @@ export default class TransactionSignature extends Signature {
 
     const writer = new Writer()
 
-    function writeInputs (inputs: Array<{ sourceTXID: string, sourceOutputIndex: number, sequence: number, script: number[] }>): void {
+    function writeInputs(
+      inputs: Array<{
+        sourceTXID: string
+        sourceOutputIndex: number
+        sequence: number
+        script: number[]
+      }>
+    ): void {
       writer.writeVarIntNum(inputs.length)
       for (const input of inputs) {
         writer.writeReverse(toArray(input.sourceTXID, 'hex'))
@@ -91,7 +100,7 @@ export default class TransactionSignature extends Signature {
       }
     }
 
-    function writeOutputs (outputs: Array<{ satoshis: number, script: number[] }>): void {
+    function writeOutputs(outputs: Array<{ satoshis: number; script: number[] }>): void {
       writer.writeVarIntNum(outputs.length)
       for (const output of outputs) {
         writer.writeUInt64LE(output.satoshis)
@@ -106,21 +115,24 @@ export default class TransactionSignature extends Signature {
     const emptyScript = new Script().toBinary()
 
     if (!isAnyoneCanPay) {
-      const inputs = params.allInputs == null
-        ? params.otherInputs.map(input => ({
-          sourceTXID: input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '',
-          sourceOutputIndex: input.sourceOutputIndex,
-          sequence: (isSingle || isNone) ? 0 : (input.sequence ?? 0xffffffff),
-          script: emptyScript
-        }))
-        : params.allInputs.map((input, index) => index === params.inputIndex
-          ? currentInput
-          : {
+      const inputs =
+        params.allInputs == null
+          ? params.otherInputs.map(input => ({
               sourceTXID: input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '',
               sourceOutputIndex: input.sourceOutputIndex,
-              sequence: (isSingle || isNone) ? 0 : (input.sequence ?? 0xffffffff),
+              sequence: isSingle || isNone ? 0 : (input.sequence ?? 0xffffffff),
               script: emptyScript
-            })
+            }))
+          : params.allInputs.map((input, index) =>
+              index === params.inputIndex
+                ? currentInput
+                : {
+                    sourceTXID: input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '',
+                    sourceOutputIndex: input.sourceOutputIndex,
+                    sequence: isSingle || isNone ? 0 : (input.sequence ?? 0xffffffff),
+                    script: emptyScript
+                  }
+            )
       if (params.allInputs == null) inputs.splice(params.inputIndex, 0, currentInput)
       writeInputs(inputs)
     } else if (isAnyoneCanPay) {
@@ -134,10 +146,13 @@ export default class TransactionSignature extends Signature {
       }))
       writeOutputs(outputs)
     } else if (isSingle) {
-      const outputs: Array<{ satoshis: number, script: number[] }> = []
-      for (let i = 0; i < params.inputIndex; i++) outputs.push({ satoshis: -1, script: emptyScript })
+      const outputs: Array<{ satoshis: number; script: number[] }> = []
+      for (let i = 0; i < params.inputIndex; i++)
+        outputs.push({ satoshis: -1, script: emptyScript })
       const o = params.outputs[params.inputIndex]
-      if (o !== undefined) { outputs.push({ satoshis: o.satoshis ?? 0, script: o.lockingScript.toBinary() }) }
+      if (o !== undefined) {
+        outputs.push({ satoshis: o.satoshis ?? 0, script: o.lockingScript.toBinary() })
+      }
       writeOutputs(outputs)
     } else if (isNone) {
       writeOutputs([])
@@ -161,18 +176,20 @@ export default class TransactionSignature extends Signature {
    * @param params.cache - Optional `SignatureHashCache` that may already contain hashed prefixes and is populated during formatting.
    * @returns Bytes for signing.
    */
-  static formatBip143 (params: TransactionSignatureFormatParams): Uint8Array {
+  static formatBip143(params: TransactionSignatureFormatParams): Uint8Array {
     const cache = params.cache
     const currentInput: TransactionInput = {
       sourceTXID: params.sourceTXID,
       sourceOutputIndex: params.sourceOutputIndex,
       sequence: params.inputSequence
     }
-    const inputs = params.allInputs ?? (() => {
-      const reconstructed = [...params.otherInputs]
-      reconstructed.splice(params.inputIndex, 0, currentInput)
-      return reconstructed
-    })()
+    const inputs =
+      params.allInputs ??
+      (() => {
+        const reconstructed = [...params.otherInputs]
+        reconstructed.splice(params.inputIndex, 0, currentInput)
+        return reconstructed
+      })()
 
     const getPrevoutHash = (): number[] => {
       const writer = new Writer()
@@ -209,7 +226,7 @@ export default class TransactionSignature extends Signature {
       return ret
     }
 
-    function getOutputsHash (outputIndex?: number): number[] {
+    function getOutputsHash(outputIndex?: number): number[] {
       const writer = new Writer()
 
       if (outputIndex === undefined) {
@@ -224,7 +241,8 @@ export default class TransactionSignature extends Signature {
       } else {
         const output = params.outputs[outputIndex]
 
-        if (output === undefined) { // ✅ Explicitly check for undefined
+        if (output === undefined) {
+          // ✅ Explicitly check for undefined
           throw new Error(`Output at index ${outputIndex} does not exist`)
         }
 
@@ -241,9 +259,9 @@ export default class TransactionSignature extends Signature {
       return ret
     }
 
-    let hashPrevouts = new Array(32).fill(0)
-    let hashSequence = new Array(32).fill(0)
-    let hashOutputs = new Array(32).fill(0)
+    let hashPrevouts = Array.from({ length: 32 }, () => 0)
+    let hashSequence = Array.from({ length: 32 }, () => 0)
+    let hashOutputs = Array.from({ length: 32 }, () => 0)
 
     if ((params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) === 0) {
       if (cache?.hashPrevouts == null) {
@@ -339,13 +357,15 @@ export default class TransactionSignature extends Signature {
    * @param params - Context for the signing input plus transaction metadata.
    * @param params.cache - Optional cache storing previously computed `hashPrevouts`, `hashSequence`, or `hashOutputs*` values; it will be populated if present.
    */
-  static format (params: TransactionSignatureFormatParams): number[] {
+  static format(params: TransactionSignatureFormatParams): number[] {
     return Array.from(this.formatBytes(params))
   }
 
-  static formatBytes (params: TransactionSignatureFormatParams): Uint8Array {
+  static formatBytes(params: TransactionSignatureFormatParams): Uint8Array {
     const hasForkId = (params.scope & TransactionSignature.SIGHASH_FORKID) !== 0
-    const hasChronicle = params.ignoreChronicle !== true && (params.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
+    const hasChronicle =
+      params.ignoreChronicle !== true &&
+      (params.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
 
     if (hasForkId && !hasChronicle) {
       return TransactionSignature.formatBip143(params)
@@ -358,17 +378,21 @@ export default class TransactionSignature extends Signature {
     return new Uint8Array(0)
   }
 
-  static usesOtdaSingleBug (params: TransactionSignatureFormatParams): boolean {
+  static usesOtdaSingleBug(params: TransactionSignatureFormatParams): boolean {
     const hasForkId = (params.scope & TransactionSignature.SIGHASH_FORKID) !== 0
-    const hasChronicle = params.ignoreChronicle !== true && (params.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
+    const hasChronicle =
+      params.ignoreChronicle !== true &&
+      (params.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
     const usesOtda = !hasForkId || (hasForkId && hasChronicle)
-    return usesOtda &&
+    return (
+      usesOtda &&
       (params.scope & 31) === TransactionSignature.SIGHASH_SINGLE &&
       params.inputIndex >= params.outputs.length
+    )
   }
 
   // The format used in a tx
-  static fromChecksigFormat (buf: number[]): TransactionSignature {
+  static fromChecksigFormat(buf: number[]): TransactionSignature {
     if (buf.length === 0) {
       // allow setting a "blank" signature
       const r = new BigNumber(1)
@@ -382,7 +406,7 @@ export default class TransactionSignature extends Signature {
     return new TransactionSignature(tempSig.r, tempSig.s, scope)
   }
 
-  constructor (r: BigNumber, s: BigNumber, scope: number) {
+  constructor(r: BigNumber, s: BigNumber, scope: number) {
     super(r, s)
     this.scope = scope
   }
@@ -392,14 +416,11 @@ export default class TransactionSignature extends Signature {
    * See also Ecdsa signature algorithm which enforces this.
    * See also Bip 62, "low S values in signatures"
    */
-  public hasLowS (): boolean {
+  public hasLowS(): boolean {
     if (
       this.s.ltn(1) ||
       this.s.gt(
-        new BigNumber(
-          '7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0',
-          'hex'
-        )
+        new BigNumber('7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0', 'hex')
       )
     ) {
       return false
@@ -407,7 +428,7 @@ export default class TransactionSignature extends Signature {
     return true
   }
 
-  toChecksigFormat (): number[] {
+  toChecksigFormat(): number[] {
     const derbuf = this.toDER() as number[]
     return [...derbuf, this.scope]
   }

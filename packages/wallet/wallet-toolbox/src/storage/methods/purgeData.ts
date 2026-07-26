@@ -9,11 +9,11 @@ import { TableOutputTagMap } from '../schema/tables/TableOutputTagMap'
 import { TableTxLabelMap } from '../schema/tables/TableTxLabelMap'
 import { TableCommission } from '../schema/tables/TableCommission'
 
-export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
+export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
   const r: PurgeResults = { count: 0, log: '' }
   const defaultAge = 1000 * 60 * 60 * 24 * 14
 
-  const runPurgeQuery = async <T extends object>(pq: PurgeQuery): Promise<void> => {
+  const runPurgeQuery = async (pq: PurgeQuery): Promise<void> => {
     try {
       pq.sql = pq.q.toString()
       const count = await pq.q
@@ -196,7 +196,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
 
   return r
 
-  async function deleteTransactions (
+  async function deleteTransactions(
     transactionIds: number[],
     qs: PurgeQuery[],
     reason: string,
@@ -256,14 +256,14 @@ interface PurgeQuery {
   log: string
 }
 
-function toSqlWhereDate (d: Date): string {
+function toSqlWhereDate(d: Date): string {
   let s = d.toISOString()
   s = s.replace('T', ' ')
   s = s.replace('Z', '')
   return s
 }
 
-function isMissingLocalBeefError (e: WalletError, txid: string, chain: string): boolean {
+function isMissingLocalBeefError(e: WalletError, txid: string, chain: string): boolean {
   if (e.code !== 'WERR_INVALID_PARAMETER') return false
   const parameter = (e as WalletError & { parameter?: string }).parameter
   if (

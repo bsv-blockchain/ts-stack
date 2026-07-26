@@ -1,18 +1,18 @@
 {
-    "files": [],
-    "compilerOptions": {
-        "types": ["jest", "node"],
-        "esModuleInterop": true,
-        "noImplicitAny": false,
-        "allowJs": true,
-        "isolatedModules": true,
-        "lib": ["es2022", "dom"],
-        "target": "es2022",
-        "rootDir": "."
-    },
-    "references": [
-        {
-            "path": "tsconfig.all.json"
-        }
-    ]
+  "files": [],
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "esModuleInterop": true,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "isolatedModules": true,
+    "lib": ["es2022", "dom"],
+    "target": "es2022",
+    "rootDir": "."
+  },
+  "references": [
+    {
+      "path": "tsconfig.all.json"
+    }
+  ]
 }

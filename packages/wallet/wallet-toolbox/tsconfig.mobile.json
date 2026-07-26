@@ -20,13 +20,6 @@
       "@bsv/sdk": ["../../sdk/dist/types/mod.d.ts"]
     }
   },
-  "files": [
-    "src/index.mobile.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "out",
-    "client/out",
-    "mobile/out"
-  ]
+  "files": ["src/index.mobile.ts"],
+  "exclude": ["node_modules", "out", "client/out", "mobile/out"]
 }

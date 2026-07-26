@@ -1,5 +1,12 @@
 import type { WalletProtocol } from '@bsv/sdk'
-import type { WalletLike, PairingParams, WireEnvelope, RpcRequest, RpcResponse, WalletMethodName } from '../types.js'
+import type {
+  WalletLike,
+  PairingParams,
+  WireEnvelope,
+  RpcRequest,
+  RpcResponse,
+  WalletMethodName
+} from '../types.js'
 import { encryptEnvelope, decryptEnvelope, type CryptoParams } from '../shared/crypto.js'
 
 export type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -8,18 +15,33 @@ export type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'discon
  * The wallet methods implemented by the BSV Browser mobile app.
  * Used as the default for `WalletPairingSessionOptions.implementedMethods`.
  */
-export const DEFAULT_IMPLEMENTED_METHODS: ReadonlySet<WalletMethodName> = new Set<WalletMethodName>([
-  'getPublicKey', 'listOutputs', 'createAction', 'signAction', 'createSignature',
-  'verifySignature', 'listActions', 'internalizeAction', 'acquireCertificate',
-  'relinquishCertificate', 'listCertificates', 'revealCounterpartyKeyLinkage',
-  'createHmac', 'verifyHmac', 'encrypt', 'decrypt',
-])
+export const DEFAULT_IMPLEMENTED_METHODS: ReadonlySet<WalletMethodName> = new Set<WalletMethodName>(
+  [
+    'getPublicKey',
+    'listOutputs',
+    'createAction',
+    'signAction',
+    'createSignature',
+    'verifySignature',
+    'listActions',
+    'internalizeAction',
+    'acquireCertificate',
+    'relinquishCertificate',
+    'listCertificates',
+    'revealCounterpartyKeyLinkage',
+    'createHmac',
+    'verifyHmac',
+    'encrypt',
+    'decrypt'
+  ]
+)
 
 /**
  * Methods approved without user interaction by default.
  * Used as the default for `WalletPairingSessionOptions.autoApproveMethods`.
  */
-export const DEFAULT_AUTO_APPROVE_METHODS: ReadonlySet<WalletMethodName> = new Set<WalletMethodName>(['getPublicKey'])
+export const DEFAULT_AUTO_APPROVE_METHODS: ReadonlySet<WalletMethodName> =
+  new Set<WalletMethodName>(['getPublicKey'])
 
 /** Return a result or an error string — used for the onRequest handler. */
 export type RequestHandler = (method: string, params: unknown) => Promise<unknown>
@@ -108,7 +130,9 @@ export class WalletPairingSession {
     this.autoApproveMethods = options.autoApproveMethods ?? DEFAULT_AUTO_APPROVE_METHODS
   }
 
-  get status(): PairingSessionStatus { return this._status }
+  get status(): PairingSessionStatus {
+    return this._status
+  }
 
   /**
    * The highest seq value received from the backend in this connection.
@@ -120,7 +144,9 @@ export class WalletPairingSession {
    * })
    * ```
    */
-  get lastSeq(): number { return this._lastSeq }
+  get lastSeq(): number {
+    return this._lastSeq
+  }
 
   // ── Event registration ───────────────────────────────────────────────────────
 
@@ -129,7 +155,8 @@ export class WalletPairingSession {
   on(event: 'error', handler: (msg: string) => void): this
   on(event: string, handler: unknown): this {
     const bucket = this.listeners[event as keyof typeof this.listeners]
-    if (bucket) (bucket as Array<(...args: unknown[]) => void>).push(handler as (...args: unknown[]) => void)
+    if (bucket)
+      (bucket as Array<(...args: unknown[]) => void>).push(handler as (...args: unknown[]) => void)
     return this
   }
 
@@ -162,7 +189,7 @@ export class WalletPairingSession {
   async resolveRelay(): Promise<string> {
     const res = await fetch(`${this.params.origin}/api/session/${this.params.topic}`)
     if (!res.ok) throw new Error(`Failed to resolve relay from origin: HTTP ${res.status}`)
-    const data = await res.json() as { relay?: string; status?: string }
+    const data = (await res.json()) as { relay?: string; status?: string }
     if (!data.relay) throw new Error('Origin server did not return a relay URL')
     this._resolvedRelay = data.relay
     return data.relay
@@ -205,7 +232,11 @@ export class WalletPairingSession {
     this.mobileIdentityKey = publicKey
 
     const { topic, backendIdentityKey } = this.params
-    const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID: topic, counterparty: backendIdentityKey }
+    const cryptoParams: CryptoParams = {
+      protocolID: this.protocolID,
+      keyID: topic,
+      counterparty: backendIdentityKey
+    }
 
     const ws = new WebSocket(`${this._resolvedRelay}/ws?topic=${topic}&role=mobile`)
     this.ws = ws
@@ -219,8 +250,8 @@ export class WalletPairingSession {
           params: {
             mobileIdentityKey: publicKey,
             walletMeta: this.options.walletMeta ?? {},
-            permissions: Array.from(this.implementedMethods),
-          },
+            permissions: Array.from(this.implementedMethods)
+          }
         })
         const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, payload)
         const envelope: WireEnvelope = { topic, mobileIdentityKey: publicKey, ciphertext }
@@ -247,7 +278,12 @@ export class WalletPairingSession {
 
         // M4: Replay protection — drop anything not strictly greater than last seq
         if (typeof msg.seq !== 'number' || msg.seq <= this._lastSeq) {
-          console.warn('[WalletPairingSession] dropping message: seq', msg.seq, '<= lastSeq', this._lastSeq)
+          console.warn(
+            '[WalletPairingSession] dropping message: seq',
+            msg.seq,
+            '<= lastSeq',
+            this._lastSeq
+          )
           return
         }
         this._lastSeq = msg.seq
@@ -284,7 +320,7 @@ export class WalletPairingSession {
       // Reconnect race: a newer connection already replaced this ws.
       if (this.ws !== ws) return
 
-      this.ws = null  // clear stale ref
+      this.ws = null // clear stale ref
       if (this.connected) {
         this._status = 'disconnected'
         this.listeners.disconnected.forEach(h => h())
@@ -303,7 +339,11 @@ export class WalletPairingSession {
 
   private async handleRpc(request: RpcRequest): Promise<void> {
     const { topic, backendIdentityKey } = this.params
-    const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID: topic, counterparty: backendIdentityKey }
+    const cryptoParams: CryptoParams = {
+      protocolID: this.protocolID,
+      keyID: topic,
+      counterparty: backendIdentityKey
+    }
 
     const sendResponse = async (response: RpcResponse): Promise<void> => {
       const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, JSON.stringify(response))
@@ -315,7 +355,7 @@ export class WalletPairingSession {
       await sendResponse({
         id: request.id,
         seq: request.seq,
-        error: { code: 501, message: `Method "${request.method}" is not implemented` },
+        error: { code: 501, message: `Method "${request.method}" is not implemented` }
       })
       return
     }
@@ -328,7 +368,7 @@ export class WalletPairingSession {
         await sendResponse({
           id: request.id,
           seq: request.seq,
-          error: { code: 4001, message: 'User rejected' },
+          error: { code: 4001, message: 'User rejected' }
         })
         return
       }
@@ -339,7 +379,7 @@ export class WalletPairingSession {
       await sendResponse({
         id: request.id,
         seq: request.seq,
-        error: { code: 501, message: 'No request handler registered' },
+        error: { code: 501, message: 'No request handler registered' }
       })
       return
     }
@@ -351,7 +391,7 @@ export class WalletPairingSession {
       await sendResponse({
         id: request.id,
         seq: request.seq,
-        error: { code: 500, message: err instanceof Error ? err.message : 'Handler error' },
+        error: { code: 500, message: err instanceof Error ? err.message : 'Handler error' }
       })
     }
   }

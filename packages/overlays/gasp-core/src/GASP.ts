@@ -80,7 +80,7 @@ export type GASPRawTransactionRequest = {
  * wrapping. Existing GASP behavior remains unchanged.
  */
 export type GASPRawTransactionResponse = {
-  transactions: Array<{ txid: string, rawTx: string }>
+  transactions: Array<{ txid: string; rawTx: string }>
   missing?: string[]
 }
 
@@ -103,19 +103,24 @@ export interface GASPStorage {
    * @param metadata Whether transaction and output metadata should be returned.
    * @returns The hydrated GASP node, with or without metadata.
    */
-  hydrateGASPNode: (graphID: string, txid: string, outputIndex: number, metadata: boolean) => Promise<GASPNode>
+  hydrateGASPNode: (
+    graphID: string,
+    txid: string,
+    outputIndex: number,
+    metadata: boolean
+  ) => Promise<GASPNode>
   /**
    * For a given node, returns the inputs needed to complete the graph, including whether updated metadata is requested for those inputs.
    * @param tx The node for which needed inputs should be found.
    * @returns A promise for a mapping of requested input transactions and whether metadata should be provided for each.
-  */
+   */
   findNeededInputs: (tx: GASPNode) => Promise<GASPNodeResponse | void>
   /**
    * Appends a new node to a temporary graph.
    * @param tx The node to append to this graph.
    * @param spentBy Unless this is the same node identified by the graph ID, denotes the TXID and input index for the node which spent this one, in 36-byte format.
    * @throws If the node cannot be appended to the graph, either because the graph ID is for a graph the recipient does not want or because the graph has grown to be too large before being finalized.
-  */
+   */
   appendToGraph: (tx: GASPNode, spentBy?: string) => Promise<void>
   /**
    * Checks whether the given graph, in its current state, makes reference only to transactions that are proven in the blockchain, or already known by the recipient to be valid.
@@ -144,7 +149,12 @@ export interface GASPRemote {
   /** Given an outgoing initial response, obtain the reply from the foreign instance. */
   getInitialReply: (response: GASPInitialResponse) => Promise<GASPInitialReply>
   /** Given an outgoing txid, outputIndex and optional metadata, request the associated GASP node from the foreign instane. */
-  requestNode: (graphID: string, txid: string, outputIndex: number, metadata: boolean) => Promise<GASPNode>
+  requestNode: (
+    graphID: string,
+    txid: string,
+    outputIndex: number,
+    metadata: boolean
+  ) => Promise<GASPNode>
   /** Given an outgoing node, send the node to the foreign instance and determine which additional inputs (if any) they request in response. */
   submitNode: (node: GASPNode) => Promise<GASPNodeResponse | void>
 }
@@ -230,11 +240,13 @@ export class GASP implements GASPRemote {
     this.sequential = sequential
 
     this.validateTimestamp(this.lastInteraction)
-    this.logData(`GASP initialized with version: ${this.version}, lastInteraction: ${this.lastInteraction}, unidirectional: ${this.unidirectional}, logLevel: ${LogLevel[this.logLevel]}, sequential: ${this.sequential}`)
+    this.logData(
+      `GASP initialized with version: ${this.version}, lastInteraction: ${this.lastInteraction}, unidirectional: ${this.unidirectional}, logLevel: ${LogLevel[this.logLevel]}, sequential: ${this.sequential}`
+    )
   }
 
   /**
-   * Helper method to execute callbacks either in parallel or sequentially, 
+   * Helper method to execute callbacks either in parallel or sequentially,
    * depending on the `sequential` flag.
    */
   private async runConcurrently<T>(
@@ -290,7 +302,12 @@ export class GASP implements GASPRemote {
   }
 
   private validateTimestamp(timestamp: number): void {
-    if (typeof timestamp !== 'number' || Number.isNaN(timestamp) || timestamp < 0 || !Number.isInteger(timestamp)) {
+    if (
+      typeof timestamp !== 'number' ||
+      Number.isNaN(timestamp) ||
+      timestamp < 0 ||
+      !Number.isInteger(timestamp)
+    ) {
       throw new Error('Invalid timestamp format')
     }
   }
@@ -312,13 +329,15 @@ export class GASP implements GASPRemote {
    * @param outpoint The 36-byte structure.
    * @returns An object containing the transaction ID and output index.
    */
-  private deconstruct36ByteStructure(outpoint: string): { txid: string, outputIndex: number } {
+  private deconstruct36ByteStructure(outpoint: string): { txid: string; outputIndex: number } {
     const [txid, index] = outpoint.split('.')
     const result = {
       txid,
       outputIndex: Number.parseInt(index, 10)
     }
-    this.debugLog(`Deconstructed 36-byte structure: ${outpoint} into txid: ${txid}, outputIndex: ${result.outputIndex}`)
+    this.debugLog(
+      `Deconstructed 36-byte structure: ${outpoint} into txid: ${txid}, outputIndex: ${result.outputIndex}`
+    )
     return result
   }
 
@@ -367,37 +386,39 @@ export class GASP implements GASPRemote {
           ingestQueue.push(utxo)
         }
       }
-      this.infoLog(`Processing page with ${initialResponse.UTXOList.length} UTXOs (since: ${initialResponse.since})`)
-
-      await this.runConcurrently(
-        ingestQueue,
-        async UTXO => {
-          try {
-            this.infoLog(`Requesting node for UTXO: ${JSON.stringify(UTXO)}`)
-            const outpoint = this.compute36ByteStructure(UTXO.txid, UTXO.outputIndex)
-            const resolvedNode = await this.remote.requestNode(
-              outpoint,
-              UTXO.txid,
-              UTXO.outputIndex,
-              true
-            )
-            this.debugLog(`Received unspent graph node from remote: ${JSON.stringify(resolvedNode)}`)
-            await this.processIncomingNode(resolvedNode)
-            await this.completeGraph(resolvedNode.graphID)
-            sharedOutpoints.add(outpoint)
-          } catch (e) {
-            this.warnLog(`Error with incoming UTXO ${UTXO.txid}.${UTXO.outputIndex}: ${(e as Error).message}`)
-          }
-        }
+      this.infoLog(
+        `Processing page with ${initialResponse.UTXOList.length} UTXOs (since: ${initialResponse.since})`
       )
+
+      await this.runConcurrently(ingestQueue, async UTXO => {
+        try {
+          this.infoLog(`Requesting node for UTXO: ${JSON.stringify(UTXO)}`)
+          const outpoint = this.compute36ByteStructure(UTXO.txid, UTXO.outputIndex)
+          const resolvedNode = await this.remote.requestNode(
+            outpoint,
+            UTXO.txid,
+            UTXO.outputIndex,
+            true
+          )
+          this.debugLog(`Received unspent graph node from remote: ${JSON.stringify(resolvedNode)}`)
+          await this.processIncomingNode(resolvedNode)
+          await this.completeGraph(resolvedNode.graphID)
+          sharedOutpoints.add(outpoint)
+        } catch (e) {
+          this.warnLog(
+            `Error with incoming UTXO ${UTXO.txid}.${UTXO.outputIndex}: ${(e as Error).message}`
+          )
+        }
+      })
     } while (limit && initialResponse.UTXOList.length >= limit)
 
     // 2. Only do the “reply” half if unidirectional is disabled
     if (!this.unidirectional) {
       await this.runConcurrently(
-        localUTXOs.filter(utxo =>
-          utxo.score >= initialResponse.since &&
-          !sharedOutpoints.has(this.compute36ByteStructure(utxo.txid, utxo.outputIndex))
+        localUTXOs.filter(
+          utxo =>
+            utxo.score >= initialResponse.since &&
+            !sharedOutpoints.has(this.compute36ByteStructure(utxo.txid, utxo.outputIndex))
         ),
         async UTXO => {
           try {
@@ -411,9 +432,12 @@ export class GASP implements GASPRemote {
             this.debugLog(`Sending unspent graph node for remote: ${JSON.stringify(outgoingNode)}`)
             await this.processOutgoingNode(outgoingNode)
           } catch (e) {
-            this.warnLog(`Error with outgoing UTXO ${UTXO.txid}.${UTXO.outputIndex}: ${(e as Error).message}`)
+            this.warnLog(
+              `Error with outgoing UTXO ${UTXO.txid}.${UTXO.outputIndex}: ${(e as Error).message}`
+            )
           }
-        })
+        }
+      )
     }
     this.infoLog('Sync completed!')
   }
@@ -480,8 +504,15 @@ export class GASP implements GASPRemote {
   /**
    * Provides a requested node to a foreign instance who requested it.
    */
-  async requestNode(graphID: string, txid: string, outputIndex: number, metadata: boolean): Promise<GASPNode> {
-    this.infoLog(`Remote is requesting node with graphID: ${graphID}, txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`)
+  async requestNode(
+    graphID: string,
+    txid: string,
+    outputIndex: number,
+    metadata: boolean
+  ): Promise<GASPNode> {
+    this.infoLog(
+      `Remote is requesting node with graphID: ${graphID}, txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`
+    )
     const node = await this.storage.hydrateGASPNode(graphID, txid, outputIndex, metadata)
     this.debugLog(`Returning node: ${JSON.stringify(node)}`)
     return node
@@ -514,7 +545,9 @@ export class GASP implements GASPRemote {
       await this.storage.finalizeGraph(graphID)
       this.infoLog(`Graph finalized for node: ${graphID}`)
     } catch (e) {
-      this.warnLog(`Error validating graph: ${(e as Error).message}. Discarding graph for node: ${graphID}`)
+      this.warnLog(
+        `Error validating graph: ${(e as Error).message}. Discarding graph for node: ${graphID}`
+      )
       await this.storage.discardGraph(graphID)
     }
   }
@@ -524,7 +557,11 @@ export class GASP implements GASPRemote {
    * @param node The incoming GASP node.
    * @param spentBy The 36-byte structure of the node that spent this one, if applicable.
    */
-  private async processIncomingNode(node: GASPNode, spentBy?: string, seenNodes = new Set()): Promise<void> {
+  private async processIncomingNode(
+    node: GASPNode,
+    spentBy?: string,
+    seenNodes = new Set()
+  ): Promise<void> {
     const nodeId = `${this.computeTXID(node.rawTx)}.${node.outputIndex}`
     this.debugLog(`Processing incoming node: ${JSON.stringify(node)}, spentBy: ${spentBy}`)
     if (seenNodes.has(nodeId)) {
@@ -540,7 +577,9 @@ export class GASP implements GASPRemote {
         Object.entries(neededInputs.requestedInputs),
         async ([outpoint, { metadata }]) => {
           const { txid, outputIndex } = this.deconstruct36ByteStructure(outpoint)
-          this.infoLog(`Requesting new node for txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`)
+          this.infoLog(
+            `Requesting new node for txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`
+          )
           const newNode = await this.remote.requestNode(node.graphID, txid, outputIndex, metadata)
           this.debugLog(`Received new node: ${JSON.stringify(newNode)}`)
           await this.processIncomingNode(
@@ -580,8 +619,15 @@ export class GASP implements GASPRemote {
         async ([outpoint, { metadata }]) => {
           const { txid, outputIndex } = this.deconstruct36ByteStructure(outpoint)
           try {
-            this.infoLog(`Hydrating node for txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`)
-            const hydratedNode = await this.storage.hydrateGASPNode(node.graphID, txid, outputIndex, metadata)
+            this.infoLog(
+              `Hydrating node for txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`
+            )
+            const hydratedNode = await this.storage.hydrateGASPNode(
+              node.graphID,
+              txid,
+              outputIndex,
+              metadata
+            )
             this.debugLog(`Hydrated node: ${JSON.stringify(hydratedNode)}`)
             await this.processOutgoingNode(hydratedNode, seenNodes)
           } catch (e) {

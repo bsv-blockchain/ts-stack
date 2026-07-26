@@ -40,12 +40,11 @@ export type UseWalletRelayClientOptions = Omit<
  */
 export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   const [session, setSession] = useState<SessionInfo | null>(null)
-  const [log, setLog]         = useState<RequestLogEntry[]>([])
-  const [error, setError]     = useState<string | null>(null)
-
+  const [log, setLog] = useState<RequestLogEntry[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   // Stable ref to the client instance — persists across StrictMode remounts
-  const clientRef   = useRef<WalletRelayClient | null>(null)
+  const clientRef = useRef<WalletRelayClient | null>(null)
   // In-flight guards: concurrent callers receive the same promise.
   const creatingRef = useRef<Promise<SessionInfo> | null>(null)
   const resumingRef = useRef<Promise<SessionInfo | null> | null>(null)
@@ -53,15 +52,15 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   // Lazily create the client once, wiring React state setters as callbacks
   function ensureClient(): WalletRelayClient {
     clientRef.current ??= new WalletRelayClient({
-      apiUrl:                options?.apiUrl,
-      pollInterval:          options?.pollInterval,
+      apiUrl: options?.apiUrl,
+      pollInterval: options?.pollInterval,
       connectedPollInterval: options?.connectedPollInterval,
-      persistSession:        options?.persistSession,
-      sessionStorageKey:     options?.sessionStorageKey,
-      sessionStorageTtl:     options?.sessionStorageTtl,
-      onSessionChange:       setSession,
-      onLogChange:           setLog,
-      onError:               setError,
+      persistSession: options?.persistSession,
+      sessionStorageKey: options?.sessionStorageKey,
+      sessionStorageTtl: options?.sessionStorageTtl,
+      onSessionChange: setSession,
+      onLogChange: setLog,
+      onError: setError
     })
     return clientRef.current
   }
@@ -69,10 +68,12 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   const createSession = useCallback(async () => {
     if (creatingRef.current) return creatingRef.current
     setError(null)
-    const promise: Promise<SessionInfo> = ensureClient().createSession().finally(() => {
-      // Only clear if we're still the active in-flight promise
-      if (creatingRef.current === promise) creatingRef.current = null
-    })
+    const promise: Promise<SessionInfo> = ensureClient()
+      .createSession()
+      .finally(() => {
+        // Only clear if we're still the active in-flight promise
+        if (creatingRef.current === promise) creatingRef.current = null
+      })
     creatingRef.current = promise
     return promise
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -80,9 +81,11 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   const resumeSession = useCallback(async () => {
     if (resumingRef.current) return resumingRef.current
     setError(null)
-    const promise: Promise<SessionInfo | null> = ensureClient().resumeSession().finally(() => {
-      if (resumingRef.current === promise) resumingRef.current = null
-    })
+    const promise: Promise<SessionInfo | null> = ensureClient()
+      .resumeSession()
+      .finally(() => {
+        if (resumingRef.current === promise) resumingRef.current = null
+      })
     resumingRef.current = promise
     return promise
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

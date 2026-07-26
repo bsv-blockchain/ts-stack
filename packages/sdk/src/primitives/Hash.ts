@@ -1,12 +1,8 @@
-
 // @ts-nocheck
 /* eslint-disable @typescript-eslint/naming-convention */
 import { assertValidHex, normalizeHex } from './hex.js'
 
-const assert = (
-  expression: unknown,
-  message: string = 'Hash assertion failed'
-): void => {
+const assert = (expression: unknown, message: string = 'Hash assertion failed'): void => {
   if (!(expression as boolean)) {
     throw new Error(message)
   }
@@ -54,12 +50,7 @@ abstract class BaseHash {
   padLength: number
   hmacStrength: number
 
-  constructor (
-    blockSize: number,
-    outSize: number,
-    hmacStrength: number,
-    padLength: number
-  ) {
+  constructor(blockSize: number, outSize: number, hmacStrength: number, padLength: number) {
     this.pending = null
     this.pendingTotal = 0
     this.blockSize = blockSize
@@ -72,15 +63,15 @@ abstract class BaseHash {
     this._delta32 = this.blockSize / 32
   }
 
-  _update (msg: number[], start: number): void {
+  _update(_msg: number[], _start: number): void {
     throw new Error('Not implemented')
   }
 
-  _digest (): number[] {
+  _digest(): number[] {
     throw new Error('Not implemented')
   }
 
-  _digestHex (): string {
+  _digestHex(): string {
     throw new Error('Not implemented')
   }
 
@@ -97,7 +88,7 @@ abstract class BaseHash {
    * @example
    * sha256.update('Hello World', 'utf8');
    */
-  update (msg: number[] | string, enc?: 'hex' | 'utf8'): this {
+  update(msg: number[] | string, enc?: 'hex' | 'utf8'): this {
     // Convert message to array, pad it, and join into 32bit blocks
     msg = toArray(msg, enc)
     if (this.pending == null) {
@@ -137,7 +128,7 @@ abstract class BaseHash {
    * @example
    * const hash = sha256.digest();
    */
-  digest (): number[] {
+  digest(): number[] {
     this.update(this._pad())
     assert(this.pending === null)
 
@@ -154,7 +145,7 @@ abstract class BaseHash {
    * @example
    * const hash = sha256.digestHex();
    */
-  digestHex (): string {
+  digestHex(): string {
     this.update(this._pad())
     assert(this.pending === null)
 
@@ -169,7 +160,7 @@ abstract class BaseHash {
    *
    * @returns Returns an array denoting the padding.
    */
-  private _pad (): number[] {
+  private _pad(): number[] {
     const len = this.pendingTotal
     if (!Number.isSafeInteger(len) || len < 0) {
       throw new Error('Message too long for this hash function')
@@ -177,7 +168,7 @@ abstract class BaseHash {
 
     const bytes = this._delta8
     const k = bytes - ((len + this.padLength) % bytes)
-    const res = new Array(k + this.padLength)
+    const res = Array.from({ length: k + this.padLength })
     res[0] = 0x80
     let i: number
     for (i = 1; i < k; i++) {
@@ -192,7 +183,7 @@ abstract class BaseHash {
     }
 
     if (this.endian === 'big') {
-      const lenArray = new Array<number>(lengthBytes)
+      const lenArray = Array.from({ length: lengthBytes })
 
       for (let b = lengthBytes - 1; b >= 0; b--) {
         lenArray[b] = Number(totalBits & 0xffn)
@@ -213,7 +204,7 @@ abstract class BaseHash {
   }
 }
 
-function isSurrogatePair (msg: string, i: number): boolean {
+function isSurrogatePair(msg: string, i: number): boolean {
   if ((msg.charCodeAt(i) & 0xfc00) !== 0xd800) {
     return false
   }
@@ -235,7 +226,7 @@ function isSurrogatePair (msg: string, i: number): boolean {
  * Apache License 2.0
  * https://github.com/google/closure-library/blob/master/LICENSE
  */
-function appendUtf8CodeUnit (msg: string, i: number, out: number[]): number {
+function appendUtf8CodeUnit(msg: string, i: number, out: number[]): number {
   let c = msg.charCodeAt(i)
   if (c < 128) {
     out.push(c)
@@ -247,19 +238,14 @@ function appendUtf8CodeUnit (msg: string, i: number, out: number[]): number {
   }
   if (isSurrogatePair(msg, i)) {
     c = 0x10000 + ((c & 0x03ff) << 10) + (msg.charCodeAt(i + 1) & 0x03ff)
-    out.push(
-      (c >> 18) | 240,
-      ((c >> 12) & 63) | 128,
-      ((c >> 6) & 63) | 128,
-      (c & 63) | 128
-    )
+    out.push((c >> 18) | 240, ((c >> 12) & 63) | 128, ((c >> 6) & 63) | 128, (c & 63) | 128)
     return i + 1
   }
   out.push((c >> 12) | 224, ((c >> 6) & 63) | 128, (c & 63) | 128)
   return i
 }
 
-function utf8StringToArray (msg: string): number[] {
+function utf8StringToArray(msg: string): number[] {
   const res: number[] = []
   let i = 0
   while (i < msg.length) {
@@ -269,7 +255,7 @@ function utf8StringToArray (msg: string): number[] {
   return res
 }
 
-function hexStringToArray (msg: string): number[] {
+function hexStringToArray(msg: string): number[] {
   assertValidHex(msg)
   const normalized = normalizeHex(msg)
   const res: number[] = []
@@ -279,7 +265,7 @@ function hexStringToArray (msg: string): number[] {
   return res
 }
 
-function numberArrayToByteArray (msg: number[]): number[] {
+function numberArrayToByteArray(msg: number[]): number[] {
   const res: number[] = []
   for (let i = 0; i < msg.length; i++) {
     res[i] = Math.trunc(msg[i])
@@ -293,10 +279,7 @@ function numberArrayToByteArray (msg: number[]): number[] {
  * @param enc Optional. Encoding to use if msg is string. Default is 'utf8'.
  * @returns array of byte values from msg. If msg is an array, a copy is returned.
  */
-export function toArray (
-  msg: number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] {
+export function toArray(msg: number[] | string, enc?: 'hex' | 'utf8'): number[] {
   if (Array.isArray(msg)) {
     return msg.slice()
   }
@@ -316,11 +299,11 @@ export function toArray (
  * Use `swapBytes32()` for explicit byte swapping, or `realHtonl()` for
  * standards-compliant host-to-network conversion.
  */
-export function htonl (w: number): number {
+export function htonl(w: number): number {
   return swapBytes32(w)
 }
 
-function toHex32 (msg: number[], endian?: 'little' | 'big'): string {
+function toHex32(msg: number[], endian?: 'little' | 'big'): string {
   let res = ''
   for (let w of msg) {
     if (endian === 'little') {
@@ -331,7 +314,7 @@ function toHex32 (msg: number[], endian?: 'little' | 'big'): string {
   return res
 }
 
-function zero8 (word: string): string {
+function zero8(word: string): string {
   if (word.length === 7) {
     return '0' + word
   } else if (word.length === 6) {
@@ -351,28 +334,25 @@ function zero8 (word: string): string {
   }
 }
 
-const BufferCtor =
-  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
-const CAN_USE_BUFFER =
-  BufferCtor != null && typeof BufferCtor.from === 'function'
+const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
+const CAN_USE_BUFFER = BufferCtor != null && typeof BufferCtor.from === 'function'
 const HEX_DIGITS = '0123456789abcdef'
-const HEX_BYTE_STRINGS = new Array<string>(256)
+const HEX_BYTE_STRINGS = Array.from({ length: 256 })
 for (let i = 0; i < HEX_BYTE_STRINGS.length; i++) {
   HEX_BYTE_STRINGS[i] = HEX_DIGITS[(i >> 4) & 0xf] + HEX_DIGITS[i & 0xf]
 }
 
-function bytesToHex (data: Uint8Array): string {
+function bytesToHex(data: Uint8Array): string {
   if (CAN_USE_BUFFER) {
     return BufferCtor.from(data).toString('hex')
   }
-  const out = new Array<string>(data.length)
+  const out = Array.from({ length: data.length })
   for (let i = 0; i < data.length; i++) out[i] = HEX_BYTE_STRINGS[data[i]]
   return out.join('')
 }
 
 const NODE_CRYPTO = (() => {
-  const processLike =
-    typeof globalThis === 'undefined' ? undefined : (globalThis as any).process
+  const processLike = typeof globalThis === 'undefined' ? undefined : (globalThis as any).process
   const getBuiltinModule = processLike?.getBuiltinModule
   if (typeof getBuiltinModule === 'function') {
     try {
@@ -387,7 +367,7 @@ const NODE_CRYPTO = (() => {
 
 type HashInput = Uint8Array | number[] | string
 
-function toHashBytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
+function toHashBytes(msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
   if (msg instanceof Uint8Array) {
     return msg
   }
@@ -397,7 +377,7 @@ function toHashBytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
   return Uint8Array.from(toArray(msg, enc))
 }
 
-function toHashKeyBytes (key: HashInput): Uint8Array {
+function toHashKeyBytes(key: HashInput): Uint8Array {
   return typeof key === 'string' ? toHashBytes(key, 'hex') : toHashBytes(key)
 }
 
@@ -406,7 +386,7 @@ interface FallbackHashLike {
   digest: () => Uint8Array
 }
 
-function updateNativeOrFallback (
+function updateNativeOrFallback(
   native: any,
   fallback: FallbackHashLike | undefined,
   data: Uint8Array
@@ -418,25 +398,19 @@ function updateNativeOrFallback (
   }
 }
 
-function digestNativeOrFallback (
-  native: any,
-  fallback: FallbackHashLike | undefined
-): number[] {
+function digestNativeOrFallback(native: any, fallback: FallbackHashLike | undefined): number[] {
   if (native != null) return Array.from(native.digest())
   if (fallback != null) return Array.from(fallback.digest())
   return []
 }
 
-function digestHexNativeOrFallback (
-  native: any,
-  fallback: FallbackHashLike | undefined
-): string {
+function digestHexNativeOrFallback(native: any, fallback: FallbackHashLike | undefined): string {
   if (native != null) return native.digest('hex')
   if (fallback != null) return bytesToHex(fallback.digest())
   return ''
 }
 
-function createNodeHash (algorithm: string): any {
+function createNodeHash(algorithm: string): any {
   const createHash = NODE_CRYPTO?.createHash
   if (typeof createHash !== 'function') return undefined
   try {
@@ -446,7 +420,7 @@ function createNodeHash (algorithm: string): any {
   }
 }
 
-function createNodeHmac (algorithm: string, keyBytes: Uint8Array): any {
+function createNodeHmac(algorithm: string, keyBytes: Uint8Array): any {
   const createHmac = NODE_CRYPTO?.createHmac
   if (typeof createHmac !== 'function') return undefined
   try {
@@ -456,7 +430,7 @@ function createNodeHmac (algorithm: string, keyBytes: Uint8Array): any {
   }
 }
 
-function digestWithNodeHash (
+function digestWithNodeHash(
   algorithm: string,
   msg: HashInput,
   enc?: 'hex' | 'utf8'
@@ -467,7 +441,7 @@ function digestWithNodeHash (
   return hash.digest()
 }
 
-function digestWithNodeHmac (
+function digestWithNodeHmac(
   algorithm: string,
   key: HashInput,
   msg: HashInput,
@@ -479,10 +453,10 @@ function digestWithNodeHmac (
   return hmac.digest()
 }
 
-function join32 (msg, start, end, endian): number[] {
+function join32(msg, start, end, endian): number[] {
   const len = end - start
   assert(len % 4 === 0)
-  const res = new Array(len / 4)
+  const res = Array.from({ length: len / 4 })
   for (let i = 0, k: number = start; i < res.length; i++, k += 4) {
     let w
     if (endian === 'big') {
@@ -495,8 +469,8 @@ function join32 (msg, start, end, endian): number[] {
   return res
 }
 
-function split32 (msg: number[], endian: 'big' | 'little'): number[] {
-  const res = new Array(msg.length * 4)
+function split32(msg: number[], endian: 'big' | 'little'): number[] {
+  const res = Array.from({ length: msg.length * 4 })
   for (let i = 0, k = 0; i < msg.length; i++, k += 4) {
     const m = msg[i]
     if (endian === 'big') {
@@ -514,37 +488,31 @@ function split32 (msg: number[], endian: 'big' | 'little'): number[] {
   return res
 }
 
-function rotr32 (w: number, b: number): number {
+function rotr32(w: number, b: number): number {
   return (w >>> b) | (w << (32 - b))
 }
 
-function rotl32 (w: number, b: number): number {
+function rotl32(w: number, b: number): number {
   return (w << b) | (w >>> (32 - b))
 }
 
-function sum32 (a: number, b: number): number {
+function sum32(a: number, b: number): number {
   return (a + b) >>> 0
 }
 
-function SUM32_3 (a: number, b: number, c: number): number {
+function SUM32_3(a: number, b: number, c: number): number {
   return (a + b + c) >>> 0
 }
 
-function SUM32_4 (a: number, b: number, c: number, d: number): number {
+function SUM32_4(a: number, b: number, c: number, d: number): number {
   return (a + b + c + d) >>> 0
 }
 
-function SUM32_5 (
-  a: number,
-  b: number,
-  c: number,
-  d: number,
-  e: number
-): number {
+function SUM32_5(a: number, b: number, c: number, d: number, e: number): number {
   return (a + b + c + d + e) >>> 0
 }
 
-function FT_1 (s, x, y, z): number {
+function FT_1(s, x, y, z): number {
   if (s === 0) {
     return ch32(x, y, z)
   }
@@ -557,63 +525,59 @@ function FT_1 (s, x, y, z): number {
   return 0
 }
 
-function ch32 (x, y, z): number {
+function ch32(x, y, z): number {
   return (x & y) ^ (~x & z)
 }
 
-function maj32 (x, y, z): number {
+function maj32(x, y, z): number {
   return (x & y) ^ (x & z) ^ (y & z)
 }
 
-function p32 (x, y, z): number {
+function p32(x, y, z): number {
   return x ^ y ^ z
 }
 
-function S0_256 (x): number {
+function S0_256(x): number {
   return rotr32(x, 2) ^ rotr32(x, 13) ^ rotr32(x, 22)
 }
 
-function S1_256 (x): number {
+function S1_256(x): number {
   return rotr32(x, 6) ^ rotr32(x, 11) ^ rotr32(x, 25)
 }
 
-function G0_256 (x): number {
+function G0_256(x): number {
   return rotr32(x, 7) ^ rotr32(x, 18) ^ (x >>> 3)
 }
 
-function G1_256 (x): number {
+function G1_256(x): number {
   return rotr32(x, 17) ^ rotr32(x, 19) ^ (x >>> 10)
 }
 
 const r = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 7, 4, 13, 1, 10, 6, 15,
-  3, 12, 0, 9, 5, 2, 14, 11, 8, 3, 10, 14, 4, 9, 15, 8, 1, 2, 7, 0, 6, 13, 11,
-  5, 12, 1, 9, 11, 10, 0, 8, 12, 4, 13, 3, 7, 15, 14, 5, 6, 2, 4, 0, 5, 9, 7,
-  12, 2, 10, 14, 1, 3, 8, 11, 6, 15, 13
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 7, 4, 13, 1, 10, 6, 15, 3, 12, 0, 9, 5, 2,
+  14, 11, 8, 3, 10, 14, 4, 9, 15, 8, 1, 2, 7, 0, 6, 13, 11, 5, 12, 1, 9, 11, 10, 0, 8, 12, 4, 13, 3,
+  7, 15, 14, 5, 6, 2, 4, 0, 5, 9, 7, 12, 2, 10, 14, 1, 3, 8, 11, 6, 15, 13
 ]
 
 const rh = [
-  5, 14, 7, 0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12, 6, 11, 3, 7, 0, 13, 5,
-  10, 14, 15, 8, 12, 4, 9, 1, 2, 15, 5, 1, 3, 7, 14, 6, 9, 11, 8, 12, 2, 10, 0,
-  4, 13, 8, 6, 4, 1, 3, 11, 15, 0, 5, 12, 2, 13, 9, 7, 10, 14, 12, 15, 10, 4, 1,
-  5, 8, 7, 6, 2, 13, 14, 0, 3, 9, 11
+  5, 14, 7, 0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12, 6, 11, 3, 7, 0, 13, 5, 10, 14, 15, 8, 12, 4,
+  9, 1, 2, 15, 5, 1, 3, 7, 14, 6, 9, 11, 8, 12, 2, 10, 0, 4, 13, 8, 6, 4, 1, 3, 11, 15, 0, 5, 12, 2,
+  13, 9, 7, 10, 14, 12, 15, 10, 4, 1, 5, 8, 7, 6, 2, 13, 14, 0, 3, 9, 11
 ]
 
 const s = [
-  11, 14, 15, 12, 5, 8, 7, 9, 11, 13, 14, 15, 6, 7, 9, 8, 7, 6, 8, 13, 11, 9, 7,
-  15, 7, 12, 15, 9, 11, 7, 13, 12, 11, 13, 6, 7, 14, 9, 13, 15, 14, 8, 13, 6, 5,
-  12, 7, 5, 11, 12, 14, 15, 14, 15, 9, 8, 9, 14, 5, 6, 8, 6, 5, 12, 9, 15, 5,
-  11, 6, 8, 13, 12, 5, 12, 13, 14, 11, 8, 5, 6
+  11, 14, 15, 12, 5, 8, 7, 9, 11, 13, 14, 15, 6, 7, 9, 8, 7, 6, 8, 13, 11, 9, 7, 15, 7, 12, 15, 9,
+  11, 7, 13, 12, 11, 13, 6, 7, 14, 9, 13, 15, 14, 8, 13, 6, 5, 12, 7, 5, 11, 12, 14, 15, 14, 15, 9,
+  8, 9, 14, 5, 6, 8, 6, 5, 12, 9, 15, 5, 11, 6, 8, 13, 12, 5, 12, 13, 14, 11, 8, 5, 6
 ]
 
 const sh = [
-  8, 9, 9, 11, 13, 15, 15, 5, 7, 7, 8, 11, 14, 14, 12, 6, 9, 13, 15, 7, 12, 8,
-  9, 11, 7, 7, 12, 7, 6, 15, 13, 11, 9, 7, 15, 11, 8, 6, 6, 14, 12, 13, 5, 14,
-  13, 13, 7, 5, 15, 5, 8, 11, 14, 14, 6, 14, 6, 9, 12, 9, 12, 5, 15, 8, 8, 5,
-  12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
+  8, 9, 9, 11, 13, 15, 15, 5, 7, 7, 8, 11, 14, 14, 12, 6, 9, 13, 15, 7, 12, 8, 9, 11, 7, 7, 12, 7,
+  6, 15, 13, 11, 9, 7, 15, 11, 8, 6, 6, 14, 12, 13, 5, 14, 13, 13, 7, 5, 15, 5, 8, 11, 14, 14, 6,
+  14, 6, 9, 12, 9, 12, 5, 15, 8, 8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
 ]
 
-function f (j, x, y, z): number {
+function f(j, x, y, z): number {
   if (j <= 15) {
     return x ^ y ^ z
   } else if (j <= 31) {
@@ -627,7 +591,7 @@ function f (j, x, y, z): number {
   }
 }
 
-function K (j): number {
+function K(j): number {
   if (j <= 15) {
     return 0x00000000
   } else if (j <= 31) {
@@ -641,7 +605,7 @@ function K (j): number {
   }
 }
 
-function Kh (j): number {
+function Kh(j): number {
   if (j <= 15) {
     return 0x50a28be6
   } else if (j <= 31) {
@@ -675,7 +639,7 @@ function Kh (j): number {
 export class RIPEMD160 extends BaseHash {
   h: number[]
 
-  constructor () {
+  constructor() {
     super(512, 160, 192, 64)
     this.endian = 'little'
 
@@ -683,7 +647,7 @@ export class RIPEMD160 extends BaseHash {
     this.endian = 'little'
   }
 
-  _update (msg: number[], start: number): void {
+  _update(msg: number[], start: number): void {
     let A = this.h[0]
     let B = this.h[1]
     let C = this.h[2]
@@ -696,22 +660,13 @@ export class RIPEMD160 extends BaseHash {
     let Eh = E
     let T
     for (let j = 0; j < 80; j++) {
-      T = sum32(
-        rotl32(SUM32_4(A, f(j, B, C, D), msg[r[j] + start], K(j)), s[j]),
-        E
-      )
+      T = sum32(rotl32(SUM32_4(A, f(j, B, C, D), msg[r[j] + start], K(j)), s[j]), E)
       A = E
       E = D
       D = rotl32(C, 10)
       C = B
       B = T
-      T = sum32(
-        rotl32(
-          SUM32_4(Ah, f(79 - j, Bh, Ch, Dh), msg[rh[j] + start], Kh(j)),
-          sh[j]
-        ),
-        Eh
-      )
+      T = sum32(rotl32(SUM32_4(Ah, f(79 - j, Bh, Ch, Dh), msg[rh[j] + start], Kh(j)), sh[j]), Eh)
       Ah = Eh
       Eh = Dh
       Dh = rotl32(Ch, 10)
@@ -726,11 +681,11 @@ export class RIPEMD160 extends BaseHash {
     this.h[0] = T
   }
 
-  _digest (): number[] {
+  _digest(): number[] {
     return split32(this.h, 'little')
   }
 
-  _digestHex (): string {
+  _digestHex(): string {
     return toHex32(this.h, 'little')
   }
 }
@@ -758,23 +713,23 @@ export class SHA256 {
   private readonly h?: FastSHA256
   private readonly native?: any
 
-  constructor () {
+  constructor() {
     this.native = createNodeHash('sha256')
     if (this.native == null) {
       this.h = new FastSHA256()
     }
   }
 
-  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+  update(msg: HashInput, enc?: 'hex' | 'utf8'): this {
     updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
-  digest (): number[] {
+  digest(): number[] {
     return digestNativeOrFallback(this.native, this.h)
   }
 
-  digestHex (): string {
+  digestHex(): string {
     return digestHexNativeOrFallback(this.native, this.h)
   }
 }
@@ -803,14 +758,14 @@ export class SHA1 extends BaseHash {
   W: number[]
   k: number[]
 
-  constructor () {
+  constructor() {
     super(512, 160, 80, 64)
     this.k = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6]
     this.h = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]
-    this.W = new Array(80)
+    this.W = Array.from({ length: 80 })
   }
 
-  _update (msg: number[], start?: number): void {
+  _update(msg: number[], start?: number): void {
     const W = this.W
 
     // Default start to 0
@@ -850,11 +805,11 @@ export class SHA1 extends BaseHash {
     this.h[4] = sum32(this.h[4], e)
   }
 
-  _digest (): number[] {
+  _digest(): number[] {
     return split32(this.h, 'big')
   }
 
-  _digestHex (): string {
+  _digestHex(): string {
     return toHex32(this.h, 'big')
   }
 }
@@ -882,23 +837,23 @@ export class SHA512 {
   private readonly h?: FastSHA512
   private readonly native?: any
 
-  constructor () {
+  constructor() {
     this.native = createNodeHash('sha512')
     if (this.native == null) {
       this.h = new FastSHA512()
     }
   }
 
-  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+  update(msg: HashInput, enc?: 'hex' | 'utf8'): this {
     updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
-  digest (): number[] {
+  digest(): number[] {
     return digestNativeOrFallback(this.native, this.h)
   }
 
-  digestHex (): string {
+  digestHex(): string {
     return digestHexNativeOrFallback(this.native, this.h)
   }
 }
@@ -934,7 +889,7 @@ export class SHA256HMAC {
    * @example
    * const myHMAC = new SHA256HMAC('deadbeef');
    */
-  constructor (key: HashInput) {
+  constructor(key: HashInput) {
     const k = toHashKeyBytes(key)
     this.native = createNodeHmac('sha256', k)
     if (this.native == null) {
@@ -953,7 +908,7 @@ export class SHA256HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: HashInput, enc?: 'hex'): this {
+  update(msg: HashInput, enc?: 'hex'): this {
     updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
@@ -967,7 +922,7 @@ export class SHA256HMAC {
    * @example
    * let hashedMessage = myHMAC.digest();
    */
-  digest (): number[] {
+  digest(): number[] {
     return digestNativeOrFallback(this.native, this.h)
   }
 
@@ -980,7 +935,7 @@ export class SHA256HMAC {
    * @example
    * let hashedMessage = myHMAC.digestHex();
    */
-  digestHex (): string {
+  digestHex(): string {
     return digestHexNativeOrFallback(this.native, this.h)
   }
 }
@@ -990,7 +945,7 @@ export class SHA1HMAC {
   outer: SHA1
   blockSize = 64
 
-  constructor (key: number[] | string) {
+  constructor(key: number[] | string) {
     key = toArray(key, 'hex')
     // Shorten key, if needed
     if (key.length > this.blockSize) {
@@ -1015,17 +970,17 @@ export class SHA1HMAC {
     this.outer = new SHA1().update(key)
   }
 
-  update (msg: number[] | string, enc?: 'hex'): this {
+  update(msg: number[] | string, enc?: 'hex'): this {
     this.inner.update(msg, enc)
     return this
   }
 
-  digest (): number[] {
+  digest(): number[] {
     this.outer.update(this.inner.digest())
     return this.outer.digest()
   }
 
-  digestHex (): string {
+  digestHex(): string {
     this.outer.update(this.inner.digest())
     return this.outer.digestHex()
   }
@@ -1062,7 +1017,7 @@ export class SHA512HMAC {
    * @example
    * const myHMAC = new SHA512HMAC('deadbeef');
    */
-  constructor (key: HashInput) {
+  constructor(key: HashInput) {
     const k = toHashKeyBytes(key)
     this.native = createNodeHmac('sha512', k)
     if (this.native == null) {
@@ -1081,7 +1036,7 @@ export class SHA512HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+  update(msg: HashInput, enc?: 'hex' | 'utf8'): this {
     updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
@@ -1095,7 +1050,7 @@ export class SHA512HMAC {
    * @example
    * let hashedMessage = myHMAC.digest();
    */
-  digest (): number[] {
+  digest(): number[] {
     return digestNativeOrFallback(this.native, this.h)
   }
 
@@ -1108,30 +1063,24 @@ export class SHA512HMAC {
    * @example
    * let hashedMessage = myHMAC.digestHex();
    */
-  digestHex (): string {
+  digestHex(): string {
     return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
-function sha256Bytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
+function sha256Bytes(msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
   const native = digestWithNodeHash('sha256', msg, enc)
   if (native != null) return native
   return new FastSHA256().update(toHashBytes(msg, enc)).digest()
 }
 
-function sha512Bytes (
-  msg: HashInput,
-  enc?: 'hex' | 'utf8'
-): Uint8Array {
+function sha512Bytes(msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
   const native = digestWithNodeHash('sha512', msg, enc)
   if (native != null) return native
   return new FastSHA512().update(toHashBytes(msg, enc)).digest()
 }
 
-function ripemd160Bytes (
-  msg: HashInput,
-  enc?: 'hex' | 'utf8'
-): Uint8Array | undefined {
+function ripemd160Bytes(msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array | undefined {
   return digestWithNodeHash('ripemd160', msg, enc)
 }
 
@@ -1146,10 +1095,7 @@ function ripemd160Bytes (
  * @example
  * const digest = ripemd160('Hello, world!');
  */
-export const ripemd160 = (
-  msg: number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
+export const ripemd160 = (msg: number[] | string, enc?: 'hex' | 'utf8'): number[] => {
   const native = ripemd160Bytes(msg, enc)
   if (native != null) return Array.from(native)
   return new RIPEMD160().update(msg, enc).digest()
@@ -1166,10 +1112,7 @@ export const ripemd160 = (
  * @example
  * const digest = sha1('Hello, world!');
  */
-export const sha1 = (
-  msg: number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
+export const sha1 = (msg: number[] | string, enc?: 'hex' | 'utf8'): number[] => {
   return new SHA1().update(msg, enc).digest()
 }
 
@@ -1251,11 +1194,7 @@ export const hash160 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
  * @example
  * const digest = sha256hmac('deadbeef', 'ffff001d');
  */
-export const sha256hmac = (
-  key: HashInput,
-  msg: HashInput,
-  enc?: 'hex'
-): number[] => {
+export const sha256hmac = (key: HashInput, msg: HashInput, enc?: 'hex'): number[] => {
   const native = digestWithNodeHmac('sha256', key, msg, enc)
   if (native != null) return Array.from(native)
   return new SHA256HMAC(key).update(msg, enc).digest()
@@ -1273,11 +1212,7 @@ export const sha256hmac = (
  * @example
  * const digest = sha512hmac('deadbeef', 'ffff001d');
  */
-export const sha512hmac = (
-  key: HashInput,
-  msg: HashInput,
-  enc?: 'hex'
-): number[] => {
+export const sha512hmac = (key: HashInput, msg: HashInput, enc?: 'hex'): number[] => {
   const native = digestWithNodeHmac('sha512', key, msg, enc)
   if (native != null) return Array.from(native)
   return new SHA512HMAC(key).update(msg, enc).digest()
@@ -1285,33 +1220,35 @@ export const sha512hmac = (
 
 // BEGIN fast-pbkdf2 helpers
 // Utils
-function isBytes (a: unknown): a is Uint8Array {
+function isBytes(a: unknown): a is Uint8Array {
   return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array')
 }
-function anumber (n: number): void {
+function anumber(n: number): void {
   if (!Number.isSafeInteger(n) || n < 0) {
     throw new Error(`positive integer expected, got ${n}`)
   }
 }
-function abytes (b: Uint8Array | undefined, ...lengths: number[]): void {
+function abytes(b: Uint8Array | undefined, ...lengths: number[]): void {
   if (!isBytes(b)) throw new Error('Uint8Array expected')
   if (lengths.length > 0 && !lengths.includes(b.length)) {
     const lens = lengths.join(',')
     throw new Error(`Uint8Array expected of length ${lens}, got length=${b.length}`)
   }
 }
-function ahash (h: IHash): void {
-  if (typeof h !== 'function' || typeof h.create !== 'function') { throw new TypeError('Hash should be wrapped by utils.createHasher') }
+function ahash(h: IHash): void {
+  if (typeof h !== 'function' || typeof h.create !== 'function') {
+    throw new TypeError('Hash should be wrapped by utils.createHasher')
+  }
   anumber(h.outputLen)
   anumber(h.blockLen)
 }
-function aexists (instance: any, checkFinished = true): void {
+function aexists(instance: any, checkFinished = true): void {
   if (instance.destroyed === true) throw new Error('Hash instance has been destroyed')
   if (checkFinished && instance.finished === true) {
     throw new Error('Hash#digest() has already been called')
   }
 }
-function aoutput (out: any, instance: any): void {
+function aoutput(out: any, instance: any): void {
   abytes(out)
   const min: number = instance.outputLen as number
   if (out.length < min) {
@@ -1319,32 +1256,26 @@ function aoutput (out: any, instance: any): void {
   }
 }
 type TypedArray =
-  | Int8Array
-  | Uint8ClampedArray
-  | Uint8Array
-  | Uint16Array
-  | Int16Array
-  | Uint32Array
-  | Int32Array
+  Int8Array | Uint8ClampedArray | Uint8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
 
-function clean (...arrays: TypedArray[]): void {
+function clean(...arrays: TypedArray[]): void {
   for (const arr of arrays) arr.fill(0)
 }
-function createView (arr: TypedArray): DataView {
+function createView(arr: TypedArray): DataView {
   return new DataView(arr.buffer, arr.byteOffset, arr.byteLength)
 }
-function toBytes (data: Input): Uint8Array {
+function toBytes(data: Input): Uint8Array {
   if (typeof data === 'string') data = utf8ToBytes(data)
   abytes(data)
   return data
 }
-function utf8ToBytes (str: string): Uint8Array {
+function utf8ToBytes(str: string): Uint8Array {
   if (typeof str !== 'string') throw new Error('string expected')
   return new Uint8Array(new TextEncoder().encode(str))
 }
 type Input = string | Uint8Array
 type KDFInput = string | Uint8Array
-function kdfInputToBytes (data: KDFInput): Uint8Array {
+function kdfInputToBytes(data: KDFInput): Uint8Array {
   if (typeof data === 'string') data = utf8ToBytes(data)
   abytes(data)
   return data
@@ -1365,14 +1296,14 @@ interface Hasher<T extends Hash<T>> {
 abstract class Hash<T extends Hash<T>> {
   abstract blockLen: number
   abstract outputLen: number
-  abstract update (buf: Input): this
-  abstract digestInto (buf: Uint8Array): void
-  abstract digest (): Uint8Array
-  abstract destroy (): void
-  abstract _cloneInto (to?: T): T
-  abstract clone (): T
+  abstract update(buf: Input): this
+  abstract digestInto(buf: Uint8Array): void
+  abstract digest(): Uint8Array
+  abstract destroy(): void
+  abstract _cloneInto(to?: T): T
+  abstract clone(): T
 }
-function createHasher<T extends Hash<T>> (hashCons: () => Hash<T>): Hasher<T> {
+function createHasher<T extends Hash<T>>(hashCons: () => Hash<T>): Hasher<T> {
   const hashC = (msg: Input): Uint8Array => hashCons().update(toBytes(msg)).digest()
   const tmp = hashCons()
   hashC.outputLen = tmp.outputLen
@@ -1384,12 +1315,12 @@ function createHasher<T extends Hash<T>> (hashCons: () => Hash<T>): Hasher<T> {
 // u64 helpers
 const U32_MASK64 = BigInt(2 ** 32 - 1)
 const _32n = BigInt(32)
-function fromBig (n: bigint, le = false): { h: number, l: number } {
+function fromBig(n: bigint, le = false): { h: number; l: number } {
   if (le) return { h: Number(n & U32_MASK64), l: Number((n >> _32n) & U32_MASK64) }
   // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
   return { h: Number((n >> _32n) & U32_MASK64) | 0, l: Number(n & U32_MASK64) | 0 }
 }
-function split (lst: bigint[], le = false): Uint32Array[] {
+function split(lst: bigint[], le = false): Uint32Array[] {
   const len = lst.length
   const Ah = new Uint32Array(len)
   const Al = new Uint32Array(len)
@@ -1406,17 +1337,20 @@ const rotrSH = (h: number, l: number, s: number): number => (h >>> s) | (l << (3
 const rotrSL = (h: number, l: number, s: number): number => (h << (32 - s)) | (l >>> s)
 const rotrBH = (h: number, l: number, s: number): number => (h << (64 - s)) | (l >>> (s - 32))
 const rotrBL = (h: number, l: number, s: number): number => (h >>> (s - 32)) | (l << (64 - s))
-function add (Ah: number, Al: number, Bh: number, Bl: number): { h: number, l: number } {
+function add(Ah: number, Al: number, Bh: number, Bl: number): { h: number; l: number } {
   const l = (Al >>> 0) + (Bl >>> 0)
   // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
   return { h: (Ah + Bh + ((l / 2 ** 32) | 0)) | 0, l: l | 0 }
 }
 const add3L = (Al: number, Bl: number, Cl: number): number => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0)
 // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
-const add3H = (low: number, Ah: number, Bh: number, Ch: number): number => (Ah + Bh + Ch + ((low / 2 ** 32) | 0)) | 0
-const add4L = (Al: number, Bl: number, Cl: number, Dl: number): number => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0)
+const add3H = (low: number, Ah: number, Bh: number, Ch: number): number =>
+  (Ah + Bh + Ch + ((low / 2 ** 32) | 0)) | 0
+const add4L = (Al: number, Bl: number, Cl: number, Dl: number): number =>
+  (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0)
 // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
-const add4H = (low: number, Ah: number, Bh: number, Ch: number, Dh: number): number => (Ah + Bh + Ch + Dh + ((low / 2 ** 32) | 0)) | 0
+const add4H = (low: number, Ah: number, Bh: number, Ch: number, Dh: number): number =>
+  (Ah + Bh + Ch + Dh + ((low / 2 ** 32) | 0)) | 0
 const add5L = (Al: number, Bl: number, Cl: number, Dl: number, El: number): number =>
   (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0)
 // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
@@ -1435,7 +1369,7 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
   protected length = 0
   protected pos = 0
   protected destroyed = false
-  constructor (blockLen: number, outputLen: number, padOffset: number, isLE: boolean) {
+  constructor(blockLen: number, outputLen: number, padOffset: number, isLE: boolean) {
     super()
     this.blockLen = blockLen
     this.outputLen = outputLen
@@ -1445,12 +1379,12 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
     this.view = createView(this.buffer)
   }
 
-  protected abstract process (buf: DataView, offset: number): void
-  protected abstract get (): number[]
-  protected abstract set (...args: number[]): void
-  abstract destroy (): void
-  protected abstract roundClean (): void
-  update (data: Input): this {
+  protected abstract process(buf: DataView, offset: number): void
+  protected abstract get(): number[]
+  protected abstract set(...args: number[]): void
+  abstract destroy(): void
+  protected abstract roundClean(): void
+  update(data: Input): this {
     aexists(this)
     data = toBytes(data)
     abytes(data)
@@ -1476,7 +1410,7 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
     return this
   }
 
-  digestInto (out: Uint8Array): void {
+  digestInto(out: Uint8Array): void {
     aexists(this)
     aoutput(out, this)
     this.finished = true
@@ -1500,7 +1434,7 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
     for (let i = 0; i < outLen; i++) oview.setUint32(4 * i, state[i], isLE)
   }
 
-  digest (): Uint8Array {
+  digest(): Uint8Array {
     const { buffer, outputLen } = this
     this.digestInto(buffer)
     const res = buffer.slice(0, outputLen)
@@ -1508,7 +1442,7 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
     return res
   }
 
-  _cloneInto (to?: T): T {
+  _cloneInto(to?: T): T {
     to ||= new (this.constructor as any)() as T
     to.set(...this.get())
     const { blockLen, buffer, length, finished, destroyed, pos } = this
@@ -1520,11 +1454,11 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
     return to
   }
 
-  clone (): T {
+  clone(): T {
     return this._cloneInto()
   }
 }
-function setBigUint64 (view: DataView, byteOffset: number, value: bigint, isLE: boolean): void {
+function setBigUint64(view: DataView, byteOffset: number, value: bigint, isLE: boolean): void {
   if (typeof view.setBigUint64 === 'function') return view.setBigUint64(byteOffset, value, isLE)
   const _32n = BigInt(32)
   const _u32_max = BigInt(0xffffffff)
@@ -1538,21 +1472,17 @@ function setBigUint64 (view: DataView, byteOffset: number, value: bigint, isLE: 
 
 // sha256 fast constants
 const SHA256_IV = Uint32Array.from([
-  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-  0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 ])
 const K256 = Uint32Array.from([
-  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
-  0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
-  0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
-  0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-  0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
-  0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 ])
 const SHA256_W = new Uint32Array(64)
 
@@ -1573,16 +1503,16 @@ class FastSHA256 extends HashMD<FastSHA256> {
   protected G = SHA256_IV[6] | 0
   // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
   protected H = SHA256_IV[7] | 0
-  constructor (outputLen = 32) {
+  constructor(outputLen = 32) {
     super(64, outputLen, 8, false)
   }
 
-  protected get (): number[] {
+  protected get(): number[] {
     const { A, B, C, D, E, F, G, H } = this
     return [A, B, C, D, E, F, G, H]
   }
 
-  protected set (
+  protected set(
     A: number,
     B: number,
     C: number,
@@ -1610,7 +1540,7 @@ class FastSHA256 extends HashMD<FastSHA256> {
     this.H = H | 0
   }
 
-  protected process (view: DataView, offset: number): void {
+  protected process(view: DataView, offset: number): void {
     for (let i = 0; i < 16; i++, offset += 4) {
       SHA256_W[i] = view.getUint32(offset)
     }
@@ -1645,11 +1575,11 @@ class FastSHA256 extends HashMD<FastSHA256> {
     this.H = sum32(this.H, H)
   }
 
-  protected roundClean (): void {
+  protected roundClean(): void {
     clean(SHA256_W)
   }
 
-  destroy (): void {
+  destroy(): void {
     clean(this.buffer)
     this.set(0, 0, 0, 0, 0, 0, 0, 0)
   }
@@ -1662,89 +1592,90 @@ const SHA512_IV = Uint32Array.from([
   0x510e527f, 0xade682d1, 0x9b05688c, 0x2b3e6c1f, 0x1f83d9ab, 0xfb41bd6b, 0x5be0cd19, 0x137e2179
 ])
 const K512 = (() =>
-  split([
-    '0x428a2f98d728ae22',
-    '0x7137449123ef65cd',
-    '0xb5c0fbcfec4d3b2f',
-    '0xe9b5dba58189dbbc',
-    '0x3956c25bf348b538',
-    '0x59f111f1b605d019',
-    '0x923f82a4af194f9b',
-    '0xab1c5ed5da6d8118',
-    '0xd807aa98a3030242',
-    '0x12835b0145706fbe',
-    '0x243185be4ee4b28c',
-    '0x550c7dc3d5ffb4e2',
-    '0x72be5d74f27b896f',
-    '0x80deb1fe3b1696b1',
-    '0x9bdc06a725c71235',
-    '0xc19bf174cf692694',
-    '0xe49b69c19ef14ad2',
-    '0xefbe4786384f25e3',
-    '0x0fc19dc68b8cd5b5',
-    '0x240ca1cc77ac9c65',
-    '0x2de92c6f592b0275',
-    '0x4a7484aa6ea6e483',
-    '0x5cb0a9dcbd41fbd4',
-    '0x76f988da831153b5',
-    '0x983e5152ee66dfab',
-    '0xa831c66d2db43210',
-    '0xb00327c898fb213f',
-    '0xbf597fc7beef0ee4',
-    '0xc6e00bf33da88fc2',
-    '0xd5a79147930aa725',
-    '0x06ca6351e003826f',
-    '0x142929670a0e6e70',
-    '0x27b70a8546d22ffc',
-    '0x2e1b21385c26c926',
-    '0x4d2c6dfc5ac42aed',
-    '0x53380d139d95b3df',
-    '0x650a73548baf63de',
-    '0x766a0abb3c77b2a8',
-    '0x81c2c92e47edaee6',
-    '0x92722c851482353b',
-    '0xa2bfe8a14cf10364',
-    '0xa81a664bbc423001',
-    '0xc24b8b70d0f89791',
-    '0xc76c51a30654be30',
-    '0xd192e819d6ef5218',
-    '0xd69906245565a910',
-    '0xf40e35855771202a',
-    '0x106aa07032bbd1b8',
-    '0x19a4c116b8d2d0c8',
-    '0x1e376c085141ab53',
-    '0x2748774cdf8eeb99',
-    '0x34b0bcb5e19b48a8',
-    '0x391c0cb3c5c95a63',
-    '0x4ed8aa4ae3418acb',
-    '0x5b9cca4f7763e373',
-    '0x682e6ff3d6b2b8a3',
-    '0x748f82ee5defb2fc',
-    '0x78a5636f43172f60',
-    '0x84c87814a1f0ab72',
-    '0x8cc702081a6439ec',
-    '0x90befffa23631e28',
-    '0xa4506cebde82bde9',
-    '0xbef9a3f7b2c67915',
-    '0xc67178f2e372532b',
-    '0xca273eceea26619c',
-    '0xd186b8c721c0c207',
-    '0xeada7dd6cde0eb1e',
-    '0xf57d4f7fee6ed178',
-    '0x06f067aa72176fba',
-    '0x0a637dc5a2c898a6',
-    '0x113f9804bef90dae',
-    '0x1b710b35131c471b',
-    '0x28db77f523047d84',
-    '0x32caab7b40c72493',
-    '0x3c9ebe0a15c9bebc',
-    '0x431d67c49c100d4c',
-    '0x4cc5d4becb3e42b6',
-    '0x597f299cfc657e2a',
-    '0x5fcb6fab3ad6faec',
-    '0x6c44198c4a475817'
-  ].map(BigInt))
-)()
+  split(
+    [
+      '0x428a2f98d728ae22',
+      '0x7137449123ef65cd',
+      '0xb5c0fbcfec4d3b2f',
+      '0xe9b5dba58189dbbc',
+      '0x3956c25bf348b538',
+      '0x59f111f1b605d019',
+      '0x923f82a4af194f9b',
+      '0xab1c5ed5da6d8118',
+      '0xd807aa98a3030242',
+      '0x12835b0145706fbe',
+      '0x243185be4ee4b28c',
+      '0x550c7dc3d5ffb4e2',
+      '0x72be5d74f27b896f',
+      '0x80deb1fe3b1696b1',
+      '0x9bdc06a725c71235',
+      '0xc19bf174cf692694',
+      '0xe49b69c19ef14ad2',
+      '0xefbe4786384f25e3',
+      '0x0fc19dc68b8cd5b5',
+      '0x240ca1cc77ac9c65',
+      '0x2de92c6f592b0275',
+      '0x4a7484aa6ea6e483',
+      '0x5cb0a9dcbd41fbd4',
+      '0x76f988da831153b5',
+      '0x983e5152ee66dfab',
+      '0xa831c66d2db43210',
+      '0xb00327c898fb213f',
+      '0xbf597fc7beef0ee4',
+      '0xc6e00bf33da88fc2',
+      '0xd5a79147930aa725',
+      '0x06ca6351e003826f',
+      '0x142929670a0e6e70',
+      '0x27b70a8546d22ffc',
+      '0x2e1b21385c26c926',
+      '0x4d2c6dfc5ac42aed',
+      '0x53380d139d95b3df',
+      '0x650a73548baf63de',
+      '0x766a0abb3c77b2a8',
+      '0x81c2c92e47edaee6',
+      '0x92722c851482353b',
+      '0xa2bfe8a14cf10364',
+      '0xa81a664bbc423001',
+      '0xc24b8b70d0f89791',
+      '0xc76c51a30654be30',
+      '0xd192e819d6ef5218',
+      '0xd69906245565a910',
+      '0xf40e35855771202a',
+      '0x106aa07032bbd1b8',
+      '0x19a4c116b8d2d0c8',
+      '0x1e376c085141ab53',
+      '0x2748774cdf8eeb99',
+      '0x34b0bcb5e19b48a8',
+      '0x391c0cb3c5c95a63',
+      '0x4ed8aa4ae3418acb',
+      '0x5b9cca4f7763e373',
+      '0x682e6ff3d6b2b8a3',
+      '0x748f82ee5defb2fc',
+      '0x78a5636f43172f60',
+      '0x84c87814a1f0ab72',
+      '0x8cc702081a6439ec',
+      '0x90befffa23631e28',
+      '0xa4506cebde82bde9',
+      '0xbef9a3f7b2c67915',
+      '0xc67178f2e372532b',
+      '0xca273eceea26619c',
+      '0xd186b8c721c0c207',
+      '0xeada7dd6cde0eb1e',
+      '0xf57d4f7fee6ed178',
+      '0x06f067aa72176fba',
+      '0x0a637dc5a2c898a6',
+      '0x113f9804bef90dae',
+      '0x1b710b35131c471b',
+      '0x28db77f523047d84',
+      '0x32caab7b40c72493',
+      '0x3c9ebe0a15c9bebc',
+      '0x431d67c49c100d4c',
+      '0x4cc5d4becb3e42b6',
+      '0x597f299cfc657e2a',
+      '0x5fcb6fab3ad6faec',
+      '0x6c44198c4a475817'
+    ].map(BigInt)
+  ))()
 const SHA512_Kh = (() => K512[0])()
 const SHA512_Kl = (() => K512[1])()
 const SHA512_W_H = new Uint32Array(80)
@@ -1783,16 +1714,16 @@ class FastSHA512 extends HashMD<FastSHA512> {
   protected Hh = SHA512_IV[14] | 0
   // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
   protected Hl = SHA512_IV[15] | 0
-  constructor (outputLen = 64) {
+  constructor(outputLen = 64) {
     super(128, outputLen, 16, false)
   }
 
-  protected get (): number[] {
+  protected get(): number[] {
     const { Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl } = this
     return [Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl]
   }
 
-  protected set (
+  protected set(
     Ah: number,
     Al: number,
     Bh: number,
@@ -1844,7 +1775,7 @@ class FastSHA512 extends HashMD<FastSHA512> {
     this.Hl = Hl | 0
   }
 
-  protected process (view: DataView, offset: number): void {
+  protected process(view: DataView, offset: number): void {
     for (let i = 0; i < 16; i++, offset += 8) {
       SHA512_W_H[i] = view.getUint32(offset)
       SHA512_W_L[i] = view.getUint32(offset + 4)
@@ -1925,11 +1856,11 @@ class FastSHA512 extends HashMD<FastSHA512> {
     this.set(Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl)
   }
 
-  protected roundClean (): void {
+  protected roundClean(): void {
     clean(SHA512_W_H, SHA512_W_L)
   }
 
-  destroy (): void {
+  destroy(): void {
     clean(this.buffer)
     this.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
   }
@@ -1943,12 +1874,17 @@ class HMAC<T extends Hash<T>> extends Hash<HMAC<T>> {
   outputLen: number
   private finished = false
   private destroyed = false
-  constructor (hash: (msg: Input) => Uint8Array & { create: () => T, blockLen: number, outputLen: number }, _key: Input) {
+  constructor(
+    hash: (msg: Input) => Uint8Array & { create: () => T; blockLen: number; outputLen: number },
+    _key: Input
+  ) {
     super()
     ahash(hash)
     const key = toBytes(_key)
     this.iHash = hash.create() as T
-    if (typeof (this.iHash as any).update !== 'function') { throw new TypeError('Expected instance of class which extends utils.Hash') }
+    if (typeof (this.iHash as any).update !== 'function') {
+      throw new TypeError('Expected instance of class which extends utils.Hash')
+    }
     this.blockLen = this.iHash.blockLen
     this.outputLen = this.iHash.outputLen
     const blockLen = this.blockLen
@@ -1962,13 +1898,13 @@ class HMAC<T extends Hash<T>> extends Hash<HMAC<T>> {
     clean(pad)
   }
 
-  update (buf: Input): this {
+  update(buf: Input): this {
     aexists(this)
     this.iHash.update(buf)
     return this
   }
 
-  digestInto (out: Uint8Array): void {
+  digestInto(out: Uint8Array): void {
     aexists(this)
     abytes(out, this.outputLen)
     this.finished = true
@@ -1978,13 +1914,13 @@ class HMAC<T extends Hash<T>> extends Hash<HMAC<T>> {
     this.destroy()
   }
 
-  digest (): Uint8Array {
+  digest(): Uint8Array {
     const out = new Uint8Array(this.oHash.outputLen)
     this.digestInto(out)
     return out
   }
 
-  _cloneInto (to?: HMAC<T>): HMAC<T> {
+  _cloneInto(to?: HMAC<T>): HMAC<T> {
     to ||= Object.create(Object.getPrototypeOf(this), {})
     const { oHash, iHash, finished, destroyed, blockLen, outputLen } = this
     to = to as this
@@ -1997,18 +1933,25 @@ class HMAC<T extends Hash<T>> extends Hash<HMAC<T>> {
     return to
   }
 
-  clone (): HMAC<T> {
+  clone(): HMAC<T> {
     return this._cloneInto()
   }
 
-  destroy (): void {
+  destroy(): void {
     this.destroyed = true
     this.oHash.destroy()
     this.iHash.destroy()
   }
 }
 
-function pbkdf2Core (hash: (msg: Input) => Uint8Array & { create: () => FastSHA512, blockLen: number, outputLen: number }, password: KDFInput, salt: KDFInput, opts: { c: number, dkLen?: number }): Uint8Array {
+function pbkdf2Core(
+  hash: (
+    msg: Input
+  ) => Uint8Array & { create: () => FastSHA512; blockLen: number; outputLen: number },
+  password: KDFInput,
+  salt: KDFInput,
+  opts: { c: number; dkLen?: number }
+): Uint8Array {
   ahash(hash)
   const { c, dkLen } = Object.assign({ dkLen: 32 }, opts)
   anumber(c)
@@ -2045,7 +1988,12 @@ const hmac = (hash: any, key: Input, message: Input): Uint8Array =>
   new HMAC<any>(hash, key).update(message).digest()
 hmac.create = (hash: any, key: Input) => new HMAC<any>(hash, key)
 
-function pbkdf2Fast (password: Uint8Array, salt: Uint8Array, iterations: number, keylen: number): Uint8Array {
+function pbkdf2Fast(
+  password: Uint8Array,
+  salt: Uint8Array,
+  iterations: number,
+  keylen: number
+): Uint8Array {
   return pbkdf2Core(sha512Fast, password, salt, { c: iterations, dkLen: keylen })
 }
 // END fast-pbkdf2 helpers
@@ -2061,7 +2009,7 @@ function pbkdf2Fast (password: Uint8Array, salt: Uint8Array, iterations: number,
  *
  * @returns The computed key
  */
-export function pbkdf2 (
+export function pbkdf2(
   password: number[],
   salt: number[],
   iterations: number,
@@ -2073,13 +2021,7 @@ export function pbkdf2 (
   }
   const pbkdf2Sync = NODE_CRYPTO?.pbkdf2Sync
   if (typeof pbkdf2Sync === 'function') {
-    const out = pbkdf2Sync(
-      toHashBytes(password),
-      toHashBytes(salt),
-      iterations,
-      keylen,
-      digest
-    )
+    const out = pbkdf2Sync(toHashBytes(password), toHashBytes(salt), iterations, keylen, digest)
     return Array.from(out)
   }
   const p = Uint8Array.from(password)
@@ -2106,12 +2048,8 @@ export function pbkdf2 (
  * @example
  * swapBytes32(0x11223344) // → 0x44332211
  */
-export function swapBytes32 (w: number): number {
-  const res =
-    (w >>> 24) |
-    ((w >>> 8) & 0xff00) |
-    ((w << 8) & 0xff0000) |
-    ((w & 0xff) << 24)
+export function swapBytes32(w: number): number {
+  const res = (w >>> 24) | ((w >>> 8) & 0xff00) | ((w << 8) & 0xff0000) | ((w & 0xff) << 24)
   return res >>> 0
 }
 
@@ -2147,6 +2085,6 @@ const isLittleEndian = (() => {
  * @example
  * realHtonl(0x11223344) // → 0x44332211 on little-endian systems
  */
-export function realHtonl (w: number): number {
-  return isLittleEndian ? swapBytes32(w) : (w >>> 0)
+export function realHtonl(w: number): number {
+  return isLittleEndian ? swapBytes32(w) : w >>> 0
 }

@@ -80,9 +80,7 @@ Packed batch methods cross the JS/WASM boundary once per bounded chunk:
 
 ```ts
 const txVerdicts = await verifier.verifyScriptsBatchFromEF(items)
-const spendVerdicts = await verifier.verifySpendsBatch(
-  spends.map(spend => ({ spend }))
-)
+const spendVerdicts = await verifier.verifySpendsBatch(spends.map(spend => ({ spend })))
 ```
 
 On machines with enough logical cores, batches of at least 32 items can use a
@@ -216,9 +214,12 @@ validates the vector, typed, transaction-batch, Spend, and Spend-batch ABIs
 through all three loaders.
 
 ```bash
+pnpm --filter @bsv/verifast format:check
+pnpm --filter @bsv/verifast lint
 pnpm --filter @bsv/verifast typecheck
 pnpm --filter @bsv/verifast build
-pnpm --filter @bsv/verifast test
+pnpm --filter @bsv/verifast test:coverage
+pnpm --filter @bsv/verifast pack:check
 pnpm --filter @bsv/verifast test:consumers
 pnpm --filter @bsv/verifast bench
 pnpm --filter @bsv/verifast bench:batch
@@ -226,7 +227,10 @@ pnpm --filter @bsv/verifast bench:crypto
 pnpm --filter @bsv/verifast bench:warmup
 ```
 
-The deterministic corpus compares positive and negative SDK-interpreter
+The coverage gate ratchets statements, branches, functions, and lines.
+`pack:check` installs the exact tarball in ESM and CommonJS projects and
+validates conditional declarations and raw WASM assets. The deterministic
+corpus compares positive and negative SDK-interpreter
 verdicts with real BDK WASM for whole transactions and individual Spend objects.
 Consumer tests execute the built package through Node ESM, CommonJS, browser
 ESM, and browser UMD rather than substituting mocks.

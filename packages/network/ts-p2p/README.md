@@ -46,28 +46,28 @@ npm install @bsv/teranode-listener
 The easiest way to use the library is with the `TeranodeListener` class, which provides topic-specific callbacks:
 
 ```typescript
-import { TeranodeListener } from '@bsv/teranode-listener';
+import { TeranodeListener } from '@bsv/teranode-listener'
 
 // Define callback functions for different topics
 const blockCallback = (data: Uint8Array, topic: string, from: string) => {
-  console.log(`New block received from ${from}:`, data);
+  console.log(`New block received from ${from}:`, data)
   // Process block data here
-};
+}
 
 const subtreeCallback = (data: Uint8Array, topic: string, from: string) => {
-  console.log(`Subtree update from ${from}:`, data);
+  console.log(`Subtree update from ${from}:`, data)
   // Process subtree data here
-};
+}
 
 // Create listener with topic callbacks
 const listener = new TeranodeListener({
   'bitcoin/mainnet-block': blockCallback,
   'bitcoin/mainnet-subtree': subtreeCallback
-});
+})
 
 // Start the listener and connect to Teranode mainnet
-await listener.start();
-console.log('Listener started and waiting for messages...');
+await listener.start()
+console.log('Listener started and waiting for messages...')
 ```
 
 ### Decoding messages
@@ -75,18 +75,18 @@ console.log('Listener started and waiting for messages...');
 By default, callbacks receive the raw GossipSub bytes (`Uint8Array`). Pass `decodeMessages: true` to have the listener decode the two-layer JSON wire format for you. Callbacks then receive a typed `DecodedMessage` (the sender name plus a typed payload):
 
 ```typescript
-import { TeranodeListener, type BlockMessage, type DecodedMessage } from '@bsv/teranode-listener';
+import { TeranodeListener, type BlockMessage, type DecodedMessage } from '@bsv/teranode-listener'
 
 const listener = new TeranodeListener(
   {
     'bitcoin/mainnet-block': (msg: DecodedMessage<BlockMessage>, topic, from) => {
-      console.log(`Block #${msg.payload.Height} (${msg.payload.Hash}) from ${msg.sender}`);
+      console.log(`Block #${msg.payload.Height} (${msg.payload.Hash}) from ${msg.sender}`)
     }
   },
   { decodeMessages: true }
-);
+)
 
-await listener.start();
+await listener.start()
 ```
 
 The exported `decodeMessage()` / `tryDecodeMessage()` helpers can also be used to decode a message manually. Frames that are not valid JSON (e.g. libp2p control frames) are skipped when `decodeMessages` is on.
@@ -96,19 +96,18 @@ The exported `decodeMessage()` / `tryDecodeMessage()` helpers can also be used t
 Alternatively, you can use the original function-based API:
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
-// Start with default configuration (connects to Teranode mainnet)
-const { node, stop } = await startSubscriber({
-  onMessage: (data, topic, from) => {
-    console.log(`Message on ${topic} from ${from}:`, data);
-  }
-});
+// Start with selected topics (or omit the argument for all mainnet topics).
+await startSubscriber({
+  topics: ['bitcoin/mainnet-block', 'bitcoin/mainnet-subtree']
+})
 
-console.log('Subscriber started and listening for messages...');
+console.log('Subscriber started and listening for messages...')
 ```
 
 Once started, both approaches automatically:
+
 - Connect to the official Teranode bootstrap peer
 - Use the mainnet shared key
 - Listen on `127.0.0.1:9901`
@@ -117,38 +116,36 @@ Once started, both approaches automatically:
 ### Custom Configuration
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
 const config = {
-  topics: ['teranode/blocks'], // Only subscribe to blocks
+  topics: ['bitcoin/mainnet-block'], // Only subscribe to blocks
   listenAddresses: ['/ip4/0.0.0.0/tcp/4000'] // Listen on a different port
-};
+}
 
 // Start with custom topics and port
-await startSubscriber(config);
-console.log('Subscriber started with custom configuration...');
+await startSubscriber(config)
+console.log('Subscriber started with custom configuration...')
 ```
 
 ### Complete Custom Setup
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
 const config = {
-  bootstrapPeers: [
-    '/ip4/127.0.0.1/tcp/4001/p2p/12D3KooWExample1'
-  ],
+  bootstrapPeers: ['/ip4/127.0.0.1/tcp/4001/p2p/12D3KooWExample1'],
   staticPeers: [
     '/ip4/192.168.1.100/tcp/4003/p2p/12D3KooWStatic1',
     '/ip4/192.168.1.101/tcp/4003/p2p/12D3KooWStatic2'
   ],
   sharedKey: 'your-custom-hex-shared-key-here',
-  topics: ['custom/topic'],
+  topics: ['bitcoin/testnet-block', 'bitcoin/testnet-subtree'],
   listenAddresses: ['/ip4/0.0.0.0/tcp/4000'],
   dhtProtocolID: '/custom-protocol'
-};
+}
 
-await startSubscriber(config);
+await startSubscriber(config)
 ```
 
 For more detailed examples, check our [Examples](#examples) section.
@@ -166,22 +163,24 @@ new TeranodeListener(topicCallbacks: TopicCallbacks, config?: TeranodeListenerCo
 ```
 
 **Parameters:**
+
 - `topicCallbacks` - Object mapping topic names to callback functions
 - `config` - Optional configuration (uses Teranode mainnet defaults)
 
 **Example:**
+
 ```typescript
 const listener = new TeranodeListener({
   'bitcoin/mainnet-block': (data, topic, from) => {
-    console.log('Block received:', data);
+    console.log('Block received:', data)
   },
   'bitcoin/mainnet-subtree': (data, topic, from) => {
-    console.log('Subtree update:', data);
+    console.log('Subtree update:', data)
   }
-});
+})
 
 // Start the listener (it does not start automatically)
-await listener.start();
+await listener.start()
 ```
 
 #### Methods
@@ -197,24 +196,24 @@ await listener.start();
 
 ```typescript
 // Supported Teranode P2P topics
-export type Topic = 
-  'bitcoin/mainnet-bestblock' |    // Best block message
-  'bitcoin/mainnet-block' |        // When miners find a block solution
-  'bitcoin/mainnet-subtree' |      // When a subtree is created
-  'bitcoin/mainnet-mining_on' |    // When mining is enabled
-  'bitcoin/mainnet-handshake' |    // When a peer connects to the network
-  'bitcoin/mainnet-rejected_tx';   // When a transaction is rejected
+export type Topic =
+  | 'bitcoin/mainnet-bestblock' // Best block message
+  | 'bitcoin/mainnet-block' // When miners find a block solution
+  | 'bitcoin/mainnet-subtree' // When a subtree is created
+  | 'bitcoin/mainnet-mining_on' // When mining is enabled
+  | 'bitcoin/mainnet-handshake' // When a peer connects to the network
+  | 'bitcoin/mainnet-rejected_tx' // When a transaction is rejected
 
-type MessageCallback = (data: Uint8Array, topic: Topic, from: string) => void;
-type TopicCallbacks = Partial<Record<Topic, MessageCallback>>;
+type MessageCallback = (data: Uint8Array, topic: Topic, from: string) => void
+type TopicCallbacks = Partial<Record<Topic, MessageCallback>>
 
 interface TeranodeListenerConfig {
-  bootstrapPeers?: string[];       // Bootstrap peer multiaddrs (default: Teranode mainnet bootstrap)
-  staticPeers?: string[];          // Static peer multiaddrs (default: Known Teranode mainnet peers)
-  sharedKey?: string;              // Hex string of PSK (default: Teranode mainnet key)
-  dhtProtocolID?: string;          // DHT protocol prefix (default: '/teranode')
-  listenAddresses?: string[];      // Listen addresses (default: ['/ip4/127.0.0.1/tcp/9901'])
-  usePrivateDHT?: boolean;         // Whether to use private DHT (default: true)
+  bootstrapPeers?: string[] // Bootstrap peer multiaddrs (default: Teranode mainnet bootstrap)
+  staticPeers?: string[] // Static peer multiaddrs (default: Known Teranode mainnet peers)
+  sharedKey?: string // Hex string of PSK (default: Teranode mainnet key)
+  dhtProtocolID?: string // DHT protocol prefix (default: '/teranode')
+  listenAddresses?: string[] // Listen addresses (default: ['/ip4/127.0.0.1/tcp/9901'])
+  usePrivateDHT?: boolean // Whether to use private DHT (default: true)
 }
 ```
 
@@ -236,13 +235,13 @@ Configuration interface for the function-based API. All parameters are optional:
 
 ```typescript
 interface SubscriberConfig {
-  bootstrapPeers?: string[];       // Bootstrap peer multiaddrs (default: Teranode mainnet bootstrap)
-  staticPeers?: string[];          // Static peer multiaddrs (default: Known Teranode mainnet peers)
-  sharedKey?: string;              // Hex string of PSK (default: Teranode mainnet key)
-  dhtProtocolID?: string;          // DHT protocol prefix (default: '/teranode')
-  topics?: Topic[];                // Topics to subscribe to (default: all Teranode topics)
-  listenAddresses?: string[];      // Listen addresses (default: ['/ip4/127.0.0.1/tcp/9901'])
-  usePrivateDHT?: boolean;         // Whether to use private DHT (default: true)
+  bootstrapPeers?: string[] // Bootstrap peer multiaddrs (default: Teranode mainnet bootstrap)
+  staticPeers?: string[] // Static peer multiaddrs (default: Known Teranode mainnet peers)
+  sharedKey?: string // Hex string of PSK (default: Teranode mainnet key)
+  dhtProtocolID?: string // DHT protocol prefix (default: '/teranode')
+  topics?: Topic[] // Topics to subscribe to (default: all Teranode topics)
+  listenAddresses?: string[] // Listen addresses (default: ['/ip4/127.0.0.1/tcp/9901'])
+  usePrivateDHT?: boolean // Whether to use private DHT (default: true)
 }
 ```
 
@@ -255,7 +254,7 @@ The package comes with production-ready defaults for Teranode mainnet:
 - **`bootstrapPeers`**: `['/dns4/teranode-bootstrap.bsvb.tech/tcp/9901/p2p/12D3KooWESmhNAN8s6NPdGNvJH3zJ4wMKDxapXKNUe2DzkAwKYqK']`
 - **`staticPeers`**: Array of known active Teranode mainnet peers (TAAL, BSVB, etc.)
 - **`sharedKey`**: Teranode mainnet pre-shared key
-- **`topics`**: `['teranode/blocks', 'teranode/transactions']`
+- **`topics`**: all six `bitcoin/mainnet-*` topics listed in the `Topic` type
 - **`listenAddresses`**: `['/ip4/127.0.0.1/tcp/9901']`
 - **`dhtProtocolID`**: `/teranode`
 - **`usePrivateDHT`**: `true`
@@ -287,103 +286,99 @@ The `sharedKey` should be provided as a hexadecimal string without the PSK heade
 ### Example 1: Basic TeranodeListener Usage
 
 ```typescript
-import { TeranodeListener, type Topic } from '@bsv/teranode-listener';
+import { TeranodeListener, type Topic } from '@bsv/teranode-listener'
 
 // Simple callback-based listener
 const listener = new TeranodeListener({
   'bitcoin/mainnet-block': (data: Uint8Array, topic: Topic, from: string) => {
-    console.log(`New block from ${from}:`, data.length, 'bytes');
+    console.log(`New block from ${from}:`, data.length, 'bytes')
     // Process block data
   },
   'bitcoin/mainnet-subtree': (data: Uint8Array, topic: Topic, from: string) => {
-    console.log(`Subtree update from ${from}:`, data.length, 'bytes');
+    console.log(`Subtree update from ${from}:`, data.length, 'bytes')
     // Process subtree data
   }
-});
+})
 
-await listener.start();
-console.log('Listener started, waiting for messages...');
+await listener.start()
+console.log('Listener started, waiting for messages...')
 ```
 
 ### Example 2: Advanced TeranodeListener with Custom Configuration
 
 ```typescript
-import { TeranodeListener } from '@bsv/teranode-listener';
+import { TeranodeListener } from '@bsv/teranode-listener'
 
 // Create a listener with topic-specific callbacks
 const listener = new TeranodeListener({
   'bitcoin/mainnet-block': (data, topic, from) => {
-    console.log(`Received block from ${from}:`, data);
+    console.log(`Received block from ${from}:`, data)
   },
   'bitcoin/mainnet-subtree': (data, topic, from) => {
-    console.log(`Received subtree from ${from}:`, data);
+    console.log(`Received subtree from ${from}:`, data)
   }
-});
+})
 
-await listener.start();
-console.log('Connected peers:', listener.getConnectedPeerCount());
+await listener.start()
+console.log('Connected peers:', listener.getConnectedPeerCount())
 
 // Add more topics dynamically
-listener.addTopicCallback('bitcoin/mainnet-transaction', (data, topic, from) => {
-  console.log(`Received transaction from ${from}:`, data);
-});
+listener.addTopicCallback('bitcoin/mainnet-rejected_tx', (data, topic, from) => {
+  console.log(`Received rejection from ${from}:`, data)
+})
 
 // Monitor connection status
 setInterval(() => {
-  console.log('Connected peers:', listener.getConnectedPeerCount());
-}, 30000);
+  console.log('Connected peers:', listener.getConnectedPeerCount())
+}, 30000)
 ```
 
 ### Example 3: Function-Based API (Legacy)
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
 // Connect to Teranode mainnet with all defaults
 startSubscriber()
   .then(() => console.log('Connected to Teranode mainnet!'))
-  .catch(console.error);
+  .catch(console.error)
 ```
 
 ### Example 4: Custom Port and Multiple Topics (Function API)
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
 // Use a different port and subscribe to multiple topics
 const config = {
-  topics: [
-    'teranode/blocks',
-    'teranode/transactions',
-    'teranode/mempool'
-  ],
+  topics: ['bitcoin/mainnet-block', 'bitcoin/mainnet-subtree', 'bitcoin/mainnet-rejected_tx'],
   listenAddresses: ['/ip4/0.0.0.0/tcp/4000']
-};
+}
 
-await startSubscriber(config);
-console.log('Listening on port 4000 for blocks, transactions, and mempool...');
+await startSubscriber(config)
+console.log('Listening on port 4000 for blocks, subtrees, and rejected transactions...')
 ```
 
 ### Example 5: Environment-Based Configuration
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
 const config = {
   topics: process.env.TOPICS?.split(',') || undefined, // Use defaults if not set
   listenAddresses: process.env.LISTEN_ADDRESS ? [process.env.LISTEN_ADDRESS] : undefined,
   sharedKey: process.env.CUSTOM_SHARED_KEY || undefined // Use default mainnet key if not set
-};
+}
 
 // Start with environment overrides, falling back to defaults
-await startSubscriber(config);
-console.log('Started with environment configuration...');
+await startSubscriber(config)
+console.log('Started with environment configuration...')
 ```
 
 ### Example 6: Complete Custom Network
 
 ```typescript
-import { startSubscriber } from '@bsv/teranode-listener';
+import { startSubscriber } from '@bsv/teranode-listener'
 
 // Connect to a custom private network
 const config = {
@@ -391,18 +386,16 @@ const config = {
     '/ip4/10.0.0.1/tcp/4001/p2p/12D3KooWBootstrap1',
     '/ip4/10.0.0.2/tcp/4001/p2p/12D3KooWBootstrap2'
   ],
-  staticPeers: [
-    '/ip4/10.0.0.10/tcp/4003/p2p/12D3KooWStatic1'
-  ],
+  staticPeers: ['/ip4/10.0.0.10/tcp/4003/p2p/12D3KooWStatic1'],
   sharedKey: 'your-custom-private-network-key',
   dhtProtocolID: '/custom-network',
-  topics: ['custom/blocks', 'custom/transactions'],
+  topics: ['bitcoin/testnet-block', 'bitcoin/testnet-subtree'],
   listenAddresses: ['/ip4/0.0.0.0/tcp/4000'],
   usePrivateDHT: true
-};
+}
 
-await startSubscriber(config);
-console.log('Connected to custom private network...');
+await startSubscriber(config)
+console.log('Connected to custom private network...')
 ```
 
 ## Development
@@ -411,14 +404,18 @@ console.log('Connected to custom private network...');
 
 ```bash
 # Clone the repository
-git clone https://github.com/bitcoin-sv/ts-p2p.git
-cd ts-p2p
+git clone https://github.com/bsv-blockchain/ts-stack.git
+cd ts-stack
 
 # Install dependencies
-npm install
+pnpm install
 
-# Build the project
-npm run build
+# Run the package contract
+pnpm --filter @bsv/teranode-listener format:check
+pnpm --filter @bsv/teranode-listener lint
+pnpm --filter @bsv/teranode-listener typecheck
+pnpm --filter @bsv/teranode-listener test:coverage
+pnpm --filter @bsv/teranode-listener pack:check
 ```
 
 ### Testing
@@ -426,10 +423,13 @@ npm run build
 This package uses [Jest](https://jestjs.io/) with `ts-jest`. Run the suite with:
 
 ```bash
-npm test
+pnpm --filter @bsv/teranode-listener test
 ```
 
-The tests exercise the message decoder (`decodeMessage` / `tryDecodeMessage`) end to end, building real two-layer wire frames and decoding them back: the PascalCase (block) and snake_case (node_status) payload shapes, multi-byte UTF-8, every base64 padding length, and the malformed / non-JSON frame paths.
+The tests exercise message decoding, subtree construction and mutation,
+listener lifecycle, subscriptions, peer reconnection, callback isolation, and
+clean shutdown. Coverage thresholds enforce the package's measured baseline.
+`pack:check` installs the exact ESM tarball and verifies its public exports.
 
 ### Project Structure
 
@@ -437,9 +437,12 @@ The tests exercise the message decoder (`decodeMessage` / `tryDecodeMessage`) en
 ts-p2p/
 ├── src/
 │   ├── index.ts          # Main library and listener
+│   ├── subtrees.ts       # Subtree data structure and validation
 │   └── messages.ts       # Wire-format types and decoder
 ├── test/
-│   └── messages.test.ts  # Decoder test suite
+│   ├── index.test.ts     # Listener lifecycle and peer behavior
+│   ├── messages.test.ts  # Decoder test suite
+│   └── subtrees.test.ts  # Subtree behavior and validation
 ├── dist/                 # Compiled JavaScript output
 ├── jest.config.js        # Jest (ts-jest) configuration
 ├── package.json          # Package configuration
@@ -486,7 +489,7 @@ Project Maintainers:
 
 For questions, bug reports, or feature requests:
 
-- [Open an issue](https://github.com/bitcoin-sv/ts-p2p/issues) on GitHub
+- [Open an issue](https://github.com/bsv-blockchain/ts-stack/issues) on GitHub
 - Check existing [documentation](https://docs.bsvblockchain.org/)
 
 ---

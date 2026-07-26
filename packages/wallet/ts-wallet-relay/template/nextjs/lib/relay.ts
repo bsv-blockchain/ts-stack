@@ -37,11 +37,11 @@ export function initRelay(server: Server): WalletRelayService {
     server,
     wallet,
     relayUrl: process.env['RELAY_URL'] ?? 'ws://localhost:3000',
-    origin:   process.env['ORIGIN']    ?? 'http://localhost:3000',
+    origin: process.env['ORIGIN'] ?? 'http://localhost:3000',
 
     // NOTE (optional): hook into session lifecycle events
-    onSessionConnected:    id => console.log(`[relay] mobile connected    — ${id}`),
-    onSessionDisconnected: id => console.log(`[relay] mobile disconnected — ${id}`),
+    onSessionConnected: id => console.log(`[relay] mobile connected    — ${id}`),
+    onSessionDisconnected: id => console.log(`[relay] mobile disconnected — ${id}`)
   })
 
   return g.__walletRelay
@@ -51,7 +51,7 @@ export function getRelay(): WalletRelayService {
   if (!g.__walletRelay) {
     throw new Error(
       'WalletRelayService not initialized.\n' +
-      'Make sure server.mjs calls initRelay(server) before any API routes are hit.'
+        'Make sure server.mjs calls initRelay(server) before any API routes are hit.'
     )
   }
   return g.__walletRelay

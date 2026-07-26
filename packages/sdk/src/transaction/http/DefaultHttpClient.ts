@@ -20,17 +20,20 @@ export function defaultHttpClient(): HttpClient {
   } else if (typeof globalThis.fetch === 'function') {
     // Service workers, Deno, Node 18+ (any environment with global fetch)
     return new FetchHttpClient(globalThis.fetch.bind(globalThis))
-  } else if (typeof require === 'undefined') {
+  }
+
+  const nodeRequire = typeof require === 'function' ? require : undefined
+  if (nodeRequire === undefined) {
     return noHttpClient
-  } else {
-    // Older Node.js — use https module
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const https = require('node:https')
-      return new NodejsHttpClient(https)
-    } catch (_httpsModuleUnavailable) {
-      // node:https not available in this runtime; fall through to noHttpClient
-      return noHttpClient
-    }
+  }
+
+  // Older Node.js — use https without exposing a static server-only import to
+  // browser bundlers.
+  try {
+    const https = nodeRequire(['node', 'https'].join(':'))
+    return new NodejsHttpClient(https)
+  } catch {
+    // node:https not available in this runtime; fall through to noHttpClient
+    return noHttpClient
   }
 }

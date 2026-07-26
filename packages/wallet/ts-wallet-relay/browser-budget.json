@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/wallet-relay",
+  "entry": "./client",
+  "requiredExports": ["WalletPairingSession", "WalletRelayClient", "WalletRelayError"],
+  "prohibitedExports": [
+    "QRSessionManager",
+    "WalletRelayService",
+    "WalletRequestHandler",
+    "WebSocketRelay"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 220000,
+      "gzip": 70000,
+      "brotli": 58000
+    },
+    "esbuild": {
+      "raw": 185000,
+      "gzip": 68000,
+      "brotli": 58000
+    }
+  }
+}

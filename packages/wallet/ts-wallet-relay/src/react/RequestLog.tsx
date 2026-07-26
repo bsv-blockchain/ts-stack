@@ -51,7 +51,7 @@ export function RequestLog({
 
   return (
     <div {...rootProps}>
-      {entries.map((entry) => {
+      {entries.map(entry => {
         let state: 'pending' | 'error' | 'ok'
         if (entry.pending) {
           state = 'pending'

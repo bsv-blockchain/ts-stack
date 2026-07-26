@@ -1,5 +1,9 @@
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
-import { buildPairingUri, parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUri.js'
+import {
+  buildPairingUri,
+  parsePairingUri,
+  verifyPairingSignature
+} from '../src/shared/pairingUri.js'
 import { bytesToBase64url } from '../src/shared/encoding.js'
 import { PROTOCOL_ID } from '../src/types.js'
 
@@ -10,7 +14,7 @@ const VALID_BUILD_PARAMS = {
   sessionId: 'session-abc-123',
   backendIdentityKey: BACKEND_KEY,
   protocolID: JSON.stringify(PROTOCOL_ID),
-  origin: 'https://app.example.com',
+  origin: 'https://app.example.com'
 }
 
 describe('buildPairingUri / parsePairingUri roundtrip', () => {
@@ -105,7 +109,7 @@ describe('parsePairingUri validation', () => {
       backendIdentityKey: BACKEND_KEY,
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: 'https://app.example.com',
-      expiry: String(Math.floor(Date.now() / 1000) - 60),  // 60 s in the past
+      expiry: String(Math.floor(Date.now() / 1000) - 60) // 60 s in the past
     })
     const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/expired/i)
@@ -117,7 +121,7 @@ describe('parsePairingUri validation', () => {
       backendIdentityKey: 'not-a-pubkey',
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: 'https://app.example.com',
-      expiry: String(Math.floor(Date.now() / 1000) + 120),
+      expiry: String(Math.floor(Date.now() / 1000) + 120)
     })
     const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/public key/i)
@@ -129,7 +133,7 @@ describe('parsePairingUri validation', () => {
       backendIdentityKey: BACKEND_KEY,
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: 'ftp://app.example.com',
-      expiry: String(Math.floor(Date.now() / 1000) + 120),
+      expiry: String(Math.floor(Date.now() / 1000) + 120)
     })
     const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/origin/i)
@@ -144,26 +148,41 @@ describe('verifyPairingSignature', () => {
   let wallet: ProtoWallet
 
   beforeEach(() => {
-    backendKey    = PrivateKey.fromRandom()
+    backendKey = PrivateKey.fromRandom()
     backendKeyHex = backendKey.toPublicKey().toString()
-    wallet        = new ProtoWallet(backendKey)
+    wallet = new ProtoWallet(backendKey)
   })
 
-  async function makeSignedParams(overrides?: Partial<{
-    topic: string; backendIdentityKey: string; origin: string; expiry: string
-  }>) {
-    const topic  = overrides?.topic              ?? 'test-session-id'
-    const bik    = overrides?.backendIdentityKey ?? backendKeyHex
-    const origin = overrides?.origin             ?? 'https://app.example.com'
-    const expiry = overrides?.expiry             ?? String(Math.floor(Date.now() / 1000) + 120)
+  async function makeSignedParams(
+    overrides?: Partial<{
+      topic: string
+      backendIdentityKey: string
+      origin: string
+      expiry: string
+    }>
+  ) {
+    const topic = overrides?.topic ?? 'test-session-id'
+    const bik = overrides?.backendIdentityKey ?? backendKeyHex
+    const origin = overrides?.origin ?? 'https://app.example.com'
+    const expiry = overrides?.expiry ?? String(Math.floor(Date.now() / 1000) + 120)
 
     const data = Array.from(new TextEncoder().encode(`${topic}|${bik}|${origin}|${expiry}`))
     const { signature } = await wallet.createSignature({
-      data, protocolID: [0, 'qr pairing'], keyID: topic, counterparty: 'anyone',
+      data,
+      protocolID: [0, 'qr pairing'],
+      keyID: topic,
+      counterparty: 'anyone'
     })
     const sig = bytesToBase64url(signature as number[])
 
-    return { topic, backendIdentityKey: bik, protocolID: JSON.stringify(PROTOCOL_ID), origin, expiry, sig }
+    return {
+      topic,
+      backendIdentityKey: bik,
+      protocolID: JSON.stringify(PROTOCOL_ID),
+      origin,
+      expiry,
+      sig
+    }
   }
 
   it('returns true for a valid signature', async () => {
@@ -178,12 +197,16 @@ describe('verifyPairingSignature', () => {
 
   it('returns false when origin is tampered', async () => {
     const params = await makeSignedParams()
-    expect(await verifyPairingSignature({ ...params, origin: 'https://evil.example.com' })).toBe(false)
+    expect(await verifyPairingSignature({ ...params, origin: 'https://evil.example.com' })).toBe(
+      false
+    )
   })
 
   it('returns false when expiry is tampered', async () => {
     const params = await makeSignedParams()
-    expect(await verifyPairingSignature({ ...params, expiry: String(Number(params.expiry) + 9999) })).toBe(false)
+    expect(
+      await verifyPairingSignature({ ...params, expiry: String(Number(params.expiry) + 9999) })
+    ).toBe(false)
   })
 
   it('returns true (no-op) when sig is absent', async () => {
@@ -199,12 +222,12 @@ describe('verifyPairingSignature', () => {
   it('buildPairingUri + parsePairingUri roundtrips the sig and verifies', async () => {
     const params = await makeSignedParams()
     const uri = buildPairingUri({
-      sessionId:          params.topic,
+      sessionId: params.topic,
       backendIdentityKey: params.backendIdentityKey,
-      protocolID:         params.protocolID,
-      origin:             params.origin,
-      expiry:             Number(params.expiry),
-      sig:                params.sig,
+      protocolID: params.protocolID,
+      origin: params.origin,
+      expiry: Number(params.expiry),
+      sig: params.sig
     })
     const result = parsePairingUri(uri)
     expect(result.error).toBeNull()
@@ -219,10 +242,10 @@ describe('QR signature performance', () => {
   const ITERATIONS = 20
 
   it(`createSignature: avg < 500 ms over ${ITERATIONS} iterations`, async () => {
-    const key    = PrivateKey.fromRandom()
+    const key = PrivateKey.fromRandom()
     const wallet = new ProtoWallet(key)
-    const bik    = key.toPublicKey().toString()
-    const topic  = 'perf-session'
+    const bik = key.toPublicKey().toString()
+    const topic = 'perf-session'
     const origin = 'https://app.example.com'
 
     const durations: number[] = []
@@ -230,29 +253,46 @@ describe('QR signature performance', () => {
       const expiry = Math.floor((Date.now() + 120_000) / 1000)
       const data = Array.from(new TextEncoder().encode(`${topic}|${bik}|${origin}|${expiry}`))
       const t0 = performance.now()
-      await wallet.createSignature({ data, protocolID: [0, 'qr pairing'], keyID: topic, counterparty: 'anyone' })
+      await wallet.createSignature({
+        data,
+        protocolID: [0, 'qr pairing'],
+        keyID: topic,
+        counterparty: 'anyone'
+      })
       durations.push(performance.now() - t0)
     }
 
     const avg = durations.reduce((a, b) => a + b, 0) / durations.length
-    console.log(`createSignature avg=${avg.toFixed(2)}ms  min=${Math.min(...durations).toFixed(2)}ms  max=${Math.max(...durations).toFixed(2)}ms`)
+    console.log(
+      `createSignature avg=${avg.toFixed(2)}ms  min=${Math.min(...durations).toFixed(2)}ms  max=${Math.max(...durations).toFixed(2)}ms`
+    )
     expect(avg).toBeLessThan(500)
   }, 30_000)
 
   it(`verifyPairingSignature: avg < 500 ms over ${ITERATIONS} iterations`, async () => {
-    const key    = PrivateKey.fromRandom()
+    const key = PrivateKey.fromRandom()
     const wallet = new ProtoWallet(key)
-    const bik    = key.toPublicKey().toString()
-    const topic  = 'perf-session'
+    const bik = key.toPublicKey().toString()
+    const topic = 'perf-session'
     const origin = 'https://app.example.com'
     const expiry = Math.floor((Date.now() + 120_000) / 1000)
 
     const data = Array.from(new TextEncoder().encode(`${topic}|${bik}|${origin}|${expiry}`))
     const { signature } = await wallet.createSignature({
-      data, protocolID: [0, 'qr pairing'], keyID: topic, counterparty: 'anyone',
+      data,
+      protocolID: [0, 'qr pairing'],
+      keyID: topic,
+      counterparty: 'anyone'
     })
     const sig = bytesToBase64url(signature as number[])
-    const uri = buildPairingUri({ sessionId: topic, backendIdentityKey: bik, protocolID: JSON.stringify(PROTOCOL_ID), origin, expiry, sig })
+    const uri = buildPairingUri({
+      sessionId: topic,
+      backendIdentityKey: bik,
+      protocolID: JSON.stringify(PROTOCOL_ID),
+      origin,
+      expiry,
+      sig
+    })
     const { params } = parsePairingUri(uri)
 
     const durations: number[] = []
@@ -263,7 +303,9 @@ describe('QR signature performance', () => {
     }
 
     const avg = durations.reduce((a, b) => a + b, 0) / durations.length
-    console.log(`verifyPairingSignature avg=${avg.toFixed(2)}ms  min=${Math.min(...durations).toFixed(2)}ms  max=${Math.max(...durations).toFixed(2)}ms`)
+    console.log(
+      `verifyPairingSignature avg=${avg.toFixed(2)}ms  min=${Math.min(...durations).toFixed(2)}ms  max=${Math.max(...durations).toFixed(2)}ms`
+    )
     expect(avg).toBeLessThan(500)
   }, 30_000)
 })

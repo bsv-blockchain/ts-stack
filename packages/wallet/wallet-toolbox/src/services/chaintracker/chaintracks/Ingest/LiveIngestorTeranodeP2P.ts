@@ -1,7 +1,6 @@
 import { BlockHeader, Chain } from '../../../../sdk'
 import { LiveIngestorBase, LiveIngestorBaseOptions } from './LiveIngestorBase'
 
-
 export interface LiveIngestorTeranodeP2POptions extends LiveIngestorBaseOptions {
   /**
    *
@@ -14,23 +13,23 @@ export interface LiveIngestorTeranodeP2POptions extends LiveIngestorBaseOptions 
 }
 
 export class LiveIngestorTeranodeP2P extends LiveIngestorBase {
-  static createLiveIngestorTeranodeP2POptions (chain: Chain): LiveIngestorTeranodeP2POptions {
+  static createLiveIngestorTeranodeP2POptions(chain: Chain): LiveIngestorTeranodeP2POptions {
     const options: LiveIngestorTeranodeP2POptions = {
       ...LiveIngestorBase.createLiveIngestorBaseOptions(chain)
     }
     return options
   }
 
-  constructor (options: LiveIngestorTeranodeP2POptions) {
+  constructor(options: LiveIngestorTeranodeP2POptions) {
     super(options)
   }
 
-  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash(_hash: string): Promise<BlockHeader | undefined> {
     return undefined
   }
 
-  async startListening (liveHeaders: BlockHeader[]): Promise<void> {
-    const errors: Array<{ code: number, message: string, count: number }> = []
+  async startListening(_liveHeaders: BlockHeader[]): Promise<void> {
+    const errors: Array<{ code: number; message: string; count: number }> = []
 
     for (;;) {
       const ok = true // await this.woc.listenForNewBlockHeaders(enqueue, error, this.idleWait)
@@ -46,7 +45,7 @@ export class LiveIngestorTeranodeP2P extends LiveIngestorBase {
     }
   }
 
-  stopListening (): void {
+  stopListening(): void {
     // this.woc?.stopNewListener()
   }
 }

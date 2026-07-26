@@ -19,7 +19,7 @@ interface Props {
 
 const actions: { method: WalletMethod; label: string; params?: unknown }[] = [
   // NOTE: Replace or extend this list with your app's wallet actions.
-  { method: 'getPublicKey', label: 'Get Public Key', params: { identityKey: true } },
+  { method: 'getPublicKey', label: 'Get Public Key', params: { identityKey: true } }
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,9 +47,7 @@ export function WalletActions({ session, onRequest }: Readonly<Props>) {
       ))}
 
       {!connected && (
-        <p className="text-xs text-gray-400 text-center">
-          Connect mobile wallet to enable actions
-        </p>
+        <p className="text-xs text-gray-400 text-center">Connect mobile wallet to enable actions</p>
       )}
     </div>
   )
