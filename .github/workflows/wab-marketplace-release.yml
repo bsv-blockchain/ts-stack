@@ -61,7 +61,7 @@ jobs:
       id-token: write          # OIDC: assume the seller-account publisher role (no static keys)
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           fetch-depth: 0
 
@@ -102,7 +102,7 @@ jobs:
           echo "Resolved WAB version: $VERSION (Marketplace title: v$VERSION)"
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ vars.WAB_MP_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}

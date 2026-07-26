@@ -45,7 +45,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/mock-knex": "^0.4.8",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.1.1",
     "@types/prettyjson": "^0.0.33",
     "@types/superagent": "^8.1.11",
     "@types/supertest": "^7.2.1",
@@ -65,7 +65,7 @@
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.1.2",
