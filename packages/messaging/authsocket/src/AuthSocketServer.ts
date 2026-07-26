@@ -1,12 +1,16 @@
 import { Server as HttpServer } from 'node:http'
 import { ServerOptions, Server as IoServer, Socket as IoSocket } from 'socket.io'
-import { WalletInterface, Peer, SessionManager } from '@bsv/sdk'
+import { WalletInterface, Peer, SessionManager, AsyncSessionManager } from '@bsv/sdk'
 import { SocketServerTransport } from './SocketServerTransport.js'
 
 export interface AuthSocketServerOptions extends Partial<ServerOptions> {
   wallet: WalletInterface // The server's wallet for signing
   requestedCertificates?: any // e.g. RequestedCertificateSet
-  sessionManager?: SessionManager
+  /**
+   * Optional shared BRC-103 session store. Use an AsyncSessionManager backed by
+   * a shared database when more than one server replica handles connections.
+   */
+  sessionManager?: SessionManager | AsyncSessionManager
 }
 
 interface PeerInfo {

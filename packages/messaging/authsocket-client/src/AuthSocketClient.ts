@@ -1,5 +1,5 @@
 import { io as realIo, Socket as IoClientSocket, ManagerOptions, SocketOptions } from 'socket.io-client'
-import { RequestedCertificateSet, SessionManager, Peer, WalletInterface, Utils, OriginatorDomainNameStringUnder250Bytes } from '@bsv/sdk'
+import { RequestedCertificateSet, SessionManager, AsyncSessionManager, Peer, WalletInterface, Utils, OriginatorDomainNameStringUnder250Bytes } from '@bsv/sdk'
 import { SocketClientTransport } from './SocketClientTransport.js'
 
 /**
@@ -105,7 +105,7 @@ export function AuthSocketClient (
   opts: {
     wallet: WalletInterface
     requestedCertificates?: RequestedCertificateSet
-    sessionManager?: SessionManager
+    sessionManager?: SessionManager | AsyncSessionManager
     managerOptions?: Partial<ManagerOptions & SocketOptions>
     originator?: OriginatorDomainNameStringUnder250Bytes
   }
