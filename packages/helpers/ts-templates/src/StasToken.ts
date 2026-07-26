@@ -122,7 +122,7 @@ export class StasToken {
       const symbolHex = pushes[1] ?? null
       symbol = (symbolHex != null && symbolHex !== '')
         ? (Array.from(hexToUtf8(symbolHex))
-            .filter(character => character.charCodeAt(0) > 0x20)
+            .filter(character => (character.codePointAt(0) ?? 0) > 0x20)
             .join('')
             .trim() || null)
         : null
