@@ -19,6 +19,8 @@ on:
         required: false
         default: ''
 
+permissions: {}
+
 concurrency:
   group: npm-release
   cancel-in-progress: false

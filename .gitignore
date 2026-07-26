@@ -10,6 +10,8 @@ coverage/
 *.log
 .DS_Store
 .venv/
+__pycache__/
+*.py[cod]
 # local go-sdk symlink (CI checks out go-sdk into this path instead)
 go-sdk
 # CARS deployment tool temp directories

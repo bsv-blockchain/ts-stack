@@ -3,6 +3,85 @@
   "lastReviewed": "2026-07-25",
   "exceptions": [
     {
+      "id": "scorecard-maintainer-merge-policy",
+      "category": "security",
+      "target": "OpenSSF Scorecard BranchProtectionID #188 and CodeReviewID #203",
+      "owner": "ts-stack-maintainers",
+      "reason": "The repository intentionally permits authorized maintainers and administrators to facilitate a merge after required checks and review-thread resolution, does not require a code-owner or last-pusher approval, and GitHub cannot count an author's documented maintainer review as a formal approval.",
+      "evidence": [
+        "https://github.com/bsv-blockchain/ts-stack/issues/324",
+        "https://github.com/bsv-blockchain/ts-stack/pull/340#issuecomment-5081263332",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/188",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/203"
+      ],
+      "created": "2026-07-25",
+      "reviewBy": "2026-10-23",
+      "removeWhen": "Remove only after an explicit operator governance decision replaces maintainer/admin facilitation and the replacement remains practical for maintainer-authored changes."
+    },
+    {
+      "id": "scorecard-release-token-permission",
+      "category": "security",
+      "target": "OpenSSF Scorecard TokenPermissionsID #189 for the npm release version-sync job",
+      "owner": "ts-stack-maintainers",
+      "reason": "The protected first-party release job requires contents write access to push its generated version-sync branch and pull-requests write access to open the reviewable sync PR after OIDC publication; every other workflow and job defaults to no token permissions and declares only its own minimum scope.",
+      "evidence": [
+        ".github/workflows/release.yaml",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/189",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-25",
+      "reviewBy": "2026-08-24",
+      "removeWhen": "Remove when version synchronization can use a narrower first-party credential or a separate trusted mechanism without losing protected-environment review, provenance, or atomic release reconciliation."
+    },
+    {
+      "id": "scorecard-release-lockfile-refresh",
+      "category": "toolchain",
+      "target": "OpenSSF Scorecard PinnedDependenciesID #200 for npm install --package-lock-only",
+      "owner": "ts-stack-maintainers",
+      "reason": "The command installs no named or ad hoc package: it deterministically refreshes each committed infrastructure package-lock from that directory's committed package.json after first-party version synchronization, with lifecycle scripts disabled. Scorecard interprets the lockfile operation as an unpinned package invocation even though dependency resolution is committed and subsequently audited.",
+      "evidence": [
+        ".github/workflows/release.yaml",
+        "infra/*/package-lock.json",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/200",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-25",
+      "reviewBy": "2026-10-23",
+      "removeWhen": "Remove when the release-sync design no longer regenerates infrastructure locks or OpenSSF Scorecard correctly distinguishes lockfile-only refreshes from unpinned package installation."
+    },
+    {
+      "id": "typescript-7-coordinated-migration",
+      "category": "dependency-hold",
+      "target": "Dependabot semver-major updates for typescript",
+      "owner": "ts-stack-maintainers",
+      "reason": "Dependabot PR #332 attempted a workspace-wide TypeScript 6.0.3 to 7.0.2 update and failed the build, reproducible codegen, conformance, aggregate gate, and three infrastructure lanes before becoming unrefreshable and conflicted. TypeScript 7 requires the planned strict-profile and toolchain compatibility migration rather than an automated monthly merge.",
+      "evidence": [
+        "https://github.com/bsv-blockchain/ts-stack/pull/332",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324",
+        ".github/dependabot.yml"
+      ],
+      "created": "2026-07-25",
+      "reviewBy": "2026-08-24",
+      "removeWhen": "Remove in Wave 11 when TypeScript 7 passes every package profile, declaration and packed-consumer check, reproducible codegen, conformance, all infrastructure builds, and the full merge gate."
+    },
+    {
+      "id": "verifast-required-wasm-binaries",
+      "category": "toolchain",
+      "target": "OpenSSF Scorecard BinaryArtifactsID #196 and #197 for @bsv/verifast WASM",
+      "owner": "ts-stack-maintainers",
+      "reason": "The two checked-in WASM modules are required runtime artifacts for browser, worker, ESM, CommonJS, and classic-script consumers. Their pinned BDK source, reproducible build, SHA-256 values, generated-file ownership, ABI tests, package-consumer tests, and bundle budget are enforced; removing them would break zero-install and browser package consumers.",
+      "evidence": [
+        "packages/verifast/README.md#reproducible-wasm-build",
+        "packages/verifast/scripts/check-artifacts.mjs",
+        "governance/repository-health/projects.json#generatedArtifacts",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/196",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/197"
+      ],
+      "created": "2026-07-25",
+      "reviewBy": "2026-10-23",
+      "removeWhen": "Remove only when all supported package consumers can obtain the verified WASM reproducibly without install-time network access, lifecycle scripts, mutable build inputs, or a larger supply-chain risk."
+    },
+    {
       "id": "brace-expansion-jest-override",
       "category": "override",
       "target": "pnpm-workspace.yaml overrides brace-expansion@<=5.0.7",

@@ -33,12 +33,14 @@ resolution, incomplete OCI metadata, unpinned deployment examples, and loss of
 the scan, attestation, signature, Docker Dependabot, or Scorecard controls.
 
 `governance/Dockerfile.container-bases` is dependency-discovery metadata, not a
-build context. Dependabot proposes readable Node version changes there. The
-health contract then requires the registry's expected version and digest plus
-every digest-only release `FROM` instruction to be reconciled in the same PR.
-Runtime Dockerfiles deliberately omit the tag because Docker uses the digest as
-the actual identity; keeping both on `FROM` is ambiguous and triggers the
-Docker analyzer rule against mixed tag-and-digest references.
+build context. Its readable tags let Dependabot discover Node releases while
+its digests let Scorecard verify pinning. Repository health requires those
+tag-and-digest references, the registry's expected version and digest, and every
+digest-only release `FROM` instruction to reconcile in one change. Runtime
+Dockerfiles deliberately omit the tag because Docker uses the digest as the
+actual identity. Automatic Sonar analysis excludes only the non-build metadata
+file because its rule rejects tag-and-digest syntax; the executable zero-install
+repository check remains authoritative for it.
 
 Package locks under `infra/**/package-lock.json` are committed release inputs.
 Release workflows never rewrite them. A stale or inconsistent lock therefore

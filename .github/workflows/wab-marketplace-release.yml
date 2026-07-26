@@ -38,6 +38,8 @@ on:
         required: false
         default: ''
 
+permissions: {}
+
 concurrency:
   group: wab-marketplace-release
   cancel-in-progress: false   # never cancel a half-registered Catalog change set

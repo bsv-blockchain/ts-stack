@@ -31,6 +31,12 @@ updates:
       # scripts/sync-versions.mjs and the release workflow. Ownership and
       # enforcement are recorded in projects.json#dependencyAutomation.
       - dependency-name: '@bsv/*'
+      # TypeScript 7 currently fails the workspace build, codegen, conformance,
+      # and multiple infrastructure lanes. It is a coordinated Wave 11
+      # migration, not a routine monthly update; see the owned exception.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     groups:
       root-security:
         applies-to: security-updates
