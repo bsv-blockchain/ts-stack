@@ -28,7 +28,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsc",
@@ -50,7 +51,7 @@
     "directory": "packages/middleware/402-pay"
   },
   "author": "Deggen <d.kellenschwiler@bsvassociation.org>",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"
   },

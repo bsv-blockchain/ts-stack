@@ -50,7 +50,7 @@
     "certification"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/message-box-client": "workspace:^",
     "@bsv/wallet-toolbox": "workspace:^",
@@ -71,7 +71,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"

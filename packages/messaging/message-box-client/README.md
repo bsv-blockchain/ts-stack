@@ -1012,4 +1012,4 @@ We welcome bug reports, feature requests, and community contributions!
 
 ## 7. License
 
-This code is licensed under the [Open BSV License](https://www.bsvlicense.org/). See [LICENSE](./LICENSE) for details.
+This code is licensed under the [Open BSV License Version 6](./LICENSE.txt).

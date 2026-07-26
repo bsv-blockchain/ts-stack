@@ -36,7 +36,8 @@
   "files": [
     "dist",
     "bin",
-    "template"
+    "template",
+    "LICENSE.txt"
   ],
   "scripts": {
     "build": "node build.mjs && tsc -p tsconfig.build.json --emitDeclarationOnly",
@@ -98,5 +99,6 @@
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay#readme",
+  "license": "SEE LICENSE IN LICENSE.txt"
 }

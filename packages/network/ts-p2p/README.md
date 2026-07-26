@@ -493,6 +493,6 @@ For questions, bug reports, or feature requests:
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+This project is licensed under the [Open BSV License Version 6](./LICENSE.txt).
 
 Thank you for being a part of the BSV Blockchain ecosystem. Let's build the future of BSV Blockchain together!

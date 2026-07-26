@@ -330,7 +330,7 @@ const updated = await ordP2pkh.lock({
 
 ## License
 
-See [LICENSE.md](./LICENSE.md)
+[Open BSV License Version 6](./LICENSE.txt)
 
 ## Contributing
 

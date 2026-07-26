@@ -220,4 +220,7 @@ Keep unrelated package history and generated artifacts out of the same change wh
 
 ## License
 
-See the individual package directories for license terms.
+Every package and service in this repository is licensed under the
+[Open BSV License Version 6](./LICENSE.txt). The repository copies the exact
+license into every package artifact; see the
+[licensing policy](./docs/reference/licensing.md) for the enforced convention.

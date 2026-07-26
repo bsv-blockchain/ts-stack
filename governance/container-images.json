@@ -21,7 +21,7 @@
       "path": "infra/chaintracks-server",
       "title": "BSV Chaintracks Server",
       "description": "Chaintracks service and bulk-header API for BSV applications",
-      "license": "MIT",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server",
       "release": "ghcr-keyless"
     },
@@ -30,7 +30,7 @@
       "path": "infra/message-box-server",
       "title": "BSV Message Box Server",
       "description": "Authenticated message-box and payment service for BSV applications",
-      "license": "ISC",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server",
       "release": "ghcr-keyless"
     },
@@ -39,7 +39,7 @@
       "path": "infra/overlay-server",
       "title": "BSV Overlay Server",
       "description": "Reference overlay-services deployment for distributed BSV applications",
-      "license": "LicenseRef-Open-BSV-License-5",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server",
       "release": "ghcr-keyless"
     },
@@ -48,7 +48,7 @@
       "path": "infra/uhrp-server-basic",
       "title": "BSV UHRP Basic Server",
       "description": "Filesystem-backed UHRP content service",
-      "license": "LicenseRef-Open-BSV-License-4",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic",
       "release": "ghcr-keyless"
     },
@@ -57,7 +57,7 @@
       "path": "infra/uhrp-server-cloud-bucket",
       "title": "BSV UHRP Cloud Bucket Server",
       "description": "Cloud-bucket-backed UHRP storage service",
-      "license": "LicenseRef-Open-BSV-License-4",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket",
       "release": "ghcr-keyless"
     },
@@ -66,7 +66,7 @@
       "path": "infra/wab",
       "title": "Wallet Authentication Backend",
       "description": "Multi-factor authentication backend for BSV wallets",
-      "license": "LicenseRef-Open-BSV-License-4",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab",
       "release": "ghcr-and-aws-marketplace-keyless"
     },
@@ -75,7 +75,7 @@
       "path": "infra/wallet-infra",
       "title": "BSV Wallet Infrastructure",
       "description": "Wallet storage and management service for BSV applications",
-      "license": "LicenseRef-Open-BSV-License-4",
+      "license": "LicenseRef-Open-BSV-License-6",
       "documentation": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra",
       "release": "ghcr-keyless"
     }

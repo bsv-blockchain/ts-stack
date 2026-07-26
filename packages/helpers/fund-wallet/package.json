@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "description": "fund a metanet wallet",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "author": "deggen",
   "type": "module",
   "main": "dist/index.js",
@@ -35,7 +35,8 @@
     "typescript": "^6.0.3"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE.txt"
   ],
   "repository": {
     "type": "git",

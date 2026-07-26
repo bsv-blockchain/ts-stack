@@ -35,7 +35,8 @@
   "types": "./out/src/index.d.ts",
   "files": [
     "out/src",
-    "src"
+    "src",
+    "LICENSE.txt"
   ],
   "scripts": {
     "start": "node out/src/index.js",

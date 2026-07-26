@@ -424,4 +424,4 @@ To contribute:
 
 ## License
 
-This project is available under the [Open BSV License v4](./LICENSE.txt).
+This project is available under the [Open BSV License Version 6](./LICENSE.txt).

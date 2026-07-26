@@ -17,8 +17,8 @@
     "dist",
     "src",
     "mod.ts",
-    "LICENSE.txt",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "exports": {
     ".": {
@@ -47,7 +47,7 @@
     "doc": "ts2md"
   },
   "author": "Peer-to-peer Privacy Systems Research, LLC",
-  "license": "Open BSV License",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",

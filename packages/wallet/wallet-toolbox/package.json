@@ -34,7 +34,7 @@
     "docs/",
     "README.md",
     "CHANGELOG.md",
-    "license.md"
+    "LICENSE.txt"
   ],
   "repository": {
     "type": "git",
@@ -42,7 +42,7 @@
     "directory": "packages/wallet/wallet-toolbox"
   },
   "author": "Tone Engel",
-  "license": "SEE LICENSE IN license.md",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "keywords": [
     "bsv",
     "babbage",

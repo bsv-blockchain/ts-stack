@@ -440,7 +440,7 @@ Contributions welcome! Please:
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+[Open BSV License Version 6](./LICENSE.txt)
 
 ## 🔗 Resources
 

@@ -10,12 +10,13 @@
   },
   "description": "Currency amount conversion",
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
-  "license": "Open BSV License",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
   "files": [
     "out",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "directories": {
     "test": "tests"

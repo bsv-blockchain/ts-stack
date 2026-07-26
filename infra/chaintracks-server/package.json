@@ -34,7 +34,7 @@
     "api"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/wallet-toolbox": "^2.4.4",
     "@opentelemetry/api": "^1.9.1",

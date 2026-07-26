@@ -95,4 +95,4 @@ Press `Ctrl + C` to stop or add the `-d` flag to run in detached mode.
 Pull requests and issues are welcome! Please open an issue to discuss any major changes.
 
 ## License
-Open BSV. See the [LICENSE](./LICENSE) file for details.
+[Open BSV License Version 6](./LICENSE.txt)
