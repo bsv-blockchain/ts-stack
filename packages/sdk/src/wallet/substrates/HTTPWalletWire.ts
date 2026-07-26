@@ -18,7 +18,11 @@ export default class HTTPWalletWire implements WalletWire {
   }
 
   async transmitToWallet(message: number[]): Promise<number[]> {
-    const messageReader = new Utils.Reader(message)
+    return Array.from(await this.transmitToWalletUint8Array(Uint8Array.from(message)))
+  }
+
+  async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array> {
+    const messageReader = new Utils.ReaderUint8Array(message)
     // Read call code
     const callCode = messageReader.readUInt8()
 
@@ -36,16 +40,16 @@ export default class HTTPWalletWire implements WalletWire {
       const originatorBytes = messageReader.read(originatorLength)
       originator = Utils.toUTF8(originatorBytes)
     }
-    const payload = messageReader.read()
+    const payload = messageReader.readView()
     const response = await this.httpClient(`${this.baseUrl}/${callName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',
         Origin: originator ?? '' // ✅ Explicitly handle null/undefined cases
       },
-      body: new Uint8Array(payload)
+      body: payload as BodyInit
     })
     const responseBuffer = await response.arrayBuffer()
-    return Array.from(new Uint8Array(responseBuffer))
+    return new Uint8Array(responseBuffer)
   }
 }

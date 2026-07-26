@@ -70,6 +70,7 @@ import {
   WalletLoggerInterface,
   MakeWalletLogger
 } from '@bsv/sdk'
+import type { SpendVerifierInterface } from '@bsv/sdk'
 import { acquireDirectCertificate } from './signer/methods/acquireDirectCertificate'
 import { proveCertificate } from './signer/methods/proveCertificate'
 import { createAction, CreateActionResultX } from './signer/methods/createAction'
@@ -206,6 +207,12 @@ export interface WalletArgs {
    * This does not change the BRC-100 wallet interface.
    */
   actionBatchMode?: ActionBatchMode
+  /**
+   * Optional high-performance script verifier used by Wallet Toolbox's
+   * internal transaction checks. This is an implementation extension and does
+   * not change the BRC-100 wallet interface.
+   */
+  scriptVerifier?: SpendVerifierInterface
 }
 
 function isWalletSigner (args: WalletArgs | WalletSigner): args is WalletSigner {
@@ -258,6 +265,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   pendingSignActions: Record<string, PendingSignAction>
   readonly actionBatch: ActionBatchController
+  readonly scriptVerifier?: SpendVerifierInterface
 
   /**
    * For repeatability testing, set to an array of random numbers from [0..1).
@@ -310,6 +318,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     this.pendingSignActions = {}
     this.actionBatch = new ActionBatchController(this, args.actionBatchMode ?? 'auto')
+    this.scriptVerifier = args.scriptVerifier
 
     this.userParty = `user ${this.getClientChangeKeyPair().publicKey}`
     this.beef = new BeefParty([this.userParty])

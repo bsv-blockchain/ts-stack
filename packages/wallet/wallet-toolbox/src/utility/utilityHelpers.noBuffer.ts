@@ -61,6 +61,5 @@ export function asUint8Array (val: ByteInput, enc?: ByteEncoding): Uint8Array {
   if (Array.isArray(val)) return Uint8Array.from(val)
   if (typeof val !== 'string') return val
   enc ||= 'hex'
-  const a: number[] = Utils.toArray(val, enc)
-  return Uint8Array.from(a)
+  return Utils.toUint8Array(val, enc)
 }

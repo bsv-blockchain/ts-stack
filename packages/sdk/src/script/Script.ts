@@ -1,6 +1,6 @@
 import ScriptChunk from './ScriptChunk.js'
 import OP from './OP.js'
-import { encode, toHex, toArray } from '../primitives/utils.js'
+import { encode, hexToUint8Array, toHex, toArray } from '../primitives/utils.js'
 import BigNumber from '../primitives/BigNumber.js'
 
 /**
@@ -100,8 +100,7 @@ export default class Script {
     if (!/^[0-9a-fA-F]+$/.test(hex)) {
       throw new Error('Some elements in this string are not hex encoded.')
     }
-    const bin = toArray(hex, 'hex')
-    const rawBytes = Uint8Array.from(bin)
+    const rawBytes = hexToUint8Array(hex)
     return new Script([], rawBytes, hex.toLowerCase(), false)
   }
 

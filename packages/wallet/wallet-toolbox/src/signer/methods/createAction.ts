@@ -65,13 +65,13 @@ export async function createAction (
     beef.mergeTransaction(prior.tx)
     logger?.log('merged beef')
 
-    verifyUnlockScripts(r.txid, beef)
+    await verifyUnlockScripts(r.txid, beef, wallet.scriptVerifier)
     logger?.log('verified unlock scripts')
 
     r.noSendChange = prior.dcr.noSendChangeOutputVouts?.map(vout => `${r.txid}.${vout}`)
     beef.atomicTxid = r.txid
     setResultBeef(r, beef)
-    if (!vargs.options.returnTXIDOnly) r.tx = beef.toBinaryAtomic(r.txid)
+    if (!vargs.options.returnTXIDOnly) r.tx = beef.toUint8ArrayAtomic(r.txid)
   }
 
   const { sendWithResults, notDelayedResults } = await processAction(prior, wallet, auth, vargs)

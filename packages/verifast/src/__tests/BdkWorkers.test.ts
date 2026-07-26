@@ -291,4 +291,28 @@ describe('BDK worker warm-up', () => {
     expect(chunks).toHaveLength(3)
     expect(chunks.flat()).toEqual(items)
   })
+
+  it('places an item above the byte target in its own worker chunk', async () => {
+    const scheduler = new BdkWorkerScheduler(
+      onFailure => new BdkWorkerPool(2, () => {
+        let messageHandler: (response: BdkWorkerResponse) => void = () => {}
+        return {
+          post: request => {
+            queueMicrotask(() => {
+              messageHandler({ id: request.id, result: new Uint8Array() })
+            })
+          },
+          onMessage: handler => { messageHandler = handler },
+          onError: () => {},
+          onExit: () => {},
+          terminate: () => {}
+        }
+      }, onFailure),
+      { maxBatchBytes: 1 }
+    )
+    await scheduler.preload(mockModule())
+
+    expect(scheduler.parallelChunks([0, 1], item => item === 0 ? 2 : 1))
+      .toEqual([[0], [1]])
+  })
 })

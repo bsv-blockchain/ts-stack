@@ -2,7 +2,6 @@ import {
   Beef,
   ListActionsResult,
   ListOutputsResult,
-  Transaction,
   Validation
 } from '@bsv/sdk'
 import type { PendingSignAction, Wallet } from '../../Wallet'
@@ -13,10 +12,11 @@ import {
   CommitActionBatchResult,
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
+import { actionBatchBootstrap } from './actionBatchBootstrap'
 import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
-import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
+import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import {
   isListActionsSpecOp,
   specOpFailedActions,
@@ -48,7 +48,7 @@ interface PendingBatchPlan {
 
 interface UploadBlob {
   digest: string
-  bytes: number[]
+  bytes: Uint8Array
 }
 
 function mergeUnique (values: string[]): string[] {
@@ -398,7 +398,7 @@ class ActionBatchWorkspace {
     const txid = prior.tx.id('hex')
     const lockingScriptDigests = prior.dcr.outputs.map(output => {
       if (output.lockingScript.length === 0) return undefined
-      const digest = actionBatchBlobDigest(asArray(output.lockingScript))
+      const digest = actionBatchBlobDigest(asUint8Array(output.lockingScript))
       this.lockingScripts.set(digest, output.lockingScript)
       return digest
     })
@@ -462,14 +462,14 @@ class ActionBatchWorkspace {
     const externalTxids = this.actions.flatMap(action => action.plan.inputs)
       .map(input => input.sourceTxid)
       .filter(txid => !stagedTxids.has(txid))
-    const dependencyBytes = asArray(beefForTxids(this.state.sharedBeef, externalTxids).toUint8Array())
+    const dependencyBytes = beefForTxids(this.state.sharedBeef, externalTxids).toUint8Array()
     const rawBytes = this.actions.map(action => {
       const tx = this.state.sharedBeef.findTxid(action.txid)?.tx
       if (tx == null) throw new WERR_INVALID_OPERATION(`missing staged transaction ${action.txid}`)
-      return asArray(tx.toUint8Array())
+      return tx.toUint8Array()
     })
-    const blobs = new Map<string, number[]>()
-    const addBlob = (bytes: number[]): string => {
+    const blobs = new Map<string, Uint8Array>()
+    const addBlob = (bytes: Uint8Array): string => {
       const digest = actionBatchBlobDigest(bytes)
       if (!blobs.has(digest)) blobs.set(digest, bytes)
       return digest
@@ -479,11 +479,11 @@ class ActionBatchWorkspace {
     })
     const dependencyBeefDigest = addBlob(dependencyBytes)
     for (const [digest, script] of this.lockingScripts) {
-      if (!blobs.has(digest)) blobs.set(digest, asArray(script))
+      if (!blobs.has(digest)) blobs.set(digest, asUint8Array(script))
     }
     const totalBytes = [...blobs.values()].reduce((sum, bytes) => sum + bytes.length, 0)
     const useUploads = totalBytes > this.capabilities.maxInlineBytes
-    const uploadBlobs = new Map<string, number[]>()
+    const uploadBlobs = new Map<string, Uint8Array>()
     const blobChunks: Record<string, string[]> = {}
     if (useUploads) {
       const chunkBytes = Math.max(1, this.capabilities.maxBlobBytes)
@@ -494,7 +494,7 @@ class ActionBatchWorkspace {
         }
         const chunks: string[] = []
         for (let offset = 0; offset < bytes.length; offset += chunkBytes) {
-          const chunk = bytes.slice(offset, Math.min(bytes.length, offset + chunkBytes))
+          const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + chunkBytes))
           const chunkDigest = actionBatchBlobDigest(chunk)
           chunks.push(chunkDigest)
           if (!uploadBlobs.has(chunkDigest)) uploadBlobs.set(chunkDigest, chunk)
@@ -508,7 +508,7 @@ class ActionBatchWorkspace {
       dependencyBeefDigest,
       inlineBlobs: useUploads
         ? undefined
-        : Object.fromEntries([...blobs].map(([digest, bytes]) => [digest, Uint8Array.from(bytes)])),
+        : Object.fromEntries(blobs),
       blobChunks: Object.keys(blobChunks).length === 0 ? undefined : blobChunks,
       sendWith: mergeUnique(sendWith),
       isDelayed
@@ -684,10 +684,8 @@ export class ActionBatchController {
     const capabilities = await this.negotiate()
     if (capabilities == null) return undefined
     const batchId = randomBytesBase64(24)
-    const begin = await this.wallet.storage.beginActionBatch({
-      batchId,
-      firstAction: { ...args, logger: undefined }
-    })
+    const bootstrap = actionBatchBootstrap(args, capabilities)
+    const begin = await this.wallet.storage.beginActionBatch({ ...bootstrap, batchId })
     this.workspace = new ActionBatchWorkspace(this.wallet, begin, args, capabilities)
     return this.workspace
   }

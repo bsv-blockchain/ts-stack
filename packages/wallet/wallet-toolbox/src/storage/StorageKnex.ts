@@ -355,6 +355,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .where({ actionBatchId, digest })
       .first()
     if (row == null) return undefined
+    if (Buffer.isBuffer(row.bytes)) {
+      row.bytes = new Uint8Array(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength)
+    }
     this.deserialiseFromKnex(row)
     return this.validateEntity(row)
   }
@@ -1174,13 +1177,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this._settings.dbtype
   }
 
-  /** Convert every number-array value to a Buffer and every undefined to null on an arbitrary object. */
+  /** Convert every byte-array value to a Buffer and every undefined to null on an arbitrary object. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private serialiseForKnex (v: any): void {
     for (const key of Object.keys(v)) {
       const val = v[key]
       if (Array.isArray(val) && (val.length === 0 || typeof val[0] === 'number')) {
         v[key] = Buffer.from(val)
+      } else if (val instanceof Uint8Array) {
+        v[key] = Buffer.from(val.buffer, val.byteOffset, val.byteLength)
       } else if (val === undefined) {
         v[key] = null
       }
@@ -1454,7 +1459,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
     const r: TableOutput | undefined = await this.knex.transaction(async trx => {
       const baseQuery = (): Knex.QueryBuilder<TableOutput, TableOutput[]> =>
-        trx<TableOutput>('outputs as o')
+        trx<TableOutput, TableOutput[]>('outputs as o')
           .join('transactions as t', 'o.transactionId', 't.transactionId')
           .where('o.userId', userId)
           .where('o.spendable', true)

@@ -50,6 +50,19 @@ describe('Spend verifier integration', () => {
     await expect(spend.validateWith({ verifySpend: async () => { throw failure } })).rejects.toBe(failure)
   })
 
+  it('passes explicit consensus context through every backend hook', async () => {
+    const { spend } = await buildSpend()
+    const context = { consensus: true, blockHeight: 943816 }
+    const verifier = {
+      shouldVerifySpend: jest.fn(() => true),
+      verifySpend: jest.fn(async () => true)
+    }
+
+    await expect(spend.validateWith(verifier, context)).resolves.toBe(true)
+    expect(verifier.shouldVerifySpend).toHaveBeenCalledWith(spend, context)
+    expect(verifier.verifySpend).toHaveBeenCalledWith(spend, context)
+  })
+
   it('uses the JavaScript validator when an adaptive backend declines', async () => {
     const { spend } = await buildSpend()
     const verifySpend = jest.fn(async () => false)

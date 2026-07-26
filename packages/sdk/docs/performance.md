@@ -30,6 +30,50 @@ CHAIN_DEPTH=10 SCRIPT_BYTES=1 WIDE_INPUTS=1000 BENCH_SAMPLES=3 \
 
 The default 2,000-link, 4.24 MB workload completes cold serialization, zero-copy structural parsing, linked parsing, verification, and sorting in roughly 69 ms of measured median/one-shot work on the optimized build. The same workload overflows the JavaScript stack on `main`; the iterative implementation is also regression-tested at 3,000 links.
 
+### Large-data wallet and serialization paths
+
+The retained large-data benchmark measures an 8 MiB generic payload against an
+unmodified build from commit `a9a432fbc` and the optimized build on the same
+Apple Silicon host with Node.js v25.9.0:
+
+```bash
+WALLET_BENCH_BYTES=8388608 BENCH_SAMPLES=7 \
+  node benchmarks/large-data-wallet-bench.js
+```
+
+| Workload (median) | Baseline | Optimized | Improvement |
+| --- | ---: | ---: | ---: |
+| 8 MiB direct `Script.fromHex` | 171.49 ms | 23.52 ms | 86.3% faster |
+| 8 MiB warm `Beef.toUint8ArrayAtomic` | 1.701 ms | 0.0067 ms | 99.6% faster |
+| 8 MiB Wallet Wire `internalizeAction` round trip | 68.88 ms | 1.41 ms | 98.0% faster |
+
+The benchmark accepts `SDK_DIST_ROOT` to run the exact same code against
+another built SDK. Atomic BEEF caching is mutation-aware, so graph changes
+invalidate the cached bytes before reuse.
+
+Wallet Wire retains its required `number[]` method for compatibility and adds an
+optional `Uint8Array` lane. The transceiver selects compact bytes only when the
+transport advertises support; the processor and HTTP binary transport implement
+both forms. Other wallet substrates keep their existing JSON, structured-clone,
+or native-bridge contracts. No BRC-100 arguments, results, or transport
+protocols change.
+
+Large binary values therefore follow the cheapest representation supported by
+each existing substrate:
+
+| Wallet client substrate | Large-data behavior |
+| --- | --- |
+| Cicada / HTTP Wallet Wire | Compact `Uint8Array` frames end to end; legacy `number[]` implementations remain compatible. |
+| Direct Wallet Wire processor | Compact `Uint8Array` frames with no transport serialization. |
+| XDM | Browser structured clone carries `Uint8Array` values without SDK-side JSON conversion or boxing. |
+| `window.CWI` | Direct BRC-100 delegation; arguments and results are not reserialized by the SDK. |
+| HTTP JSON | Existing JSON wire representation is preserved. |
+| React Native WebView | Existing stringified native-bridge representation is preserved. |
+
+XDM does not transfer ownership of caller buffers because doing so would detach
+application-owned BRC-100 arguments. The JSON and native-bridge substrates do
+not substitute a binary encoding because that would change their protocols.
+
 Wallet Toolbox has a separate reproducible frontier benchmark:
 
 ```bash

@@ -10,7 +10,9 @@ import {
   fromBase58Check,
   toBase58Check,
   verifyNotNull,
-  constantTimeEquals
+  constantTimeEquals,
+  hexToUint8Array,
+  toUint8Array
 } from '../../primitives/utils'
 import Point from '../../primitives/Point'
 
@@ -22,6 +24,12 @@ describe('utils', () => {
     expect(toArray('\u1234', 'utf8')).toEqual([225, 136, 180])
     expect(toArray('\u1234' + '234', 'utf8')).toEqual([225, 136, 180, 50, 51, 52])
     expect(toArray([1, 2, 3, 4])).toEqual([1, 2, 3, 4])
+  })
+
+  it('decodes hex directly to Uint8Array with legacy odd-length handling', () => {
+    expect(hexToUint8Array('00aBff')).toEqual(new Uint8Array([0, 0xab, 0xff]))
+    expect(toUint8Array('abc', 'hex')).toEqual(new Uint8Array([0x0a, 0xbc]))
+    expect(() => hexToUint8Array('not hex')).toThrow('Invalid hex string')
   })
 
   it('should zero pad byte to hex', () => {

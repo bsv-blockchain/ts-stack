@@ -144,8 +144,8 @@ export default class Certificate {
    * @param {number[]} bin - The binary data representing the certificate.
    * @returns {Certificate} - The deserialized Certificate object.
    */
-  static fromBinary(bin: number[]): Certificate {
-    const reader = new Utils.Reader(bin)
+  static fromBinary(bin: number[] | Uint8Array): Certificate {
+    const reader = new Utils.ReaderUint8Array(bin)
 
     // Read type
     const typeBytes = reader.read(32)
@@ -190,7 +190,7 @@ export default class Certificate {
     let signature: string | undefined
     if (!reader.eof()) {
       const signatureBytes = reader.read()
-      const sig = Signature.fromDER(signatureBytes)
+      const sig = Signature.fromDER(Array.from(signatureBytes))
       signature = sig.toString('hex') as string
     }
 

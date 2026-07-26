@@ -216,6 +216,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Add explicit script-verification context and a distinct resource-exhaustion
+  error so transaction version and local interpreter limits cannot be mistaken
+  for consensus validity.
+- Add an optional compact-byte Wallet Wire lane while preserving the existing
+  `number[]` transport contract for older and third-party substrates.
 - Add opt-in, provider-neutral telemetry with scalar event attributes,
   correlation IDs, sink isolation, severity filtering, and centralized
   secret redaction.
@@ -230,6 +235,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Remove arbitrary post-Genesis script element and default interpreter-memory
+  caps; explicit caller budgets remain enforceable but are not reported as
+  invalid scripts.
+- Keep large hex, Atomic BEEF, and binary Wallet Wire payloads in
+  `Uint8Array` storage, cache repeat Atomic BEEF serialization, and invalidate
+  that cache when the graph changes.
 - Instrument overlay lookup lifecycle and host outcomes without emitting lookup
   query payloads or host URL paths.
 - Make transaction signing/verification share BIP143 hash components, replace recursive

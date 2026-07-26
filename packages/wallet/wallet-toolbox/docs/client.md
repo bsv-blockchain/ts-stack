@@ -5628,6 +5628,7 @@ export interface SetupClientWalletArgs {
     active?: WalletStorageProvider;
     backups?: WalletStorageProvider[];
     taalApiKey?: string;
+    scriptVerifier?: SpendVerifierInterface;
 }
 ```
 
@@ -5658,6 +5659,15 @@ Defaults to undefined.
 
 ```ts
 privilegedKeyGetter?: () => Promise<PrivateKey>
+```
+
+###### Property scriptVerifier
+
+Optional high-performance verifier for internal wallet and locally hosted
+storage validation. This does not alter the BRC-100 interface.
+
+```ts
+scriptVerifier?: SpendVerifierInterface
 ```
 
 ###### Property rootKeyHex
@@ -6499,6 +6509,7 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
     feeModel: StorageFeeModel;
     commissionSatoshis: number;
     commissionPubKeyHex?: PubKeyHex;
+    scriptVerifier?: SpendVerifierInterface;
 }
 ```
 
@@ -6521,6 +6532,15 @@ A value of zero disables commission fees.
 
 ```ts
 commissionSatoshis: number
+```
+
+###### Property scriptVerifier
+
+Optional verifier for server-side action-batch script checks. This Wallet
+Toolbox extension leaves the BRC-100 interface unchanged.
+
+```ts
+scriptVerifier?: SpendVerifierInterface
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -7566,6 +7586,8 @@ export interface WalletArgs {
     settingsManager?: WalletSettingsManager;
     lookupResolver?: LookupResolver;
     makeLogger?: MakeWalletLogger;
+    actionBatchMode?: ActionBatchMode;
+    scriptVerifier?: SpendVerifierInterface;
 }
 ```
 
@@ -7583,6 +7605,24 @@ Aggregate tracing and control over capturing all logged output in one place:
 
 ```ts
 makeLogger?: MakeWalletLogger
+```
+
+###### Property actionBatchMode
+
+Optional action-batch negotiation mode. `auto` uses the provider capability
+when available; `legacy` preserves per-action persistence.
+
+```ts
+actionBatchMode?: ActionBatchMode
+```
+
+###### Property scriptVerifier
+
+Optional high-performance verifier used by Wallet Toolbox's internal
+transaction checks. This does not alter the BRC-100 interface.
+
+```ts
+scriptVerifier?: SpendVerifierInterface
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

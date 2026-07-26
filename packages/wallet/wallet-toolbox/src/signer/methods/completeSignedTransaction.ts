@@ -1,9 +1,11 @@
-import { Beef, SignActionSpend, Spend, Transaction, type SignatureHashCache } from '@bsv/sdk'
+import {
+  SignActionSpend,
+  Transaction
+} from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
-import { WalletError } from '../../sdk/WalletError'
 
 export async function completeSignedTransaction (
   prior: PendingSignAction,
@@ -60,57 +62,5 @@ export async function completeSignedTransaction (
   return prior.tx
 }
 
-/**
- * @param txid The TXID of a transaction in the beef for which all unlocking scripts must be valid.
- * @param beef Must contain transactions for txid and all its inputs.
- * @throws WERR_INVALID_PARAMETER if any unlocking script is invalid, if sourceTXID is invalid, if beef doesn't contain required transactions.
- */
-export function verifyUnlockScripts (txid: string, beef: Beef): void {
-  const tx = beef.findTxid(txid)?.tx
-  if (tx == null) throw new WERR_INVALID_PARAMETER('txid', `contained in beef, txid ${txid}`)
-
-  for (let i = 0; i < tx.inputs.length; i++) {
-    const input = tx.inputs[i]
-    if (!input.sourceTXID) throw new WERR_INVALID_PARAMETER(`inputs[${i}].sourceTXID`, 'valid')
-    if (input.unlockingScript == null) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockingScript`, 'valid')
-    input.sourceTransaction = beef.findTxid(input.sourceTXID)?.tx
-    if (input.sourceTransaction == null) {
-      // The beef doesn't contain all the source transactions only if advanced features
-      // such as knownTxids are used.
-      // Skip unlock script checks.
-      return
-      // throw new WERR_INVALID_PARAMETER(`inputs[${i}].sourceTXID`, `contained in beef`)
-    }
-  }
-
-  const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
-  for (let i = 0; i < tx.inputs.length; i++) {
-    const input = tx.inputs[i]
-    const sourceOutput = input.sourceTransaction!.outputs[input.sourceOutputIndex]
-
-    const spend = new Spend({
-      sourceTXID: input.sourceTXID!,
-      sourceOutputIndex: input.sourceOutputIndex,
-      lockingScript: sourceOutput.lockingScript,
-      sourceSatoshis: sourceOutput.satoshis ?? 0,
-      transactionVersion: tx.version,
-      otherInputs: [],
-      allInputs: tx.inputs,
-      unlockingScript: input.unlockingScript!,
-      inputSequence: input.sequence ?? 0,
-      inputIndex: i,
-      outputs: tx.outputs,
-      lockTime: tx.lockTime,
-      sigHashCache
-    })
-
-    try {
-      const spendValid = spend.validate()
-
-      if (!spendValid) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, 'valid')
-    } catch (error_: unknown) {
-      const e = WalletError.fromUnknown(error_)
-      throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, `valid. ${e.message}`)
-    }
-  }
-}
+export { verifyUnlockScripts } from './verifyUnlockScripts'
+export type { UnlockScriptVerificationResult } from './verifyUnlockScripts'

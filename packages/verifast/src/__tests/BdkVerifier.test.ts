@@ -1,4 +1,5 @@
 import { Transaction, Script, P2PKH, PrivateKey, MerklePath, Spend, OP } from '@bsv/sdk'
+import { jest } from '@jest/globals'
 import BdkVerifier, {
   BdkErrorDomain,
   BdkVerificationError,
@@ -208,7 +209,7 @@ describe('BdkVerifier', () => {
     expect(verifier.isReady()).toBe(false)
   })
 
-  it('keeps non-standard version-1 scripts and custom memory limits on JavaScript', async () => {
+  it('distinguishes version-1 policy routing from explicit consensus validation', async () => {
     const tx = await buildTx()
     const verifier = new BdkVerifier(async () =>
       makeMockModule({ domain: 0, code: 0 }, [])
@@ -228,6 +229,11 @@ describe('BdkVerifier', () => {
       blockHeight: 1,
       consensus: false
     })).toBe(false)
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 1,
+      consensus: true
+    })).toBe(true)
 
     tx.version = 2
     expect(verifier.shouldVerifyScripts({
@@ -448,6 +454,63 @@ describe('BdkVerifier', () => {
     expect(batchCalls).toBe(1)
   })
 
+  it('treats maxBatchBytes as a soft target for oversized singleton items', async () => {
+    const tx = await buildTx()
+    const spend = spendForInput(tx)
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    const calls: string[] = []
+    module.VerifyScriptBatchArray = () => {
+      calls.push('script')
+      return Int32Array.from([0, 0])
+    }
+    module.VerifySpendBatchArray = () => {
+      calls.push('spend')
+      return Int32Array.from([0, 0])
+    }
+    module.VerifyDigestBatchArray = () => {
+      calls.push('digest')
+      return Uint8Array.of(1)
+    }
+    const verifier = new BdkVerifier(
+      async () => module,
+      { maxBatchBytes: 1, registerAsDefault: false }
+    )
+
+    await expect(verifier.verifyScriptsBatchFromEF([{
+      extendedTransaction: Uint8Array.of(1, 2),
+      utxoHeights: [10],
+      blockHeight: 30,
+      consensus: true
+    }])).resolves.toEqual([true])
+    await expect(verifier.verifySpendsBatch([
+      { spend, consensus: true }
+    ])).resolves.toEqual([true])
+    await expect(verifier.verifyDigestBatch([{
+      publicKey: Uint8Array.of(2, 3),
+      digest: new Uint8Array(32),
+      signature: Uint8Array.of(4, 5)
+    }])).resolves.toEqual([true])
+    expect(calls).toEqual(['script', 'spend', 'digest'])
+  })
+
+  it('serializes a shared transaction once for a multi-input Spend batch', async () => {
+    const tx = await buildTx(2)
+    const spends = [spendForInput(tx, 0), spendForInput(tx, 1)]
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifySpendBatchArray = () => Int32Array.from([0, 0, 0, 0])
+    const verifier = new BdkVerifier(
+      async () => module,
+      { registerAsDefault: false }
+    )
+    const serialize = jest.spyOn(Spend.prototype, 'toTransactionUint8Array')
+
+    await expect(verifier.verifySpendsBatch(
+      spends.map(spend => ({ spend, consensus: true }))
+    )).resolves.toEqual([true, true])
+    expect(serialize).toHaveBeenCalledTimes(1)
+    serialize.mockRestore()
+  })
+
   it('validates a Spend directly and through Spend.validateWith', async () => {
     const tx = await buildTx()
     const input = tx.inputs[0]
@@ -457,6 +520,7 @@ describe('BdkVerifier', () => {
     const spend = spendForInput(tx)
     const module = makeMockModule({ domain: 0, code: 0 }, [])
     let calls = 0
+    const consensusValues: boolean[] = []
     module.VerifySpendArray = (transaction, inputIndex, lockingScript, sourceSatoshis, utxoHeight, blockHeight, consensus, hasFlags, flags, network) => {
       calls++
       expect(transaction).toEqual(tx.toUint8Array())
@@ -465,16 +529,17 @@ describe('BdkVerifier', () => {
       expect(sourceSatoshis).toBe(sourceOutput.satoshis)
       expect(utxoHeight).toBe(943816)
       expect(blockHeight).toBe(943816)
-      expect(consensus).toBe(false)
+      consensusValues.push(consensus)
       expect(hasFlags).toBe(false)
       expect(flags).toBe(0)
       expect(network).toBe(0)
       return { domain: 0, code: 0 }
     }
     const verifier = new BdkVerifier(async () => module)
-    await expect(verifier.verifySpend(spend)).resolves.toBe(true)
-    await expect(spend.validateWith(verifier)).resolves.toBe(true)
+    await expect(verifier.verifySpend(spend, { consensus: false })).resolves.toBe(true)
+    await expect(spend.validateWith(verifier, { consensus: true })).resolves.toBe(true)
     expect(calls).toBe(2)
+    expect(consensusValues).toEqual([false, true])
   })
 
   it('rejects unsafe source satoshi values consistently before packing', async () => {

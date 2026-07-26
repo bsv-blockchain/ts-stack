@@ -2188,8 +2188,13 @@ A Wallet Wire is an abstraction over a raw transport medium where binary data ca
 ```ts
 export default interface WalletWire {
     transmitToWallet: (message: number[]) => Promise<number[]>;
+    transmitToWalletUint8Array?: (message: Uint8Array) => Promise<Uint8Array>;
 }
 ```
+
+`transmitToWalletUint8Array` is an optional compact-byte lane for large frames.
+The required `number[]` method and all wallet protocol contracts remain
+unchanged.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2626,6 +2631,7 @@ export default class HTTPWalletWire implements WalletWire {
     originator: string | undefined;
     constructor(originator: string | undefined, baseUrl: string = "http://localhost:3301", httpClient = fetch) 
     async transmitToWallet(message: number[]): Promise<number[]> 
+    async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array>
 }
 ```
 
@@ -3210,6 +3216,7 @@ export default class WalletWireProcessor implements WalletWire {
     wallet: WalletInterface;
     constructor(wallet: WalletInterface) 
     async transmitToWallet(message: number[]): Promise<number[]> 
+    async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array>
 }
 ```
 

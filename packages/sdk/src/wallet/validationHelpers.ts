@@ -328,6 +328,9 @@ function validateOptionalHexString (
   return validateHexString(s, name, min, max)
 }
 
+const normalizedHexRegex = /^[0-9a-f]+$/
+const hexRegex = /^[0-9A-Fa-f]+$/
+
 /**
  * Validate a hex string (even length, hex chars) and optional length bounds (character count).
  *
@@ -338,13 +341,13 @@ function validateOptionalHexString (
  * @returns
  */
 function validateHexString (s: string, name: string, min?: number, max?: number): string {
-  s = s.trim().toLowerCase()
+  s = s.trim()
   if (s.length % 2 === 1) throw new WERR_INVALID_PARAMETER(name, `even length, not ${s.length}.`)
-  const hexRegex = /^[0-9A-Fa-f]+$/
-  if (!hexRegex.test(s)) throw new WERR_INVALID_PARAMETER(name, 'hexadecimal string.')
+  const isNormalized = normalizedHexRegex.test(s)
+  if (!isNormalized && !hexRegex.test(s)) throw new WERR_INVALID_PARAMETER(name, 'hexadecimal string.')
   if (min !== undefined && s.length < min) throw new WERR_INVALID_PARAMETER(name, `at least ${min} length.`)
   if (max !== undefined && s.length > max) throw new WERR_INVALID_PARAMETER(name, `no more than ${max} length.`)
-  return s
+  return isNormalized ? s : s.toLowerCase()
 }
 
 /**
@@ -356,7 +359,6 @@ function validateHexString (s: string, name: string, min?: number, max?: number)
 export function isHexString (s: string): boolean {
   s = s.trim()
   if (s.length % 2 === 1) return false
-  const hexRegex = /^[0-9A-Fa-f]+$/
   if (!hexRegex.test(s)) return false
   return true
 }

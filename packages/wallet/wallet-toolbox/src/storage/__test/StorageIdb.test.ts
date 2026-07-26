@@ -112,7 +112,9 @@ describe('StorageIdb tests', () => {
         created_at: now,
         updated_at: now
       })
-      expect((await storage.findActionBatchBlobRecord(first.actionBatchId, '07'.repeat(32)))?.bytes).toEqual([1, 2, 3])
+      const storedBlob = await storage.findActionBatchBlobRecord(first.actionBatchId, '07'.repeat(32))
+      expect(storedBlob?.bytes).toBeInstanceOf(Uint8Array)
+      expect(Array.from(storedBlob?.bytes ?? [])).toEqual([1, 2, 3])
     } finally {
       await resetStorage(storage)
     }

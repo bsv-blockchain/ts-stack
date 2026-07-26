@@ -838,6 +838,7 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
     feeModel: StorageFeeModel;
     commissionSatoshis: number;
     commissionPubKeyHex?: PubKeyHex;
+    scriptVerifier?: SpendVerifierInterface;
 }
 ```
 
@@ -860,6 +861,15 @@ A value of zero disables commission fees.
 
 ```ts
 commissionSatoshis: number
+```
+
+###### Property scriptVerifier
+
+Optional verifier for server-side action-batch script checks. This Wallet
+Toolbox extension leaves the BRC-100 interface unchanged.
+
+```ts
+scriptVerifier?: SpendVerifierInterface
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

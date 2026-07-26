@@ -2,6 +2,7 @@ import type {
   DigestVerification,
   Script,
   Spend,
+  SpendVerificationContext,
   Transaction
 } from '@bsv/sdk'
 
@@ -49,12 +50,7 @@ export interface BdkVerifyFromEFParams {
   customFlags?: readonly number[] | Uint32Array
 }
 
-export interface BdkVerifySpendOptions {
-  utxoHeight?: number
-  blockHeight?: number
-  consensus?: boolean
-  verifyFlags?: string | string[]
-}
+export type BdkVerifySpendOptions = Partial<SpendVerificationContext>
 
 export interface BdkSpendBatchItem extends BdkVerifySpendOptions {
   spend: Spend
@@ -80,6 +76,10 @@ export interface BdkVerifierOptions {
   /** Script byte length above which auto mode selects WASM. Defaults to 100. */
   scriptByteThreshold?: number
   maxBatchItems?: number
+  /**
+   * Soft aggregate packing target. An individual item larger than this target
+   * is processed alone and is never rejected solely because of its size.
+   */
   maxBatchBytes?: number
   /** Worker count for explicitly large batches. Defaults conservatively from logical cores. */
   batchWorkers?: number

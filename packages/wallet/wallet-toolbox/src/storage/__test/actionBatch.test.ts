@@ -2,7 +2,6 @@ import { Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { cleanupExpiredActionBatches } from '../methods/actionBatch'
 import {
-  ACTION_BATCH_MAX_CHUNKS_PER_BLOB,
   ACTION_BATCH_MAX_INLINE_BYTES
 } from '../methods/actionBatchBlobs'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
@@ -32,7 +31,10 @@ describe('action batch reservations', () => {
   })
 
   test('capability is advertised and concurrent batches reserve disjoint outputs', async () => {
-    expect((await ctx.storage.getCapabilities()).actionBatch?.version).toBe(1)
+    expect((await ctx.storage.getCapabilities()).actionBatch).toMatchObject({
+      version: 1,
+      compactBegin: true
+    })
     const first = await ctx.storage.beginActionBatch({ batchId: 'reservation-a', firstAction: firstAction() })
     const second = await ctx.storage.beginActionBatch({ batchId: 'reservation-b', firstAction: firstAction() })
     const firstIds = new Set(first.reservedOutputs.map(output => output.outputId))
@@ -42,6 +44,33 @@ describe('action batch reservations', () => {
     expect(second.reservedOutputs.length).toBeLessThanOrEqual(4)
     await ctx.storage.abortActionBatch(first.batchId)
     await ctx.storage.abortActionBatch(second.batchId)
+  })
+
+  test('compact begin accepts deferred external proofs and exact script lengths', async () => {
+    const action = firstAction()
+    action.inputs.push({
+      outpoint: { txid: '33'.repeat(32), vout: 0 },
+      inputDescription: 'deferred external source',
+      sequenceNumber: 0xffffffff,
+      unlockingScriptLength: 1
+    })
+    action.outputs[0].lockingScript = ''
+
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'compact-bootstrap',
+      firstAction: action,
+      firstActionOutputScriptLengths: [ACTION_BATCH_MAX_INLINE_BYTES * 4]
+    })
+    expect(begun.batchId).toBe('compact-bootstrap')
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('compact begin validates its output length summary', async () => {
+    await expect(ctx.storage.beginActionBatch({
+      batchId: 'invalid-compact-bootstrap',
+      firstAction: firstAction(),
+      firstActionOutputScriptLengths: [2]
+    })).rejects.toThrow('firstActionOutputScriptLengths')
   })
 
   test('legacy noSendChange cannot consume an output reserved by another workspace', async () => {
@@ -200,15 +229,17 @@ describe('action batch reservations', () => {
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest, bytes })
     const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
-    expect((await ctx.activeStorage.findActionBatchBlobRecord(batch!.actionBatchId, digest))?.bytes).toEqual(bytes)
+    const storedBlob = await ctx.activeStorage.findActionBatchBlobRecord(batch!.actionBatchId, digest)
+    expect(storedBlob?.bytes).toBeInstanceOf(Uint8Array)
+    expect(Array.from(storedBlob?.bytes ?? [])).toEqual(bytes)
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 
-  test('commit rejects an excessive logical blob chunk list before assembly', async () => {
-    const begun = await ctx.storage.beginActionBatch({ batchId: 'excessive-chunks', firstAction: firstAction() })
+  test('logical blobs may span more than the former 64-chunk ceiling', async () => {
+    const begun = await ctx.storage.beginActionBatch({ batchId: 'many-chunks', firstAction: firstAction() })
     const chunk = [7]
     const chunkDigest = actionBatchBlobDigest(chunk)
-    const chunks = Array(ACTION_BATCH_MAX_CHUNKS_PER_BLOB + 1).fill(chunkDigest)
+    const chunks = Array(65).fill(chunkDigest)
     const dependencyBeefDigest = actionBatchBlobDigest(chunks.map(() => chunk[0]))
     const withoutDigest = {
       batchId: begun.batchId,
@@ -223,7 +254,7 @@ describe('action batch reservations', () => {
     await ctx.storage.prepareActionBatchCommit(manifest)
     await ctx.storage.putActionBatchBlob({ batchId: begun.batchId, digest: chunkDigest, bytes: chunk })
     await expect(ctx.storage.commitActionBatch(manifest))
-      .rejects.toThrow(`at most ${ACTION_BATCH_MAX_CHUNKS_PER_BLOB} blob chunks`)
+      .rejects.toThrow('at least one signed action')
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 

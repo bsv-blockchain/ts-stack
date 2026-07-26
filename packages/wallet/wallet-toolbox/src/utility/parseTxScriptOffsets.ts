@@ -5,8 +5,8 @@ export interface TxScriptOffsets {
   outputs: Array<{ vout: number, offset: number, length: number }>
 }
 
-export function parseTxScriptOffsets (rawTx: number[]): TxScriptOffsets {
-  const br = new SdkUtils.Reader(rawTx)
+export function parseTxScriptOffsets (rawTx: number[] | Uint8Array): TxScriptOffsets {
+  const br = SdkUtils.ReaderUint8Array.makeReader(rawTx)
   const inputs: Array<{ vin: number, offset: number, length: number }> = []
   const outputs: Array<{ vout: number, offset: number, length: number }> = []
 

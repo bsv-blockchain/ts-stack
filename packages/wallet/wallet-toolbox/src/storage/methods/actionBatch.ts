@@ -24,12 +24,13 @@ import { verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest
 import { validateStorageFeeModel } from '../StorageProvider'
 import type { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
-import { TableActionBatch, TableActionBatchOutput } from '../schema/tables/TableActionBatch'
+import { TableActionBatch } from '../schema/tables/TableActionBatch'
 import { TableCommission } from '../schema/tables/TableCommission'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableTransaction } from '../schema/tables/TableTransaction'
+import { TableTxLabel } from '../schema/tables/TableTxLabel'
 import { isAutoSpendableChangeOutput } from './managedChange'
 import { parseTxScriptOffsets } from '../../utility/parseTxScriptOffsets'
 import { shareReqsWithWorld } from './processAction'
@@ -58,7 +59,8 @@ export function getActionBatchCapabilities (): StorageCapabilities {
       maxBlobBytes: ACTION_BATCH_MAX_BLOB_BYTES,
       maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
       leaseMs: ACTION_BATCH_LEASE_MS,
-      hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS
+      hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS,
+      compactBegin: true
     }
   }
 }
@@ -131,7 +133,8 @@ function sourceOutputFromBeef (
 async function resolveExplicitOutputs (
   storage: StorageProvider,
   userId: number,
-  args: Validation.ValidCreateActionArgs
+  args: Validation.ValidCreateActionArgs,
+  allowDeferredProofs: boolean
 ): Promise<{ outputs: TableOutput[], inputSatoshis: number }> {
   const byOutpoint = await storage.findOutputsByOutpoints(userId, args.inputs.map(input => input.outpoint))
   const beef = args.inputBEEF == null ? new Beef() : Beef.fromBinary(args.inputBEEF)
@@ -147,6 +150,7 @@ async function resolveExplicitOutputs (
     }
     const source = sourceOutputFromBeef(beef, input.outpoint)
     if (source == null) {
+      if (allowDeferredProofs) continue
       throw new WERR_INVALID_PARAMETER('inputBEEF', `proof data for ${input.outpoint.txid}.${input.outpoint.vout}`)
     }
     inputSatoshis += source.satoshis
@@ -179,11 +183,12 @@ async function resolveNoSendChangeOutputs (
 function estimateFirstActionTarget (
   storage: StorageProvider,
   args: Validation.ValidCreateActionArgs,
-  inputSatoshis: number
+  inputSatoshis: number,
+  outputScriptLengths?: number[]
 ): number {
   const outputSatoshis = args.outputs.reduce((sum, output) => sum + output.satoshis, 0) + storage.commissionSatoshis
   const inputLengths = args.inputs.map(input => input.unlockingScriptLength)
-  const outputLengths = args.outputs.map(output => output.lockingScript.length / 2)
+  const outputLengths = outputScriptLengths ?? args.outputs.map(output => output.lockingScript.length / 2)
   if (storage.commissionSatoshis > 0) outputLengths.push(25)
   outputLengths.push(25)
   const fee = validateStorageFeeModel(storage.feeModel).value ?? 0
@@ -335,15 +340,37 @@ export async function beginActionBatch (
   if (await storage.findActionBatch(userId, args.batchId) != null) {
     throw new WERR_INVALID_PARAMETER('batchId', 'unique')
   }
+  const outputScriptLengths = args.firstActionOutputScriptLengths
+  if (outputScriptLengths != null && (
+    outputScriptLengths.length !== args.firstAction.outputs.length ||
+    outputScriptLengths.some(length => !Number.isSafeInteger(length) || length < 0) ||
+    args.firstAction.outputs.some((output, index) =>
+      output.lockingScript.length > 0 &&
+      output.lockingScript.length / 2 !== outputScriptLengths[index]
+    )
+  )) {
+    throw new WERR_INVALID_PARAMETER(
+      'firstActionOutputScriptLengths',
+      'valid byte lengths aligned with firstAction outputs'
+    )
+  }
   const changeBasket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
-  const explicit = await resolveExplicitOutputs(storage, userId, args.firstAction)
+  const explicit = await resolveExplicitOutputs(
+    storage,
+    userId,
+    args.firstAction,
+    outputScriptLengths != null
+  )
   const noSendChange = await resolveNoSendChangeOutputs(storage, userId, args.firstAction)
   const fixedOutputIds = new Set([...explicit.outputs, ...noSendChange.outputs].map(output => output.outputId))
   const available = (await availableManagedChange(
     storage, userId, changeBasket.basketId, !args.firstAction.isDelayed
   )).filter(output => !fixedOutputIds.has(output.outputId))
   const target = estimateFirstActionTarget(
-    storage, args.firstAction, explicit.inputSatoshis + noSendChange.inputSatoshis
+    storage,
+    args.firstAction,
+    explicit.inputSatoshis + noSendChange.inputSatoshis,
+    outputScriptLengths
   )
   const fixedOutputs = [...explicit.outputs, ...noSendChange.outputs]
   const requiredCapacity = Math.max(0, INITIAL_RESERVATION_LIMIT - fixedOutputs.length)
@@ -525,13 +552,14 @@ function transactionStatuses (action: ActionBatchCommitAction): { tx: Transactio
 
 async function persistLabels (
   storage: StorageProvider,
-  userId: number,
   transactionId: number,
   labels: string[],
+  labelsByName: ReadonlyMap<string, TableTxLabel>,
   trx: TrxToken
 ): Promise<void> {
   for (const label of new Set(labels)) {
-    const row = await storage.findOrInsertTxLabel(userId, label, trx)
+    const row = labelsByName.get(label)
+    if (row == null) throw new WERR_INTERNAL(`missing preloaded transaction label ${label}`)
     await storage.findOrInsertTxLabelMap(transactionId, verifyId(row.txLabelId), trx)
   }
 }
@@ -541,14 +569,11 @@ async function persistOutputs (
   userId: number,
   transactionId: number,
   validated: ValidatedBatchAction,
+  baskets: Record<string, TableOutputBasket>,
+  tags: Record<string, TableOutputTag>,
   trx: TrxToken
 ): Promise<TableOutput[]> {
   const { action, tx, rawTx } = validated
-  const basketNames = [...new Set(action.plan.outputs.map(output => output.basket).filter((name): name is string => name != null))]
-  if (action.plan.outputs.some(output => output.purpose === 'change')) basketNames.push('default')
-  const baskets = await storage.findOrInsertOutputBasketsBulk(userId, [...new Set(basketNames)], trx)
-  const tagNames = [...new Set(action.plan.outputs.flatMap(output => output.tags))]
-  const tags = await storage.findOrInsertOutputTagsBulk(userId, tagNames, trx)
   const offsets = parseTxScriptOffsets(rawTx)
   const rows: TableOutput[] = []
   for (let index = 0; index < action.plan.outputs.length; index++) {
@@ -612,7 +637,11 @@ async function persistAction (
   userId: number,
   validated: ValidatedBatchAction,
   reservedOutputIds: Set<number>,
+  storedByOutpoint: Readonly<Record<string, TableOutput>>,
   stagedByOutpoint: Map<string, TableOutput>,
+  labelsByName: ReadonlyMap<string, TableTxLabel>,
+  baskets: Record<string, TableOutputBasket>,
+  tags: Record<string, TableOutputTag>,
   trx: TrxToken
 ): Promise<void> {
   const { action, tx, rawTx } = validated
@@ -639,12 +668,12 @@ async function persistAction (
     updated_at: now
   }
   transaction.transactionId = await storage.insertTransaction(transaction, trx)
-  await persistLabels(storage, userId, transaction.transactionId, action.metadata.labels, trx)
+  await persistLabels(storage, transaction.transactionId, action.metadata.labels, labelsByName, trx)
 
   for (const input of action.plan.inputs) {
     const outpoint = `${input.sourceTxid}.${input.sourceVout}`
     let output = stagedByOutpoint.get(outpoint)
-    output ??= (await storage.findOutputsByOutpoints(userId, [{ txid: input.sourceTxid, vout: input.sourceVout }], trx))[outpoint]
+    output ??= storedByOutpoint[outpoint]
     if (output == null) continue
     if (output.spentBy != null || !output.spendable) throw new WERR_INVALID_OPERATION(`input ${outpoint} is no longer spendable`)
     if (!stagedByOutpoint.has(outpoint) && !reservedOutputIds.has(output.outputId)) {
@@ -659,10 +688,22 @@ async function persistAction (
     output.spentBy = transaction.transactionId
   }
 
-  const outputRows = await persistOutputs(storage, userId, transaction.transactionId, validated, trx)
+  const outputRows = await persistOutputs(
+    storage,
+    userId,
+    transaction.transactionId,
+    validated,
+    baskets,
+    tags,
+    trx
+  )
   for (const output of outputRows) stagedByOutpoint.set(`${action.txid}.${output.vout}`, output)
 
-  const req = EntityProvenTxReq.fromTxid(action.txid, rawTx, validated.inputBeef)
+  const req = EntityProvenTxReq.fromTxid(
+    action.txid,
+    Array.from(rawTx),
+    Array.from(validated.inputBeef)
+  )
   req.status = statuses.req
   req.addNotifyTransactionId(transaction.transactionId)
   await req.insertOrMerge(storage, trx)
@@ -673,7 +714,7 @@ async function persistManifestAtomically (
   userId: number,
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
-  validated: { actions: ValidatedBatchAction[], dependencyBeef: number[] }
+  validated: { actions: ValidatedBatchAction[], dependencyBeef: Uint8Array }
 ): Promise<{ batch: TableActionBatch, alreadyCommitted: boolean }> {
   return await storage.transaction(async trx => {
     const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
@@ -698,9 +739,55 @@ async function persistManifestAtomically (
       requireLiveBatch(current)
     }
     const reservedOutputIds = new Set(await storage.findActionBatchOutputIds(current.actionBatchId, trx))
+    const stagedTxids = new Set(validated.actions.map(({ action }) => action.txid))
+    const inputOutpoints = [...new Map(validated.actions.flatMap(({ action }) => action.plan.inputs)
+      .filter(input => !stagedTxids.has(input.sourceTxid))
+      .map(input => [`${input.sourceTxid}.${input.sourceVout}`, {
+        txid: input.sourceTxid,
+        vout: input.sourceVout
+      }])).values()]
+    const storedByOutpoint = await storage.findOutputsByOutpointsForUpdate(
+      userId,
+      inputOutpoints,
+      trx
+    )
+    const allBasketNames = validated.actions.flatMap(({ action }) =>
+      action.plan.outputs.flatMap(output => output.basket == null ? [] : [output.basket])
+    )
+    if (validated.actions.some(({ action }) =>
+      action.plan.outputs.some(output => output.purpose === 'change')
+    )) allBasketNames.push('default')
+    const baskets = await storage.findOrInsertOutputBasketsBulk(
+      userId,
+      [...new Set(allBasketNames)],
+      trx
+    )
+    const tags = await storage.findOrInsertOutputTagsBulk(
+      userId,
+      [...new Set(validated.actions.flatMap(({ action }) =>
+        action.plan.outputs.flatMap(output => output.tags)
+      ))],
+      trx
+    )
+    const labelsByName = new Map<string, TableTxLabel>()
+    const labelNames = [...new Set(validated.actions.flatMap(({ action }) => action.metadata.labels))]
+    for (const label of labelNames) {
+      labelsByName.set(label, await storage.findOrInsertTxLabel(userId, label, trx))
+    }
     const stagedByOutpoint = new Map<string, TableOutput>()
     for (const action of validated.actions) {
-      await persistAction(storage, userId, action, reservedOutputIds, stagedByOutpoint, trx)
+      await persistAction(
+        storage,
+        userId,
+        action,
+        reservedOutputIds,
+        storedByOutpoint,
+        stagedByOutpoint,
+        labelsByName,
+        baskets,
+        tags,
+        trx
+      )
     }
     await storage.deleteActionBatchOutputReservations(current.actionBatchId, trx)
     await storage.deleteActionBatchBlobRecords(current.actionBatchId, trx)

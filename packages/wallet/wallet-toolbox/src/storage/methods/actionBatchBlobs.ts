@@ -7,23 +7,21 @@ import type { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { actionBatchBlobDigest, verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest'
 import { verifyId } from '../../utility/utilityHelpers'
-import { asArray } from '../../utility/utilityHelpers.noBuffer'
+import { asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import type { StorageProvider } from '../StorageProvider'
 import type { TableActionBatch } from '../schema/tables/TableActionBatch'
 
 export const ACTION_BATCH_MAX_BLOB_BYTES = 8 * 1024 * 1024
-export const ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES = 64 * 1024 * 1024
-export const ACTION_BATCH_MAX_CHUNKS_PER_BLOB = 64
 export const ACTION_BATCH_MAX_CONCURRENT_UPLOADS = 4
 export const ACTION_BATCH_MAX_INLINE_BYTES = 4 * 1024 * 1024
 
 export function validateActionBatchInlinePayload (manifest: ActionBatchManifest): void {
-  let totalBytes = manifest.dependencyBeef == null ? 0 : asArray(manifest.dependencyBeef).length
+  let totalBytes = manifest.dependencyBeef == null ? 0 : manifest.dependencyBeef.length
   const inlineBlobs = Object.entries(manifest.inlineBlobs ?? {})
-    .map(([digest, value]) => ({ digest, bytes: asArray(value) }))
+    .map(([digest, value]) => ({ digest, bytes: asUint8Array(value) }))
   totalBytes += inlineBlobs.reduce((sum, blob) => sum + blob.bytes.length, 0)
   for (const action of manifest.actions) {
-    if (action.rawTx != null) totalBytes += asArray(action.rawTx).length
+    if (action.rawTx != null) totalBytes += action.rawTx.length
     if (action.lockingScriptDigests == null) {
       totalBytes += action.plan.outputs.reduce((sum, output) => sum + output.lockingScript.length / 2, 0)
     }
@@ -106,7 +104,7 @@ export async function putActionBatchBlob (
   args: PutActionBatchBlobArgs
 ): Promise<void> {
   const userId = verifyId(auth.userId)
-  const bytes = asArray(args.bytes)
+  const bytes = asUint8Array(args.bytes)
   if (bytes.length > ACTION_BATCH_MAX_BLOB_BYTES) throw new WERR_INVALID_PARAMETER('bytes', 'within provider blob limit')
   if (actionBatchBlobDigest(bytes) !== args.digest) throw new WERR_INVALID_PARAMETER('digest', 'match bytes')
   await storage.transaction(async trx => {

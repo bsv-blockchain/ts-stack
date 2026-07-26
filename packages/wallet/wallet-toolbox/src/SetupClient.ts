@@ -14,6 +14,7 @@ import {
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
+import type { SpendVerifierInterface } from '@bsv/sdk'
 import { KeyPairAddress, SetupClientWalletArgs, SetupWallet, SetupWalletClient } from './SetupWallet'
 import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { StorageIdb } from './storage/StorageIdb'
@@ -62,7 +63,8 @@ export abstract class SetupClient {
       storage,
       services,
       monitor,
-      privilegedKeyManager
+      privilegedKeyManager,
+      scriptVerifier: args.scriptVerifier
     })
     const r: SetupWallet = {
       rootKey,
@@ -90,6 +92,7 @@ export abstract class SetupClient {
     rootKeyHex: string
     storageUrl?: string
     privilegedKeyGetter?: () => Promise<PrivateKey>
+    scriptVerifier?: SpendVerifierInterface
   }): Promise<Wallet> {
     const chain = args.chain
     const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
@@ -105,7 +108,8 @@ export abstract class SetupClient {
       keyDeriver,
       storage,
       services,
-      privilegedKeyManager
+      privilegedKeyManager,
+      scriptVerifier: args.scriptVerifier
     })
     const client = new StorageClient(wallet, endpointUrl)
     await storage.addWalletStorageProvider(client)
@@ -282,7 +286,8 @@ export abstract class SetupClient {
       chain: args.chain,
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
-      feeModel: { model: 'sat/kb', value: 100 }
+      feeModel: { model: 'sat/kb', value: 100 },
+      scriptVerifier: args.scriptVerifier
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
     await storage.makeAvailable()

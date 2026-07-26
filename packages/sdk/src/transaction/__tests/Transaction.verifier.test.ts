@@ -65,7 +65,7 @@ describe('Transaction.verify with a pluggable verifier', () => {
     expect(shouldVerifyScripts).toHaveBeenCalledWith({
       tx,
       blockHeight: 943816,
-      consensus: false
+      consensus: true
     })
     expect(verifyScripts).not.toHaveBeenCalled()
   })
@@ -99,7 +99,7 @@ describe('Transaction.verify with a pluggable verifier', () => {
     expect(capableVerifier.verifyScripts).toHaveBeenCalledWith({
       tx,
       blockHeight: 943816,
-      consensus: false,
+      consensus: true,
       memoryLimit: 1024
     })
   })
