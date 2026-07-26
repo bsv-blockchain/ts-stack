@@ -8,7 +8,7 @@ interface HttpPortEnvironment {
 
 function parsePort(value: string | undefined, name: string): number | undefined {
   if (value == null || value.trim() === '') return undefined
-  if (!/^[0-9]+$/.test(value.trim())) {
+  if (!/^\d+$/.test(value.trim())) {
     throw new Error(`${name} must be an integer between 1 and ${MAX_TCP_PORT}.`)
   }
   const parsed = Number(value)

@@ -154,6 +154,29 @@ describe('PeerPayClient Unit Tests', () => {
         undefined
       )
     })
+
+    it('falls back to HTTP when live delivery fails', async () => {
+      jest.spyOn(peerPayClient, 'createPaymentToken').mockResolvedValue({
+        customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+        transaction: [1, 2, 3],
+        amount: 2
+      })
+      jest.spyOn(peerPayClient, 'sendLiveMessage').mockRejectedValue(new Error('socket failed'))
+      const send = jest.spyOn(peerPayClient, 'sendMessage').mockResolvedValue({
+        status: 'success',
+        messageId: 'http-message'
+      })
+
+      await peerPayClient.sendLivePayment(
+        { recipient: 'recipientKey', amount: 2 },
+        'https://override.example'
+      )
+
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({ recipient: 'recipientKey', messageBox: 'payment_inbox' }),
+        'https://override.example'
+      )
+    })
   })
 
   // Test: acceptPayment
@@ -207,6 +230,73 @@ describe('PeerPayClient Unit Tests', () => {
         messageIds: ['123']
       })
     })
+
+    it('acknowledges a payment that is too small to refund', async () => {
+      const acknowledge = jest.spyOn(peerPayClient, 'acknowledgeMessage').mockResolvedValue('ok')
+      ;(peerPayClient as any).authFetch = undefined
+      await peerPayClient.rejectPayment({
+        messageId: 'small',
+        sender: 'senderKey',
+        token: {
+          customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+          transaction: [1, 2, 3],
+          amount: 1500
+        }
+      })
+      expect(acknowledge).toHaveBeenCalledWith({ messageIds: ['small'] })
+    })
+
+    it('tolerates a 401 while acknowledging a payment that is too small to refund', async () => {
+      jest
+        .spyOn(peerPayClient, 'acknowledgeMessage')
+        .mockRejectedValue(new Error('HTTP 401 unauthorized'))
+
+      await expect(
+        peerPayClient.rejectPayment({
+          messageId: 'small',
+          sender: 'senderKey',
+          token: {
+            customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+            transaction: [1, 2, 3],
+            amount: 1500
+          }
+        })
+      ).resolves.toBeUndefined()
+    })
+
+    it('rethrows a non-authentication acknowledgement failure for a small payment', async () => {
+      jest.spyOn(peerPayClient, 'acknowledgeMessage').mockRejectedValue(new Error('network failed'))
+
+      await expect(
+        peerPayClient.rejectPayment({
+          messageId: 'small',
+          sender: 'senderKey',
+          token: {
+            customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+            transaction: [1, 2, 3],
+            amount: 1500
+          }
+        })
+      ).rejects.toThrow('network failed')
+    })
+
+    it('does not fail a completed refund when the final acknowledgement fails', async () => {
+      jest.spyOn(peerPayClient, 'acceptPayment').mockResolvedValue(undefined)
+      jest.spyOn(peerPayClient, 'sendPayment').mockResolvedValue(undefined)
+      jest.spyOn(peerPayClient, 'acknowledgeMessage').mockRejectedValue(new Error('offline'))
+
+      await expect(
+        peerPayClient.rejectPayment({
+          messageId: 'large',
+          sender: 'senderKey',
+          token: {
+            customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
+            transaction: [1, 2, 3],
+            amount: 3000
+          }
+        })
+      ).resolves.toBeUndefined()
+    })
   })
 
   // Test: listIncomingPayments
@@ -234,6 +324,13 @@ describe('PeerPayClient Unit Tests', () => {
             transaction: toArray('mockedTransaction2', 'utf8'),
             amount: 9
           })
+        },
+        {
+          messageId: 'invalid',
+          sender: 'sender3',
+          created_at: '2025-03-05T12:20:00Z',
+          updated_at: '2025-03-05T12:25:00Z',
+          body: '{'
         }
       ])
 
@@ -473,6 +570,28 @@ describe('PeerPayClient Unit Tests', () => {
       // The request should NOT be cancelled because the cancel came from a different sender
       expect(requests).toHaveLength(1)
       expect(requests[0].requestId).toBe('req-1')
+    })
+
+    it('discards a cancellation whose HMAC proof is invalid', async () => {
+      mockWalletClient.verifyHmac.mockRejectedValueOnce(new Error('invalid proof'))
+      jest.spyOn(peerPayClient, 'listMessages').mockResolvedValue([
+        {
+          messageId: 'invalid-cancel',
+          sender: 'sender1',
+          created_at: '2025-01-01T00:00:00Z',
+          updated_at: '2025-01-01T00:00:00Z',
+          body: JSON.stringify({
+            requestId: 'req-1',
+            senderIdentityKey: 'sender1',
+            cancelled: true,
+            requestProof: 'abcd1234'
+          })
+        }
+      ])
+      const acknowledge = jest.spyOn(peerPayClient, 'acknowledgeMessage').mockResolvedValue('ok')
+
+      await expect(peerPayClient.listIncomingPaymentRequests()).resolves.toEqual([])
+      expect(acknowledge).toHaveBeenCalledWith({ messageIds: ['invalid-cancel'] })
     })
 
     it('filters out requests below minAmount and above maxAmount, acknowledges them', async () => {
@@ -837,6 +956,20 @@ describe('PeerPayClient Unit Tests', () => {
         })
       ).rejects.toThrow()
     })
+
+    it('translates a permission-denied response into a whitelist error', async () => {
+      jest.spyOn(peerPayClient, 'getIdentityKey').mockResolvedValue('myIdentityKey')
+      jest.spyOn(peerPayClient, 'sendMessage').mockRejectedValue(new Error('HTTP 403 Forbidden'))
+
+      await expect(
+        peerPayClient.requestPayment({
+          recipient: 'recipientKey',
+          amount: 1000,
+          description: 'Please pay me',
+          expiresAt: Date.now() + 60_000
+        })
+      ).rejects.toThrow("not on the recipient's whitelist")
+    })
   })
 
   // Test: cancelPaymentRequest
@@ -870,5 +1003,13 @@ describe('PeerPayClient Unit Tests', () => {
         cancelled: true
       })
     })
+  })
+
+  it('lazily creates and then reuses its dedicated AuthFetch instance', () => {
+    const defaultHostClient = new PeerPayClient({ walletClient: mockWalletClient })
+    const first = (peerPayClient as any).authFetchInstance
+    const second = (peerPayClient as any).authFetchInstance
+    expect(first).toBe(second)
+    expect(defaultHostClient).toBeInstanceOf(PeerPayClient)
   })
 })

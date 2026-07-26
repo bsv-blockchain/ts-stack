@@ -32,7 +32,7 @@ export default {
   modulePathIgnorePatterns: ['<rootDir>/out/'],
 
   // Important for ES modules
-  transformIgnorePatterns: ['/node_modules/(?!.*\\.mjs$)'],
+  transformIgnorePatterns: [String.raw`/node_modules/(?!.*\.mjs$)`],
 
   // Use .mjs extension for Jest config to indicate ESM
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs']

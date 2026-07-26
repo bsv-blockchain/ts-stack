@@ -99,6 +99,63 @@ function buildBatchSendResult(
   }
 }
 
+function assertBatchSendParams(params: SendListParams): void {
+  if (!Array.isArray(params.recipients) || params.recipients.length === 0) {
+    throw new Error('You must provide at least one recipient!')
+  }
+  if (params.recipients.length > 100) {
+    throw new Error('A batch may include at most 100 recipients.')
+  }
+  if (!params.messageBox || params.messageBox.trim() === '') {
+    throw new Error('You must provide a messageBox to send this message into!')
+  }
+  if (params.body == null || (typeof params.body === 'string' && params.body.trim().length === 0)) {
+    throw new Error('Every message must have a body!')
+  }
+  if (params.skipEncryption !== true) {
+    throw new Error(
+      'A shared multi-recipient batch cannot be encrypted per recipient. ' +
+        'Set skipEncryption: true explicitly or send encrypted messages individually.'
+    )
+  }
+}
+
+function buildRecipientQuoteMap(
+  quotes: MessageBoxMultiQuote['quotesByRecipient']
+): Map<string, { recipientFee: number; deliveryFee: number }> {
+  return new Map(
+    quotes.map(quote => [
+      quote.recipient,
+      {
+        recipientFee: quote.recipientFee,
+        deliveryFee: quote.deliveryFee
+      }
+    ])
+  )
+}
+
+function selectDeliveryAgentIdentityKey(
+  identityKeysByHost: Record<string, string> | undefined,
+  finalHost: string,
+  hasOverrideHost: boolean
+): string {
+  const entries = Object.entries(identityKeysByHost ?? {})
+  if (entries.length === 0) {
+    throw new Error('Missing delivery agent identity keys in quote response.')
+  }
+  if (entries.length > 1 && !hasOverrideHost) {
+    throw new Error(
+      'Recipients resolve to multiple hosts. Use overrideHost to force a single server or split by host.'
+    )
+  }
+
+  const identityKey = identityKeysByHost?.[finalHost] ?? entries[0][1]
+  if (!identityKey) {
+    throw new Error('Could not determine server delivery agent identity key.')
+  }
+  return identityKey
+}
+
 type MessageBoxRecipientQuote = MessageBoxMultiQuote['quotesByRecipient'][number]
 type MessageBoxQuoteStatus = MessageBoxRecipientQuote['status']
 
@@ -1265,26 +1322,9 @@ export class MessageBoxClient {
     overrideHost?: string
   ): Promise<SendListResult> {
     await this.assertInitialized()
+    assertBatchSendParams(params)
 
     const { recipients, messageBox, body } = params
-    if (!Array.isArray(recipients) || recipients.length === 0) {
-      throw new Error('You must provide at least one recipient!')
-    }
-    if (recipients.length > 100) {
-      throw new Error('A batch may include at most 100 recipients.')
-    }
-    if (!messageBox || messageBox.trim() === '') {
-      throw new Error('You must provide a messageBox to send this message into!')
-    }
-    if (body == null || (typeof body === 'string' && body.trim().length === 0)) {
-      throw new Error('Every message must have a body!')
-    }
-    if (params.skipEncryption !== true) {
-      throw new Error(
-        'A shared multi-recipient batch cannot be encrypted per recipient. ' +
-          'Set skipEncryption: true explicitly or send encrypted messages individually.'
-      )
-    }
 
     // 1) Multi-quote for all recipients
     const quoteResponse = (await this.getMessageBoxQuote(
@@ -1316,39 +1356,20 @@ export class MessageBoxClient {
     }
 
     // 3) Map recipient -> fees
-    const perRecipientQuotes = new Map<string, { recipientFee: number; deliveryFee: number }>()
-    for (const q of quotesByRecipient) {
-      perRecipientQuotes.set(q.recipient, {
-        recipientFee: q.recipientFee,
-        deliveryFee: q.deliveryFee
-      })
-    }
+    const perRecipientQuotes = buildRecipientQuoteMap(quotesByRecipient)
 
     // 4) One delivery agent only (batch goes to one server)
     const { deliveryAgentIdentityKeyByHost } = quoteResponse
-    if (
-      !deliveryAgentIdentityKeyByHost ||
-      Object.keys(deliveryAgentIdentityKeyByHost).length === 0
-    ) {
-      throw new Error('Missing delivery agent identity keys in quote response.')
-    }
-    if (Object.keys(deliveryAgentIdentityKeyByHost).length > 1 && !overrideHost) {
-      // To keep the single-POST invariant, we require all recipients to share a host
-      throw new Error(
-        'Recipients resolve to multiple hosts. Use overrideHost to force a single server or split by host.'
-      )
-    }
 
     // pick the host to POST to
     const finalHost = normalizeMessageBoxHost(
       overrideHost ?? (await this.resolveHostForRecipient(allowedRecipients[0]))
     )
-    const singleDeliveryKey =
-      deliveryAgentIdentityKeyByHost[finalHost] ?? Object.values(deliveryAgentIdentityKeyByHost)[0]
-
-    if (!singleDeliveryKey) {
-      throw new Error('Could not determine server delivery agent identity key.')
-    }
+    const singleDeliveryKey = selectDeliveryAgentIdentityKey(
+      deliveryAgentIdentityKeyByHost,
+      finalHost,
+      overrideHost != null
+    )
 
     // 5) Identity key (sender)
     if (!this.myIdentityKey) {
@@ -1727,9 +1748,7 @@ export class MessageBoxClient {
     host,
     acceptPayments
   }: ListMessagesParams): Promise<PeerMessage[]> {
-    if (typeof acceptPayments !== 'boolean') {
-      acceptPayments = true
-    }
+    const shouldAcceptPayments = acceptPayments !== false
     if (typeof messageBox !== 'string' || messageBox.trim() === '') {
       throw new Error('MessageBox cannot be empty')
     }
@@ -1782,7 +1801,7 @@ export class MessageBoxClient {
 
     const parsed = messages.map(message => this.parseMessageEnvelope(message))
 
-    if (acceptPayments) {
+    if (shouldAcceptPayments) {
       const paymentJobs = parsed.filter(
         p => p.paymentData?.tx != null && p.paymentData.outputs != null
       )
@@ -1895,7 +1914,7 @@ export class MessageBoxClient {
         throw new Error(data.description ?? 'Unknown server error')
       }
       if (!Array.isArray(data.messages)) {
-        throw new Error('Message Box server returned an invalid messages payload')
+        throw new TypeError('Message Box server returned an invalid messages payload')
       }
       messages.push(...(data.messages as PeerMessage[]))
 
@@ -2550,7 +2569,9 @@ export class MessageBoxClient {
     }
 
     if (!Array.isArray(data.permissions)) {
-      throw new Error('Failed to list permissions: server returned an invalid permissions payload')
+      throw new TypeError(
+        'Failed to list permissions: server returned an invalid permissions payload'
+      )
     }
 
     return data.permissions.map((permission: unknown) => {

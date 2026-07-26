@@ -1,7 +1,7 @@
 const MAX_HOST_LENGTH = 2048
 
 function isPrivateIpv4(hostname: string): boolean {
-  const octets = hostname.split('.').map(part => Number(part))
+  const octets = hostname.split('.').map(Number)
   if (
     octets.length !== 4 ||
     octets.some(octet => !Number.isInteger(octet) || octet < 0 || octet > 255)
@@ -82,7 +82,8 @@ export function normalizeMessageBoxHost(host: string): string {
     throw new TypeError('Message Box host must not contain a query or fragment')
   }
 
-  const pathname = url.pathname.replace(/\/+$/, '')
+  let pathname = url.pathname
+  while (pathname.endsWith('/')) pathname = pathname.slice(0, -1)
   return pathname === '' ? url.origin : `${url.origin}${pathname}`
 }
 

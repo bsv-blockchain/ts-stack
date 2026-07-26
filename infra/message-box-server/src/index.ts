@@ -142,7 +142,9 @@ export async function startStandalone(): Promise<void> {
 // the service accepts traffic. A failed prerequisite is a failed process, not
 // a partially healthy server.
 if (NODE_ENV !== 'test') {
-  void startStandalone().catch(async error => {
+  try {
+    await startStandalone()
+  } catch (error) {
     log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
     try {
       await knex.destroy()
@@ -153,7 +155,7 @@ if (NODE_ENV !== 'test') {
       )
     }
     process.exitCode = 1
-  })
+  }
 }
 
 // Composable API for embedding (standalone boot above is unchanged)

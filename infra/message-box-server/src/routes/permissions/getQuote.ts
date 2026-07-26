@@ -15,6 +15,166 @@ export interface GetQuoteRequest extends AuthRequest {
   }
 }
 
+type QuoteStatus = 'blocked' | 'always_allow' | 'payment_required'
+
+interface QuoteValidationError {
+  statusCode: 400 | 401
+  body: {
+    status: 'error'
+    code: string
+    description: string
+  }
+}
+
+interface ValidatedQuoteInput {
+  sender: string
+  recipients: string[]
+  messageBox: string
+}
+
+interface RecipientQuote {
+  recipient: string
+  messageBox: string
+  deliveryFee: number
+  recipientFee: number
+  status: QuoteStatus
+}
+
+function validationError(
+  statusCode: 400 | 401,
+  code: string,
+  description: string
+): QuoteValidationError {
+  return { statusCode, body: { status: 'error', code, description } }
+}
+
+function invalidRecipientIndexes(recipients: string[]): number[] {
+  const invalidIndexes: number[] = []
+  recipients.forEach((recipient, index) => {
+    try {
+      PublicKey.fromString(recipient)
+    } catch {
+      invalidIndexes.push(index)
+    }
+  })
+  return invalidIndexes
+}
+
+function validateQuoteInput(req: GetQuoteRequest): ValidatedQuoteInput | QuoteValidationError {
+  const sender = req.auth?.identityKey
+  if (sender == null) {
+    Logger.log('[DEBUG] Authentication required for message quote')
+    return validationError(401, 'ERR_AUTHENTICATION_REQUIRED', 'Authentication required.')
+  }
+
+  const { recipient, messageBox } = req.query
+  if (recipient == null || messageBox == null) {
+    Logger.log('[DEBUG] Missing required parameters for message quote')
+    return validationError(
+      400,
+      'ERR_MISSING_PARAMETERS',
+      'recipient and messageBox parameters are required.'
+    )
+  }
+  if (
+    typeof messageBox !== 'string' ||
+    messageBox.trim() === '' ||
+    Buffer.byteLength(messageBox, 'utf8') > MAX_MESSAGE_BOX_BYTES
+  ) {
+    return validationError(
+      400,
+      'ERR_INVALID_MESSAGE_BOX',
+      `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
+    )
+  }
+
+  const recipients = Array.isArray(recipient) ? recipient : [recipient]
+  if (recipients.length === 0) {
+    return validationError(400, 'ERR_MISSING_PARAMETERS', 'At least one recipient is required.')
+  }
+  if (recipients.length > MAX_QUOTE_RECIPIENTS) {
+    return validationError(
+      400,
+      'ERR_TOO_MANY_RECIPIENTS',
+      `A quote may include at most ${MAX_QUOTE_RECIPIENTS} recipients.`
+    )
+  }
+
+  const invalidIndexes = invalidRecipientIndexes(recipients)
+  if (invalidIndexes.length > 0) {
+    Logger.log('[DEBUG] Invalid recipient public key format in array')
+    return validationError(
+      400,
+      'ERR_INVALID_PUBLIC_KEY',
+      `Invalid recipient public key at index(es): ${invalidIndexes.join(', ')}.`
+    )
+  }
+
+  return { sender, recipients, messageBox }
+}
+
+function isQuoteValidationError(
+  input: ValidatedQuoteInput | QuoteValidationError
+): input is QuoteValidationError {
+  return 'statusCode' in input
+}
+
+function feeToStatus(fee: number): QuoteStatus {
+  if (fee === -1) return 'blocked'
+  if (fee === 0) return 'always_allow'
+  return 'payment_required'
+}
+
+async function buildMultiRecipientQuote(
+  input: ValidatedQuoteInput,
+  deliveryFee: number
+): Promise<{
+  quotesByRecipient: RecipientQuote[]
+  blockedRecipients: string[]
+  totals: {
+    deliveryFees: number
+    recipientFees: number
+    totalForPayableRecipients: number
+  }
+}> {
+  const quotesByRecipient: RecipientQuote[] = []
+  const blockedRecipients: string[] = []
+  let totalRecipientFees = 0
+
+  for (let offset = 0; offset < input.recipients.length; offset += QUOTE_CONCURRENCY) {
+    const batch = input.recipients.slice(offset, offset + QUOTE_CONCURRENCY)
+    const recipientFees = await Promise.all(
+      batch.map(async recipient => ({
+        recipient,
+        recipientFee: await getRecipientFee(recipient, input.sender, input.messageBox)
+      }))
+    )
+
+    for (const { recipient, recipientFee } of recipientFees) {
+      quotesByRecipient.push({
+        recipient,
+        messageBox: input.messageBox,
+        deliveryFee,
+        recipientFee,
+        status: feeToStatus(recipientFee)
+      })
+      if (recipientFee === -1) blockedRecipients.push(recipient)
+      else totalRecipientFees += recipientFee
+    }
+  }
+
+  const deliveryFees = deliveryFee * input.recipients.length
+  return {
+    quotesByRecipient,
+    blockedRecipients,
+    totals: {
+      deliveryFees,
+      recipientFees: totalRecipientFees,
+      totalForPayableRecipients: deliveryFees + totalRecipientFees
+    }
+  }
+}
+
 /**
  * @swagger
  * /permissions/quote:
@@ -59,84 +219,19 @@ export default {
       Logger.log('[DEBUG] Processing message quote request')
       log.debug({ operation: 'permissions.quote' }, 'Processing message quote request')
 
-      // Validate authentication (the caller is the SENDER)
-      const sender = req.auth?.identityKey
-      if (sender == null) {
-        Logger.log('[DEBUG] Authentication required for message quote')
-        return res.status(401).json({
-          status: 'error',
-          code: 'ERR_AUTHENTICATION_REQUIRED',
-          description: 'Authentication required.'
-        })
-      }
-
-      const { recipient, messageBox } = req.query
-
-      // Required params
-      if (recipient == null || messageBox == null) {
-        Logger.log('[DEBUG] Missing required parameters for message quote')
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_MISSING_PARAMETERS',
-          description: 'recipient and messageBox parameters are required.'
-        })
-      }
-      if (
-        typeof messageBox !== 'string' ||
-        messageBox.trim() === '' ||
-        Buffer.byteLength(messageBox, 'utf8') > MAX_MESSAGE_BOX_BYTES
-      ) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_MESSAGE_BOX',
-          description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
-        })
-      }
-
-      // Normalize recipients to array (preserve order)
-      const recipients: string[] = Array.isArray(recipient) ? recipient : [recipient]
-
-      if (recipients.length === 0) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_MISSING_PARAMETERS',
-          description: 'At least one recipient is required.'
-        })
-      }
-
-      if (recipients.length > MAX_QUOTE_RECIPIENTS) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_TOO_MANY_RECIPIENTS',
-          description: `A quote may include at most ${MAX_QUOTE_RECIPIENTS} recipients.`
-        })
-      }
-
-      // Validate each recipient public key
-      const invalidIdx: number[] = []
-      for (let i = 0; i < recipients.length; i++) {
-        try {
-          PublicKey.fromString(recipients[i])
-        } catch {
-          invalidIdx.push(i)
-        }
-      }
-      if (invalidIdx.length > 0) {
-        Logger.log('[DEBUG] Invalid recipient public key format in array')
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_PUBLIC_KEY',
-          description: `Invalid recipient public key at index(es): ${invalidIdx.join(', ')}.`
-        })
-      }
+      const input = validateQuoteInput(req)
+      if (isQuoteValidationError(input)) return res.status(input.statusCode).json(input.body)
 
       // Delivery fee for this messageBox (applies per message/recipient)
-      const perMessageDeliveryFee = await getServerDeliveryFee(messageBox)
+      const perMessageDeliveryFee = await getServerDeliveryFee(input.messageBox)
 
       // Single-recipient path → keep legacy response shape for compatibility
-      if (recipients.length === 1) {
-        const recipientKey = recipients[0]
-        const recipientFee = await getRecipientFee(recipientKey, sender, messageBox)
+      if (input.recipients.length === 1) {
+        const recipientFee = await getRecipientFee(
+          input.recipients[0],
+          input.sender,
+          input.messageBox
+        )
 
         return res.status(200).json({
           status: 'success',
@@ -148,70 +243,12 @@ export default {
         })
       }
 
-      // Multi-recipient path → compute per-recipient, plus aggregates
-      const quotesByRecipient: Array<{
-        recipient: string
-        messageBox: string
-        deliveryFee: number
-        recipientFee: number
-        status: 'blocked' | 'always_allow' | 'payment_required'
-      }> = []
-
-      const blockedRecipients: string[] = []
-      let totalRecipientFees = 0
-      let totalDeliveryFees = 0
-
-      // Helper to map fee -> status
-      const feeToStatus = (fee: number): 'blocked' | 'always_allow' | 'payment_required' => {
-        if (fee === -1) return 'blocked'
-        if (fee === 0) return 'always_allow'
-        return 'payment_required'
-      }
-
-      for (let offset = 0; offset < MAX_QUOTE_RECIPIENTS; offset += QUOTE_CONCURRENCY) {
-        const batch = recipients.slice(offset, offset + QUOTE_CONCURRENCY)
-        if (batch.length === 0) break
-
-        const recipientFees = await Promise.all(
-          batch.map(async recipientKey => ({
-            recipient: recipientKey,
-            recipientFee: await getRecipientFee(recipientKey, sender, messageBox)
-          }))
-        )
-
-        for (const { recipient: recipientKey, recipientFee } of recipientFees) {
-          const status = feeToStatus(recipientFee)
-          quotesByRecipient.push({
-            recipient: recipientKey,
-            messageBox,
-            deliveryFee: perMessageDeliveryFee,
-            recipientFee,
-            status
-          })
-
-          totalDeliveryFees += perMessageDeliveryFee
-          if (recipientFee === -1) {
-            blockedRecipients.push(recipientKey)
-          } else {
-            totalRecipientFees += recipientFee
-          }
-        }
-      }
-
-      const totals = {
-        deliveryFees: totalDeliveryFees,
-        recipientFees: totalRecipientFees,
-        // If any are blocked, caller may want to handle those separately.
-        // We still provide a full monetary total for non-blocked recipients:
-        totalForPayableRecipients: totalDeliveryFees + totalRecipientFees
-      }
+      const quote = await buildMultiRecipientQuote(input, perMessageDeliveryFee)
 
       return res.status(200).json({
         status: 'success',
-        description: `Message delivery quotes generated for ${recipients.length} recipients.`,
-        quotesByRecipient,
-        totals,
-        blockedRecipients
+        description: `Message delivery quotes generated for ${input.recipients.length} recipients.`,
+        ...quote
       })
     } catch (error) {
       Logger.error('[ERROR] Internal Server Error in message quote:', error)
