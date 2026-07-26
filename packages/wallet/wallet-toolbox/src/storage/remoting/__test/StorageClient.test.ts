@@ -152,6 +152,79 @@ describe('StorageClient tests', () => {
     await client.storage.abortActionBatch(batchId)
   })
 
+  test('1bb authenticated packed upload accepts authorized compressed repetitive bytes', async () => {
+    const firstAction = Validation.validateCreateActionArgs({
+      description: 'stage generic packed action batch bytes',
+      outputs: [{
+        satoshis: 1,
+        lockingScript: '51',
+        outputDescription: 'packed upload test output'
+      }],
+      options: { noSend: true }
+    })
+    const batchId = `packed-${Date.now()}`
+    const begun = await client.storage.beginActionBatch({ batchId, firstAction })
+    const values = [
+      Uint8Array.from({ length: 1024 * 1024 }, (_, index) => index % 13),
+      Uint8Array.from({ length: 1024 * 1024 }, (_, index) => index % 29)
+    ]
+    const items = values.map(bytes => ({
+      digest: actionBatchBlobDigest(bytes),
+      bytes
+    }))
+
+    const pack = {
+      batchId,
+      items,
+      maxPackBytes: 8 * 1024 * 1024,
+      maxItems: 4096,
+      preferredEncodings: ['brotli', 'gzip', 'identity'] as ['brotli', 'gzip', 'identity']
+    }
+    await expect(client.storage.putActionBatchPack(pack))
+      .rejects.toThrow('prepared action batch manifest')
+    const logicalBytes = values.flatMap(bytes => Array.from(bytes))
+    const dependencyBeefDigest = actionBatchBlobDigest(logicalBytes)
+    const withoutDigest = {
+      batchId,
+      actions: [],
+      dependencyBeefDigest,
+      blobChunks: { [dependencyBeefDigest]: items.map(item => item.digest) },
+      sendWith: [],
+      isDelayed: true
+    }
+    await client.storage.prepareActionBatchCommit({
+      ...withoutDigest,
+      digest: actionBatchManifestDigest(withoutDigest)
+    })
+    await client.storage.putActionBatchPack(pack)
+
+    const batch = await server.setup.activeStorage.findActionBatch(server.setup.userId, begun.batchId)
+    const stored = await server.setup.activeStorage.findActionBatchBlobRecords(
+      batch!.actionBatchId,
+      items.map(item => item.digest)
+    )
+    expect(stored).toHaveLength(items.length)
+    expect(stored.map(blob => Array.from(blob.bytes.subarray(0, 64))))
+      .toEqual(values.map(bytes => Array.from(bytes.subarray(0, 64))))
+    await client.storage.abortActionBatch(batchId)
+  })
+
+  test('1bc authenticated packed upload rejects a non-binary request body', async () => {
+    const storageClient = client.storage.getActive() as StorageClient
+    const authClient = Reflect.get(storageClient, 'authClient')
+    const response = await authClient.fetch(
+      'http://localhost:8042/action-batch/not-binary/pack',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bytes: [0x41, 0x42, 0x50, 0x31] })
+      }
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.text()).resolves.toContain('binary action batch body required')
+  })
+
   test('1c batch RPCs are authenticated, user-bound, and restricted to the public protocol', async () => {
     const batchId = `auth-bound-${Date.now()}`
     await client.storage.beginActionBatch({ batchId, firstAction: Validation.validateCreateActionArgs({

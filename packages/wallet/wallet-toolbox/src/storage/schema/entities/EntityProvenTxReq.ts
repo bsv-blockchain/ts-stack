@@ -26,15 +26,21 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     return new EntityProvenTxReq(reqApi)
   }
 
-  static fromTxid(txid: string, rawTx: number[], inputBEEF?: number[]): EntityProvenTxReq {
+  static fromTxid(
+    txid: string,
+    rawTx: number[] | Uint8Array,
+    inputBEEF?: number[] | Uint8Array
+  ): EntityProvenTxReq {
     const now = new Date()
     return new EntityProvenTxReq({
       provenTxReqId: 0,
       created_at: now,
       updated_at: now,
       txid,
-      inputBEEF,
-      rawTx,
+      // Storage adapters accept typed byte arrays without boxing. The public
+      // table shape remains number[] for backwards-compatible sync payloads.
+      inputBEEF: inputBEEF as number[] | undefined,
+      rawTx: rawTx as number[],
       status: 'unknown',
       history: '{}',
       notify: '{}',

@@ -3,6 +3,11 @@ import { performance } from 'node:perf_hooks'
 import { Wallet } from '../src/Wallet'
 import { stringifyJsonRpc } from '../src/storage/remoting/BinaryJson'
 import { _tu, TestWalletNoSetup } from '../test/utils/TestUtilsWalletStorage'
+import {
+  compressActionBatchPack,
+  encodeActionBatchPack,
+  supportedActionBatchPackEncodings
+} from '../src/utility/actionBatchPack'
 
 interface ActualResult {
   mode: 'batch' | 'legacy'
@@ -19,6 +24,9 @@ interface ActualResult {
   cpuSystemMs: number
   peakRetainedHeapBytes: number
   uploadedBytes: number
+  packedUploadCalls: number
+  packedLogicalBytes: number
+  packedWireBytes: number
 }
 
 interface ModelResult {
@@ -32,7 +40,9 @@ interface ModelResult {
   batchControlMs: number
   legacyPersistenceWorkflows: number
   batchPersistenceWorkflows: number
-  uploadedBytes: number
+  logicalBytes: number
+  packUploadCount: number
+  packUploadWaves: number
   inline: boolean
 }
 
@@ -51,7 +61,11 @@ function modeledResults (): ModelResult[] {
           const uploadedBytes = actions * (scriptBytes + 180)
           const inline = uploadedBytes <= 4 * 1024 * 1024
           const legacyRpcCount = actions * 2 + 1
-          const batchControlRpcCount = inline ? 2 : 3
+          const packUploadCount = inline
+            ? 0
+            : Math.ceil(uploadedBytes / (8 * 1024 * 1024 - 44))
+          const packUploadWaves = Math.ceil(packUploadCount / 4)
+          const batchControlRpcCount = inline ? 2 : 3 + packUploadCount
           results.push({
             workload,
             actions,
@@ -60,10 +74,12 @@ function modeledResults (): ModelResult[] {
             legacyRpcCount,
             batchControlRpcCount,
             legacyStorageMs: legacyRpcCount * latencyMs,
-            batchControlMs: batchControlRpcCount * latencyMs,
+            batchControlMs: (inline ? 2 : 3 + packUploadWaves) * latencyMs,
             legacyPersistenceWorkflows: actions * 2,
             batchPersistenceWorkflows: 2,
-            uploadedBytes,
+            logicalBytes: uploadedBytes,
+            packUploadCount,
+            packUploadWaves,
             inline
           })
         }
@@ -117,6 +133,9 @@ async function measureActual (
   let broadcastMs = 0
   let rpcCount = 0
   let uploadedBytes = 0
+  let packedUploadCalls = 0
+  let packedLogicalBytes = 0
+  let packedWireBytes = 0
   const heapStart = process.memoryUsage().heapUsed
   let peakHeap = heapStart
   let databaseTransactions = 0
@@ -154,11 +173,30 @@ async function measureActual (
     uploadedBytes += value.bytes.length
     return await put(value)
   })
+  const putPack = ctx.storage.putActionBatchPack.bind(ctx.storage)
+  jest.spyOn(ctx.storage, 'putActionBatchPack').mockImplementation(async value => {
+    rpcCount++
+    packedUploadCalls++
+    const frame = encodeActionBatchPack(value.items, value.maxPackBytes, value.maxItems)
+    const encoding = supportedActionBatchPackEncodings()[0]
+    const compressed = await compressActionBatchPack(frame, encoding)
+    const wireBytes = Math.min(frame.length, compressed.length)
+    packedLogicalBytes += value.items.reduce((sum, item) => sum + item.bytes.length, 0)
+    packedWireBytes += wireBytes
+    uploadedBytes += wireBytes
+    return await putPack(value)
+  })
   const commit = ctx.storage.commitActionBatch.bind(ctx.storage)
   jest.spyOn(ctx.storage, 'commitActionBatch').mockImplementation(async value => {
     rpcCount++
     uploadedBytes += jsonRpcRequestBytes('commitActionBatch', value)
     return await commit(value)
+  })
+  const commitByDigest = ctx.storage.commitActionBatchByDigest.bind(ctx.storage)
+  jest.spyOn(ctx.storage, 'commitActionBatchByDigest').mockImplementation(async value => {
+    rpcCount++
+    uploadedBytes += jsonRpcRequestBytes('commitActionBatchByDigest', value)
+    return await commitByDigest(value)
   })
   const legacyCreate = ctx.storage.createAction.bind(ctx.storage)
   jest.spyOn(ctx.storage, 'createAction').mockImplementation(async value => {
@@ -215,7 +253,10 @@ async function measureActual (
       cpuUserMs: cpu.user / 1000,
       cpuSystemMs: cpu.system / 1000,
       peakRetainedHeapBytes: peakHeap - heapStart,
-      uploadedBytes
+      uploadedBytes,
+      packedUploadCalls,
+      packedLogicalBytes,
+      packedWireBytes
     }
   } finally {
     ctx.activeStorage.knex.off('query', countTransaction)
@@ -251,7 +292,9 @@ describe('retained action batch benchmark', () => {
     const batch4MiB = actual.find(result => result.mode === 'batch' && result.actions === 1 &&
       result.scriptBytes === 4 * 1024 * 1024)
     expect(batch4MiB?.rpcCount).toBeGreaterThan(3)
-    expect(batch4MiB?.uploadedBytes).toBeGreaterThan(4 * 1024 * 1024)
+    expect(batch4MiB?.packedUploadCalls).toBeGreaterThan(0)
+    expect(batch4MiB?.packedLogicalBytes).toBeGreaterThan(4 * 1024 * 1024)
+    expect(batch4MiB?.packedWireBytes).toBeLessThan(batch4MiB!.packedLogicalBytes)
     const modeledAcceptance = modeled.filter(result => result.workload === 'dependent' &&
       result.actions === 250 && result.latencyMs === 100 &&
       (result.scriptBytes === 1024 || result.scriptBytes === 4 * 1024 * 1024))

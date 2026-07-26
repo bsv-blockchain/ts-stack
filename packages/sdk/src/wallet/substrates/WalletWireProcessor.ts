@@ -94,7 +94,7 @@ export default class WalletWireProcessor implements WalletWire {
           // tx
           const inputBeefLength = paramsReader.readVarIntNum()
           if (inputBeefLength >= 0) {
-            args.inputBEEF = paramsReader.read(inputBeefLength) // BEEF (Byte[])
+            args.inputBEEF = paramsReader.readView(inputBeefLength) // BEEF (Byte[])
           } else {
             args.inputBEEF = undefined
           }
@@ -339,7 +339,13 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.WriterUint8Array()
+          const resultWriter = new Utils.WriterUint8Array(
+            undefined,
+            4096 +
+            (createActionResult.tx?.length ?? 0) +
+            (createActionResult.signableTransaction?.tx.length ?? 0)
+          )
+          resultWriter.writeUInt8(0) // errorByte = 0
 
           // txid
           if (createActionResult.txid != null && createActionResult.txid !== '') {
@@ -402,11 +408,7 @@ export default class WalletWireProcessor implements WalletWire {
             resultWriter.write(referenceBytes)
           }
 
-          // Return success code and result
-          const responseWriter = new Utils.WriterUint8Array()
-          responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toUint8Array())
-          return responseWriter.toUint8Array()
+          return resultWriter.toUint8ArrayZeroCopy()
         }
         case 'signAction': {
           const args: any = {}
@@ -495,7 +497,11 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.WriterUint8Array()
+          const resultWriter = new Utils.WriterUint8Array(
+            undefined,
+            4096 + (signActionResult.tx?.length ?? 0)
+          )
+          resultWriter.writeUInt8(0) // errorByte = 0
 
           // txid
           if (signActionResult.txid != null && signActionResult.txid !== '') {
@@ -531,11 +537,7 @@ export default class WalletWireProcessor implements WalletWire {
             }
           }
 
-          // Return success code and result
-          const responseWriter = new Utils.WriterUint8Array()
-          responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toUint8Array())
-          return responseWriter.toUint8Array()
+          return resultWriter.toUint8ArrayZeroCopy()
         }
         case 'abortAction': {
           // Deserialize reference
@@ -823,7 +825,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Read tx
           const txLength = paramsReader.readVarIntNum()
-          args.tx = paramsReader.read(txLength)
+          args.tx = paramsReader.readView(txLength)
 
           // Read outputs
           const outputsLength = paramsReader.readVarIntNum()
@@ -1026,7 +1028,11 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.WriterUint8Array()
+          const resultWriter = new Utils.WriterUint8Array(
+            undefined,
+            4096 + (listOutputsResult.BEEF?.length ?? 0)
+          )
+          resultWriter.writeUInt8(0) // errorByte = 0
 
           // totalOutputs
           resultWriter.writeVarIntNum(listOutputsResult.totalOutputs)
@@ -1096,11 +1102,7 @@ export default class WalletWireProcessor implements WalletWire {
             }
           }
 
-          // Return success code and result
-          const responseWriter = new Utils.WriterUint8Array()
-          responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toUint8Array())
-          return responseWriter.toUint8Array()
+          return resultWriter.toUint8ArrayZeroCopy()
         }
 
         case 'relinquishOutput': {

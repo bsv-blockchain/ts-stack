@@ -7,20 +7,21 @@ import { beefForTxids } from '../../utility/beefForTxids'
 import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import type { StorageProvider } from '../StorageProvider'
 import { validateStorageFeeModel } from '../StorageProvider'
-import type { TableActionBatch } from '../schema/tables/TableActionBatch'
+import type { TableActionBatch, TableActionBatchBlob } from '../schema/tables/TableActionBatch'
 import { maxPossibleSatoshis } from './generateChange'
 import { lockScriptWithKeyOffsetFromPubKey } from './offsetKey'
+import { manifestPhysicalDigests } from './actionBatchBlobs'
 
 export interface ValidatedBatchAction {
   action: ActionBatchCommitAction
   tx: Transaction
   rawTx: Uint8Array
-  inputBeef: Uint8Array
+  /** Proof frontier for inputs outside this atomic batch. */
+  externalInputBeef: Uint8Array
 }
 
 async function resolveManifestBytes(
-  storage: StorageProvider,
-  batch: TableActionBatch,
+  blobs: ReadonlyMap<string, TableActionBatchBlob>,
   inline: number[] | Uint8Array | undefined,
   digest: string | undefined,
   name: string,
@@ -40,7 +41,7 @@ async function resolveManifestBytes(
     const logicalHash = new Hash.SHA256()
     let totalBytes = 0
     for (const chunkDigest of chunkDigests) {
-      const chunk = await storage.findActionBatchBlobRecord(batch.actionBatchId, chunkDigest)
+      const chunk = blobs.get(chunkDigest)
       if (chunk == null) throw new WERR_INVALID_OPERATION(`missing action batch blob ${chunkDigest}`)
       if (actionBatchBlobDigest(chunk.bytes) !== chunkDigest) {
         throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${chunkDigest}`)
@@ -71,12 +72,12 @@ async function resolveManifestBytes(
     }
     return bytes
   }
-  const blob = await storage.findActionBatchBlobRecord(batch.actionBatchId, digest)
+  const blob = blobs.get(digest)
   if (blob == null) throw new WERR_INVALID_OPERATION(`missing action batch blob ${digest}`)
   if (actionBatchBlobDigest(blob.bytes) !== digest) {
     throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${digest}`)
   }
-  return Uint8Array.from(blob.bytes)
+  return blob.bytes instanceof Uint8Array ? blob.bytes : Uint8Array.from(blob.bytes)
 }
 
 function sameStrings(left: string[] | undefined, right: string[] | undefined): boolean {
@@ -234,10 +235,10 @@ async function requireSourceOutput(
 }
 
 async function materializeActionScripts(
-  storage: StorageProvider,
-  batch: TableActionBatch,
+  blobs: ReadonlyMap<string, TableActionBatchBlob>,
   manifest: ActionBatchManifest,
-  action: ActionBatchCommitAction
+  action: ActionBatchCommitAction,
+  tx: Transaction
 ): Promise<ActionBatchCommitAction> {
   if (action.lockingScriptDigests == null) return action
   if (action.lockingScriptDigests.length !== action.plan.outputs.length) {
@@ -246,26 +247,43 @@ async function materializeActionScripts(
   const scripts: string[] = []
   for (let index = 0; index < action.plan.outputs.length; index++) {
     const digest = action.lockingScriptDigests[index]
-    scripts.push(
-      digest == null
-        ? action.plan.outputs[index].lockingScript
-        : asString(
-            await resolveManifestBytes(
-              storage,
-              batch,
-              manifest.inlineBlobs?.[digest],
-              digest,
-              `locking script ${index}`,
-              manifest.blobChunks?.[digest]
+    if (action.deriveLockingScripts === true) {
+      const output = tx.outputs[action.plan.outputs[index].vout]
+      if (output == null) {
+        throw new WERR_INVALID_PARAMETER('lockingScriptDigests', 'align with transaction outputs')
+      }
+      const bytes = output.lockingScript.toUint8Array()
+      if (digest == null || actionBatchBlobDigest(bytes) !== digest) {
+        throw new WERR_INVALID_PARAMETER('lockingScriptDigests', 'match transaction output scripts')
+      }
+      scripts.push(output.lockingScript.toHex())
+    } else {
+      scripts.push(
+        digest == null
+          ? action.plan.outputs[index].lockingScript
+          : asString(
+              await resolveManifestBytes(
+                blobs,
+                manifest.inlineBlobs?.[digest],
+                digest,
+                `locking script ${index}`,
+                manifest.blobChunks?.[digest]
+              )
             )
-          )
-    )
+      )
+    }
   }
   return {
     ...action,
     plan: {
       ...action.plan,
-      outputs: action.plan.outputs.map((output, index) => ({ ...output, lockingScript: scripts[index] }))
+      outputs: action.plan.outputs.map((output, index) => ({
+        ...output,
+        // Wallet-managed change is intentionally represented by derivation
+        // metadata in the canonical plan, even though its transaction output
+        // script participates in the compact-manifest digest check above.
+        lockingScript: output.purpose === 'change' ? '' : scripts[index]
+      }))
     },
     metadata: {
       ...action.metadata,
@@ -278,10 +296,14 @@ export async function validateManifestActions(
   storage: StorageProvider,
   batch: TableActionBatch,
   manifest: ActionBatchManifest
-): Promise<{ actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array }> {
+): Promise<{ actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array; beef: Beef }> {
+  const blobRecords = await storage.findActionBatchBlobRecords(
+    batch.actionBatchId,
+    manifestPhysicalDigests(manifest)
+  )
+  const blobs = new Map(blobRecords.map(blob => [blob.digest, blob]))
   const dependencyBeef = await resolveManifestBytes(
-    storage,
-    batch,
+    blobs,
     manifest.dependencyBeef ??
       (manifest.dependencyBeefDigest == null ? undefined : manifest.inlineBlobs?.[manifest.dependencyBeefDigest]),
     manifest.dependencyBeefDigest,
@@ -298,21 +320,20 @@ export async function validateManifestActions(
   const spentOutpoints = new Set<string>()
   const actions: ValidatedBatchAction[] = []
   for (const compactAction of manifest.actions) {
-    const action = await materializeActionScripts(storage, batch, manifest, compactAction)
+    const rawTx = await resolveManifestBytes(
+      blobs,
+      compactAction.rawTx ?? (compactAction.rawTxDigest == null ? undefined : manifest.inlineBlobs?.[compactAction.rawTxDigest]),
+      compactAction.rawTxDigest,
+      `rawTx ${compactAction.txid}`,
+      compactAction.rawTxDigest == null ? undefined : manifest.blobChunks?.[compactAction.rawTxDigest]
+    )
+    const tx = Transaction.fromBinary(rawTx)
+    const action = await materializeActionScripts(blobs, manifest, compactAction, tx)
     if (seenTxids.has(action.txid)) throw new WERR_INVALID_PARAMETER('actions', 'unique txids')
     if (seenReferences.has(action.reference)) throw new WERR_INVALID_PARAMETER('actions', 'unique references')
     if (action.reference !== action.plan.reference) throw new WERR_INVALID_PARAMETER('reference', 'match plan')
     validateActionMetadata(action)
     validateActionCommission(storage, action)
-    const rawTx = await resolveManifestBytes(
-      storage,
-      batch,
-      action.rawTx ?? (action.rawTxDigest == null ? undefined : manifest.inlineBlobs?.[action.rawTxDigest]),
-      action.rawTxDigest,
-      `rawTx ${action.txid}`,
-      action.rawTxDigest == null ? undefined : manifest.blobChunks?.[action.rawTxDigest]
-    )
-    const tx = Transaction.fromBinary(rawTx)
     if (tx.id('hex') !== action.txid) throw new WERR_INVALID_PARAMETER('txid', 'match raw transaction')
     if (!(await storage.getServices().nLockTimeIsFinal(tx))) {
       throw new WERR_INVALID_PARAMETER('transaction', 'final nLockTime and sequence values')
@@ -342,7 +363,8 @@ export async function validateManifestActions(
         throw new WERR_INVALID_PARAMETER('inputs', 'match planned transaction outpoints')
       }
       const source = await requireSourceOutput(storage, beef, planned.sourceTxid, planned.sourceVout)
-      if (source.satoshis !== planned.sourceSatoshis || source.lockingScript.toHex() !== planned.sourceLockingScript) {
+      if (source.satoshis !== planned.sourceSatoshis ||
+        (planned.sourceLockingScript != null && source.lockingScript.toHex() !== planned.sourceLockingScript)) {
         throw new WERR_INVALID_PARAMETER('inputs', 'match proven source outputs')
       }
     }
@@ -378,14 +400,16 @@ export async function validateManifestActions(
         throw new WERR_INVALID_PARAMETER('outputs', 'match planned transaction outputs')
       }
     }
-    const inputBeef = beefForTxids(
+    const externalInputBeef = beefForTxids(
       beef,
-      action.plan.inputs.map(input => input.sourceTxid)
+      action.plan.inputs
+        .map(input => input.sourceTxid)
+        .filter(txid => !batchTxids.has(txid))
     ).toUint8Array()
     beef.mergeRawTx(rawTx)
     seenTxids.add(action.txid)
     seenReferences.add(action.reference)
-    actions.push({ action, tx, rawTx, inputBeef })
+    actions.push({ action, tx, rawTx, externalInputBeef })
   }
   await verifyUnlockScriptsBatch(
     actions.map(({ action }) => action.txid),
@@ -395,5 +419,5 @@ export async function validateManifestActions(
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
     throw new WERR_INVALID_PARAMETER('manifest', 'valid dependency graph')
   }
-  return { actions, dependencyBeef }
+  return { actions, dependencyBeef, beef }
 }

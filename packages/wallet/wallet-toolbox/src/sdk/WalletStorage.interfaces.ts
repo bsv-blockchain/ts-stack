@@ -43,11 +43,13 @@ import {
   ActionBatchManifest,
   BeginActionBatchArgs,
   BeginActionBatchResult,
+  CommitActionBatchByDigestArgs,
   CommitActionBatchResult,
   ExtendActionBatchArgs,
   ExtendActionBatchResult,
   PrepareActionBatchCommitResult,
   PutActionBatchBlobArgs,
+  PutActionBatchPackArgs,
   RenewActionBatchResult,
   StorageCapabilities
 } from './ActionBatch.interfaces'
@@ -87,7 +89,9 @@ export interface WalletStorage {
   renewActionBatch: (batchId: string) => Promise<RenewActionBatchResult>
   prepareActionBatchCommit: (manifest: ActionBatchManifest) => Promise<PrepareActionBatchCommitResult>
   putActionBatchBlob: (args: PutActionBatchBlobArgs) => Promise<void>
+  putActionBatchPack?: (args: PutActionBatchPackArgs) => Promise<void>
   commitActionBatch: (manifest: ActionBatchManifest) => Promise<CommitActionBatchResult>
+  commitActionBatchByDigest?: (args: CommitActionBatchByDigestArgs) => Promise<CommitActionBatchResult>
   abortActionBatch: (batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (args: InternalizeActionArgs) => Promise<InternalizeActionResult>
 
@@ -177,7 +181,12 @@ export interface WalletStorageWriter extends WalletStorageReader {
   renewActionBatch: (auth: AuthId, batchId: string) => Promise<RenewActionBatchResult>
   prepareActionBatchCommit: (auth: AuthId, manifest: ActionBatchManifest) => Promise<PrepareActionBatchCommitResult>
   putActionBatchBlob: (auth: AuthId, args: PutActionBatchBlobArgs) => Promise<void>
+  putActionBatchPack?: (auth: AuthId, args: PutActionBatchPackArgs) => Promise<void>
   commitActionBatch: (auth: AuthId, manifest: ActionBatchManifest) => Promise<CommitActionBatchResult>
+  commitActionBatchByDigest?: (
+    auth: AuthId,
+    args: CommitActionBatchByDigestArgs
+  ) => Promise<CommitActionBatchResult>
   abortActionBatch: (auth: AuthId, batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (auth: AuthId, args: InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
 

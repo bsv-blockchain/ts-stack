@@ -7,6 +7,7 @@ import {
 import type { PendingSignAction, Wallet } from '../../Wallet'
 import {
   ActionBatchCommitAction,
+  ActionBatchCommitPlan,
   ActionBatchManifest,
   BeginActionBatchResult,
   CommitActionBatchResult,
@@ -34,10 +35,12 @@ import {
   addPlannerOutputs,
   mergePlannerBeef,
   planAction,
+  plannerInputLockingScript,
   plannerOutputLockingScript,
   stageTransactionOutputs
 } from './ActionBatchPlanner'
 import { beefForTxids } from '../../utility/beefForTxids'
+import { actionBatchPackLength } from '../../utility/actionBatchPack'
 
 export type ActionBatchMode = 'auto' | 'legacy'
 
@@ -131,6 +134,11 @@ class ActionBatchWorkspace {
   private renewal?: Promise<void>
   private expiresAt: number
   private committed = false
+  private eagerEnabled = false
+  private eagerLogicalBytes = 0
+  private readonly eagerPending = new Map<string, Uint8Array>()
+  private readonly eagerUploadLanes: Array<Promise<void>>
+  private eagerUploadCursor = 0
 
   constructor (
     private readonly wallet: Wallet,
@@ -141,6 +149,24 @@ class ActionBatchWorkspace {
     this.batchId = begin.batchId
     this.state = makePlannerState(begin, firstAction)
     this.expiresAt = Date.parse(begin.expiresAt)
+    this.eagerUploadLanes = Array.from(
+      {
+        length: capabilities.packedUploads == null
+          ? 1
+          : Math.max(1, capabilities.maxConcurrentUploads)
+      },
+      async () => {}
+    )
+  }
+
+  private get usesCompactManifest (): boolean {
+    return this.capabilities.manifestVersion === 2
+  }
+
+  private get packedUploads (): NonNullable<typeof this.capabilities.packedUploads> | undefined {
+    return this.capabilities.packedUploads?.version === 1
+      ? this.capabilities.packedUploads
+      : undefined
   }
 
   ownsReference (reference: string): boolean {
@@ -191,7 +217,9 @@ class ActionBatchWorkspace {
             ? action.plan.inputs.map(input => ({
                 sourceOutpoint: `${input.sourceTxid}.${input.sourceVout}`,
                 sourceSatoshis: input.sourceSatoshis,
-                sourceLockingScript: args.includeInputSourceLockingScripts ? input.sourceLockingScript : undefined,
+                sourceLockingScript: args.includeInputSourceLockingScripts
+                  ? asString(plannerInputLockingScript(this.state, input))
+                  : undefined,
                 unlockingScript: args.includeInputUnlockingScripts
                   ? tx.inputs[input.vin]?.unlockingScript?.toHex()
                   : undefined,
@@ -396,22 +424,34 @@ class ActionBatchWorkspace {
     const pending = this.planned.get(prior.reference)
     if (pending == null) throw new WERR_INVALID_OPERATION('signed action does not belong to active action batch')
     const txid = prior.tx.id('hex')
+    const rawTx = prior.tx.toUint8Array()
+    const rawTxDigest = actionBatchBlobDigest(rawTx)
     const lockingScriptDigests = prior.dcr.outputs.map(output => {
-      if (output.lockingScript.length === 0) return undefined
-      const digest = actionBatchBlobDigest(asUint8Array(output.lockingScript))
-      this.lockingScripts.set(digest, output.lockingScript)
+      const lockingScript = prior.tx.outputs[output.vout]?.lockingScript.toHex()
+      if (lockingScript == null) {
+        throw new WERR_INVALID_OPERATION(`missing staged output script for ${txid}.${String(output.vout)}`)
+      }
+      if (lockingScript.length === 0 && !this.usesCompactManifest) return undefined
+      const digest = actionBatchBlobDigest(asUint8Array(lockingScript))
+      if (!this.usesCompactManifest) this.lockingScripts.set(digest, lockingScript)
       return digest
     })
-    const compactPlan: StorageCreateActionResult = {
+    const compactPlan: ActionBatchCommitPlan = {
       ...prior.dcr,
       inputBeef: undefined,
-      inputs: prior.dcr.inputs.map(input => ({ ...input, sourceTransaction: undefined })),
+      inputs: prior.dcr.inputs.map(input => ({
+        ...input,
+        sourceLockingScript: this.usesCompactManifest ? undefined : input.sourceLockingScript,
+        sourceTransaction: undefined
+      })),
       outputs: prior.dcr.outputs.map(output => ({ ...output, lockingScript: '' }))
     }
     const action: ActionBatchCommitAction = {
       reference: prior.reference,
       txid,
+      rawTxDigest,
       lockingScriptDigests,
+      deriveLockingScripts: this.usesCompactManifest || undefined,
       plan: compactPlan,
       metadata: {
         description: pending.args.description,
@@ -427,8 +467,104 @@ class ActionBatchWorkspace {
     this.updateEwma(pending)
     stageTransactionOutputs(this.state, prior.tx, prior.dcr)
     mergePlannerBeef(this.state, prior.tx)
+    this.queueEagerLogicalBlob(rawTxDigest, rawTx)
     this.planned.delete(prior.reference)
     this.scheduleExtensionIfNeeded()
+  }
+
+  private physicalBlobs (
+    logicalDigest: string,
+    bytes: Uint8Array
+  ): { chunks?: string[], blobs: UploadBlob[] } {
+    const packed = this.packedUploads
+    const maxPhysicalBytes = packed == null
+      ? this.capabilities.maxBlobBytes
+      : Math.min(
+          this.capabilities.maxBlobBytes,
+          Math.max(1, packed.maxPackBytes - actionBatchPackLength([{
+            digest: logicalDigest,
+            bytes: new Uint8Array()
+          }]))
+        )
+    if (bytes.length <= maxPhysicalBytes) {
+      return { blobs: [{ digest: logicalDigest, bytes }] }
+    }
+    const chunks: string[] = []
+    const blobs: UploadBlob[] = []
+    for (let offset = 0; offset < bytes.length; offset += maxPhysicalBytes) {
+      const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + maxPhysicalBytes))
+      const digest = actionBatchBlobDigest(chunk)
+      chunks.push(digest)
+      blobs.push({ digest, bytes: chunk })
+    }
+    return { chunks, blobs }
+  }
+
+  private queueEagerLogicalBlob (digest: string, bytes: Uint8Array): void {
+    const packed = this.packedUploads
+    if (packed?.eager !== true || !this.usesCompactManifest) return
+    const physical = this.physicalBlobs(digest, bytes)
+    for (const blob of physical.blobs) {
+      if (this.eagerPending.has(blob.digest)) continue
+      this.eagerPending.set(blob.digest, blob.bytes)
+      this.eagerLogicalBytes += blob.bytes.length
+    }
+    if (this.eagerLogicalBytes > this.capabilities.maxInlineBytes) {
+      this.eagerEnabled = true
+      this.flushEagerPacks(false)
+    }
+  }
+
+  private takePack (final: boolean): UploadBlob[] {
+    const packed = this.packedUploads
+    if (packed == null || this.eagerPending.size === 0) return []
+    const items: UploadBlob[] = []
+    for (const [digest, bytes] of this.eagerPending) {
+      const candidate = [...items, { digest, bytes }]
+      if (candidate.length > packed.maxItems ||
+        actionBatchPackLength(candidate) > packed.maxPackBytes) break
+      items.push({ digest, bytes })
+    }
+    if (items.length === 0) throw new WERR_INVALID_OPERATION('action batch blob cannot fit provider pack')
+    const length = actionBatchPackLength(items)
+    if (!final && items.length === this.eagerPending.size &&
+      length < Math.floor(packed.maxPackBytes * 0.9)) return []
+    for (const item of items) this.eagerPending.delete(item.digest)
+    return items
+  }
+
+  private schedulePackUpload (items: UploadBlob[]): void {
+    const packed = this.packedUploads
+    if (packed == null || items.length === 0) return
+    const lane = this.eagerUploadCursor++ % this.eagerUploadLanes.length
+    this.eagerUploadLanes[lane] = this.eagerUploadLanes[lane]
+      .then(async () => {
+        await this.wallet.storage.putActionBatchPack({
+          batchId: this.batchId,
+          items,
+          maxPackBytes: packed.maxPackBytes,
+          maxItems: packed.maxItems,
+          preferredEncodings: packed.encodings
+        })
+      })
+      .catch(() => {
+        // Eager upload is speculative. Prepare remains the source of truth:
+        // anything this attempt did not persist is reported missing and
+        // retried through the ordinary final upload path.
+      })
+  }
+
+  private async awaitEagerUploads (): Promise<void> {
+    await Promise.all(this.eagerUploadLanes)
+  }
+
+  private flushEagerPacks (final: boolean): void {
+    if (!this.eagerEnabled) return
+    for (;;) {
+      const items = this.takePack(final)
+      if (items.length === 0) return
+      this.schedulePackUpload(items)
+    }
   }
 
   private scheduleExtensionIfNeeded (): void {
@@ -474,35 +610,33 @@ class ActionBatchWorkspace {
       if (!blobs.has(digest)) blobs.set(digest, bytes)
       return digest
     }
-    const actions = this.actions.map((action, index) => {
-      return { ...action, rawTx: undefined, rawTxDigest: addBlob(rawBytes[index]) }
-    })
+    const actions = this.actions.map((action, index) => ({
+      ...action,
+      rawTx: undefined,
+      rawTxDigest: addBlob(rawBytes[index])
+    }))
     const dependencyBeefDigest = addBlob(dependencyBytes)
-    for (const [digest, script] of this.lockingScripts) {
-      if (!blobs.has(digest)) blobs.set(digest, asUint8Array(script))
+    if (!this.usesCompactManifest) {
+      for (const [digest, script] of this.lockingScripts) {
+        if (!blobs.has(digest)) blobs.set(digest, asUint8Array(script))
+      }
     }
     const totalBytes = [...blobs.values()].reduce((sum, bytes) => sum + bytes.length, 0)
     const useUploads = totalBytes > this.capabilities.maxInlineBytes
+    if (useUploads) this.queueEagerLogicalBlob(dependencyBeefDigest, dependencyBytes)
     const uploadBlobs = new Map<string, Uint8Array>()
     const blobChunks: Record<string, string[]> = {}
     if (useUploads) {
-      const chunkBytes = Math.max(1, this.capabilities.maxBlobBytes)
       for (const [digest, bytes] of blobs) {
-        if (bytes.length <= chunkBytes) {
-          uploadBlobs.set(digest, bytes)
-          continue
+        const physical = this.physicalBlobs(digest, bytes)
+        for (const blob of physical.blobs) {
+          if (!uploadBlobs.has(blob.digest)) uploadBlobs.set(blob.digest, blob.bytes)
         }
-        const chunks: string[] = []
-        for (let offset = 0; offset < bytes.length; offset += chunkBytes) {
-          const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + chunkBytes))
-          const chunkDigest = actionBatchBlobDigest(chunk)
-          chunks.push(chunkDigest)
-          if (!uploadBlobs.has(chunkDigest)) uploadBlobs.set(chunkDigest, chunk)
-        }
-        blobChunks[digest] = chunks
+        if (physical.chunks != null) blobChunks[digest] = physical.chunks
       }
     }
     const withoutDigest: Omit<ActionBatchManifest, 'digest'> = {
+      format: this.usesCompactManifest ? 2 : undefined,
       batchId: this.batchId,
       actions,
       dependencyBeefDigest,
@@ -520,9 +654,48 @@ class ActionBatchWorkspace {
   }
 
   private async uploadMissing (manifest: ActionBatchManifest, uploads: UploadBlob[]): Promise<void> {
+    this.flushEagerPacks(true)
+    await this.awaitEagerUploads()
     const prepared = await this.wallet.storage.prepareActionBatchCommit(manifest)
     const missing = new Set(prepared.missingDigests)
     const pending = uploads.filter(upload => missing.has(upload.digest))
+    const packed = this.packedUploads
+    if (packed != null && manifest.format === 2) {
+      const packs: UploadBlob[][] = []
+      let current: UploadBlob[] = []
+      for (const upload of pending) {
+        const candidate = [...current, upload]
+        if (current.length > 0 && (
+          candidate.length > packed.maxItems ||
+          actionBatchPackLength(candidate) > packed.maxPackBytes
+        )) {
+          packs.push(current)
+          current = []
+        }
+        current.push(upload)
+      }
+      if (current.length > 0) packs.push(current)
+      const concurrency = Math.max(1, Math.min(
+        prepared.maxConcurrentUploads,
+        this.capabilities.maxConcurrentUploads,
+        packs.length
+      ))
+      let packCursor = 0
+      await Promise.all(Array.from({ length: concurrency }, async () => {
+        for (;;) {
+          const pack = packs[packCursor++]
+          if (pack == null) return
+          await this.wallet.storage.putActionBatchPack({
+            batchId: this.batchId,
+            items: pack,
+            maxPackBytes: packed.maxPackBytes,
+            maxItems: packed.maxItems,
+            preferredEncodings: packed.encodings
+          })
+        }
+      }))
+      return
+    }
     const concurrency = Math.max(1, Math.min(
       prepared.maxConcurrentUploads,
       this.capabilities.maxConcurrentUploads,
@@ -552,7 +725,12 @@ class ActionBatchWorkspace {
     if (this.planned.size > 0) throw new WERR_INVALID_OPERATION('all two-step actions must be signed before batch commit')
     const { manifest, uploads } = this.buildManifest(sendWith, isDelayed)
     if (uploads.length > 0) await this.uploadMissing(manifest, uploads)
-    const result = await this.wallet.storage.commitActionBatch(manifest)
+    const result = uploads.length > 0 && manifest.format === 2 && this.capabilities.commitByDigest === true
+      ? await this.wallet.storage.commitActionBatchByDigest({
+          batchId: manifest.batchId,
+          digest: manifest.digest
+        })
+      : await this.wallet.storage.commitActionBatch(manifest)
     this.committed = true
     return result
   }
@@ -624,7 +802,7 @@ class ActionBatchWorkspace {
         const vout = action.plan.outputs[outputIndex]?.vout
         const script = vout == null ? undefined : tx.outputs[vout]?.lockingScript
         if (script == null) throw new WERR_INVALID_OPERATION(`missing staged output script for ${action.txid}.${vout}`)
-        this.lockingScripts.set(digest, script.toHex())
+        if (!this.usesCompactManifest) this.lockingScripts.set(digest, script.toHex())
       })
     }
 
@@ -638,6 +816,7 @@ class ActionBatchWorkspace {
 
   async abort (): Promise<void> {
     if (this.committed) return
+    await this.awaitEagerUploads()
     await this.wallet.storage.abortActionBatch(this.batchId)
     for (const reference of this.planned.keys()) delete this.wallet.pendingSignActions[reference]
   }

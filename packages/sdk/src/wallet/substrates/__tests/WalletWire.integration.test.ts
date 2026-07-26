@@ -2,6 +2,7 @@ import { CompletedProtoWallet } from '../../../auth/certificates/__tests/Complet
 import { Utils, PrivateKey, Hash } from '../../../primitives/index'
 import WalletWireTransceiver from '../../../wallet/substrates/WalletWireTransceiver'
 import WalletWireProcessor from '../../../wallet/substrates/WalletWireProcessor'
+import type { WalletInterface } from '../../../wallet/Wallet.interfaces'
 
 const sampleData = [3, 1, 4, 1, 5, 9]
 
@@ -22,6 +23,38 @@ describe('WalletWire Integration Tests', () => {
     await expect(wallet.getVersion({})).resolves.toEqual({ version: '1.2.3-test' })
     expect(typedTransport).toHaveBeenCalledTimes(1)
     expect(legacyTransport).not.toHaveBeenCalled()
+  })
+
+  it('preserves multi-megabyte typed BEEF across createAction without boxed arrays', async () => {
+    const inputBEEF = Uint8Array.from(
+      { length: 4 * 1024 * 1024 },
+      (_, index) => index % 251
+    )
+    let received: Uint8Array | undefined
+    const processor = new WalletWireProcessor({
+      createAction: async args => {
+        received = args.inputBEEF as Uint8Array
+        return {
+          signableTransaction: {
+            tx: inputBEEF,
+            reference: 'AQIDBA=='
+          }
+        }
+      }
+    } as unknown as WalletInterface)
+    const wallet = new WalletWireTransceiver(processor)
+
+    const result = await wallet.createAction({
+      description: 'Exercise a generic large BEEF payload',
+      inputBEEF,
+      labels: [],
+      options: { signAndProcess: false }
+    })
+
+    expect(received).toBeInstanceOf(Uint8Array)
+    expect(received).toEqual(inputBEEF)
+    expect(result.signableTransaction?.tx).toBeInstanceOf(Uint8Array)
+    expect(result.signableTransaction?.tx).toEqual(inputBEEF)
   })
 
   /**

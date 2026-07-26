@@ -511,8 +511,26 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return await this.runAsWriter(async writer => await writer.putActionBatchBlob(await this.getAuth(true), args))
   }
 
+  async putActionBatchPack(args: sdk.PutActionBatchPackArgs): Promise<void> {
+    return await this.runAsWriter(async writer => {
+      if (writer.putActionBatchPack == null) {
+        throw new sdk.WERR_NOT_IMPLEMENTED('packed action batch uploads are not available')
+      }
+      await writer.putActionBatchPack(await this.getAuth(true), args)
+    })
+  }
+
   async commitActionBatch(manifest: sdk.ActionBatchManifest): Promise<sdk.CommitActionBatchResult> {
     return await this.runAsWriter(async writer => await writer.commitActionBatch(await this.getAuth(true), manifest))
+  }
+
+  async commitActionBatchByDigest(args: sdk.CommitActionBatchByDigestArgs): Promise<sdk.CommitActionBatchResult> {
+    return await this.runAsWriter(async writer => {
+      if (writer.commitActionBatchByDigest == null) {
+        throw new sdk.WERR_NOT_IMPLEMENTED('digest-only action batch commit is not available')
+      }
+      return await writer.commitActionBatchByDigest(await this.getAuth(true), args)
+    })
   }
 
   async abortActionBatch(batchId: string): Promise<sdk.AbortActionBatchResult> {

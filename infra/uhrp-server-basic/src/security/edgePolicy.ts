@@ -17,6 +17,7 @@ const DEFAULT_ALLOWED_HEADERS = [
   'Authorization',
   'Content-Type',
   'If-None-Match',
+  'X-BSV-Action-Batch-Encoding',
   'X-BSV-Auth-Identity-Key',
   'X-BSV-Auth-Message-Type',
   'X-BSV-Auth-Nonce',

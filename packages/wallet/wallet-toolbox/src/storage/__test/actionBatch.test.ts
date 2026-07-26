@@ -18,6 +18,27 @@ function firstAction () {
   })
 }
 
+async function preparePackedItems (
+  ctx: TestWalletNoSetup,
+  batchId: string,
+  items: Array<{ digest: string, bytes: number[] | Uint8Array }>
+): Promise<void> {
+  const logicalBytes = items.flatMap(item => Array.from(item.bytes))
+  const dependencyBeefDigest = actionBatchBlobDigest(logicalBytes)
+  const withoutDigest = {
+    batchId,
+    actions: [],
+    dependencyBeefDigest,
+    blobChunks: { [dependencyBeefDigest]: items.map(item => item.digest) },
+    sendWith: [],
+    isDelayed: true
+  }
+  await ctx.storage.prepareActionBatchCommit({
+    ...withoutDigest,
+    digest: actionBatchManifestDigest(withoutDigest)
+  })
+}
+
 describe('action batch reservations', () => {
   jest.setTimeout(120000)
   let ctx: TestWalletNoSetup
@@ -33,7 +54,8 @@ describe('action batch reservations', () => {
   test('capability is advertised and concurrent batches reserve disjoint outputs', async () => {
     expect((await ctx.storage.getCapabilities()).actionBatch).toMatchObject({
       version: 1,
-      compactBegin: true
+      compactBegin: true,
+      packedUploads: { eager: false }
     })
     const first = await ctx.storage.beginActionBatch({ batchId: 'reservation-a', firstAction: firstAction() })
     const second = await ctx.storage.beginActionBatch({ batchId: 'reservation-b', firstAction: firstAction() })
@@ -235,6 +257,80 @@ describe('action batch reservations', () => {
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 
+  test('packed blobs require manifest authorization and remain content-addressed', async () => {
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'eager-pack',
+      firstAction: firstAction()
+    })
+    const first = Uint8Array.from({ length: 64 * 1024 }, (_, index) => index & 0xff)
+    const second = Uint8Array.from({ length: 64 * 1024 }, (_, index) => index % 11)
+    const items = [first, second].map(bytes => ({
+      digest: actionBatchBlobDigest(bytes),
+      bytes
+    }))
+
+    const pack = {
+      batchId: begun.batchId,
+      items,
+      maxPackBytes: 8 * 1024 * 1024,
+      maxItems: 4096,
+      preferredEncodings: ['identity'] as ['identity']
+    }
+    await expect(ctx.storage.putActionBatchPack(pack))
+      .rejects.toThrow('prepared action batch manifest')
+    await preparePackedItems(ctx, begun.batchId, items)
+    await ctx.storage.putActionBatchPack(pack)
+    await ctx.storage.putActionBatchPack(pack)
+
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    const blobs = await ctx.activeStorage.findActionBatchBlobRecords(
+      batch!.actionBatchId,
+      items.map(item => item.digest)
+    )
+    expect(blobs).toHaveLength(2)
+    expect(blobs.map(blob => blob.digest).sort()).toEqual(items.map(item => item.digest).sort())
+
+    const unrequested = Uint8Array.of(4, 5, 6)
+    await expect(ctx.storage.putActionBatchPack({
+      ...pack,
+      items: [{ digest: actionBatchBlobDigest(unrequested), bytes: unrequested }]
+    })).rejects.toThrow('prepared action batch manifest')
+    await expect(ctx.storage.putActionBatchPack({
+      ...pack,
+      items: [{ digest: '00'.repeat(32), bytes: first }],
+    })).rejects.toThrow('match bytes')
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('packed blob persistence spans conservative SQL parameter chunks', async () => {
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'large-item-count-pack',
+      firstAction: firstAction()
+    })
+    const items = Array.from({ length: 550 }, (_, index) => {
+      const bytes = Uint8Array.of(index >>> 8, index & 0xff)
+      return { digest: actionBatchBlobDigest(bytes), bytes }
+    })
+
+    await preparePackedItems(ctx, begun.batchId, items)
+    await ctx.storage.putActionBatchPack({
+      batchId: begun.batchId,
+      items,
+      maxPackBytes: 8 * 1024 * 1024,
+      maxItems: 4096,
+      preferredEncodings: ['identity']
+    })
+
+    const batch = await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId)
+    const blobs = await ctx.activeStorage.findActionBatchBlobRecords(
+      batch!.actionBatchId,
+      items.map(item => item.digest)
+    )
+    expect(blobs).toHaveLength(items.length)
+    expect(new Set(blobs.map(blob => blob.digest)).size).toBe(items.length)
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
   test('logical blobs may span more than the former 64-chunk ceiling', async () => {
     const begun = await ctx.storage.beginActionBatch({ batchId: 'many-chunks', firstAction: firstAction() })
     const chunk = [7]
@@ -304,6 +400,27 @@ describe('action batch reservations', () => {
     }
     const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
     await expect(ctx.storage.prepareActionBatchCommit(manifest)).rejects.toThrow('inline payload within provider limit')
+    await ctx.storage.abortActionBatch(begun.batchId)
+  })
+
+  test('prepared format-2 manifests retain digests rather than inline bytes', async () => {
+    const begun = await ctx.storage.beginActionBatch({
+      batchId: 'compact-inline-prepare',
+      firstAction: firstAction()
+    })
+    const dependencyBeef = Uint8Array.of(1, 2, 3)
+    const withoutDigest = {
+      format: 2 as const,
+      batchId: begun.batchId,
+      actions: [],
+      dependencyBeef,
+      dependencyBeefDigest: actionBatchBlobDigest(dependencyBeef),
+      sendWith: [],
+      isDelayed: true
+    }
+    const manifest = { ...withoutDigest, digest: actionBatchManifestDigest(withoutDigest) }
+    await expect(ctx.storage.prepareActionBatchCommit(manifest))
+      .rejects.toThrow('digest-only bytes')
     await ctx.storage.abortActionBatch(begun.batchId)
   })
 })

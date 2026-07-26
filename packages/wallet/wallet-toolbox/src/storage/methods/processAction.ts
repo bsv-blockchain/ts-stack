@@ -95,6 +95,8 @@ export interface GetReqsAndBeefDetail {
 export interface GetReqsAndBeefResult {
   beef: Beef
   details: GetReqsAndBeefDetail[]
+  /** Internal fast path: this exact BEEF instance already passed validation. */
+  verified?: boolean
 }
 
 export interface PostBeefResultForTxidApi {
@@ -151,7 +153,7 @@ async function verifyMergedBeef(
   readyToSendReqs: EntityProvenTxReq[],
   logger?: WalletLoggerInterface
 ): Promise<void> {
-  if (readyToSendReqs.length === 0) return
+  if (readyToSendReqs.length === 0 || r.verified === true) return
   const beefIsValid = await r.beef.verify(await storage.getServices().getChainTracker())
   if (!beefIsValid) {
     logger?.error(`VERIFY FALSE BEEF: ${r.beef.toLogString()}`)

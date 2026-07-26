@@ -111,7 +111,7 @@ function makeSignableTransactionResult(
     noSendChange: args.isNoSend ? prior.dcr.noSendChangeOutputVouts?.map(vout => `${txid}.${vout}`) : undefined,
     signableTransaction: {
       reference: prior.dcr.reference,
-      tx: makeSignableTransactionBeef(prior.tx, prior.dcr.inputBeef)
+      tx: makeSignableTransactionBeef(prior.tx)
     }
   }
 
@@ -120,7 +120,7 @@ function makeSignableTransactionResult(
   return r
 }
 
-function makeSignableTransactionBeef(tx: Transaction, _inputBEEF: number[] | Uint8Array): number[] {
+function makeSignableTransactionBeef(tx: Transaction): number[] {
   // This is a special case beef for transaction signing.
   // We only need the transaction being signed, and for each input, the raw source transaction.
   const beef = new Beef()
@@ -131,6 +131,8 @@ function makeSignableTransactionBeef(tx: Transaction, _inputBEEF: number[] | Uin
     beef.mergeRawTx(input.sourceTransaction.toUint8Array())
   }
   beef.mergeRawTx(tx.toUint8Array())
+  // BRC-100 historically returns number[] here. Keep that observable shape;
+  // Wallet Wire converts it to compact bytes only inside negotiated substrates.
   return beef.toBinaryAtomic(tx.id('hex'))
 }
 

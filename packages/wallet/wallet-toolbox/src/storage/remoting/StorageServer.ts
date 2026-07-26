@@ -35,6 +35,16 @@ import {
   type HttpServerPolicyDefaults,
   type SecurityHeadersOptions
 } from './edgePolicy'
+import {
+  ACTION_BATCH_PACK_ENCODING_HEADER,
+  decodeActionBatchPack,
+  decompressActionBatchPack,
+  supportedActionBatchPackEncodings
+} from '../../utility/actionBatchPack'
+import {
+  ACTION_BATCH_MAX_PACK_BYTES,
+  ACTION_BATCH_MAX_PACK_ITEMS
+} from '../methods/actionBatchBlobs'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -42,6 +52,7 @@ const storageRpcMethods = new Set([
   'adminStats',
   'beginActionBatch',
   'commitActionBatch',
+  'commitActionBatchByDigest',
   'createAction',
   'destroy',
   'extendActionBatch',
@@ -77,6 +88,7 @@ const authIdRpcMethods = new Set([
   'abortActionBatch',
   'beginActionBatch',
   'commitActionBatch',
+  'commitActionBatchByDigest',
   'createAction',
   'extendActionBatch',
   'findCertificatesAuth',
@@ -101,6 +113,7 @@ const actionBatchRpcMethods = new Set([
   'abortActionBatch',
   'beginActionBatch',
   'commitActionBatch',
+  'commitActionBatchByDigest',
   'extendActionBatch',
   'prepareActionBatchCommit',
   'renewActionBatch'
@@ -303,6 +316,51 @@ export class StorageServer {
         })
       )
     }
+
+    this.app.put(
+      '/action-batch/:batchId/pack',
+      async (req: Request, res: Response) => {
+        try {
+          const auth = await this.authenticatedAuth(req, true)
+          const batchId = String(req.params.batchId)
+          // Express types request bodies as `any`, and other body parsers can
+          // produce strings, arrays, or objects. Keep the runtime narrowing
+          // inline so both the transport and static data-flow analysis can see
+          // that only a real byte view reaches the binary pack decoder.
+          const rawBody: unknown = req.body
+          if (
+            typeof rawBody !== 'object' ||
+            rawBody === null ||
+            !(rawBody instanceof Uint8Array)
+          ) {
+            throw new TypeError('binary action batch body required')
+          }
+          // Re-wrap without copying. Besides normalizing Buffer subclasses,
+          // this makes the decoder's runtime type independent of req.body.
+          const body = new Uint8Array(rawBody.buffer, rawBody.byteOffset, rawBody.byteLength)
+          const requestedEncoding = req.header(ACTION_BATCH_PACK_ENCODING_HEADER) ?? 'identity'
+          const encoding = supportedActionBatchPackEncodings()
+            .find(candidate => candidate === requestedEncoding)
+          if (encoding == null) throw new TypeError(`unsupported action batch pack encoding ${requestedEncoding}`)
+          const frame = await decompressActionBatchPack(body, encoding, ACTION_BATCH_MAX_PACK_BYTES)
+          const items = decodeActionBatchPack(
+            frame,
+            ACTION_BATCH_MAX_PACK_BYTES,
+            ACTION_BATCH_MAX_PACK_ITEMS
+          )
+          await this.storage.putActionBatchPack(auth, {
+            batchId,
+            items,
+            maxPackBytes: ACTION_BATCH_MAX_PACK_BYTES,
+            maxItems: ACTION_BATCH_MAX_PACK_ITEMS
+          })
+          res.status(200).json({ uploaded: true })
+        } catch (error: unknown) {
+          const json = WalletError.unknownToJson(error)
+          res.status(400).json(JSON.parse(json))
+        }
+      }
+    )
 
     this.app.put(
       '/action-batch/:batchId/blob/:digest',

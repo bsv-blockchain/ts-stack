@@ -72,11 +72,14 @@ describe('shared service edge policy', () => {
         method: 'OPTIONS',
         headers: {
           Origin: 'https://another-unknown-app.example',
-          'Access-Control-Request-Method': 'POST'
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'X-BSV-Action-Batch-Encoding'
         }
       })
       expect(preflight.status).toBe(204)
       expect(preflight.headers.get('access-control-allow-origin')).toBe('*')
+      expect(preflight.headers.get('access-control-allow-headers'))
+        .toContain('X-BSV-Action-Batch-Encoding')
     } finally {
       await close(server)
     }

@@ -156,6 +156,19 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-07-26-001 retain prepared action batch manifests'] = {
+      async up (knex) {
+        await knex.schema.alterTable('action_batches', table => {
+          table.text('manifest', 'longtext').nullable()
+        })
+      },
+      async down (knex) {
+        await knex.schema.alterTable('action_batches', table => {
+          table.dropColumn('manifest')
+        })
+      }
+    }
+
     migrations['2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs'] = {
       async up (knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {

@@ -52,4 +52,17 @@ describe('actionBatchBootstrap', () => {
     expect(bootstrap.firstAction.outputs[0].lockingScript).toBe('515151')
     expect(bootstrap.firstActionOutputScriptLengths).toBeUndefined()
   })
+
+  it('always omits derivable bytes for format-2 providers', () => {
+    const modern = {
+      ...capabilities(true),
+      maxInlineBytes: 1024,
+      manifestVersion: 2 as const
+    }
+    const bootstrap = actionBatchBootstrap(action, modern)
+
+    expect(bootstrap.firstAction.inputBEEF).toBeUndefined()
+    expect(bootstrap.firstAction.outputs[0].lockingScript).toBe('')
+    expect(bootstrap.firstActionOutputScriptLengths).toEqual([3])
+  })
 })
