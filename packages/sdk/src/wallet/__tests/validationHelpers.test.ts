@@ -550,6 +550,23 @@ describe('validateCreateActionArgs', () => {
     expect(v.isSignAction).toBe(false)
   })
 
+  it('retains lower-case scripts and normalizes upper-case scripts', () => {
+    const lower = 'ab'.repeat(1024)
+    const lowerResult = validateCreateActionOutput({
+      satoshis: 1,
+      lockingScript: lower,
+      outputDescription: 'lower-case generic output'
+    } as any)
+    const upperResult = validateCreateActionOutput({
+      satoshis: 1,
+      lockingScript: ' AABB ',
+      outputDescription: 'upper-case generic output'
+    } as any)
+
+    expect(lowerResult.lockingScript).toBe(lower)
+    expect(upperResult.lockingScript).toBe('aabb')
+  })
+
   it('sets isTestWerrReviewActions when the specOp label is present', () => {
     const v = validateCreateActionArgs({
       ...minimalArgs,

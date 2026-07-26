@@ -1,7 +1,7 @@
-import { Beef, Script, Transaction, Validation } from '@bsv/sdk'
+import { Beef, Hash, Script, Transaction, Utils, Validation } from '@bsv/sdk'
 import type { ActionBatchCommitAction, ActionBatchManifest } from '../../sdk/ActionBatch.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
-import { verifyUnlockScripts } from '../../signer/methods/completeSignedTransaction'
+import { verifyUnlockScriptsBatch } from '../../signer/methods/verifyUnlockScripts'
 import { actionBatchBlobDigest } from '../../utility/actionBatchDigest'
 import { beefForTxids } from '../../utility/beefForTxids'
 import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
@@ -10,10 +10,6 @@ import { validateStorageFeeModel } from '../StorageProvider'
 import type { TableActionBatch } from '../schema/tables/TableActionBatch'
 import { maxPossibleSatoshis } from './generateChange'
 import { lockScriptWithKeyOffsetFromPubKey } from './offsetKey'
-import {
-  ACTION_BATCH_MAX_CHUNKS_PER_BLOB,
-  ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES
-} from './actionBatchBlobs'
 
 export interface ValidatedBatchAction {
   action: ActionBatchCommitAction
@@ -40,10 +36,8 @@ async function resolveManifestBytes (
   if (digest == null) throw new WERR_INVALID_PARAMETER(name, 'inline bytes or digest')
   if (chunkDigests != null) {
     if (chunkDigests.length === 0) throw new WERR_INVALID_PARAMETER(name, 'one or more blob chunks')
-    if (chunkDigests.length > ACTION_BATCH_MAX_CHUNKS_PER_BLOB) {
-      throw new WERR_INVALID_PARAMETER(name, `at most ${ACTION_BATCH_MAX_CHUNKS_PER_BLOB} blob chunks`)
-    }
-    const chunks: Uint8Array[] = []
+    const chunks: Array<number[] | Uint8Array> = []
+    const logicalHash = new Hash.SHA256()
     let totalBytes = 0
     for (const chunkDigest of chunkDigests) {
       const chunk = await storage.findActionBatchBlobRecord(batch.actionBatchId, chunkDigest)
@@ -52,19 +46,28 @@ async function resolveManifestBytes (
         throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${chunkDigest}`)
       }
       totalBytes += chunk.bytes.length
-      if (totalBytes > ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES) {
-        throw new WERR_INVALID_PARAMETER(name, 'assembled bytes within provider limit')
+      if (!Number.isSafeInteger(totalBytes)) {
+        throw new WERR_INVALID_OPERATION(`action batch ${name} exceeds this runtime's addressable memory`)
       }
-      chunks.push(Uint8Array.from(chunk.bytes))
+      chunks.push(chunk.bytes)
+      logicalHash.update(chunk.bytes)
     }
-    const bytes = new Uint8Array(totalBytes)
+    if (Utils.toHex(logicalHash.digest()) !== digest) {
+      throw new WERR_INVALID_PARAMETER(name, 'chunks matching digest')
+    }
+    let bytes: Uint8Array
+    try {
+      bytes = new Uint8Array(totalBytes)
+    } catch (error: unknown) {
+      if (error instanceof RangeError) {
+        throw new WERR_INVALID_OPERATION(`action batch ${name} cannot be assembled in this runtime`)
+      }
+      throw error
+    }
     let offset = 0
     for (const chunk of chunks) {
       bytes.set(chunk, offset)
       offset += chunk.length
-    }
-    if (actionBatchBlobDigest(bytes) !== digest) {
-      throw new WERR_INVALID_PARAMETER(name, 'chunks matching digest')
     }
     return bytes
   }
@@ -360,9 +363,11 @@ export async function validateManifestActions (
     seenReferences.add(action.reference)
     actions.push({ action, tx, rawTx, inputBeef })
   }
-  for (const { action } of actions) {
-    await verifyUnlockScripts(action.txid, beef, storage.scriptVerifier)
-  }
+  await verifyUnlockScriptsBatch(
+    actions.map(({ action }) => action.txid),
+    beef,
+    storage.scriptVerifier
+  )
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
     throw new WERR_INVALID_PARAMETER('manifest', 'valid dependency graph')
   }

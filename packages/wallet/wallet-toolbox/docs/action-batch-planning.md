@@ -13,6 +13,9 @@ mode, the wallet asks its active storage provider for capabilities once. A provi
 advertising `actionBatch: { version: 1, ...limits }` enables local planning. A
 provider without that capability uses the existing persistence flow before any
 workspace begins. A workspace never mixes storage modes or changes active provider.
+Large first actions use compact bootstrap only when the provider also advertises
+`compactBegin: true`; this keeps new clients compatible with older version-1
+servers during a rolling deployment.
 
 The capability and its methods are Wallet Toolbox storage extensions. They do not
 extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
@@ -22,7 +25,10 @@ extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
 
 1. The first `noSend` action begins a workspace, reserves the canonical funding
    inputs needed for that action plus limited headroom, and returns their proof
-   data in one storage call.
+   data in one storage call. When its scripts or proof data exceed the inline
+   target, the client sends only planning metadata and exact script lengths.
+   Full transaction, script, and proof bytes follow through the chunked commit
+   path, so they never have to fit in the bootstrap JSON request.
 2. The wallet plans, signs, validates, and indexes subsequent actions locally. A
    shared BEEF graph and content-addressed locking-script blobs avoid retaining
    repeated ancestry and script copies.
@@ -82,21 +88,58 @@ inline for batches up to the provider's inline limit (4 MiB by default). Larger
 workloads prepare a manifest, upload only missing blobs through authenticated raw
 binary requests, and commit by digest. Logical blobs are split at the provider's
 advertised limit (8 MiB by default), deduplicated by digest, and uploaded with at
-most four concurrent requests. Incomplete uploads expire with their batch.
+most four concurrent requests. The 8 MiB value is a physical request target, not
+a logical transaction limit: one transaction, locking script, or dependency BEEF
+may span any number of chunks. Incomplete uploads expire with their batch.
 
-The planner, validator, digest pipeline, and chunk assembler retain
-`Uint8Array` storage throughout this path. Conversion to database-compatible
-numeric arrays occurs only at persistence entity boundaries. Atomic commit also
+Allocation failure in a particular JavaScript host remains a local resource
+failure. It is reported as an operation/runtime failure rather than evidence that
+the transaction or script is consensus-invalid.
+
+The planner, validator, digest pipeline, browser IndexedDB store, and chunk
+assembler retain `Uint8Array` storage throughout this path. SQL adapters create
+buffer views only at the driver boundary. Atomic commit also
 preloads external inputs, baskets, tags, and labels once per manifest instead of
 repeating those lookups for every action. These are implementation details; the
-storage capability, manifest format, and BRC-100 arguments and results are
-unchanged.
+manifest format and BRC-100 arguments and results are unchanged. The storage
+capability adds only the optional, negotiated `compactBegin` flag described
+above.
 
 Wallet and locally hosted storage construction can receive an optional
 `scriptVerifier`. Batch and ordinary action checks pass explicit consensus
-context to that verifier, allowing a warm native/WASM implementation to handle
-large scripts without changing the wallet contract. If no verifier is supplied,
-the SDK TypeScript interpreter remains the default.
+context and known source-output heights to that verifier. A provider with a
+packed Spend lane verifies all selected staged inputs in one backend scheduling
+pass, allowing a warm native/WASM implementation to handle large scripts without
+changing the wallet contract. If no verifier is supplied, the SDK TypeScript
+interpreter remains the default.
+
+Verifier configuration is process- or page-local. A browser or local wallet
+verifier accelerates checks performed by that wallet; it is not serialized over
+BRC-100 or storage RPC. A remote storage process must create, preload, and inject
+its own verifier into `StorageKnex` if server-side atomic-commit checks should use
+the same backend. Backend initialization, ABI, or memory failures propagate as
+operational failures and are never rewritten as invalid-script verdicts.
+
+## Deployment behavior for large scripts
+
+| Deployment | Before these changes | Current behavior |
+| --- | --- | --- |
+| Local Node wallet with Knex | TypeScript execution was the normal path; its default 32 MiB stack budget could turn local exhaustion into an invalid-action error. Repeated action persistence added storage round trips. | A preloaded verifier can execute ordinary and batch checks in explicit consensus mode. Default JS execution has no arbitrary consensus stack cap. `noSend` chains plan in memory and commit atomically. |
+| Browser wallet with IndexedDB | Large byte values were commonly boxed or hex/string copied, and validation stayed on the TypeScript interpreter. | Browser VeriFast uses the same consensus context and packed typed-byte paths. IndexedDB and the wallet receive the configured verifier. Host quota or memory exhaustion remains a browser resource failure, not consensus invalidity. |
+| Browser/Node wallet using remote Toolbox storage | The first large action and later commit values could encounter JSON/body limits; each staged action was validated separately and server verification could not be configured independently. | Capability-negotiated compact bootstrap avoids sending large first-action bytes as JSON. Content-addressed binary chunks carry unbounded logical blobs. Client and server independently preload/inject verifiers, and server commit batches selected spends. |
+
+For latency-sensitive startup, call `await verifier.preload()` before constructing
+or first using the wallet. The default adaptive mode deliberately lets a cold
+first call use the TypeScript interpreter while WASM warms in the background;
+`mode: 'always'` instead waits for WASM. In a remote deployment, repeat that
+startup step in both the client runtime and every storage-server process.
+
+The remaining transport boundaries are resource and protocol facts rather than
+consensus limits. Raw action-batch upload requests stay bounded and chunk around
+that bound. Cicada/Wallet Wire uses typed bytes. Browser XDM uses structured
+clone. HTTP JSON and React Native retain their existing BRC-100 encodings, so
+operators must configure infrastructure request limits for ordinary non-batched
+calls or use action batching for multi-megabyte transaction flows.
 
 The remote server derives the batch user ID and active-storage state from the
 BRC-103 authenticated identity for every management call and binary upload.
@@ -121,11 +164,20 @@ pnpm --filter @bsv/wallet-toolbox bench:action-batch
 ```
 
 On the same Apple Silicon host with Node.js v25.9.0, a representative cold
-250-action, 1 KiB-script batch improved from 12,120.22 ms to 9,858.20 ms for
-planning/signing/validation (18.7% faster) and from 6,962.96 ms to 6,054.02 ms
-for atomic commit (13.1% faster). Combined local time fell from 19,083.18 ms to
-15,912.21 ms, a 16.6% reduction. The workload, database, random inputs, and
-benchmark code were identical; absolute times remain host-dependent.
+250-action, 1 KiB-script run reduced planning/signing/validation from
+19,020.51 ms in legacy mode to 11,785.46 ms in batch mode (38.0%, or 1.61x).
+Including the deliberately heavier atomic commit, total local time was
+19,062.33 ms versus 18,261.81 ms (4.2% lower), while storage calls fell from 501
+to 2 and database transactions from 252 to 3. At 100 ms storage RTT those calls
+represent 50,100 ms versus 200 ms of control-path latency, a 99.6% reduction.
+
+The same run reduced a single 1 MiB action from 304.86 ms to 215.30 ms total
+(29.4%) and a 4 MiB action from 1,231.91 ms to 826.64 ms (32.9%), including
+chunk upload and atomic commit. Retaining an existing generic 8 MiB
+`Uint8Array` at the persistence entry point took a 0.004 ms median versus
+142.9 ms to box it with `Array.from`; it also avoids approximately 64 MiB of
+number slots for an 8 MiB payload. Absolute times remain host- and
+database-dependent.
 
 It records planning, signing and validation, storage RPCs, database transactions,
 request bytes, commit and broadcast time, CPU, and incremental peak heap. Physical

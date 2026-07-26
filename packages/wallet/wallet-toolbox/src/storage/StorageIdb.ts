@@ -1204,7 +1204,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const tx = this.toDbTrx(['action_batch_blobs'], 'readwrite', trx)
     const store = tx.objectStore('action_batch_blobs')
     if (store.put == null) throw new WERR_INTERNAL('IndexedDB action_batch_blobs store does not support put')
-    await store.put(blob)
+    await store.put({
+      ...blob,
+      bytes: blob.bytes instanceof Uint8Array ? blob.bytes : Uint8Array.from(blob.bytes)
+    })
     if (trx == null) await tx.done
   }
 

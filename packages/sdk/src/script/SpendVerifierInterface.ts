@@ -29,6 +29,19 @@ export default interface SpendVerifierInterface {
   ) => Promise<boolean>
 
   /**
+   * Optionally validate several Spends in one backend call. Callers retain
+   * responsibility for applying {@link shouldVerifySpend} independently to
+   * each item before using this lane.
+   *
+   * The result at each index is the authoritative verdict for the item at the
+   * same index. Implementations must either return exactly one verdict per item
+   * or reject the operation.
+   */
+  verifySpendsBatch?: (
+    items: ReadonlyArray<Partial<SpendVerificationContext> & { spend: Spend }>
+  ) => Promise<boolean[]>
+
+  /**
    * Optional warm-only synchronous lane used by {@link Spend.validate}. It must
    * return an authoritative verdict and must never initiate asynchronous work.
    */

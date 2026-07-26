@@ -104,9 +104,14 @@ browser-compatible fallback and does not require cross-origin isolation. Call
 is final; later calls reject instead of silently creating new workers.
 
 The default limits are 256 items and 32 MiB of input data per chunk and can be
-lowered with `maxBatchItems` and `maxBatchBytes`. Packing principally reduces
+lowered with `maxBatchItems` and the soft aggregate `maxBatchBytes` target.
+An individual item larger than that target is processed alone rather than
+rejected. Packing principally reduces
 marshalling and orchestration overhead; ECDSA remains the dominant cost for
-large signature-heavy batches.
+large signature-heavy batches. Spend items sharing the same transaction input
+and output arrays serialize that transaction once before packing. The soft byte
+target then prevents a multi-input, multi-megabyte transaction from being
+duplicated into one unbounded packed allocation.
 
 ## Generic cryptography and SDK integration
 

@@ -354,9 +354,6 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
     for (const item of params) {
       const itemBytes = item.extendedTransaction.byteLength + item.utxoHeights.length * 4 +
         (item.customFlags?.length ?? 0) * 4
-      if (itemBytes > this.maxBatchBytes) {
-        throw new RangeError(`A BDK batch item exceeds maxBatchBytes (${this.maxBatchBytes})`)
-      }
       if (chunk.length > 0 && (chunk.length >= this.maxBatchItems || bytes + itemBytes > this.maxBatchBytes)) {
         chunks.push(chunk)
         chunk = []
@@ -453,14 +450,15 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
 
   private spendContext (
     spend: Spend,
-    options: BdkVerifySpendOptions = {}
+    options: BdkVerifySpendOptions = {},
+    transaction?: Uint8Array
   ): BdkSpendContext {
     if (!Number.isSafeInteger(spend.sourceSatoshis) || spend.sourceSatoshis < 0) {
       throw new RangeError('sourceSatoshis must be a non-negative safe integer')
     }
     const verifyFlags = options.verifyFlags ?? (spend.verifyFlags === undefined ? undefined : [...spend.verifyFlags])
     return {
-      transaction: spend.toTransactionUint8Array(),
+      transaction: transaction ?? spend.toTransactionUint8Array(),
       lockingScript: spend.lockingScript.toUint8Array(),
       customFlags: verifyFlags === undefined ? undefined : mapVerifyFlags(verifyFlags),
       utxoHeight: options.utxoHeight ?? this.defaultUtxoHeight,
@@ -539,7 +537,35 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
 
   async verifySpendsBatchDetailed (items: readonly BdkSpendBatchItem[]): Promise<BdkVerificationResult[]> {
     if (items.length === 0) return []
-    const allContexts = items.map(item => this.spendContext(item.spend, item))
+    const serializedTransactions: Array<{
+      inputs: NonNullable<Spend['allInputs']>
+      outputs: Spend['outputs']
+      version: number
+      lockTime: number
+      bytes: Uint8Array
+    }> = []
+    const allContexts = items.map(item => {
+      const spend = item.spend
+      const existing = spend.allInputs === undefined
+        ? undefined
+        : serializedTransactions.find(candidate =>
+          candidate.inputs === spend.allInputs &&
+          candidate.outputs === spend.outputs &&
+          candidate.version === spend.transactionVersion &&
+          candidate.lockTime === spend.lockTime
+        )
+      const transaction = existing?.bytes ?? spend.toTransactionUint8Array()
+      if (existing === undefined && spend.allInputs !== undefined) {
+        serializedTransactions.push({
+          inputs: spend.allInputs,
+          outputs: spend.outputs,
+          version: spend.transactionVersion,
+          lockTime: spend.lockTime,
+          bytes: transaction
+        })
+      }
+      return this.spendContext(spend, item, transaction)
+    })
     if (this.workerScheduler?.shouldUse(
       items.length, async () => await this.preloadBatch()
     ) === true) {
@@ -606,9 +632,6 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
       const item = items[index]
       const context = allContexts[index]
       const itemBytes = context.transaction.byteLength + context.lockingScript.byteLength + 32
-      if (itemBytes > this.maxBatchBytes) {
-        throw new RangeError(`A BDK Spend batch item exceeds maxBatchBytes (${this.maxBatchBytes})`)
-      }
       if (chunk.length > 0 && (chunk.length >= this.maxBatchItems || chunkBytes + itemBytes > this.maxBatchBytes)) {
         flush()
       }
@@ -669,11 +692,6 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
       }
       digests.set(items[index].digest, index * 32)
     }
-    const packedBytes = publicKeys.values.byteLength +
-      signatures.values.byteLength + digests.byteLength
-    if (packedBytes > this.maxBatchBytes) {
-      throw new RangeError(`A digest batch exceeds maxBatchBytes (${this.maxBatchBytes})`)
-    }
     return {
       publicKeys: publicKeys.values,
       publicKeyOffsets: publicKeys.offsets,
@@ -709,12 +727,26 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
         })
       }
     }
-    if (items.length > this.maxBatchItems) {
+    const chunks: BdkDigestVerification[][] = []
+    let chunk: BdkDigestVerification[] = []
+    let chunkBytes = 0
+    for (const item of items) {
+      const itemBytes = item.publicKey.byteLength +
+        item.digest.byteLength + item.signature.byteLength
+      if (chunk.length > 0 &&
+        (chunk.length >= this.maxBatchItems || chunkBytes + itemBytes > this.maxBatchBytes)) {
+        chunks.push(chunk)
+        chunk = []
+        chunkBytes = 0
+      }
+      chunk.push(item)
+      chunkBytes += itemBytes
+    }
+    if (chunk.length > 0) chunks.push(chunk)
+    if (chunks.length > 1) {
       const results: boolean[] = []
-      for (let offset = 0; offset < items.length; offset += this.maxBatchItems) {
-        results.push(...await this.verifyDigestBatch(
-          items.slice(offset, offset + this.maxBatchItems)
-        ))
+      for (const batch of chunks) {
+        results.push(...await this.verifyDigestBatch(batch))
       }
       return results
     }

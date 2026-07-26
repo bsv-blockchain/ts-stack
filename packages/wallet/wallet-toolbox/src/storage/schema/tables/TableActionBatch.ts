@@ -23,5 +23,5 @@ export interface TableActionBatchBlob extends EntityTimeStamp {
   actionBatchBlobId: number
   actionBatchId: number
   digest: string
-  bytes: number[]
+  bytes: number[] | Uint8Array
 }

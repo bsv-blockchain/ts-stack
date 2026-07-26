@@ -1,4 +1,5 @@
 import { Transaction, Script, P2PKH, PrivateKey, MerklePath, Spend, OP } from '@bsv/sdk'
+import { jest } from '@jest/globals'
 import BdkVerifier, {
   BdkErrorDomain,
   BdkVerificationError,
@@ -451,6 +452,63 @@ describe('BdkVerifier', () => {
       { extendedTransaction: Uint8Array.of(3, 4, 5), utxoHeights: [20, 21], blockHeight: 31, consensus: false }
     ])).resolves.toEqual([true, false])
     expect(batchCalls).toBe(1)
+  })
+
+  it('treats maxBatchBytes as a soft target for oversized singleton items', async () => {
+    const tx = await buildTx()
+    const spend = spendForInput(tx)
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    const calls: string[] = []
+    module.VerifyScriptBatchArray = () => {
+      calls.push('script')
+      return Int32Array.from([0, 0])
+    }
+    module.VerifySpendBatchArray = () => {
+      calls.push('spend')
+      return Int32Array.from([0, 0])
+    }
+    module.VerifyDigestBatchArray = () => {
+      calls.push('digest')
+      return Uint8Array.of(1)
+    }
+    const verifier = new BdkVerifier(
+      async () => module,
+      { maxBatchBytes: 1, registerAsDefault: false }
+    )
+
+    await expect(verifier.verifyScriptsBatchFromEF([{
+      extendedTransaction: Uint8Array.of(1, 2),
+      utxoHeights: [10],
+      blockHeight: 30,
+      consensus: true
+    }])).resolves.toEqual([true])
+    await expect(verifier.verifySpendsBatch([
+      { spend, consensus: true }
+    ])).resolves.toEqual([true])
+    await expect(verifier.verifyDigestBatch([{
+      publicKey: Uint8Array.of(2, 3),
+      digest: new Uint8Array(32),
+      signature: Uint8Array.of(4, 5)
+    }])).resolves.toEqual([true])
+    expect(calls).toEqual(['script', 'spend', 'digest'])
+  })
+
+  it('serializes a shared transaction once for a multi-input Spend batch', async () => {
+    const tx = await buildTx(2)
+    const spends = [spendForInput(tx, 0), spendForInput(tx, 1)]
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifySpendBatchArray = () => Int32Array.from([0, 0, 0, 0])
+    const verifier = new BdkVerifier(
+      async () => module,
+      { registerAsDefault: false }
+    )
+    const serialize = jest.spyOn(Spend.prototype, 'toTransactionUint8Array')
+
+    await expect(verifier.verifySpendsBatch(
+      spends.map(spend => ({ spend, consensus: true }))
+    )).resolves.toEqual([true, true])
+    expect(serialize).toHaveBeenCalledTimes(1)
+    serialize.mockRestore()
   })
 
   it('validates a Spend directly and through Spend.validateWith', async () => {

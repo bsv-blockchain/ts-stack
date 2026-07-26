@@ -76,6 +76,10 @@ export interface BdkVerifierOptions {
   /** Script byte length above which auto mode selects WASM. Defaults to 100. */
   scriptByteThreshold?: number
   maxBatchItems?: number
+  /**
+   * Soft aggregate packing target. An individual item larger than this target
+   * is processed alone and is never rejected solely because of its size.
+   */
   maxBatchBytes?: number
   /** Worker count for explicitly large batches. Defaults conservatively from logical cores. */
   batchWorkers?: number

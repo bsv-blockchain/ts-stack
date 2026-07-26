@@ -11,6 +11,8 @@ export interface StorageCapabilities {
     maxConcurrentUploads: number
     leaseMs: number
     hardLifetimeMs: number
+    /** Large first actions may omit bytes that will be uploaded at commit. */
+    compactBegin?: boolean
   }
 }
 
@@ -21,6 +23,12 @@ export interface ActionBatchFundingOutput extends TableOutput {
 export interface BeginActionBatchArgs {
   batchId: string
   firstAction: Validation.ValidCreateActionArgs
+  /**
+   * Exact output-script byte lengths when a large first action is sent in
+   * compact form with empty script fields. This internal storage extension
+   * avoids sending scripts and input proof data before chunked upload begins.
+   */
+  firstActionOutputScriptLengths?: number[]
 }
 
 export interface BeginActionBatchResult {

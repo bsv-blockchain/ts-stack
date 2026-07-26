@@ -59,7 +59,8 @@ export function getActionBatchCapabilities (): StorageCapabilities {
       maxBlobBytes: ACTION_BATCH_MAX_BLOB_BYTES,
       maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
       leaseMs: ACTION_BATCH_LEASE_MS,
-      hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS
+      hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS,
+      compactBegin: true
     }
   }
 }
@@ -132,7 +133,8 @@ function sourceOutputFromBeef (
 async function resolveExplicitOutputs (
   storage: StorageProvider,
   userId: number,
-  args: Validation.ValidCreateActionArgs
+  args: Validation.ValidCreateActionArgs,
+  allowDeferredProofs: boolean
 ): Promise<{ outputs: TableOutput[], inputSatoshis: number }> {
   const byOutpoint = await storage.findOutputsByOutpoints(userId, args.inputs.map(input => input.outpoint))
   const beef = args.inputBEEF == null ? new Beef() : Beef.fromBinary(args.inputBEEF)
@@ -148,6 +150,7 @@ async function resolveExplicitOutputs (
     }
     const source = sourceOutputFromBeef(beef, input.outpoint)
     if (source == null) {
+      if (allowDeferredProofs) continue
       throw new WERR_INVALID_PARAMETER('inputBEEF', `proof data for ${input.outpoint.txid}.${input.outpoint.vout}`)
     }
     inputSatoshis += source.satoshis
@@ -180,11 +183,12 @@ async function resolveNoSendChangeOutputs (
 function estimateFirstActionTarget (
   storage: StorageProvider,
   args: Validation.ValidCreateActionArgs,
-  inputSatoshis: number
+  inputSatoshis: number,
+  outputScriptLengths?: number[]
 ): number {
   const outputSatoshis = args.outputs.reduce((sum, output) => sum + output.satoshis, 0) + storage.commissionSatoshis
   const inputLengths = args.inputs.map(input => input.unlockingScriptLength)
-  const outputLengths = args.outputs.map(output => output.lockingScript.length / 2)
+  const outputLengths = outputScriptLengths ?? args.outputs.map(output => output.lockingScript.length / 2)
   if (storage.commissionSatoshis > 0) outputLengths.push(25)
   outputLengths.push(25)
   const fee = validateStorageFeeModel(storage.feeModel).value ?? 0
@@ -336,15 +340,37 @@ export async function beginActionBatch (
   if (await storage.findActionBatch(userId, args.batchId) != null) {
     throw new WERR_INVALID_PARAMETER('batchId', 'unique')
   }
+  const outputScriptLengths = args.firstActionOutputScriptLengths
+  if (outputScriptLengths != null && (
+    outputScriptLengths.length !== args.firstAction.outputs.length ||
+    outputScriptLengths.some(length => !Number.isSafeInteger(length) || length < 0) ||
+    args.firstAction.outputs.some((output, index) =>
+      output.lockingScript.length > 0 &&
+      output.lockingScript.length / 2 !== outputScriptLengths[index]
+    )
+  )) {
+    throw new WERR_INVALID_PARAMETER(
+      'firstActionOutputScriptLengths',
+      'valid byte lengths aligned with firstAction outputs'
+    )
+  }
   const changeBasket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
-  const explicit = await resolveExplicitOutputs(storage, userId, args.firstAction)
+  const explicit = await resolveExplicitOutputs(
+    storage,
+    userId,
+    args.firstAction,
+    outputScriptLengths != null
+  )
   const noSendChange = await resolveNoSendChangeOutputs(storage, userId, args.firstAction)
   const fixedOutputIds = new Set([...explicit.outputs, ...noSendChange.outputs].map(output => output.outputId))
   const available = (await availableManagedChange(
     storage, userId, changeBasket.basketId, !args.firstAction.isDelayed
   )).filter(output => !fixedOutputIds.has(output.outputId))
   const target = estimateFirstActionTarget(
-    storage, args.firstAction, explicit.inputSatoshis + noSendChange.inputSatoshis
+    storage,
+    args.firstAction,
+    explicit.inputSatoshis + noSendChange.inputSatoshis,
+    outputScriptLengths
   )
   const fixedOutputs = [...explicit.outputs, ...noSendChange.outputs]
   const requiredCapacity = Math.max(0, INITIAL_RESERVATION_LIMIT - fixedOutputs.length)

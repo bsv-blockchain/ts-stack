@@ -12,12 +12,12 @@ export default class ScriptResourceLimitError extends Error {
     public readonly limit: number | bigint,
     public readonly attempted: number | bigint
   ) {
-    const label =
-      resource === 'stack'
-        ? 'Stack memory usage'
-        : resource === 'alt-stack'
-          ? 'Alt stack memory usage'
-          : 'Script element allocation'
+    const labels: Record<ScriptResource, string> = {
+      stack: 'Stack memory usage',
+      'alt-stack': 'Alt stack memory usage',
+      'element-size': 'Script element allocation'
+    }
+    const label = labels[resource]
     super(`${label} has exceeded ${limit} bytes`)
     this.name = 'ScriptResourceLimitError'
   }

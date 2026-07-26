@@ -78,11 +78,6 @@ export default class BdkWorkerScheduler {
     if (items.length === 0) return []
     if (this.pool === undefined) return []
     const sizes = items.map(itemBytes)
-    for (const size of sizes) {
-      if (size > this.maxBatchBytes) {
-        throw new RangeError(`A BDK batch item exceeds maxBatchBytes (${this.maxBatchBytes})`)
-      }
-    }
     const chunks: T[][] = []
     let chunk: T[] = []
     let chunkBytes = 0

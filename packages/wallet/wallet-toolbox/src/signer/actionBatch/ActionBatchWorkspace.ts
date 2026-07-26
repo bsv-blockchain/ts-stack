@@ -12,6 +12,7 @@ import {
   CommitActionBatchResult,
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
+import { actionBatchBootstrap } from './actionBatchBootstrap'
 import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
@@ -683,10 +684,8 @@ export class ActionBatchController {
     const capabilities = await this.negotiate()
     if (capabilities == null) return undefined
     const batchId = randomBytesBase64(24)
-    const begin = await this.wallet.storage.beginActionBatch({
-      batchId,
-      firstAction: { ...args, logger: undefined }
-    })
+    const bootstrap = actionBatchBootstrap(args, capabilities)
+    const begin = await this.wallet.storage.beginActionBatch({ ...bootstrap, batchId })
     this.workspace = new ActionBatchWorkspace(this.wallet, begin, args, capabilities)
     return this.workspace
   }
