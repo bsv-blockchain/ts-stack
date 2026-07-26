@@ -18,7 +18,7 @@ interface P2pPaymentDestinationRouteConfig {
 }
 
 export default class P2pPaymentDestinationRoute extends PaymailRoute {
-  constructor (config: P2pPaymentDestinationRouteConfig) {
+  constructor(config: P2pPaymentDestinationRouteConfig) {
     super({
       capability: P2pPaymentDestinationCapability,
       endpoint: '/p2p-payment-destination/:paymail',
@@ -26,17 +26,18 @@ export default class P2pPaymentDestinationRoute extends PaymailRoute {
     })
   }
 
-  protected async validateBody (body: any): Promise<void> {
+  protected async validateBody(body: unknown): Promise<unknown> {
     const schema = joi.object({
-      satoshis: joi.number().required()
+      satoshis: joi.number().integer().min(1).required()
     })
-    const { error } = schema.validate(body)
+    const { error, value } = schema.validate(body, { stripUnknown: true })
     if (error) {
       throw new PaymailBadRequestError('Invalid body: ' + error.message)
     }
+    return value
   }
 
-  protected serializeResponse (domainLogicResponse: P2pDestinationsResponse): string {
+  protected serializeResponse(domainLogicResponse: P2pDestinationsResponse): string {
     return JSON.stringify({
       outputs: domainLogicResponse.outputs.map(output => ({
         script: output.script,

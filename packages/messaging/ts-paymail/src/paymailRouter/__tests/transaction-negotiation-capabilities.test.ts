@@ -1,9 +1,9 @@
 import request from 'supertest'
-import express from 'express'
-import PaymailRouter from '../../../dist/cjs/src/paymailRouter/paymailRouter.js'
-import TransactionNegotiationCapabilitiesRoute from '../../../dist/cjs/src/paymailRouter/paymailRoutes/negotiationCapability.js'
+import express, { type Express } from 'express'
+import PaymailRouter from '../paymailRouter.js'
+import TransactionNegotiationCapabilitiesRoute from '../paymailRoutes/negotiationCapability.js'
 describe('#Paymail Server - Transaction Negotiation Capabilities', () => {
-  let app
+  let app: Express
 
   beforeAll(() => {
     app = express()
@@ -24,7 +24,9 @@ describe('#Paymail Server - Transaction Negotiation Capabilities', () => {
   })
 
   it('should get transaction negotiation capabilities', async () => {
-    const response = await request(app).get('/transaction-negotiation-capabilities/satoshi@vistamail.org')
+    const response = await request(app).get(
+      '/transaction-negotiation-capabilities/satoshi@vistamail.org'
+    )
     expect(response.statusCode).toBe(200)
     expect(response.body).toEqual({
       send_disabled: false,

@@ -6,9 +6,10 @@ const receiveTransactionRoute = new ReceiveTransactionRoute({
   domainLogicHandler: async (params, body) => {
     const { name, domain } = ReceiveTransactionRoute.getNameAndDomain(params)
     const user = await fetchUser(name, domain)
-    const tx = Transaction.fromHex(body.hex)
+    const { hex, reference } = body as { hex: string; reference: string }
+    const tx = Transaction.fromHex(hex)
     await user.broadcastTransaction(tx)
-    await user.processTransaction(tx, body.reference)
+    await user.processTransaction(tx, reference)
     return {
       txid: tx.id('hex')
     }

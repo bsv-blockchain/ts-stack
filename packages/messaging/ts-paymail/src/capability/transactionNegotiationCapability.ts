@@ -12,11 +12,11 @@ export default TransactionNegotiationCapability
 
 export interface TransactionNegotiationBody {
   thread_id: string
-  fees: Array<{ feeType: string, satoshis: number, bytes: number }>
+  fees?: Array<{ feeType: string; satoshis: number; bytes: number }>
   expanded_tx: {
     tx: string
-    ancestors: Array<{ tx: string, merkle_proofs?: any[], miner_responses?: any[] }>
-    spent_outputs: Array<{ value: number, locking_script: string }>
+    ancestors?: Array<{ tx: string; merkle_proofs?: unknown[]; miner_responses?: unknown[] }>
+    spent_outputs?: Array<{ value: number; locking_script: string }>
   }
   expiry: number
   timestamp: number

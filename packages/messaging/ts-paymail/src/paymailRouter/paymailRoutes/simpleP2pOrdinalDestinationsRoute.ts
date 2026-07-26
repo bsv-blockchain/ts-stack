@@ -17,7 +17,7 @@ interface OrdinalP2pPaymentDestinationRouteConfig {
 }
 
 export default class OrdinalP2pPaymentDestinationRoute extends PaymailRoute {
-  constructor (config: OrdinalP2pPaymentDestinationRouteConfig) {
+  constructor(config: OrdinalP2pPaymentDestinationRouteConfig) {
     super({
       capability: simpleP2pOrdinalDestinationsCapability,
       endpoint: '/ordinal-p2p-payment-destination/:paymail',
@@ -25,17 +25,18 @@ export default class OrdinalP2pPaymentDestinationRoute extends PaymailRoute {
     })
   }
 
-  protected async validateBody (body: any): Promise<void> {
+  protected async validateBody(body: unknown): Promise<unknown> {
     const schema = joi.object({
-      ordinals: joi.number().required()
+      ordinals: joi.number().integer().min(1).required()
     })
-    const { error } = schema.validate(body)
+    const { error, value } = schema.validate(body, { stripUnknown: true })
     if (error) {
       throw new PaymailBadRequestError('Invalid body: ' + error.message)
     }
+    return value
   }
 
-  protected serializeResponse (domainLogicResponse: OrdinalP2pDestinationsResponse): string {
+  protected serializeResponse(domainLogicResponse: OrdinalP2pDestinationsResponse): string {
     return JSON.stringify({
       outputs: domainLogicResponse.outputs.map(output => ({
         script: output.script

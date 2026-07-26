@@ -10,7 +10,7 @@ interface TransactionNegotiationCapabilitiesRouteConfig {
 }
 
 export default class TransactionNegotiationCapabilitiesRoute extends PaymailRoute {
-  constructor (config: TransactionNegotiationCapabilitiesRouteConfig) {
+  constructor(config: TransactionNegotiationCapabilitiesRouteConfig) {
     super({
       capability: TransactionNegotiationCapabilities,
       endpoint: config.endpoint || '/transaction-negotiation/:paymail',
@@ -18,11 +18,11 @@ export default class TransactionNegotiationCapabilitiesRoute extends PaymailRout
     })
   }
 
-  protected async validateBody (body: any): Promise<void> {
+  protected async validateBody(body: unknown): Promise<unknown> {
     const feeSchema = Joi.object({
       feeType: Joi.string().valid('standard', 'data').required(),
-      satoshis: Joi.number().required(),
-      bytes: Joi.number().required()
+      satoshis: Joi.number().integer().min(0).required(),
+      bytes: Joi.number().integer().min(1).required()
     })
 
     const txSchema = Joi.object({
@@ -43,26 +43,27 @@ export default class TransactionNegotiationCapabilitiesRoute extends PaymailRout
         tx: Joi.string().required(),
         ancestors: Joi.array().items(txSchema).optional(),
         spent_outputs: Joi.array().items(spentOutputSchema).optional()
-      }),
+      }).required(),
       expiry: Joi.number().required(),
       timestamp: Joi.number().required(),
       reply_to: Joi.object({
         handle: Joi.string().required(),
         peer_channel: Joi.string().uri().optional()
-      })
+      }).required()
     })
 
-    const { error } = schema.validate(body)
+    const { error, value } = schema.validate(body, { stripUnknown: true })
     if (error) {
       throw new PaymailBadRequestError('Invalid body: ' + error.message)
     }
+    return value
   }
 
-  protected serializeResponse (): string {
+  protected serializeResponse(): string {
     return JSON.stringify({})
   }
 
-  protected sendSuccessResponse (res: Response): Response {
+  protected sendSuccessResponse(res: Response): Response {
     return res.type('application/json').status(202).send()
   }
 }

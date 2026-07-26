@@ -1,5 +1,5 @@
-import express, { Router, ErrorRequestHandler } from 'express'
-import bodyParser from 'body-parser'
+import express from 'express'
+import type { ErrorRequestHandler, NextFunction, Request, Response, Router } from 'express'
 import PaymailRoute from './paymailRoutes/paymailRoute.js'
 import RequestSenderValidationCapability from '../capability/requestSenderValidationCapability.js'
 import { PaymailBadRequestError } from '../errors/index.js'
@@ -27,11 +27,11 @@ export default class PaymailRouter {
    * Creates an instance of PaymailRouter.
    * @param config - Configuration options for the PaymailRouter.
    */
-  constructor (config: PaymailRouterConfig) {
+  constructor(config: PaymailRouterConfig) {
     this.baseUrl = config.baseUrl
     this.basePath = config.basePath ?? ''
     this.router = express.Router()
-    this.router.use(bodyParser.json({ type: 'application/json' }))
+    this.router.use(express.json({ type: 'application/json' }))
     this.routes = config.routes
     this.requestSenderValidation = config.requestSenderValidation ?? false
 
@@ -60,22 +60,30 @@ export default class PaymailRouter {
    * Default error handler for the PaymailRouter.
    * @returns An express middleware for handling errors.
    */
-  private readonly defaultErrorHandler = () => {
-    return (err, req, res, next) => {
+  private readonly defaultErrorHandler = (): ErrorRequestHandler => {
+    return (err: unknown, request: Request, res: Response, next: NextFunction) => {
+      void request
+      void next
       if (err instanceof PaymailBadRequestError) {
-        return res.status(400).send(err.message)
+        res.status(400).send(err.message)
+        return
       }
-      res.status(500).send(err.message)
+      res.status(500).send('Internal server error')
     }
   }
 
   /**
    * Adds a route for handling the well-known BSV alias protocol.
    */
-  private addWellKnownRouter (): void {
-    this.router.get('/.well-known/bsvalias', (req, res) => {
-      const capabilities = this.routes.reduce((map, route) => {
-        const endpoint = route.getEndpoint().split(':paymail').join('{alias}@{domain.tld}').split(':pubkey').join('{pubkey}')
+  private addWellKnownRouter(): void {
+    this.router.get('/.well-known/bsvalias', (_request, res) => {
+      const capabilities = this.routes.reduce<Record<string, string | boolean>>((map, route) => {
+        const endpoint = route
+          .getEndpoint()
+          .split(':paymail')
+          .join('{alias}@{domain.tld}')
+          .split(':pubkey')
+          .join('{pubkey}')
         map[route.getCode()] = this.joinUrl(this.baseUrl, this.getBasePath(), endpoint)
         return map
       }, {})
@@ -88,11 +96,11 @@ export default class PaymailRouter {
     })
   }
 
-  private joinUrl (...parts: string[]): string {
+  private joinUrl(...parts: string[]): string {
     return parts.map(part => this.trimSlashes(part)).join('/')
   }
 
-  private trimSlashes (part: string): string {
+  private trimSlashes(part: string): string {
     let start = 0
     let end = part.length
     while (start < end && part[start] === '/') start += 1
@@ -100,7 +108,7 @@ export default class PaymailRouter {
     return part.slice(start, end)
   }
 
-  private getBasePath (): string {
+  private getBasePath(): string {
     return this.basePath
   }
 
@@ -108,7 +116,7 @@ export default class PaymailRouter {
    * Gets the configured express Router.
    * @returns The express Router with all configured routes and handlers.
    */
-  public getRouter (): Router {
+  public getRouter(): Router {
     return this.router
   }
 }

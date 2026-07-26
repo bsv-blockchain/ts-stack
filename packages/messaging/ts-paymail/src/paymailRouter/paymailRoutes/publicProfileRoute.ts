@@ -12,7 +12,7 @@ interface PublicProfileRouteConfig {
 }
 
 export default class PublicProfileRoute extends PaymailRoute {
-  constructor (config: PublicProfileRouteConfig) {
+  constructor(config: PublicProfileRouteConfig) {
     super({
       capability: PublicProfileCapability,
       endpoint: config.endpoint || '/public-profile/:paymail',
@@ -20,7 +20,7 @@ export default class PublicProfileRoute extends PaymailRoute {
     })
   }
 
-  protected serializeResponse (domainLogicResponse: PublicProfileResponse): string {
+  protected serializeResponse(domainLogicResponse: PublicProfileResponse): string {
     return JSON.stringify({
       avatar: domainLogicResponse.avatar,
       name: domainLogicResponse.name

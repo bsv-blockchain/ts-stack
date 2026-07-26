@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 59,
+  "findingCount": 54,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -50,26 +50,6 @@
     {
       "id": "packages/messaging/message-box-client::missing-script::typecheck",
       "message": "Profile dual-runtime-library requires script typecheck"
-    },
-    {
-      "id": "packages/messaging/ts-paymail::missing-script::format:check",
-      "message": "Profile dual-runtime-library requires script format:check"
-    },
-    {
-      "id": "packages/messaging/ts-paymail::missing-script::pack:check",
-      "message": "Profile dual-runtime-library requires script pack:check"
-    },
-    {
-      "id": "packages/messaging/ts-paymail::missing-script::typecheck",
-      "message": "Profile dual-runtime-library requires script typecheck"
-    },
-    {
-      "id": "packages/messaging/ts-paymail/docs/examples::missing-script::format:check",
-      "message": "Profile examples requires script format:check"
-    },
-    {
-      "id": "packages/messaging/ts-paymail/docs/examples::missing-script::typecheck",
-      "message": "Profile examples requires script typecheck"
     },
     {
       "id": "packages/middleware/auth-express-middleware::missing-script::format:check",

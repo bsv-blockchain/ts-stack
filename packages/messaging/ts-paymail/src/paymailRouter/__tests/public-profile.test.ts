@@ -1,10 +1,10 @@
 import request from 'supertest'
-import express from 'express'
-import PaymailRouter from '../../../dist/cjs/src/paymailRouter/paymailRouter.js'
-import PublicProfileRoute from '../../../dist/cjs/src/paymailRouter/paymailRoutes/publicProfileRoute.js'
+import express, { type Express } from 'express'
+import PaymailRouter from '../paymailRouter.js'
+import PublicProfileRoute from '../paymailRoutes/publicProfileRoute.js'
 
 describe('#Paymail Server - Get Public Profile', () => {
-  let app
+  let app: Express
 
   beforeAll(() => {
     app = express()
@@ -12,7 +12,7 @@ describe('#Paymail Server - Get Public Profile', () => {
 
     const routes = [
       new PublicProfileRoute({
-        domainLogicHandler: (params) => {
+        domainLogicHandler: params => {
           const { name, domain } = PublicProfileRoute.getNameAndDomain(params)
           return {
             name,

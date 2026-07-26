@@ -1,14 +1,28 @@
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
-Links: [API](#api), [Classes](#classes), [Types](#types)
+# Interfaces
+
+## Interface: PaymailRouteParams
+
+```ts
+export interface PaymailRouteParams {
+  [key: string]: string
+  paymail: string
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+
+---
 
 # Classes
 
-| |
-| --- |
-| [PaymailRoute](#class-paymailroute) |
+|                                       |
+| ------------------------------------- |
+| [PaymailRoute](#class-paymailroute)   |
 | [PaymailRouter](#class-paymailrouter) |
 
-Links: [API](#api), [Classes](#classes), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
 
@@ -16,27 +30,30 @@ Links: [API](#api), [Classes](#classes), [Types](#types)
 
 ```ts
 export default class PaymailRoute {
-    protected readonly domainLogicHandler: DomainLogicHandler;
-    constructor(config: PaymailRouteConfig) 
-    protected async defaultHandler(req: Request, res: Response, next: NextFunction): Promise<any> 
-    protected async validateBody(body: any): Promise<void> 
-    protected serializeResponse(response): string 
-    protected sendSuccessResponse(res: Response, content: string): Response 
-    public getHandler(): RequestHandler 
-    public getCode(): string 
-    public getEndpoint(): string 
-    public getMethod(): "GET" | "POST" 
-    static getNameAndDomain(params: any): {
-        name: string;
-        domain: string;
-        pubkey?: string;
-    } 
+  protected readonly domainLogicHandler: DomainLogicHandler
+  constructor(config: PaymailRouteConfig)
+  protected async defaultHandler(req: Request, res: Response, next: NextFunction): Promise<void>
+  protected async validateBody(body: unknown): Promise<unknown>
+  protected serializeResponse(response: unknown): string
+  protected sendSuccessResponse(res: Response, content: string): Response
+  public getHandler(): RequestHandler
+  public getCode(): string
+  public getEndpoint(): string
+  public getMethod(): 'GET' | 'POST'
+  static getNameAndDomain(params: PaymailRouteParams): {
+    name: string
+    domain: string
+    pubkey?: string
+  }
 }
 ```
 
-Links: [API](#api), [Classes](#classes), [Types](#types)
+See also: [DomainLogicHandler](#type-domainlogichandler), [PaymailRouteParams](#interface-paymailrouteparams)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
+
 ## Class: PaymailRouter
 
 PaymailRouter is responsible for routing and handling Paymail requests.
@@ -44,14 +61,16 @@ It sets up the necessary routes and handlers based on the given configuration.
 
 ```ts
 export default class PaymailRouter {
-    public baseUrl: string;
-    public basePath: string;
-    public routes: PaymailRoute[];
-    public requestSenderValidation: boolean;
-    constructor(config: PaymailRouterConfig) 
-    public getRouter(): Router 
+  public baseUrl: string
+  public basePath: string
+  public routes: PaymailRoute[]
+  public requestSenderValidation: boolean
+  constructor(config: PaymailRouterConfig)
+  public getRouter(): Router
 }
 ```
+
+See also: [PaymailRoute](#class-paymailroute)
 
 <details>
 
@@ -62,20 +81,20 @@ export default class PaymailRouter {
 Creates an instance of PaymailRouter.
 
 ```ts
-constructor(config: PaymailRouterConfig) 
+constructor(config: PaymailRouterConfig)
 ```
 
 Argument Details
 
-+ **config**
-  + Configuration options for the PaymailRouter.
+- **config**
+  - Configuration options for the PaymailRouter.
 
 ### Method getRouter
 
 Gets the configured express Router.
 
 ```ts
-public getRouter(): Router 
+public getRouter(): Router
 ```
 
 Returns
@@ -84,17 +103,26 @@ The express Router with all configured routes and handlers.
 
 </details>
 
-Links: [API](#api), [Classes](#classes), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
+
+# Functions
+
 # Types
 
 ## Type: DomainLogicHandler
 
 ```ts
-export type DomainLogicHandler = (params: any, body?: any, pubkey?: string) => Promise<any>
+export type DomainLogicHandler = (
+  params: PaymailRouteParams,
+  body?: unknown,
+  pubkey?: string
+) => unknown | Promise<unknown>
 ```
 
-Links: [API](#api), [Classes](#classes), [Types](#types)
+See also: [PaymailRouteParams](#interface-paymailrouteparams)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---

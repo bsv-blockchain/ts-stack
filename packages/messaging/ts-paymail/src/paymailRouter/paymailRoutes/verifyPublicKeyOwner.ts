@@ -13,7 +13,7 @@ interface VerifyPublicKeyOwnerRouteConfig {
 }
 
 export default class VerifyPublicKeyOwnerRoute extends PaymailRoute {
-  constructor (config: VerifyPublicKeyOwnerRouteConfig) {
+  constructor(config: VerifyPublicKeyOwnerRouteConfig) {
     super({
       capability: VerifyPublicKeyOwnerCapability,
       endpoint: config.endpoint || '/verifypubkey/:paymail/:pubkey',
@@ -21,7 +21,7 @@ export default class VerifyPublicKeyOwnerRoute extends PaymailRoute {
     })
   }
 
-  protected serializeResponse (domainLogicResponse: VerifyPublicKeyOwnerResponse): string {
+  protected serializeResponse(domainLogicResponse: VerifyPublicKeyOwnerResponse): string {
     return JSON.stringify({
       bsvalias: '1.0',
       handle: domainLogicResponse.handle,
