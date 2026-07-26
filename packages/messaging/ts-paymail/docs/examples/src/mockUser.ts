@@ -160,7 +160,7 @@ class MockUser {
         throw new Error('Source transaction not found')
       }
       const sourceOutput = sourceTx.outputs[output.sourceOutputIndex]
-      if (!sourceOutput || sourceOutput.satoshis === undefined) {
+      if (sourceOutput?.satoshis === undefined) {
         throw new Error('Source transaction output is unavailable')
       }
       tx.addInput({

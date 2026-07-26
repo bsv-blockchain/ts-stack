@@ -109,12 +109,12 @@ class DNSResolver extends AbstractResolver {
     domain: string,
     field: 'port' | 'priority' | 'weight'
   ): number {
-    const port =
-      typeof value === 'number'
-        ? value
-        : /^\d+$/.test(value)
-          ? Number.parseInt(value, 10)
-          : Number.NaN
+    let port: number
+    if (typeof value === 'number') {
+      port = value
+    } else {
+      port = /^\d+$/.test(value) ? Number.parseInt(value, 10) : Number.NaN
+    }
     if (!Number.isInteger(port) || port < 0 || port > 65_535) {
       throw new PaymailServerResponseError(
         `${domain} is not correctly configured: invalid SRV ${field}`

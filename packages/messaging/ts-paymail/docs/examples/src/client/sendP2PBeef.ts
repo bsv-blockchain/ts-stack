@@ -8,7 +8,7 @@ const client = new PaymailClient()
   const sender = mockUser1
   const receiver = mockUser2.getPaymail()
   await sender.initWallet()
-  const startingBalance = await sender.getSatoshiBalance()
+  const startingBalance = sender.getSatoshiBalance()
   console.log('sender starting balance', startingBalance)
 
   if (startingBalance < 3) {
@@ -39,6 +39,6 @@ const client = new PaymailClient()
   })
   await sender.broadcastTransaction(tx)
   mockUser1.processTransaction(tx, reference)
-  console.log('sender updated balance', await sender.getSatoshiBalance())
+  console.log('sender updated balance', sender.getSatoshiBalance())
   await sender.closeWallet()
 })()

@@ -57,6 +57,22 @@ describe('HttpClient', () => {
     expect(headers.get('Authorization')).toBe('Bearer token')
   })
 
+  it('preserves a caller-provided content type', async () => {
+    mockedFetch.mockResolvedValue(new Response('{}', { status: 200 }))
+    const client = new HttpClient()
+
+    await client.request('https://example.test', {
+      method: 'POST',
+      body: { value: 1 },
+      headers: { 'Content-Type': 'application/paymail+json' }
+    })
+
+    const requestOptions = mockedFetch.mock.calls[0]?.[1]
+    expect(new Headers(requestOptions?.headers).get('Content-Type')).toBe(
+      'application/paymail+json'
+    )
+  })
+
   it('does not synthesize a body when a POST body is omitted', async () => {
     mockedFetch.mockResolvedValue(new Response('{}', { status: 200 }))
     const client = new HttpClient()

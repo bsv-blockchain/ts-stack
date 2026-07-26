@@ -89,6 +89,49 @@ describe('PaymailRoute', () => {
     expect(failure.text).toBe('Internal server error')
   })
 
+  it('normalizes non-Error body validation failures into bad requests', async () => {
+    class InvalidBodyRoute extends PaymailRoute {
+      protected override async validateBody(): Promise<unknown> {
+        throw 'invalid body'
+      }
+    }
+
+    const route = new InvalidBodyRoute({
+      capability: new Capability({
+        code: 'invalid-body',
+        title: 'Invalid body test',
+        method: 'POST'
+      }),
+      endpoint: '/invalid-body/:paymail',
+      domainLogicHandler: () => ({ accepted: true })
+    })
+    const app = express()
+    app.use(
+      new PaymailRouter({
+        baseUrl: 'https://example.test',
+        routes: [route]
+      }).getRouter()
+    )
+
+    const response = await request(app).post('/invalid-body/alice@example.test').send({})
+
+    expect(response.statusCode).toBe(400)
+    expect(response.text).toBe('invalid body')
+  })
+
+  it('rejects unsupported route methods defensively', () => {
+    const route = createRoute()
+    jest.spyOn(route, 'getMethod').mockReturnValue('PUT' as 'GET')
+
+    expect(
+      () =>
+        new PaymailRouter({
+          baseUrl: 'https://example.test',
+          routes: [route]
+        })
+    ).toThrow('Unsupported method: PUT')
+  })
+
   it('allows applications to handle route errors before the safe fallback', async () => {
     const customErrorHandler: ErrorRequestHandler = (error: unknown, _request, response, _next) => {
       response.status(422).json({

@@ -3,7 +3,7 @@ import express, { type Express } from 'express'
 import PaymailRouter from '../paymailRouter.js'
 import ReceiveBeefTransactionRoute from '../paymailRoutes/receiveBeefTransaction.js'
 import PaymailClient from '../../paymailClient/paymailClient.js'
-import { PrivateKey, Transaction } from '@bsv/sdk'
+import { ECDSA, PrivateKey, Transaction } from '@bsv/sdk'
 
 describe('#Paymail Server - P2P Receive Beef Transaction', () => {
   let app: Express
@@ -63,6 +63,23 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
       match: true
     })
     const signature = paymailClient.createP2PSignature(tx.id('hex'), privateKey)
+    const ecdsaVerify = jest.spyOn(ECDSA, 'verify').mockReturnValue(false)
+    const invalidSignatureResponse = await request(app)
+      .post('/paymail/receive-beef-transaction/satoshi@bsv.org')
+      .send({
+        beef: tx.toHexBEEF(),
+        metadata: {
+          sender: 'halfinny@vistamail.org',
+          pubkey: privateKey.toPublicKey().toString(),
+          signature
+        },
+        reference: 'someRefId'
+      })
+    ecdsaVerify.mockRestore()
+
+    expect(invalidSignatureResponse.statusCode).toBe(400)
+    expect(invalidSignatureResponse.text).toEqual('Invalid Signature')
+
     const response = await request(app)
       .post('/paymail/receive-beef-transaction/satoshi@bsv.org')
       .send({
@@ -91,6 +108,25 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
       },
       reference: 'someRefId'
     })
+
+    const unsignedApp = express()
+    const unsignedRoute = new ReceiveBeefTransactionRoute({
+      domainLogicHandler: () => ({ txid: tx.id('hex') }),
+      verifySignature: false,
+      paymailClient
+    })
+    unsignedApp.use(
+      new PaymailRouter({
+        baseUrl: 'http://localhost',
+        basePath: '/paymail',
+        routes: [unsignedRoute]
+      }).getRouter()
+    )
+    const unsignedResponse = await request(unsignedApp)
+      .post('/paymail/receive-beef-transaction/satoshi@bsv.org')
+      .send({ beef: tx.toHexBEEF(), reference: 'someRefId' })
+    expect(unsignedResponse.statusCode).toBe(200)
+    expect(unsignedResponse.body.txid).toBe(tx.id('hex'))
   })
 
   it('should reject with invalid signature', async () => {
@@ -119,6 +155,22 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
     expect(response.statusCode).toBe(400)
     expect(response.text).toEqual('Invalid Compact Signature')
     expect(verifyPublicKey).not.toHaveBeenCalled()
+
+    const otherPrivateKey = PrivateKey.fromRandom()
+    const mismatchResponse = await request(app)
+      .post('/paymail/receive-beef-transaction/satoshi@bsv.org')
+      .send({
+        beef: tx.toHexBEEF(),
+        metadata: {
+          sender: 'halfinny@vistamail.org',
+          pubkey: otherPrivateKey.toPublicKey().toString(),
+          signature: paymailClient.createP2PSignature(tx.id('hex'), privateKey)
+        },
+        reference: 'someRefId'
+      })
+    expect(mismatchResponse.statusCode).toBe(400)
+    expect(mismatchResponse.text).toEqual('PubKey does not match signature')
+    expect(verifyPublicKey).not.toHaveBeenCalled()
   })
 
   it('should reject with invalid public key', async () => {
@@ -146,5 +198,14 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
       })
     expect(response.statusCode).toBe(400)
     expect(response.text).toEqual('Invalid Public Key for sender')
+  })
+
+  it('validates request shape before BEEF transaction processing', async () => {
+    const response = await request(app)
+      .post('/paymail/receive-beef-transaction/satoshi@bsv.org')
+      .send({ reference: 'someRefId' })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.text).toContain('"beef" is required')
   })
 })

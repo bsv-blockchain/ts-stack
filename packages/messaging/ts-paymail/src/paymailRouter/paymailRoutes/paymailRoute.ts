@@ -18,7 +18,7 @@ export type DomainLogicHandler = (
   params: PaymailRouteParams,
   body?: unknown,
   pubkey?: string
-) => unknown | Promise<unknown>
+) => unknown
 
 export default class PaymailRoute {
   private readonly capability: Capability

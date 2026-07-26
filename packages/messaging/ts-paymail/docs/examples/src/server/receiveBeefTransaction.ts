@@ -34,7 +34,7 @@ const receiveBeefTransactionRoute = new ReceiveBeefTransactionRoute({
       throw new Error('BEEF transaction verification failed')
     }
     await user.broadcastTransaction(tx)
-    await user.processTransaction(tx, reference)
+    user.processTransaction(tx, reference)
     return {
       txid: tx.id('hex')
     }

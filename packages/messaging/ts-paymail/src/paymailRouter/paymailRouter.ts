@@ -61,9 +61,7 @@ export default class PaymailRouter {
    * @returns An express middleware for handling errors.
    */
   private readonly defaultErrorHandler = (): ErrorRequestHandler => {
-    return (err: unknown, request: Request, res: Response, next: NextFunction) => {
-      void request
-      void next
+    return (err: unknown, _request: Request, res: Response, _next: NextFunction) => {
       if (err instanceof PaymailBadRequestError) {
         res.status(400).send(err.message)
         return
@@ -80,10 +78,8 @@ export default class PaymailRouter {
       const capabilities = this.routes.reduce<Record<string, string | boolean>>((map, route) => {
         const endpoint = route
           .getEndpoint()
-          .split(':paymail')
-          .join('{alias}@{domain.tld}')
-          .split(':pubkey')
-          .join('{pubkey}')
+          .replaceAll(':paymail', '{alias}@{domain.tld}')
+          .replaceAll(':pubkey', '{pubkey}')
         map[route.getCode()] = this.joinUrl(this.baseUrl, this.getBasePath(), endpoint)
         return map
       }, {})

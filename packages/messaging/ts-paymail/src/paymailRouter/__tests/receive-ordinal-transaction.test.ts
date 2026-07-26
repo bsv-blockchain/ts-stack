@@ -1,4 +1,4 @@
-import { PrivateKey, Transaction } from '@bsv/sdk'
+import { ECDSA, PrivateKey, Transaction } from '@bsv/sdk'
 import express, { type Express } from 'express'
 import request from 'supertest'
 
@@ -32,6 +32,23 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
       pubkey: privateKey.toPublicKey().toString(),
       match: true
     })
+    const signature = paymailClient.createP2PSignature(transaction.id('hex'), privateKey)
+    const ecdsaVerify = jest.spyOn(ECDSA, 'verify').mockReturnValue(false)
+    const invalidSignatureResponse = await request(app)
+      .post('/receive-ordinal-tx/satoshi@bsv.org')
+      .send({
+        hex: transaction.toHex(),
+        metadata: {
+          sender: 'halfinny@vistamail.org',
+          pubkey: privateKey.toPublicKey().toString(),
+          signature
+        },
+        reference: 'ordinal-reference'
+      })
+    ecdsaVerify.mockRestore()
+
+    expect(invalidSignatureResponse.statusCode).toBe(400)
+    expect(invalidSignatureResponse.text).toBe('Invalid Signature')
 
     const response = await request(app)
       .post('/receive-ordinal-tx/satoshi@bsv.org')
@@ -40,7 +57,7 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
         metadata: {
           sender: 'halfinny@vistamail.org',
           pubkey: privateKey.toPublicKey().toString(),
-          signature: paymailClient.createP2PSignature(transaction.id('hex'), privateKey),
+          signature,
           note: 'ordinal'
         },
         reference: 'ordinal-reference'
@@ -88,6 +105,22 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
     expect(response.statusCode).toBe(400)
     expect(response.text).toBe('Invalid Compact Signature')
     expect(verifyPublicKey).not.toHaveBeenCalled()
+
+    const otherPrivateKey = PrivateKey.fromRandom()
+    const mismatchResponse = await request(app)
+      .post('/receive-ordinal-tx/satoshi@bsv.org')
+      .send({
+        hex: transaction.toHex(),
+        metadata: {
+          sender: 'halfinny@vistamail.org',
+          pubkey: otherPrivateKey.toPublicKey().toString(),
+          signature: paymailClient.createP2PSignature(transaction.id('hex'), privateKey)
+        },
+        reference: 'ordinal-reference'
+      })
+    expect(mismatchResponse.statusCode).toBe(400)
+    expect(mismatchResponse.text).toBe('PubKey does not match signature')
+    expect(verifyPublicKey).not.toHaveBeenCalled()
   })
 
   it('rejects a valid signature when Paymail ownership does not match', async () => {
@@ -133,5 +166,14 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.body).toEqual({ txid: 'unsigned-txid', note: '' })
+  })
+
+  it('validates request shape before ordinal transaction processing', async () => {
+    const response = await request(app)
+      .post('/receive-ordinal-tx/satoshi@bsv.org')
+      .send({ reference: 'ordinal-reference' })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.text).toContain('"hex" is required')
   })
 })

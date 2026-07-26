@@ -9,7 +9,7 @@ const receiveTransactionRoute = new ReceiveTransactionRoute({
     const { hex, reference } = body as { hex: string; reference: string }
     const tx = Transaction.fromHex(hex)
     await user.broadcastTransaction(tx)
-    await user.processTransaction(tx, reference)
+    user.processTransaction(tx, reference)
     return {
       txid: tx.id('hex')
     }

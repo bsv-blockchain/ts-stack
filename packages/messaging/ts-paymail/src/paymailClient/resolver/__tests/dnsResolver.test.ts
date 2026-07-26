@@ -158,6 +158,25 @@ describe('# DNS resolver', () => {
     })
   })
 
+  it('falls back to DoH when local DNS omits the records argument', async () => {
+    const dns = {
+      resolveSrv(
+        _domain: string,
+        callback: (
+          error: NodeJS.ErrnoException | null,
+          records?: Array<{ name: string; port: number }>
+        ) => void
+      ): void {
+        callback(null)
+      }
+    }
+    const resolver = new DNSResolver(mockHttpClient, { dns })
+    await expect(resolver.queryBsvaliasDomain('handcash.io')).resolves.toEqual({
+      domain: 'cloud.handcash.io',
+      port: 443
+    })
+  })
+
   it('rejects invalid local DNS ports', async () => {
     const dns = {
       resolveSrv(
