@@ -11,10 +11,24 @@
   "description": "Currency amount conversion",
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
-  "main": "./out/src/index.js",
-  "types": "./out/src/index.d.ts",
+  "type": "commonjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
   "files": [
-    "out",
+    "dist",
     "README.md",
     "LICENSE.txt"
   ],
@@ -23,8 +37,13 @@
   },
   "scripts": {
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
-    "build": "tsc --build"
+    "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/amountinator/{src,tests}/**/*.ts\" \"packages/helpers/amountinator/*.{cjs,json,ts}\"",
+    "lint": "oxlint src tests --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports CurrencyConverter,formatAmountWithCurrency",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "repository": {
     "type": "git",
@@ -39,8 +58,10 @@
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
+    "oxlint": "^1.75.0",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3"
   },
   "dependencies": {

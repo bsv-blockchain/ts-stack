@@ -2,7 +2,7 @@
 id: repository-health
 title: "Repository Health Controls"
 kind: reference
-version: "1.1.0"
+version: "1.2.0"
 last_updated: "2026-07-26"
 last_verified: "2026-07-26"
 review_cadence_days: 30
@@ -98,6 +98,32 @@ pnpm health:check
 Never refresh the baseline merely to make unexplained new debt pass. A new
 temporary hold belongs in the exception registry, not in an unreviewed baseline
 rewrite.
+
+### Package artifact checks
+
+A publishable package's `pack:check` command validates the built package rather
+than its source tree. The shared checker:
+
+1. creates the exact pnpm release tarball with lifecycle scripts disabled;
+2. rejects tests, compiler caches, lockfiles, and uncompiled TypeScript in the
+   payload;
+3. runs strict `publint` metadata and entry-point validation;
+4. runs `@arethetypeswrong/cli` across Node and bundler resolution modes; and
+5. installs the tarball into a clean temporary consumer and exercises every
+   declared runtime module format.
+
+Build before checking an individual package:
+
+```sh
+pnpm --filter @bsv/amountinator build
+pnpm --filter @bsv/amountinator pack:check
+```
+
+CI runs implemented `pack:check` commands for affected packages after the
+shared workspace build. The release workflow repeats every implemented check
+before resolving or publishing a release plan. Adding a script therefore adds
+a blocking release contract; it must not be a placeholder or a source-only
+check.
 
 ## CI behavior
 

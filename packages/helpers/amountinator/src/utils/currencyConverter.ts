@@ -27,10 +27,13 @@ export class CurrencyConverter {
 
   private refreshTimer?: ReturnType<typeof setInterval>
 
-  /** 
+  /**
    * @param refreshInterval  How often to pull new rates (ms), if 0, it never auto-refreshes
    */
-  constructor(refreshInterval: number = DEFAULT_REFRESH_INTERVAL, settingsManager: WalletSettingsManager | undefined = undefined) {
+  constructor(
+    refreshInterval: number = DEFAULT_REFRESH_INTERVAL,
+    settingsManager: WalletSettingsManager | undefined = undefined
+  ) {
     this.refreshInterval = Math.max(0, refreshInterval)
     this.services = new Services('main')
     this.exchangeRates = {
@@ -55,7 +58,7 @@ export class CurrencyConverter {
 
     // only start timer when refreshInterval > 0
     if (this.refreshInterval > 0) {
-      this.refreshTimer = setInterval( () => this.fetchExchangeRates(true), this.refreshInterval)
+      this.refreshTimer = setInterval(() => this.fetchExchangeRates(true), this.refreshInterval)
     }
   }
 
@@ -135,7 +138,7 @@ export class CurrencyConverter {
       return this.preferredCurrency
     }
     if (this.currencyPromise) return this.currencyPromise
-  
+
     this.currencyPromise = (async () => {
       const settingsManager = this.settingsManager
 
@@ -146,9 +149,9 @@ export class CurrencyConverter {
       this.currencyPromise = null
       return this.preferredCurrency
     })()
-  
+
     return this.currencyPromise
-  }  
+  }
 
   private normalizeSupportedCurrencyCode(currency: string): SupportedCurrencyCode {
     const upper = currency.toUpperCase()
@@ -162,15 +165,15 @@ export class CurrencyConverter {
   /**
    * Converts currency amount based on user's preferences
    * @param {number | string} amount - the currency to convert
-   * @param {FormatOptions} formatOptions 
-   * @returns 
+   * @param {FormatOptions} formatOptions
+   * @returns
    */
   async convertAmount(amount: number | string, formatOptions?: FormatOptions) {
     await this.refreshPreferredCurrency()
     const amountAsString = amount.toString()
-    let parsedAmount = Number.parseFloat(amountAsString.replace(/[^0-9.-]+/g, ""))
+    let parsedAmount = Number.parseFloat(amountAsString.replace(/[^0-9.-]+/g, ''))
     let inputCurrency = amountAsString.replace(/[\d.,\s]+/g, '').trim()
-    inputCurrency ||= (amountAsString.includes('.') ? 'BSV' : 'SATS')
+    inputCurrency ||= amountAsString.includes('.') ? 'BSV' : 'SATS'
 
     // Use convertCurrency to directly convert from the input currency to the preferred currency
     let finalAmount = this.convertCurrency(parsedAmount, inputCurrency, this.preferredCurrency)
@@ -182,8 +185,8 @@ export class CurrencyConverter {
 
   /**
    * Convert an amount given in any of the supported currencies to an amount in satoshis
-   * @param amount 
-   * @returns 
+   * @param amount
+   * @returns
    */
   async convertToSatoshis(amount: number): Promise<number | null> {
     // Directly convert the amount from the preferred currency to SATS

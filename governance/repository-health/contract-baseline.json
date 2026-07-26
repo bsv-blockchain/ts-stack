@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 137,
+  "findingCount": 131,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,30 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-exports",
-      "message": "Profile requires package exports"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-script::lint",
-      "message": "Profile node-library requires script lint"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-script::test:coverage",
-      "message": "Profile node-library requires script test:coverage"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
     },
     {
       "id": "packages/helpers/bsv-wallet-helper::disabled-quality-script::lint:ci-disabled",
