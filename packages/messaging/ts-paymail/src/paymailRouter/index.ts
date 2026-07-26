@@ -1,5 +1,6 @@
 export { default as PaymailRouter } from './paymailRouter.js'
 export { default as PaymailRoute } from './paymailRoutes/paymailRoute.js'
+export type { DomainLogicHandler, PaymailRouteParams } from './paymailRoutes/paymailRoute.js'
 export { default as P2pPaymentDestinationRoute } from './paymailRoutes/p2pPaymentDestinationRoute.js'
 export { default as PublicKeyInfrastructureRoute } from './paymailRoutes/pki.js'
 export { default as ReceiveTransactionRoute } from './paymailRoutes/receiveTransaction.js'
@@ -8,3 +9,5 @@ export { default as VerifyPublicKeyOwnerRoute } from './paymailRoutes/verifyPubl
 export { default as ReceiveBeefTransactionRoute } from './paymailRoutes/receiveBeefTransaction.js'
 export { default as NegotiationCapabilitiesRoute } from './paymailRoutes/negotiationCapability.js'
 export { default as TransactionNegotiationCapabilitiesRoute } from './paymailRoutes/transactionNegotiationCapabilities.js'
+export { default as OrdinalP2pPaymentDestinationRoute } from './paymailRoutes/simpleP2pOrdinalDestinationsRoute.js'
+export { default as SimpleP2pOrdinalReceiveRoute } from './paymailRoutes/receiveOrdinalTransaction.js'

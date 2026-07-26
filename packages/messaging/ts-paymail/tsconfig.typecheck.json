@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": false,
+    "noEmit": true,
+    "types": ["jest", "node"]
+  },
+  "include": ["mod.ts", "mod.browser.ts", "src/**/*.ts"],
+  "exclude": ["dist", "dist-*", "node_modules"]
+}

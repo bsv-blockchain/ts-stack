@@ -9,90 +9,161 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "dist/cjs/mod.js",
-  "module": "dist/esm/mod.js",
-  "types": "dist/types/mod.d.ts",
+  "main": "./dist/mod.cjs",
+  "module": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
+  "typesVersions": {
+    "*": {
+      "client": [
+        "dist/src/paymailClient/index.d.cts"
+      ],
+      "client/*": [
+        "dist/src/paymailClient/*.d.cts"
+      ],
+      "capability": [
+        "dist/src/capability/index.d.cts"
+      ],
+      "capability/*": [
+        "dist/src/capability/*.d.cts"
+      ],
+      "router": [
+        "dist/src/paymailRouter/index.d.cts"
+      ],
+      "router/*": [
+        "dist/src/paymailRouter/*.d.cts"
+      ],
+      "errors": [
+        "dist/src/errors/index.d.cts"
+      ],
+      "errors/*": [
+        "dist/src/errors/*.d.cts"
+      ]
+    }
+  },
   "type": "module",
   "files": [
-    "dist/**/*.js",
-    "dist/**/*.js.map",
-    "dist/**/*.json",
-    "dist/**/*.d.ts",
-    "dist/**/*.d.ts.map",
-    "src/**/*.ts",
-    "!src/**/__tests__/**",
+    "dist",
+    "README.md",
     "docs/*.md",
     "docs/specs",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "browser": "./dist/esm/mod.browser.js",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
-    },
-    "./*.ts": {
-      "types": "./dist/types/src/*.d.ts",
-      "import": "./dist/esm/src/*.js",
-      "require": "./dist/cjs/src/*.js"
+      "browser": {
+        "types": "./dist/mod.browser.d.ts",
+        "default": "./dist/mod.browser.js"
+      },
+      "import": {
+        "types": "./dist/mod.d.ts",
+        "default": "./dist/mod.js"
+      },
+      "require": {
+        "types": "./dist/mod.d.cts",
+        "default": "./dist/mod.cjs"
+      }
     },
     "./client": {
-      "import": "./dist/esm/src/paymailClient/index.js",
-      "require": "./dist/cjs/src/paymailClient/index.js",
-      "types": "./dist/types/src/paymailClient/index.d.ts"
+      "import": {
+        "types": "./dist/src/paymailClient/index.d.ts",
+        "default": "./dist/src/paymailClient/index.js"
+      },
+      "require": {
+        "types": "./dist/src/paymailClient/index.d.cts",
+        "default": "./dist/src/paymailClient/index.cjs"
+      }
     },
     "./client/*": {
-      "import": "./dist/esm/src/paymailClient/*.js",
-      "require": "./dist/cjs/src/paymailClient/*.js",
-      "types": "./dist/types/src/paymailClient/*.d.ts"
+      "import": {
+        "types": "./dist/src/paymailClient/*.d.ts",
+        "default": "./dist/src/paymailClient/*.js"
+      },
+      "require": {
+        "types": "./dist/src/paymailClient/*.d.cts",
+        "default": "./dist/src/paymailClient/*.cjs"
+      }
     },
     "./capability": {
-      "import": "./dist/esm/src/capability/index.js",
-      "require": "./dist/cjs/src/capability/index.js",
-      "types": "./dist/types/src/capability/index.d.ts"
+      "import": {
+        "types": "./dist/src/capability/index.d.ts",
+        "default": "./dist/src/capability/index.js"
+      },
+      "require": {
+        "types": "./dist/src/capability/index.d.cts",
+        "default": "./dist/src/capability/index.cjs"
+      }
     },
     "./capability/*": {
-      "import": "./dist/esm/src/capability/*.js",
-      "require": "./dist/cjs/src/capability/*.js",
-      "types": "./dist/types/src/capability/*.d.ts"
+      "import": {
+        "types": "./dist/src/capability/*.d.ts",
+        "default": "./dist/src/capability/*.js"
+      },
+      "require": {
+        "types": "./dist/src/capability/*.d.cts",
+        "default": "./dist/src/capability/*.cjs"
+      }
     },
     "./router": {
-      "import": "./dist/esm/src/paymailRouter/index.js",
-      "require": "./dist/cjs/src/paymailRouter/index.js",
-      "types": "./dist/types/src/paymailRouter/index.d.ts"
+      "import": {
+        "types": "./dist/src/paymailRouter/index.d.ts",
+        "default": "./dist/src/paymailRouter/index.js"
+      },
+      "require": {
+        "types": "./dist/src/paymailRouter/index.d.cts",
+        "default": "./dist/src/paymailRouter/index.cjs"
+      }
     },
     "./router/*": {
-      "import": "./dist/esm/src/paymailRouter/*.js",
-      "require": "./dist/cjs/src/paymailRouter/*.js",
-      "types": "./dist/types/src/paymailRouter/*.d.ts"
+      "import": {
+        "types": "./dist/src/paymailRouter/*.d.ts",
+        "default": "./dist/src/paymailRouter/*.js"
+      },
+      "require": {
+        "types": "./dist/src/paymailRouter/*.d.cts",
+        "default": "./dist/src/paymailRouter/*.cjs"
+      }
     },
     "./errors": {
-      "import": "./dist/esm/src/errors/index.js",
-      "require": "./dist/cjs/src/errors/index.js",
-      "types": "./dist/types/src/errors/index.d.ts"
+      "import": {
+        "types": "./dist/src/errors/index.d.ts",
+        "default": "./dist/src/errors/index.js"
+      },
+      "require": {
+        "types": "./dist/src/errors/index.d.cts",
+        "default": "./dist/src/errors/index.cjs"
+      }
     },
     "./errors/*": {
-      "import": "./dist/esm/src/errors/*.js",
-      "require": "./dist/cjs/src/errors/*.js",
-      "types": "./dist/types/src/errors/*.d.ts"
-    }
+      "import": {
+        "types": "./dist/src/errors/*.d.ts",
+        "default": "./dist/src/errors/*.js"
+      },
+      "require": {
+        "types": "./dist/src/errors/*.d.cts",
+        "default": "./dist/src/errors/*.cjs"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "npm run build && jest",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
-    "lint": "oxlint src",
-    "ex-lint": "oxlint docs/examples",
-    "docs-lint": "oxlint docs",
-    "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
-    "dev": "tsc -b -w",
-    "prepublish": "npm run build",
-    "build:example": "npm run build && npm link && cd docs/examples && npm i && npm link @bsv/paymail && tsc -p tsconfig.json",
-    "start:example:server": "npm run build:example && cd docs/examples && npm run server",
-    "example:getProfile": "npm run build:example && cd docs/examples && npm run getProfile",
-    "example:sendP2P": "npm run build:example && cd docs/examples && npm run sendP2P",
-    "doc": "ts2md --inputFilename=src/capability/index.ts --outputFilename=docs/capability.md --filenameSubString=capability --firstHeadingLevel=1 && ts2md --inputFilename=src/paymailClient/paymailClient.ts --outputFilename=docs/paymailClient.md --filenameSubString=paymailClient --firstHeadingLevel=1 && npx ts2md --inputFilename=src/paymailRouter/paymailRouter.ts --outputFilename=docs/paymailRouter.md --filenameSubString=paymailRouter --firstHeadingLevel=1"
+    "build": "tsdown",
+    "build:example": "pnpm build && pnpm --filter example-paymail build",
+    "dev": "tsdown --watch",
+    "doc": "ts2md --inputFilename=src/capability/index.ts --outputFilename=docs/capability.md --filenameSubString=capability --firstHeadingLevel=1 && ts2md --inputFilename=src/paymailClient/paymailClient.ts --outputFilename=docs/paymailClient.md --filenameSubString=paymailClient --firstHeadingLevel=1 && ts2md --inputFilename=src/paymailRouter/paymailRouter.ts --outputFilename=docs/paymailRouter.md --filenameSubString=paymailRouter --firstHeadingLevel=1",
+    "docs-lint": "oxlint docs --deny-warnings",
+    "ex-lint": "pnpm --filter example-paymail lint",
+    "example:getProfile": "pnpm build:example && pnpm --filter example-paymail getProfile",
+    "example:sendP2P": "pnpm build:example && pnpm --filter example-paymail sendP2P",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/messaging/ts-paymail/**/*.{cjs,js,json,ts}\"",
+    "lint": "oxlint mod.ts mod.browser.ts src --deny-warnings",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports Capability,PublicKeyInfrastructureCapability,PublicProfileCapability,P2pPaymentDestinationCapability,ReceiveTransactionCapability,RequestSenderValidationCapability,VerifyPublicKeyOwnerCapability,P2pReceiveBeefTransactionCapability,NegotiationCapability,TransactionNegotiationCapability,SimpleP2pOrdinalDestinationsCapability,SimpleP2pOrdinalReceiveCapability,PaymailClient,DNSResolver,HttpClient,AbstractDnsResolver,PaymailRouter,PaymailRoute,P2pPaymentDestinationRoute,PublicKeyInfrastructureRoute,ReceiveTransactionRoute,PublicProfileRoute,VerifyPublicKeyOwnerRoute,ReceiveBeefTransactionRoute,NegotiationCapabilitiesRoute,TransactionNegotiationCapabilitiesRoute,OrdinalP2pPaymentDestinationRoute,SimpleP2pOrdinalReceiveRoute,PaymailError,PaymailBadRequestError,PaymailServerResponseError --entry-exports \"./client=PaymailClient|DNSResolver|HttpClient|AbstractDnsResolver;./capability=Capability|PublicKeyInfrastructureCapability|PublicProfileCapability|P2pPaymentDestinationCapability|ReceiveTransactionCapability|RequestSenderValidationCapability|VerifyPublicKeyOwnerCapability|P2pReceiveBeefTransactionCapability|NegotiationCapability|TransactionNegotiationCapability|SimpleP2pOrdinalDestinationsCapability|SimpleP2pOrdinalReceiveCapability;./router=PaymailRouter|PaymailRoute|P2pPaymentDestinationRoute|PublicKeyInfrastructureRoute|ReceiveTransactionRoute|PublicProfileRoute|VerifyPublicKeyOwnerRoute|ReceiveBeefTransactionRoute|NegotiationCapabilitiesRoute|TransactionNegotiationCapabilitiesRoute|OrdinalP2pPaymentDestinationRoute|SimpleP2pOrdinalReceiveRoute;./errors=PaymailError|PaymailBadRequestError|PaymailServerResponseError\"",
+    "prepublishOnly": "pnpm build",
+    "start:example:server": "pnpm build:example && pnpm --filter example-paymail server",
+    "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -121,15 +192,16 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
-    "@types/body-parser": "^1.19.6",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "@types/supertest": "^7.2.1",
     "jest": "^30.4.2",
     "oxlint": "^1.75.0",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
-    "tsconfig-to-dual-package": "^1.2.0",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

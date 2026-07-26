@@ -1,19 +1,16 @@
 import request from 'supertest'
-import express from 'express'
-import PaymailRouter from '../../../dist/cjs/src/paymailRouter/paymailRouter.js'
-import TransactionNegotiationCapabilitiesRoute from '../../../dist/cjs/src/paymailRouter/paymailRoutes/transactionNegotiationCapabilities.js'
+import express, { type Express } from 'express'
+import PaymailRouter from '../paymailRouter.js'
+import TransactionNegotiationCapabilitiesRoute from '../paymailRoutes/transactionNegotiationCapabilities.js'
 
 describe('#Paymail Server - Transaction Negotiation', () => {
-  let app
+  let app: Express
 
   beforeAll(() => {
     app = express()
     const baseUrl = 'http://localhost:3000'
 
-    const domainLogicHandler = async (name, domain, body) => {
-      // Implement your domain logic here, and return the appropriate response
-      return {} // Placeholder response
-    }
+    const domainLogicHandler = () => ({})
 
     const routes = [
       new TransactionNegotiationCapabilitiesRoute({
@@ -42,5 +39,26 @@ describe('#Paymail Server - Transaction Negotiation', () => {
       .send(postData)
 
     expect(response.statusCode).toBe(202)
+  })
+
+  it.each([
+    {
+      thread_id: 'missing-expanded',
+      expiry: 1234567890,
+      timestamp: 1234567890,
+      reply_to: { handle: 'satoshi@vistamail.org' }
+    },
+    {
+      thread_id: 'missing-reply',
+      expanded_tx: { tx: 'hexstring' },
+      expiry: 1234567890,
+      timestamp: 1234567890
+    }
+  ])('should reject incomplete transaction negotiation requests', async postData => {
+    const response = await request(app)
+      .post('/transaction-negotiation/satoshi@vistamail.org')
+      .send(postData)
+
+    expect(response.statusCode).toBe(400)
   })
 })

@@ -1,27 +1,10 @@
 import Joi from 'joi'
-import { Transaction, Signature, Utils, Hash, BigNumber, ECDSA } from '@bsv/sdk'
+import { Transaction } from '@bsv/sdk'
 import PaymailRoute, { DomainLogicHandler } from './paymailRoute.js'
 import P2pReceiveTransactionCapability from '../../capability/p2pReceiveTransactionCapability.js'
 import { PaymailBadRequestError } from '../../errors/index.js'
 import PaymailClient from '../../paymailClient/paymailClient.js'
-const BSM_PREFIX = 'Bitcoin Signed Message:\n'
-
-/** Encode a small integer as a Bitcoin varint (up to 252 bytes). */
-function bsmVarInt (n: number): number[] {
-  if (n < 0xfd) return [n]
-  return [0xfd, n & 0xff, (n >> 8) & 0xff]
-}
-
-function bsmMagicHash (msg: number[]): number[] {
-  const prefixBytes = Utils.toArray(BSM_PREFIX, 'utf8')
-  const buf = [
-    ...bsmVarInt(prefixBytes.length),
-    ...prefixBytes,
-    ...bsmVarInt(msg.length),
-    ...msg
-  ]
-  return Hash.hash256(buf)
-}
+import { verifyP2PSignature } from '../../p2pSignature.js'
 
 interface ReceiveTransactionResponse {
   txid: string
@@ -39,7 +22,7 @@ export default class ReceiveTransactionRoute extends PaymailRoute {
   private readonly verifySignature: boolean
   private readonly paymailClient: PaymailClient
 
-  constructor (config: ReceiveTransactionRouteConfig) {
+  constructor(config: ReceiveTransactionRouteConfig) {
     super({
       capability: P2pReceiveTransactionCapability,
       endpoint: config.endpoint || '/receive-transaction/:paymail',
@@ -49,16 +32,17 @@ export default class ReceiveTransactionRoute extends PaymailRoute {
     this.paymailClient = config.paymailClient
   }
 
-  protected async validateBody (body: any): Promise<void> {
+  protected async validateBody(body: unknown): Promise<unknown> {
     const schema = this.buildSchema()
     const { error, value } = schema.validate(body)
     if (error) {
       throw new PaymailBadRequestError(error.message)
     }
     await this.validateTransaction(value)
+    return value
   }
 
-  private buildSchema () {
+  private buildSchema() {
     const metadataSchema = Joi.object({
       sender: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
       pubkey: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
@@ -72,49 +56,57 @@ export default class ReceiveTransactionRoute extends PaymailRoute {
     }).options({ stripUnknown: true })
   }
 
-  private async validateTransaction (value: any) {
+  private async validateTransaction(value: {
+    hex: string
+    metadata: { sender: string; pubkey: string; signature: string }
+  }): Promise<void> {
     const tx = this.validateTransactionFormat(value.hex)
     if (this.verifySignature) {
       await this.validateSignature(tx, value.metadata)
     }
   }
 
-  private validateTransactionFormat (hex: string): Transaction {
+  private validateTransactionFormat(hex: string): Transaction {
     try {
       return Transaction.fromHex(hex)
     } catch (error) {
-      throw new PaymailBadRequestError('Invalid body: ' + error.message)
+      throw new PaymailBadRequestError(
+        `Invalid body: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
-  private async validateSignature (tx: Transaction, metadata: {
-    sender: string
-    pubkey: string
-    signature: string
-  }): Promise<void> {
+  private async validateSignature(
+    tx: Transaction,
+    metadata: {
+      sender: string
+      pubkey: string
+      signature: string
+    }
+  ): Promise<void> {
     const { sender, pubkey, signature } = metadata
-    await this.verifySenderPublicKey(sender, pubkey)
     this.verifyTransactionSignature(tx.id('hex'), signature, pubkey)
+    await this.verifySenderPublicKey(sender, pubkey)
   }
 
-  private async verifySenderPublicKey (sender: string, pubkey: string): Promise<void> {
+  private async verifySenderPublicKey(sender: string, pubkey: string): Promise<void> {
     const { match } = await this.paymailClient.verifyPublicKey(sender, pubkey)
     if (!match) {
       throw new PaymailBadRequestError('Invalid Public Key for sender')
     }
   }
 
-  private verifyTransactionSignature (message: string, signature: string, pubkey: string): void {
-    const msg = Utils.toArray(message, 'utf8')
-    const sig = Signature.fromCompact(signature, 'base64')
-    const recovery = Utils.toArray(signature, 'base64')[0] - 27 - 4
-    const msgHash = bsmMagicHash(msg)
-    const pkRecovered = sig.RecoverPublicKey(recovery, new BigNumber(msgHash))
-    if (pkRecovered.toString() !== pubkey) throw new PaymailBadRequestError('PubKey does not match signature')
-    if (!ECDSA.verify(new BigNumber(msgHash), sig, pkRecovered)) throw new PaymailBadRequestError('Invalid Signature')
+  private verifyTransactionSignature(message: string, signature: string, pubkey: string): void {
+    const verification = verifyP2PSignature(message, signature, pubkey)
+    if (!verification.publicKeyMatches) {
+      throw new PaymailBadRequestError('PubKey does not match signature')
+    }
+    if (!verification.signatureValid) {
+      throw new PaymailBadRequestError('Invalid Signature')
+    }
   }
 
-  protected serializeResponse (domainLogicResponse: ReceiveTransactionResponse): string {
+  protected serializeResponse(domainLogicResponse: ReceiveTransactionResponse): string {
     return JSON.stringify({
       txid: domainLogicResponse.txid,
       note: domainLogicResponse.note || ''

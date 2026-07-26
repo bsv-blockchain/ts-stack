@@ -8,3 +8,6 @@ export { default as VerifyPublicKeyOwnerCapability } from './verifyPublicKeyOwne
 export { default as P2pReceiveBeefTransactionCapability } from './p2pReceiveBeefTransactionCapability.js'
 export { default as NegotiationCapability } from './negotiationCapabilities.js'
 export { default as TransactionNegotiationCapability } from './transactionNegotiationCapability.js'
+export type { TransactionNegotiationBody } from './transactionNegotiationCapability.js'
+export { default as SimpleP2pOrdinalDestinationsCapability } from './simpleP2pOrdinalDestinationsCapability.js'
+export { default as SimpleP2pOrdinalReceiveCapability } from './simpleP2pOrdinalReceiveCapability.js'

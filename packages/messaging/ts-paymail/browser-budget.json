@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/paymail",
+  "entry": ".",
+  "requiredExports": [
+    "AbstractDnsResolver",
+    "Capability",
+    "DNSResolver",
+    "HttpClient",
+    "PaymailBadRequestError",
+    "PaymailClient",
+    "PaymailError",
+    "PaymailServerResponseError",
+    "PublicProfileCapability",
+    "SimpleP2pOrdinalDestinationsCapability",
+    "SimpleP2pOrdinalReceiveCapability"
+  ],
+  "prohibitedExports": [
+    "PaymailRoute",
+    "PaymailRouter",
+    "ReceiveTransactionRoute",
+    "SimpleP2pOrdinalReceiveRoute"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 530000,
+      "gzip": 136000,
+      "brotli": 114000
+    },
+    "esbuild": {
+      "raw": 365000,
+      "gzip": 126000,
+      "brotli": 107000
+    }
+  }
+}

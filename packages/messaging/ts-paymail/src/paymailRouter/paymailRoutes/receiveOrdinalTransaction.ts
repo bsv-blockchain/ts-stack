@@ -1,9 +1,10 @@
 import Joi from 'joi'
-import { PublicKey, Transaction, Signature } from '@bsv/sdk'
+import { Transaction } from '@bsv/sdk'
 import PaymailRoute, { DomainLogicHandler } from './paymailRoute.js'
 import simpleP2pOrdinalReceiveCapability from '../../capability/simpleP2pOrdinalReceiveCapability.js'
 import { PaymailBadRequestError } from '../../errors/index.js'
 import PaymailClient from '../../paymailClient/paymailClient.js'
+import { verifyP2PSignature } from '../../p2pSignature.js'
 
 interface ReceiveTransactionResponse {
   txid: string
@@ -21,27 +22,27 @@ export default class SimpleP2pOrdinalReceiveRoute extends PaymailRoute {
   private readonly verifySignature: boolean
   private readonly paymailClient: PaymailClient
 
-  constructor (config: ReceiveTransactionRouteConfig) {
+  constructor(config: ReceiveTransactionRouteConfig) {
     super({
       capability: simpleP2pOrdinalReceiveCapability,
-      endpoint: config.endpoint || '/receive-transaction/:paymail',
+      endpoint: config.endpoint || '/receive-ordinal-tx/:paymail',
       domainLogicHandler: config.domainLogicHandler
     })
     this.verifySignature = config.verifySignature ?? false
     this.paymailClient = config.paymailClient
   }
 
-  protected async validateBody (body: any): Promise<void> {
+  protected async validateBody(body: unknown): Promise<unknown> {
     const schema = this.buildSchema()
     const { error, value } = schema.validate(body)
     if (error) {
       throw new PaymailBadRequestError(error.message)
     }
     await this.validateTransaction(value)
+    return value
   }
 
-  private buildSchema () {
-    console.log(this.verifySignature)
+  private buildSchema() {
     const metadataSchema = Joi.object({
       sender: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
       pubkey: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
@@ -55,47 +56,58 @@ export default class SimpleP2pOrdinalReceiveRoute extends PaymailRoute {
     }).options({ stripUnknown: true })
   }
 
-  private async validateTransaction (value: any) {
+  private async validateTransaction(value: {
+    hex: string
+    metadata: { sender: string; pubkey: string; signature: string }
+  }): Promise<void> {
     const tx = this.validateTransactionFormat(value.hex)
     if (this.verifySignature) {
       await this.validateSignature(tx, value.metadata)
     }
   }
 
-  private validateTransactionFormat (hex: string): Transaction {
+  private validateTransactionFormat(hex: string): Transaction {
     try {
       return Transaction.fromHex(hex)
     } catch (error) {
-      throw new PaymailBadRequestError('Invalid body: ' + error.message)
+      throw new PaymailBadRequestError(
+        `Invalid body: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
-  private async validateSignature (tx: Transaction, metadata: {
-    sender: string
-    pubkey: string
-    signature: string
-  }): Promise<void> {
+  private async validateSignature(
+    tx: Transaction,
+    metadata: {
+      sender: string
+      pubkey: string
+      signature: string
+    }
+  ): Promise<void> {
     const { sender, pubkey, signature } = metadata
+    this.verifyTransactionSignature(tx.id('hex'), signature, pubkey)
     const match = await this.verifySenderPublicKey(sender, pubkey)
     if (!match) {
       throw new PaymailBadRequestError('Invalid Public Key for sender')
     }
-    this.verifyTransactionSignature(tx.id('hex'), signature, pubkey)
   }
 
-  private async verifySenderPublicKey (sender: string, pubkey: string): Promise<boolean> {
+  private async verifySenderPublicKey(sender: string, pubkey: string): Promise<boolean> {
     const { match } = await this.paymailClient.verifyPublicKey(sender, pubkey)
     return match
   }
 
-  private verifyTransactionSignature (message: string, signature: string, pubkey: string): void {
-    const sig = Signature.fromDER(signature, 'hex')
-    if (!sig.verify(message, PublicKey.fromString(pubkey))) {
+  private verifyTransactionSignature(message: string, signature: string, pubkey: string): void {
+    const verification = verifyP2PSignature(message, signature, pubkey)
+    if (!verification.publicKeyMatches) {
+      throw new PaymailBadRequestError('PubKey does not match signature')
+    }
+    if (!verification.signatureValid) {
       throw new PaymailBadRequestError('Invalid Signature')
     }
   }
 
-  protected serializeResponse (domainLogicResponse: ReceiveTransactionResponse): string {
+  protected serializeResponse(domainLogicResponse: ReceiveTransactionResponse): string {
     return JSON.stringify({
       txid: domainLogicResponse.txid,
       note: domainLogicResponse.note || ''

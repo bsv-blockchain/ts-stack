@@ -24,23 +24,33 @@
  */
 
 import express from 'express'
-import p2pDestinationsRoute from './server/p2pDestinations';
-import receiveTransactionRoute from './server/receiveTransaction';
-import publicProfileRoute from './server/publicProfile';
-import pkiRoute from './server/pki';
-import { PaymailRouter } from '@bsv/paymail';
+import p2pDestinationsRoute from './server/p2pDestinations'
+import receiveTransactionRoute from './server/receiveTransaction'
+import receiveBeefTransactionRoute from './server/receiveBeefTransaction'
+import publicProfileRoute from './server/publicProfile'
+import pkiRoute from './server/pki'
+import { PaymailRouter } from '@bsv/paymail'
 
 const app = express()
 app.disable('x-powered-by')
 const DOMAIN = process.env.DOMAIN ?? 'localhost' // Replace with your actual domain
-const baseUrl = 'https://' + DOMAIN
+const PORT = Number.parseInt(process.env.PORT ?? '3000', 10)
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65_535) {
+  throw new Error('PORT must be an integer from 1 through 65535')
+}
+const defaultBaseUrl = DOMAIN === 'localhost' ? `http://${DOMAIN}:${PORT}` : `https://${DOMAIN}`
+const baseUrl = process.env.PAYMAIL_BASE_URL ?? defaultBaseUrl
 
-
-const routes = [publicProfileRoute, pkiRoute, p2pDestinationsRoute, receiveTransactionRoute]
+const routes = [
+  publicProfileRoute,
+  pkiRoute,
+  p2pDestinationsRoute,
+  receiveTransactionRoute,
+  receiveBeefTransactionRoute
+]
 const paymailRouter = new PaymailRouter({ baseUrl, routes })
 app.use(paymailRouter.getRouter())
 
-const PORT = 3000
-app.listen(PORT, async () => {
-  console.log(`Server is running on ${baseUrl}:${PORT}`)
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT} and advertising ${baseUrl}`)
 })

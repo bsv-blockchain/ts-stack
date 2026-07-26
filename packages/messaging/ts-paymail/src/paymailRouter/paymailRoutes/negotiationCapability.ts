@@ -12,16 +12,16 @@ interface NegotiationCapabilitiesResponse {
 
 interface NegotiationCapabilitiesRouteConfig {
   endpoint?: string
-  send_disabled: false
-  auto_send_response: false
-  receive: false
-  three_step_exchange: false
-  four_step_exchange: false
-  auto_exchange_response: false
+  send_disabled: boolean
+  auto_send_response: boolean
+  receive: boolean
+  three_step_exchange: boolean
+  four_step_exchange: boolean
+  auto_exchange_response: boolean
 }
 
 export default class TransactionNegotiationCapabilitiesRoute extends PaymailRoute {
-  constructor (config: NegotiationCapabilitiesRouteConfig) {
+  constructor(config: NegotiationCapabilitiesRouteConfig) {
     super({
       capability: NegotiationCapabilities,
       endpoint: config.endpoint || '/transaction-negotiation-capabilities/:paymail',
@@ -38,7 +38,7 @@ export default class TransactionNegotiationCapabilitiesRoute extends PaymailRout
     })
   }
 
-  protected serializeResponse (domainLogicResponse: NegotiationCapabilitiesResponse): string {
+  protected serializeResponse(domainLogicResponse: NegotiationCapabilitiesResponse): string {
     return JSON.stringify({
       send_disabled: domainLogicResponse.send_disabled,
       auto_send_response: domainLogicResponse.auto_send_response,

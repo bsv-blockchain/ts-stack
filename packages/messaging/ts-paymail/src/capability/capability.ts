@@ -18,7 +18,7 @@ export default class Capability {
   /**
    * The authors of the capability.
    */
-  private readonly authors?: string[]
+  private readonly authors: string[]
 
   /**
    * The version of the capability.
@@ -39,7 +39,7 @@ export default class Capability {
    * Constructs a new Capability instance.
    * @param params - The parameters for the capability.
    */
-  constructor ({
+  constructor({
     code,
     title,
     authors,
@@ -67,7 +67,7 @@ export default class Capability {
    * Retrieves the code of the capability.
    * @returns The capability code or a generated code if not explicitly set.
    */
-  public getCode (): string {
+  public getCode(): string {
     return this.code || this.bfrc()
   }
 
@@ -75,7 +75,7 @@ export default class Capability {
    * Retrieves the HTTP method of the capability.
    * @returns The HTTP method ('GET' or 'POST').
    */
-  public getMethod (): 'GET' | 'POST' {
+  public getMethod(): 'GET' | 'POST' {
     return this.method || 'GET'
   }
 
@@ -84,9 +84,15 @@ export default class Capability {
    * This is used when an explicit code is not provided.
    * @returns A generated unique code for the capability.
    */
-  private bfrc () {
-    const stringToHash = [this.title.trim() + this.authors.join(', ').trim() + (this.version?.toString() || '')].join('').trim()
-    const bufferHash = new Hash.SHA256().update(new Hash.SHA256().update(stringToHash).digest()).digest()
+  private bfrc(): string {
+    const stringToHash = [
+      this.title.trim() + this.authors.join(', ').trim() + (this.version?.toString() || '')
+    ]
+      .join('')
+      .trim()
+    const bufferHash = new Hash.SHA256()
+      .update(new Hash.SHA256().update(stringToHash).digest())
+      .digest()
     const hash = bufferHash.toReversed()
     return Buffer.from(hash).toString('hex').substring(0, 12)
   }

@@ -13,7 +13,7 @@ interface PublicKeyInfrastructureRouteConfig {
 }
 
 export default class PublicKeyInfrastructureRoute extends PaymailRoute {
-  constructor (config: PublicKeyInfrastructureRouteConfig) {
+  constructor(config: PublicKeyInfrastructureRouteConfig) {
     super({
       capability: PublicKeyInfrastructureCapability,
       endpoint: config.endpoint || '/id/:paymail',
@@ -21,7 +21,7 @@ export default class PublicKeyInfrastructureRoute extends PaymailRoute {
     })
   }
 
-  protected serializeResponse (domainLogicResponse: PkiResponse): string {
+  protected serializeResponse(domainLogicResponse: PkiResponse): string {
     return JSON.stringify({
       bsvalias: '1.0',
       handle: domainLogicResponse.handle,

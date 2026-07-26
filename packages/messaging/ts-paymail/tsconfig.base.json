@@ -1,24 +1,17 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "ESNext"],
+    "lib": ["DOM", "ESNext"],
     "module": "NodeNext",
     "target": "esnext",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
     "rootDir": "./",
-    "strict": false,
+    "strict": true,
     "isolatedModules": true,
-    "strictNullChecks": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "incremental": true,
     "sourceMap": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
     "resolveJsonModule": true,
     "esModuleInterop": true
-  },
-  "files": ["mod.ts", "mod.browser.ts"],
-  "include": ["src"],
-  "exclude": ["dist", "*/**/__tests"]
+  }
 }

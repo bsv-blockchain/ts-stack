@@ -1,4 +1,3 @@
-
 import Capability from './capability.js'
 
 const VerifyPublicKeyOwnerCapability = new Capability({
