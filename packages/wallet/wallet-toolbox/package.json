@@ -17,6 +17,16 @@
       "require": "./out/src/index.js",
       "default": "./out/src/index.js"
     },
+    "./out/src/sdk": {
+      "types": "./out/src/sdk/index.d.ts",
+      "require": "./out/src/sdk/index.js",
+      "default": "./out/src/sdk/index.js"
+    },
+    "./out/src/*": {
+      "types": "./out/src/*.d.ts",
+      "require": "./out/src/*.js",
+      "default": "./out/src/*.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
