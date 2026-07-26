@@ -6,13 +6,13 @@ export {
   createAuthSigData,
   checkAuthSigData,
   createAuthProof,
-  verifyAuthProof,
-} from './core.js';
+  verifyAuthProof
+} from './core.js'
 
 // Ergonomic class wrappers — construct once with options, then call methods.
-export { AuthProofClient, AuthProofServer } from './auth.js';
+export { AuthProofClient, AuthProofServer } from './auth.js'
 
-export { DEFAULT_PROTOCOL, DEFAULT_WINDOW_MS, DEFAULT_CLOCK_SKEW_MS } from './constants.js';
+export { DEFAULT_PROTOCOL, DEFAULT_WINDOW_MS, DEFAULT_CLOCK_SKEW_MS } from './constants.js'
 
 export type {
   AuthProof,
@@ -24,5 +24,5 @@ export type {
   ConsumeNonce,
   AuthProofOptions,
   ProofSignerWallet,
-  ProofVerifierWallet,
-} from './types.js';
+  ProofVerifierWallet
+} from './types.js'

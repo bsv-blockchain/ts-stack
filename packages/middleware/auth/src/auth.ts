@@ -3,8 +3,8 @@ import {
   createAuthSigData,
   serializeAuthSigData,
   checkAuthSigData,
-  verifyAuthProof,
-} from './core.js';
+  verifyAuthProof
+} from './core.js'
 import type {
   AuthProof,
   AuthProofOptions,
@@ -13,8 +13,8 @@ import type {
   ProofSignerWallet,
   ProofVerifierWallet,
   RequestBody,
-  VerifyAuthProofResult,
-} from './types.js';
+  VerifyAuthProofResult
+} from './types.js'
 
 /**
  * Client-side toolkit. Construct once with the app's options (same `protocol`
@@ -23,18 +23,21 @@ import type {
 export class AuthProofClient {
   constructor(private readonly options: AuthProofOptions = {}) {}
 
-  createAuthProof(
-    args: { wallet: ProofSignerWallet; counterparty: string; action: string; body?: RequestBody },
-  ): Promise<AuthProof> {
-    return createAuthProof({ ...args, ...this.options });
+  createAuthProof(args: {
+    wallet: ProofSignerWallet
+    counterparty: string
+    action: string
+    body?: RequestBody
+  }): Promise<AuthProof> {
+    return createAuthProof({ ...args, ...this.options })
   }
 
   createAuthSigData(action: string, identityKey: string, now?: number): AuthSigData {
-    return createAuthSigData(action, identityKey, this.options, now);
+    return createAuthSigData(action, identityKey, this.options, now)
   }
 
   serializeAuthSigData(data: AuthSigData): number[] {
-    return serializeAuthSigData(data);
+    return serializeAuthSigData(data)
   }
 }
 
@@ -46,28 +49,26 @@ export class AuthProofClient {
 export class AuthProofServer {
   constructor(private readonly options: AuthProofOptions = {}) {}
 
-  verifyAuthProof(
-    args: {
-      wallet: ProofVerifierWallet;
-      proof: AuthProof | undefined | null;
-      action: string;
-      consumeNonce: ConsumeNonce;
-      now?: number;
-      body?: RequestBody;
-    },
-  ): Promise<VerifyAuthProofResult> {
-    return verifyAuthProof({ ...args, ...this.options });
+  verifyAuthProof(args: {
+    wallet: ProofVerifierWallet
+    proof: AuthProof | undefined | null
+    action: string
+    consumeNonce: ConsumeNonce
+    now?: number
+    body?: RequestBody
+  }): Promise<VerifyAuthProofResult> {
+    return verifyAuthProof({ ...args, ...this.options })
   }
 
   checkAuthSigData(
     data: AuthSigData | undefined | null,
     expectedAction: string,
-    now: number,
+    now: number
   ): { valid: boolean; error?: string } {
-    return checkAuthSigData(data, expectedAction, now, this.options);
+    return checkAuthSigData(data, expectedAction, now, this.options)
   }
 
   serializeAuthSigData(data: AuthSigData): number[] {
-    return serializeAuthSigData(data);
+    return serializeAuthSigData(data)
   }
 }

@@ -1,4 +1,17 @@
-import { LockingScript, ScriptTemplate, Transaction, UnlockingScript, Hash, OP, Utils, WalletInterface, TransactionSignature, Signature, PublicKey, WalletProtocol } from '@bsv/sdk'
+import {
+  LockingScript,
+  ScriptTemplate,
+  Transaction,
+  UnlockingScript,
+  Hash,
+  OP,
+  Utils,
+  WalletInterface,
+  TransactionSignature,
+  Signature,
+  PublicKey,
+  WalletProtocol
+} from '@bsv/sdk'
 
 import { calculatePreimage } from '../utils/createPreimage'
 import {
@@ -13,7 +26,7 @@ import {
 /**
  * Validates wallet derivation parameters at runtime
  */
-function validateWalletDerivationParams (params: any, paramName: string = 'parameters'): void {
+function validateWalletDerivationParams(params: any, paramName: string = 'parameters'): void {
   if (!params || typeof params !== 'object') {
     throw new Error(`Invalid ${paramName}: must be an object with protocolID and keyID`)
   }
@@ -34,7 +47,9 @@ function validateWalletDerivationParams (params: any, paramName: string = 'param
   }
   // counterparty is optional, defaults to 'self'
   if (params.counterparty !== undefined && typeof params.counterparty !== 'string') {
-    throw new Error(`Invalid ${paramName}: counterparty must be a string (or omit for default "self")`)
+    throw new Error(
+      `Invalid ${paramName}: counterparty must be a string (or omit for default "self")`
+    )
   }
 }
 
@@ -48,37 +63,37 @@ export default class P2PKH implements ScriptTemplate {
   wallet?: WalletInterface
 
   /**
-     * Creates a new P2PKH instance.
-     *
-     * @param wallet - Optional BRC-100 compatible wallet interface
-     */
-  constructor (wallet?: WalletInterface) {
+   * Creates a new P2PKH instance.
+   *
+   * @param wallet - Optional BRC-100 compatible wallet interface
+   */
+  constructor(wallet?: WalletInterface) {
     this.wallet = wallet
   }
 
   /**
-     * Creates a P2PKH locking script from a public key hash.
-     *
-     * @param params - Object containing pubkeyhash (20-byte array)
-     * @returns A P2PKH locking script locked to the given public key hash
-     */
-  lock (params: P2PKHLockWithPubkeyhash): Promise<LockingScript>
-  lock (params: P2PKHLockWithAddress): Promise<LockingScript>
+   * Creates a P2PKH locking script from a public key hash.
+   *
+   * @param params - Object containing pubkeyhash (20-byte array)
+   * @returns A P2PKH locking script locked to the given public key hash
+   */
+  lock(params: P2PKHLockWithPubkeyhash): Promise<LockingScript>
+  lock(params: P2PKHLockWithAddress): Promise<LockingScript>
   /**
-     * Creates a P2PKH locking script from a public key string.
-     *
-     * @param params - Object containing publicKey (hex string)
-     * @returns A P2PKH locking script locked to the given public key
-     */
-  lock (params: P2PKHLockWithPublicKey): Promise<LockingScript>
+   * Creates a P2PKH locking script from a public key string.
+   *
+   * @param params - Object containing publicKey (hex string)
+   * @returns A P2PKH locking script locked to the given public key
+   */
+  lock(params: P2PKHLockWithPublicKey): Promise<LockingScript>
   /**
-     * Creates a P2PKH locking script using the instance's BRC-100 wallet to derive the public key.
-     *
-     * @param params - Object containing walletParams (protocolID, keyID, counterparty)
-     * @returns A P2PKH locking script locked to the wallet's public key
-     */
-  lock (params: P2PKHLockWithWallet): Promise<LockingScript>
-  async lock (params: P2PKHLockParams): Promise<LockingScript> {
+   * Creates a P2PKH locking script using the instance's BRC-100 wallet to derive the public key.
+   *
+   * @param params - Object containing walletParams (protocolID, keyID, counterparty)
+   * @returns A P2PKH locking script locked to the wallet's public key
+   */
+  lock(params: P2PKHLockWithWallet): Promise<LockingScript>
+  async lock(params: P2PKHLockParams): Promise<LockingScript> {
     // Validate params exists before using 'in' operator
     if (!params || typeof params !== 'object') {
       throw new Error('One of pubkeyhash, publicKey, or walletParams is required')
@@ -134,25 +149,25 @@ export default class P2PKH implements ScriptTemplate {
   }
 
   /**
-     * Creates a function that generates a P2PKH unlocking script using the instance's BRC-100 wallet.
-     *
-     * The returned object contains:
-     * 1. `sign` - An async function that, when invoked with a transaction and an input index,
-     *    produces an unlocking script suitable for a P2PKH locked output by using the wallet
-     *    to create a signature following the BRC-29 pattern.
-     * 2. `estimateLength` - A function that returns the estimated length of the unlocking script (108 bytes).
-     *
-     * @param params - Named parameters object
-     * @param params.protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
-     * @param params.keyID - Specific key identifier within the protocol (default: '0')
-     * @param params.counterparty - The counterparty for which the key is being used (default: 'self')
-     * @param params.signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
-     * @param params.anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
-     * @param params.sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
-     * @param params.lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
-     * @returns An object containing the `sign` and `estimateLength` functions
-     */
-  unlock (params?: P2PKHUnlockParams): {
+   * Creates a function that generates a P2PKH unlocking script using the instance's BRC-100 wallet.
+   *
+   * The returned object contains:
+   * 1. `sign` - An async function that, when invoked with a transaction and an input index,
+   *    produces an unlocking script suitable for a P2PKH locked output by using the wallet
+   *    to create a signature following the BRC-29 pattern.
+   * 2. `estimateLength` - A function that returns the estimated length of the unlocking script (108 bytes).
+   *
+   * @param params - Named parameters object
+   * @param params.protocolID - Protocol identifier for key derivation (default: [2, "p2pkh"])
+   * @param params.keyID - Specific key identifier within the protocol (default: '0')
+   * @param params.counterparty - The counterparty for which the key is being used (default: 'self')
+   * @param params.signOutputs - The signature scope for outputs: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Flag indicating if the signature allows for other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional. The amount in satoshis being unlocked. Otherwise input.sourceTransaction is required.
+   * @param params.lockingScript - Optional. The locking script being unlocked. Otherwise input.sourceTransaction is required.
+   * @returns An object containing the `sign` and `estimateLength` functions
+   */
+  unlock(params?: P2PKHUnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: () => Promise<108>
   } {
@@ -161,7 +176,7 @@ export default class P2PKH implements ScriptTemplate {
     }
 
     // Apply defaults
-    const protocolID = params?.protocolID ?? [2, 'p2pkh'] as WalletProtocol
+    const protocolID = params?.protocolID ?? ([2, 'p2pkh'] as WalletProtocol)
     const keyID = params?.keyID ?? '0'
     const counterparty = params?.counterparty ?? 'self'
     const signOutputs = params?.signOutputs ?? 'all'
@@ -191,7 +206,14 @@ export default class P2PKH implements ScriptTemplate {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
         // Calculate the transaction preimage according to Bitcoin's signature algorithm
-        const { preimage, signatureScope } = calculatePreimage(tx, inputIndex, signOutputs, anyoneCanPay, sourceSatoshis, lockingScript)
+        const { preimage, signatureScope } = calculatePreimage(
+          tx,
+          inputIndex,
+          signOutputs,
+          anyoneCanPay,
+          sourceSatoshis,
+          lockingScript
+        )
 
         // Use the BRC-29 wallet pattern to create a signature over the double-SHA256 hash of the preimage
         const { signature } = await wallet.createSignature({
@@ -211,11 +233,7 @@ export default class P2PKH implements ScriptTemplate {
 
         // Convert the DER-encoded signature to a TransactionSignature with the proper signature scope
         const rawSignature = Signature.fromDER(signature, 'hex')
-        const sig = new TransactionSignature(
-          rawSignature.r,
-          rawSignature.s,
-          signatureScope
-        )
+        const sig = new TransactionSignature(rawSignature.r, rawSignature.s, signatureScope)
 
         // Format the signature and public key for the unlocking script
         const sigForScript = sig.toChecksigFormat()

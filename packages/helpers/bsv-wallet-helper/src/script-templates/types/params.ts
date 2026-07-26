@@ -41,10 +41,7 @@ export interface P2PKHLockWithWallet {
  * Use one of: pubkeyhash, publicKey, or walletParams.
  */
 export type P2PKHLockParams =
-    | P2PKHLockWithPubkeyhash
-    | P2PKHLockWithPublicKey
-    | P2PKHLockWithAddress
-    | P2PKHLockWithWallet
+  P2PKHLockWithPubkeyhash | P2PKHLockWithPublicKey | P2PKHLockWithAddress | P2PKHLockWithWallet
 
 /**
  * Parameters for P2PKH unlock method
@@ -134,10 +131,10 @@ export interface OrdinalLockWithWallet {
  * Optionally include inscription and/or metadata for 1Sat Ordinals.
  */
 export type OrdinalLockParams =
-    | OrdinalLockWithPubkeyhash
-    | OrdinalLockWithPublicKey
-    | OrdinalLockWithAddress
-    | OrdinalLockWithWallet
+  | OrdinalLockWithPubkeyhash
+  | OrdinalLockWithPublicKey
+  | OrdinalLockWithAddress
+  | OrdinalLockWithWallet
 
 /**
  * Parameters for OrdP2PKH unlock method (same as {@link P2PKHUnlockParams})

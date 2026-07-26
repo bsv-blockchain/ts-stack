@@ -7,7 +7,7 @@ import { OrdLockLockParams } from '../../script-templates/types'
  * Configuration for a transaction output
  */
 export type OutputConfig =
-    | {
+  | {
       type: 'p2pkh'
       satoshis: number
       description?: string
@@ -16,7 +16,7 @@ export type OutputConfig =
       basket?: string
       customInstructions?: string
     }
-    | {
+  | {
       type: 'ordinalP2PKH'
       satoshis: number
       description?: string
@@ -27,7 +27,7 @@ export type OutputConfig =
       basket?: string
       customInstructions?: string
     }
-    | {
+  | {
       type: 'ordLock'
       satoshis: number
       description?: string
@@ -36,7 +36,7 @@ export type OutputConfig =
       basket?: string
       customInstructions?: string
     }
-    | {
+  | {
       type: 'custom'
       satoshis: number
       description?: string
@@ -45,7 +45,7 @@ export type OutputConfig =
       basket?: string
       customInstructions?: string
     }
-    | {
+  | {
       type: 'change'
       satoshis?: number // Calculated during signing, optional for config
       description?: string

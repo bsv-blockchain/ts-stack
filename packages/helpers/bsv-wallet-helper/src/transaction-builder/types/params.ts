@@ -66,10 +66,10 @@ export interface AddP2PKHOutputWithAutoDerivation {
  * Use one of: publicKey, walletParams, or auto-derivation (empty params).
  */
 export type AddP2PKHOutputParams =
-    | AddP2PKHOutputWithPublicKey
-    | AddP2PKHOutputWithAddress
-    | AddP2PKHOutputWithWallet
-    | AddP2PKHOutputWithAutoDerivation
+  | AddP2PKHOutputWithPublicKey
+  | AddP2PKHOutputWithAddress
+  | AddP2PKHOutputWithWallet
+  | AddP2PKHOutputWithAutoDerivation
 
 /**
  * Parameters for adding a change output with a public key
@@ -113,9 +113,7 @@ export interface AddChangeOutputWithAutoDerivation {
  * Amount is calculated automatically from remaining input satoshis.
  */
 export type AddChangeOutputParams =
-    | AddChangeOutputWithPublicKey
-    | AddChangeOutputWithWallet
-    | AddChangeOutputWithAutoDerivation
+  AddChangeOutputWithPublicKey | AddChangeOutputWithWallet | AddChangeOutputWithAutoDerivation
 
 /**
  * Parameters for adding an ordinal P2PKH output with a public key
@@ -194,10 +192,10 @@ export interface AddOrdinalP2PKHOutputWithAutoDerivation {
  * Optionally include inscription and/or metadata for 1Sat Ordinals.
  */
 export type AddOrdinalP2PKHOutputParams =
-    | AddOrdinalP2PKHOutputWithPublicKey
-    | AddOrdinalP2PKHOutputWithAddress
-    | AddOrdinalP2PKHOutputWithWallet
-    | AddOrdinalP2PKHOutputWithAutoDerivation
+  | AddOrdinalP2PKHOutputWithPublicKey
+  | AddOrdinalP2PKHOutputWithAddress
+  | AddOrdinalP2PKHOutputWithWallet
+  | AddOrdinalP2PKHOutputWithAutoDerivation
 
 /**
  * Parameters for adding an OrdLock output.

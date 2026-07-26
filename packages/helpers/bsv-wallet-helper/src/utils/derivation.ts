@@ -6,7 +6,7 @@ export interface Derivation {
   keyID: string
 }
 
-export function getDerivation (): Derivation {
+export function getDerivation(): Derivation {
   const derivationPrefix = Utils.toBase64(Random(8))
   const derivationSuffix = Utils.toBase64(Random(8))
   return {
@@ -24,7 +24,11 @@ export interface AddressWithParams {
   }
 }
 
-export async function getAddress (wallet: WalletInterface, amount: number = 1, counterparty: string = 'self'): Promise<AddressWithParams[]> {
+export async function getAddress(
+  wallet: WalletInterface,
+  amount: number = 1,
+  counterparty: string = 'self'
+): Promise<AddressWithParams[]> {
   if (!wallet) {
     throw new Error('Wallet is required')
   }

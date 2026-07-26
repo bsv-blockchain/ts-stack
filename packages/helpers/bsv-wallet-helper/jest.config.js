@@ -5,21 +5,20 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: {
-        module: 'commonjs',
-        moduleResolution: 'bundler'
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'bundler'
+        }
       }
-    }]
+    ]
   },
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/__tests__/**',
-    '!src/**/*.test.ts'
-  ],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/__tests__/**', '!src/**/*.test.ts'],
   coverageDirectory: 'coverage',
   verbose: true
-};
+}

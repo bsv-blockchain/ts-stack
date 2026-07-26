@@ -31,7 +31,7 @@ const SCRIPT_TEMPLATES = {
  * @param functionName - Name of the calling function for error messages
  * @throws Error if input is invalid
  */
-function validateInput (input: unknown, functionName: string): void {
+function validateInput(input: unknown, functionName: string): void {
   if (input === null || input === undefined) {
     throw new Error(`${functionName}: Input cannot be null or undefined`)
   }
@@ -40,19 +40,25 @@ function validateInput (input: unknown, functionName: string): void {
 
   // Check for arrays (typeof array is 'object')
   if (Array.isArray(input)) {
-    throw new TypeError(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`)
+    throw new TypeError(
+      `${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`
+    )
   }
 
   // Check for valid types
   if (inputType !== 'string' && inputType !== 'object') {
-    throw new Error(`${functionName}: Input must be a LockingScript, Script, or hex string, got ${inputType}`)
+    throw new Error(
+      `${functionName}: Input must be a LockingScript, Script, or hex string, got ${inputType}`
+    )
   }
 
   // If it's an object, verify it has the required methods
   if (inputType === 'object') {
     const scriptObj = input as any
     if (typeof scriptObj.toHex !== 'function' || typeof scriptObj.toASM !== 'function') {
-      throw new TypeError(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`)
+      throw new TypeError(
+        `${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`
+      )
     }
   }
 
@@ -74,7 +80,7 @@ function validateInput (input: unknown, functionName: string): void {
  * @param script - The script to convert
  * @returns Hex string representation of the script
  */
-function scriptToHex (script: LockingScript | Script): string {
+function scriptToHex(script: LockingScript | Script): string {
   return script.toHex()
 }
 
@@ -93,7 +99,7 @@ function scriptToHex (script: LockingScript | Script): string {
  *   console.log('This is a P2PKH script');
  * }
  */
-export function isP2PKH (script: LockingScript | Script): boolean
+export function isP2PKH(script: LockingScript | Script): boolean
 
 /**
  * Checks if a hex string represents a standard P2PKH (Pay-to-Public-Key-Hash) script.
@@ -107,11 +113,11 @@ export function isP2PKH (script: LockingScript | Script): boolean
  *   console.log('This is a P2PKH script');
  * }
  */
-export function isP2PKH (hex: string): boolean
+export function isP2PKH(hex: string): boolean
 
-export function isP2PKH (input: ScriptInput): boolean
+export function isP2PKH(input: ScriptInput): boolean
 
-export function isP2PKH (input: ScriptInput): boolean {
+export function isP2PKH(input: ScriptInput): boolean {
   validateInput(input, 'isP2PKH')
 
   try {
@@ -119,7 +125,7 @@ export function isP2PKH (input: ScriptInput): boolean {
     const { prefix, suffix, hashLength } = SCRIPT_TEMPLATES.p2pkh
 
     // P2PKH is exactly: prefix (4 chars) + length byte (2 chars) + hash (40 chars) + suffix (4 chars) = 50 chars
-    const expectedLength = 4 + 2 + (hashLength * 2) + 4 // 50 hex chars
+    const expectedLength = 4 + 2 + hashLength * 2 + 4 // 50 hex chars
 
     if (hex.length !== expectedLength) {
       return false
@@ -142,7 +148,7 @@ export function isP2PKH (input: ScriptInput): boolean {
     }
 
     return true
-  } catch (_invalidScript) {
+  } catch {
     // Malformed or unrecognised script bytes — treat as non-P2PKH rather than throwing.
     return false
   }
@@ -169,7 +175,7 @@ export function isP2PKH (input: ScriptInput): boolean {
  *   console.log('This is a BSV-20 Ordinal inscription with P2PKH');
  * }
  */
-export function isOrdinal (script: LockingScript | Script): boolean
+export function isOrdinal(script: LockingScript | Script): boolean
 
 /**
  * Checks if a hex string represents a BSV-20 Ordinal inscription envelope with P2PKH.
@@ -183,11 +189,11 @@ export function isOrdinal (script: LockingScript | Script): boolean
  *   console.log('This is a BSV-20 Ordinal inscription with P2PKH');
  * }
  */
-export function isOrdinal (hex: string): boolean
+export function isOrdinal(hex: string): boolean
 
-export function isOrdinal (input: ScriptInput): boolean
+export function isOrdinal(input: ScriptInput): boolean
 
-export function isOrdinal (input: ScriptInput): boolean {
+export function isOrdinal(input: ScriptInput): boolean {
   validateInput(input, 'isOrdinal')
 
   try {
@@ -204,7 +210,7 @@ export function isOrdinal (input: ScriptInput): boolean {
     const hasP2PKH = p2pkhPattern.test(hex)
 
     return hasP2PKH
-  } catch (_invalidScript) {
+  } catch {
     // Malformed or unrecognised script bytes — treat as non-ordinal rather than throwing.
     return false
   }
@@ -231,7 +237,7 @@ export function isOrdinal (input: ScriptInput): boolean {
  *   console.log('This script contains a BSV-20 ordinal envelope');
  * }
  */
-export function hasOrd (script: LockingScript | Script): boolean
+export function hasOrd(script: LockingScript | Script): boolean
 
 /**
  * Checks if a hex string contains a BSV-20 Ordinal inscription envelope.
@@ -245,11 +251,11 @@ export function hasOrd (script: LockingScript | Script): boolean
  *   console.log('This script contains a BSV-20 ordinal envelope');
  * }
  */
-export function hasOrd (hex: string): boolean
+export function hasOrd(hex: string): boolean
 
-export function hasOrd (input: ScriptInput): boolean
+export function hasOrd(input: ScriptInput): boolean
 
-export function hasOrd (input: ScriptInput): boolean {
+export function hasOrd(input: ScriptInput): boolean {
   validateInput(input, 'hasOrd')
 
   try {
@@ -259,7 +265,7 @@ export function hasOrd (input: ScriptInput): boolean {
     // Check if the hex contains the ordinal envelope start pattern
     // OP_0 OP_IF 'ord' = 0063036f7264
     return hex.includes(start)
-  } catch (_invalidScript) {
+  } catch {
     // Malformed or unrecognised script bytes — treat as no-ord rather than throwing.
     return false
   }
@@ -281,7 +287,7 @@ export function hasOrd (input: ScriptInput): boolean {
  *   console.log('This script contains OP_RETURN data');
  * }
  */
-export function hasOpReturnData (script: LockingScript | Script): boolean
+export function hasOpReturnData(script: LockingScript | Script): boolean
 
 /**
  * Checks if a hex string contains OP_RETURN data.
@@ -295,11 +301,11 @@ export function hasOpReturnData (script: LockingScript | Script): boolean
  *   console.log('This script contains OP_RETURN data');
  * }
  */
-export function hasOpReturnData (hex: string): boolean
+export function hasOpReturnData(hex: string): boolean
 
-export function hasOpReturnData (input: ScriptInput): boolean
+export function hasOpReturnData(input: ScriptInput): boolean
 
-export function hasOpReturnData (input: ScriptInput): boolean {
+export function hasOpReturnData(input: ScriptInput): boolean {
   validateInput(input, 'hasOpReturnData')
 
   try {
@@ -314,7 +320,7 @@ export function hasOpReturnData (input: ScriptInput): boolean {
         if (asm.includes('OP_RETURN')) {
           return true
         }
-      } catch (_invalidHex) {
+      } catch {
         // Parsing failed — fall through to heuristic opcode scan below.
       }
 
@@ -339,7 +345,7 @@ export function hasOpReturnData (input: ScriptInput): boolean {
       // For Script objects, use ASM which clearly identifies OP_RETURN as an opcode
       return input.toASM().includes('OP_RETURN')
     }
-  } catch (_invalidScript) {
+  } catch {
     // Malformed or unrecognised script bytes — treat as no-OP_RETURN rather than throwing.
     return false
   }
@@ -368,7 +374,7 @@ export type ScriptType = 'P2PKH' | 'Ordinal' | 'OpReturn' | 'Custom'
  *   console.log('This is a BSV-20 Ordinal');
  * }
  */
-export function getScriptType (script: LockingScript | Script): ScriptType
+export function getScriptType(script: LockingScript | Script): ScriptType
 
 /**
  * Determines the type of a Bitcoin script from hex string.
@@ -380,9 +386,9 @@ export function getScriptType (script: LockingScript | Script): ScriptType
  * const type = getScriptType('76a914...88ac');
  * console.log(type); // 'P2PKH'
  */
-export function getScriptType (hex: string): ScriptType
+export function getScriptType(hex: string): ScriptType
 
-export function getScriptType (input: ScriptInput): ScriptType {
+export function getScriptType(input: ScriptInput): ScriptType {
   validateInput(input, 'getScriptType')
 
   try {
@@ -413,7 +419,7 @@ export function getScriptType (input: ScriptInput): ScriptType {
 
     // 4. Everything else is custom
     return 'Custom'
-  } catch (_invalidScript) {
+  } catch {
     // Malformed or unrecognised script bytes — fall back to 'Custom' rather than throwing.
     return 'Custom'
   }
@@ -444,7 +450,7 @@ export interface InscriptionData {
  *   const data = Buffer.from(inscription.dataB64, 'base64');
  * }
  */
-export function extractInscriptionData (script: LockingScript | Script): InscriptionData | null
+export function extractInscriptionData(script: LockingScript | Script): InscriptionData | null
 
 /**
  * Extracts inscription data from a BSV-20 Ordinal script hex string.
@@ -458,9 +464,9 @@ export function extractInscriptionData (script: LockingScript | Script): Inscrip
  *   const imageData = Buffer.from(inscription.dataB64, 'base64');
  * }
  */
-export function extractInscriptionData (hex: string): InscriptionData | null
+export function extractInscriptionData(hex: string): InscriptionData | null
 
-export function extractInscriptionData (input: ScriptInput): InscriptionData | null {
+export function extractInscriptionData(input: ScriptInput): InscriptionData | null {
   validateInput(input, 'extractInscriptionData')
 
   // Convert to Script object for chunk parsing
@@ -532,7 +538,9 @@ export function extractInscriptionData (input: ScriptInput): InscriptionData | n
     contentType = 'application/octet-stream' // Default when not specified
     dataB64 = Buffer.from(dataChunk.data).toString('base64')
   } else {
-    throw new Error(`extractInscriptionData: Unexpected OP_ENDIF position at index ${endifIndex}. Expected 7 (without content type) or 9 (with content type)`)
+    throw new Error(
+      `extractInscriptionData: Unexpected OP_ENDIF position at index ${endifIndex}. Expected 7 (without content type) or 9 (with content type)`
+    )
   }
 
   return {
@@ -566,7 +574,7 @@ export interface MAP {
  *   console.log(`Author: ${metadata.author}`);
  * }
  */
-export function extractMapMetadata (script: LockingScript | Script): MAP | null
+export function extractMapMetadata(script: LockingScript | Script): MAP | null
 
 /**
  * Extracts MAP metadata from a script hex string.
@@ -580,9 +588,9 @@ export function extractMapMetadata (script: LockingScript | Script): MAP | null
  *   // Process app-specific metadata
  * }
  */
-export function extractMapMetadata (hex: string): MAP | null
+export function extractMapMetadata(hex: string): MAP | null
 
-export function extractMapMetadata (input: ScriptInput): MAP | null {
+export function extractMapMetadata(input: ScriptInput): MAP | null {
   validateInput(input, 'extractMapMetadata')
 
   // Must have OP_RETURN data
@@ -643,7 +651,7 @@ export function extractMapMetadata (input: ScriptInput): MAP | null {
     const keyChunk = chunks[currentIndex]
     const valueChunk = chunks[currentIndex + 1]
 
-    if (((keyChunk?.data) == null) || ((valueChunk?.data) == null)) {
+    if (keyChunk?.data == null || valueChunk?.data == null) {
       break
     }
 
@@ -661,8 +669,10 @@ export function extractMapMetadata (input: ScriptInput): MAP | null {
 
   // Validate required fields
   if (
-    metadata.app == null || metadata.app.length === 0 ||
-    metadata.type == null || metadata.type.length === 0
+    metadata.app == null ||
+    metadata.app.length === 0 ||
+    metadata.type == null ||
+    metadata.type.length === 0
   ) {
     return null
   }
@@ -692,7 +702,7 @@ export function extractMapMetadata (input: ScriptInput): MAP | null {
  *   fs.writeFileSync('image.png', imageData);
  * }
  */
-export function extractOpReturnData (script: LockingScript | Script): string[] | null
+export function extractOpReturnData(script: LockingScript | Script): string[] | null
 
 /**
  * Extracts OP_RETURN data fields from a script hex string.
@@ -707,9 +717,9 @@ export function extractOpReturnData (script: LockingScript | Script): string[] |
  *   console.log('Decoded:', text);
  * }
  */
-export function extractOpReturnData (hex: string): string[] | null
+export function extractOpReturnData(hex: string): string[] | null
 
-export function extractOpReturnData (input: ScriptInput): string[] | null {
+export function extractOpReturnData(input: ScriptInput): string[] | null {
   validateInput(input, 'extractOpReturnData')
 
   if (!hasOpReturnData(input)) {
@@ -729,7 +739,7 @@ export function extractOpReturnData (input: ScriptInput): string[] | null {
   const dataFields: string[] = []
   for (let i = opReturnIndex + 1; i < chunks.length; i++) {
     const chunk = chunks[i]
-    if ((chunk.data != null) && chunk.data.length > 0) {
+    if (chunk.data != null && chunk.data.length > 0) {
       // Convert byte array to base64 string
       dataFields.push(Utils.toBase64(chunk.data))
     }

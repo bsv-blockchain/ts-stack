@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 131,
+  "findingCount": 119,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,30 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/helpers/bsv-wallet-helper::disabled-quality-script::lint:ci-disabled",
-      "message": "Remove disabled quality escape hatch lint:ci-disabled"
-    },
-    {
-      "id": "packages/helpers/bsv-wallet-helper::disabled-quality-script::test:coverage-disabled",
-      "message": "Remove disabled quality escape hatch test:coverage-disabled"
-    },
-    {
-      "id": "packages/helpers/bsv-wallet-helper::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/bsv-wallet-helper::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/helpers/bsv-wallet-helper::missing-script::test:coverage",
-      "message": "Profile node-library requires script test:coverage"
-    },
-    {
-      "id": "packages/helpers/bsv-wallet-helper::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
     },
     {
       "id": "packages/helpers/create-bsv-app::missing-script::format:check",
@@ -245,30 +221,6 @@
     },
     {
       "id": "packages/middleware/auth-express-middleware::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/middleware/auth::disabled-quality-script::lint:ci-disabled",
-      "message": "Remove disabled quality escape hatch lint:ci-disabled"
-    },
-    {
-      "id": "packages/middleware/auth::disabled-quality-script::test:coverage-disabled",
-      "message": "Remove disabled quality escape hatch test:coverage-disabled"
-    },
-    {
-      "id": "packages/middleware/auth::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/middleware/auth::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/middleware/auth::missing-script::test:coverage",
-      "message": "Profile node-library requires script test:coverage"
-    },
-    {
-      "id": "packages/middleware/auth::missing-script::typecheck",
       "message": "Profile node-library requires script typecheck"
     },
     {
