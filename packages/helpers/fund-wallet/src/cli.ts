@@ -251,7 +251,7 @@ export function parseCliArguments(arguments_: string[]): CliParseResult {
 
 function printHelp(io: CliIO, errorMessage?: string): void {
   if (errorMessage) io.error(chalk.red(`\n❌ ${errorMessage}\n`))
-  io.log(`${chalk.bold('fund-metanet')} - Fund a Metanet wallet
+  io.log(String.raw`${chalk.bold('fund-metanet')} - Fund a Metanet wallet
 
 ${chalk.bold('USAGE:')}
   fund-metanet [OPTIONS]
@@ -268,7 +268,7 @@ ${chalk.bold('OPTIONS:')}
 ${chalk.bold('EXAMPLES:')}
   fund-metanet --chain main --private-key <hex> --satoshis 1000
   fund-metanet --chain main --private-key <hex>
-  fund-metanet --chain test --private-key <hex> \\
+  fund-metanet --chain test --private-key <hex> \
     --storage-url ${DEFAULT_STORAGE_URL} --satoshis 500
 `)
 }
