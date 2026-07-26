@@ -1,6 +1,7 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction, OP, Script } from '@bsv/sdk'
 import { assertValidBsv20Payload } from '../shared/assertValidBsv20Payload.js'
+import { errorMessage } from '../shared/errorMessage.js'
 
 export default class MonsterBattleTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -89,7 +90,7 @@ function checkScriptFormat (script: Script) {
 
     return { valid: true, message: 'Script is valid' }
   } catch (error) {
-    return { valid: false, message: error instanceof Error ? error.message : 'Invalid script format' }
+    return { valid: false, message: errorMessage(error, 'Invalid script format') }
   }
 }
 

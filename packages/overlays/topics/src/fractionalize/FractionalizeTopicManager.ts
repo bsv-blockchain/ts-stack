@@ -1,6 +1,7 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction, Script, OP } from '@bsv/sdk'
 import { assertValidBsv20Payload } from '../shared/assertValidBsv20Payload.js'
+import { errorMessage } from '../shared/errorMessage.js'
 
 export default class FractionalizeTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -120,6 +121,6 @@ function checkScriptFormat (script: Script, type: 'server-token' | 'transfer-tok
         throw new Error(`Unknown script type: ${type}`)
     }
   } catch (error) {
-    return { valid: false, message: error instanceof Error ? error.message : 'Invalid script format' }
+    return { valid: false, message: errorMessage(error, 'Invalid script format') }
   }
 }

@@ -20,6 +20,7 @@
  * identifyNeededInputs: returns outpoints for inputs that lack a sourceTransaction.
  */
 
+import { jest } from '@jest/globals'
 import { LockingScript, PrivateKey, Transaction, Utils } from '@bsv/sdk'
 import TokenDemoTopicManager from '../utility-tokens/TokenDemoTopicManager.js'
 
@@ -54,10 +55,7 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
  *   chunks[2..N] = data fields (each a standard push)
  *   chunks[N+1..] = OP_2DROP (0x6d) for each pair, OP_DROP (0x75) for remainder
  */
-function buildPushDropScript(
-  pubKeyHex: string,
-  fields: number[][]
-): LockingScript {
+function buildPushDropScript(pubKeyHex: string, fields: number[][]): LockingScript {
   const chunks: Array<{ op: number; data?: number[] }> = []
   const pubKeyBytes = Utils.toArray(pubKeyHex, 'hex')
 
@@ -111,16 +109,25 @@ function encodeUInt64LE(value: number): number[] {
  * For a standalone mint (no previousCoins needed), use tokenId = '___mint___'.
  * The balance check sets isMint=true so the amount mismatch is ignored.
  */
+function buildTokenScript(
+  pubKeyHex: string,
+  tokenId: string,
+  amount: number,
+  customFields: Record<string, unknown> = {}
+): LockingScript {
+  const tokenIdBytes = Utils.toArray(tokenId, 'utf8')
+  const amountBytes = encodeUInt64LE(amount)
+  const customFieldsBytes = Utils.toArray(JSON.stringify(customFields), 'utf8')
+
+  return buildPushDropScript(pubKeyHex, [tokenIdBytes, amountBytes, customFieldsBytes])
+}
+
 function buildMintTokenScript(
   pubKeyHex: string,
   amount: number,
   customFields: Record<string, unknown> = {}
 ): LockingScript {
-  const tokenId = Utils.toArray('___mint___', 'utf8')
-  const amountBytes = encodeUInt64LE(amount)
-  const customFieldsBytes = Utils.toArray(JSON.stringify(customFields), 'utf8')
-
-  return buildPushDropScript(pubKeyHex, [tokenId, amountBytes, customFieldsBytes])
+  return buildTokenScript(pubKeyHex, '___mint___', amount, customFields)
 }
 
 // ---------------------------------------------------------------------------
@@ -179,8 +186,8 @@ describe('TokenDemoTopicManager', () => {
   it('rejects a P2PKH script (chunks[1].op is not OP_CHECKSIG at index 1)', async () => {
     const pubkeyHash = Array.from({ length: 20 }, () => 0xab)
     const badScript = new LockingScript([
-      { op: 0x76 },                       // OP_DUP (chunks[0])
-      { op: 0xa9 },                       // OP_HASH160 (chunks[1] — not OP_CHECKSIG)
+      { op: 0x76 }, // OP_DUP (chunks[0])
+      { op: 0xa9 }, // OP_HASH160 (chunks[1] — not OP_CHECKSIG)
       { op: 20, data: pubkeyHash },
       { op: 0x88 },
       { op: 0xac }
@@ -202,7 +209,7 @@ describe('TokenDemoTopicManager', () => {
   it('rejects an OP_FALSE OP_RETURN script (not a PushDrop)', async () => {
     const badScript = new LockingScript([
       { op: 0x00 }, // OP_FALSE (chunks[0])
-      { op: 0x6a }  // OP_RETURN (chunks[1] — not OP_CHECKSIG)
+      { op: 0x6a } // OP_RETURN (chunks[1] — not OP_CHECKSIG)
     ])
     const tx = buildTxWithInput([badScript])
 
@@ -216,7 +223,11 @@ describe('TokenDemoTopicManager', () => {
     const amountBytes = encodeUInt64LE(100)
     const badCustomFieldsBytes = Utils.toArray('not-valid-json!!!', 'utf8')
 
-    const lockingScript = buildPushDropScript(pubKeyHex, [tokenIdBytes, amountBytes, badCustomFieldsBytes])
+    const lockingScript = buildPushDropScript(pubKeyHex, [
+      tokenIdBytes,
+      amountBytes,
+      badCustomFieldsBytes
+    ])
     const tx = buildTxWithInput([lockingScript])
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
@@ -250,6 +261,36 @@ describe('TokenDemoTopicManager', () => {
     expect(result).toEqual([])
   })
 
+  it('identifyNeededInputs returns unresolved source outpoints', async () => {
+    const sourceTXID = '11'.repeat(32)
+    const tx = new Transaction()
+    tx.addInput({
+      sourceTXID,
+      sourceOutputIndex: 7,
+      unlockingScript: new LockingScript([])
+    })
+    tx.addOutput({
+      lockingScript: buildMintTokenScript(pubKeyHex, 1, {}),
+      satoshis: 1000
+    })
+
+    await expect(manager.identifyNeededInputs(tx.toBEEF())).resolves.toEqual([
+      { txid: sourceTXID, outputIndex: 7 }
+    ])
+  })
+
+  it('identifyNeededInputs ignores a malformed input without either source representation', async () => {
+    const fromBEEF = jest.spyOn(Transaction, 'fromBEEF').mockReturnValueOnce({
+      inputs: [{ sourceOutputIndex: 0 }]
+    } as unknown as Transaction)
+
+    try {
+      await expect(manager.identifyNeededInputs([])).resolves.toEqual([])
+    } finally {
+      fromBEEF.mockRestore()
+    }
+  })
+
   it('identifyNeededInputs throws when transaction has no inputs', async () => {
     // A transaction with outputs but no inputs
     const sourceTx = new Transaction()
@@ -258,7 +299,80 @@ describe('TokenDemoTopicManager', () => {
     const tx = new Transaction()
     tx.addOutput({ lockingScript: buildMintTokenScript(pubKeyHex, 1, {}), satoshis: 1000 })
 
-    await expect(manager.identifyNeededInputs(tx.toBEEF())).rejects.toThrow('Missing parameter: inputs')
+    await expect(manager.identifyNeededInputs(tx.toBEEF())).rejects.toThrow(
+      'Missing parameter: inputs'
+    )
+  })
+
+  it('skips a requested previous coin when its source transaction is unavailable', async () => {
+    const tx = new Transaction()
+    tx.addInput({
+      sourceTXID: '22'.repeat(32),
+      sourceOutputIndex: 0,
+      unlockingScript: new LockingScript([])
+    })
+    tx.addOutput({
+      lockingScript: buildMintTokenScript(pubKeyHex, 1, {}),
+      satoshis: 1000
+    })
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0])
+
+    expect(result.outputsToAdmit).toEqual([0])
+    expect(error).toHaveBeenCalledWith(
+      'Error processing input 0:',
+      expect.objectContaining({ message: 'Missing source transaction' })
+    )
+  })
+
+  it('skips a requested previous coin when its source output is unavailable', async () => {
+    const sourceTransaction = new Transaction()
+    sourceTransaction.addOutput({
+      lockingScript: buildMintTokenScript(pubKeyHex, 1, {}),
+      satoshis: 1000
+    })
+    const tx = new Transaction()
+    tx.addInput({
+      sourceTransaction,
+      sourceOutputIndex: 7,
+      unlockingScript: new LockingScript([])
+    })
+    tx.addOutput({
+      lockingScript: buildMintTokenScript(pubKeyHex, 1, {}),
+      satoshis: 1000
+    })
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0])
+
+    expect(result.outputsToAdmit).toEqual([0])
+    expect(error).toHaveBeenCalledWith(
+      'Error processing input 0:',
+      expect.objectContaining({ message: 'Missing source output' })
+    )
+  })
+
+  it('balances a transfer against a requested previous token output', async () => {
+    const sourceTransaction = new Transaction()
+    sourceTransaction.addOutput({
+      lockingScript: buildTokenScript(pubKeyHex, 'token-id', 25, {}),
+      satoshis: 1000
+    })
+    const tx = new Transaction()
+    tx.addInput({
+      sourceTransaction,
+      sourceOutputIndex: 0,
+      unlockingScript: new LockingScript([])
+    })
+    tx.addOutput({
+      lockingScript: buildTokenScript(pubKeyHex, 'token-id', 25, {}),
+      satoshis: 1000
+    })
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0])
+
+    expect(result.outputsToAdmit).toEqual([0])
   })
 
   // --- Metadata ---

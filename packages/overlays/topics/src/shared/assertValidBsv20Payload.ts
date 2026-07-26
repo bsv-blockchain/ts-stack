@@ -1,4 +1,5 @@
 import { Utils } from '@bsv/sdk'
+import { errorMessage } from './errorMessage.js'
 
 interface Bsv20Payload {
   p?: unknown
@@ -25,7 +26,6 @@ export function assertValidBsv20Payload(data: number[] | undefined): void {
       throw new Error('Malformed JSON payload')
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Invalid JSON payload: ${message}`)
+    throw new Error(`Invalid JSON payload: ${errorMessage(error)}`)
   }
 }
