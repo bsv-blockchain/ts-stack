@@ -143,7 +143,7 @@ test('container release workflows scan before push and publish signed evidence',
   assert.match(infraRelease, /actions\/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6/)
   assert.match(infraRelease, /sigstore\/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6/)
   assert.equal(
-    infraRelease.match(/docker\/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf/g)?.length,
+    infraRelease.match(/docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/g)?.length,
     1,
     'the scanned release image must be built exactly once'
   )
