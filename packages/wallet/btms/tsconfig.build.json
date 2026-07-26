@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "noEmit": true
+  },
+  "files": [],
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/__tests__/**"]
+}

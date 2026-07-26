@@ -1,399 +1,169 @@
-# BTMS Permission Module Integration Guide
+# BTMS Permission Module Integration
 
-Complete guide for integrating the BTMS Permission Module into your wallet application.
-
-## Related Docs
-
-- Project index: [`../README.md`](../README.md)
-- Main BTMS API package (`@bsv/btms`): [`../core/README.md`](../core/README.md)
-- Core permission module overview: [`./README.md`](./README.md)
-- React/MUI prompt package: [`../permission-module-ui/README.md`](../permission-module-ui/README.md)
-- Frontend app and live deployment (`https://btms.metanet.app`): [`../frontend/README.md`](../frontend/README.md)
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Installation](#installation)
-- [Integration Steps](#integration-steps)
-- [API Reference](#api-reference)
-- [Examples](#examples)
-- [Troubleshooting](#troubleshooting)
-
-## Overview
-
-The BTMS Permission Module provides wallet permission management for BTMS token operations. It consists of two main components:
-
-1. **Core Factory (`createBtmsModule`)** - Creates the permission module instance (framework-agnostic)
-2. **TokenAccessPrompt** - React UI component for displaying token spending authorization requests
+This guide covers the trust boundary, lifecycle, and failure behavior expected
+when integrating `@bsv/btms-permission-module` into a wallet.
 
 ## Architecture
 
-### Flow Diagram
-
-```
-User Action (Token Spend)
-    ↓
-BTMS Core (createAction/createSignature)
-    ↓
-BasicTokenModule (intercepts via P-basket delegation)
-    ↓
-requestTokenAccess (your callback)
-    ↓
-TokenAccessPrompt UI (shows dialog)
-    ↓
-User Approves/Denies
-    ↓
-BasicTokenModule (allows/blocks operation)
-    ↓
-Transaction Completes/Fails
+```text
+Untrusted application
+  -> WalletPermissionsManager
+    -> BasicTokenModule
+      -> trusted host prompt
+      -> wallet action/signature only after authorization
 ```
 
-### Component Responsibilities
+The module receives permission hooks for the `btms` scheme. The host owns the
+prompt UI and the wallet owns the action/signature implementation. Applications
+must not be able to replace the callback, render over the trusted prompt, or
+bypass the permission manager.
 
-**Core factory (`createBtmsModule`):**
-- Intercepts `createAction` calls to extract token spend information
-- Intercepts `createSignature` calls to verify authorized transactions
-- Manages session-based authorization for transaction flows
-- Validates transaction integrity using BIP-143 preimage verification
+## Create and Register the Module
 
-**TokenAccessPrompt:**
-- Displays token information (amount, name, asset ID)
-- Shows recipient and change details
-- Handles window focus management (optional)
-- Provides approve/deny actions
-
-## Installation
-
-```bash
-npm install @bsv/btms-permission-module
-```
-
-### Peer Dependencies
-
-Ensure you have the following installed:
-
-```json
-{
-  "@bsv/sdk": ">=2.0.0",
-  "@bsv/wallet-toolbox-client": ">=1.5.0",
-  "react": ">=18.0.0",
-  "@mui/material": ">=5.0.0",
-  "@mui/icons-material": ">=5.0.0"
-}
-```
-
-## Integration Steps
-
-### Step 1: Setup the Token Usage Prompt Hook
-
-First, create the prompt function with optional focus handlers for desktop applications.
-
-```typescript
-import { useTokenSpendPrompt, type FocusHandlers } from '@bsv/btms-permission-module-ui'
-import { UserContext } from './UserContext' // Your app's context
-
-// In your wallet context provider component:
-const { isFocused, onFocusRequested, onFocusRelinquished } = useContext(UserContext)
-
-// Setup the hook with focus handlers (optional - omit for web-only apps)
-const { promptUser: requestTokenAccess, PromptComponent } = useTokenSpendPrompt({
-  isFocused,
-  onFocusRequested,
-  onFocusRelinquished
-})
-
-const requestTokenAccessWithTheme = useCallback((app: string, message: string) => {
-  return requestTokenAccess(app, message, tokenPromptPaletteMode)
-}, [requestTokenAccess, tokenPromptPaletteMode])
-```
-
-**For web-only applications** (no window focus management):
-
-```typescript
-const { promptUser: requestTokenAccess, PromptComponent } = useTokenSpendPrompt()
-```
-
-### Step 2: Create the Module Instance
-
-Create an instance of `BasicTokenModule` and pass your prompt function.
+The factory creates a BTMS client for metadata enrichment:
 
 ```typescript
 import { createBtmsModule } from '@bsv/btms-permission-module'
+import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
 
-const basicTokenModule = createBtmsModule({
+const module = createBtmsModule({
   wallet,
-  promptHandler: requestTokenAccessWithTheme
+  promptHandler: async (originator, message) => {
+    return await trustedPromptController.request({
+      originator,
+      payload: parseBTMSPrompt(message)
+    })
+  }
+})
+
+const permissionsManager = new WalletPermissionsManager(wallet, adminOriginator, {
+  ...permissionConfig,
+  permissionModules: {
+    ...permissionConfig.permissionModules,
+    btms: module
+  }
 })
 ```
 
-### Step 3: Register with WalletPermissionsManager
-
-Add the module to your wallet's permission configuration.
+Direct construction avoids the metadata lookup dependency:
 
 ```typescript
-import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
+import { BasicTokenModule } from '@bsv/btms-permission-module'
 
-// Add permission modules to config
-const configWithModules = {
-  ...permissionConfig,
-  permissionModules: {
-    btms: basicTokenModule
-  }
-}
-
-// Create permissions manager with the config
-const permissionsManager = new WalletPermissionsManager(
-  wallet,
-  adminOriginator,
-  configWithModules
+const module = new BasicTokenModule((originator, message) =>
+  trustedPromptController.request({ originator, payload: parseBTMSPrompt(message) })
 )
 ```
 
-### Step 4: Render the Prompt Component
+## Parse Prompt Messages Conservatively
 
-Include the prompt component in your app's render tree.
-
-```tsx
-return (
-  <WalletContext.Provider value={contextValue}>
-    {children}
-    
-    {/* Render token usage prompt */}
-    <PromptComponent />
-    
-    {/* Other permission prompts */}
-  </WalletContext.Provider>
-)
-```
-
-## API Reference
-
-### `useTokenSpendPrompt(focusHandlers?: FocusHandlers)`
-
-React hook for managing token spend prompts.
-
-**Parameters:**
-- `focusHandlers` (optional): Object containing window focus management functions
-  - `isFocused: () => Promise<boolean>` - Check if window is focused
-  - `onFocusRequested: () => Promise<void>` - Request window focus
-  - `onFocusRelinquished: () => Promise<void>` - Release window focus
-
-**Returns:**
-- `promptUser: (app: string, message: string) => Promise<boolean>` - Function to show prompt
-- `PromptComponent: React.ComponentType` - Component to render in your app
-
-### `BasicTokenModule`
-
-Permission module for BTMS token operations.
-
-**Constructor:**
-```typescript
-new BasicTokenModule(
-  requestTokenAccess: (app: string, message: string) => Promise<boolean>,
-  btms: BTMS
-)
-```
-
-**Parameters:**
-- `requestTokenAccess`: Async function that displays a prompt and returns user's decision
-
-**Message Format:**
-
-The `message` parameter is a JSON string with the following structure:
+Structured spend, burn, and access prompts are JSON. The module may emit a
+plain-text fallback when it cannot safely derive token details. A host should
+never interpret parse failure as approval:
 
 ```typescript
-{
-  type: 'btms_spend',
-  sendAmount: number,           // Amount being sent to recipient
-  tokenName: string,            // Token name from metadata
-  assetId: string,              // Asset ID (txid.outputIndex)
-  recipient?: string,           // Recipient public key (if available)
-  iconURL?: string,             // Token icon URL (if available)
-  changeAmount: number,         // Change amount returned to sender
-  totalInputAmount: number      // Total amount from inputs
-}
-```
-
-### `FocusHandlers`
-
-Interface for window focus management (desktop apps).
-
-```typescript
-interface FocusHandlers {
-  isFocused: () => Promise<boolean>
-  onFocusRequested: () => Promise<void>
-  onFocusRelinquished: () => Promise<void>
-}
-```
-
-## Examples
-
-### Complete Integration Example
-
-```typescript
-import React, { useContext, useState } from 'react'
-import { WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
-import { BasicTokenModule, useTokenSpendPrompt } from '@bsv/btms-permission-module'
-
-export const WalletContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [wallet, setWallet] = useState(null)
-  
-  // Get focus handlers from your app context (desktop apps only)
-  const { isFocused, onFocusRequested, onFocusRelinquished } = useContext(UserContext)
-  
-  // Step 1: Setup token spend prompt with focus handlers
-  const { promptUser: requestTokenAccess, PromptComponent } = useTokenSpendPrompt({
-    isFocused,
-    onFocusRequested,
-    onFocusRelinquished
-  })
-  
-  // Initialize wallet and permissions
-  const initializeWallet = async () => {
-    // ... wallet initialization code ...
-    
-    // Step 2: Initialize BTMS + BasicTokenModule
-    const btms = new BTMS({ wallet, networkPreset: 'local' })
-    const basicTokenModule = new BasicTokenModule(
-      requestTokenAccess,
-      btms
-    )
-    
-    // Step 3: Configure permissions with the module
-    const configWithModules = {
-      ...permissionConfig,
-      permissionModules: {
-        btms: basicTokenModule
-      }
+function parseBTMSPrompt(message: string): unknown {
+  try {
+    return JSON.parse(message)
+  } catch {
+    return {
+      type: 'btms_generic',
+      message
     }
-    
-    // Create permissions manager
-    const permissionsManager = new WalletPermissionsManager(
-      wallet,
-      adminOriginator,
-      configWithModules
-    )
-    
-    // Bind other permission callbacks...
-    permissionsManager.bindCallback('onSpendingAuthorizationRequested', spendingCallback)
-    // etc...
-    
-    setWallet(wallet)
   }
-  
-  return (
-    <WalletContext.Provider value={{ wallet }}>
-      {children}
-      
-      {/* Step 4: Render the prompt component */}
-      <PromptComponent />
-    </WalletContext.Provider>
-  )
 }
 ```
 
-### Web-Only Integration (No Focus Management)
+Render every value as untrusted text. The prompt should visibly identify the
+requesting originator, action, token, amount, recipient when known, change, and
+whether the action burns tokens. Approval must require an explicit user action.
+Closing, timing out, navigating away, or encountering a rendering error should
+deny.
+
+## Lifecycle
+
+Keep one module instance for the lifetime of its wallet permission manager. The
+module holds short-lived, originator-scoped authorization and transaction
+commitments in memory.
 
 ```typescript
-// Simplified for web applications without window focus management
-const { promptUser: requestTokenAccess, PromptComponent } = useTokenSpendPrompt()
-
-const btms = new BTMS({ wallet, networkPreset: 'local' })
-const basicTokenModule = new BasicTokenModule(requestTokenAccess, btms)
-
-// Rest of integration is the same...
-```
-
-### Custom Prompt Implementation
-
-If you want to use your own UI instead of the provided `TokenAccessPrompt`:
-
-```typescript
-const customPromptFunction = async (app: string, message: string): Promise<boolean> => {
-  // Parse the message
-  const spendInfo = JSON.parse(message)
-  
-  // Show your custom UI
-  const result = await showMyCustomDialog({
-    app,
-    tokenName: spendInfo.tokenName,
-    amount: spendInfo.sendAmount,
-    assetId: spendInfo.assetId
-  })
-  
-  return result // true = approved, false = denied
+try {
+  await runWalletSession({ permissionsManager })
+} finally {
+  module.dispose()
 }
-
-const btms = new BTMS({ wallet, networkPreset: 'local' })
-const basicTokenModule = new BasicTokenModule(customPromptFunction, btms)
 ```
 
-## Troubleshooting
+`dispose()` clears this sensitive state. Normal expiry is request-driven, so the
+module does not create a background interval or keep the process alive.
 
-### Issue: Prompt not appearing
+## Authorization Flow
 
-**Possible causes:**
-1. `PromptComponent` not rendered in your app tree
-2. Focus handlers not working correctly (desktop apps)
-3. Module not registered with `WalletPermissionsManager`
+### Token access
 
-**Solution:**
-- Verify `<PromptComponent />` is included in your render tree
-- Check browser console for errors
-- Ensure `permissionModules` config includes your `basicTokenModule`
+`listActions` requests for BTMS labels and `listOutputs` requests for `p btms`
+baskets prompt once per originator session. Denial throws and prevents the
+wallet operation.
 
-### Issue: Two prompts appearing
+### Transfer or burn
 
-**Cause:** Both generic wallet permission and BTMS-specific prompt showing.
+For `createAction`, the module parses BTMS input BEEF and output scripts. It
+rejects mixed asset IDs and invalid burn/send combinations. It prompts with the
+details it can verify, or uses the generic prompt if those details cannot be
+derived safely.
 
-**Solution:** This was a bug in earlier versions. Ensure you're using the latest version where session authorization prevents duplicate prompts.
+After approval, the wallet executes `createAction`. The module then derives the
+exact SHA-256 signing digest for every input in the returned signable
+transaction. Failure to parse that response clears authorization and fails
+closed.
 
-### Issue: Token information not displaying
+For `createSignature`, the module verifies the 32-byte digest supplied by
+`PushDrop` against that exact transaction commitment. A full BIP-143 preimage is
+also accepted when its SHA-256 digest matches. Truncated, malformed,
+substituted, unbound, or expired requests are rejected.
 
-**Possible causes:**
-1. Token metadata not properly encoded in locking script
-2. PushDrop field count mismatch
+### Issuance
 
-**Solution:**
-- Verify tokens are created with proper metadata
-- Check that `BTMSToken.createTransfer` is called with correct parameters
-- Ensure `includeSignature` parameter matches your use case
+Issuance does not spend an existing BTMS asset, so it can proceed without a
+prompt only when the request proves issuance. Accepted markers are:
 
-### Issue: Window focus not working (desktop apps)
+- an exact `btms_type_issue` output tag; or
+- an exact `ISSUE` value in the PushDrop asset field, including a valid
+  signature preimage's script code.
 
-**Cause:** Focus handlers not properly implemented or passed.
+An unmarked action, a digest-only signature request, or a malformed preimage is
+not treated as issuance and therefore cannot take the automatic path. Unbound
+signature approval is one-shot and is not inherited from a token-access grant.
 
-**Solution:**
-- Verify your `UserContext` provides valid focus handler functions
-- Check that Tauri commands (or equivalent) are properly configured
-- Test focus handlers independently to ensure they work
+## Failure Handling
 
-## Security Considerations
+The permission module communicates denial and verification failures by throwing.
+The host should abort the wallet operation and surface a neutral error that does
+not leak sensitive transaction data.
 
-### Transaction Verification
+Do not retry a denied prompt automatically. After an expired or invalidated
+authorization, restart the intended wallet flow so that a new `createAction`
+approval and transaction commitment are established together.
 
-`BasicTokenModule` implements multiple security layers:
+## Integration Checklist
 
-1. **Session Authorization**: Temporary authorization for transaction flows
-2. **Preimage Verification**: Validates that signature requests match authorized transactions
-3. **Output Hash Validation**: Ensures transaction outputs haven't been modified
+- Route every `p btms ...` permission hook through the same module instance.
+- Render prompts in trusted wallet UI and identify the originator.
+- Escape all message fields and deny on UI or parsing failure.
+- Do not infer approval from session presence outside this module.
+- Keep the action response and signature request in the expected hook order.
+- Call `dispose()` on logout, wallet replacement, or host shutdown.
+- Exercise approval, denial, expiry, malformed transaction, short preimage,
+  outpoint substitution, output substitution, issuance, access, transfer, and
+  burn paths in host-level tests.
+- Run the package's type, lint, coverage, build, and packed-consumer gates.
 
-### Best Practices
+## Related Documentation
 
-1. **Always prompt users**: Never bypass the authorization flow
-2. **Validate token metadata**: Ensure token information is accurate before displaying
-3. **Handle errors gracefully**: Show user-friendly messages when operations fail
-4. **Secure focus management**: Prevent focus-stealing attacks in desktop apps
+- [Package overview and prompt contract](./README.md)
+- [BTMS library](../btms/README.md)
+- [BTMS overlay backend](../../overlays/btms-backend/README.md)
 
-## Additional Resources
+## License
 
-- [BTMS Core Documentation](../core/README.md)
-- [BRC-99: Permissioned Baskets](https://github.com/bitcoin-sv/BRCs)
-- [Wallet Toolbox Client](https://github.com/bitcoin-sv/wallet-toolbox)
-
-## Support
-
-For issues or questions:
-- GitHub Issues: [btms repository](https://github.com/bitcoin-sv/btms)
-- Documentation: [BTMS Core API Reference](../core/README.md#api-reference)
+Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).

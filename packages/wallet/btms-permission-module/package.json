@@ -10,12 +10,15 @@
   },
   "description": "BTMS Permission Module for wallet integration",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
     }
   },
   "files": [
@@ -24,7 +27,15 @@
     "LICENSE.txt"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsdown src/index.ts --format esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/btms-permission-module/src/**/*.ts\" \"packages/wallet/btms-permission-module/README.md\" \"packages/wallet/btms-permission-module/INTEGRATION.md\" \"packages/wallet/btms-permission-module/*.{cjs,json,ts}\"",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes esm --exports BasicTokenModule,createBtmsModule",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
+    "prepublishOnly": "npm run build",
     "clean": "rm -rf dist"
   },
   "keywords": [
@@ -44,7 +55,12 @@
     "@bsv/btms": "workspace:^",
     "@bsv/sdk": "workspace:^",
     "@bsv/wallet-toolbox-client": "workspace:^",
+    "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "jest": "^30.4.2",
+    "oxlint": "^1.75.0",
+    "ts-jest": "^29.4.12",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3"
   },
   "repository": {

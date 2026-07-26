@@ -1,9 +1,9 @@
 /**
  * BTMSToken - Token Encoding and Decoding
- * 
+ *
  * This module handles the encoding and decoding of BTMS tokens using PushDrop.
  * It implements the exact 3-field schema expected by BTMSTopicManager:
- * 
+ *
  * Field 0: assetId (or "ISSUE" for new tokens)
  * Field 1: amount (as UTF-8 string)
  * Field 2: metadata (optional JSON string)
@@ -24,22 +24,22 @@ import { BTMS_PROTOCOL_ID, ISSUE_MARKER, MIN_TOKEN_AMOUNT, MAX_TOKEN_AMOUNT } fr
 
 /**
  * BTMSToken handles encoding and decoding of BTMS PushDrop tokens.
- * 
+ *
  * The token format follows the BTMSTopicManager protocol exactly:
  * - Field 0: assetId or "ISSUE"
  * - Field 1: amount (positive integer as string)
  * - Field 2: metadata (optional JSON)
- * 
+ *
  * @example
  * ```typescript
  * const token = new BTMSToken(wallet)
- * 
+ *
  * // Create an issuance token
  * const lockScript = await token.createIssuance(1000, { name: 'MyToken' })
- * 
+ *
  * // Create a transfer token
  * const transferScript = await token.createTransfer('abc123.0', 500, metadata, recipient)
- * 
+ *
  * // Decode a token
  * const decoded = BTMSToken.decode(lockingScriptHex)
  * ```
@@ -61,10 +61,10 @@ export class BTMSToken {
 
   /**
    * Create a token issuance locking script.
-   * 
+   *
    * Issuance tokens use "ISSUE" as field[0]. The canonical assetId
    * becomes `{txid}.{outputIndex}` after the transaction is mined.
-   * 
+   *
    * @param amount - Number of tokens to issue (positive integer)
    * @param keyID - Key ID for derivation
    * @param metadata - Optional metadata object (will be JSON stringified)
@@ -82,22 +82,16 @@ export class BTMSToken {
     const fields = this.buildFields(ISSUE_MARKER, amount, metadata)
     const pushdrop = new PushDrop(this.wallet, this.originator)
 
-    return pushdrop.lock(
-      fields,
-      this.protocolID,
-      keyID,
-      counterparty,
-      false
-    )
+    return pushdrop.lock(fields, this.protocolID, keyID, counterparty, false)
   }
 
   /**
    * Create a token transfer locking script.
-   * 
+   *
    * Transfer tokens reference an existing assetId in field[0].
    * The metadata must match the original issuance metadata for the
    * TopicManager to accept the output.
-   * 
+   *
    * @param assetId - The canonical asset ID (txid.outputIndex format)
    * @param amount - Number of tokens to transfer (positive integer)
    * @param metadata - Metadata (must match original issuance)
@@ -121,44 +115,32 @@ export class BTMSToken {
     const fields = this.buildFieldsRaw(assetId, amount, metadata)
     const pushdrop = new PushDrop(this.wallet, this.originator)
 
-    return pushdrop.lock(
-      fields,
-      this.protocolID,
-      keyID,
-      counterparty,
-      false,
-      includeSignature
-    )
+    return pushdrop.lock(fields, this.protocolID, keyID, counterparty, false, includeSignature)
   }
 
   /**
    * Create an unlocking script template for spending a BTMS token.
-   * 
+   *
    * @param counterparty - The counterparty used when the token was created
    * @param keyID - Key ID for derivation from customInstructions
    * @returns An unlocker that can sign transactions
    */
   createUnlocker(keyID: string, counterparty: WalletCounterparty = 'self') {
-    return new PushDrop(this.wallet, this.originator).unlock(
-      this.protocolID,
-      keyID,
-      counterparty
-    )
+    return new PushDrop(this.wallet, this.originator).unlock(this.protocolID, keyID, counterparty)
   }
 
   /**
    * Decode a BTMS token from a locking script.
-   * 
+   *
    * This is a static method that can be used without a wallet instance.
-   * 
+   *
    * @param lockingScript - The locking script (hex string or LockingScript)
    * @returns Decoded token data or invalid result
    */
   static decode(lockingScript: string | LockingScript): BTMSTokenDecodeResult {
     try {
-      const script = typeof lockingScript === 'string'
-        ? LockingScript.fromHex(lockingScript)
-        : lockingScript
+      const script =
+        typeof lockingScript === 'string' ? LockingScript.fromHex(lockingScript) : lockingScript
 
       const decoded = PushDrop.decode(script)
       const fields = decoded.fields
@@ -309,11 +291,7 @@ export class BTMSToken {
     return fields
   }
 
-  private buildFieldsRaw(
-    assetId: string,
-    amount: number,
-    metadata?: string
-  ): number[][] {
+  private buildFieldsRaw(assetId: string, amount: number, metadata?: string): number[][] {
     const fields: number[][] = [
       Utils.toArray(assetId, 'utf8'),
       Utils.toArray(String(amount), 'utf8')

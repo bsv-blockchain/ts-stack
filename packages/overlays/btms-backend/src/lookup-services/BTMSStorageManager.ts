@@ -12,11 +12,11 @@ export class BTMSStorageManager {
   /**
    * @param db A connected MongoDB database handle.
    */
-  constructor (private readonly db: Db) {
+  constructor(private readonly db: Db) {
     this.records = db.collection<BTMSRecord>('btmsRecords')
   }
 
-  private ensureIndexes (): Promise<void> {
+  private ensureIndexes(): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await Promise.all([
@@ -32,7 +32,7 @@ export class BTMSStorageManager {
   /**
    * Insert a new BTMS token record.
    */
-  async storeRecord (
+  async storeRecord(
     txid: string,
     outputIndex: number,
     assetId: string,
@@ -56,7 +56,7 @@ export class BTMSStorageManager {
   /**
    * Remove a BTMS record identified by its UTXO.
    */
-  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
@@ -64,7 +64,7 @@ export class BTMSStorageManager {
   /**
    * Find records with dynamic filter combinations.
    */
-  async findWithFilters (
+  async findWithFilters(
     filters: {
       assetId?: string
       ownerKey?: PubKeyHex
@@ -90,7 +90,7 @@ export class BTMSStorageManager {
   /**
    * Fetch all BTMS records without filtering, with pagination and sorting.
    */
-  async findAllRecords (
+  async findAllRecords(
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
@@ -102,7 +102,7 @@ export class BTMSStorageManager {
   /**
    * Find a specific record by txid and outputIndex.
    */
-  async findByTxidOutputIndex (txid: string, outputIndex: number): Promise<BTMSRecord | null> {
+  async findByTxidOutputIndex(txid: string, outputIndex: number): Promise<BTMSRecord | null> {
     await this.ensureIndexes()
     return await this.records.findOne({ txid, outputIndex })
   }
@@ -110,7 +110,7 @@ export class BTMSStorageManager {
   /**
    * Helper function for querying from the database
    */
-  private async findRecordWithQuery (
+  private async findRecordWithQuery(
     query: object,
     limit: number = 50,
     skip: number = 0,

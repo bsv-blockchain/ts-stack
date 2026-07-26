@@ -4,7 +4,8 @@
 
 ## Overview
 
-BTMS Core provides a clean, well-architected API for:
+BTMS provides an API for:
+
 - **Issuing** new fungible tokens with customizable metadata
 - **Sending** tokens to other users
 - **Receiving** tokens from others
@@ -16,18 +17,21 @@ The library is designed to work with the BSV overlay network and aligns exactly 
 
 If you are building a token-enabled app, this is the primary package to use: `@bsv/btms`.
 
-## Related Docs
+## Related Documentation
 
-- Project index: [`../README.md`](../README.md)
-- Overlay backend (Topic Manager + Lookup Service): [`../backend/README.md`](../backend/README.md)
-- Frontend app and live deployment (`https://btms.metanet.app`): [`../frontend/README.md`](../frontend/README.md)
-- Wallet integration modules (BRC-100 via BRC-98/99 hooks): [`../permission-module/README.md`](../permission-module/README.md), [`../permission-module-ui/README.md`](../permission-module-ui/README.md)
+- [ts-stack repository overview](../../../README.md)
+- [BTMS overlay backend](../../overlays/btms-backend/README.md)
+- [BTMS wallet permission module](../btms-permission-module/README.md)
 
 ## Installation
 
 ```bash
 npm install @bsv/btms @bsv/sdk
 ```
+
+Node.js 22 or newer is required. The package provides typed ESM and CommonJS
+entry points. Browser applications should bundle the ESM entry point and
+provide a compatible wallet implementation.
 
 ## Quick Start
 
@@ -37,7 +41,7 @@ import { MessageBoxClient } from '@bsv/message-box-client'
 
 // Create a BTMS instance with MessageBoxClient for token delivery
 const comms = new MessageBoxClient()
-const btms = new BTMS({ 
+const btms = new BTMS({
   networkPreset: 'mainnet',
   comms
 })
@@ -79,11 +83,11 @@ for (const asset of assets) {
 
 BTMS uses a 3-field PushDrop token format that aligns with the `BTMSTopicManager`:
 
-| Field | Description |
-|-------|-------------|
-| 0 | Asset ID (or `"ISSUE"` for new tokens) |
-| 1 | Amount (positive integer as UTF-8 string) |
-| 2 | Metadata (optional JSON string) |
+| Field | Description                               |
+| ----- | ----------------------------------------- |
+| 0     | Asset ID (or `"ISSUE"` for new tokens)    |
+| 1     | Amount (positive integer as UTF-8 string) |
+| 2     | Metadata (optional JSON string)           |
 
 ### Issuance
 
@@ -92,6 +96,7 @@ When issuing new tokens, field 0 is set to `"ISSUE"`. After the transaction is m
 ### Transfers
 
 When transferring tokens, field 0 contains the canonical asset ID. The TopicManager enforces:
+
 - Total output amounts cannot exceed input amounts for the same asset
 - Metadata must match across inputs/outputs for the same asset
 
@@ -109,11 +114,11 @@ const btms = new BTMS(config?: BTMSConfig)
 
 **Configuration Options:**
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `wallet` | `WalletInterface` | `WalletClient()` | Wallet for signing transactions |
-| `networkPreset` | `'local' \| 'mainnet' \| 'testnet'` | `'mainnet'` | Network for overlay services |
-| `comms` | `CommsLayer` | `undefined` | Optional communications layer (e.g., MessageBoxClient) |
+| Option          | Type                                | Default          | Description                                            |
+| --------------- | ----------------------------------- | ---------------- | ------------------------------------------------------ |
+| `wallet`        | `WalletInterface`                   | `WalletClient()` | Wallet for signing transactions                        |
+| `networkPreset` | `'local' \| 'mainnet' \| 'testnet'` | `'mainnet'`      | Network for overlay services                           |
+| `comms`         | `CommsLayer`                        | `undefined`      | Optional communications layer (e.g., MessageBoxClient) |
 
 #### Methods
 
@@ -146,9 +151,9 @@ Send tokens to a recipient.
 
 ```typescript
 const result = await btms.send(
-  'abc123...def.0',  // asset ID
-  '03abc123...',     // recipient's identity public key
-  100                // amount to send
+  'abc123...def.0', // asset ID
+  '03abc123...', // recipient's identity public key
+  100 // amount to send
 )
 
 // Result:
@@ -315,9 +320,9 @@ BTMS supports cryptographic ownership proofs using key linkage:
 ```typescript
 // Prover creates a proof for a verifier
 const proof = await btms.proveOwnership(
-  'abc123...def.0',  // asset ID
-  100,               // amount to prove
-  verifierPubKey     // verifier's identity key
+  'abc123...def.0', // asset ID
+  100, // amount to prove
+  verifierPubKey // verifier's identity key
 )
 
 // Verifier validates the proof
@@ -328,6 +333,7 @@ if (result.valid) {
 ```
 
 This enables use cases like:
+
 - Collateral verification for loans
 - Marketplace escrow-free trading
 - Access control / token gating
@@ -363,4 +369,4 @@ For overlay deployment, see the `@bsv/btms-backend` package.
 
 ## License
 
-See LICENSE.txt
+Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).

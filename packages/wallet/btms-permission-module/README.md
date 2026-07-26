@@ -1,174 +1,141 @@
-# BTMS Permission Module
+# @bsv/btms-permission-module
 
-Wallet permission module for BTMS token spending authorization.
+Framework-agnostic wallet permission checks for BTMS token access, transfers,
+and burns.
 
-## Overview
-
-This is the **core permission module** for BTMS token operations - framework agnostic with no UI dependencies.
-
-- **BasicTokenModule** - Permission module that intercepts token operations and prompts users
-- **Framework Agnostic** - Works with any UI framework (React, Vue, Angular, vanilla JS)
-- **Minimal Dependencies** - Only requires `@bsv/sdk` and `@bsv/wallet-toolbox-client`
-
-For ready-to-use React/MUI UI components, see **@bsv/btms-permission-module-ui**
-
-## Target Audience
-
-This module is for wallet developers integrating BTMS token support into **BRC-100 wallets** via **BRC-98/99 hooks**.
-
-## Related Docs
-
-- Project index: [`../README.md`](../README.md)
-- Main BTMS API package (`@bsv/btms`): [`../core/README.md`](../core/README.md)
-- React/MUI prompt components: [`../permission-module-ui/README.md`](../permission-module-ui/README.md)
-- Full wallet integration guide: [`./INTEGRATION.md`](./INTEGRATION.md)
-- Frontend app and live deployment (`https://btms.metanet.app`): [`../frontend/README.md`](../frontend/README.md)
-
-## Features
-
-- **Token Spend Authorization**: Prompts users before spending or burning BTMS tokens
-- **Burn Authorization**: Prompts users before permanently destroying tokens
-- **Session-based Authorization**: Caches authorization for transaction flows
-- **Security Verification**: Validates signature requests match authorized transactions
-- **Rich Token Display**: Shows amounts, names, metadata, and transaction details
-- **Window Focus Management**: Brings app to foreground when prompting (desktop apps)
-- **Customizable UI**: Use provided components or implement your own
+The module implements the wallet-toolbox `PermissionsModule` hooks used by
+BRC-100 wallets. A host wallet supplies the trusted prompt UI; this package has
+no browser, React, or other UI dependency.
 
 ## Installation
 
 ```bash
-npm install @bsv/btms-permission-module
+npm install @bsv/btms-permission-module @bsv/btms @bsv/sdk @bsv/wallet-toolbox-client
 ```
 
-### Peer Dependencies
-
-```bash
-npm install @bsv/sdk @bsv/wallet-toolbox-client
-```
+Node.js 22 or newer is required. The package provides a typed ESM entry point.
 
 ## Quick Start
 
-### 1. Implement Your Prompt Function
+Use the factory when the module should enrich prompts with BTMS metadata:
 
 ```typescript
-import { BasicTokenModule } from '@bsv/btms-permission-module'
+import { createBtmsModule } from '@bsv/btms-permission-module'
 
-// Create a function that shows a prompt to the user
-const requestTokenAccess = async (app: string, message: string): Promise<boolean> => {
-  // Parse the token spend information
-  const spendInfo = JSON.parse(message)
-  
-  // Show your UI (React, Vue, Angular, vanilla JS, etc.)
-  const approved = await showMyCustomDialog({
-    app,
-    tokenName: spendInfo.tokenName,
-    amount: spendInfo.sendAmount,
-    assetId: spendInfo.assetId
-  })
-  
-  return approved // true = user approved, false = user denied
-}
-```
-
-### 2. Initialize the Module
-
-```typescript
-const basicTokenModule = new BasicTokenModule(requestTokenAccess)
-```
-
-### 3. Register with Wallet
-
-```typescript
-const permissionsManager = new WalletPermissionsManager(wallet, originator, {
-  ...config,
-  permissionModules: {
-    btms: basicTokenModule
+const btmsPermissions = createBtmsModule({
+  wallet,
+  promptHandler: async (originator, message) => {
+    const request = message.startsWith('{') ? JSON.parse(message) : { message }
+    return showTrustedWalletPrompt({ originator, request })
   }
 })
 ```
 
-## Using with React/MUI
+If `promptHandler` is omitted, the factory denies requests by default.
 
-For a complete React implementation with Material-UI, install the UI package:
-
-```bash
-npm install @bsv/btms-permission-module-ui
-```
-
-Then use the provided hook:
+Alternatively, construct the module directly. Metadata enrichment is optional:
 
 ```typescript
 import { BasicTokenModule } from '@bsv/btms-permission-module'
-import { useTokenSpendPrompt } from '@bsv/btms-permission-module-ui'
 
-const { promptUser, PromptComponent } = useTokenSpendPrompt()
-const basicTokenModule = new BasicTokenModule(promptUser)
-
-// Render the component
-return (
-  <>
-    {children}
-    <PromptComponent />
-  </>
-)
+const btmsPermissions = new BasicTokenModule(async (originator, message) => {
+  return showTrustedWalletPrompt({ originator, message })
+})
 ```
 
-See the `@bsv/btms-permission-module-ui` package for full documentation.
+Register the result under the `btms` permission scheme in the host wallet's
+`WalletPermissionsManager` configuration:
 
-## Documentation
-
-- **[Integration Guide](./INTEGRATION.md)** - Complete step-by-step integration instructions
-- **[API Reference](./INTEGRATION.md#api-reference)** - Detailed API documentation
-- **[Examples](./INTEGRATION.md#examples)** - Code examples and use cases
-- **[Troubleshooting](./INTEGRATION.md#troubleshooting)** - Common issues and solutions
-
-## API Overview
-
-### `BasicTokenModule`
-
-Permission module for BTMS token operations.
-
-**Constructor:**
 ```typescript
-new BasicTokenModule(
-  requestTokenAccess: (app: string, message: string) => Promise<boolean>
-)
+const permissionsManager = new WalletPermissionsManager(wallet, adminOriginator, {
+  ...permissionConfig,
+  permissionModules: {
+    ...permissionConfig.permissionModules,
+    btms: btmsPermissions
+  }
+})
 ```
 
-### Message Format
+Call `btmsPermissions.dispose()` when the wallet tears down the module. This
+immediately clears its in-memory sessions and transaction commitments.
 
-The prompt message is a JSON string containing:
+## Prompt Contract
+
+The callback receives the requesting originator and either a JSON message or a
+conservative generic message. The JSON variants are:
 
 ```typescript
-{
-  type: 'btms_spend' | 'btms_burn',
-  sendAmount: number,        // Amount being sent (0 for burn)
-  burnAmount?: number,       // Amount being burned (for burn operations)
-  tokenName: string,         // Token name
-  assetId: string,          // Asset ID (txid.vout)
-  recipient?: string,       // Recipient public key (not present for burn)
-  iconURL?: string,         // Token icon URL
-  changeAmount: number,     // Change returned
-  totalInputAmount: number  // Total from inputs
+type BTMSSpendPrompt = {
+  type: 'btms_spend'
+  sendAmount: number
+  tokenName: string
+  assetId: string
+  recipient?: string
+  iconURL?: string
+  changeAmount: number
+  totalInputAmount: number
+}
+
+type BTMSBurnPrompt = {
+  type: 'btms_burn'
+  burnAmount: number
+  tokenName: string
+  assetId: string
+  iconURL?: string
+  burnAll: boolean
+}
+
+type BTMSAccessPrompt = {
+  type: 'btms_access'
+  action: 'access BTMS tokens'
+  assetId?: string
 }
 ```
 
-## Architecture
+The host must display prompts in trusted wallet chrome, identify the originator,
+escape untrusted text, and return `true` only after an explicit user decision.
 
+## Security Model
+
+The module:
+
+- prompts before token access, transfer, or burn operations;
+- isolates authorization by originator and expires it after 60 seconds;
+- binds a successful `createAction` response to the exact SHA-256 signing
+  digest for every input in the returned transaction;
+- rejects signature requests that change any signed transaction field;
+- invalidates authorization if the returned transaction cannot be parsed and
+  bound;
+- treats malformed or unbound signature payloads conservatively;
+- auto-approves issuance only when an output has the exact
+  `btms_type_issue` tag or its PushDrop asset field is exactly `ISSUE`; and
+- performs expiry cleanup during requests, without a background timer.
+
+A prompt approval is not a general-purpose wallet grant. Hosts should preserve
+the permission module in the signing path for every `p btms ...` basket and
+should not reuse its callback as an authorization signal elsewhere.
+
+## Verification
+
+```bash
+pnpm --filter @bsv/btms build
+pnpm --filter @bsv/btms-permission-module typecheck
+pnpm --filter @bsv/btms-permission-module lint
+pnpm --filter @bsv/btms-permission-module test:coverage
+pnpm --filter @bsv/btms-permission-module build
+pnpm --filter @bsv/btms-permission-module pack:check
 ```
-User Action → BTMS Core → BasicTokenModule → promptUser → UI → User Decision → Allow/Deny
-```
 
-See [INTEGRATION.md](./INTEGRATION.md#architecture) for detailed flow diagrams.
+The package enforces coverage thresholds and verifies the packed ESM artifact,
+exports, dependency installation, and strict type resolution.
 
-## Security
+## Related Documentation
 
-The module implements multiple security layers:
-
-- **Session Authorization**: Temporary auth for transaction flows
-- **Preimage Verification**: Validates signature requests match authorized transactions
-- **Output Hash Validation**: Ensures outputs haven't been modified
+- [Integration and lifecycle guide](./INTEGRATION.md)
+- [BTMS library](../btms/README.md)
+- [BTMS overlay backend](../../overlays/btms-backend/README.md)
+- [ts-stack repository overview](../../../README.md)
 
 ## License
 
-Open BSV
+Open BSV License version 6. See [LICENSE.txt](./LICENSE.txt).

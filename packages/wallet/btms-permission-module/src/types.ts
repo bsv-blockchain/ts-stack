@@ -72,10 +72,8 @@ export interface TokenSpendInfo {
 export interface AuthorizedTransaction {
   /** The reference from the signable transaction */
   reference: string
-  /** Hash of all outputs (BIP-143 hashOutputs) */
-  hashOutputs: string
-  /** Set of authorized outpoints (txid.vout format) */
-  authorizedOutpoints: Set<string>
+  /** SHA-256 hashes of the exact BIP-143 preimages authorized for signing */
+  authorizedDigests: Set<string>
   /** Timestamp when this authorization was created */
   timestamp: number
 }

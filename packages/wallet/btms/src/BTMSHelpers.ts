@@ -14,27 +14,19 @@ import type {
   GetTransactionsResult
 } from './types.js'
 import type { ListActionsResult, PubKeyHex, TXIDHexString } from '@bsv/sdk'
-import {
-  BTMS_LABEL_PREFIX,
-  ISSUE_MARKER,
-  DEFAULT_TOKEN_SATOSHIS
-} from './constants.js'
+import { BTMS_LABEL_PREFIX, ISSUE_MARKER, DEFAULT_TOKEN_SATOSHIS } from './constants.js'
 
 // ---------------------------------------------------------------------------
 // getTransactions helpers
 // ---------------------------------------------------------------------------
 
 /** Strip the BTMS label prefix and return payload strings. */
-export function stripLabelPrefix (labels: string[]): string[] {
-  return labels.map(l =>
-    l.startsWith(BTMS_LABEL_PREFIX) ? l.slice(BTMS_LABEL_PREFIX.length) : l
-  )
+export function stripLabelPrefix(labels: string[]): string[] {
+  return labels.map(l => (l.startsWith(BTMS_LABEL_PREFIX) ? l.slice(BTMS_LABEL_PREFIX.length) : l))
 }
 
 /** Derive the transaction type from label payloads. */
-export function parseTxType (
-  payloads: string[]
-): 'issue' | 'send' | 'receive' | 'burn' {
+export function parseTxType(payloads: string[]): 'issue' | 'send' | 'receive' | 'burn' {
   if (payloads.some(l => l.includes('type issue'))) return 'issue'
   if (payloads.some(l => l.includes('type receive'))) return 'receive'
   if (payloads.some(l => l.includes('type burn'))) return 'burn'
@@ -42,13 +34,13 @@ export function parseTxType (
 }
 
 /** Extract the counterparty key from label payloads. */
-export function parseTxCounterparty (payloads: string[]): PubKeyHex | undefined {
+export function parseTxCounterparty(payloads: string[]): PubKeyHex | undefined {
   const found = payloads.find(l => l.startsWith('counterparty '))
   return found ? found.replace('counterparty ', '') : undefined
 }
 
 /** Extract a numeric timestamp from label payloads. */
-export function parseTxTimestamp (payloads: string[]): number | undefined {
+export function parseTxTimestamp(payloads: string[]): number | undefined {
   const found = payloads.find(l => l.startsWith('timestamp '))
   if (!found) return undefined
   const n = Number(found.replace('timestamp ', ''))
@@ -56,7 +48,7 @@ export function parseTxTimestamp (payloads: string[]): number | undefined {
 }
 
 /** Sum token amounts from outputs whose tag matches `tagName`. */
-export function sumOutputAmountsByTag (
+export function sumOutputAmountsByTag(
   outputs: NonNullable<ListActionsResult['actions'][number]['outputs']>,
   tagName: string,
   txid: TXIDHexString,
@@ -72,7 +64,7 @@ export function sumOutputAmountsByTag (
 }
 
 /** Sum token amounts from all inputs. */
-export function sumInputAmounts (
+export function sumInputAmounts(
   inputs: NonNullable<ListActionsResult['actions'][number]['inputs']>,
   assetId: string
 ): number {
@@ -85,7 +77,7 @@ export function sumInputAmounts (
 }
 
 /** Calculate the display amount for an `issue` or `receive` action. */
-export function calcSimpleOutputAmount (
+export function calcSimpleOutputAmount(
   action: ListActionsResult['actions'][number],
   tagName: string,
   assetId: string
@@ -95,7 +87,7 @@ export function calcSimpleOutputAmount (
 }
 
 /** Calculate the amount sent (outputs tagged `btms_type_send`, with input-minus-change fallback). */
-export function calcSendAmount (
+export function calcSendAmount(
   action: ListActionsResult['actions'][number],
   assetId: string
 ): number {
@@ -122,7 +114,7 @@ export function calcSendAmount (
 }
 
 /** Calculate the amount burned (inputs − change). */
-export function calcBurnAmount (
+export function calcBurnAmount(
   action: ListActionsResult['actions'][number],
   assetId: string
 ): number {
@@ -134,21 +126,25 @@ export function calcBurnAmount (
 }
 
 /** Calculate display amount for any action type. */
-export function calcActionAmount (
+export function calcActionAmount(
   action: ListActionsResult['actions'][number],
   type: 'issue' | 'send' | 'receive' | 'burn',
   assetId: string
 ): number {
   switch (type) {
-    case 'issue': return calcSimpleOutputAmount(action, 'btms_type_issue', assetId)
-    case 'receive': return calcSimpleOutputAmount(action, 'btms_type_receive', assetId)
-    case 'send': return calcSendAmount(action, assetId)
-    case 'burn': return calcBurnAmount(action, assetId)
+    case 'issue':
+      return calcSimpleOutputAmount(action, 'btms_type_issue', assetId)
+    case 'receive':
+      return calcSimpleOutputAmount(action, 'btms_type_receive', assetId)
+    case 'send':
+      return calcSendAmount(action, assetId)
+    case 'burn':
+      return calcBurnAmount(action, assetId)
   }
 }
 
 /** Map a single `listActions` action into a `BTMSTransaction`. */
-export function mapActionToTransaction (
+export function mapActionToTransaction(
   action: ListActionsResult['actions'][number],
   assetId: string
 ): BTMSTransaction {
@@ -156,7 +152,8 @@ export function mapActionToTransaction (
   const type = parseTxType(payloads)
   const counterparty = parseTxCounterparty(payloads)
   const timestamp = parseTxTimestamp(payloads)
-  const direction: 'incoming' | 'outgoing' = (type === 'send' || type === 'burn') ? 'outgoing' : 'incoming'
+  const direction: 'incoming' | 'outgoing' =
+    type === 'send' || type === 'burn' ? 'outgoing' : 'incoming'
   let amount = calcActionAmount(action, type, assetId)
   if (direction === 'outgoing') amount = -amount
 
@@ -174,7 +171,7 @@ export function mapActionToTransaction (
 }
 
 /** Build a full `GetTransactionsResult` from a `ListActionsResult`. */
-export function buildTransactionsResult (
+export function buildTransactionsResult(
   result: ListActionsResult,
   assetId: string
 ): GetTransactionsResult {
@@ -195,7 +192,7 @@ export interface AssetAccumulator {
 }
 
 /** Attempt to parse metadata (string or object). Returns undefined on failure. */
-export function parseMetadata (raw: unknown): BTMSAssetMetadata | undefined {
+export function parseMetadata(raw: unknown): BTMSAssetMetadata | undefined {
   if (!raw) return undefined
   try {
     return typeof raw === 'string' ? JSON.parse(raw) : (raw as BTMSAssetMetadata)
@@ -205,7 +202,7 @@ export function parseMetadata (raw: unknown): BTMSAssetMetadata | undefined {
 }
 
 /** Resolve the assetId for one output (handles ISSUE_MARKER). */
-export function resolveOutputAssetId (
+export function resolveOutputAssetId(
   decoded: DecodedBTMSToken,
   outpoint: string
 ): string | undefined {
@@ -218,8 +215,8 @@ export function resolveOutputAssetId (
 }
 
 /** Process one wallet output and accumulate its contribution into `assetBalances`. */
-export function accumulateOutputIntoBalances (
-  output: { spendable?: boolean, satoshis?: number, outpoint: string, lockingScript?: string },
+export function accumulateOutputIntoBalances(
+  output: { spendable?: boolean; satoshis?: number; outpoint: string; lockingScript?: string },
   assetBalances: Map<string, AssetAccumulator>
 ): void {
   if (!output.spendable) return
@@ -238,9 +235,11 @@ export function accumulateOutputIntoBalances (
 }
 
 /** Parse a single raw message body into an `IncomingToken`. Returns null on failure. */
-export function parseIncomingMessage (
-  msg: { body: string, messageId?: string, sender?: string }
-): IncomingToken | null {
+export function parseIncomingMessage(msg: {
+  body: string
+  messageId?: string
+  sender?: string
+}): IncomingToken | null {
   try {
     const payment = JSON.parse(msg.body) as IncomingToken
     if (msg.messageId !== undefined) payment.messageId = msg.messageId
@@ -256,7 +255,7 @@ export function parseIncomingMessage (
 // ---------------------------------------------------------------------------
 
 /** Return true if the decoded token belongs to the target `assetId`. */
-export function tokenMatchesAsset (
+export function tokenMatchesAsset(
   decoded: DecodedBTMSToken,
   outpoint: string,
   assetId: string
@@ -272,12 +271,18 @@ export function tokenMatchesAsset (
 // findBadOutputs helpers
 // ---------------------------------------------------------------------------
 
-export interface BadOutput { outpoint: string, reason: string }
+export interface BadOutput {
+  outpoint: string
+  reason: string
+}
 
 /** Validate a single output and return a `BadOutput` entry, or null if valid. */
-export function validateOutputForBadness (
-  output: { outpoint: string, spendable?: boolean, satoshis?: number, lockingScript?: string }
-): BadOutput | null {
+export function validateOutputForBadness(output: {
+  outpoint: string
+  spendable?: boolean
+  satoshis?: number
+  lockingScript?: string
+}): BadOutput | null {
   if (!output.spendable) return null
 
   if (output.satoshis !== DEFAULT_TOKEN_SATOSHIS) {
@@ -307,17 +312,15 @@ export function validateOutputForBadness (
 // ---------------------------------------------------------------------------
 
 /** Verify that a single proven token's asset ID matches the proof's assetId. */
-export function verifyProvenTokenAssetId (
+export function verifyProvenTokenAssetId(
   decoded: DecodedBTMSToken,
   txid: string,
   outputIndex: number,
   expectedAssetId: string
 ): void {
-  const tokenAssetId = decoded.assetId === ISSUE_MARKER
-    ? BTMSToken.computeAssetId(txid, outputIndex)
-    : decoded.assetId
+  const tokenAssetId =
+    decoded.assetId === ISSUE_MARKER ? BTMSToken.computeAssetId(txid, outputIndex) : decoded.assetId
   if (tokenAssetId !== expectedAssetId) {
     throw new Error('Token asset ID does not match proof asset ID')
   }
 }
-

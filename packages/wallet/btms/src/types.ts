@@ -1,6 +1,6 @@
 /**
  * BTMS Core Type Definitions
- * 
+ *
  * Type definitions for the Basic Token Management System.
  * These types align with the BTMSTopicManager protocol.
  */
@@ -12,7 +12,7 @@ import type {
   PubKeyHex,
   TXIDHexString,
   HexString,
-  CommsLayer,
+  CommsLayer
 } from '@bsv/sdk'
 
 // ---------------------------------------------------------------------------
@@ -21,18 +21,18 @@ import type {
 
 /**
  * BTMS Token Protocol Field Schema
- * 
+ *
  * BTMS tokens use 2-4 PushDrop fields:
  * - Field 0: assetId (or "ISSUE" for new token issuance)
  * - Field 1: amount (as UTF-8 string of a positive integer)
  * - Field 2: metadata (optional JSON string)
  * - Field 3: optional PushDrop signature (present when script-level signing is enabled)
- * 
+ *
  * For ISSUE tokens, the canonical assetId becomes `{txid}.{outputIndex}`
  * after the transaction is mined.
  */
 export interface BTMSTokenFields {
-  /** 
+  /**
    * For issuance: "ISSUE" literal
    * For transfers: the canonical assetId (e.g., "abc123.0")
    */
@@ -149,10 +149,10 @@ export interface BTMSAssetMetadata {
  * Different strategies optimize for different goals.
  */
 export type SelectionStrategy =
-  | 'largest-first'   // Greedy: use largest UTXOs first (minimizes UTXO count)
-  | 'smallest-first'  // Use smallest UTXOs first (preserves large UTXOs for big payments)
-  | 'exact-match'     // Try to find exact match first, then fall back to largest-first
-  | 'random'          // Random selection (privacy-preserving)
+  | 'largest-first' // Greedy: use largest UTXOs first (minimizes UTXO count)
+  | 'smallest-first' // Use smallest UTXOs first (preserves large UTXOs for big payments)
+  | 'exact-match' // Try to find exact match first, then fall back to largest-first
+  | 'random' // Random selection (privacy-preserving)
 
 /**
  * Options for UTXO selection
@@ -214,7 +214,7 @@ export interface ChangeStrategy {
   /**
    * Compute the change outputs for a transaction.
    * The sum of all returned output amounts must equal changeAmount.
-   * 
+   *
    * @param context - Context about the transaction
    * @returns Array of change outputs to create
    */
@@ -225,8 +225,8 @@ export interface ChangeStrategy {
  * Built-in change strategy types
  */
 export type ChangeStrategyType =
-  | 'single'       // Single change output (default)
-  | 'split-equal'  // Split into equal amounts
+  | 'single' // Single change output (default)
+  | 'split-equal' // Split into equal amounts
   | 'split-random' // Split into random amounts (Benford distribution)
 
 /**

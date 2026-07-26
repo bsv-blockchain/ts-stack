@@ -27,8 +27,10 @@
     "test:build": "npm run build && jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "oxlint src",
+    "lint": "oxlint src --deny-warnings",
     "build": "tsc -b",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/btms-backend/src/**/*.ts\" \"packages/overlays/btms-backend/README.md\" \"packages/overlays/btms-backend/*.{js,json,ts}\"",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
     "prepublish": "npm run build",
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1"
   },

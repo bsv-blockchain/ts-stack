@@ -8,28 +8,37 @@
   "publishConfig": {
     "access": "public"
   },
-  "type": "module",
+  "type": "commonjs",
   "description": "Basic Token Management System - UTXO-based token management for BSV",
-  "module": "dist/esm/src/index.js",
-  "types": "dist/types/src/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "files": [
     "dist",
-    "src",
     "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/src/index.d.ts",
-      "import": "./dist/esm/src/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "oxlint src",
-    "build": "tsc -b",
+    "lint": "oxlint src --deny-warnings",
+    "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/btms/src/**/*.ts\" \"packages/wallet/btms/README.md\" \"packages/wallet/btms/*.{cjs,json,ts}\"",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports BTMS,BTMSToken,BTMS_TOPIC,BTMS_LOOKUP_SERVICE,BTMS_PROTOCOL_ID,BTMS_LABEL_PREFIX,BTMS_BASKET,DEFAULT_TOKEN_SATOSHIS,ISSUE_MARKER,MIN_TOKEN_AMOUNT,MAX_TOKEN_AMOUNT,parseCustomInstructions",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
     "prepublishOnly": "npm run build",
     "doc": "ts2md --inputFilename=src/index.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1"
   },
@@ -54,6 +63,7 @@
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3",
     "oxlint": "^1.75.0"
   },

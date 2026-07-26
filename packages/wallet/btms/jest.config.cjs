@@ -1,5 +1,6 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
-export default {
+module.exports = {
+  bail: 1,
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
@@ -25,10 +26,7 @@ export default {
     ]
   },
   testMatch: ['**/__tests/**/*.test.ts'],
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/__tests/**'
-  ],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/__tests/**'],
   coverageDirectory: 'coverage',
   verbose: true
 }

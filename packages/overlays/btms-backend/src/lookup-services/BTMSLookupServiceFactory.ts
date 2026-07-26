@@ -1,5 +1,13 @@
 import { BTMSStorageManager } from './BTMSStorageManager.js'
-import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
+import {
+  AdmissionMode,
+  LookupFormula,
+  LookupQuestion,
+  LookupService,
+  OutputAdmittedByTopic,
+  OutputSpent,
+  SpendNotificationMode
+} from '@bsv/overlay'
 import { LockingScript, PushDrop, Transaction, Utils } from '@bsv/sdk'
 import { Db } from 'mongodb'
 import { btmsProtocol, BTMSLookupResult, BTMSQuery, BTMSRecord } from './types.js'
@@ -16,9 +24,9 @@ class BTMSLookupService implements LookupService {
   private static readonly TOPIC = 'tm_btms'
   private static readonly SERVICE_ID = 'ls_btms'
 
-  constructor (public storageManager: BTMSStorageManager) { }
+  constructor(public storageManager: BTMSStorageManager) {}
 
-  private isLikelySignatureField (field: number[]): boolean {
+  private isLikelySignatureField(field: number[]): boolean {
     if (field.length < 40) {
       return false
     }
@@ -42,7 +50,11 @@ class BTMSLookupService implements LookupService {
     return printable / Math.max(asText.length, 1) < 0.8
   }
 
-  private decodeAdmittedToken (lockingScript: LockingScript, txid: string, outputIndex: number): {
+  private decodeAdmittedToken(
+    lockingScript: LockingScript,
+    txid: string,
+    outputIndex: number
+  ): {
     assetId: string
     amount: number
     metadata?: string
@@ -72,9 +84,7 @@ class BTMSLookupService implements LookupService {
       metadata = Utils.toUTF8(decoded.fields[btmsProtocol.metadata])
     }
 
-    const assetId = assetIdField === 'ISSUE'
-      ? `${txid}.${outputIndex}`
-      : assetIdField
+    const assetId = assetIdField === 'ISSUE' ? `${txid}.${outputIndex}` : assetIdField
 
     return {
       assetId,
@@ -84,7 +94,7 @@ class BTMSLookupService implements LookupService {
     }
   }
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') {
       throw new Error('Invalid payload mode')
     }
@@ -95,23 +105,20 @@ class BTMSLookupService implements LookupService {
     }
 
     try {
-      const { assetId, amount, metadata, ownerKey } = this.decodeAdmittedToken(lockingScript, txid, outputIndex)
-
-      await this.storageManager.storeRecord(
+      const { assetId, amount, metadata, ownerKey } = this.decodeAdmittedToken(
+        lockingScript,
         txid,
-        outputIndex,
-        assetId,
-        amount,
-        ownerKey,
-        metadata
+        outputIndex
       )
+
+      await this.storageManager.storeRecord(txid, outputIndex, assetId, amount, ownerKey, metadata)
     } catch (error) {
       console.error('Error processing BTMS output:', error)
       throw error
     }
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload mode')
     const { topic, txid, outputIndex } = payload
     if (topic !== BTMSLookupService.TOPIC) return
@@ -119,11 +126,11 @@ class BTMSLookupService implements LookupService {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided')
     }
@@ -149,11 +156,7 @@ class BTMSLookupService implements LookupService {
         query.sortOrder
       )
     } else {
-      results = await this.storageManager.findAllRecords(
-        query.limit,
-        query.skip,
-        query.sortOrder
-      )
+      results = await this.storageManager.findAllRecords(query.limit, query.skip, query.sortOrder)
     }
 
     const lookupResults: BTMSLookupResult[] = []
@@ -163,9 +166,9 @@ class BTMSLookupService implements LookupService {
         txid: result.txid,
         outputIndex: result.outputIndex,
         history: query.history
-          ? async (beef: number[], outputIndex: number, currentDepth: number) => {
-            return await this.historySelector(beef, outputIndex, result.assetId)
-          }
+          ? async (beef: number[], outputIndex: number, _currentDepth: number) => {
+              return await this.historySelector(beef, outputIndex, result.assetId)
+            }
           : undefined
       })
     }
@@ -176,7 +179,11 @@ class BTMSLookupService implements LookupService {
   /**
    * History selector for determining which outputs to include in chain tracking
    */
-  private async historySelector (beef: number[], outputIndex: number, assetId?: string): Promise<boolean> {
+  private async historySelector(
+    beef: number[],
+    outputIndex: number,
+    assetId?: string
+  ): Promise<boolean> {
     try {
       const tx = Transaction.fromBEEF(beef)
       const output = tx.outputs[outputIndex]
@@ -192,17 +199,17 @@ class BTMSLookupService implements LookupService {
       }
 
       return true
-    } catch (_e) {
+    } catch {
       // Malformed BEEF or script — output is not a valid BTMS token; exclude from history
       return false
     }
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return docs
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -217,7 +224,7 @@ class BTMSLookupService implements LookupService {
 }
 
 // Factory function
-function createBTMSLookupService (db: Db): BTMSLookupService {
+function createBTMSLookupService(db: Db): BTMSLookupService {
   return new BTMSLookupService(new BTMSStorageManager(db))
 }
 export default createBTMSLookupService
