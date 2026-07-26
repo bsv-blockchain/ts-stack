@@ -9,10 +9,7 @@ const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
  * Helper to determine if a given message-level log should be output
  * based on the configured log level.
  */
-export function isLogLevelEnabled (
-  configuredLevel: LogLevel,
-  messageLevel: LogLevel
-): boolean {
+export function isLogLevelEnabled(configuredLevel: LogLevel, messageLevel: LogLevel): boolean {
   return LOG_LEVELS.indexOf(messageLevel) >= LOG_LEVELS.indexOf(configuredLevel)
 }
 
@@ -23,23 +20,25 @@ export function isLogLevelEnabled (
  * Uses an explicit switch to avoid dynamic property access on a user-influenced
  * key, which prevents CodeQL js/unvalidated-dynamic-method-call alerts.
  */
-export function getLogMethod (
-  logger: typeof console,
-  level: LogLevel
-): (...args: any[]) => void {
+export function getLogMethod(logger: typeof console, level: LogLevel): (...args: any[]) => void {
   switch (level) {
-    case 'debug': return (typeof logger.debug === 'function' ? logger.debug : logger.log).bind(logger)
-    case 'info': return (typeof logger.info === 'function' ? logger.info : logger.log).bind(logger)
-    case 'warn': return (typeof logger.warn === 'function' ? logger.warn : logger.log).bind(logger)
-    case 'error': return (typeof logger.error === 'function' ? logger.error : logger.log).bind(logger)
-    default: return logger.log.bind(logger)
+    case 'debug':
+      return (typeof logger.debug === 'function' ? logger.debug : logger.log).bind(logger)
+    case 'info':
+      return (typeof logger.info === 'function' ? logger.info : logger.log).bind(logger)
+    case 'warn':
+      return (typeof logger.warn === 'function' ? logger.warn : logger.log).bind(logger)
+    case 'error':
+      return (typeof logger.error === 'function' ? logger.error : logger.log).bind(logger)
+    default:
+      return logger.log.bind(logger)
   }
 }
 
 /**
  * Write the URL pathname and search components to the binary writer.
  */
-export function writeUrlToWriter (parsedUrl: URL, writer: Utils.Writer): void {
+export function writeUrlToWriter(parsedUrl: URL, writer: Utils.Writer): void {
   if (parsedUrl.pathname.length > 0) {
     const pathnameAsArray = Utils.toArray(parsedUrl.pathname)
     writer.writeVarIntNum(pathnameAsArray.length)
@@ -60,17 +59,21 @@ export function writeUrlToWriter (parsedUrl: URL, writer: Utils.Writer): void {
 /**
  * Collect and write signed request headers to the binary writer.
  */
-export function writeRequestHeadersToWriter (req: Request, writer: Utils.Writer): void {
+export function writeRequestHeadersToWriter(req: Request, writer: Utils.Writer): void {
   const includedHeaders: Array<[string, string]> = []
   for (let [k, v] of Object.entries(req.headers)) {
     k = k.toLowerCase()
     // Normalise to a single string — Express may return string[] when a header
     // is repeated (e.g. `Set-Cookie`).  Take the first value to avoid
     // type-confusion (CodeQL js/type-confusion-through-parameter-tampering).
-    const vStr: string = Array.isArray(v) ? v[0] : (typeof v === 'string' ? v : '')
-    let headerValue = vStr
+    let headerValue = ''
+    if (Array.isArray(v)) {
+      headerValue = v[0]
+    } else if (typeof v === 'string') {
+      headerValue = v
+    }
     if (k === 'content-type') {
-      headerValue = vStr.split(';')[0].trim()
+      headerValue = headerValue.split(';')[0].trim()
     }
     if (
       (k.startsWith('x-bsv-') || k === 'content-type' || k === 'authorization') &&
@@ -90,7 +93,7 @@ export function writeRequestHeadersToWriter (req: Request, writer: Utils.Writer)
 /**
  * Write a header pair (key + value) to the binary writer.
  */
-export function writeHeaderPair (writer: Utils.Writer, key: string, value: string): void {
+export function writeHeaderPair(writer: Utils.Writer, key: string, value: string): void {
   const keyBytes = Utils.toArray(key, 'utf8')
   writer.writeVarIntNum(keyBytes.length)
   writer.write(keyBytes)
@@ -102,7 +105,7 @@ export function writeHeaderPair (writer: Utils.Writer, key: string, value: strin
 /**
  * Helper: Write body to writer
  */
-export function writeBodyToWriter (
+export function writeBodyToWriter(
   req: Request,
   writer: Utils.Writer,
   logger?: typeof console,
@@ -114,15 +117,18 @@ export function writeBodyToWriter (
   // Inline-normalised content-type to a single string (Express may return string[]).
   // Inline narrowing rather than a helper so CodeQL's dataflow analysis can see
   // the explicit type guard (avoids js/type-confusion-through-parameter-tampering).
-  const rawContentType = headers['content-type']
+  const rawContentType: unknown = headers['content-type']
   let contentType = ''
   if (typeof rawContentType === 'string') {
-    contentType = rawContentType
+    contentType = rawContentType.split(';', 1)[0].trim().toLowerCase()
   } else if (Array.isArray(rawContentType) && typeof rawContentType[0] === 'string') {
-    contentType = rawContentType[0]
+    contentType = rawContentType[0].split(';', 1)[0].trim().toLowerCase()
   }
 
-  if (Array.isArray(body) && body.every((item) => typeof item === 'number')) {
+  if (
+    Array.isArray(body) &&
+    body.every(item => Number.isInteger(item) && item >= 0 && item <= 255)
+  ) {
     writer.writeVarIntNum(body.length)
     writer.write(body)
     debugLog('[writeBodyToWriter] Body recognized as number[]', { length: body.length })
@@ -140,7 +146,7 @@ export function writeBodyToWriter (
     const bodyAsArray = Utils.toArray(JSON.stringify(body), 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
-    debugLog('[writeBodyToWriter] Body recognized as JSON', { body })
+    debugLog('[writeBodyToWriter] Body recognized as JSON', { length: bodyAsArray.length })
     return
   }
 
@@ -155,7 +161,9 @@ export function writeBodyToWriter (
     const bodyAsArray = Utils.toArray(parsedBody, 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
-    debugLog('[writeBodyToWriter] Body recognized as x-www-form-urlencoded', { parsedBody })
+    debugLog('[writeBodyToWriter] Body recognized as x-www-form-urlencoded', {
+      length: bodyAsArray.length
+    })
     return
   }
 
@@ -163,7 +171,7 @@ export function writeBodyToWriter (
     const bodyAsArray = Utils.toArray(body, 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
-    debugLog('[writeBodyToWriter] Body recognized as text/plain', { body })
+    debugLog('[writeBodyToWriter] Body recognized as text/plain', { length: bodyAsArray.length })
     return
   }
 
@@ -175,12 +183,22 @@ export function writeBodyToWriter (
 /**
  * Helper: Convert values passed to res.send(...) into byte arrays
  */
-export function convertValueToArray (val: any, responseHeaders: Record<string, any>): number[] {
+export function convertValueToArray(
+  val: unknown,
+  responseHeaders: Record<string, string>
+): number[] {
+  if (val === undefined || val === null) return []
   if (typeof val === 'string') {
     return Utils.toArray(val, 'utf8')
   }
   if (val instanceof Buffer) {
     return Array.from(val)
+  }
+  if (val instanceof Uint8Array) {
+    return Array.from(val)
+  }
+  if (Array.isArray(val) && val.every(item => Number.isInteger(item) && item >= 0 && item <= 255)) {
+    return val
   }
   if (typeof val === 'object' && val !== null) {
     if (!responseHeaders['content-type']) {
@@ -188,16 +206,16 @@ export function convertValueToArray (val: any, responseHeaders: Record<string, a
     }
     return Utils.toArray(JSON.stringify(val), 'utf8')
   }
-  if (typeof val === 'number') {
+  if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') {
     return Utils.toArray(val.toString(), 'utf8')
   }
-  return Utils.toArray(String(val), 'utf8')
+  return []
 }
 
 /**
  * Returns a no-op or a bound debug logger depending on config.
  */
-export function makeDebugLogger (
+export function makeDebugLogger(
   logger?: typeof console,
   logLevel?: LogLevel
 ): (msg: string, data: any) => void {

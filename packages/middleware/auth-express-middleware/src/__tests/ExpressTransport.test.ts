@@ -91,7 +91,7 @@ describe('ExpressTransport configuration', () => {
     expect(unauthenticated).not.toHaveBeenCalled()
   })
 
-  it('stores attacker-controlled request IDs in prototype-safe maps', async () => {
+  it('rejects malformed attacker-controlled request IDs before allocating state', async () => {
     const transport = new ExpressTransport()
     transport.peer = {
       sessionManager: {
@@ -100,35 +100,30 @@ describe('ExpressTransport configuration', () => {
     } as any
     const req = {
       body: {
-        identityKey: 'identity-key',
+        messageType: 'initialRequest',
+        version: '1',
+        identityKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         initialNonce: 'initial-nonce'
       },
       headers: {
         'x-bsv-auth-request-id': '__proto__'
       }
     }
-    const firstRes = {}
-    const firstNext = jest.fn()
-    const secondRes = {}
-    const secondNext = jest.fn()
 
-    await (transport as any).handleWellKnownAuth(req, firstRes, firstNext)
-    await (transport as any).handleWellKnownAuth(req, secondRes, secondNext)
-
-    expect(transport.openNonGeneralHandles).toBeInstanceOf(Map)
-    expect(transport.openNonGeneralHandles.get('__proto__')).toEqual([
-      { res: firstRes, next: firstNext },
-      { res: secondRes, next: secondNext }
-    ])
-    expect(Object.getPrototypeOf(transport.openNonGeneralHandles)).toBe(Map.prototype)
+    await expect((transport as any).handleWellKnownAuth(req, {}, jest.fn())).rejects.toThrow(
+      'request identifier'
+    )
+    expect(transport.openNonGeneralHandles.size).toBe(0)
   })
 
   it('rejects a general response that has no matching request handle', async () => {
     const transport = new ExpressTransport()
 
-    await expect((transport as any).sendGeneralMessage({
-      payload: Array(32).fill(0)
-    })).rejects.toThrow('No response handle for this requestId')
+    await expect(
+      (transport as any).sendGeneralMessage({
+        payload: Array(32).fill(0)
+      })
+    ).rejects.toThrow('No response handle for this requestId')
   })
 
   it('removes completed non-general handles instead of retaining empty entries', async () => {
@@ -137,9 +132,7 @@ describe('ExpressTransport configuration', () => {
       set: jest.fn(),
       send: jest.fn()
     }
-    transport.openNonGeneralHandles.set('peer-nonce', [
-      { res: res as any, next: jest.fn() }
-    ])
+    transport.openNonGeneralHandles.set('peer-nonce', [{ res: res as any, next: jest.fn() }])
 
     await (transport as any).sendNonGeneralMessage({
       version: '1',
@@ -195,23 +188,25 @@ describe('ExpressTransport configuration', () => {
     )
 
     expect(status).toHaveBeenCalledWith(400)
-    expect(json).toHaveBeenCalledWith({ status: 'No certificates provided' })
+    expect(json).toHaveBeenCalledWith({
+      status: 'error',
+      code: 'ERR_CERTIFICATES_REQUIRED',
+      description: 'No certificates were provided.'
+    })
   })
 
-  it('removes a handshake handle after its certificate listener completes', () => {
+  it('ignores certificate events from a different peer without dropping the expected listener', () => {
     const transport = new ExpressTransport()
     let listener: ((senderPublicKey: string, certs: any[]) => void) | undefined
     const stopListeningForCertificatesReceived = jest.fn()
     transport.peer = {
-      listenForCertificatesReceived: jest.fn((callback) => {
+      listenForCertificatesReceived: jest.fn(callback => {
         listener = callback
         return 7
       }),
       stopListeningForCertificatesReceived
     } as any
-    transport.openNonGeneralHandles.set('request-id', [
-      { res: {} as any, next: jest.fn() }
-    ])
+    transport.openNonGeneralHandles.set('request-id', [{ res: {} as any, next: jest.fn() }])
 
     ;(transport as any).registerCertificateListener(
       { body: { identityKey: 'expected-peer' } },
@@ -222,8 +217,8 @@ describe('ExpressTransport configuration', () => {
     )
     listener?.('different-peer', [])
 
-    expect(transport.openNonGeneralHandles.has('request-id')).toBe(false)
-    expect(stopListeningForCertificatesReceived).toHaveBeenCalledWith(7)
+    expect(transport.openNonGeneralHandles.has('request-id')).toBe(true)
+    expect(stopListeningForCertificatesReceived).not.toHaveBeenCalled()
   })
 
   it('replaces stale certificate waits and times out the current handler safely', async () => {

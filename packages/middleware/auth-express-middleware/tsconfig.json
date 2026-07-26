@@ -1,18 +1,3 @@
 {
-  "files": [],
-  "compilerOptions": {
-    "types": ["jest"],
-    "esModuleInterop": true
-  },
-  "references": [
-    {
-      "path": "tsconfig.esm.json"
-    },
-    {
-      "path": "tsconfig.cjs.json"
-    },
-    {
-      "path": "tsconfig.types.json"
-    }
-  ]
+  "extends": "./tsconfig.base.json"
 }

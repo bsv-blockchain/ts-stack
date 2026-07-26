@@ -1,16 +1,19 @@
 # API
 
-Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
 
 ## Interfaces
 
-| |
-| --- |
-| [BSVPayment](#interface-bsvpayment) |
+|                                                                 |
+| --------------------------------------------------------------- |
+| [BSVPayment](#interface-bsvpayment)                             |
+| [PaymentLogger](#interface-paymentlogger)                       |
 | [PaymentMiddlewareOptions](#interface-paymentmiddlewareoptions) |
-| [PaymentResult](#interface-paymentresult) |
+| [PaymentReceipt](#interface-paymentreceipt)                     |
+| [PaymentReplayStore](#interface-paymentreplaystore)             |
+| [PaymentRequest](#interface-paymentrequest)                     |
 
-Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
 
 ---
 
@@ -18,71 +21,125 @@ Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
 ```ts
 export interface BSVPayment {
-    derivationPrefix: string;
-    derivationSuffix: string;
-    transaction: unknown;
+  derivationPrefix: string
+  derivationSuffix: string
+  transaction: string
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
 
 ---
+
+### Interface: PaymentLogger
+
+```ts
+export interface PaymentLogger {
+  error?: (message: string, context?: Record<string, unknown>) => void
+  warn?: (message: string, context?: Record<string, unknown>) => void
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
+
+---
+
 ### Interface: PaymentMiddlewareOptions
 
 ```ts
 export interface PaymentMiddlewareOptions {
-    calculateRequestPrice?: (req: Request) => number | Promise<number>;
-    wallet: Wallet;
+  calculateRequestPrice?: (req: PaymentRequest) => number | Promise<number>
+  wallet: WalletInterface
+  replayStore?: PaymentReplayStore
+  maxPaymentHeaderBytes?: number
+  logger?: PaymentLogger
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+See also: [PaymentLogger](#interface-paymentlogger), [PaymentReplayStore](#interface-paymentreplaystore), [PaymentRequest](#interface-paymentrequest)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
 
 ---
-### Interface: PaymentResult
+
+### Interface: PaymentReceipt
 
 ```ts
-export interface PaymentResult {
-    accepted: boolean;
+export interface PaymentReceipt {
+  satoshisPaid: number
+  accepted: true
+  tx: string
+  txid: string
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
 
 ---
+
+### Interface: PaymentReplayStore
+
+Replay claims must be atomic. Return false when the transaction ID has
+already been claimed. Shared deployments should use a durable implementation.
+
+```ts
+export interface PaymentReplayStore {
+  claim: (transactionId: string) => boolean | Promise<boolean>
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
+
+---
+
+### Interface: PaymentRequest
+
+```ts
+export interface PaymentRequest extends Request {
+  auth?: {
+    identityKey?: unknown
+  }
+  payment?: PaymentReceipt
+}
+```
+
+See also: [PaymentReceipt](#interface-paymentreceipt)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
+
+---
+
+## Classes
+
+### Class: InMemoryPaymentReplayStore
+
+```ts
+export class InMemoryPaymentReplayStore implements PaymentReplayStore {
+    constructor(private readonly maxEntries: number = DEFAULT_REPLAY_CAPACITY)
+    claim(transactionId: string): boolean
+}
+```
+
+See also: [PaymentReplayStore](#interface-paymentreplaystore)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
+
+---
+
 ## Functions
 
 ### Function: createPaymentMiddleware
 
-Creates middleware that enforces BSV payment for HTTP requests.
-
-NOTE: This middleware should run after the authentication middleware so that `req.auth` is available.
+Creates middleware that enforces a BRC-29 wallet payment after BRC-103 auth.
 
 ```ts
-export function createPaymentMiddleware(options: PaymentMiddlewareOptions) 
+export function createPaymentMiddleware(
+  options: PaymentMiddlewareOptions
+): (req: PaymentRequest, res: Response, next: NextFunction) => Promise<void>
 ```
 
-See also: [PaymentMiddlewareOptions](#interface-paymentmiddlewareoptions)
+See also: [PaymentMiddlewareOptions](#interface-paymentmiddlewareoptions), [PaymentRequest](#interface-paymentrequest)
 
-<details>
-
-<summary>Function createPaymentMiddleware Details</summary>
-
-Returns
-
-Express middleware that requires payment if `calculateRequestPrice` > 0.
-
-Argument Details
-
-+ **options**
-  + Configuration for the payment middleware
-+ **options.wallet**
-  + A wallet instance capable of submitting direct transactions.
-+ **options.calculateRequestPrice**
-  + A function returning the price for the request in satoshis.
-
-</details>
-
-Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions)
 
 ---

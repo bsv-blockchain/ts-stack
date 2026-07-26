@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 51,
+  "findingCount": 45,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,30 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/middleware/auth-express-middleware::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/middleware/auth-express-middleware::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/middleware/auth-express-middleware::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/middleware/payment-express-middleware::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/middleware/payment-express-middleware::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/middleware/payment-express-middleware::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
     },
     {
       "id": "packages/network/ts-p2p::missing-script::format:check",

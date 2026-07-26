@@ -1,178 +1,172 @@
 ---
 id: pkg-auth-express-middleware
-title: "@bsv/auth-express-middleware"
+title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: "2.1.2"
-source_repo: "bsv-blockchain/auth-express-middleware"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.1.2'
+source_repo: 'bsv-blockchain/ts-stack'
+source_commit: 'unreleased'
+last_updated: '2026-07-26'
+last_verified: '2026-07-26'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/auth-express-middleware"
-repo: "https://github.com/bsv-blockchain/auth-express-middleware"
+npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
 status: stable
-tags: [middleware, express, auth, brc-31]
+tags: [middleware, express, auth, brc-103, brc-104]
 ---
 
 # @bsv/auth-express-middleware
 
-> Express.js middleware implementing BRC-103 peer-to-peer mutual authentication via BRC-104 HTTP transport. Enables cryptographic handshakes between server and client, with optional selective disclosure of verifiable certificates.
+Express transport for BRC-103 peer-to-peer mutual authentication over
+BRC-104 HTTP. It handles the public handshake, verifies authenticated
+application requests, signs responses, and optionally exchanges verifiable
+certificates.
 
 ## Install
 
 ```bash
-npm install @bsv/auth-express-middleware
+npm install @bsv/auth-express-middleware @bsv/sdk express
 ```
+
+Node.js 22 or newer is required. The package provides native ESM and CommonJS
+entry points with matching declarations.
 
 ## Quick start
 
-```typescript
+```ts
 import express from 'express'
-import bodyParser from 'body-parser'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
-const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.SERVER_PRIVATE_KEY!))
-const authMiddleware = createAuthMiddleware({ wallet, allowUnauthenticated: false })
-
+const wallet = new ProtoWallet(PrivateKey.fromRandom())
 const app = express()
-app.use(bodyParser.json())
-app.use(authMiddleware)
-
-app.get('/', (req, res) => {
-  if (req.auth && req.auth.identityKey !== 'unknown') {
-    res.send(`Hello, authenticated peer: ${req.auth.identityKey}`)
-  } else {
-    res.status(401).send('Unauthorized')
-  }
-})
-
-app.listen(3000)
-```
-
-## What it provides
-
-- **createAuthMiddleware** — Express middleware factory with BRC-103 authentication
-- **AuthRequest** — Extended Request with `.auth` object containing `identityKey`
-- **BRC-103 mutual authentication** — Nonce-based challenge-response with signatures
-- **BRC-104 HTTP transport** — Custom headers (`x-bsv-auth-*`) for non-general messages
-- **Session management** — Tracks nonces per identity; AsyncSessionManager interface extensible to synchronous or asynchronous stores
-- **Certificate exchange** — Optional verifiable certificates during handshake
-- **Response wrapping** — Middleware intercepts response methods to sign responses before sending
-- **Optional authentication** — `allowUnauthenticated` flag for mixed public/private endpoints
-
-## Common patterns
-
-### Global auth requirement
-
-```typescript
-import express from 'express'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-
-const app = express()
-const authMiddleware = createAuthMiddleware({ wallet })
 
 app.use(express.json())
-app.use(authMiddleware)
+app.use(createAuthMiddleware({ wallet }))
 
-app.post('/secure-upload', (req, res) => {
-  res.send('File uploaded by ' + req.auth.identityKey)
+app.get('/private', (req: AuthRequest, res) => {
+  res.json({ identityKey: req.auth?.identityKey })
 })
 ```
 
-### Certificate handling
+Authentication is required by default. `allowUnauthenticated: true` permits
+requests without auth and marks them with identity key `unknown`; that value
+must never be treated as authorization.
 
-```typescript
-function onCertificatesReceived(senderPublicKey, certs, req, res, next) {
-  console.log(`Received ${certs.length} certs from ${senderPublicKey}`)
-  next()
-}
+## Configuration
 
-const authMiddleware = createAuthMiddleware({
-  wallet,
-  certificatesToRequest: {
-    certifiers: ['<33-byte-pubkey-hex>'],
-    types: {
-      'age-verification': ['dateOfBirth', 'country']
+```ts
+app.use(
+  createAuthMiddleware({
+    wallet,
+    allowUnauthenticated: false,
+    sessionManager,
+    certificatesToRequest,
+    onCertificatesReceived,
+    logger,
+    logLevel: 'error',
+    transportLimits: {
+      requestTimeoutMs: 30_000,
+      maxPendingRequests: 1_000
     }
-  },
-  onCertificatesReceived
-})
-
-app.use(express.json())
-app.use(authMiddleware)
+  })
+)
 ```
 
-### Shared sessions for scaled servers
+`transportLimits` bounds pending handshakes, verification listeners,
+certificate waits, and response-signing state. Malformed requests are rejected
+before state allocation. At capacity, the middleware fails closed with `503`.
 
-The default `SessionManager` stores BRC-103 nonce/session state in one process. For load-balanced Express servers, pass a `AsyncSessionManager` backed by shared storage so every instance can resolve the same handshake state instead of relying on sticky routing.
+The exact `/.well-known/auth` endpoint remains public because it establishes
+the session. Similar path prefixes receive normal auth treatment.
 
-```typescript
-import { AsyncSessionManager } from '@bsv/sdk'
+## Scaled deployment
 
-const authMiddleware = createAuthMiddleware({
-  wallet,
-  sessionManager: sharedSessionManager satisfies AsyncSessionManager
-})
+The default SDK `SessionManager` is process-local. A load-balanced service must
+inject a shared `AsyncSessionManager` so every replica can resolve the same
+handshake/session state:
+
+```ts
+import type { AsyncSessionManager } from '@bsv/sdk'
+
+app.use(
+  createAuthMiddleware({
+    wallet,
+    sessionManager: sharedSessionManager satisfies AsyncSessionManager
+  })
+)
 ```
 
-### Per-route protection
+Use storage with appropriate atomicity, expiry, availability, and encryption.
+Sticky routing does not preserve state through process replacement.
 
-```typescript
-app.post('/secure-endpoint', createAuthMiddleware({ wallet }), (req, res) => {
-  res.send('Request authenticated via BRC-103: ' + req.auth.identityKey)
-})
+## Certificate handling
+
+```ts
+app.use(
+  createAuthMiddleware({
+    wallet,
+    certificatesToRequest: {
+      certifiers: ['<compressed-certifier-public-key>'],
+      types: { '<base64-certificate-type>': ['firstName'] }
+    },
+    async onCertificatesReceived(senderPublicKey, certificates, req, res, next) {
+      await authorizeDisclosedFields(senderPublicKey, certificates)
+      next()
+    }
+  })
+)
 ```
 
-## Key concepts
+Applications remain responsible for authorization, revocation checks, and
+storage of disclosed fields. Callback errors produce generic public responses;
+certificate bodies and internal errors are not logged by default or returned.
 
-- **BRC-103 mutual authentication** — Nonce-based challenge-response with signatures
-- **BRC-104 HTTP transport** — Uses custom headers and `/.well-known/auth` endpoint
-- **General vs non-general messages** — Non-general for handshake, general for authenticated app requests
-- **Nonce binding** — Each request/response pair bound to server-generated nonce; prevents replay attacks
-- **Session management** — Tracks nonces per identity; AsyncSessionManager interface extensible to synchronous or asynchronous stores
-- **Certificate exchange** — Optional verifiable certificates during handshake
-- **Response wrapping** — Middleware intercepts response methods to sign responses before sending
+## Browser and public-service policy
 
-## When to use this
+The middleware does not hard-code CORS, CSP, or origin restrictions. Public
+services can remain accessible across browser apps, WUI, mobile clients, and
+unknown domains by default, while an operator may opt into a configurable
+allowlist at the application or edge.
 
-- Protecting REST API endpoints with Bitcoin signature authentication
-- Building servers that verify user identity without passwords
-- Implementing APIs where requests prove identity cryptographically
-- Replacing JWT/session auth with signature-based auth
-- Building peer-to-peer APIs with mutual authentication
+For browsers, handle `OPTIONS` before auth and expose required
+`x-bsv-auth-*` headers. Do not combine wildcard origins with credentialed
+CORS. CSP is primarily a document policy and is not a substitute for API CORS.
 
-## When NOT to use this
+## Security and operations
 
-- WebSocket authentication — use `@bsv/authsocket` instead
-- Traditional password/session auth — use passport.js
-- Public APIs without authentication — skip this middleware
-- Bearer token auth — use standard OAuth middleware
+- Use HTTPS; mutual authentication does not encrypt all HTTP data.
+- Parse bodies before auth so signed and routed values match.
+- Install one auth wrapper per request path.
+- Keep finite timeouts/capacity and alert on `408` and `503`.
+- Keep authentication separate from application authorization.
+- Do not log raw headers, signatures, certificates, bodies, or wallet objects.
+- Public errors are stable and omit internal exception text.
 
-## Spec conformance
+## Public API
 
-- **BRC-103** (Peer-to-Peer Mutual Authentication): Full handshake, nonce exchange, signature verification, optional certificate exchange
-- **BRC-104** (HTTP Transport for BRC-103): Uses custom headers and `/.well-known/auth` endpoint
-- **BRC-100** (Wallet interface): Leverages standard wallet signing/verification interface
+Runtime:
 
-## Common pitfalls
+- `createAuthMiddleware`
+- `ExpressTransport`
 
-1. **Must run before routes** — Place auth middleware early in middleware stack
-2. **Wallet must be BRC-100 compatible** — Needs `sign()` and `verify()` methods
-3. **allowUnauthenticated changes behavior** — If false (default), unauthenticated requests get 401; if true, they pass with identityKey='unknown'
-4. **Response wrapping side effects** — Middleware modifies Express response object; don't install twice on same app
-5. **Certificate request timeout** — If requesting certificates and client doesn't respond in 30 seconds, times out with 408
-6. **HTTPS recommended** — BRC-103 authenticates but doesn't encrypt; run over TLS for confidentiality
+Types:
+
+- `AuthMiddlewareOptions`
+- `AuthRequest`
+- `AuthTransportLimits`
+- `LogLevel`
 
 ## Related packages
 
-- **@bsv/payment-express-middleware** — Often stacked after this for monetized APIs
-- **@bsv/authsocket** / **@bsv/authsocket-client** — Parallel BRC-103 implementation for WebSockets
-- **@bsv/paymail** — Can combine with Paymail for authenticated capability discovery
+- `@bsv/payment-express-middleware` — authenticated payment gating; runs after
+  auth
+- `@bsv/authsocket` / `@bsv/authsocket-client` — WebSocket mutual auth
+- `@bsv/sdk` — wallet, peer, session, and AuthFetch implementation
 
-## Reference
+## References
 
-- [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/auth-express-middleware/)
-- [Source on GitHub](https://github.com/bsv-blockchain/auth-express-middleware)
+- [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware)
 - [npm](https://www.npmjs.com/package/@bsv/auth-express-middleware)
+- [BRC-103](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md)
+- [BRC-104](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0104.md)

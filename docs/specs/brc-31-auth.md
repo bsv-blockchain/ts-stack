@@ -2,16 +2,20 @@
 id: spec-brc-31-auth
 title: BRC-31 Mutual Authentication Handshake
 kind: spec
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: '1.0.0'
+last_updated: '2026-04-28'
+last_verified: '2026-04-28'
 status: stable
-tags: ["spec", "auth", "brc-103", "brc-31"]
+tags: ['spec', 'auth', 'brc-103', 'brc-31']
 ---
 
 # BRC-31 Mutual Authentication Handshake
 
-> BRC-31 (implemented via BRC-103 `Peer` + BRC-104 HTTP transport) enables cryptographic handshakes between client and server. Both parties prove identity using ECDSA signatures, establishing a forward-secret session where every message is signed and verified. No shared passwords or certificates required—only identity public keys.
+> BRC-31 (implemented via BRC-103 `Peer` + BRC-104 HTTP transport)
+> enables cryptographic handshakes between client and server. Both parties
+> prove control of identity keys using signatures, and authenticated
+> application messages are signed and verified. No shared password is
+> required.
 
 ## Interactive spec
 
@@ -19,18 +23,25 @@ tags: ["spec", "auth", "brc-103", "brc-31"]
 
 ## At a glance
 
-| Field | Value |
-|---|---|
-| Format | AsyncAPI 3.0 |
-| Version | 1.0.0 |
-| Status | stable |
+| Field           | Value                                         |
+| --------------- | --------------------------------------------- |
+| Format          | AsyncAPI 3.0                                  |
+| Version         | 1.0.0                                         |
+| Status          | stable                                        |
 | Implementations | @bsv/auth-express-middleware, @bsv/authsocket |
 
 ## What problem this solves
 
-**Verifiable peer identity without PKI infrastructure**. Traditional APIs use API keys or JWT tokens, which are single-factor and don't prove who is calling. BRC-31 uses ECDSA signatures to prove the caller's identity: only the holder of the private key can generate valid signatures. This works peer-to-peer (no trusted CA) and is quantum-resistant.
+**Verifiable peer identity without a conventional account token**. BRC-31
+uses signatures to prove control of an identity private key. Certificate trust
+and application authorization remain separate concerns. ECDSA is not
+post-quantum cryptography.
 
-**Replay attack prevention**. The handshake uses nonces (one-time values) bound to each request. An attacker cannot replay a signature from one request to another because the request ID and timestamp are part of the signed payload. This prevents man-in-the-middle replay attacks.
+**Replay resistance with session state**. Session nonces and a fresh
+32-byte request ID are bound into signed request/response payloads. The SDK
+session manager must preserve and validate that state; a nonce string alone is
+not an expiring single-use store. The signed HTTP payload does not introduce a
+separate timestamp field.
 
 **Certificate exchange**. The handshake optionally requests verifiable certificates (e.g., age verification, credential proofs) that the client provides. The server can validate these against known certifiers, enabling selective disclosure (e.g., "prove you're over 18" without revealing your actual birthdate).
 
@@ -74,13 +85,13 @@ After handshake succeeds, every request/response carries:
 
 ## Key types / endpoints
 
-| Channel | Direction | Message Type | Purpose |
-|---------|-----------|--------------|---------|
-| `/.well-known/auth` | Request | `initialRequest` | Client initiates handshake with nonce |
-| `/.well-known/auth` | Response | `initialResponse` | Server validates, responds with nonce + signature |
-| `/.well-known/auth` | Request | `certificatePayload` | Client provides certificates if server requested |
-| Any route | Request | `general` | Authenticated application request (after handshake) |
-| Any route | Response | `general` | Authenticated application response |
+| Channel             | Direction | Message Type         | Purpose                                             |
+| ------------------- | --------- | -------------------- | --------------------------------------------------- |
+| `/.well-known/auth` | Request   | `initialRequest`     | Client initiates handshake with nonce               |
+| `/.well-known/auth` | Response  | `initialResponse`    | Server validates, responds with nonce + signature   |
+| `/.well-known/auth` | Request   | `certificatePayload` | Client provides certificates if server requested    |
+| Any route           | Request   | `general`            | Authenticated application request (after handshake) |
+| Any route           | Response  | `general`            | Authenticated application response                  |
 
 ## Example: Express middleware handshake
 
@@ -95,12 +106,12 @@ const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.SERVER_PRIVATE_KEY
 // 2. Create auth middleware
 const authMiddleware = createAuthMiddleware({
   wallet,
-  allowUnauthenticated: false  // Reject unauthenticated requests with 401
+  allowUnauthenticated: false // Reject unauthenticated requests with 401
 })
 
 const app = express()
 app.use(express.json())
-app.use(authMiddleware)  // Install middleware early
+app.use(authMiddleware) // Install middleware early
 
 // 3. Routes now have req.auth.identityKey set to client's public key
 app.get('/protected', (req, res) => {
@@ -126,7 +137,7 @@ const response = await authFetch.fetch('https://server.com/protected', {
 })
 
 const data = await response.json()
-console.log(data.message)  // "Hello, 025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366"
+console.log(data.message) // "Hello, 025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366"
 ```
 
 ## Example: WebSocket with AuthSocket
@@ -144,11 +155,11 @@ const io = new AuthSocketServer(server, {
 })
 
 // 2. Listen for authenticated connections
-io.on('connection', (socket) => {
+io.on('connection', socket => {
   console.log('Authenticated:', socket.id)
-  
+
   // All messages from this socket are auto-verified
-  socket.on('chatMessage', (msg) => {
+  socket.on('chatMessage', msg => {
     console.log('Message verified:', msg)
   })
 })
@@ -171,11 +182,11 @@ BRC-31-related portable coverage currently lives in `conformance/vectors/messagi
 
 ## Implementations in ts-stack
 
-| Package | Notes |
-|---------|-------|
+| Package                      | Notes                                                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
 | @bsv/auth-express-middleware | Express.js middleware for HTTP BRC-31 authentication; intercepts response methods to sign responses |
-| @bsv/authsocket | Socket.IO wrapper adding BRC-31 authentication to WebSocket connections |
-| @bsv/sdk | `Peer` and `Transport` abstractions; `AuthFetch` client implementation |
+| @bsv/authsocket              | Socket.IO wrapper adding BRC-31 authentication to WebSocket connections                             |
+| @bsv/sdk                     | `Peer` and `Transport` abstractions; `AuthFetch` client implementation                              |
 
 ## Related specs
 

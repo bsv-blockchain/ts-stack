@@ -1,18 +1,19 @@
-import { Request, Response, NextFunction } from 'express'
 import fs from 'node:fs'
 import mime from 'mime-types'
 import {
   Utils,
-  VerifiableCertificate,
   Peer,
-  AuthMessage,
-  RequestedCertificateSet,
-  Transport,
   SessionManager,
-  AsyncSessionManager,
-  WalletInterface,
-  PubKeyHex
+  PublicKey,
+  type AsyncSessionManager,
+  type AuthMessage,
+  type PubKeyHex,
+  type RequestedCertificateSet,
+  type Transport,
+  type VerifiableCertificate,
+  type WalletInterface
 } from '@bsv/sdk'
+import type { NextFunction, Request, Response } from 'express'
 import {
   LogLevel,
   isLogLevelEnabled,
@@ -30,6 +31,30 @@ export { isLogLevelEnabled, getLogMethod } from './authMiddlewareHelpers.js'
 export { writeBodyToWriter } from './authMiddlewareHelpers.js'
 
 const WELL_KNOWN_AUTH_PATH = '/.well-known/auth'
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+const DEFAULT_MAX_PENDING_REQUESTS = 1_000
+const MAX_AUTH_HEADER_LENGTH = 4_096
+
+interface PendingHandle {
+  res: Response
+  next: NextFunction
+  timeout: ReturnType<typeof setTimeout>
+}
+
+interface ActiveGeneralRequest {
+  listenerId: number
+  timeout: ReturnType<typeof setTimeout>
+}
+
+interface ActiveCertificateRequest {
+  listenerId: number
+  timeout: ReturnType<typeof setTimeout>
+}
+
+export interface AuthTransportLimits {
+  requestTimeoutMs: number
+  maxPendingRequests: number
+}
 
 export interface AuthRequest extends Request {
   auth?: {
@@ -52,7 +77,7 @@ export interface AuthMiddlewareOptions {
     req: AuthRequest,
     res: Response,
     next: NextFunction
-  ) => void
+  ) => void | Promise<void>
 
   /**
    * Optional logger (e.g., console). If not provided, logging is disabled.
@@ -63,12 +88,131 @@ export interface AuthMiddlewareOptions {
    * Optional logging level. Defaults to no logging if not provided.
    * 'debug' | 'info' | 'warn' | 'error'
    *
-   * - debug: Logs *everything*, including low-level details of the auth process.
+   * - debug: Logs detailed lifecycle metadata without secret-bearing payloads.
    * - info: Logs general informational messages about normal operation.
    * - warn: Logs potential issues but not necessarily errors.
    * - error: Logs only critical issues and errors.
    */
   logLevel?: LogLevel
+
+  /**
+   * Bounds unauthenticated work and pending protocol state. Defaults to a
+   * 30-second timeout and 1,000 concurrent request records per process.
+   */
+  transportLimits?: Partial<AuthTransportLimits>
+}
+
+class AuthProtocolError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AuthProtocolError'
+  }
+}
+
+function singleHeader(req: Request, name: string, required = true): string | undefined {
+  const value = req.headers[name]
+  if (value === undefined && !required) return undefined
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > MAX_AUTH_HEADER_LENGTH ||
+    containsUnsafeHeaderCharacter(value)
+  ) {
+    throw new AuthProtocolError(`Invalid ${name} header.`)
+  }
+  return value
+}
+
+function containsUnsafeHeaderCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0)
+    if (code === 0 || code === 10 || code === 13) return true
+  }
+  return false
+}
+
+function isCanonicalBase64(value: string, decodedLength?: number): boolean {
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+    return false
+  }
+  try {
+    const decoded = Utils.toArray(value, 'base64')
+    return (
+      (decodedLength === undefined || decoded.length === decodedLength) &&
+      Utils.toBase64(decoded) === value
+    )
+  } catch {
+    return false
+  }
+}
+
+function isCompressedPublicKey(value: string): value is PubKeyHex {
+  if (!/^(02|03)[0-9a-fA-F]{64}$/.test(value)) return false
+  try {
+    return PublicKey.fromString(value).toString() === value.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function validateGeneralAuthRequest(req: Request): string {
+  const requestId = singleHeader(req, 'x-bsv-auth-request-id')!
+  const version = singleHeader(req, 'x-bsv-auth-version')!
+  const identityKey = singleHeader(req, 'x-bsv-auth-identity-key')!
+  const nonce = singleHeader(req, 'x-bsv-auth-nonce')!
+  const yourNonce = singleHeader(req, 'x-bsv-auth-your-nonce')!
+  const signature = singleHeader(req, 'x-bsv-auth-signature')!
+  if (!isCanonicalBase64(requestId, 32)) {
+    throw new AuthProtocolError('Invalid x-bsv-auth-request-id header.')
+  }
+  if (version.length > 32 || !isCompressedPublicKey(identityKey)) {
+    throw new AuthProtocolError('Invalid authentication identity or version.')
+  }
+  if (
+    !isCanonicalBase64(nonce) ||
+    !isCanonicalBase64(yourNonce) ||
+    !/^(?:[0-9a-fA-F]{2})+$/.test(signature)
+  ) {
+    throw new AuthProtocolError('Invalid authentication nonce or signature.')
+  }
+  return requestId
+}
+
+function validateHandshakeMessage(req: Request): {
+  message: AuthMessage
+  requestId: string
+} {
+  if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    throw new AuthProtocolError('The BRC-104 handshake body must be an object.')
+  }
+  const message = req.body as Partial<AuthMessage>
+  if (
+    typeof message.messageType !== 'string' ||
+    message.messageType.length === 0 ||
+    message.messageType.length > 64 ||
+    typeof message.version !== 'string' ||
+    message.version.length === 0 ||
+    message.version.length > 32 ||
+    typeof message.identityKey !== 'string' ||
+    !isCompressedPublicKey(message.identityKey)
+  ) {
+    throw new AuthProtocolError('The BRC-104 handshake message is malformed.')
+  }
+  const requestIdHeader = singleHeader(req, 'x-bsv-auth-request-id', false)
+  const requestId = requestIdHeader ?? message.initialNonce
+  if (
+    typeof requestId !== 'string' ||
+    requestId.length === 0 ||
+    requestId.length > MAX_AUTH_HEADER_LENGTH ||
+    !isCanonicalBase64(requestId)
+  ) {
+    throw new AuthProtocolError('The BRC-104 handshake request identifier is invalid.')
+  }
+  return { message: message as AuthMessage, requestId }
+}
+
+function safeErrorDetails(error: unknown): Record<string, unknown> {
+  return error instanceof Error ? { errorName: error.name } : { errorType: typeof error }
 }
 
 /**
@@ -79,19 +223,13 @@ class ResponseWriterWrapper {
   private statusCode: number = 200
   private headers: Record<string, string> = {}
   private body: number[] = []
-  private readonly originalRes: Response
-  private flushed: boolean = false
 
-  constructor (res: Response) {
-    this.originalRes = res
-  }
-
-  status (code: number): this {
+  status(code: number): this {
     this.statusCode = code
     return this
   }
 
-  set (key: string | Record<string, string>, value?: string): this {
+  set(key: string | Record<string, string>, value?: string): this {
     if (typeof key === 'object' && key !== null) {
       for (const [k, v] of Object.entries(key)) {
         this.headers[k.toLowerCase()] = String(v)
@@ -102,12 +240,12 @@ class ResponseWriterWrapper {
     return this
   }
 
-  send (data: any): this {
+  send(data: any): this {
     this.body = convertValueToArray(data, this.headers)
     return this
   }
 
-  json (data: any): this {
+  json(data: any): this {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'application/json'
     }
@@ -115,7 +253,7 @@ class ResponseWriterWrapper {
     return this
   }
 
-  text (data: string): this {
+  text(data: string): this {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'text/plain'
     }
@@ -123,41 +261,21 @@ class ResponseWriterWrapper {
     return this
   }
 
-  end (): this {
+  end(): this {
     // No-op for buffering, actual end happens on flush
     return this
   }
 
-  getStatusCode (): number {
+  getStatusCode(): number {
     return this.statusCode
   }
 
-  getHeaders (): Record<string, string> {
+  getHeaders(): Record<string, string> {
     return this.headers
   }
 
-  getBody (): number[] {
+  getBody(): number[] {
     return this.body
-  }
-
-  getOriginalRes (): Response {
-    return this.originalRes
-  }
-
-  // Called after peer signs the response
-  flush (): void {
-    if (this.flushed) return
-    this.flushed = true
-
-    this.originalRes.status(this.statusCode)
-    for (const [key, value] of Object.entries(this.headers)) {
-      this.originalRes.set(key, value)
-    }
-    if (this.body.length > 0) {
-      this.originalRes.send(Buffer.from(new Uint8Array(this.body)))
-    } else {
-      this.originalRes.end()
-    }
   }
 }
 
@@ -167,14 +285,18 @@ class ResponseWriterWrapper {
 export class ExpressTransport implements Transport {
   peer?: Peer
   allowUnauthenticated: boolean
-  openNonGeneralHandles = new Map<string, Array<{ res: Response, next: Function }>>()
-  openGeneralHandles = new Map<string, { next: Function, res: Response }>()
+  openNonGeneralHandles = new Map<string, PendingHandle[]>()
+  openGeneralHandles = new Map<string, { next: Function; res: Response }>()
   openNextHandlers = new Map<string, NextFunction>()
   openNextHandlerTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly activeGeneralRequests = new Map<string, ActiveGeneralRequest>()
+  private readonly activeCertificateRequests = new Map<string, ActiveCertificateRequest>()
+  private readonly openGeneralHandleTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
   private messageCallback?: (message: AuthMessage) => Promise<void>
   private readonly logger: typeof console | undefined
   private readonly logLevel: LogLevel
+  private readonly limits: AuthTransportLimits
 
   /**
    * Constructs a new ExpressTransport instance.
@@ -185,25 +307,41 @@ export class ExpressTransport implements Transport {
    * @param {typeof console} [logger] - Logger to use (e.g., console). If omitted, logging is disabled.
    * @param {'debug' | 'info' | 'warn' | 'error'} [logLevel] - Log level. If omitted, no logs are output.
    */
-  constructor (
+  constructor(
     allowUnauthenticated: boolean = false,
     logger?: typeof console,
-    logLevel?: LogLevel
+    logLevel?: LogLevel,
+    limits: Partial<AuthTransportLimits> = {}
   ) {
+    if (
+      logger !== undefined &&
+      (logger === null || typeof logger !== 'object' || typeof logger.log !== 'function')
+    ) {
+      throw new TypeError('logger must provide a log method.')
+    }
+    const requestTimeoutMs = limits.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+    const maxPendingRequests = limits.maxPendingRequests ?? DEFAULT_MAX_PENDING_REQUESTS
+    if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1) {
+      throw new RangeError('requestTimeoutMs must be a positive safe integer.')
+    }
+    if (!Number.isSafeInteger(maxPendingRequests) || maxPendingRequests < 1) {
+      throw new RangeError('maxPendingRequests must be a positive safe integer.')
+    }
     this.allowUnauthenticated = allowUnauthenticated
     this.logger = logger
     this.logLevel = logLevel || 'error' // Default to 'error' if not provided
+    this.limits = { requestTimeoutMs, maxPendingRequests }
   }
 
   /**
    * @deprecated Use `allowUnauthenticated`. This compatibility alias will be
    * removed in the next major release.
    */
-  get allowAuthenticated (): boolean {
+  get allowAuthenticated(): boolean {
     return this.allowUnauthenticated
   }
 
-  set allowAuthenticated (value: boolean) {
+  set allowAuthenticated(value: boolean) {
     this.allowUnauthenticated = value
   }
 
@@ -214,11 +352,7 @@ export class ExpressTransport implements Transport {
    * @param message - The message to log
    * @param data - Optional additional data to log
    */
-  private log (
-    level: LogLevel,
-    message: string,
-    data?: any
-  ): void {
+  private log(level: LogLevel, message: string, data?: any): void {
     if (typeof this.logger !== 'object') return // Logging disabled
     if (isLogLevelEnabled(this.logLevel, level)) {
       const logMethod = getLogMethod(this.logger, level)
@@ -230,9 +364,103 @@ export class ExpressTransport implements Transport {
     }
   }
 
-  setPeer (peer: Peer): void {
+  setPeer(peer: Peer): void {
     this.peer = peer
-    this.log('debug', 'Peer set in ExpressTransport', { peer })
+    this.log('debug', 'Peer set in ExpressTransport')
+  }
+
+  private pendingRequestCount(): number {
+    let nonGeneral = 0
+    for (const handles of this.openNonGeneralHandles.values()) {
+      nonGeneral += handles.length
+    }
+    return (
+      nonGeneral +
+      this.activeGeneralRequests.size +
+      this.activeCertificateRequests.size +
+      this.openGeneralHandles.size +
+      this.openNextHandlers.size
+    )
+  }
+
+  private assertPendingCapacity(): void {
+    if (this.pendingRequestCount() >= this.limits.maxPendingRequests) {
+      throw new AuthProtocolError('Authentication middleware is at pending-request capacity.')
+    }
+  }
+
+  private addNonGeneralHandle(requestId: string, res: Response, next: NextFunction): void {
+    this.assertPendingCapacity()
+    const handle = {} as PendingHandle
+    handle.res = res
+    handle.next = next
+    handle.timeout = setTimeout(() => {
+      this.removeNonGeneralHandle(requestId, handle)
+      this.clearActiveCertificateRequest(requestId)
+      if (!res.headersSent) {
+        res.status(408).json({
+          status: 'error',
+          code: 'ERR_AUTH_TIMEOUT',
+          description: 'Authentication handshake timed out.'
+        })
+      }
+    }, this.limits.requestTimeoutMs)
+    handle.timeout.unref?.()
+    const handles = this.openNonGeneralHandles.get(requestId)
+    if (handles === undefined) {
+      this.openNonGeneralHandles.set(requestId, [handle])
+    } else {
+      handles.push(handle)
+    }
+  }
+
+  private removeNonGeneralHandle(
+    requestId: string,
+    expected?: PendingHandle
+  ): PendingHandle | undefined {
+    const handles = this.openNonGeneralHandles.get(requestId)
+    if (handles === undefined) return undefined
+    const index = expected === undefined ? 0 : handles.indexOf(expected)
+    if (index < 0) return undefined
+    const [handle] = handles.splice(index, 1)
+    if (handle !== undefined) clearTimeout(handle.timeout)
+    if (handles.length === 0) this.openNonGeneralHandles.delete(requestId)
+    return handle
+  }
+
+  private clearActiveGeneralRequest(requestId: string): void {
+    const active = this.activeGeneralRequests.get(requestId)
+    if (active === undefined) return
+    clearTimeout(active.timeout)
+    this.peer?.stopListeningForGeneralMessages(active.listenerId)
+    this.activeGeneralRequests.delete(requestId)
+  }
+
+  private clearActiveCertificateRequest(requestId: string): void {
+    const active = this.activeCertificateRequests.get(requestId)
+    if (active === undefined) return
+    clearTimeout(active.timeout)
+    this.peer?.stopListeningForCertificatesReceived(active.listenerId)
+    this.activeCertificateRequests.delete(requestId)
+  }
+
+  private clearOpenGeneralHandle(requestId: string): void {
+    const timeout = this.openGeneralHandleTimeouts.get(requestId)
+    if (timeout !== undefined) clearTimeout(timeout)
+    this.openGeneralHandleTimeouts.delete(requestId)
+    this.openGeneralHandles.delete(requestId)
+  }
+
+  private respondWithProtocolError(res: Response, error: AuthProtocolError): void {
+    if (res.headersSent) return
+    const capacity = error.message.includes('capacity')
+    res.status(capacity ? 503 : 400).json({
+      status: 'error',
+      code: capacity ? 'ERR_AUTH_CAPACITY' : 'ERR_AUTH_MALFORMED',
+      description: capacity
+        ? 'Authentication is temporarily at capacity.'
+        : 'The authentication request is malformed.'
+    })
   }
 
   /**
@@ -245,8 +473,11 @@ export class ExpressTransport implements Transport {
    * ### Returns:
    * @returns {Promise<void>} A promise that resolves once the message has been sent successfully.
    */
-  async send (message: AuthMessage): Promise<void> {
-    this.log('debug', 'Attempting to send AuthMessage', { message })
+  async send(message: AuthMessage): Promise<void> {
+    this.log('debug', 'Attempting to send AuthMessage', {
+      messageType: message.messageType,
+      payloadLength: message.payload?.length ?? 0
+    })
     if (message.messageType === 'general') {
       await this.sendGeneralMessage(message)
     } else {
@@ -257,17 +488,17 @@ export class ExpressTransport implements Transport {
   /**
    * Handles a general (authenticated application) AuthMessage response.
    */
-  private async sendGeneralMessage (message: AuthMessage): Promise<void> {
+  private async sendGeneralMessage(message: AuthMessage): Promise<void> {
     const reader = new Utils.Reader(message.payload)
     const requestId = Utils.toBase64(reader.read(32))
 
     const handle = this.openGeneralHandles.get(requestId)
     if (handle === undefined) {
-      this.log('warn', 'No response handle for this requestId', { requestId })
+      this.log('warn', 'No response handle for this requestId')
       throw new Error('No response handle for this requestId!')
     }
     let { res, next } = handle
-    this.openGeneralHandles.delete(requestId)
+    this.clearOpenGeneralHandle(requestId)
 
     const statusCode = reader.readVarIntNum()
     ;(res as any).__status(statusCode)
@@ -281,7 +512,9 @@ export class ExpressTransport implements Transport {
     responseHeaders['x-bsv-auth-request-id'] = requestId
 
     if (message.requestedCertificates) {
-      responseHeaders['x-bsv-auth-requested-certificates'] = JSON.stringify(message.requestedCertificates)
+      responseHeaders['x-bsv-auth-requested-certificates'] = JSON.stringify(
+        message.requestedCertificates
+      )
     }
 
     for (const [k, v] of Object.entries(responseHeaders)) {
@@ -297,9 +530,8 @@ export class ExpressTransport implements Transport {
     res = this.resetRes(res, next)
     this.log('info', 'Sending general AuthMessage response', {
       status: statusCode,
-      responseHeaders,
-      responseBodyLength: responseBody ? responseBody.length : 0,
-      requestId
+      responseHeaderCount: Object.keys(responseHeaders).length,
+      responseBodyLength: responseBody ? responseBody.length : 0
     })
     if (responseBody) {
       res.send(Buffer.from(new Uint8Array(responseBody)))
@@ -311,7 +543,7 @@ export class ExpressTransport implements Transport {
   /**
    * Reads response headers from a binary reader.
    */
-  private readResponseHeaders (reader: Utils.Reader): Record<string, string> {
+  private readResponseHeaders(reader: Utils.Reader): Record<string, string> {
     const responseHeaders: Record<string, string> = {}
     const nHeaders = reader.readVarIntNum()
     for (let i = 0; i < nHeaders; i++) {
@@ -329,15 +561,19 @@ export class ExpressTransport implements Transport {
   /**
    * Handles a non-general (handshake) AuthMessage response.
    */
-  private async sendNonGeneralMessage (message: AuthMessage): Promise<void> {
+  private async sendNonGeneralMessage(message: AuthMessage): Promise<void> {
     const handles = this.openNonGeneralHandles.get(message.yourNonce!)
     if (!Array.isArray(handles) || handles.length === 0) {
-      this.log('warn', 'No open handles to peer for nonce', { yourNonce: message.yourNonce })
+      this.log('warn', 'No open handles to peer for nonce')
       throw new Error('No open handles to this peer!')
     }
 
     // Since this is an initial response, we can assume there's only one handle per identity
-    const { res, next } = handles[0]
+    const handle = handles[0]
+    if (handle === undefined) {
+      throw new Error('No open handles to this peer!')
+    }
+    const { res, next } = handle
     const responseHeaders: Record<string, string> = {
       'x-bsv-auth-version': message.version,
       'x-bsv-auth-message-type': message.messageType,
@@ -348,7 +584,9 @@ export class ExpressTransport implements Transport {
     }
 
     if (typeof message.requestedCertificates === 'object') {
-      responseHeaders['x-bsv-auth-requested-certificates'] = JSON.stringify(message.requestedCertificates)
+      responseHeaders['x-bsv-auth-requested-certificates'] = JSON.stringify(
+        message.requestedCertificates
+      )
     }
     if ((res as any).__set !== undefined) {
       this.resetRes(res, next)
@@ -359,21 +597,18 @@ export class ExpressTransport implements Transport {
 
     this.log('info', 'Sending non-general AuthMessage response', {
       status: 200,
-      responseHeaders,
-      messagePayload: message
+      responseHeaderCount: Object.keys(responseHeaders).length,
+      messageType: message.messageType
     })
     res.send(message)
-    handles.shift()
-    if (handles.length === 0) {
-      this.openNonGeneralHandles.delete(message.yourNonce!)
-    }
+    this.removeNonGeneralHandle(message.yourNonce!, handle)
   }
 
   /**
    * Stores the callback bound by a Peer
    * @param callback
    */
-  async onData (callback: (message: AuthMessage) => Promise<void>): Promise<void> {
+  async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
     this.log('debug', 'onData callback set')
     this.messageCallback = callback
   }
@@ -400,7 +635,7 @@ export class ExpressTransport implements Transport {
    * @param {NextFunction} next - The Express `next` middleware function.
    * @param {Function} [onCertificatesReceived] - Optional callback invoked when certificates are received.
    */
-  public async handleIncomingRequest (
+  public async handleIncomingRequest(
     req: AuthRequest,
     res: Response,
     next: NextFunction,
@@ -410,13 +645,12 @@ export class ExpressTransport implements Transport {
       req: AuthRequest,
       res: Response,
       next: NextFunction
-    ) => void
+    ) => void | Promise<void>
   ): Promise<void> {
     this.log('debug', 'Handling incoming request', {
-      path: req.path,
-      headers: req.headers,
+      pathLength: req.path.length,
       method: req.method,
-      body: req.body
+      hasAuthRequestId: typeof req.headers['x-bsv-auth-request-id'] === 'string'
     })
     try {
       if (!this.peer) {
@@ -429,21 +663,25 @@ export class ExpressTransport implements Transport {
       // the signed general-message path or the explicit unauthenticated policy.
       if (req.path === WELL_KNOWN_AUTH_PATH) {
         await this.handleWellKnownAuth(req, res, next, onCertificatesReceived)
-      } else if (req.headers['x-bsv-auth-request-id']) {
+      } else if (req.headers['x-bsv-auth-request-id'] !== undefined) {
         this.handleGeneralMessage(req, res, next)
       } else {
         this.handleUnauthenticated(req, res, next)
       }
     } catch (error) {
-      this.log('error', 'Caught error in handleIncomingRequest', { error })
-      next(error)
+      this.log('error', 'Caught error in handleIncomingRequest', safeErrorDetails(error))
+      if (error instanceof AuthProtocolError) {
+        this.respondWithProtocolError(res, error)
+      } else {
+        next(error)
+      }
     }
   }
 
   /**
    * Handles a request to /.well-known/auth (non-general / handshake messages).
    */
-  private async handleWellKnownAuth (
+  private async handleWellKnownAuth(
     req: AuthRequest,
     res: Response,
     next: NextFunction,
@@ -453,35 +691,40 @@ export class ExpressTransport implements Transport {
       req: AuthRequest,
       res: Response,
       next: NextFunction
-    ) => void
+    ) => void | Promise<void>
   ): Promise<void> {
-    const message = req.body as AuthMessage
-    this.log('debug', 'Received non-general message at /.well-known/auth', { message })
-
-    let requestId = req.headers['x-bsv-auth-request-id'] as string
-    if (!requestId) {
-      requestId = message.initialNonce!
+    const { message, requestId } = validateHandshakeMessage(req)
+    // A later handshake phase can legitimately reuse the initial request ID
+    // while its certificate listener is still active. Only a simultaneously
+    // open HTTP response handle represents a duplicate request.
+    if (this.openNonGeneralHandles.has(requestId)) {
+      throw new AuthProtocolError('Duplicate authentication request identifier.')
     }
+    this.log('debug', 'Received non-general message at /.well-known/auth', {
+      messageType: message.messageType
+    })
+    this.addNonGeneralHandle(requestId, res, next)
 
-    const handles = this.openNonGeneralHandles.get(requestId)
-    if (handles !== undefined) {
-      handles.push({ res, next })
-    } else {
-      this.openNonGeneralHandles.set(requestId, [{ res, next }])
-    }
-
-    if (!await this.peer!.sessionManager.hasSession(message.identityKey)) {
-      this.registerCertificateListener(req, res, next, requestId, message, onCertificatesReceived)
+    try {
+      if (!(await this.peer!.sessionManager.hasSession(message.identityKey))) {
+        this.registerCertificateListener(req, res, next, requestId, message, onCertificatesReceived)
+      }
+    } catch (error) {
+      this.removeNonGeneralHandle(requestId)
+      this.clearActiveCertificateRequest(requestId)
+      throw error
     }
 
     if (this.messageCallback) {
       this.log('debug', 'Invoking stored messageCallback for non-general message')
-      this.messageCallback(message).catch((err) => {
-        this.log('error', 'Error in messageCallback', { error: err.message, err })
+      this.messageCallback(message).catch(err => {
+        this.log('error', 'Error in messageCallback', safeErrorDetails(err))
+        this.removeNonGeneralHandle(requestId)
+        this.clearActiveCertificateRequest(requestId)
         return res.status(500).json({
           status: 'error',
           code: 'ERR_INTERNAL_SERVER_ERROR',
-          description: err.message || 'An unknown error occurred.'
+          description: 'Authentication processing failed.'
         })
       })
     }
@@ -490,7 +733,7 @@ export class ExpressTransport implements Transport {
   /**
    * Registers a certificate-received listener for a non-general message.
    */
-  private registerCertificateListener (
+  private registerCertificateListener(
     req: AuthRequest,
     res: Response,
     next: NextFunction,
@@ -502,39 +745,52 @@ export class ExpressTransport implements Transport {
       req: AuthRequest,
       res: Response,
       next: NextFunction
-    ) => void
+    ) => void | Promise<void>
   ): void {
-    const listenerId = this.peer!.listenForCertificatesReceived(
+    let listenerId = -1
+    listenerId = this.peer!.listenForCertificatesReceived(
       (senderPublicKey: string, certs: VerifiableCertificate[]) => {
-        try {
-          this.log('debug', 'Certificates received event triggered', {
-            senderPublicKey,
-            certCount: certs?.length,
-            requestId
-          })
-          if (senderPublicKey === req.body.identityKey) {
-            this.handleCertificatesForPeer(senderPublicKey, certs, req, res, next, message, onCertificatesReceived)
-          }
-        } catch (error) {
-          this.log('error', 'Error in certificate listener callback', { error })
-        } finally {
-          const handles = this.openNonGeneralHandles.get(requestId)
-          if (handles && handles.length > 0) {
-            handles.shift()
-            if (handles.length === 0) {
-              this.openNonGeneralHandles.delete(requestId)
+        if (senderPublicKey !== message.identityKey) return
+        this.clearActiveCertificateRequest(requestId)
+        this.log('debug', 'Certificates received event triggered', {
+          certCount: certs?.length
+        })
+        void this.handleCertificatesForPeer(
+          senderPublicKey,
+          certs,
+          req,
+          res,
+          next,
+          message,
+          onCertificatesReceived
+        )
+          .catch(error => {
+            this.log('error', 'Error in certificate listener callback', safeErrorDetails(error))
+            if (!res.headersSent) {
+              res.status(500).json({
+                status: 'error',
+                code: 'ERR_CERTIFICATE_HANDLER',
+                description: 'Certificate processing failed.'
+              })
             }
-          }
-          this.peer?.stopListeningForCertificatesReceived(listenerId)
-        }
-      })
-    this.log('debug', 'listenForCertificatesReceived registered', { listenerId, requestId })
+          })
+          .finally(() => {
+            this.removeNonGeneralHandle(requestId)
+          })
+      }
+    )
+    const timeout = setTimeout(() => {
+      this.clearActiveCertificateRequest(requestId)
+    }, this.limits.requestTimeoutMs)
+    timeout.unref?.()
+    this.activeCertificateRequests.set(requestId, { listenerId, timeout })
+    this.log('debug', 'listenForCertificatesReceived registered', { listenerId })
   }
 
   /**
    * Processes certificates received from a peer during the handshake.
    */
-  private handleCertificatesForPeer (
+  private async handleCertificatesForPeer(
     senderPublicKey: string,
     certs: VerifiableCertificate[],
     req: AuthRequest,
@@ -547,22 +803,39 @@ export class ExpressTransport implements Transport {
       req: AuthRequest,
       res: Response,
       next: NextFunction
-    ) => void
-  ): void {
+    ) => void | Promise<void>
+  ): Promise<void> {
     if (!Array.isArray(certs) || certs.length === 0) {
-      this.log('warn', 'No certificates provided by peer', { senderPublicKey })
-      const handles = this.openNonGeneralHandles.get(
-        req.headers['x-bsv-auth-request-id'] as string ?? message.initialNonce!
-      )
-      if (handles && handles.length > 0) {
-        handles[0].res.status(400).json({ status: 'No certificates provided' })
+      this.log('warn', 'No certificates provided by peer')
+      const headerRequestId = req.headers['x-bsv-auth-request-id']
+      const requestId = typeof headerRequestId === 'string' ? headerRequestId : message.initialNonce
+      const handle =
+        typeof requestId === 'string' ? this.openNonGeneralHandles.get(requestId)?.[0] : undefined
+      if (handle !== undefined) {
+        handle.res.status(400).json({
+          status: 'error',
+          code: 'ERR_CERTIFICATES_REQUIRED',
+          description: 'No certificates were provided.'
+        })
       }
       return
     }
 
-    this.log('info', 'Certificates successfully received from peer', { senderPublicKey, certs })
+    this.log('info', 'Certificates successfully received from peer', { certCount: certs.length })
+    let continued = false
+    const continueOnce = ((argument?: unknown) => {
+      if (continued) return
+      continued = true
+      if (argument === 'route' || argument === 'router') {
+        next(argument)
+      } else if (argument !== undefined) {
+        next(argument)
+      } else {
+        next()
+      }
+    }) as NextFunction
     if (typeof onCertificatesReceived === 'function') {
-      onCertificatesReceived(senderPublicKey, certs, req, res, next)
+      await onCertificatesReceived(senderPublicKey, certs, req, res, continueOnce)
     }
 
     const identityKey = message.identityKey
@@ -574,7 +847,7 @@ export class ExpressTransport implements Transport {
         clearTimeout(timeoutHandle)
         this.openNextHandlerTimeouts.delete(identityKey)
       }
-      nextFn()
+      if (!continued) nextFn()
       this.openNextHandlers.delete(identityKey)
     }
   }
@@ -582,42 +855,61 @@ export class ExpressTransport implements Transport {
   /**
    * Handles an authenticated general message (has x-bsv-auth-request-id header).
    */
-  private handleGeneralMessage (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): void {
+  private handleGeneralMessage(req: AuthRequest, res: Response, next: NextFunction): void {
+    const expectedRequestId = validateGeneralAuthRequest(req)
+    this.assertPendingCapacity()
+    if (this.activeGeneralRequests.has(expectedRequestId)) {
+      throw new AuthProtocolError('Duplicate authentication request identifier.')
+    }
     const message = buildAuthMessageFromRequest(req, this.logger, this.logLevel)
-    this.log('debug', 'Received general message with x-bsv-auth-request-id', { message })
+    this.log('debug', 'Received general message with x-bsv-auth-request-id')
 
-    // Setup general message listener
-    const listenerId = this.peer!.listenForGeneralMessages((senderPublicKey: string, payload: number[]) => {
-      try {
-        if (senderPublicKey !== req.headers['x-bsv-auth-identity-key']) return
-        const requestId = Utils.toBase64(new Utils.Reader(payload).read(32))
-        if (requestId === req.headers['x-bsv-auth-request-id']) {
-          this.peer?.stopListeningForGeneralMessages(listenerId)
-          this.setupAuthenticatedResponse(req, res, next, senderPublicKey, requestId)
+    const listenerId = this.peer!.listenForGeneralMessages(
+      (senderPublicKey: string, payload: number[]) => {
+        try {
+          if (senderPublicKey !== message.identityKey) return
+          const requestId = Utils.toBase64(new Utils.Reader(payload).read(32))
+          if (requestId === expectedRequestId) {
+            this.clearActiveGeneralRequest(expectedRequestId)
+            this.setupAuthenticatedResponse(req, res, next, senderPublicKey, requestId)
+          }
+        } catch (error) {
+          this.clearActiveGeneralRequest(expectedRequestId)
+          this.log('error', 'Error in listenForGeneralMessages callback', safeErrorDetails(error))
+          next(error)
         }
-      } catch (error) {
-        this.log('error', 'Error in listenForGeneralMessages callback', { error })
-        next(error)
       }
-    })
+    )
+    const timeout = setTimeout(() => {
+      this.clearActiveGeneralRequest(expectedRequestId)
+      if (!res.headersSent) {
+        res.status(408).json({
+          status: 'error',
+          code: 'ERR_AUTH_TIMEOUT',
+          description: 'Authentication verification timed out.'
+        })
+      }
+    }, this.limits.requestTimeoutMs)
+    timeout.unref?.()
+    this.activeGeneralRequests.set(expectedRequestId, { listenerId, timeout })
 
     this.log('debug', 'listenForGeneralMessages registered', { listenerId })
 
     if (this.messageCallback) {
       this.log('debug', 'Invoking stored messageCallback for general message')
-      this.messageCallback(message).catch((err) => {
+      this.messageCallback(message).catch(err => {
+        this.clearActiveGeneralRequest(expectedRequestId)
         const msg = err instanceof Error ? err.message : String(err)
         const isAuthError = /nonce|signature|session|auth version/i.test(msg)
-        this.log('error', 'Error in messageCallback (general message)', { error: msg, isAuthError })
+        this.log('error', 'Error in messageCallback (general message)', {
+          ...safeErrorDetails(err),
+          isAuthError
+        })
         const statusCode = isAuthError ? 401 : 500
         const code = isAuthError ? 'ERR_AUTH_FAILED' : 'ERR_INTERNAL_SERVER_ERROR'
         const description = isAuthError
-          ? (msg || 'Authentication failed.')
-          : (msg || 'An unexpected error occurred.')
+          ? 'Authentication failed.'
+          : 'Authentication processing failed.'
         return res.status(statusCode).json({ status: 'error', code, description })
       })
     }
@@ -626,17 +918,17 @@ export class ExpressTransport implements Transport {
   /**
    * Sets up the intercepted response for an authenticated general message.
    */
-  private setupAuthenticatedResponse (
+  private setupAuthenticatedResponse(
     req: AuthRequest,
     res: Response,
     next: NextFunction,
     senderPublicKey: string,
     requestId: string
   ): void {
-    this.log('debug', 'General message from the correct identity key', { requestId, senderPublicKey })
+    this.log('debug', 'General message from the correct identity key')
     req.auth = { identityKey: senderPublicKey }
 
-    const wrapper = new ResponseWriterWrapper(res)
+    const wrapper = new ResponseWriterWrapper()
     let responseSent = false
 
     const buildAndSendResponse = async (): Promise<void> => {
@@ -648,42 +940,56 @@ export class ExpressTransport implements Transport {
           wrapper.getStatusCode(),
           wrapper.getHeaders(),
           wrapper.getBody(),
-          req,
           this.logger,
           this.logLevel
         )
         this.openGeneralHandles.set(requestId, { res, next })
+        const responseTimeout = setTimeout(() => {
+          this.clearOpenGeneralHandle(requestId)
+          this.log('warn', 'Authenticated response signing timed out')
+        }, this.limits.requestTimeoutMs)
+        responseTimeout.unref?.()
+        this.openGeneralHandleTimeouts.set(requestId, responseTimeout)
         this.log('debug', 'Sending general message response', {
-          requestId,
           responseStatus: wrapper.getStatusCode(),
-          responseHeaders: wrapper.getHeaders(),
+          responseHeaderCount: Object.keys(wrapper.getHeaders()).length,
           responseBodyLength: wrapper.getBody().length
         })
-        await this.peer?.toPeer(responsePayload, req.headers['x-bsv-auth-identity-key'] as string)
+        if (this.peer === undefined) throw new Error('Authentication peer is unavailable.')
+        await this.peer.toPeer(responsePayload, senderPublicKey)
       } catch (err) {
-        this.openGeneralHandles.delete(requestId)
-        this.log('error', 'Failed to build and send authenticated response', { error: err })
+        this.clearOpenGeneralHandle(requestId)
+        this.log('error', 'Failed to build and send authenticated response', safeErrorDetails(err))
         try {
           const restored = this.resetRes(res, next)
           restored.status(500).json({
             status: 'error',
             code: 'ERR_RESPONSE_SIGNING_FAILED',
-            description: err instanceof Error ? err.message : 'Failed to sign response'
+            description: 'Failed to sign the authenticated response.'
           })
-        } catch (_responseAlreadySent) {
-          // Response may already be partially sent — nothing to do
+        } catch (responseError) {
+          this.log(
+            'error',
+            'Unable to report response-signing failure',
+            safeErrorDetails(responseError)
+          )
         }
       }
     }
 
     this.hijackResponse(res, next, wrapper, buildAndSendResponse)
-    void this.scheduleNextOrCertificateWait(next, senderPublicKey, wrapper, buildAndSendResponse).catch(next)
+    void this.scheduleNextOrCertificateWait(
+      next,
+      senderPublicKey,
+      wrapper,
+      buildAndSendResponse
+    ).catch(next)
   }
 
   /**
    * Overrides the response methods to intercept and buffer the response for signing.
    */
-  private hijackResponse (
+  private hijackResponse(
     res: Response,
     next: NextFunction,
     wrapper: ResponseWriterWrapper,
@@ -692,7 +998,7 @@ export class ExpressTransport implements Transport {
     // Override methods to capture response data
     this.checkRes(res, 'needs to be clear', next)
     ;(res as any).__status = res.status
-    res.status = (n) => {
+    res.status = n => {
       wrapper.status(n)
       return res
     }
@@ -737,7 +1043,7 @@ export class ExpressTransport implements Transport {
     ;(res as any).sendFile = (path: string, options?: any, callback?: Function) => {
       fs.readFile(path, (err, data) => {
         if (err) {
-          this.log('error', 'Error reading file in sendFile', { error: err.message })
+          this.log('error', 'Error reading file in sendFile', { errorName: err.name })
           if (callback) return callback(err)
           wrapper.status(500)
           buildAndSendResponse()
@@ -755,7 +1061,7 @@ export class ExpressTransport implements Transport {
   /**
    * Either calls next() immediately or stores it pending certificate arrival.
    */
-  private async scheduleNextOrCertificateWait (
+  private async scheduleNextOrCertificateWait(
     next: NextFunction,
     senderPublicKey: string,
     wrapper: ResponseWriterWrapper,
@@ -764,19 +1070,19 @@ export class ExpressTransport implements Transport {
     const hasSession = await (this.peer?.sessionManager.hasSession(senderPublicKey) ?? false)
     const needsCertificates = this.peer?.certificatesToRequest?.certifiers?.length
     this.log('debug', 'Checking if we need to wait for certificates', {
-      senderPublicKey,
       hasSession,
-      needsCertificates,
-      openNextHandlersKeys: Array.from(this.openNextHandlers.keys())
+      needsCertificates
     })
 
     if (!needsCertificates || hasSession) {
-      this.log('debug', 'Calling next() immediately - no certificate wait needed', { senderPublicKey, hasSession })
+      this.log('debug', 'Calling next() immediately - no certificate wait needed', {
+        hasSession
+      })
       next()
       return
     }
 
-    this.log('debug', 'Storing next handler to wait for certificates', { senderPublicKey })
+    this.log('debug', 'Storing next handler to wait for certificates')
     const existingTimeout = this.openNextHandlerTimeouts.get(senderPublicKey)
     if (existingTimeout != null) {
       clearTimeout(existingTimeout)
@@ -784,10 +1090,9 @@ export class ExpressTransport implements Transport {
     }
     this.openNextHandlers.set(senderPublicKey, next)
 
-    const CERTIFICATE_TIMEOUT_MS = 30000
     const timeoutHandle = setTimeout(() => {
       if (this.openNextHandlers.has(senderPublicKey)) {
-        this.log('warn', 'Certificate request timed out', { senderPublicKey })
+        this.log('warn', 'Certificate request timed out')
         this.openNextHandlers.delete(senderPublicKey)
         this.openNextHandlerTimeouts.delete(senderPublicKey)
         wrapper.status(408).json({
@@ -797,19 +1102,18 @@ export class ExpressTransport implements Transport {
         })
         buildAndSendResponse()
       }
-    }, CERTIFICATE_TIMEOUT_MS)
+    }, this.limits.requestTimeoutMs)
+    timeoutHandle.unref?.()
     this.openNextHandlerTimeouts.set(senderPublicKey, timeoutHandle)
   }
 
   /**
    * Handles a request with no auth headers.
    */
-  private handleUnauthenticated (req: AuthRequest, res: Response, next: NextFunction): void {
-    this.log(
-      'warn',
-      'No Auth headers found on request. Checking allowUnauthenticated setting.',
-      { allowUnauthenticated: this.allowUnauthenticated }
-    )
+  private handleUnauthenticated(req: AuthRequest, res: Response, next: NextFunction): void {
+    this.log('warn', 'No Auth headers found on request. Checking allowUnauthenticated setting.', {
+      allowUnauthenticated: this.allowUnauthenticated
+    })
     if (this.allowUnauthenticated) {
       req.auth = { identityKey: 'unknown' }
       next()
@@ -823,7 +1127,11 @@ export class ExpressTransport implements Transport {
     }
   }
 
-  private checkRes (res: any, test?: 'needs to be clear' | 'needs to be hijacked', next?: Function): void {
+  private checkRes(
+    res: any,
+    test?: 'needs to be clear' | 'needs to be hijacked',
+    next?: Function
+  ): void {
     if (test === 'needs to be clear') {
       if (
         typeof res.__status === 'function' ||
@@ -834,7 +1142,9 @@ export class ExpressTransport implements Transport {
         typeof res.__end === 'function' ||
         typeof res.__sendFile === 'function'
       ) {
-        const e = new Error('Unable to install Auth midddleware on the response object as it is not clear. Are two middleware instances installed?')
+        const e = new Error(
+          'Unable to install Auth midddleware on the response object as it is not clear. Are two middleware instances installed?'
+        )
         if (typeof next === 'function') {
           next(e)
         }
@@ -848,7 +1158,9 @@ export class ExpressTransport implements Transport {
       typeof res.__end !== 'function' ||
       typeof res.__sendFile !== 'function'
     ) {
-      const e = new Error('Unable to restore response object. Did you tamper with hijacked properties (res.__status, __set, __json, __text, __send, __end, __sendFile) ?')
+      const e = new Error(
+        'Unable to restore response object. Did you tamper with hijacked properties (res.__status, __set, __json, __text, __send, __end, __sendFile) ?'
+      )
       if (typeof next === 'function') {
         next(e)
       }
@@ -856,7 +1168,7 @@ export class ExpressTransport implements Transport {
     }
   }
 
-  private resetRes (res: Response, next?: Function): Response {
+  private resetRes(res: Response, next?: Function): Response {
     this.checkRes(res, 'needs to be hijacked', next)
     res.status = (res as any).__status
     res.set = (res as any).__set
@@ -872,28 +1184,38 @@ export class ExpressTransport implements Transport {
 /**
  * Helper: Build AuthMessage from Request
  */
-function buildAuthMessageFromRequest (
+function buildAuthMessageFromRequest(
   req: Request,
   logger?: typeof console,
   logLevel?: LogLevel
 ): AuthMessage {
   const debugLog = makeDebugLogger(logger, logLevel)
   debugLog('[buildAuthMessageFromRequest] Building message from request...', {
-    path: req.path,
-    headers: req.headers,
-    method: req.method,
-    body: req.body
+    pathLength: req.path.length,
+    method: req.method
   })
 
   const writer = new Utils.Writer()
-  const requestNonce = req.headers['x-bsv-auth-request-id']
-  const requestNonceBytes = requestNonce ? Utils.toArray(requestNonce, 'base64') : []
+  const requestNonce = singleHeader(req, 'x-bsv-auth-request-id')!
+  const requestNonceBytes = Utils.toArray(requestNonce, 'base64')
   writer.write(requestNonceBytes)
   writer.writeVarIntNum(req.method.length)
   writer.write(Utils.toArray(req.method))
 
   const protocol = req.protocol
   const host = req.get('host')
+  if (
+    (protocol !== 'http' && protocol !== 'https') ||
+    typeof host !== 'string' ||
+    host.length === 0 ||
+    host.length > 512 ||
+    containsUnsafeHeaderCharacter(host) ||
+    typeof req.originalUrl !== 'string' ||
+    !req.originalUrl.startsWith('/') ||
+    req.originalUrl.length > 8_192
+  ) {
+    throw new AuthProtocolError('The authenticated request URL is invalid.')
+  }
   const parsedUrl = new URL(`${protocol}://${host}${req.originalUrl}`)
 
   writeUrlToWriter(parsedUrl, writer)
@@ -902,17 +1224,17 @@ function buildAuthMessageFromRequest (
 
   const authMessage = {
     messageType: 'general' as const,
-    version: req.headers['x-bsv-auth-version'] as string,
-    identityKey: req.headers['x-bsv-auth-identity-key'] as string,
-    nonce: req.headers['x-bsv-auth-nonce'] as string,
-    yourNonce: req.headers['x-bsv-auth-your-nonce'] as string,
+    version: singleHeader(req, 'x-bsv-auth-version')!,
+    identityKey: singleHeader(req, 'x-bsv-auth-identity-key')!,
+    nonce: singleHeader(req, 'x-bsv-auth-nonce')!,
+    yourNonce: singleHeader(req, 'x-bsv-auth-your-nonce')!,
     payload: writer.toArray(),
-    signature: req.headers['x-bsv-auth-signature']
-      ? Utils.toArray(req.headers['x-bsv-auth-signature'], 'hex')
-      : []
+    signature: Utils.toArray(singleHeader(req, 'x-bsv-auth-signature')!, 'hex')
   }
 
-  debugLog('[buildAuthMessageFromRequest] AuthMessage built', { authMessage })
+  debugLog('[buildAuthMessageFromRequest] AuthMessage built', {
+    payloadLength: authMessage.payload.length
+  })
 
   return authMessage
 }
@@ -920,20 +1242,18 @@ function buildAuthMessageFromRequest (
 /**
  * Helper: Build response payload for sending back to peer
  */
-function buildResponsePayload (
+function buildResponsePayload(
   requestId: string,
   responseStatus: number,
   responseHeaders: Record<string, any>,
   responseBody: number[],
-  req: Request,
   logger?: typeof console,
   logLevel?: LogLevel
 ): number[] {
   const debugLog = makeDebugLogger(logger, logLevel)
   debugLog('[buildResponsePayload] Building response payload', {
-    requestId,
     responseStatus,
-    responseHeaders,
+    responseHeaderCount: Object.keys(responseHeaders).length,
     responseBodyLength: responseBody.length
   })
 
@@ -947,8 +1267,11 @@ function buildResponsePayload (
   const includedHeaders: Array<[string, string]> = []
   Object.entries(responseHeaders).forEach(([key, value]) => {
     const lowerKey = key.toLowerCase()
-    if ((lowerKey.startsWith('x-bsv-') || lowerKey === 'authorization') && !lowerKey.startsWith('x-bsv-auth')) {
-      includedHeaders.push([lowerKey, value])
+    if (
+      (lowerKey.startsWith('x-bsv-') || lowerKey === 'authorization') &&
+      !lowerKey.startsWith('x-bsv-auth')
+    ) {
+      includedHeaders.push([lowerKey, String(value)])
     }
   })
 
@@ -976,7 +1299,12 @@ function buildResponsePayload (
  * @param {AuthMiddlewareOptions} options
  * @returns {(req: Request, res: Response, next: NextFunction) => void} Express middleware
  */
-export function createAuthMiddleware (options: AuthMiddlewareOptions): (req: AuthRequest, res: Response, next: NextFunction) => void {
+export function createAuthMiddleware(
+  options: AuthMiddlewareOptions
+): (req: AuthRequest, res: Response, next: NextFunction) => void {
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError('Auth middleware options are required.')
+  }
   const {
     wallet,
     sessionManager,
@@ -984,25 +1312,45 @@ export function createAuthMiddleware (options: AuthMiddlewareOptions): (req: Aut
     certificatesToRequest,
     onCertificatesReceived,
     logger,
-    logLevel
+    logLevel,
+    transportLimits
   } = options
 
-  if (!wallet) {
+  if (wallet === null || typeof wallet !== 'object') {
     if (logger && logLevel && isLogLevelEnabled(logLevel, 'error')) {
-      getLogMethod(logger, 'error')(
-        '[createAuthMiddleware] No wallet provided in AuthMiddlewareOptions.'
-      )
+      getLogMethod(
+        logger,
+        'error'
+      )('[createAuthMiddleware] No wallet provided in AuthMiddlewareOptions.')
     }
-    throw new Error('You must configure the auth middleware with a wallet.')
+    throw new TypeError('You must configure the auth middleware with a wallet.')
+  }
+  if (allowUnauthenticated !== undefined && typeof allowUnauthenticated !== 'boolean') {
+    throw new TypeError('allowUnauthenticated must be a boolean.')
+  }
+  if (logLevel !== undefined && !(['debug', 'info', 'warn', 'error'] as const).includes(logLevel)) {
+    throw new TypeError('logLevel must be debug, info, warn, or error.')
+  }
+  if (onCertificatesReceived !== undefined && typeof onCertificatesReceived !== 'function') {
+    throw new TypeError('onCertificatesReceived must be a function.')
   }
 
-  const transport = new ExpressTransport(allowUnauthenticated ?? false, logger, logLevel)
+  const transport = new ExpressTransport(
+    allowUnauthenticated ?? false,
+    logger,
+    logLevel,
+    transportLimits
+  )
 
   const sessionMgr = sessionManager || new SessionManager()
 
   if (logger && logLevel && isLogLevelEnabled(logLevel, 'info')) {
-    getLogMethod(logger, 'info')(
-      `[createAuthMiddleware] Creating Peer with provided wallet & transport. Session Manager: ${sessionManager ? 'Custom' : 'Default'
+    getLogMethod(
+      logger,
+      'info'
+    )(
+      `[createAuthMiddleware] Creating Peer with provided wallet & transport. Session Manager: ${
+        sessionManager ? 'Custom' : 'Default'
       }`
     )
   }
@@ -1013,9 +1361,9 @@ export function createAuthMiddleware (options: AuthMiddlewareOptions): (req: Aut
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
       getLogMethod(logger, 'debug')('[createAuthMiddleware] Incoming request to auth middleware', {
-        path: req.path,
-        headers: req.headers,
-        method: req.method
+        pathLength: req.path.length,
+        method: req.method,
+        hasAuthRequestId: typeof req.headers['x-bsv-auth-request-id'] === 'string'
       })
     }
     void transport.handleIncomingRequest(req, res, next, onCertificatesReceived).catch(next)

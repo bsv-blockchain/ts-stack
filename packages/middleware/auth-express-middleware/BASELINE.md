@@ -1,73 +1,47 @@
 # BASELINE — @bsv/auth-express-middleware
 
-> Captured: 2026-04-24. Reflects state at time of ts-stack migration.
+> Verified: 2026-07-26. This is the source baseline; npm remains at the version
+> shown until an explicit release is approved.
 
 ## Identity
 
-| Field | Value |
-|-------|-------|
-| Package | `@bsv/auth-express-middleware` |
-| Path | `packages/middleware/auth-express-middleware` |
-| npm | [@bsv/auth-express-middleware](https://www.npmjs.com/package/@bsv/auth-express-middleware) |
-| Version | 2.0.5 |
-| Criticality | **Tier 1** — critical service, used by message-box-server, wallet-toolbox, wab |
-| Reliability Level | **RL1** — builds, 2 test files (low coverage), no contracts |
-| Owner | @sirdeggen |
-| Backup owner | — |
+| Field          | Value                                         |
+| -------------- | --------------------------------------------- |
+| Package        | `@bsv/auth-express-middleware`                |
+| Path           | `packages/middleware/auth-express-middleware` |
+| Source version | `2.1.2`                                       |
+| Criticality    | Tier 1 — service authentication boundary      |
+| Runtime        | Node.js 22+                                   |
+| Formats        | Native ESM + CommonJS + declarations          |
 
-## Build
+## Verified gates
 
-| Field | Value |
-|-------|-------|
-| Build command | `tsc -b && tsconfig-to-dual-package tsconfig.cjs.json` |
-| Build status | ✅ Passing |
-| Outputs | ESM + CJS dual package |
+| Gate                | Result                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| Strict typecheck    | Passing                                                                              |
+| Oxlint              | Passing with zero warnings                                                           |
+| Prettier check      | Passing                                                                              |
+| Deterministic tests | 97 passing across 5 suites                                                           |
+| Production coverage | 93.39% lines, 89.31% branches, 88.88% functions, 92.60% statements                   |
+| Coverage floor      | 85% lines/statements/functions; 80% branches                                         |
+| Build               | `tsdown` passing                                                                     |
+| Artifact            | Exact tarball validated for ESM, CommonJS, declarations, exports, and file allowlist |
 
-## Tests
+## Reliability and security controls
 
-| Field | Value |
-|-------|-------|
-| Test command | `npm run build && jest` |
-| Test files | 2 |
-| Coverage command | `npm run test:coverage` |
-| Coverage | **Low** — 2 test files for 4 source files. |
-| Known flaky | None identified |
-| Known skips | None |
+- Strict attacker-controlled handshake/header validation before state allocation
+- Bounded request, certificate, verification, and response-signing state
+- Configurable pending-request capacity and timeout
+- Stable public errors without internal wallet/signing/storage messages
+- Metadata-only optional logging; no raw auth headers, signatures,
+  certificates, bodies, wallet objects, or peer objects
+- Shared `AsyncSessionManager` supported and documented for scaled services
+- Deterministic local AuthFetch and certificate integration coverage
+- Public handshake path exact-matched; no hard-coded CORS/CSP restriction
 
-## Lint
+## Remaining program work
 
-| Field | Value |
-|-------|-------|
-| Linter | Oxlint |
-| Lint command | `oxlint src` |
-| Fix command | `oxlint src` |
-| Status | Not yet verified clean in ts-stack CI |
-
-## Dependencies
-
-| Type | Count | Packages |
-|------|-------|---------|
-| Production | 2 | @bsv/sdk, express |
-| Dev | — | typescript, jest, Oxlint, ts2md, … |
-
-## Known Issues & Incidents
-
-- **Test coverage low** — 2 test files for 4 source files. Auth middleware is security-critical; coverage gap is a risk.
-- Phase 1 priority: expand test coverage and add property/fuzz tests on token parsing paths.
-
-## Security Notes
-
-Auth middleware handles request authentication across multiple services. Per MBGA §7, this is a candidate for threat model review in Phase 2.
-
-## Conformance Vectors
-
-No vectors exist yet. Phase 2 target: BRC-31 (auth) request/response contract vectors.
-
-## Migration Gate Checklist (MBGA §13.3)
-
-- [x] BASELINE.md captured
-- [ ] Conformance runner vectors passing
-- [ ] Contract tests green
-- [ ] Publishing rehearsed (npm dry-run)
-- [ ] Rollback documented
-- [ ] 60-day deprecation notice in source repo (bsv-blockchain/auth-express-middleware)
+- Repository-wide conformance/vector work remains tracked in the main stack
+  health program.
+- Publication, release notes, and rollback evidence are deferred until explicit
+  release approval. No npm publication is part of this baseline.

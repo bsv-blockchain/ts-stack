@@ -1,4 +1,7 @@
-export { createAuthMiddleware } from "./src/index.js"
-export { ExpressTransport } from './src/index.js'
-export type { AuthMiddlewareOptions } from './src/index.js'
-export type { AuthRequest } from './src/index.js'
+export { ExpressTransport, createAuthMiddleware } from './src/index.js'
+export type {
+  AuthMiddlewareOptions,
+  AuthRequest,
+  AuthTransportLimits,
+  LogLevel
+} from './src/index.js'
