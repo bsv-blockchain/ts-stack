@@ -27,7 +27,7 @@
     "docs:preview": "pnpm --filter docs-site preview"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "0.18.5",
+    "@arethetypeswrong/core": "0.18.5",
     "prettier": "3.9.6",
     "publint": "0.3.22",
     "yaml": "^2.9.0"

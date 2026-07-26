@@ -108,7 +108,8 @@ than its source tree. The shared checker:
 2. rejects tests, compiler caches, lockfiles, and uncompiled TypeScript in the
    payload;
 3. runs strict `publint` metadata and entry-point validation;
-4. runs `@arethetypeswrong/cli` across Node and bundler resolution modes; and
+4. runs the `@arethetypeswrong/core` analyzer across every strict Node and
+   bundler resolution mode; and
 5. installs the tarball into a clean temporary consumer and exercises every
    declared runtime module format.
 

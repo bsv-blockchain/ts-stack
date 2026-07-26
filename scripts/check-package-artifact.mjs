@@ -6,11 +6,9 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
 const execFileAsync = promisify(execFile)
-const SCRIPT_PATH = fileURLToPath(import.meta.url)
-const REPOSITORY_ROOT = path.resolve(path.dirname(SCRIPT_PATH), '..')
 const COMMAND_TIMEOUT_MS = 180_000
 const MAX_BUFFER_BYTES = 20 * 1024 * 1024
 
@@ -142,20 +140,26 @@ async function checkPublint(tarballPath) {
 }
 
 async function checkTypes(tarballPath) {
-  await run(
-    'pnpm',
-    [
-      'exec',
-      'attw',
-      tarballPath,
-      '--profile',
-      'strict',
-      '--no-color',
-      '--no-emoji',
-      '--no-summary'
-    ],
-    { cwd: REPOSITORY_ROOT }
-  )
+  const [{ checkPackage, createPackageFromTarballData }, { problemKindInfo }] =
+    await Promise.all([
+      import('@arethetypeswrong/core'),
+      import('@arethetypeswrong/core/problems')
+    ])
+  const tarball = new Uint8Array(await fs.readFile(tarballPath))
+  const result = await checkPackage(createPackageFromTarballData(tarball))
+  if (!result.types) {
+    throw new Error('@arethetypeswrong/core found no package types')
+  }
+  if (result.problems.length > 0) {
+    const problems = result.problems.map(problem => {
+      const title = problemKindInfo[problem.kind]?.title ?? problem.kind
+      return `${title}: ${JSON.stringify(problem)}`
+    })
+    throw new Error(
+      `@arethetypeswrong/core found ${problems.length} strict type problem(s):\n` +
+      problems.join('\n')
+    )
+  }
 }
 
 function exportValidation(expectedExports) {

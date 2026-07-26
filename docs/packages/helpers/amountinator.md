@@ -57,8 +57,8 @@ converter.dispose()
 
 The package root provides matching typed entry points for Node.js ESM and
 CommonJS consumers. The published tarball is checked with `publint`, strict
-`@arethetypeswrong/cli` resolution, and clean installs that import and require
-both public exports. Node.js 22 or newer is supported.
+`@arethetypeswrong/core` resolution, and clean installs that import and
+require both public exports. Node.js 22 or newer is supported.
 
 ## Common patterns
 
