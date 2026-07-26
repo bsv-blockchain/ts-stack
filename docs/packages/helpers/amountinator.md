@@ -4,13 +4,13 @@ title: "@bsv/amountinator"
 kind: package
 domain: helpers
 version: "2.1.1"
-source_repo: "bsv-blockchain/amountinator"
+source_repo: "bsv-blockchain/ts-stack"
 source_commit: "unknown"
 last_updated: "2026-07-24"
 last_verified: "2026-07-24"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/amountinator"
-repo: "https://github.com/bsv-blockchain/amountinator"
+repo: "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator"
 status: stable
 tags: [helpers, amounts, satoshis]
 ---
@@ -52,6 +52,13 @@ converter.dispose()
 - **Settings integration** — Read/write preferred currency to wallet settings
 - **Formatted output** — Display string with symbol, decimals, and hover text
 - **Satoshi rounding** — `convertToSatoshis()` rounds up to ensure sufficient payment
+
+## Runtime and package compatibility
+
+The package root provides matching typed entry points for Node.js ESM and
+CommonJS consumers. The published tarball is checked with `publint`, strict
+`@arethetypeswrong/core` resolution, and clean installs that import and
+require both public exports. Node.js 22 or newer is supported.
 
 ## Common patterns
 
@@ -140,5 +147,5 @@ const amount = await staticConverter.convertAmount('100')
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/amountinator/)
-- [Source on GitHub](https://github.com/bsv-blockchain/amountinator)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator)
 - [npm](https://www.npmjs.com/package/@bsv/amountinator)

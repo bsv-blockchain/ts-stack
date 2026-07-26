@@ -82,6 +82,9 @@ jobs:
       - name: Verify package license payloads
         run: pnpm license:pack-check
 
+      - name: Verify package artifacts and clean consumers
+        run: pnpm -r --if-present --filter '!@bsv/ts-stack' run pack:check
+
       # Resolve release mode + filter. Three shapes:
       #
       #   1. Tag `packages/<path>/v*` → single-package publish, filter=./packages/<path>

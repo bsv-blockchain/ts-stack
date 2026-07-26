@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2019",
-     "jsx": "react-jsx",
+    "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "sourceMap": true,
@@ -21,6 +21,5 @@
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "jest.config.ts"],
-  "references": [
-  ]
+  "references": []
 }
