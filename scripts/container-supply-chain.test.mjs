@@ -200,6 +200,11 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
       `Dependabot does not own deployment images in ${directory}`
     )
   }
+  assert.match(
+    dependabot,
+    /dependency-name: your-registry\/wallet-infra/,
+    'Dependabot must ignore the documentation-only registry placeholder'
+  )
 
   assert.match(scorecard, /ossf\/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc/)
   assert.match(scorecard, /publish_results: true/)
