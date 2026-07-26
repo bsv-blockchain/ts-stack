@@ -10,6 +10,7 @@ import {
 } from '@bsv/overlay'
 import { ChainTracker } from '@bsv/sdk'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
+import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 
 // Mock dependencies
 jest.mock('knex')
@@ -17,6 +18,9 @@ jest.mock('mongodb')
 jest.mock('@bsv/overlay')
 jest.mock('@bsv/sdk')
 jest.mock('@bsv/overlay-discovery-services')
+jest.mock('@bsv/auth-express-middleware', () => ({
+  createAuthMiddleware: jest.fn(() => jest.fn())
+}))
 
 /** Creates a mock MongoDB Db object with a collection stub that supports BanService */
 function createMockDbValue (): Record<string, any> {
@@ -925,6 +929,30 @@ describe('OverlayExpress', () => {
       expect(getSpy).toHaveBeenCalled()
       expect(postSpy).toHaveBeenCalled()
       expect(listenSpy).toHaveBeenCalledWith(3000, expect.any(Function))
+    })
+
+    it('passes a configured async session manager to BSV auth middleware', async () => {
+      const sessionManager = {
+        addSession: jest.fn<any>().mockResolvedValue(undefined),
+        updateSession: jest.fn<any>().mockResolvedValue(undefined),
+        getSession: jest.fn<any>().mockResolvedValue(undefined),
+        removeSession: jest.fn<any>().mockResolvedValue(undefined),
+        hasSession: jest.fn<any>().mockResolvedValue(false)
+      }
+      instance.serverWallet = {} as any
+      instance.configureAuthSessionManager(sessionManager)
+      jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
+        callback()
+        return {} as any
+      })
+
+      await instance.start()
+
+      expect(createAuthMiddleware).toHaveBeenCalledWith(expect.objectContaining({
+        wallet: instance.serverWallet,
+        sessionManager,
+        allowUnauthenticated: true
+      }))
     })
 
     it('does not expose internal engine errors in public responses', async () => {
