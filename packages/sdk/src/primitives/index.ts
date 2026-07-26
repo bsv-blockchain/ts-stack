@@ -1,3 +1,7 @@
+import * as ECDSA from './ECDSA.js'
+import * as Hash from './Hash.js'
+import * as Utils from './utils.js'
+
 export { default as BigNumber } from './BigNumber.js'
 export { default as Curve } from './Curve.js'
 export { default as Point } from './Point.js'
@@ -5,9 +9,7 @@ export { default as PublicKey } from './PublicKey.js'
 export { default as Signature } from './Signature.js'
 export { default as PrivateKey, KeyShares } from './PrivateKey.js'
 export { default as SymmetricKey } from './SymmetricKey.js'
-export * as ECDSA from './ECDSA.js'
-export * as Utils from './utils.js'
-export * as Hash from './Hash.js'
+export { ECDSA, Hash, Utils } // NOSONAR -- direct namespace re-exports fail the Metro consumer gate.
 export { default as Random } from './Random.js'
 export { default as TransactionSignature, type SignatureHashCache } from './TransactionSignature.js'
 export { default as Polynomial, PointInFiniteField } from './Polynomial.js'

@@ -1,4 +1,4 @@
-export { Chain } from '../../../sdk/types'
+export type { Chain } from '../../../sdk/types'
 
 export * from './Api/ChaintracksApi'
 export * from './Api/ChaintracksFsApi'

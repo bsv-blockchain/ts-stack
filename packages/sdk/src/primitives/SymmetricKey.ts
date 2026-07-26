@@ -4,14 +4,13 @@ import Random from './Random.js'
 import { toArray, encode } from './utils.js'
 
 // ---------------------------------------------------------------------------
-// Native AES-GCM fast-path via node:crypto / react-native-quick-crypto
+// Native AES-GCM fast-path via node:crypto
 //
 // Resolved once at module load using the same pattern as Hash.ts.  When
-// `node:crypto` (or a compatible shim) is available and exposes
-// `createCipheriv` / `createDecipheriv`, encrypt and decrypt will use it
-// instead of the pure-TS implementation.  The pure-TS path remains the
-// unconditional fallback — any error in the native path causes silent
-// re-execution through the pure-TS implementation.
+// supported Node exposes `node:crypto` through `process.getBuiltinModule`,
+// encrypt and decrypt use it instead of the pure-TS implementation. The
+// pure-TS path remains the unconditional fallback in browsers and mobile
+// runtimes, without leaving a static Node dependency for their bundlers.
 // ---------------------------------------------------------------------------
 const NODE_CRYPTO_SYM = (() => {
   const processLike =
@@ -22,16 +21,8 @@ const NODE_CRYPTO_SYM = (() => {
       const crypto = getBuiltinModule.call(processLike, 'node:crypto')
       if (crypto != null) return crypto
     } catch {
-      // continue to CommonJS fallback
+      // node:crypto is unavailable in this runtime
     }
-  }
-  try {
-    if (typeof require === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require('node:crypto')
-    }
-  } catch {
-    // node:crypto is unavailable in this runtime
   }
   return undefined
 })()
@@ -163,7 +154,7 @@ export default class SymmetricKey extends BigNumber {
     const msgBytes = new Uint8Array(toArray(msg, enc))
     const keyBytes = new Uint8Array(this.toArray('be', 32))
 
-    // Fast path: native AES-256-GCM via node:crypto / react-native-quick-crypto.
+    // Fast path: native AES-256-GCM via node:crypto.
     // Falls back to pure-TS on any failure.
     if (NATIVE_AES_GCM_AVAILABLE) {
       const nativeResult = nativeEncrypt(msgBytes, iv, keyBytes)
@@ -220,7 +211,7 @@ export default class SymmetricKey extends BigNumber {
 
     const keyBytes = new Uint8Array(this.toArray('be', 32))
 
-    // Fast path: native AES-256-GCM via node:crypto / react-native-quick-crypto.
+    // Fast path: native AES-256-GCM via node:crypto.
     // Falls back to pure-TS on null/undefined return.
     if (NATIVE_AES_GCM_AVAILABLE) {
       const nativeResult = nativeDecrypt(msgBytes, ivLength, tagLength, keyBytes)

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 108,
+  "findingCount": 94,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -378,62 +378,6 @@
     {
       "id": "packages/wallet/wallet-toolbox::missing-script::typecheck",
       "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::format:check",
-      "message": "Profile browser-library requires script format:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::lint",
-      "message": "Profile browser-library requires script lint"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::pack:check",
-      "message": "Profile browser-library requires script pack:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::test",
-      "message": "Profile browser-library requires script test"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::test:browser",
-      "message": "Profile browser-library requires script test:browser"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::test:coverage",
-      "message": "Profile browser-library requires script test:coverage"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/client::missing-script::typecheck",
-      "message": "Profile browser-library requires script typecheck"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::format:check",
-      "message": "Profile react-native-library requires script format:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::lint",
-      "message": "Profile react-native-library requires script lint"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::pack:check",
-      "message": "Profile react-native-library requires script pack:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::test",
-      "message": "Profile react-native-library requires script test"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::test:coverage",
-      "message": "Profile react-native-library requires script test:coverage"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::test:mobile",
-      "message": "Profile react-native-library requires script test:mobile"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox/mobile::missing-script::typecheck",
-      "message": "Profile react-native-library requires script typecheck"
     }
   ]
 }

@@ -1,6 +1,7 @@
 {
   "name": "@bsv/wallet-toolbox-client",
   "version": "2.4.4",
+  "type": "module",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -8,19 +9,30 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "Client only Wallet Storage",
-  "main": "./out/src/index.client.js",
-  "types": "./out/src/index.client.d.ts",
+  "description": "Browser-safe BRC-100 wallet, storage, signer, and services components",
+  "main": "./out/index.client.cjs",
+  "module": "./out/index.client.mjs",
+  "browser": "./out/index.client.mjs",
+  "types": "./out/index.client.d.cts",
   "exports": {
     ".": {
-      "types": "./out/src/index.client.d.ts",
-      "require": "./out/src/index.client.js",
-      "default": "./out/src/index.client.js"
+      "browser": {
+        "types": "./out/index.client.d.mts",
+        "default": "./out/index.client.mjs"
+      },
+      "import": {
+        "types": "./out/index.client.d.mts",
+        "default": "./out/index.client.mjs"
+      },
+      "require": {
+        "types": "./out/index.client.d.cts",
+        "default": "./out/index.client.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "out/src",
+    "out",
     "README.md",
     "LICENSE.txt"
   ],
@@ -37,7 +49,16 @@
     "BRC100"
   ],
   "scripts": {
-    "build": "tsc --build ../tsconfig.client.json"
+    "build": "tsdown --config tsdown.config.ts",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/src/index.client.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.{client,mobile}.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts\" \"packages/wallet/wallet-toolbox/client/**/*.{json,md,ts}\"",
+    "lint": "pnpm --workspace-root exec oxlint packages/wallet/wallet-toolbox/src/index.client.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.client.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts packages/wallet/wallet-toolbox/client/test packages/wallet/wallet-toolbox/client/tsdown.config.ts packages/wallet/wallet-toolbox/client/vitest.config.ts --deny-warnings",
+    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageIdb,Services,SetupClient,WalletPermissionsManager,WalletSettingsManager,sdk",
+    "test": "vitest run",
+    "test:browser": "node ../../../../scripts/check-wallet-toolbox-platform.mjs browser",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
+    "prepublishOnly": "npm run build"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
@@ -57,7 +78,13 @@
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
+    "@vitest/coverage-v8": "4.1.10",
     "@types/node": "^26.1.1",
-    "typescript": "^6.0.3"
+    "esbuild": "0.28.1",
+    "oxlint": "^1.75.0",
+    "tsdown": "0.22.14",
+    "typescript": "^6.0.3",
+    "vite": "8.1.5",
+    "vitest": "^4.1.10"
   }
 }

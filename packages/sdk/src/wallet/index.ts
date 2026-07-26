@@ -1,3 +1,5 @@
+import * as Validation from './validationHelpers.js'
+
 export * from './Wallet.interfaces.js'
 export * from './KeyDeriver.js'
 export { default as CachedKeyDeriver } from './CachedKeyDeriver.js'
@@ -9,6 +11,6 @@ export { default as WERR_REVIEW_ACTIONS } from './WERR_REVIEW_ACTIONS.js'
 export { default as WERR_INVALID_PARAMETER } from './WERR_INVALID_PARAMETER.js'
 export { default as WERR_INSUFFICIENT_FUNDS } from './WERR_INSUFFICIENT_FUNDS.js'
 export * from './WalletError.js'
-export * as Validation from './validationHelpers.js'
+export { Validation } // NOSONAR -- direct namespace re-exports fail the Metro consumer gate.
 export * from './substrates/index.js'
 export * from './WalletLoggerInterface.js'

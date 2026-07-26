@@ -30,7 +30,7 @@ name: WAB → AWS Marketplace
 on:
   push:
     tags:
-      - 'infra/v*'          # same trigger as infra-release.yaml — the tag is only the trigger
+      - 'infra/v*' # same trigger as infra-release.yaml — the tag is only the trigger
   workflow_dispatch:
     inputs:
       version_override:
@@ -42,13 +42,13 @@ permissions: {}
 
 concurrency:
   group: wab-marketplace-release
-  cancel-in-progress: false   # never cancel a half-registered Catalog change set
+  cancel-in-progress: false # never cancel a half-registered Catalog change set
 
 env:
   AWS_REGION: us-east-1
-  MP_ECR_ACCOUNT: '709825985650'                      # AWS Marketplace-managed ECR account
-  MP_ECR_REPO: bsv-blockchain/wab                     # existing Marketplace repo for this product
-  PRODUCT_ID: prod-67ziqtkrihz34                      # WAB ContainerProduct
+  MP_ECR_ACCOUNT: '709825985650' # AWS Marketplace-managed ECR account
+  MP_ECR_REPO: bsv-blockchain/wab # existing Marketplace repo for this product
+  PRODUCT_ID: prod-67ziqtkrihz34 # WAB ContainerProduct
   WAB_DIR: infra/wab
 
 jobs:
@@ -58,7 +58,7 @@ jobs:
     permissions:
       attestations: write
       contents: read
-      id-token: write          # OIDC: assume the seller-account publisher role (no static keys)
+      id-token: write # OIDC: assume the seller-account publisher role (no static keys)
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,6 +157,9 @@ jobs:
         id: image
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
+          LICENSE="$(jq -er --arg path "$WAB_DIR" \
+            '.components[] | select(.path == $path) | .license' \
+            governance/container-images.json)"
           IMAGE="${MP_ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${MP_ECR_REPO}:${VERSION}"
           docker build \
             --platform linux/amd64 \
@@ -170,7 +173,7 @@ jobs:
             --label "org.opencontainers.image.version=${VERSION}" \
             --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-            --label "org.opencontainers.image.licenses=LicenseRef-Open-BSV-License-4" \
+            --label "org.opencontainers.image.licenses=${LICENSE}" \
             --label "org.opencontainers.image.url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/main/infra/wab" \
             --label "org.opencontainers.image.documentation=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/main/infra/wab" \
             --tag "$IMAGE" \

@@ -1,6 +1,7 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
   "version": "2.4.4",
+  "type": "module",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -8,19 +9,30 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "Client only Wallet Storage",
-  "main": "./out/src/index.mobile.js",
-  "types": "./out/src/index.mobile.d.ts",
+  "description": "React Native and mobile-safe BRC-100 wallet, signer, and remote storage components",
+  "main": "./out/index.mobile.cjs",
+  "module": "./out/index.mobile.mjs",
+  "react-native": "./out/index.mobile.mjs",
+  "types": "./out/index.mobile.d.cts",
   "exports": {
     ".": {
-      "types": "./out/src/index.mobile.d.ts",
-      "require": "./out/src/index.mobile.js",
-      "default": "./out/src/index.mobile.js"
+      "react-native": {
+        "types": "./out/index.mobile.d.mts",
+        "default": "./out/index.mobile.mjs"
+      },
+      "import": {
+        "types": "./out/index.mobile.d.mts",
+        "default": "./out/index.mobile.mjs"
+      },
+      "require": {
+        "types": "./out/index.mobile.d.cts",
+        "default": "./out/index.mobile.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "out/src",
+    "out",
     "README.md",
     "LICENSE.txt"
   ],
@@ -37,13 +49,23 @@
     "BRC100"
   ],
   "scripts": {
-    "build": "tsc --build ../tsconfig.mobile.json"
+    "build": "tsdown --config tsdown.config.ts",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/src/index.mobile.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts\" \"packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts\" \"packages/wallet/wallet-toolbox/mobile/**/*.{json,md,ts}\"",
+    "lint": "pnpm --workspace-root exec oxlint packages/wallet/wallet-toolbox/src/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/index.mobile.ts packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts packages/wallet/wallet-toolbox/mobile/test packages/wallet/wallet-toolbox/mobile/tsdown.config.ts packages/wallet/wallet-toolbox/mobile/vitest.config.ts --deny-warnings",
+    "pack:check": "node ../../../../scripts/check-package-artifact.mjs . --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,Services,ArcSSEClient,WalletPermissionsManager,WalletSettingsManager,sdk",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:mobile": "node ../../../../scripts/check-wallet-toolbox-platform.mjs mobile",
+    "test:watch": "vitest",
+    "typecheck": "tsc --project tsconfig.typecheck.json",
+    "prepublishOnly": "npm run build"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile#readme",
   "dependencies": {
+    "@babel/runtime": "7.29.7",
     "hash-wasm": "^4.12.0",
     "idb": "^8.0.3"
   },
@@ -56,8 +78,17 @@
     }
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
     "@bsv/sdk": "workspace:^",
+    "@react-native/babel-preset": "0.86.1",
+    "@vitest/coverage-v8": "4.1.10",
     "@types/node": "^26.1.1",
-    "typescript": "^6.0.3"
+    "hermes-compiler": "260318099.0.1",
+    "metro": "0.87.0",
+    "metro-config": "0.87.0",
+    "oxlint": "^1.75.0",
+    "tsdown": "0.22.14",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   }
 }

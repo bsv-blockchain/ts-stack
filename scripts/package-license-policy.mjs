@@ -11,6 +11,7 @@ export const REPOSITORY_ROOT = path.resolve(SCRIPT_DIRECTORY, '..')
 export const LICENSE_DECLARATION = 'SEE LICENSE IN LICENSE.txt'
 export const LICENSE_FILE = 'LICENSE.txt'
 export const LICENSE_VERSION = 6
+export const OCI_LICENSE_REFERENCE = `LicenseRef-Open-BSV-License-${LICENSE_VERSION}`
 export const EXPECTED_LICENSE_SHA256 =
   'bac995a0c84dd533f7d5335b6d870aae9fee7d28d189b8aa78b103e0c9932bc0'
 
@@ -84,7 +85,7 @@ function validateCanonicalLicense(root) {
   if (actualHash !== EXPECTED_LICENSE_SHA256) {
     errors.push(
       `${LICENSE_FILE} must be the exact Open BSV License Version ${LICENSE_VERSION} ` +
-      `text (${EXPECTED_LICENSE_SHA256}); received ${actualHash}`
+        `text (${EXPECTED_LICENSE_SHA256}); received ${actualHash}`
     )
   }
   return { errors, canonical }
@@ -93,9 +94,7 @@ function validateCanonicalLicense(root) {
 function normalizeFilesAllowlist(files) {
   if (!Array.isArray(files)) return files
   return [
-    ...files.filter(entry =>
-      typeof entry !== 'string' || !LICENSE_ENTRY_PATTERN.test(entry)
-    ),
+    ...files.filter(entry => typeof entry !== 'string' || !LICENSE_ENTRY_PATTERN.test(entry)),
     LICENSE_FILE
   ]
 }
@@ -151,21 +150,19 @@ export function synchronizePackageLicenses(root = REPOSITORY_ROOT) {
 
 function validateManifestDeclaration(project, manifest) {
   if (manifest.license === LICENSE_DECLARATION) return []
-  return [
-    `${project} must declare license ${JSON.stringify(LICENSE_DECLARATION)}`
-  ]
+  return [`${project} must declare license ${JSON.stringify(LICENSE_DECLARATION)}`]
 }
 
 function validateFilesAllowlist(project, manifest) {
   if (!Array.isArray(manifest.files)) return []
 
-  const licenseEntries = manifest.files.filter(entry =>
-    typeof entry === 'string' && LICENSE_ENTRY_PATTERN.test(entry)
+  const licenseEntries = manifest.files.filter(
+    entry => typeof entry === 'string' && LICENSE_ENTRY_PATTERN.test(entry)
   )
   if (licenseEntries.length === 1 && licenseEntries[0] === LICENSE_FILE) return []
   return [
     `${project} files allowlist must contain exactly ${LICENSE_FILE} ` +
-    'and no legacy license filename'
+      'and no legacy license filename'
   ]
 }
 
@@ -176,15 +173,14 @@ function validateLicenseCopy(project, directory, canonical) {
   }
   if (fs.readFileSync(projectLicensePath).equals(canonical)) return []
   return [
-    `${project}/${LICENSE_FILE} does not match the canonical Version ` +
-    `${LICENSE_VERSION} text`
+    `${project}/${LICENSE_FILE} does not match the canonical Version ` + `${LICENSE_VERSION} text`
   ]
 }
 
 function validateLegacyFiles(project, directory) {
-  return LEGACY_LICENSE_FILES
-    .filter(legacyFile => fs.existsSync(path.join(directory, legacyFile)))
-    .map(legacyFile => `${project} retains legacy license file ${legacyFile}`)
+  return LEGACY_LICENSE_FILES.filter(legacyFile =>
+    fs.existsSync(path.join(directory, legacyFile))
+  ).map(legacyFile => `${project} retains legacy license file ${legacyFile}`)
 }
 
 function validatePackageLock(directory, root) {
@@ -194,7 +190,7 @@ function validatePackageLock(directory, root) {
   if (lockLicense === LICENSE_DECLARATION) return []
   return [
     `${relativePath(lockPath, root)} root package must declare ` +
-    JSON.stringify(LICENSE_DECLARATION)
+      JSON.stringify(LICENSE_DECLARATION)
   ]
 }
 
@@ -229,11 +225,10 @@ function main() {
   }
   console.log(
     `Verified ${discoverPackageManifests().length} package manifests against ` +
-    `Open BSV License Version ${LICENSE_VERSION}.`
+      `Open BSV License Version ${LICENSE_VERSION}.`
   )
 }
 
-if (process.argv[1] &&
-    import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main()
 }

@@ -379,17 +379,8 @@ const NODE_CRYPTO = (() => {
       const crypto = getBuiltinModule.call(processLike, 'node:crypto')
       if (crypto != null) return crypto
     } catch {
-      // continue to CommonJS fallback
+      // node:crypto is unavailable in this runtime
     }
-  }
-
-  try {
-    if (typeof require === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require('node:crypto')
-    }
-  } catch {
-    // node:crypto is unavailable in this runtime
   }
   return undefined
 })()

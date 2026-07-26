@@ -1,6 +1,6 @@
-import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
+import type { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 
-export { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
+export type { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 
 /**
  * The "live" portion of the block chain is recent history that can conceivably be subject to reorganizations.
@@ -8,7 +8,7 @@ export { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.int
  */
 export interface LiveBlockHeader extends BlockHeader {
   /**
-   * The cummulative chainwork achieved by the addition of this block to the chain.
+   * The cumulative chainwork achieved by the addition of this block to the chain.
    * Chainwork only matters in selecting the active chain.
    */
   chainWork: string
@@ -62,7 +62,7 @@ export function isBaseBlockHeader(header: AnyBlockHeader): header is BaseBlockHe
  * Type guard function.
  * @publicbody
  */
-export function isBlockHeader(header: AnyBlockHeader): header is LiveBlockHeader {
+export function isBlockHeader(header: AnyBlockHeader): header is BlockHeader {
   return 'height' in header && typeof header.previousHash === 'string'
 }
 
@@ -71,5 +71,5 @@ export function isBlockHeader(header: AnyBlockHeader): header is LiveBlockHeader
  * @publicbody
  */
 export function isLiveBlockHeader(header: AnyBlockHeader): header is LiveBlockHeader {
-  return 'chainwork' in header && typeof header.previousHash === 'string'
+  return 'chainWork' in header && typeof header.previousHash === 'string'
 }
