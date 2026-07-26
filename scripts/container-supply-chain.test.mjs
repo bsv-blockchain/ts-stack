@@ -3,30 +3,33 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
+import { OCI_LICENSE_REFERENCE } from './package-license-policy.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
 const REGISTRY_PATH = join(REPOSITORY_ROOT, 'governance/container-images.json')
 const BASE_REFRESH_DOCKERFILE_PATH = join(REPOSITORY_ROOT, 'governance/Dockerfile.container-bases')
 const INFRA_RELEASE_PATH = join(REPOSITORY_ROOT, '.github/workflows/infra-release.yaml')
-const MARKETPLACE_RELEASE_PATH = join(REPOSITORY_ROOT, '.github/workflows/wab-marketplace-release.yml')
+const MARKETPLACE_RELEASE_PATH = join(
+  REPOSITORY_ROOT,
+  '.github/workflows/wab-marketplace-release.yml'
+)
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
 const SCORECARD_PATH = join(REPOSITORY_ROOT, '.github/workflows/scorecard.yml')
 const DEPENDABOT_PATH = join(REPOSITORY_ROOT, '.github/dependabot.yml')
 const SHA256_DIGEST = /@sha256:[a-f0-9]{64}(?:\s|$)/
 
-function trackedFiles (...pathspecs) {
-  return execFileSync(
-    'git',
-    ['ls-files', '--', ...pathspecs],
-    { cwd: REPOSITORY_ROOT, encoding: 'utf8' }
-  )
+function trackedFiles(...pathspecs) {
+  return execFileSync('git', ['ls-files', '--', ...pathspecs], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8'
+  })
     .trim()
     .split('\n')
     .filter(Boolean)
     .sort()
 }
 
-function readRepositoryFile (path) {
+function readRepositoryFile(path) {
   return readFileSync(join(REPOSITORY_ROOT, path), 'utf8')
 }
 
@@ -40,10 +43,15 @@ test('container registry exactly owns every release Dockerfile and immutable bas
   assert.equal(registry.schemaVersion, 1)
   assert.equal(registry.platform, 'linux/amd64')
   assert.deepEqual(registeredDockerfiles, trackedDockerfiles)
-  assert.equal(new Set(registry.components.map(component => component.name)).size, registry.components.length)
+  assert.equal(
+    new Set(registry.components.map(component => component.name)).size,
+    registry.components.length
+  )
 
   const allowedBases = new Set(
-    registry.baseImages.flatMap(base => base.references.map(reference => `${reference}@${base.digest}`))
+    registry.baseImages.flatMap(base =>
+      base.references.map(reference => `${reference}@${base.digest}`)
+    )
   )
   const refreshBases = readFileSync(BASE_REFRESH_DOCKERFILE_PATH, 'utf8')
     .split('\n')
@@ -51,13 +59,15 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     .map(line => line.split(/\s+/)[1])
     .sort()
   const expectedRefreshBases = registry.baseImages
-    .flatMap(base => base.references.map(reference => `${reference}:${base.version}@${base.digest}`))
+    .flatMap(base =>
+      base.references.map(reference => `${reference}:${base.version}@${base.digest}`)
+    )
     .sort()
   assert.deepEqual(refreshBases, expectedRefreshBases)
 
   for (const component of registry.components) {
     assert.match(component.name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    assert.equal(component.license, 'LicenseRef-Open-BSV-License-6')
+    assert.equal(component.license, OCI_LICENSE_REFERENCE)
     assert.match(component.documentation, /^https:\/\/github\.com\/bsv-blockchain\/ts-stack\//)
     assert.ok(component.title.length > 0)
     assert.ok(component.description.length > 0)
@@ -82,17 +92,14 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     }
     const dockerfileInstructions = dockerfile
       .split('\n')
-      .filter((line) => !line.trimStart().startsWith('#'))
+      .filter(line => !line.trimStart().startsWith('#'))
       .join('\n')
     assert.doesNotMatch(dockerfileInstructions, /\bapk upgrade\b/)
   }
 })
 
 test('checked-in deployment examples use immutable non-latest image references', () => {
-  const deploymentFiles = trackedFiles(
-    'infra/**/*.yml',
-    'infra/**/*.yaml'
-  )
+  const deploymentFiles = trackedFiles('infra/**/*.yml', 'infra/**/*.yaml')
 
   for (const path of deploymentFiles) {
     const imageLines = readRepositoryFile(path)
@@ -143,7 +150,8 @@ test('container release workflows scan before push and publish signed evidence',
   assert.match(infraRelease, /actions\/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6/)
   assert.match(infraRelease, /sigstore\/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6/)
   assert.equal(
-    infraRelease.match(/docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/g)?.length,
+    infraRelease.match(/docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/g)
+      ?.length,
     1,
     'the scanned release image must be built exactly once'
   )
@@ -154,8 +162,14 @@ test('container release workflows scan before push and publish signed evidence',
   )
 
   assert.match(marketplaceRelease, /SOURCE_DATE_EPOCH=/)
+  assert.match(marketplaceRelease, /\.components\[\] \| select\(\.path == \$path\) \| \.license/)
+  assert.match(marketplaceRelease, /org\.opencontainers\.image\.licenses=\$\{LICENSE\}/)
+  assert.doesNotMatch(marketplaceRelease, /org\.opencontainers\.image\.licenses=LicenseRef-/)
   assert.match(marketplaceRelease, /attestations: write/)
-  assert.match(marketplaceRelease, /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/)
+  assert.match(
+    marketplaceRelease,
+    /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/
+  )
   assert.match(marketplaceRelease, /anchore\/sbom-action@e22c389904149dbc22b58101806040fa8d37a610/)
   assert.match(marketplaceRelease, /actions\/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6/)
   assert.ok(
@@ -208,7 +222,10 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
 
   assert.match(scorecard, /ossf\/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc/)
   assert.match(scorecard, /publish_results: true/)
-  assert.match(scorecard, /github\/codeql-action\/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81/)
+  assert.match(
+    scorecard,
+    /github\/codeql-action\/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81/
+  )
   assert.match(scorecard, /security-events: write/)
   assert.match(scorecard, /id-token: write/)
 

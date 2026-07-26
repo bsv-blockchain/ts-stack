@@ -17,7 +17,7 @@
  */
 
 /** Shadow globalThis.crypto with the given value (or undefined). */
-function shadowCrypto (value: any): void {
+function shadowCrypto(value: any): void {
   Object.defineProperty(globalThis, 'crypto', {
     value,
     configurable: true,
@@ -26,7 +26,7 @@ function shadowCrypto (value: any): void {
 }
 
 /** Remove the own-property shadow so the prototype getter is visible again. */
-function restoreCrypto (): void {
+function restoreCrypto(): void {
   // Only delete if we installed an own property
   if (Object.prototype.hasOwnProperty.call(globalThis, 'crypto')) {
     delete (globalThis as any).crypto
@@ -39,7 +39,7 @@ describe('Random – environment branches', () => {
   // -------------------------------------------------------------------------
 
   /** Load a fresh copy of the Random module inside the current environment. */
-  function loadRandom (): (len: number) => number[] {
+  function loadRandom(): (len: number) => number[] {
     let Random: (len: number) => number[]
     // isolateModules executes synchronously
     jest.isolateModules(() => {
@@ -87,7 +87,7 @@ describe('Random – environment branches', () => {
     afterEach(() => {
       restoreCrypto()
       if (hadSelf) {
-        (globalThis as any).self = originalSelf
+        ;(globalThis as any).self = originalSelf
       } else {
         delete (globalThis as any).self
       }
@@ -138,12 +138,12 @@ describe('Random – environment branches', () => {
     afterEach(() => {
       restoreCrypto()
       if (hadSelf) {
-        (globalThis as any).self = originalSelf
+        ;(globalThis as any).self = originalSelf
       } else {
         delete (globalThis as any).self
       }
       if (hadWindow) {
-        (globalThis as any).window = originalWindow
+        ;(globalThis as any).window = originalWindow
       } else {
         delete (globalThis as any).window
       }
@@ -186,7 +186,7 @@ describe('Random – environment branches', () => {
       delete (globalThis as any).self
       originalWindow = (globalThis as any).window
       delete (globalThis as any).window
-      // Remove process entirely so that the Node < 18 require('crypto') branch is skipped
+      // Remove process entirely so that the Node.js getBuiltinModule branch is skipped
       originalProcess = (globalThis as any).process
       delete (globalThis as any).process
     })
@@ -194,12 +194,12 @@ describe('Random – environment branches', () => {
     afterEach(() => {
       restoreCrypto()
       if (hadSelf) {
-        (globalThis as any).self = originalSelf
+        ;(globalThis as any).self = originalSelf
       } else {
         delete (globalThis as any).self
       }
       if (hadWindow) {
-        (globalThis as any).window = originalWindow
+        ;(globalThis as any).window = originalWindow
       } else {
         delete (globalThis as any).window
       }
@@ -215,12 +215,12 @@ describe('Random – environment branches', () => {
   })
 
   // -------------------------------------------------------------------------
-  // 5. Node.js < 18 require('crypto') fallback path
+  // 5. Node.js process.getBuiltinModule('node:crypto') fallback path
   // -------------------------------------------------------------------------
-  describe('Node.js < 18 require(\'crypto\') fallback path', () => {
+  describe('Node.js process.getBuiltinModule fallback path', () => {
     beforeEach(() => {
       // Shadow globalThis.crypto with undefined so the first branch is skipped
-      // and the constructor falls through to the process.release.name === 'node' check
+      // and the constructor falls through to process.getBuiltinModule.
       shadowCrypto(undefined)
     })
 
@@ -228,10 +228,7 @@ describe('Random – environment branches', () => {
       restoreCrypto()
     })
 
-    it('falls through to require("crypto").randomBytes when globalThis.crypto is absent', () => {
-      // process.release.name === 'node' is already true in Jest / Node.
-      // With globalThis.crypto shadowed as undefined the module should attempt require('crypto')
-      // and use randomBytes successfully.
+    it('uses randomBytes without a static Node.js import when Web Crypto is absent', () => {
       const Random = loadRandom()
       const bytes = Random(8)
       expect(bytes).toHaveLength(8)
@@ -239,6 +236,22 @@ describe('Random – environment branches', () => {
         expect(b).toBeGreaterThanOrEqual(0)
         expect(b).toBeLessThanOrEqual(255)
       })
+    })
+
+    it.each([
+      ['getBuiltinModule is unavailable', {}],
+      ['node:crypto does not expose randomBytes', { getBuiltinModule: () => ({}) }]
+    ])('uses the explicit failure path when %s', (_scenario, processValue) => {
+      const originalProcess = (globalThis as any).process
+      ;(globalThis as any).process = processValue
+      try {
+        const Random = loadRandom()
+        expect(() => Random(8)).toThrow(
+          'No secure random number generator is available in this environment.'
+        )
+      } finally {
+        ;(globalThis as any).process = originalProcess
+      }
     })
   })
 

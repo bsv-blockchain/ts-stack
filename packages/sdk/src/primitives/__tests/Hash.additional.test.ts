@@ -93,9 +93,6 @@ describe('Hash – additional coverage', () => {
       }
       try {
         jest.isolateModules(() => {
-          jest.doMock('node:crypto', () => {
-            throw new Error('blocked for test')
-          })
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const fallback = require('../../primitives/Hash')
           expect(toHex(fallback.sha256(Array.from(msg)))).toBe(expectedSha256)

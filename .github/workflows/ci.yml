@@ -53,6 +53,8 @@ jobs:
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
+      wallet_client: ${{ steps.scope.outputs.wallet_client }}
+      wallet_mobile: ${{ steps.scope.outputs.wallet_mobile }}
       verifast: ${{ steps.scope.outputs.verifast }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,7 +100,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/ci\.yml|governance/repository-health/|scripts/(check-package-artifact|repository-health|run-ci-tests|normalize-lcov-paths|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/ci\.yml|governance/repository-health/|scripts/(check-package-artifact|check-wallet-toolbox-platform|repository-health|run-ci-tests|normalize-lcov-paths|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"
@@ -127,6 +129,8 @@ jobs:
             "sdk:@bsv/sdk" \
             "did:@bsv/did" \
             "wallet:@bsv/wallet-toolbox" \
+            "wallet_client:@bsv/wallet-toolbox-client" \
+            "wallet_mobile:@bsv/wallet-toolbox-mobile" \
             "verifast:@bsv/verifast"; do
             key="${entry%%:*}"
             package="${entry#*:}"
@@ -222,6 +226,52 @@ jobs:
             filters+=(--filter "$package")
           done
           pnpm -r "${filters[@]}" run test
+
+  wallet-browser-platform:
+    name: Platform / wallet browser
+    if: needs.prepare.outputs.wallet_client == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify packed browser consumer with Vite and esbuild
+        run: pnpm --filter @bsv/wallet-toolbox-client run test:browser
+
+  wallet-mobile-platform:
+    name: Platform / wallet mobile
+    if: needs.prepare.outputs.wallet_mobile == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify packed mobile consumer with Metro and Hermes
+        run: pnpm --filter @bsv/wallet-toolbox-mobile run test:mobile
 
   coverage-sdk:
     name: Coverage / SDK
@@ -321,7 +371,7 @@ jobs:
       - name: Generate wallet-toolbox coverage shard
         run: |
           pnpm --filter @bsv/wallet-toolbox exec jest \
-            --testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts' \
+            --testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test' \
             --coverage \
             --shard=${{ matrix.shard }}/4 \
             --coverageDirectory=coverage/shard-${{ matrix.shard }}
@@ -564,6 +614,8 @@ jobs:
       - prepare
       - standard-tests
       - coverage-upload
+      - wallet-browser-platform
+      - wallet-mobile-platform
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -572,11 +624,15 @@ jobs:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           TEST_RESULT: ${{ needs.standard-tests.result }}
           COVERAGE_RESULT: ${{ needs.coverage-upload.result }}
+          BROWSER_RESULT: ${{ needs.wallet-browser-platform.result }}
+          MOBILE_RESULT: ${{ needs.wallet-mobile-platform.result }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
                 "$TEST_RESULT" != "success" ||
-                "$COVERAGE_RESULT" != "success" ]]; then
-            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT tests=$TEST_RESULT coverage=$COVERAGE_RESULT"
+                "$COVERAGE_RESULT" != "success" ||
+                ( "$BROWSER_RESULT" != "success" && "$BROWSER_RESULT" != "skipped" ) ||
+                ( "$MOBILE_RESULT" != "success" && "$MOBILE_RESULT" != "skipped" ) ]]; then
+            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT tests=$TEST_RESULT coverage=$COVERAGE_RESULT browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
             exit 1
           fi
 

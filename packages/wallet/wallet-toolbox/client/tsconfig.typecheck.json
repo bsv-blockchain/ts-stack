@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.client.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "files": [],
+  "include": ["../src/index.client.ts", "test/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "out", "../out", "../mobile/out"]
+}

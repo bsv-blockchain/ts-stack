@@ -1,10 +1,10 @@
 ---
 id: about-contributing
-title: "Contributing"
+title: 'Contributing'
 kind: meta
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: '1.0.0'
+last_updated: '2026-04-28'
+last_verified: '2026-04-28'
 review_cadence_days: 90
 status: stable
 tags: [about, contributing, development, community]
@@ -60,6 +60,7 @@ git checkout -b feature/your-feature-name
 ```
 
 Branch naming conventions:
+
 - `feature/...` — New features
 - `fix/...` — Bug fixes
 - `docs/...` — Documentation
@@ -166,6 +167,7 @@ git push origin feature/your-feature-name
 ### 2. Create PR on GitHub
 
 Include:
+
 - **Title** — Clear, descriptive (e.g., "fix: validate BRC-100 output satoshis")
 - **Description** — What changed and why
 - **Tests** — Link to related tests
@@ -176,24 +178,29 @@ Template:
 
 ```markdown
 ## Description
+
 Briefly describe the change.
 
 ## Related Issue
+
 Fixes #123
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
 
 ## Testing
+
 - [ ] Added unit tests
 - [ ] Added conformance vectors
 - [ ] All tests pass locally
 - [ ] Ran linter
 
 ## Documentation
+
 - [ ] Updated relevant doc pages
 - [ ] Updated CHANGELOG
 ```
@@ -208,11 +215,11 @@ Review feedback is normal. We aim to be constructive and helpful.
 
 ```typescript
 // Good — import specific exports from the top-level or subpath
-import { PrivateKey, Hash } from '@bsv/sdk';
-import { Transaction } from '@bsv/sdk/transaction';
+import { PrivateKey, Hash } from '@bsv/sdk'
+import { Transaction } from '@bsv/sdk/transaction'
 
 // Bad — avoid wildcard imports
-import * as sdk from '@bsv/sdk';
+import * as sdk from '@bsv/sdk'
 ```
 
 ### Naming
@@ -220,14 +227,14 @@ import * as sdk from '@bsv/sdk';
 ```typescript
 // Good
 interface WalletConfig {
-  publicKey: string;
-  maxTransactionSize: number;
+  publicKey: string
+  maxTransactionSize: number
 }
 
 // Bad
 interface WalletConfigObj {
-  pubkey: string;
-  maxTxSize: number;
+  pubkey: string
+  maxTxSize: number
 }
 ```
 
@@ -236,13 +243,13 @@ interface WalletConfigObj {
 ```typescript
 // Good
 if (!isValid(input)) {
-  throw new Error('Invalid input: expected hex string');
+  throw new Error('Invalid input: expected hex string')
 }
 
 // Bad
 if (!isValid(input)) {
-  console.error('Invalid input');
-  return null;
+  console.error('Invalid input')
+  return null
 }
 ```
 
@@ -278,19 +285,23 @@ Template:
 ## Bug Report
 
 ### Environment
+
 - Node: v18.0.0
 - @bsv/sdk: 1.2.3
 - OS: macOS 13.0
 
 ### Reproduction
+
 ```typescript
 // Minimal code to reproduce
 ```
 
 ### Expected
+
 [Expected behavior]
 
 ### Actual
+
 [Actual behavior]
 ````
 
@@ -320,6 +331,7 @@ footer
 ```
 
 Types:
+
 - `feat:` — New feature
 - `fix:` — Bug fix
 - `docs:` — Documentation
@@ -352,7 +364,11 @@ If any check fails, fix the issue and push again.
 
 ## Licensing
 
-By contributing, you agree that your contributions are licensed under the same license as ts-stack (typically MIT or BSL-1.1).
+By contributing, you agree that your contributions are licensed under the
+[Open BSV License Version 6](https://github.com/bsv-blockchain/ts-stack/blob/main/LICENSE.txt),
+the same license used uniformly throughout ts-stack. See the
+[licensing policy](../reference/licensing.md) for the package and release
+controls that keep every first-party project on the current canonical text.
 
 ## Code of Conduct
 

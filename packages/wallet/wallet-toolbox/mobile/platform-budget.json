@@ -1,0 +1,15 @@
+{
+  "profile": "mobile",
+  "maximumBytes": {
+    "metro": {
+      "raw": 1710000,
+      "gzip": 455000,
+      "brotli": 360000
+    },
+    "hermes": {
+      "raw": 3250000,
+      "gzip": 1325000,
+      "brotli": 1035000
+    }
+  }
+}

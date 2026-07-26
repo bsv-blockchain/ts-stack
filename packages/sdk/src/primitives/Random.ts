@@ -2,11 +2,11 @@
  * Random number generator that works across modern JavaScript environments.
  *
  * This implementation uses the Web Crypto API which is available in:
- * - Node.js 6+ via require('crypto').randomBytes()
  * - Node.js 18+ via globalThis.crypto
  * - Modern browsers via globalThis.crypto, self.crypto, or window.crypto
  * - Web Workers and Service Workers via self.crypto
  * - Deno and Bun via globalThis.crypto
+ * - Node.js 22+ via process.getBuiltinModule when Web Crypto is unavailable
  *
  * @throws {Error} If no secure random number generator is available
  */
@@ -36,22 +36,6 @@ class Rand {
       return
     }
 
-    // Node.js fallback for versions < 18
-    if (typeof process !== 'undefined' && process.release?.name === 'node') {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const crypto = require('node:crypto')
-        if (typeof crypto.randomBytes === 'function') {
-          this._rand = (n) => {
-            return Array.from(crypto.randomBytes(n))
-          }
-          return
-        }
-      } catch (_cryptoModuleUnavailable) {
-        // node:crypto not available in this runtime; continue to other crypto API checks
-      }
-    }
-
     // Try self.crypto (Web Workers and Service Workers)
     if (typeof globalThis.self !== 'undefined' && typeof globalThis.self.crypto?.getRandomValues === 'function') {
       this._rand = (n) => {
@@ -66,6 +50,19 @@ class Rand {
         return this.getRandomValues(globalThis.window, n)
       }
       return
+    }
+
+    // Retain a Node.js fallback without a static import or require that browser
+    // and mobile bundlers would have to resolve.
+    if (
+      typeof process !== 'undefined' &&
+      typeof process.getBuiltinModule === 'function'
+    ) {
+      const nodeCrypto = process.getBuiltinModule('node:crypto')
+      if (typeof nodeCrypto?.randomBytes === 'function') {
+        this._rand = n => Array.from(nodeCrypto.randomBytes(n))
+        return
+      }
     }
 
     // No crypto available
