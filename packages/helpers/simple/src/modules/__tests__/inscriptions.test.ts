@@ -18,6 +18,38 @@ function createCore(): { core: WalletCore; send: jest.Mock } {
 }
 
 describe('createInscriptionMethods', () => {
+  it('inscribes text and maps output details', async () => {
+    const { core, send } = createCore()
+    const inscriptions = createInscriptionMethods(core)
+
+    await expect(inscriptions.inscribeText('hello')).resolves.toMatchObject({
+      type: 'text',
+      dataSize: 5,
+      basket: 'text',
+      outputs: [{ index: 0, satoshis: 0, lockingScript: '' }]
+    })
+    expect(send).toHaveBeenCalledWith({
+      outputs: [{ data: ['hello'], basket: 'text', description: 'Text inscription' }],
+      description: 'Default transaction description'
+    })
+  })
+
+  it('serializes JSON before sending and measuring it', async () => {
+    const { core, send } = createCore()
+    const inscriptions = createInscriptionMethods(core)
+
+    await expect(inscriptions.inscribeJSON({ answer: 42 })).resolves.toMatchObject({
+      type: 'json',
+      dataSize: 13,
+      basket: 'json',
+      outputs: [{ index: 0, satoshis: 0, lockingScript: '' }]
+    })
+    expect(send).toHaveBeenCalledWith({
+      outputs: [{ data: ['{"answer":42}'], basket: 'json', description: 'JSON inscription' }],
+      description: 'Default transaction description'
+    })
+  })
+
   it.each([
     ['inscribeFileHash', 'file-hash', 'hash-document', 'File hash inscription'],
     ['inscribeImageHash', 'image-hash', 'hash-image', 'Image hash inscription']

@@ -75,6 +75,34 @@ describe('DIDClient', () => {
     })
   })
 
+  it.each([undefined, ['did-token']] as const)(
+    'returns a structured error when the DID subject tag is missing (%s)',
+    async tags => {
+      const wallet = makeWallet()
+      jest.mocked(wallet.listOutputs).mockResolvedValue({
+        totalOutputs: 1,
+        outputs: [
+          {
+            outpoint: `${'0'.repeat(64)}.0`,
+            satoshis: 1,
+            customInstructions: JSON.stringify({
+              derivationPrefix: 'prefix',
+              derivationSuffix: 'suffix'
+            }),
+            tags
+          }
+        ],
+        BEEF: [0]
+      } as ListOutputsResult)
+      const client = new DIDClient({ wallet })
+
+      await expect(client.revokeDID({ serialNumber: 'serial' })).resolves.toMatchObject({
+        status: 'error',
+        code: 'ERR_MISSING_SUBJECT'
+      })
+    }
+  )
+
   it('normalizes lookup filters and date boundaries for the resolver', async () => {
     const wallet = makeWallet()
     const query = jest.fn().mockResolvedValue({ type: 'output-list', outputs: [] })

@@ -301,4 +301,52 @@ describe('MultiPushDrop', () => {
       /Unlocker key derived .* not found/
     )
   })
+
+  it('requires a source transaction ID for signing', async () => {
+    const template = multiPushDrop.unlock(protocolID, keyID, 'self')
+    const transaction = {
+      inputs: [{ sourceOutputIndex: 0 }],
+      outputs: [],
+      version: 1,
+      lockTime: 0
+    } as unknown as Transaction
+
+    await expect(template.sign(transaction, 0)).rejects.toThrow(
+      'sourceTXID or sourceTransaction required'
+    )
+  })
+
+  it('requires source satoshis for signing', async () => {
+    const template = multiPushDrop.unlock(protocolID, keyID, 'self')
+    const transaction = {
+      inputs: [{ sourceTXID: '00'.repeat(32), sourceOutputIndex: 0 }],
+      outputs: [],
+      version: 1,
+      lockTime: 0
+    } as unknown as Transaction
+
+    await expect(template.sign(transaction, 0)).rejects.toThrow(
+      'sourceSatoshis or sourceTransaction required'
+    )
+  })
+
+  it('requires a source locking script for signing', async () => {
+    const template = multiPushDrop.unlock(protocolID, keyID, 'self')
+    const transaction = {
+      inputs: [
+        {
+          sourceTXID: '00'.repeat(32),
+          sourceOutputIndex: 0,
+          sourceTransaction: { outputs: [{ satoshis: 1 }] }
+        }
+      ],
+      outputs: [],
+      version: 1,
+      lockTime: 0
+    } as unknown as Transaction
+
+    await expect(template.sign(transaction, 0)).rejects.toThrow(
+      'lockingScript or sourceTransaction required'
+    )
+  })
 })

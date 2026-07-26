@@ -10,4 +10,11 @@ describe('OpReturn script', () => {
   it('does not support unlocking', () => {
     expect(() => new OpReturn().unlock()).toThrow()
   })
+
+  it('locks and decodes raw byte arrays', () => {
+    const script = new OpReturn().lock([65, 66])
+
+    expect(script.toASM()).toBe('OP_0 OP_RETURN 4142')
+    expect(OpReturn.decode(script)).toEqual(['AB'])
+  })
 })

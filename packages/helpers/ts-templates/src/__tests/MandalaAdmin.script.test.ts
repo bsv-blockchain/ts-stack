@@ -73,4 +73,11 @@ describe('MandalaAdmin lock/decode', () => {
     script.chunks[1] = { op: OP.OP_DUP }
     expect(() => MandalaAdmin.decode(script)).toThrow()
   })
+
+  it('decode rejects a malformed P2PKH shape', async () => {
+    const script = await MandalaAdmin.lock({ wallet: wallet as any, data })
+    script.chunks[0] = { op: OP.OP_0 }
+
+    expect(() => MandalaAdmin.decode(script)).toThrow('bad P2PKH shape')
+  })
 })

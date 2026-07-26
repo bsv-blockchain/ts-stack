@@ -380,6 +380,31 @@ describe('createCredentialMethods', () => {
     ).rejects.toThrow('Credential acquisition failed: Server returned 503')
   })
 
+  it('surfaces issuer errors from rejected certification requests', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          certifierPublicKey: CERTIFIER_KEY,
+          certificateType: certificate.type
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: 'Certification denied' })
+      })
+
+    const methods = createCredentialMethods(core)
+
+    await expect(
+      methods.acquireCredential({
+        serverUrl: 'https://issuer.example',
+        replaceExisting: false
+      })
+    ).rejects.toThrow('Credential acquisition failed: Certification denied')
+  })
+
   it('lists wallet certificates as verifiable credentials', async () => {
     client.listCertificates.mockResolvedValueOnce({
       certificates: [certificate]

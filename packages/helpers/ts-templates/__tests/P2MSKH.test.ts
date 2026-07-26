@@ -231,4 +231,33 @@ describe('P2MSKH', () => {
 
     expect(P2MSKH.address(publicKeys, 1)).toEqual(expect.any(String))
   })
+
+  it('requires at least two public keys when creating an address', () => {
+    expect(() => P2MSKH.address([PrivateKey.fromRandom().toPublicKey()], 1)).toThrow(
+      'at least 1 pubkeys are required'
+    )
+  })
+
+  it('signs with direct source context instead of a source transaction', async () => {
+    const fixture = await makeSpendFixture(1, 2)
+    const directContextTransaction = fixture.spendTransaction
+    directContextTransaction.inputs[0] = {
+      sourceTXID: fixture.sourceTransaction.id('hex'),
+      sourceOutputIndex: 0,
+      sequence: 0xffffffff
+    }
+    const template = new P2MSKH().unlock(
+      fixture.players[0],
+      fixture.instructions,
+      undefined,
+      'all',
+      false,
+      SOURCE_SATOSHIS,
+      fixture.lockingScript
+    )
+
+    await expect(template.sign(directContextTransaction, 0)).resolves.toBeInstanceOf(
+      UnlockingScript
+    )
+  })
 })

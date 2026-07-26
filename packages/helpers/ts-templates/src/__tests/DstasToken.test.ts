@@ -32,4 +32,18 @@ describe('DstasToken.decode (against real dxs-bsv-token-sdk output)', () => {
   it('throws on a short / non-DSTAS script', () => {
     expect(() => DstasToken.decode(LockingScript.fromHex(`14${DSTAS_OWNER}00`))).toThrow(/DSTAS/)
   })
+
+  it('rejects a long script without the owner push opcode', () => {
+    const malformed = `15${DSTAS_PLAIN_HEX.slice(2)}`
+
+    expect(() => DstasToken.decode(LockingScript.fromHex(malformed))).toThrow(
+      'missing 20-byte owner push'
+    )
+  })
+
+  it('detects the pushed frozen action marker', () => {
+    const pushedFrozenMarker = `${DSTAS_PLAIN_HEX.slice(0, 42)}0102${DSTAS_PLAIN_HEX.slice(44)}`
+
+    expect(DstasToken.decode(LockingScript.fromHex(pushedFrozenMarker)).frozen).toBe(true)
+  })
 })
