@@ -24,6 +24,27 @@ function csvOption(arguments_, name, fallback) {
     .filter(Boolean)
 }
 
+function entryExportsOption(arguments_, rootExports) {
+  const entries = { '.': rootExports }
+  const value = optionValue(arguments_, '--entry-exports')
+  if (!value) return entries
+  for (const specification of value.split(';').filter(Boolean)) {
+    const separator = specification.indexOf('=')
+    if (separator === -1) {
+      throw new Error(`invalid --entry-exports specification ${JSON.stringify(specification)}`)
+    }
+    const subpath = specification.slice(0, separator)
+    if (subpath !== '.' && !subpath.startsWith('./')) {
+      throw new Error(`entrypoint must be "." or start with "./": ${JSON.stringify(subpath)}`)
+    }
+    entries[subpath] = specification
+      .slice(separator + 1)
+      .split('|')
+      .filter(Boolean)
+  }
+  return entries
+}
+
 function commandError(error) {
   const details = [error.stdout, error.stderr]
     .map(value => value?.toString().trim())
@@ -181,7 +202,29 @@ function exportValidation(expectedExports) {
   ].join('\n')
 }
 
-async function checkConsumer(tarballPath, manifest, modes, expectedExports) {
+function declaredBin(manifest, binName) {
+  if (typeof manifest.bin === 'string') {
+    const defaultName = manifest.name.split('/').at(-1)
+    return binName === defaultName ? manifest.bin : undefined
+  }
+  return manifest.bin?.[binName]
+}
+
+async function checkInstalledBin(consumerDirectory, manifest, binName, binArguments) {
+  if (!binName) return
+  if (path.basename(binName) !== binName || !declaredBin(manifest, binName)) {
+    throw new Error(`package does not declare the requested executable ${JSON.stringify(binName)}`)
+  }
+  await run(path.join(consumerDirectory, 'node_modules', '.bin', binName), binArguments, {
+    cwd: consumerDirectory
+  })
+}
+
+function packageSpecifier(packageName, subpath) {
+  return subpath === '.' ? packageName : `${packageName}/${subpath.slice(2)}`
+}
+
+async function checkConsumer(tarballPath, manifest, modes, entryExports, binName, binArguments) {
   const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-consumer-'))
   try {
     await fs.writeFile(
@@ -202,25 +245,29 @@ async function checkConsumer(tarballPath, manifest, modes, expectedExports) {
       { cwd: consumerDirectory }
     )
 
-    const validation = exportValidation(expectedExports)
-    if (modes.includes('esm')) {
-      await run(
-        'node',
-        [
-          '--input-type=module',
-          '--eval',
-          `const loaded = await import(${JSON.stringify(manifest.name)});\n${validation}`
-        ],
-        { cwd: consumerDirectory }
-      )
+    for (const [subpath, expectedExports] of Object.entries(entryExports)) {
+      const specifier = packageSpecifier(manifest.name, subpath)
+      const validation = exportValidation(expectedExports)
+      if (modes.includes('esm')) {
+        await run(
+          'node',
+          [
+            '--input-type=module',
+            '--eval',
+            `const loaded = await import(${JSON.stringify(specifier)});\n${validation}`
+          ],
+          { cwd: consumerDirectory }
+        )
+      }
+      if (modes.includes('cjs')) {
+        await run(
+          'node',
+          ['--eval', `const loaded = require(${JSON.stringify(specifier)});\n${validation}`],
+          { cwd: consumerDirectory }
+        )
+      }
     }
-    if (modes.includes('cjs')) {
-      await run(
-        'node',
-        ['--eval', `const loaded = require(${JSON.stringify(manifest.name)});\n${validation}`],
-        { cwd: consumerDirectory }
-      )
-    }
+    await checkInstalledBin(consumerDirectory, manifest, binName, binArguments)
   } finally {
     await fs.rm(consumerDirectory, { recursive: true, force: true })
   }
@@ -229,7 +276,11 @@ async function checkConsumer(tarballPath, manifest, modes, expectedExports) {
 export async function checkPackageArtifact({
   packageDirectory,
   modes = ['esm', 'cjs'],
-  expectedExports = []
+  expectedExports = [],
+  entryExports = { '.': expectedExports },
+  binName = '',
+  binArguments = [],
+  validateTypes = true
 }) {
   const manifestPath = path.join(packageDirectory, 'package.json')
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
@@ -241,8 +292,8 @@ export async function checkPackageArtifact({
     if (errors.length > 0) {
       throw new Error(errors.join('\n'))
     }
-    await checkTypes(packed.tarballPath)
-    await checkConsumer(packed.tarballPath, manifest, modes, expectedExports)
+    if (validateTypes) await checkTypes(packed.tarballPath)
+    await checkConsumer(packed.tarballPath, manifest, modes, entryExports, binName, binArguments)
     return manifest
   } finally {
     await fs.rm(packed.temporaryDirectory, { recursive: true, force: true })
@@ -254,15 +305,27 @@ async function main(arguments_) {
   const packageDirectory = path.resolve(process.cwd(), target)
   const modes = csvOption(arguments_, '--modes', 'esm,cjs')
   const expectedExports = csvOption(arguments_, '--exports', '')
+  const entryExports = entryExportsOption(arguments_, expectedExports)
+  const binName = optionValue(arguments_, '--bin')
+  const binArguments = csvOption(arguments_, '--bin-args', '')
+  const validateTypes = !arguments_.includes('--skip-types')
   const manifest = await checkPackageArtifact({
     packageDirectory,
     modes,
-    expectedExports
+    expectedExports,
+    entryExports,
+    binName,
+    binArguments,
+    validateTypes
   })
-  console.log(
-    `Verified ${manifest.name}@${manifest.version}: packed payload, publint, ` +
-      `strict type resolution, and ${modes.join('/')} clean consumers.`
-  )
+  const validations = [
+    'packed payload',
+    'publint',
+    ...(validateTypes ? ['strict type resolution'] : []),
+    `${modes.join('/')} clean consumers`,
+    ...(binName ? [`installed ${binName} executable`] : [])
+  ]
+  console.log(`Verified ${manifest.name}@${manifest.version}: ${validations.join(', ')}.`)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

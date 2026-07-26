@@ -178,7 +178,7 @@ describe('idb update tests', () => {
             provenTxId: 1,
             batch: `batch-001`,
             status: 'completed',
-            txid: `mockTxid-${Date.now()}`,
+            txid: `mockTxid-${record[primaryKey]}`,
             created_at: new Date('2024-12-30T23:00:00Z'),
             updated_at: new Date('2024-12-30T23:05:00Z'),
             attempts: 3,

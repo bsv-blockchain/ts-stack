@@ -89,13 +89,6 @@ test('contract findings are deterministic and match their recorded baseline', ()
     createContractBaseline(findings, '2026-07-26'),
     baseline
   )
-  assert.ok(
-    findings.some(item =>
-      item.id ===
-      'packages/messaging/ts-paymail/docs/examples::placeholder-quality-script::test'
-    ),
-    'the failing npm test placeholder must remain visible until it is replaced'
-  )
 })
 
 test('contract ratchet detects both new and stale resolved findings', () => {

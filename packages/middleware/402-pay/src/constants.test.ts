@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { HEADERS, HEADER_PREFIX, BRC29_PROTOCOL_ID, DEFAULT_PAYMENT_WINDOW_MS } from './constants.js'
+import {
+  HEADERS,
+  HEADER_PREFIX,
+  BRC29_PROTOCOL_ID,
+  DEFAULT_PAYMENT_WINDOW_MS
+} from './constants.js'
 
 describe('constants', () => {
   describe('HEADER_PREFIX', () => {

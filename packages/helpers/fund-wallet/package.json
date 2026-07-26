@@ -10,32 +10,41 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "deggen",
   "type": "module",
-  "main": "dist/index.js",
   "bin": {
-    "fund-metanet": "./dist/index.js"
+    "fund-metanet": "./dist/index.mjs"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsdown src/index.ts --format esm --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/fund-wallet/src/**/*.ts\" \"packages/helpers/fund-wallet/*.{json,ts}\"",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes cli --skip-types --bin fund-metanet --bin-args --help",
     "prepublishOnly": "npm run build",
-    "start": "node dist/index.js",
-    "dev": "node dist/index.js",
-    "test": "exit 0"
+    "start": "node dist/index.mjs",
+    "dev": "node dist/index.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "dependencies": {
     "@bsv/wallet-toolbox": "workspace:^",
-    "chalk": "^5.6.2",
-    "dotenv": "^17.4.2"
+    "chalk": "^5.6.2"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/node": "^26.1.1",
-    "typescript": "^6.0.3"
+    "@vitest/coverage-v8": "4.1.10",
+    "oxlint": "^1.75.0",
+    "tsdown": "0.22.14",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "files": [
     "dist",
+    "README.md",
     "LICENSE.txt"
   ],
   "repository": {

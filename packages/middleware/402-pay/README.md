@@ -8,7 +8,9 @@
 npm install @bsv/402-pay
 ```
 
-Peer dependency: `@bsv/sdk >= 2.0.0`
+Peer dependency: `@bsv/sdk ^2.1.6`. The package supports Node.js 22+ and browser
+consumers, with matching ESM and CommonJS entry points and declarations for the
+package root, `/server`, and `/client`.
 
 ## Server
 
@@ -40,9 +42,15 @@ app.get('/articles/:slug', (req, res) => {
 import { validatePayment, send402 } from '@bsv/402-pay/server'
 
 // In any HTTP handler:
-const result = await validatePayment(req, wallet)
+const requiredSatoshis = 100
+const result = await validatePayment(req, wallet, requiredSatoshis)
 if (!result) {
-  send402(res, serverIdentityKey, 100)
+  send402(res, serverIdentityKey, requiredSatoshis)
+  return
+}
+if (!result.accepted) {
+  // Explicit replay rejection. Log safely and request a fresh payment.
+  send402(res, serverIdentityKey, requiredSatoshis)
   return
 }
 // Payment accepted — serve content
@@ -65,6 +73,11 @@ const html = await response.text()
 fetch402.clearCache()
 ```
 
+The default paid-response cache lifetime is 30 minutes. Set
+`cacheTimeoutMs` explicitly when the content or authorization lifetime is
+shorter. Only successful paid `GET` responses are cached; non-GET requests are
+always sent to the service.
+
 ## Headers
 
 ### Server → Client
@@ -84,13 +97,28 @@ fetch402.clearCache()
 | `x-bsv-time` | Unix millisecond timestamp |
 | `x-bsv-vout` | Payment output index |
 
-## Replay Protection
+## Security and Replay Protection
 
 Two mechanisms prevent replay attacks:
 
 1. **Timestamp freshness** -- `x-bsv-time` must be within 30 seconds of the server's clock
 2. **Transaction uniqueness** -- `internalizeAction` returns `isMerge: true` for previously seen transactions
 
+Servers should synchronize their clocks, treat payment headers as untrusted
+input, retain normal request-rate/body limits around the middleware, and avoid
+logging raw BEEF or identity material. Clients pay the origin derived from the
+requested URL and should only call trusted HTTPS services.
+
+For browser clients, configure the service or edge layer to expose
+`x-bsv-sats` and `x-bsv-server` and to allow the five client payment headers.
+The package intentionally does not set an origin policy: public services can
+remain broadly accessible, while deployments that need an allowlist can apply
+one without changing payment behavior.
+
+Wallet initialization and invalid server pricing are treated as server errors
+(`500`). Malformed, invalid, insufficient, or replayed payments receive a fresh
+`402`, as required by BRC-121.
+
 ## License
 
-See LICENSE
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
