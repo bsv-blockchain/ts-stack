@@ -15,5 +15,6 @@
   },
   "devDependencies": {
     "typescript": "^6.0.3"
-  }
+  },
+  "license": "SEE LICENSE IN LICENSE.txt"
 }

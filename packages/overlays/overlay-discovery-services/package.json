@@ -18,8 +18,8 @@
     "src",
     "docs",
     "mod.ts",
-    "LICENSE.txt",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "exports": {
     ".": {

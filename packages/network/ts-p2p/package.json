@@ -20,7 +20,7 @@
   "files": [
     "dist/**/*",
     "README.md",
-    "LICENSE"
+    "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsc",
@@ -64,7 +64,7 @@
     "pubsub",
     "bsv"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "engines": {
     "node": ">=22"
   },

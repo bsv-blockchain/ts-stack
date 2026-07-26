@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 148,
+  "findingCount": 137,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -42,10 +42,6 @@
     {
       "id": "packages/helpers/amountinator::missing-exports",
       "message": "Profile requires package exports"
-    },
-    {
-      "id": "packages/helpers/amountinator::missing-license-file",
-      "message": "Profile requires a shipped license file"
     },
     {
       "id": "packages/helpers/amountinator::missing-script::format:check",
@@ -104,10 +100,6 @@
       "message": "Profile cli requires script typecheck"
     },
     {
-      "id": "packages/helpers/did-client::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
-    {
       "id": "packages/helpers/did-client::missing-script::format:check",
       "message": "Profile browser-library requires script format:check"
     },
@@ -124,10 +116,6 @@
       "message": "Profile browser-library requires script typecheck"
     },
     {
-      "id": "packages/helpers/did::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
-    {
       "id": "packages/helpers/did::missing-script::format:check",
       "message": "Profile dual-runtime-library requires script format:check"
     },
@@ -138,10 +126,6 @@
     {
       "id": "packages/helpers/did::missing-script::typecheck",
       "message": "Profile dual-runtime-library requires script typecheck"
-    },
-    {
-      "id": "packages/helpers/fund-wallet::missing-license-file",
-      "message": "Profile requires a shipped license file"
     },
     {
       "id": "packages/helpers/fund-wallet::missing-script::format:check",
@@ -296,10 +280,6 @@
       "message": "Remove disabled quality escape hatch test:coverage-disabled"
     },
     {
-      "id": "packages/middleware/auth::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
-    {
       "id": "packages/middleware/auth::missing-script::format:check",
       "message": "Profile node-library requires script format:check"
     },
@@ -326,10 +306,6 @@
     {
       "id": "packages/middleware/payment-express-middleware::missing-script::typecheck",
       "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/network/ts-p2p::missing-license-file",
-      "message": "Profile requires a shipped license file"
     },
     {
       "id": "packages/network/ts-p2p::missing-script::format:check",
@@ -404,10 +380,6 @@
       "message": "Profile node-library requires script typecheck"
     },
     {
-      "id": "packages/overlays/topics::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
-    {
       "id": "packages/overlays/topics::missing-script::format:check",
       "message": "Profile node-library requires script format:check"
     },
@@ -448,10 +420,6 @@
       "message": "Profile wasm-library requires script pack:check"
     },
     {
-      "id": "packages/wallet/btms-permission-module::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
-    {
       "id": "packages/wallet/btms-permission-module::missing-script::format:check",
       "message": "Profile node-library requires script format:check"
     },
@@ -476,10 +444,6 @@
       "message": "Profile node-library requires script typecheck"
     },
     {
-      "id": "packages/wallet/btms::missing-license-file",
-      "message": "Profile requires a shipped license file"
-    },
-    {
       "id": "packages/wallet/btms::missing-script::format:check",
       "message": "Profile node-library requires script format:check"
     },
@@ -490,14 +454,6 @@
     {
       "id": "packages/wallet/btms::missing-script::typecheck",
       "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/wallet/ts-wallet-relay::missing-license-field",
-      "message": "Public package requires license"
-    },
-    {
-      "id": "packages/wallet/ts-wallet-relay::missing-license-file",
-      "message": "Profile requires a shipped license file"
     },
     {
       "id": "packages/wallet/ts-wallet-relay::missing-script::format:check",

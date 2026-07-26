@@ -79,6 +79,9 @@ jobs:
       - name: Build all packages
         run: pnpm -r --filter '!@bsv/ts-stack' run build
 
+      - name: Verify package license payloads
+        run: pnpm license:pack-check
+
       # Resolve release mode + filter. Three shapes:
       #
       #   1. Tag `packages/<path>/v*` → single-package publish, filter=./packages/<path>

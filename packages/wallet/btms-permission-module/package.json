@@ -20,7 +20,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsc -b",
@@ -33,7 +34,7 @@
     "wallet"
   ],
   "author": "BSV Blockchain Association",
-  "license": "Open BSV",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "peerDependencies": {
     "@bsv/btms": "^1.1.0",
     "@bsv/sdk": "^2.1.6",

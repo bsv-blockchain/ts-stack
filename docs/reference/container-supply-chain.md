@@ -2,9 +2,9 @@
 id: container-supply-chain
 title: "Container Supply Chain"
 kind: reference
-version: "1.0.0"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: "1.1.0"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
@@ -24,7 +24,8 @@ artifact that reaches a registry.
 
 - the seven Docker build contexts and their `linux/amd64` platform;
 - the exact digest-pinned Node base and its human-readable expected version;
-- OCI title, description, license, and documentation metadata; and
+- OCI title, description, uniform `LicenseRef-Open-BSV-License-6`, and
+  documentation metadata; and
 - the GHCR or GHCR-plus-Marketplace release route for each component.
 
 `scripts/container-supply-chain.test.mjs`, run by `pnpm health:check`, rejects

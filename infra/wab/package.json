@@ -62,5 +62,6 @@
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3"
-  }
+  },
+  "license": "SEE LICENSE IN LICENSE.txt"
 }

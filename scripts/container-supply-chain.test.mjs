@@ -57,7 +57,7 @@ test('container registry exactly owns every release Dockerfile and immutable bas
 
   for (const component of registry.components) {
     assert.match(component.name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    assert.match(component.license, /^(?:MIT|ISC|LicenseRef-[A-Za-z0-9-]+)$/)
+    assert.equal(component.license, 'LicenseRef-Open-BSV-License-6')
     assert.match(component.documentation, /^https:\/\/github\.com\/bsv-blockchain\/ts-stack\//)
     assert.ok(component.title.length > 0)
     assert.ok(component.description.length > 0)
@@ -221,5 +221,5 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   }
 
   assert.deepEqual(trackedPythonBytecode, [])
-  assert.ok(existsSync(join(REPOSITORY_ROOT, 'LICENSE.md')))
+  assert.ok(existsSync(join(REPOSITORY_ROOT, 'LICENSE.txt')))
 })

@@ -22,7 +22,8 @@
     "src/**/*.ts",
     "!src/**/__tests__/**",
     "docs/*.md",
-    "docs/specs"
+    "docs/specs",
+    "LICENSE.txt"
   ],
   "exports": {
     ".": {

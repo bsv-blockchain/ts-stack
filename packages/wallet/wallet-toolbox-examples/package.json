@@ -11,7 +11,7 @@
     "directory": "packages/wallet/wallet-toolbox-examples"
   },
   "author": "Tone Engel",
-  "license": "SEE LICENSE IN license.md",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "keywords": [
     "bsv",
     "babbage",

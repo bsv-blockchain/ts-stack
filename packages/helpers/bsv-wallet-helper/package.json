@@ -20,7 +20,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE.txt"
   ],
   "repository": {
     "type": "git",
@@ -37,7 +38,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "type": "commonjs",
   "dependencies": {
     "@bsv/wallet-toolbox-client": "workspace:^"

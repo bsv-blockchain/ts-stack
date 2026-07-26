@@ -20,7 +20,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE.txt"
   ],
   "repository": {
     "type": "git",
@@ -44,7 +45,7 @@
     "signature"
   ],
   "author": "BSV Blockchain Association",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "type": "commonjs",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

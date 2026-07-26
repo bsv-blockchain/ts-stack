@@ -43,7 +43,7 @@
     "prepublish": "npm run build"
   },
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
-  "license": "Open BSV License",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "qrcode": "^1.5.4"
   },

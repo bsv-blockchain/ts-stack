@@ -16,7 +16,7 @@
     "sendBeefP2P": "npm run build && node dist/cjs/src/client/sendP2PBeef.js"
   },
   "author": "",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/paymail": "workspace:^",
     "@bsv/sdk": "workspace:^",

@@ -14,7 +14,8 @@
   "types": "./out/src/index.d.ts",
   "files": [
     "out/src",
-    "src"
+    "src",
+    "LICENSE.txt"
   ],
   "repository": {
     "type": "git",

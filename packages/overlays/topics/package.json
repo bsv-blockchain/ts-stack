@@ -20,7 +20,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsc",
@@ -44,7 +45,7 @@
     "typescript": "^6.0.3",
     "oxlint": "^1.75.0"
   },
-  "license": "Open BSV",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "author": "BSV Blockchain Association",
   "private": false,
   "repository": {

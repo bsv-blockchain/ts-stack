@@ -11,5 +11,6 @@
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "typescript": "^6.0.3"
-  }
+  },
+  "license": "SEE LICENSE IN LICENSE.txt"
 }
