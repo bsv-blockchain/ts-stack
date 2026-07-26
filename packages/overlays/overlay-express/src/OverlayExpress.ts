@@ -27,7 +27,9 @@ import {
   Transaction,
   PrivateKey,
   KeyDeriver,
-  WalletInterface
+  WalletInterface,
+  SessionManager,
+  AsyncSessionManager
 } from '@bsv/sdk'
 import Knex from 'knex'
 import { MongoClient, Db } from 'mongodb'
@@ -385,6 +387,9 @@ export default class OverlayExpress {
   // Server-side wallet (WalletInterface) used for BSV mutual authentication
   serverWallet?: WalletInterface
 
+  // Optional shared store for BSV mutual-auth sessions.
+  authSessionManager?: SessionManager | AsyncSessionManager
+
   // Server start time for uptime tracking
   private startTime?: Date
 
@@ -549,6 +554,16 @@ export default class OverlayExpress {
   configureAdminIdentityKey (identityKey: string): void {
     this.adminIdentityKey = identityKey
     this.logger.log(chalk.blue('Admin identity key has been configured.'))
+  }
+
+  /**
+   * Configures BRC-103 session storage for the administrative mutual-auth
+   * middleware. Horizontally scaled services should supply a shared
+   * AsyncSessionManager rather than use the default process-local store.
+   */
+  configureAuthSessionManager (sessionManager: SessionManager | AsyncSessionManager): void {
+    this.authSessionManager = sessionManager
+    this.logger.log(chalk.blue('BSV authentication session manager has been configured.'))
   }
 
   /**
@@ -1959,6 +1974,7 @@ export default class OverlayExpress {
     if (this.serverWallet !== undefined) {
       const bsvAuth = createAuthMiddleware({
         wallet: this.serverWallet,
+        sessionManager: this.authSessionManager,
         allowUnauthenticated: true
       })
       this.app.use(bsvAuth as any)
