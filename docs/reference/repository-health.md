@@ -2,9 +2,9 @@
 id: repository-health
 title: "Repository Health Controls"
 kind: reference
-version: "1.0.0"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: "1.1.0"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -31,6 +31,9 @@ The profile definitions in the same file describe the scripts and package
 metadata required for Node, browser, CLI, React Native, WASM, private,
 documentation, and conformance projects. Profiles standardize the externally
 observable contract without requiring every package to use the same build tool.
+For every public package, the control also enforces the exact supported
+Node.js 22 runtime floor, explicit public npm access, and an explicit
+tree-shaking side-effect declaration.
 
 `governance/repository-health/baselines.json` records the dated starting
 measurements for CI, conformance, lint, TypeScript, coverage, security,

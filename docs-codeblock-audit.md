@@ -214,7 +214,7 @@ Status key: ✅ = checked against local source/package docs/tests and patched if
 ## docs/infrastructure/uhrp-server-cloud-bucket.md
 
 - ✅ CB-0141 (bash) [73-85] Run locally — `# Install dependencies`
-- ✅ CB-0142 (bash) [91-104] Deploy to production — `# Multi-stage build: Node 22 alpine builder → production runtime`
+- ✅ CB-0142 (bash) [91-104] Deploy to production — `# Multi-stage build: pinned Node 24 alpine builder → production runtime`
 
 ## docs/infrastructure/wab.md
 
@@ -225,7 +225,7 @@ Status key: ✅ = checked against local source/package docs/tests and patched if
 ## docs/infrastructure/wallet-infra.md
 
 - ✅ CB-0146 (bash) [68-83] Run locally — `# Install dependencies`
-- ✅ CB-0147 (bash) [87-113] Deploy to production — `# Multi-stage Docker build: Node 22 alpine → production`
+- ✅ CB-0147 (bash) [87-113] Deploy to production — `# Multi-stage Docker build: pinned Node 24 alpine → production`
 
 ## docs/packages/helpers/amountinator.md
 

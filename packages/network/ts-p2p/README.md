@@ -34,7 +34,7 @@ npm install @bsv/teranode-listener
 
 ### Requirements
 
-- **Node.js**: Version 18.0.0 or higher
+- **Node.js**: Version 22.0.0 or higher
 - **ES Modules**: This package is published as an ES module. Ensure your project supports ES modules by either:
   - Adding `"type": "module"` to your `package.json`, or
   - Using `.mjs` file extensions for your JavaScript files

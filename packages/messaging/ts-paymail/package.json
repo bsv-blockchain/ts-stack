@@ -1,6 +1,10 @@
 {
   "name": "@bsv/paymail",
   "version": "2.4.2",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
   "description": "BSV Paymail library",
   "publishConfig": {
     "access": "public"

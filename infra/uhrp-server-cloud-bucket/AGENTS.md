@@ -12,7 +12,7 @@ A production-grade UHRP host server backed by Google Cloud Storage (or S3-compat
 - **Health/readiness** – Implicit health via /info endpoint
 
 ## Real deployment
-- **Dockerfile** – Multi-stage: Node 22 alpine builder → production runtime with ts-node
+- **Dockerfile** – Multi-stage: digest-pinned Node 24 alpine builder → production runtime with ts-node
 - **No docker-compose.yml** – Designed for Google Cloud Run + Cloud SQL, not Docker Compose
 - **No nginx.conf** – Cloud Run handles HTTP/2, load balancing, and SSL
 - **Cloud Storage** – Google Cloud Storage bucket via `@google-cloud/storage` SDK
@@ -88,7 +88,7 @@ Environment variables:
 - **scripts/**
   - `sync-secrets.ts` – Cloud Secret Manager sync to .env (staging/prod)
   - `verify-config.ts` – Pre-deployment config validation
-- **Dockerfile** – Multi-stage Node 22 alpine builder → production
+- **Dockerfile** – Multi-stage digest-pinned Node 24 alpine builder → production
 - **package.json** – Scripts: `dev`, `build`, `start`, `secrets:staging`, `secrets:prod`
 - **.env.example** – Template with GCP, wallet, and storage config
 - **README.md** – Deployment guide for Google Cloud Run setup

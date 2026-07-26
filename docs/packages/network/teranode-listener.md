@@ -165,7 +165,7 @@ await listener.stop()
 
 ## Common pitfalls
 
-1. **Node.js 18+ required** — Modern async/await and crypto features
+1. **Node.js 22+ required** — This is the supported runtime floor declared by the package
 2. **ES modules only** — Package is ESM; use `.mjs` files or set `"type": "module"` in package.json
 3. **Teranode mainnet defaults** — Without config, connects to official Teranode mainnet
 4. **PSK hex format** — `sharedKey` must be hex-encoded; library auto-formats to PSK

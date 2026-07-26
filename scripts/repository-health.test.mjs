@@ -44,12 +44,39 @@ test('workspace discovery exactly matches the 37-project registry', () => {
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
-  const result = evaluateRepositoryHealth({ today: '2026-07-25' })
+  const result = evaluateRepositoryHealth({ today: '2026-07-26' })
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.projects.length, 37)
   assert.equal(result.publicPackages, 30)
   assert.ok(result.findings.length > 0, 'known debt must remain visible until remediated')
+})
+
+test('every public package declares the supported Node.js 22 runtime contract', () => {
+  const publicPackages = discoverWorkspaceProjects()
+    .filter(project => project.manifest.private !== true)
+
+  assert.equal(publicPackages.length, 30)
+  for (const project of publicPackages) {
+    assert.equal(
+      project.manifest.engines?.node,
+      '>=22',
+      `${project.path} must declare the exact supported Node.js runtime floor`
+    )
+    assert.equal(
+      project.manifest.publishConfig?.access,
+      'public',
+      `${project.path} must explicitly publish with public access`
+    )
+    assert.ok(
+      typeof project.manifest.sideEffects === 'boolean' ||
+        (Array.isArray(project.manifest.sideEffects) &&
+          project.manifest.sideEffects.every(item =>
+            typeof item === 'string' && item.trim().length > 0
+          )),
+      `${project.path} must declare its tree-shaking side-effect contract`
+    )
+  }
 })
 
 test('contract findings are deterministic and match their recorded baseline', () => {
@@ -59,7 +86,7 @@ test('contract findings are deterministic and match their recorded baseline', ()
 
   assert.deepEqual(compareContractBaseline(baseline, findings), [])
   assert.deepEqual(
-    createContractBaseline(findings, '2026-07-25'),
+    createContractBaseline(findings, '2026-07-26'),
     baseline
   )
   assert.ok(

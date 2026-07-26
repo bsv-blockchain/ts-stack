@@ -2,9 +2,9 @@
 id: guide-p2p-messaging
 title: "Peer-to-Peer Messaging"
 kind: guide
-version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: "1.0.1"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [guide, messaging, encryption, brc-103]
@@ -15,7 +15,7 @@ tags: [guide, messaging, encryption, brc-103]
 > Send authenticated, encrypted messages between peers using BRC-103 mutual authentication. Choose between store-and-forward HTTP (MessageBox) or real-time WebSocket (Authsocket) transport.
 
 **Time:** ~25 minutes
-**Prerequisites:** Node.js ≥ 20, basic TypeScript, understanding of public-key cryptography
+**Prerequisites:** Node.js ≥ 22, basic TypeScript, understanding of public-key cryptography
 
 ## What you'll build
 
@@ -30,7 +30,7 @@ By the end, you'll understand both HTTP and WebSocket messaging patterns.
 
 ## Prerequisites
 
-- Node.js 20+ installed
+- Node.js 22+ installed
 - npm or pnpm
 - A BRC-100 wallet (or WalletClient from @bsv/sdk)
 - Public key of a peer you want to message

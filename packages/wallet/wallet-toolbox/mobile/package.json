@@ -1,9 +1,29 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
   "version": "2.4.4",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.mobile.js",
   "types": "./out/src/index.mobile.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/src/index.mobile.d.ts",
+      "require": "./out/src/index.mobile.js",
+      "default": "./out/src/index.mobile.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "out/src",
+    "README.md",
+    "license.md"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

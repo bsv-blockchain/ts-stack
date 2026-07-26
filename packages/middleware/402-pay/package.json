@@ -1,6 +1,13 @@
 {
   "name": "@bsv/402-pay",
   "version": "0.2.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "BRC-121 Simple 402 Payments — server middleware and client for BSV micropayments over HTTP",
   "type": "module",
   "main": "dist/index.js",

@@ -1,9 +1,34 @@
 {
   "name": "@bsv/wallet-toolbox",
   "version": "2.4.4",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "BRC100 conforming wallet, wallet storage and wallet signer components",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/src/index.d.ts",
+      "require": "./out/src/index.js",
+      "default": "./out/src/index.js"
+    },
+    "./out/src/sdk": {
+      "types": "./out/src/sdk/index.d.ts",
+      "require": "./out/src/sdk/index.js",
+      "default": "./out/src/sdk/index.js"
+    },
+    "./out/src/*": {
+      "types": "./out/src/*.d.ts",
+      "require": "./out/src/*.js",
+      "default": "./out/src/*.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "out/src/",
     "docs/",

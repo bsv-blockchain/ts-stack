@@ -103,7 +103,7 @@ Requires GCP service account credentials or emulator for local testing.
 ## Deploy to production
 
 ```bash
-# Multi-stage build: Node 22 alpine builder → production runtime
+# Multi-stage build: pinned Node 24 alpine builder → production runtime
 docker build -t uhrp-storage:latest .
 
 # Deploy to Google Cloud Run

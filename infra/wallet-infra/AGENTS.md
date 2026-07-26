@@ -17,7 +17,7 @@ A reference implementation of BSV wallet infrastructure for secure UTXO storage 
 - **WebSocket** – Optional real-time UTXO update notifications (not in base config)
 
 ## Real deployment
-- **Dockerfile** – Alpine-based Node 22 image. Compiles TypeScript to `out/`, runs `node out/src/index.js` with nginx reverse proxy support
+- **Dockerfile** – Digest-pinned Alpine-based Node 24 image. Compiles TypeScript to `out/`, runs `node out/src/index.js` with nginx reverse proxy support
 - **docker-compose.yml** – Services: Node app (on port 8081), MySQL 8.0 database with health checks
 - **nginx.conf** – Optional reverse proxy (if ENABLE_NGINX=true), listening on 8080, proxying to app on 8081
 - **Knex migrations** – Auto-applied on startup via `@bsv/wallet-toolbox`
@@ -80,7 +80,7 @@ Environment variables (from `.env.example`):
   - `index.ts` – Entry point: initializes Knex, wallet-toolbox, StorageServer, starts HTTP server
   - **No app.ts** – Configuration is inline in index.ts via wallet-toolbox classes
 - **out/** – Compiled TypeScript output (created by `npm run build`)
-- **Dockerfile** – Alpine-based Node 22 with nginx optional support
+- **Dockerfile** – Digest-pinned Alpine-based Node 24 with nginx optional support
 - **docker-compose.yml** – App + MySQL 8.0
 - **nginx.conf** – Reverse proxy config (used if ENABLE_NGINX=true)
 - **.env.example** – Template with all required/optional variables

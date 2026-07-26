@@ -2,9 +2,9 @@
 id: guide-http-402
 title: "HTTP 402 Payment Gating"
 kind: guide
-version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: "1.0.1"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [guide, payments, http-402, brc-121, monetization]
@@ -15,7 +15,7 @@ tags: [guide, payments, http-402, brc-121, monetization]
 > Monetize your API with Bitcoin SV micropayments. You'll set up a payment-gated Express server and build a client that auto-pays for content using HTTP 402 Payment Required.
 
 **Time:** ~25 minutes
-**Prerequisites:** Node.js ≥ 20, basic Express.js, understanding of Bitcoin transactions
+**Prerequisites:** Node.js ≥ 22, basic Express.js, understanding of Bitcoin transactions
 
 ## What you'll build
 
@@ -28,7 +28,7 @@ By the end, you'll have a production-ready micropayment system that doesn't requ
 
 ## Prerequisites
 
-- Node.js 20+ installed
+- Node.js 22+ installed
 - npm or pnpm
 - A BRC-100 wallet (server and client)
 - Basic understanding of Bitcoin transactions and satoshis

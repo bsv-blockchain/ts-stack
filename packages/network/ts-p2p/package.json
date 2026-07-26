@@ -1,10 +1,22 @@
 {
   "name": "@bsv/teranode-listener",
   "version": "1.1.1",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "An npm package to subscribe to Teranode P2P topics in a private DHT network and log messages",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist/**/*",
     "README.md",
@@ -54,7 +66,7 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22"
   },
   "repository": {
     "type": "git",
