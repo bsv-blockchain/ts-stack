@@ -60,7 +60,9 @@ export const addOpReturnData = (
   // Check if script already contains OP_RETURN
   const scriptAsm = script.toASM()
   if (scriptAsm.includes('OP_RETURN')) {
-    throw new Error('Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.')
+    throw new Error(
+      'Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.'
+    )
   }
 
   // Validate fields parameter

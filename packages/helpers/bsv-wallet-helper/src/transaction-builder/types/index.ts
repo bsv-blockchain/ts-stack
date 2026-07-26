@@ -1,5 +1,5 @@
-export { BuildParams } from './build-params'
-export { InputConfig } from './input-config'
-export { OutputConfig } from './output-config'
+export type { BuildParams } from './build-params'
+export type { InputConfig } from './input-config'
+export type { OutputConfig } from './output-config'
 export { isDerivationParams } from './type-guards'
 export * from './params'

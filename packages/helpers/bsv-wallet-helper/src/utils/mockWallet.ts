@@ -6,14 +6,14 @@
  * For hermetic unit tests, use makeMockWallet (based on ProtoWallet, no network).
  */
 
+import { PrivateKey, KeyDeriver, WalletClient, ProtoWallet, WalletInterface } from '@bsv/sdk'
 import {
-  PrivateKey,
-  KeyDeriver,
-  WalletClient,
-  ProtoWallet,
-  WalletInterface
-} from '@bsv/sdk'
-import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
+  WalletStorageManager,
+  Services,
+  Wallet,
+  StorageClient,
+  WalletSigner
+} from '@bsv/wallet-toolbox-client'
 
 /**
  * Creates a test wallet for blockchain testing
@@ -24,7 +24,7 @@ import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } f
  * @returns WalletClient instance (cast from WalletInterface)
  * @throws Error if parameters are invalid or wallet creation fails
  */
-export async function makeWallet (
+export async function makeWallet(
   chain: 'test' | 'main',
   storageURL: string,
   privateKey: string
@@ -66,7 +66,7 @@ export async function makeWallet (
 /**
  * Creates a random private key for testing
  */
-export function createTestPrivateKey (): PrivateKey {
+export function createTestPrivateKey(): PrivateKey {
   return PrivateKey.fromRandom()
 }
 
@@ -74,7 +74,7 @@ export function createTestPrivateKey (): PrivateKey {
  * Creates a deterministic private key from a seed number
  * Useful for reproducible tests
  */
-export function createTestPrivateKeyFromSeed (seed: number): PrivateKey {
+export function createTestPrivateKeyFromSeed(seed: number): PrivateKey {
   return new PrivateKey(seed)
 }
 
@@ -91,10 +91,10 @@ export function createTestPrivateKeyFromSeed (seed: number): PrivateKey {
  * @param privateKey - A PrivateKey instance, or hex string, or numeric seed
  * @returns WalletInterface-compatible mock (sync construction, returned as Promise for API compat)
  */
-export async function makeMockWallet (privateKey: PrivateKey | string | number): Promise<WalletInterface> {
-  const rootKey = privateKey instanceof PrivateKey
-    ? privateKey
-    : new PrivateKey(privateKey)
+export async function makeMockWallet(
+  privateKey: PrivateKey | string | number
+): Promise<WalletInterface> {
+  const rootKey = privateKey instanceof PrivateKey ? privateKey : new PrivateKey(privateKey)
   const proto = new ProtoWallet(rootKey)
   // Cast: ProtoWallet provides the cryptographic surface required by the script templates
   return proto as unknown as WalletInterface

@@ -1,17 +1,13 @@
-import {
-  Transaction,
-  Script,
-  TransactionSignature
-} from '@bsv/sdk'
+import { Transaction, Script, TransactionSignature } from '@bsv/sdk'
 
-export function calculatePreimage (
+export function calculatePreimage(
   tx: Transaction,
   inputIndex: number,
   signOutputs: 'all' | 'none' | 'single',
   anyoneCanPay: boolean,
   sourceSatoshis?: number,
   lockingScript?: Script
-): { preimage: number[], signatureScope: number } {
+): { preimage: number[]; signatureScope: number } {
   // Validate required parameters
   if (!tx) {
     throw new Error('Transaction is required')
@@ -20,7 +16,9 @@ export function calculatePreimage (
     throw new Error('Transaction must have at least one input')
   }
   if (inputIndex < 0 || inputIndex >= tx.inputs.length) {
-    throw new Error(`Invalid inputIndex ${inputIndex}. Transaction has ${tx.inputs.length} input(s)`)
+    throw new Error(
+      `Invalid inputIndex ${inputIndex}. Transaction has ${tx.inputs.length} input(s)`
+    )
   }
   if (!['all', 'none', 'single'].includes(signOutputs)) {
     throw new Error(`Invalid signOutputs "${signOutputs}". Must be "all", "none", or "single"`)
@@ -34,7 +32,9 @@ export function calculatePreimage (
     signatureScope |= TransactionSignature.SIGHASH_SINGLE
     // SIGHASH_SINGLE requires a corresponding output at the same index
     if (!tx.outputs || inputIndex >= tx.outputs.length) {
-      throw new Error(`SIGHASH_SINGLE requires output at index ${inputIndex}, but transaction only has ${tx.outputs?.length || 0} output(s)`)
+      throw new Error(
+        `SIGHASH_SINGLE requires output at index ${inputIndex}, but transaction only has ${tx.outputs?.length || 0} output(s)`
+      )
     }
   }
   if (anyoneCanPay) signatureScope |= TransactionSignature.SIGHASH_ANYONECANPAY
@@ -50,12 +50,16 @@ export function calculatePreimage (
 
   sourceSatoshis ||= input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis
   if (!sourceSatoshis) {
-    throw new Error(`Input ${inputIndex}: sourceSatoshis or input sourceTransaction is required for signing`)
+    throw new Error(
+      `Input ${inputIndex}: sourceSatoshis or input sourceTransaction is required for signing`
+    )
   }
 
   lockingScript ||= input.sourceTransaction?.outputs[input.sourceOutputIndex].lockingScript
   if (lockingScript == null) {
-    throw new Error(`Input ${inputIndex}: lockingScript or input sourceTransaction is required for signing`)
+    throw new Error(
+      `Input ${inputIndex}: lockingScript or input sourceTransaction is required for signing`
+    )
   }
 
   return {

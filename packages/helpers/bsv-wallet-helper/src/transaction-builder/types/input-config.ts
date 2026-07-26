@@ -5,7 +5,7 @@ import { WalletDerivationParams } from '../../types/wallet'
  * Configuration for a transaction input
  */
 export type InputConfig =
-    | {
+  | {
       type: 'p2pkh'
       sourceTransaction: Transaction
       sourceOutputIndex: number
@@ -16,7 +16,7 @@ export type InputConfig =
       sourceSatoshis?: number
       lockingScript?: Script
     }
-    | {
+  | {
       type: 'ordLock'
       sourceTransaction: Transaction
       sourceOutputIndex: number
@@ -28,7 +28,7 @@ export type InputConfig =
       sourceSatoshis?: number
       lockingScript?: Script
     }
-    | {
+  | {
       type: 'ordinalP2PKH'
       sourceTransaction: Transaction
       sourceOutputIndex: number
@@ -39,7 +39,7 @@ export type InputConfig =
       sourceSatoshis?: number
       lockingScript?: Script
     }
-    | {
+  | {
       type: 'custom'
       sourceTransaction: Transaction
       sourceOutputIndex: number

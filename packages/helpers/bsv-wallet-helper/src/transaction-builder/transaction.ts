@@ -1,4 +1,12 @@
-import { WalletInterface, LockingScript, Transaction, CreateActionOutput, CreateActionOptions, SatoshisPerKilobyte, Beef } from '@bsv/sdk'
+import {
+  WalletInterface,
+  LockingScript,
+  Transaction,
+  CreateActionOutput,
+  CreateActionOptions,
+  SatoshisPerKilobyte,
+  Beef
+} from '@bsv/sdk'
 
 import P2PKH from '../script-templates/p2pkh'
 import OrdP2PKH from '../script-templates/ordinal'
@@ -27,7 +35,7 @@ import {
 /** Address string, wallet derivation params, or undefined (BRC-29 auto-derive). */
 type AddressOrParams = string | WalletDerivationParams | undefined
 
-export function isHexPublicKey (value: string): boolean {
+export function isHexPublicKey(value: string): boolean {
   return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130)
 }
 
@@ -38,18 +46,18 @@ export function isHexPublicKey (value: string): boolean {
  * access transaction-level methods like build().
  */
 export class InputBuilder {
-  constructor (
+  constructor(
     private readonly parent: TransactionBuilder,
     private readonly inputConfig: InputConfig
-  ) { }
+  ) {}
 
   /**
-     * Sets the description for THIS input only.
-     *
-     * @param desc - Description for this specific input
-     * @returns This InputBuilder for further input configuration
-     */
-  inputDescription (desc: string): this {
+   * Sets the description for THIS input only.
+   *
+   * @param desc - Description for this specific input
+   * @returns This InputBuilder for further input configuration
+   */
+  inputDescription(desc: string): this {
     if (typeof desc !== 'string') {
       throw new TypeError('Input description must be a string')
     }
@@ -58,122 +66,122 @@ export class InputBuilder {
   }
 
   /**
-     * Adds a P2PKH input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addP2PKHInput (params: AddP2PKHInputParams): InputBuilder {
+   * Adds a P2PKH input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addP2PKHInput(params: AddP2PKHInputParams): InputBuilder {
     return this.parent.addP2PKHInput(params)
   }
 
   /**
-     * Adds an ordinalP2PKH input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addOrdinalP2PKHInput (params: AddOrdinalP2PKHInputParams): InputBuilder {
+   * Adds an ordinalP2PKH input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addOrdinalP2PKHInput(params: AddOrdinalP2PKHInputParams): InputBuilder {
     return this.parent.addOrdinalP2PKHInput(params)
   }
 
   /**
-     * Adds an OrdLock input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addOrdLockInput (params: AddOrdLockInputParams): InputBuilder {
+   * Adds an OrdLock input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addOrdLockInput(params: AddOrdLockInputParams): InputBuilder {
     return this.parent.addOrdLockInput(params)
   }
 
   /**
-     * Adds a custom input with a pre-built unlocking script template.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addCustomInput (params: AddCustomInputParams): InputBuilder {
+   * Adds a custom input with a pre-built unlocking script template.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addCustomInput(params: AddCustomInputParams): InputBuilder {
     return this.parent.addCustomInput(params)
   }
 
   /**
-     * Adds a P2PKH output to the transaction.
-     *
-     * @param params - Object with publicKey/walletParams, satoshis, and optional description
-     * @returns A new OutputBuilder for the new output
-     */
-  addP2PKHOutput (params: AddP2PKHOutputParams): OutputBuilder {
+   * Adds a P2PKH output to the transaction.
+   *
+   * @param params - Object with publicKey/walletParams, satoshis, and optional description
+   * @returns A new OutputBuilder for the new output
+   */
+  addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder {
     return this.parent.addP2PKHOutput(params)
   }
 
   /**
-     * Adds a change output that automatically calculates the change amount.
-     *
-     * @param params - Optional object with publicKey/walletParams and description
-     * @returns A new OutputBuilder for the new output
-     */
-  addChangeOutput (params?: AddChangeOutputParams): OutputBuilder {
+   * Adds a change output that automatically calculates the change amount.
+   *
+   * @param params - Optional object with publicKey/walletParams and description
+   * @returns A new OutputBuilder for the new output
+   */
+  addChangeOutput(params?: AddChangeOutputParams): OutputBuilder {
     return this.parent.addChangeOutput(params)
   }
 
   /**
-     * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
-     *
-     * @param params - Object with publicKey/walletParams, satoshis, and optional inscription, metadata, description
-     * @returns A new OutputBuilder for the new output
-     */
-  addOrdinalP2PKHOutput (params: AddOrdinalP2PKHOutputParams): OutputBuilder {
+   * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+   *
+   * @param params - Object with publicKey/walletParams, satoshis, and optional inscription, metadata, description
+   * @returns A new OutputBuilder for the new output
+   */
+  addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder {
     return this.parent.addOrdinalP2PKHOutput(params)
   }
 
   /**
-     * Adds an OrdLock output to the transaction.
-     *
-     * @param params - Object containing output parameters
-     * @returns A new OutputBuilder for configuring this output
-     */
-  addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
+   * Adds an OrdLock output to the transaction.
+   *
+   * @param params - Object containing output parameters
+   * @returns A new OutputBuilder for configuring this output
+   */
+  addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder {
     return this.parent.addOrdLockOutput(params)
   }
 
   /**
-     * Adds a custom output with a pre-built locking script.
-     *
-     * @param params - Object with lockingScript, satoshis, and optional description
-     * @returns A new OutputBuilder for the new output
-     */
-  addCustomOutput (params: AddCustomOutputParams): OutputBuilder {
+   * Adds a custom output with a pre-built locking script.
+   *
+   * @param params - Object with lockingScript, satoshis, and optional description
+   * @returns A new OutputBuilder for the new output
+   */
+  addCustomOutput(params: AddCustomOutputParams): OutputBuilder {
     return this.parent.addCustomOutput(params)
   }
 
   /**
-     * Sets transaction-level options (convenience proxy to TransactionTemplate).
-     *
-     * @param opts - Transaction options (randomizeOutputs, etc.)
-     * @returns The parent TransactionBuilder for transaction-level chaining
-     */
-  options (opts: CreateActionOptions): TransactionBuilder {
+   * Sets transaction-level options (convenience proxy to TransactionTemplate).
+   *
+   * @param opts - Transaction options (randomizeOutputs, etc.)
+   * @returns The parent TransactionBuilder for transaction-level chaining
+   */
+  options(opts: CreateActionOptions): TransactionBuilder {
     return this.parent.options(opts)
   }
 
   /**
-     * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
-     *
-     * @param params - Build parameters (optional)
-     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
-     */
-  async build (params?: BuildParams): Promise<any> {
+   * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
+   *
+   * @param params - Build parameters (optional)
+   * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
+   */
+  async build(params?: BuildParams): Promise<any> {
     return await this.parent.build(params)
   }
 
   /**
-     * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
-     * Equivalent to calling build({ preview: true }).
-     *
-     * @returns Promise resolving to the createAction arguments object
-     */
-  async preview (): Promise<any> {
+   * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
+   * Equivalent to calling build({ preview: true }).
+   *
+   * @returns Promise resolving to the createAction arguments object
+   */
+  async preview(): Promise<any> {
     return await this.parent.build({ preview: true })
   }
 }
@@ -186,18 +194,18 @@ export class InputBuilder {
  * accessing transaction-level methods like build().
  */
 export class OutputBuilder {
-  constructor (
+  constructor(
     private readonly parent: TransactionBuilder,
     private readonly outputConfig: OutputConfig
-  ) { }
+  ) {}
 
   /**
-     * Adds OP_RETURN data to THIS output only.
-     *
-     * @param fields - Array of data fields. Each field can be a UTF-8 string, hex string, or byte array
-     * @returns This OutputBuilder for further output configuration
-     */
-  addOpReturn (fields: Array<string | number[]>): this {
+   * Adds OP_RETURN data to THIS output only.
+   *
+   * @param fields - Array of data fields. Each field can be a UTF-8 string, hex string, or byte array
+   * @returns This OutputBuilder for further output configuration
+   */
+  addOpReturn(fields: Array<string | number[]>): this {
     if (!Array.isArray(fields) || fields.length === 0) {
       throw new Error('addOpReturn requires a non-empty array of fields')
     }
@@ -206,12 +214,12 @@ export class OutputBuilder {
   }
 
   /**
-     * Sets the basket for THIS output only.
-     *
-     * @param value - Basket name/identifier
-     * @returns This OutputBuilder for further output configuration
-     */
-  basket (value: string): this {
+   * Sets the basket for THIS output only.
+   *
+   * @param value - Basket name/identifier
+   * @returns This OutputBuilder for further output configuration
+   */
+  basket(value: string): this {
     if (typeof value !== 'string' || value.length === 0) {
       throw new Error('basket requires a non-empty string')
     }
@@ -220,12 +228,12 @@ export class OutputBuilder {
   }
 
   /**
-     * Sets custom instructions for THIS output only.
-     *
-     * @param value - Custom instructions (typically JSON string)
-     * @returns This OutputBuilder for further output configuration
-     */
-  customInstructions (value: string): this {
+   * Sets custom instructions for THIS output only.
+   *
+   * @param value - Custom instructions (typically JSON string)
+   * @returns This OutputBuilder for further output configuration
+   */
+  customInstructions(value: string): this {
     if (typeof value !== 'string' || value.length === 0) {
       throw new Error('customInstructions requires a non-empty string')
     }
@@ -234,90 +242,90 @@ export class OutputBuilder {
   }
 
   /**
-     * Adds a P2PKH output to the transaction.
-     *
-     * @param params - Object with publicKey/walletParams, satoshis, and optional description
-     * @returns A new OutputBuilder for the new output
-     */
-  addP2PKHOutput (params: AddP2PKHOutputParams): OutputBuilder {
+   * Adds a P2PKH output to the transaction.
+   *
+   * @param params - Object with publicKey/walletParams, satoshis, and optional description
+   * @returns A new OutputBuilder for the new output
+   */
+  addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder {
     return this.parent.addP2PKHOutput(params)
   }
 
   /**
-     * Adds a change output that automatically calculates the change amount.
-     *
-     * @param params - Optional object with publicKey/walletParams and description
-     * @returns A new OutputBuilder for the new output
-     */
-  addChangeOutput (params?: AddChangeOutputParams): OutputBuilder {
+   * Adds a change output that automatically calculates the change amount.
+   *
+   * @param params - Optional object with publicKey/walletParams and description
+   * @returns A new OutputBuilder for the new output
+   */
+  addChangeOutput(params?: AddChangeOutputParams): OutputBuilder {
     return this.parent.addChangeOutput(params)
   }
 
   /**
-     * Adds a P2PKH input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addP2PKHInput (params: AddP2PKHInputParams): InputBuilder {
+   * Adds a P2PKH input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addP2PKHInput(params: AddP2PKHInputParams): InputBuilder {
     return this.parent.addP2PKHInput(params)
   }
 
   /**
-     * Adds an ordinalP2PKH input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addOrdinalP2PKHInput (params: AddOrdinalP2PKHInputParams): InputBuilder {
+   * Adds an ordinalP2PKH input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addOrdinalP2PKHInput(params: AddOrdinalP2PKHInputParams): InputBuilder {
     return this.parent.addOrdinalP2PKHInput(params)
   }
 
-  addOrdLockInput (params: AddOrdLockInputParams): InputBuilder {
+  addOrdLockInput(params: AddOrdLockInputParams): InputBuilder {
     return this.parent.addOrdLockInput(params)
   }
 
   /**
-     * Adds a custom input with a pre-built unlocking script template.
-     *
-     * @param params - Object containing input parameters
-     * @returns A new InputBuilder for the new input
-     */
-  addCustomInput (params: AddCustomInputParams): InputBuilder {
+   * Adds a custom input with a pre-built unlocking script template.
+   *
+   * @param params - Object containing input parameters
+   * @returns A new InputBuilder for the new input
+   */
+  addCustomInput(params: AddCustomInputParams): InputBuilder {
     return this.parent.addCustomInput(params)
   }
 
   /**
-     * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
-     *
-     * @param params - Object with publicKey/walletParams, satoshis, and optional inscription, metadata, description
-     * @returns A new OutputBuilder for the new output
-     */
-  addOrdinalP2PKHOutput (params: AddOrdinalP2PKHOutputParams): OutputBuilder {
+   * Adds an ordinalP2PKH (1Sat Ordinal + P2PKH) output to the transaction.
+   *
+   * @param params - Object with publicKey/walletParams, satoshis, and optional inscription, metadata, description
+   * @returns A new OutputBuilder for the new output
+   */
+  addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder {
     return this.parent.addOrdinalP2PKHOutput(params)
   }
 
-  addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
+  addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder {
     return this.parent.addOrdLockOutput(params)
   }
 
   /**
-     * Adds a custom output with a pre-built locking script.
-     *
-     * @param params - Object with lockingScript, satoshis, and optional description
-     * @returns A new OutputBuilder for the new output
-     */
-  addCustomOutput (params: AddCustomOutputParams): OutputBuilder {
+   * Adds a custom output with a pre-built locking script.
+   *
+   * @param params - Object with lockingScript, satoshis, and optional description
+   * @returns A new OutputBuilder for the new output
+   */
+  addCustomOutput(params: AddCustomOutputParams): OutputBuilder {
     return this.parent.addCustomOutput(params)
   }
 
   /**
-     * Sets the description for THIS output only.
-     *
-     * @param desc - Description for this specific output
-     * @returns This OutputBuilder for further output configuration
-     */
-  outputDescription (desc: string): this {
+   * Sets the description for THIS output only.
+   *
+   * @param desc - Description for this specific output
+   * @returns This OutputBuilder for further output configuration
+   */
+  outputDescription(desc: string): this {
     if (typeof desc !== 'string') {
       throw new TypeError('Output description must be a string')
     }
@@ -326,32 +334,32 @@ export class OutputBuilder {
   }
 
   /**
-     * Sets transaction-level options (convenience proxy to TransactionTemplate).
-     *
-     * @param opts - Transaction options (randomizeOutputs, etc.)
-     * @returns The parent TransactionBuilder for transaction-level chaining
-     */
-  options (opts: CreateActionOptions): TransactionBuilder {
+   * Sets transaction-level options (convenience proxy to TransactionTemplate).
+   *
+   * @param opts - Transaction options (randomizeOutputs, etc.)
+   * @returns The parent TransactionBuilder for transaction-level chaining
+   */
+  options(opts: CreateActionOptions): TransactionBuilder {
     return this.parent.options(opts)
   }
 
   /**
-     * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
-     *
-     * @param params - Build parameters (optional)
-     * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
-     */
-  async build (params?: BuildParams): Promise<any> {
+   * Builds the transaction using wallet.createAction() (convenience proxy to TransactionTemplate).
+   *
+   * @param params - Build parameters (optional)
+   * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
+   */
+  async build(params?: BuildParams): Promise<any> {
     return await this.parent.build(params)
   }
 
   /**
-     * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
-     * Equivalent to calling build({ preview: true }).
-     *
-     * @returns Promise resolving to the createAction arguments object
-     */
-  async preview (): Promise<any> {
+   * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
+   * Equivalent to calling build({ preview: true }).
+   *
+   * @returns Promise resolving to the createAction arguments object
+   */
+  async preview(): Promise<any> {
     return await this.parent.build({ preview: true })
   }
 }
@@ -372,12 +380,12 @@ export class TransactionBuilder {
   private transactionOptions: CreateActionOptions = {}
 
   /**
-     * Creates a new TransactionBuilder.
-     *
-     * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
-     * @param description - Optional description for the entire transaction
-     */
-  constructor (wallet: WalletInterface, description?: string) {
+   * Creates a new TransactionBuilder.
+   *
+   * @param wallet - BRC-100 compatible wallet interface for signing and key derivation
+   * @param description - Optional description for the entire transaction
+   */
+  constructor(wallet: WalletInterface, description?: string) {
     if (!wallet) {
       throw new Error('Wallet is required for TransactionBuilder')
     }
@@ -386,12 +394,12 @@ export class TransactionBuilder {
   }
 
   /**
-     * Sets the transaction-level description.
-     *
-     * @param desc - Description for the entire transaction
-     * @returns This TransactionBuilder for further chaining
-     */
-  transactionDescription (desc: string): this {
+   * Sets the transaction-level description.
+   *
+   * @param desc - Description for the entire transaction
+   * @returns This TransactionBuilder for further chaining
+   */
+  transactionDescription(desc: string): this {
     if (typeof desc !== 'string') {
       throw new TypeError('Description must be a string')
     }
@@ -400,12 +408,12 @@ export class TransactionBuilder {
   }
 
   /**
-     * Sets transaction-level options.
-     *
-     * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
-     * @returns This TransactionBuilder for further chaining
-     */
-  options (opts: CreateActionOptions): this {
+   * Sets transaction-level options.
+   *
+   * @param opts - Transaction options (randomizeOutputs, trustSelf, signAndProcess, etc.)
+   * @returns This TransactionBuilder for further chaining
+   */
+  options(opts: CreateActionOptions): this {
     if (!opts || typeof opts !== 'object') {
       throw new Error('Options must be an object')
     }
@@ -414,7 +422,10 @@ export class TransactionBuilder {
     if (opts.signAndProcess !== undefined && typeof opts.signAndProcess !== 'boolean') {
       throw new Error('signAndProcess must be a boolean')
     }
-    if (opts.acceptDelayedBroadcast !== undefined && typeof opts.acceptDelayedBroadcast !== 'boolean') {
+    if (
+      opts.acceptDelayedBroadcast !== undefined &&
+      typeof opts.acceptDelayedBroadcast !== 'boolean'
+    ) {
       throw new Error('acceptDelayedBroadcast must be a boolean')
     }
     if (opts.returnTXIDOnly !== undefined && typeof opts.returnTXIDOnly !== 'boolean') {
@@ -474,26 +485,28 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds a P2PKH input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @param params.sourceTransaction - The source transaction containing the output to spend
-     * @param params.sourceOutputIndex - The index of the output in the source transaction
-     * @param params.walletParams - Optional wallet derivation parameters
-     * @param params.description - Optional description for this input
-     * @param params.signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-     * @param params.anyoneCanPay - Allow other inputs to be added later (default: false)
-     * @param params.sourceSatoshis - Optional amount in satoshis
-     * @param params.lockingScript - Optional locking script
-     * @returns An InputBuilder for the new input
-     */
-  addP2PKHInput (params: AddP2PKHInputParams): InputBuilder {
+   * Adds a P2PKH input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @param params.sourceTransaction - The source transaction containing the output to spend
+   * @param params.sourceOutputIndex - The index of the output in the source transaction
+   * @param params.walletParams - Optional wallet derivation parameters
+   * @param params.description - Optional description for this input
+   * @param params.signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional amount in satoshis
+   * @param params.lockingScript - Optional locking script
+   * @returns An InputBuilder for the new input
+   */
+  addP2PKHInput(params: AddP2PKHInputParams): InputBuilder {
     // Validate parameters
     if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError(
+        'sourceTransaction must be a valid Transaction object with an id() method'
+      )
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -519,19 +532,21 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds an OrdLock input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @param params.kind - 'cancel' (wallet signature) or 'purchase' (outputs blob + preimage)
-     * @returns An InputBuilder for the new input
-     */
-  addOrdLockInput (params: AddOrdLockInputParams): InputBuilder {
+   * Adds an OrdLock input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @param params.kind - 'cancel' (wallet signature) or 'purchase' (outputs blob + preimage)
+   * @returns An InputBuilder for the new input
+   */
+  addOrdLockInput(params: AddOrdLockInputParams): InputBuilder {
     // Validate parameters
     if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError(
+        'sourceTransaction must be a valid Transaction object with an id() method'
+      )
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -561,26 +576,28 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds an ordinalP2PKH input to the transaction.
-     *
-     * @param params - Object containing input parameters
-     * @param params.sourceTransaction - The source transaction containing the output to spend
-     * @param params.sourceOutputIndex - The index of the output in the source transaction
-     * @param params.walletParams - Optional wallet derivation parameters
-     * @param params.description - Optional description for this input
-     * @param params.signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
-     * @param params.anyoneCanPay - Allow other inputs to be added later (default: false)
-     * @param params.sourceSatoshis - Optional amount in satoshis
-     * @param params.lockingScript - Optional locking script
-     * @returns An InputBuilder for the new input
-     */
-  addOrdinalP2PKHInput (params: AddOrdinalP2PKHInputParams): InputBuilder {
+   * Adds an ordinalP2PKH input to the transaction.
+   *
+   * @param params - Object containing input parameters
+   * @param params.sourceTransaction - The source transaction containing the output to spend
+   * @param params.sourceOutputIndex - The index of the output in the source transaction
+   * @param params.walletParams - Optional wallet derivation parameters
+   * @param params.description - Optional description for this input
+   * @param params.signOutputs - Signature scope: 'all', 'none', or 'single' (default: 'all')
+   * @param params.anyoneCanPay - Allow other inputs to be added later (default: false)
+   * @param params.sourceSatoshis - Optional amount in satoshis
+   * @param params.lockingScript - Optional locking script
+   * @returns An InputBuilder for the new input
+   */
+  addOrdinalP2PKHInput(params: AddOrdinalP2PKHInputParams): InputBuilder {
     // Validate parameters
     if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError(
+        'sourceTransaction must be a valid Transaction object with an id() method'
+      )
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -606,18 +623,18 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds a custom input with a pre-built unlocking script template.
-     *
-     * @param params - Object containing input parameters
-     * @param params.unlockingScriptTemplate - The unlocking script template for this input
-     * @param params.sourceTransaction - The source transaction containing the output to spend
-     * @param params.sourceOutputIndex - The index of the output in the source transaction
-     * @param params.description - Optional description for this input
-     * @param params.sourceSatoshis - Optional amount in satoshis
-     * @param params.lockingScript - Optional locking script
-     * @returns An InputBuilder for the new input
-     */
-  addCustomInput (params: AddCustomInputParams): InputBuilder {
+   * Adds a custom input with a pre-built unlocking script template.
+   *
+   * @param params - Object containing input parameters
+   * @param params.unlockingScriptTemplate - The unlocking script template for this input
+   * @param params.sourceTransaction - The source transaction containing the output to spend
+   * @param params.sourceOutputIndex - The index of the output in the source transaction
+   * @param params.description - Optional description for this input
+   * @param params.sourceSatoshis - Optional amount in satoshis
+   * @param params.lockingScript - Optional locking script
+   * @returns An InputBuilder for the new input
+   */
+  addCustomInput(params: AddCustomInputParams): InputBuilder {
     // Validate parameters
     if (!params.unlockingScriptTemplate) {
       throw new Error('unlockingScriptTemplate is required for custom input')
@@ -629,7 +646,9 @@ export class TransactionBuilder {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError(
+        'sourceTransaction must be a valid Transaction object with an id() method'
+      )
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -653,12 +672,12 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds a P2PKH output to the transaction.
-     *
-     * @param params - Object containing output parameters
-     * @returns An OutputBuilder for configuring this output
-     */
-  addP2PKHOutput (params: AddP2PKHOutputParams): OutputBuilder {
+   * Adds a P2PKH output to the transaction.
+   *
+   * @param params - Object containing output parameters
+   * @returns An OutputBuilder for configuring this output
+   */
+  addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder {
     // Validate parameters
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
       throw new TypeError('satoshis must be a non-negative number')
@@ -690,12 +709,12 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds an OrdLock output to the transaction.
-     *
-     * @param params - OrdLock locking params plus `satoshis` for the locked output itself.
-     * @returns An OutputBuilder for configuring this output
-     */
-  addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
+   * Adds an OrdLock output to the transaction.
+   *
+   * @param params - OrdLock locking params plus `satoshis` for the locked output itself.
+   * @returns An OutputBuilder for configuring this output
+   */
+  addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder {
     // Validate parameters
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
       throw new TypeError('satoshis must be a non-negative number')
@@ -718,12 +737,12 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds a change output to the transaction.
-     *
-     * @param params - Optional object containing output parameters
-     * @returns An OutputBuilder for configuring this output
-     */
-  addChangeOutput (params?: AddChangeOutputParams): OutputBuilder {
+   * Adds a change output to the transaction.
+   *
+   * @param params - Optional object containing output parameters
+   * @returns An OutputBuilder for configuring this output
+   */
+  addChangeOutput(params?: AddChangeOutputParams): OutputBuilder {
     // Validate parameters
     if (params?.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
@@ -731,9 +750,9 @@ export class TransactionBuilder {
 
     // Determine addressOrParams from named parameters
     let addressOrParams: AddressOrParams
-    if ((params != null) && 'publicKey' in params) {
+    if (params != null && 'publicKey' in params) {
       addressOrParams = params.publicKey
-    } else if ((params != null) && 'walletParams' in params) {
+    } else if (params != null && 'walletParams' in params) {
       addressOrParams = params.walletParams
     }
     // else undefined for BRC-29 auto-derivation
@@ -749,12 +768,12 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds an ordinalP2PKH output to the transaction.
-     *
-     * @param params - Object containing output parameters
-     * @returns An OutputBuilder for configuring this output
-     */
-  addOrdinalP2PKHOutput (params: AddOrdinalP2PKHOutputParams): OutputBuilder {
+   * Adds an ordinalP2PKH output to the transaction.
+   *
+   * @param params - Object containing output parameters
+   * @returns An OutputBuilder for configuring this output
+   */
+  addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder {
     // Validate parameters
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
       throw new TypeError('satoshis must be a non-negative number')
@@ -788,15 +807,15 @@ export class TransactionBuilder {
   }
 
   /**
-     * Adds a custom output with a pre-built locking script.
-     *
-     * This is useful for advanced use cases where you need to use a locking script
-     * that isn't directly supported by the builder methods.
-     *
-     * @param params - Object containing lockingScript, satoshis, and optional description
-     * @returns An OutputBuilder for configuring this output
-     */
-  addCustomOutput (params: AddCustomOutputParams): OutputBuilder {
+   * Adds a custom output with a pre-built locking script.
+   *
+   * This is useful for advanced use cases where you need to use a locking script
+   * that isn't directly supported by the builder methods.
+   *
+   * @param params - Object containing lockingScript, satoshis, and optional description
+   * @returns An OutputBuilder for configuring this output
+   */
+  addCustomOutput(params: AddCustomOutputParams): OutputBuilder {
     // Validate parameters
     if (!params.lockingScript || typeof params.lockingScript.toHex !== 'function') {
       throw new Error('lockingScript must be a LockingScript instance')
@@ -820,17 +839,17 @@ export class TransactionBuilder {
   }
 
   /**
-     * Builds the transaction using wallet.createAction().
-     *
-     * This method creates locking scripts for all outputs, applies OP_RETURN metadata
-     * where specified, calls wallet.createAction() with unlockingScriptLength first,
-     * then signs the transaction and calls signAction() to complete and broadcast.
-     *
-     * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
-     * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
-     * @throws Error if no outputs are configured or if locking script creation fails
-     */
-  async build (params?: BuildParams): Promise<any> {
+   * Builds the transaction using wallet.createAction().
+   *
+   * This method creates locking scripts for all outputs, applies OP_RETURN metadata
+   * where specified, calls wallet.createAction() with unlockingScriptLength first,
+   * then signs the transaction and calls signAction() to complete and broadcast.
+   *
+   * @param params - Build parameters (optional). Use { preview: true } to return the createAction arguments without executing
+   * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
+   * @throws Error if no outputs are configured or if locking script creation fails
+   */
+  async build(params?: BuildParams): Promise<any> {
     // Validate that we have outputs
     if (this.outputs.length === 0) {
       throw new Error('At least one output is required to build a transaction')
@@ -843,7 +862,11 @@ export class TransactionBuilder {
     }
 
     // Track derivation info for customInstructions
-    const derivationInfo: Array<{ outputIndex: number, derivationPrefix: string, derivationSuffix: string }> = []
+    const derivationInfo: Array<{
+      outputIndex: number
+      derivationPrefix: string
+      derivationSuffix: string
+    }> = []
 
     // Store unlocking script templates for later signing
     const unlockingScriptTemplates: any[] = []
@@ -1077,7 +1100,7 @@ export class TransactionBuilder {
       }
 
       // Apply OP_RETURN data if specified for this output
-      if ((config.opReturnFields != null) && config.opReturnFields.length > 0) {
+      if (config.opReturnFields != null && config.opReturnFields.length > 0) {
         lockingScript = addOpReturnData(lockingScript, config.opReturnFields)
       }
 
@@ -1167,10 +1190,10 @@ export class TransactionBuilder {
     if (preimageInputs.length > 0) {
       // Build the preimage transaction to calculate change amounts
       const preimageTx = new Transaction()
-      preimageInputs.forEach((input) => {
+      preimageInputs.forEach(input => {
         preimageTx.addInput(input)
       })
-      preimageOutputs.forEach((output) => {
+      preimageOutputs.forEach(output => {
         if (output.change) {
           // Change output - don't specify satoshis, will be calculated
           preimageTx.addOutput({
@@ -1257,7 +1280,7 @@ export class TransactionBuilder {
       } else {
         // For multiple inputs, merge the BEEFs
         const mergedBeef = new Beef()
-        preimageInputs.forEach((input) => {
+        preimageInputs.forEach(input => {
           const beef = input.sourceTransaction.toBEEF()
           mergedBeef.mergeBeef(beef)
         })
@@ -1268,7 +1291,7 @@ export class TransactionBuilder {
     // Build the createAction arguments object with unlockingScriptLength
     const createActionArgs = {
       description: this._transactionDescription || 'Transaction',
-      ...((inputBEEF != null) && { inputBEEF }),
+      ...(inputBEEF != null && { inputBEEF }),
       ...(actionInputsConfig.length > 0 && { inputs: actionInputsConfig }),
       ...(actionOutputs.length > 0 && { outputs: actionOutputs }),
       options: createActionOptions
@@ -1291,7 +1314,7 @@ export class TransactionBuilder {
     }
 
     // Extract the signable transaction
-    if ((actionRes?.signableTransaction) == null) {
+    if (actionRes?.signableTransaction == null) {
       throw new Error('Failed to create signable transaction')
     }
 
@@ -1332,29 +1355,29 @@ export class TransactionBuilder {
   }
 
   /**
-     * Preview the transaction without executing it.
-     * Equivalent to calling build({ preview: true }).
-     *
-     * @returns Promise resolving to the createAction arguments object
-     */
-  async preview (): Promise<any> {
+   * Preview the transaction without executing it.
+   * Equivalent to calling build({ preview: true }).
+   *
+   * @returns Promise resolving to the createAction arguments object
+   */
+  async preview(): Promise<any> {
     return await this.build({ preview: true })
   }
 
   /**
-     * Create a minimal P2PKH payment and execute it.
-     *
-     * This convenience method adds a single P2PKH output to the given destination
-     * (either a hex public key or a base58 address), disables output randomization,
-     * then calls build().
-     *
-     * @param to - Destination (hex public key or base58 address)
-     * @param satoshis - Amount to send in satoshis (must be non-negative)
-     * @returns Promise resolving to txid and tx from wallet.createAction()/wallet.signAction()
-     * @throws Error if to is not a string
-     * @throws Error if satoshis is not a non-negative number
-     */
-  async pay (to: string, satoshis: number): Promise<any> {
+   * Create a minimal P2PKH payment and execute it.
+   *
+   * This convenience method adds a single P2PKH output to the given destination
+   * (either a hex public key or a base58 address), disables output randomization,
+   * then calls build().
+   *
+   * @param to - Destination (hex public key or base58 address)
+   * @param satoshis - Amount to send in satoshis (must be non-negative)
+   * @returns Promise resolving to txid and tx from wallet.createAction()/wallet.signAction()
+   * @throws Error if to is not a string
+   * @throws Error if satoshis is not a non-negative number
+   */
+  async pay(to: string, satoshis: number): Promise<any> {
     if (typeof to !== 'string') {
       throw new TypeError('to must be a string')
     }

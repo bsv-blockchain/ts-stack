@@ -1,4 +1,19 @@
-import { BigNumber, Hash, LockingScript, OP, PublicKey, Script, ScriptTemplate, Signature, Transaction, TransactionSignature, UnlockingScript, Utils, WalletInterface, WalletProtocol } from '@bsv/sdk'
+import {
+  BigNumber,
+  Hash,
+  LockingScript,
+  OP,
+  PublicKey,
+  Script,
+  ScriptTemplate,
+  Signature,
+  Transaction,
+  TransactionSignature,
+  UnlockingScript,
+  Utils,
+  WalletInterface,
+  WalletProtocol
+} from '@bsv/sdk'
 
 import { calculatePreimage } from '../utils/createPreimage'
 import P2PKH from './p2pkh'
@@ -26,7 +41,7 @@ const toHex = (str: string): string => {
 }
 
 // Validate the lock parameters
-function validateLockParams (params: OrdLockLockParams): void {
+function validateLockParams(params: OrdLockLockParams): void {
   if (!params || typeof params !== 'object') {
     throw new Error('params is required')
   }
@@ -42,16 +57,26 @@ function validateLockParams (params: OrdLockLockParams): void {
   if (!params.assetId || typeof params.assetId !== 'string') {
     throw new Error('assetId is required and must be a string')
   }
-  if (params.metadata !== undefined && (params.metadata == null || typeof params.metadata !== 'object' || Array.isArray(params.metadata))) {
+  if (
+    params.metadata !== undefined &&
+    (params.metadata == null ||
+      typeof params.metadata !== 'object' ||
+      Array.isArray(params.metadata))
+  ) {
     throw new Error('metadata must be an object')
   }
-  if (params.itemData !== undefined && (params.itemData == null || typeof params.itemData !== 'object' || Array.isArray(params.itemData))) {
+  if (
+    params.itemData !== undefined &&
+    (params.itemData == null ||
+      typeof params.itemData !== 'object' ||
+      Array.isArray(params.itemData))
+  ) {
     throw new Error('itemData must be an object')
   }
 }
 
 // Build an output specification for the contract
-function buildOutput (satoshis: number, script: number[]): number[] {
+function buildOutput(satoshis: number, script: number[]): number[] {
   const writer = new Utils.Writer()
   writer.writeUInt64LEBn(new BigNumber(satoshis))
   writer.writeVarIntNum(script.length)
@@ -76,7 +101,7 @@ export default class OrdLock implements ScriptTemplate {
    *
    * @param wallet - Optional wallet used for cancel unlocking (wallet signature)
    */
-  constructor (wallet?: WalletInterface) {
+  constructor(wallet?: WalletInterface) {
     this.wallet = wallet
     this.p2pkh = new P2PKH(wallet)
   }
@@ -87,7 +112,7 @@ export default class OrdLock implements ScriptTemplate {
    * The pay output script is produced using the existing WalletP2PKH template.
    * Metadata is appended as OP_RETURN only when `metadata` or `itemData` contains fields.
    */
-  async lock (params: OrdLockLockParams): Promise<LockingScript> {
+  async lock(params: OrdLockLockParams): Promise<LockingScript> {
     // Validate the parameters
     validateLockParams(params)
 
@@ -155,8 +180,8 @@ export default class OrdLock implements ScriptTemplate {
    * - Cancel path (default): wallet signature + pubkey + OP_1
    * - Purchase path (`kind: 'purchase'`): outputs blob + preimage + OP_0
    */
-  unlock (params?: OrdLockUnlockParams) {
-    if ((params != null) && (params as any).kind === 'purchase') {
+  unlock(params?: OrdLockUnlockParams) {
+    if (params != null && (params as any).kind === 'purchase') {
       return this.purchaseUnlock(params as OrdLockPurchaseUnlockParams)
     }
     return this.cancelUnlock(params as OrdLockCancelUnlockParams)
@@ -168,7 +193,7 @@ export default class OrdLock implements ScriptTemplate {
    * Unlocking script format:
    * `<signature> <compressedPubKey> OP_1`
    */
-  cancelUnlock (params?: OrdLockCancelUnlockParams): {
+  cancelUnlock(params?: OrdLockCancelUnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: () => Promise<108>
   } {
@@ -179,7 +204,7 @@ export default class OrdLock implements ScriptTemplate {
     // Set default values for the unlock parameters
     const protocolID = params?.protocolID ?? ([0, 'ordlock'] as WalletProtocol)
     const keyID = params?.keyID ?? '0'
-    const counterparty = (params?.counterparty ?? 'self')
+    const counterparty = params?.counterparty ?? 'self'
     const signOutputs = params?.signOutputs ?? 'all'
     const anyoneCanPay = params?.anyoneCanPay ?? false
     const sourceSatoshis = params?.sourceSatoshis
@@ -217,11 +242,7 @@ export default class OrdLock implements ScriptTemplate {
 
         // Convert the signature to the format required by the script
         const rawSignature = Signature.fromDER(signature, 'hex')
-        const sig = new TransactionSignature(
-          rawSignature.r,
-          rawSignature.s,
-          signatureScope
-        )
+        const sig = new TransactionSignature(rawSignature.r, rawSignature.s, signatureScope)
 
         const sigForScript = sig.toChecksigFormat()
         const pubkeyForScript = PublicKey.fromString(publicKey).encode(true) as number[]
@@ -247,7 +268,7 @@ export default class OrdLock implements ScriptTemplate {
    * Note: the unlocking script size depends on final outputs, so `estimateLength`
    * must be called with `(tx, inputIndex)`.
    */
-  purchaseUnlock (params?: OrdLockPurchaseUnlockParams): {
+  purchaseUnlock(params?: OrdLockPurchaseUnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>
   } {

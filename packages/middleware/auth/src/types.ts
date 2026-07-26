@@ -1,20 +1,20 @@
-import type { WalletInterface, WalletProtocol } from '@bsv/sdk';
+import type { WalletInterface, WalletProtocol } from '@bsv/sdk'
 
 /** The cleartext that gets signed and echoed in the request body. */
 export interface AuthSigData {
   /** Operation authorized, e.g. 'login' | 'create-user' | 'delete'. */
-  action: string;
+  action: string
   /** Signer's identity public key (subject). */
-  identityKey: string;
+  identityKey: string
   /** Absolute expiry, ms since epoch. Cleartext; the signature makes it tamper-proof. */
-  expiresAt: number;
+  expiresAt: number
   /** base64(32 random bytes); unique per request, enforces single-use server-side. */
-  nonce: string;
+  nonce: string
 }
 
 export interface AuthProof {
-  data: AuthSigData;
-  signature: number[];
+  data: AuthSigData
+  signature: number[]
 }
 
 /**
@@ -32,16 +32,12 @@ export interface AuthProof {
  * re-serialized object). A swapped body fails verification.
  */
 export type RequestBody =
-  | string
-  | ArrayBuffer
-  | ArrayBufferView
-  | unknown[]
-  | Record<string, unknown>;
+  string | ArrayBuffer | ArrayBufferView | unknown[] | Record<string, unknown>
 
 export interface VerifyAuthProofResult {
-  valid: boolean;
-  identityKey?: string;
-  error?: string;
+  valid: boolean
+  identityKey?: string
+  error?: string
 }
 
 /**
@@ -57,32 +53,32 @@ export interface VerifyAuthProofResult {
  *
  * Keyed on `nonce` and retained only until `expiresAt` (e.g. a TTL index).
  */
-export type ConsumeNonce = (nonce: string, expiresAt: Date) => boolean | Promise<boolean>;
+export type ConsumeNonce = (nonce: string, expiresAt: Date) => boolean | Promise<boolean>
 
 export interface AuthProofOptions {
   /**
    * Signing protocol (security level 2 = bound to counterparty). MUST match on
    * client and server. Protocol names may only contain letters, numbers, spaces.
    */
-  protocol?: WalletProtocol;
+  protocol?: WalletProtocol
   /** Proof validity window in ms (default 120000 = 2 min). */
-  windowMs?: number;
+  windowMs?: number
   /** Clock-skew tolerance in ms for the expiry bound (default 30000). */
-  clockSkewMs?: number;
+  clockSkewMs?: number
 }
 
 /** Client wallet methods needed to create a proof. */
-export type ProofSignerWallet = Pick<WalletInterface, 'getPublicKey' | 'createSignature'>;
+export type ProofSignerWallet = Pick<WalletInterface, 'getPublicKey' | 'createSignature'>
 
 /** Server wallet method needed to verify a proof (ProtoWallet satisfies this). */
 export interface ProofVerifierWallet {
   verifySignature: (args: {
-    data: number[];
-    signature: number[];
-    protocolID: WalletProtocol;
-    keyID: string;
-    counterparty: string;
-  }) => Promise<{ valid: boolean }>;
+    data: number[]
+    signature: number[]
+    protocolID: WalletProtocol
+    keyID: string
+    counterparty: string
+  }) => Promise<{ valid: boolean }>
 }
 
 /**
@@ -91,13 +87,13 @@ export interface ProofVerifierWallet {
  */
 export interface CreateAuthProofArgs extends AuthProofOptions {
   /** Wallet that signs the proof. */
-  wallet: ProofSignerWallet;
+  wallet: ProofSignerWallet
   /** The verifier's identity key the wallet signs toward. */
-  counterparty: string;
+  counterparty: string
   /** Operation being authorized, e.g. 'login'. */
-  action: string;
+  action: string
   /** Optional request payload to bind into the signature; omit for bodyless actions. */
-  body?: RequestBody;
+  body?: RequestBody
 }
 
 /**
@@ -106,15 +102,15 @@ export interface CreateAuthProofArgs extends AuthProofOptions {
  */
 export interface VerifyAuthProofArgs extends AuthProofOptions {
   /** Wallet that verifies the signature (a ProtoWallet for the verifier identity). */
-  wallet: ProofVerifierWallet;
+  wallet: ProofVerifierWallet
   /** The proof received from the client. */
-  proof: AuthProof | undefined | null;
+  proof: AuthProof | undefined | null
   /** The action the verifier expects this proof to authorize. */
-  action: string;
+  action: string
   /** Single-use store hook; see `ConsumeNonce`. */
-  consumeNonce: ConsumeNonce;
+  consumeNonce: ConsumeNonce
   /** Current time in ms (injectable for tests); defaults to `Date.now()`. */
-  now?: number;
+  now?: number
   /** The raw received request body, if the proof bound one; omit for bodyless actions. */
-  body?: RequestBody;
+  body?: RequestBody
 }
