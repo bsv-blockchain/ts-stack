@@ -43,7 +43,7 @@ describe('standalone serializeAuthSigData / createAuthSigData', () => {
   it('createAuthSigData honors the window from options and makes a 32-byte nonce', () => {
     const d = createAuthSigData('login', IDENTITY, { windowMs: 5000 }, NOW)
     expect(d.expiresAt).toBe(NOW + 5000)
-    expect(Utils.toArray(d.nonce, 'base64').length).toBe(32)
+    expect(Utils.toArray(d.nonce, 'base64')).toHaveLength(32)
   })
 })
 
@@ -56,7 +56,7 @@ describe('AuthProofClient', () => {
     const a = client.createAuthSigData('login', IDENTITY, NOW)
     const b = client.createAuthSigData('login', IDENTITY, NOW)
     expect(a.nonce).not.toBe(b.nonce)
-    expect(Utils.toArray(a.nonce, 'base64').length).toBe(32)
+    expect(Utils.toArray(a.nonce, 'base64')).toHaveLength(32)
   })
 
   it('serializes proof data through both class wrappers', () => {

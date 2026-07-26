@@ -508,7 +508,7 @@ describe('Script Validation Functions', () => {
       const extracted = extractOpReturnData(scriptWithData)
 
       expect(extracted).not.toBeNull()
-      expect(extracted!.length).toBe(2)
+      expect(extracted!).toHaveLength(2)
       // Decode base64 to UTF-8
       expect(Buffer.from(extracted![0], 'base64').toString('utf8')).toBe('Hello')
       expect(Buffer.from(extracted![1], 'base64').toString('utf8')).toBe('World')
