@@ -159,6 +159,21 @@ describe('P2PKH locking script', () => {
         'One of pubkeyhash, publicKey, or walletParams is required'
       )
     })
+
+    test.each([
+      [{ walletParams: null }, 'must be an object with protocolID and keyID'],
+      [{ walletParams: {} }, 'protocolID is required'],
+      [{ walletParams: { protocolID: ['bad'], keyID: '0' } }, 'must be an array'],
+      [{ walletParams: { protocolID: ['2', 'p2pkh'], keyID: '0' } }, 'must be [number, string]'],
+      [{ walletParams: { protocolID: [2, 'p2pkh'] } }, 'keyID is required'],
+      [{ walletParams: { protocolID: [2, 'p2pkh'], keyID: 0 } }, 'keyID must be a string'],
+      [
+        { walletParams: { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 1 } },
+        'counterparty must be a string'
+      ]
+    ])('rejects invalid wallet derivation parameters', async (params, message) => {
+      await expect(new P2PKH().lock(params as any)).rejects.toThrow(message)
+    })
   })
 })
 

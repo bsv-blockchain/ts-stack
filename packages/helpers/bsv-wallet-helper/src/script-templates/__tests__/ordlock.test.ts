@@ -4,14 +4,18 @@ import OrdLock from '../ordlock'
 import { makeMockWallet } from '../../utils/mockWallet'
 
 describe('OrdLock script template', () => {
+  const lockParams = {
+    ordAddress: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT',
+    payAddress: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT',
+    price: 1000,
+    assetId: 'abcd_0'
+  }
+
   test('lock should create a script containing ord envelope and OP_RETURN metadata', async () => {
     const ordLock = new OrdLock()
 
     const lockingScript = await ordLock.lock({
-      ordAddress: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT',
-      payAddress: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT',
-      price: 1000,
-      assetId: 'abcd_0',
+      ...lockParams,
       itemData: { lootTableId: 'test' },
       metadata: { app: 'test', type: 'ord' }
     })
@@ -20,6 +24,24 @@ describe('OrdLock script template', () => {
 
     expect(asm).toContain('OP_IF')
     expect(asm).toContain('OP_RETURN')
+  })
+
+  test('lock omits OP_RETURN without metadata and rejects invalid metadata containers', async () => {
+    const ordLock = new OrdLock()
+
+    expect((await ordLock.lock(lockParams)).toASM()).not.toContain('OP_RETURN')
+    await expect(ordLock.lock({ ...lockParams, metadata: null } as any)).rejects.toThrow(
+      'metadata must be an object'
+    )
+    await expect(ordLock.lock({ ...lockParams, metadata: [] } as any)).rejects.toThrow(
+      'metadata must be an object'
+    )
+    await expect(ordLock.lock({ ...lockParams, itemData: null } as any)).rejects.toThrow(
+      'itemData must be an object'
+    )
+    await expect(ordLock.lock({ ...lockParams, itemData: [] } as any)).rejects.toThrow(
+      'itemData must be an object'
+    )
   })
 
   test('cancel unlock should produce unlocking script ending with OP_1', async () => {
@@ -51,4 +73,12 @@ describe('OrdLock script template', () => {
 
     expect(asm.trim().endsWith('OP_1')).toBe(true)
   }, 30000)
+
+  test('unlock dispatches cancel and purchase templates', async () => {
+    const wallet = await makeMockWallet(43)
+    const ordLock = new OrdLock(wallet)
+
+    expect(ordLock.unlock().sign).toEqual(expect.any(Function))
+    expect(ordLock.unlock({ kind: 'purchase' }).sign).toEqual(expect.any(Function))
+  })
 })

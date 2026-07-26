@@ -1153,6 +1153,33 @@ describe('TransactionTemplate', () => {
   })
 
   describe('transactions with inputs', () => {
+    test('rejects transaction-like inputs without an id method', async () => {
+      const wallet = await makeWallet('test', storageURL, new PrivateKey(199).toHex())
+      const invalidSource = {} as any
+      const builder = new TransactionBuilder(wallet)
+      const expected = 'sourceTransaction must be a valid Transaction object with an id() method'
+
+      expect(() =>
+        builder.addP2PKHInput({ sourceTransaction: invalidSource, sourceOutputIndex: 0 })
+      ).toThrow(expected)
+      expect(() =>
+        builder.addOrdLockInput({ sourceTransaction: invalidSource, sourceOutputIndex: 0 })
+      ).toThrow(expected)
+      expect(() =>
+        builder.addOrdinalP2PKHInput({
+          sourceTransaction: invalidSource,
+          sourceOutputIndex: 0
+        })
+      ).toThrow(expected)
+      expect(() =>
+        builder.addCustomInput({
+          sourceTransaction: invalidSource,
+          sourceOutputIndex: 0,
+          unlockingScriptTemplate: { estimateLength: async () => 1 } as any
+        })
+      ).toThrow(expected)
+    })
+
     test('should prepare a transaction with P2PKH input and output', async () => {
       const privateKey = new PrivateKey(200)
       const wallet = await makeWallet('test', storageURL, privateKey.toHex())
