@@ -17,7 +17,7 @@ export interface ChaintracksServiceClientOptions {}
  *
  */
 export class ChaintracksServiceClient implements ChaintracksClientApi {
-  static createChaintracksServiceClientOptions (): ChaintracksServiceClientOptions {
+  static createChaintracksServiceClientOptions(): ChaintracksServiceClientOptions {
     const options: ChaintracksServiceClientOptions = {
       useAuthrite: false
     }
@@ -26,7 +26,7 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
 
   options: ChaintracksServiceClientOptions
 
-  constructor (
+  constructor(
     public chain: Chain,
     public serviceUrl: string,
     options?: ChaintracksServiceClientOptions
@@ -34,23 +34,23 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     this.options = options || ChaintracksServiceClient.createChaintracksServiceClientOptions()
   }
 
-  async subscribeHeaders (listener: HeaderListener): Promise<string> {
+  async subscribeHeaders(_listener: HeaderListener): Promise<string> {
     throw new Error('Method not implemented.')
   }
 
-  async subscribeReorgs (listener: ReorgListener): Promise<string> {
+  async subscribeReorgs(_listener: ReorgListener): Promise<string> {
     throw new Error('Method not implemented.')
   }
 
-  async unsubscribe (subscriptionId: string): Promise<boolean> {
+  async unsubscribe(_subscriptionId: string): Promise<boolean> {
     throw new Error('Method not implemented.')
   }
 
-  async currentHeight (): Promise<number> {
+  async currentHeight(): Promise<number> {
     return await this.getPresentHeight()
   }
 
-  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
     const r = await this.findHeaderForHeight(height)
     if (r == null) return false
     const isValid = root === asString(r.merkleRoot)
@@ -62,7 +62,7 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     for (let retry = 0; retry < 3; retry++) {
       try {
         const r = await fetch(`${this.serviceUrl}${path}`)
-        const v = await r.json() as FetchStatus<T>
+        const v = (await r.json()) as FetchStatus<T>
         if (v.status === 'success') return v.value
         // Some deployed chaintracks services report a missing resource as an
         // error payload instead of a success with an undefined value. That is
@@ -96,7 +96,7 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
       // cache: 'no-cache',
     })
     try {
-      const s = await r.json() as FetchStatus<void>
+      const s = (await r.json()) as FetchStatus<void>
       if (s.status === 'success') return
       throw new Error(JSON.stringify(s))
     } catch (e) {
@@ -109,24 +109,24 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
   // HTTP API FUNCTIONS
   //
 
-  async addHeader (header: BaseBlockHeader): Promise<void> {
+  async addHeader(header: BaseBlockHeader): Promise<void> {
     const r = await this.postJsonVoid('/addHeaderHex', header)
     if (typeof r === 'string') throw new Error(r)
   }
 
-  async startListening (): Promise<void> {
+  async startListening(): Promise<void> {
     await this.getPresentHeight()
   }
 
-  async listening (): Promise<void> {
+  async listening(): Promise<void> {
     await this.getPresentHeight()
   }
 
-  async getChain (): Promise<Chain> {
+  async getChain(): Promise<Chain> {
     return this.chain
   }
 
-  async isListening (): Promise<boolean> {
+  async isListening(): Promise<boolean> {
     try {
       await this.getPresentHeight()
       return true
@@ -135,35 +135,35 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     }
   }
 
-  async isSynchronized (): Promise<boolean> {
+  async isSynchronized(): Promise<boolean> {
     return await this.isListening()
   }
 
-  async getPresentHeight (): Promise<number> {
+  async getPresentHeight(): Promise<number> {
     return await this.getJson('/getPresentHeight')
   }
 
-  async getInfo (): Promise<ChaintracksInfoApi> {
+  async getInfo(): Promise<ChaintracksInfoApi> {
     return await this.getJson('/getInfo')
   }
 
-  async findChainTipHeader (): Promise<BlockHeader> {
+  async findChainTipHeader(): Promise<BlockHeader> {
     return await this.getJson('/findChainTipHeaderHex')
   }
 
-  async findChainTipHash (): Promise<string> {
+  async findChainTipHash(): Promise<string> {
     return await this.getJson('/findChainTipHashHex')
   }
 
-  async getHeaders (height: number, count: number): Promise<string> {
+  async getHeaders(height: number, count: number): Promise<string> {
     return await this.getJson<string>(`/getHeaders?height=${height}&count=${count}`)
   }
 
-  async findHeaderForHeight (height: number): Promise<BlockHeader | undefined> {
+  async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
     return await this.getJsonOrUndefined(`/findHeaderHexForHeight?height=${height}`)
   }
 
-  async findHeaderForBlockHash (hash: string): Promise<BlockHeader | undefined> {
+  async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
     return await this.getJsonOrUndefined(`/findHeaderHexForBlockHash?hash=${hash}`)
   }
 }

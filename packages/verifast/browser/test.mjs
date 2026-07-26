@@ -42,11 +42,14 @@ try {
   })
   const page = await browser.newPage()
   const browserErrors = []
-  page.on('pageerror', (error) => browserErrors.push(error.stack ?? error.message))
+  page.on('pageerror', error => browserErrors.push(error.stack ?? error.message))
   await page.goto(url, { waitUntil: 'networkidle0' })
-  await page.waitForFunction(() => window.__VERIFAST_RESULT__ !== undefined || window.__VERIFAST_ERROR__ !== undefined, {
-    timeout: 60_000
-  })
+  await page.waitForFunction(
+    () => window.__VERIFAST_RESULT__ !== undefined || window.__VERIFAST_ERROR__ !== undefined,
+    {
+      timeout: 60_000
+    }
+  )
   const state = await page.evaluate(() => ({
     result: window.__VERIFAST_RESULT__,
     error: window.__VERIFAST_ERROR__
@@ -68,10 +71,11 @@ try {
 
   const umdPage = await browser.newPage()
   const umdErrors = []
-  umdPage.on('pageerror', (error) => umdErrors.push(error.stack ?? error.message))
+  umdPage.on('pageerror', error => umdErrors.push(error.stack ?? error.message))
   await umdPage.goto(new URL('umd.html', url).href, { waitUntil: 'networkidle0' })
   await umdPage.waitForFunction(
-    () => window.__VERIFAST_UMD_RESULT__ !== undefined || window.__VERIFAST_UMD_ERROR__ !== undefined,
+    () =>
+      window.__VERIFAST_UMD_RESULT__ !== undefined || window.__VERIFAST_UMD_ERROR__ !== undefined,
     { timeout: 60_000 }
   )
   const umdState = await umdPage.evaluate(() => ({

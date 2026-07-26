@@ -15,9 +15,9 @@
  * NOTE: Update the heading and subtitle to match your application.
  */
 
-import { QRDisplay }        from './QRDisplay'
-import { WalletActions }    from './WalletActions'
-import { RequestLog }       from './RequestLog'
+import { QRDisplay } from './QRDisplay'
+import { WalletActions } from './WalletActions'
+import { RequestLog } from './RequestLog'
 import { useWalletSession } from '../hooks/useWalletSession'
 
 export function WalletPairingView() {

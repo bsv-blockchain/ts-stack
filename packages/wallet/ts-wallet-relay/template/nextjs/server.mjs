@@ -23,10 +23,10 @@ import { parse } from 'node:url'
 import next from 'next'
 import { initRelay } from './lib/relay.js'
 
-const dev  = process.env.NODE_ENV !== 'production'
+const dev = process.env.NODE_ENV !== 'production'
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 
-const app    = next({ dev })
+const app = next({ dev })
 const handle = app.getRequestHandler()
 
 await app.prepare()

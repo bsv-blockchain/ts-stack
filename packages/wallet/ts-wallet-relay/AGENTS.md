@@ -1,12 +1,15 @@
 # CLAUDE.md — @bsv/wallet-relay v0.1.0
 
 ## Purpose
+
 Wallet Relay enables mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket tunnels. A web app (desktop browser) shows a QR code; user scans with their mobile BSV wallet; all wallet operations (signing, key retrieval, etc.) are proxied over HTTPS+WSS relay servers to the mobile without exposing keys or trust chains to the desktop. Provides both the relay server infrastructure (Node.js) and React frontend components for web apps to add "Connect Mobile Wallet" functionality.
 
 ## Public API Surface
 
 ### Server-Side (Node.js)
+
 From root exports:
+
 - **`WalletRelayService`** — All-in-one relay server; constructor: `new WalletRelayService(options: WalletRelayServiceOptions)` where options include:
   - `app: Express` — Express instance to register routes on
   - `server: http.Server` — HTTP server for WebSocket upgrade
@@ -20,17 +23,20 @@ From root exports:
   - `WS /ws` — WebSocket relay for bidirectional communication
 
 ### Lower-level components:
+
 - **`QRSessionManager`** — Session lifecycle management (creation, status tracking, cleanup)
 - **`WebSocketRelay`** — WebSocket server with message routing, topic validation, token auth
 - **`WalletRequestHandler`** — Converts RPC calls to wallet method invocations
 
 ### Client-Side (Browser) — `@bsv/wallet-relay/client`
+
 - **`WalletRelayClient`** — Direct HTTP/WebSocket client for session management and RPC calls; methods:
   - `createSession()` → `Promise<{ sessionId, qrDataUrl, pairingUri, desktopToken }>`
   - `getSessionStatus(sessionId)` → `Promise<SessionInfo>`
   - `sendRequest(sessionId, request, desktopToken)` → `Promise<RpcResponse>`
 
 ### React Components — `@bsv/wallet-relay/react`
+
 - **`useWalletRelayClient(relayUrl?)`** — Hook wrapping WalletRelayClient; returns client instance
 - **`useWalletSession(client, sessionId?)`** — Hook for session state management
 - **`WalletConnectionModal`** — Pre-built UI component for QR pairing flow (shows modal, displays QR, handles scanning)
@@ -38,6 +44,7 @@ From root exports:
 - **`RequestLog`** — UI for displaying pending/completed RPC requests
 
 ### Shared Types & Utilities
+
 - **`Session`** — Session state: `{ id, status, qrData, pairingUri, desktopToken, mobileConnected, createdAt }`
 - **`SessionStatus`** — Enum: `'pending' | 'paired' | 'disconnected' | 'expired'`
 - **`PairingParams`** — QR encoding: `{ relayUrl, sessionId, sessionKey }`
@@ -47,7 +54,9 @@ From root exports:
 - **`WalletLike`** — Any object implementing core wallet methods (createAction, signAction, etc.)
 
 ### Crypto & Encoding Utilities
+
 From shared exports (also in `./client`):
+
 - **`encryptEnvelope(message, key, iv?)`** → `WireEnvelope` — AES-256-GCM encryption
 - **`decryptEnvelope(envelope, key)`** → `string` — Decryption
 - **`parsePairingUri(uri)`** → `ParseResult` — Extract params from QR URI
@@ -56,12 +65,14 @@ From shared exports (also in `./client`):
 - **`bytesToBase64url(bytes)`**, **`base64urlToBytes(b64)`** — URL-safe base64 encoding
 
 ### CLI Scaffolding
+
 - **`npx @bsv/wallet-relay init`** — Command to scaffold Express backend + React frontend wired together
   - Options: `--nextjs`, `--backend`, `--frontend`, `--backend-dir`, `--frontend-dir`
 
 ## Real Usage Patterns
 
 ### 1. Set up relay server (Express + Node.js)
+
 ```typescript
 import express from 'express'
 import { createServer } from 'http'
@@ -70,18 +81,20 @@ import { WalletRelayService } from '@bsv/wallet-relay'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 
 const app = express()
-app.use(cors({
-  origin: process.env.ORIGIN,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
-}))
+app.use(
+  cors({
+    origin: process.env.ORIGIN,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
+  })
+)
 app.use(express.json())
 
 const server = createServer(app)
 const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))
 
-new WalletRelayService({ 
-  app, 
-  server, 
+new WalletRelayService({
+  app,
+  server,
   wallet,
   relayUrl: process.env.RELAY_URL,
   origin: process.env.ORIGIN
@@ -91,6 +104,7 @@ server.listen(3000)
 ```
 
 ### 2. Create session and get QR code (frontend React)
+
 ```typescript
 import { useWalletRelayClient } from '@bsv/wallet-relay/react'
 import { useEffect, useState } from 'react'
@@ -119,13 +133,14 @@ function WalletConnection() {
 ```
 
 ### 3. Use WalletConnectionModal component
+
 ```typescript
 import { WalletConnectionModal } from '@bsv/wallet-relay/react'
 
 function App() {
   return (
     <>
-      <WalletConnectionModal 
+      <WalletConnectionModal
         relayUrl="https://relay.example.com"
         onConnect={(client, sessionId) => {
           console.log('Mobile connected, sessionId:', sessionId)
@@ -139,6 +154,7 @@ function App() {
 ```
 
 ### 4. Send wallet RPC call from desktop to mobile
+
 ```typescript
 import { useWalletRelayClient } from '@bsv/wallet-relay/react'
 
@@ -147,17 +163,21 @@ function sendPayment(client: WalletRelayClient, sessionId: string, desktopToken:
     jsonrpc: '2.0',
     id: 1,
     method: 'createAction',
-    params: [{
-      description: 'Send payment',
-      outputs: [{
-        satoshis: 5000,
-        lockingScript: '76a914...'
-      }]
-    }]
+    params: [
+      {
+        description: 'Send payment',
+        outputs: [
+          {
+            satoshis: 5000,
+            lockingScript: '76a914...'
+          }
+        ]
+      }
+    ]
   }
 
   const response = await client.sendRequest(sessionId, request, desktopToken)
-  
+
   if (response.error) {
     console.error('Mobile rejected:', response.error)
   } else {
@@ -167,6 +187,7 @@ function sendPayment(client: WalletRelayClient, sessionId: string, desktopToken:
 ```
 
 ### 5. Mobile wallet implementation (WalletPairingSession)
+
 ```typescript
 import { WalletPairingSession } from '@bsv/wallet-relay/client'
 import { PrivateKey } from '@bsv/sdk'
@@ -184,7 +205,7 @@ const { relayUrl, sessionId, sessionKey } = parsePairingUri(scannedQR)
 await session.pair({ relayUrl, sessionId, sessionKey })
 
 // Listen for incoming requests
-session.onRequest = async (request) => {
+session.onRequest = async request => {
   // Forward to local wallet
   const result = await myWallet[request.method](request.params)
   return result
@@ -194,19 +215,20 @@ session.onRequest = async (request) => {
 ```
 
 ### 6. Using Next.js with wallet relay
+
 ```typescript
 // pages/api/wallet-request.ts
 import { WalletRelayClient } from '@bsv/wallet-relay/client'
 
 export default async function handler(req, res) {
   const { sessionId, desktopToken, request } = req.body
-  
+
   const client = new WalletRelayClient({
     baseUrl: process.env.RELAY_URL
   })
-  
+
   const response = await client.sendRequest(sessionId, request, desktopToken)
-  
+
   // Must forward X-Desktop-Token header
   res.setHeader('X-Desktop-Token', desktopToken)
   res.json(response)
@@ -226,6 +248,7 @@ export default async function handler(req, res) {
 ## Dependencies
 
 ### Runtime (Peer Deps)
+
 - **`@bsv/sdk`** ^2.0.14 — Cryptography and wallet types
 - **`express`** >=4.0.0 (optional) — Web framework for server
 - **`ws`** >=8.0.0 (optional) — WebSocket server (required if using WalletRelayService)
@@ -233,12 +256,14 @@ export default async function handler(req, res) {
 - **`react`** >=17.0.0 (optional) — React (required for react exports)
 
 ### Dev
+
 - **`jest`** ^30.3.0 — Test runner
 - **`ts-jest`** ^29.4.6 — TypeScript support
 - **`typescript`** ^5.4.0 — Compiler
 - **`esbuild`** ^0.28.1 — Direct ESM/CJS bundler used by `build.mjs`
 
 ### Other ts-stack packages
+
 - **`@bsv/sdk`** — Cryptography, ProtoWallet, PrivateKey types
 
 ## Common Pitfalls / Gotchas

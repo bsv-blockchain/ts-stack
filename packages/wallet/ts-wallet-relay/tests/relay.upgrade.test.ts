@@ -18,9 +18,19 @@ function stopServer(server: http.Server): Promise<void> {
 function connectOutcome(url: string, ms = 1500): Promise<'open' | 'error' | 'timeout'> {
   return new Promise(resolve => {
     const ws = new WebSocket(url)
-    const timer = setTimeout(() => { ws.terminate(); resolve('timeout') }, ms)
-    ws.on('open',  () => { clearTimeout(timer); ws.close(); resolve('open') })
-    ws.on('error', () => { clearTimeout(timer); resolve('error') })
+    const timer = setTimeout(() => {
+      ws.terminate()
+      resolve('timeout')
+    }, ms)
+    ws.on('open', () => {
+      clearTimeout(timer)
+      ws.close()
+      resolve('open')
+    })
+    ws.on('error', () => {
+      clearTimeout(timer)
+      resolve('error')
+    })
   })
 }
 
@@ -32,7 +42,9 @@ describe('WebSocketRelay upgrade routing', () => {
     server = http.createServer()
     port = await startListening(server)
   })
-  afterEach(async () => { await stopServer(server) })
+  afterEach(async () => {
+    await stopServer(server)
+  })
 
   it('coexists with another WS service on a different path (the reported bug)', async () => {
     const relay = new WebSocketRelay(server)
@@ -79,9 +91,13 @@ describe('WebSocketRelay upgrade routing', () => {
       if (pathname !== '/wallet-ws') orphans.push(socket)
     })
     try {
-      expect(await connectOutcome(`ws://localhost:${port}/wallet-ws?topic=t&role=mobile`)).toBe('open')
+      expect(await connectOutcome(`ws://localhost:${port}/wallet-ws?topic=t&role=mobile`)).toBe(
+        'open'
+      )
       // Nothing claims '/ws' → the socket hangs unanswered → client never opens.
-      expect(await connectOutcome(`ws://localhost:${port}/ws?topic=t&role=mobile`, 500)).toBe('timeout')
+      expect(await connectOutcome(`ws://localhost:${port}/ws?topic=t&role=mobile`, 500)).toBe(
+        'timeout'
+      )
     } finally {
       relay.close()
       for (const socket of orphans) socket.destroy()

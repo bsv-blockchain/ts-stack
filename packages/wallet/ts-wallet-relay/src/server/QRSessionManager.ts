@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import type { Session, SessionStatus } from '../types.js'
 
-const PAIRING_TTL_MS   = 120 * 1000  // 2 min QR expiry
-const PAIRING_GRACE_MS = 30  * 1000  // extra window once mobile WS has opened
-const PENDING_EXPIRY_MS = PAIRING_TTL_MS + PAIRING_GRACE_MS + 60 * 1000  // ~3.5 min
-const SESSION_TTL_MS  = 24 * 60 * 60 * 1000 // 24 hours (once connected)
-const GC_INTERVAL_MS  = 10 * 60 * 1000           // GC every 10 min
+const PAIRING_TTL_MS = 120 * 1000 // 2 min QR expiry
+const PAIRING_GRACE_MS = 30 * 1000 // extra window once mobile WS has opened
+const PENDING_EXPIRY_MS = PAIRING_TTL_MS + PAIRING_GRACE_MS + 60 * 1000 // ~3.5 min
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours (once connected)
+const GC_INTERVAL_MS = 10 * 60 * 1000 // GC every 10 min
 
 export interface QRSessionManagerOptions {
   /**
@@ -52,17 +52,17 @@ export class QRSessionManager {
       err.code = 429
       throw err
     }
-    const id           = randomBytes(32).toString('base64url')
+    const id = randomBytes(32).toString('base64url')
     const desktopToken = randomBytes(24).toString('base64url')
     const now = Date.now()
     const session: Session = {
       id,
-      status:    'pending',
+      status: 'pending',
       createdAt: now,
       // Short TTL — extended to SESSION_TTL_MS when the session becomes connected.
       // This ensures unscanned QR codes are GC'd quickly rather than after 30 days.
       expiresAt: now + PENDING_EXPIRY_MS,
-      desktopToken,
+      desktopToken
     }
     this.sessions.set(id, session)
     return session

@@ -14,12 +14,17 @@ export type {
   TopicValidator,
   TokenValidator,
   ConnectHandler,
-  DisconnectHandler,
+  DisconnectHandler
 } from './server/WebSocketRelay.js'
 
 // ── Shared utilities (also available from ./client) ───────────────────────────
 
-export { parsePairingUri, buildPairingUri, verifyPairingSignature, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
+export {
+  parsePairingUri,
+  buildPairingUri,
+  verifyPairingSignature,
+  DEFAULT_ACCEPTED_SCHEMAS
+} from './shared/pairingUri.js'
 export { encryptEnvelope, decryptEnvelope } from './shared/crypto.js'
 export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 export { compileOriginMatcher } from './shared/originMatcher.js'
@@ -37,6 +42,6 @@ export type {
   SessionInfo,
   SessionStatus,
   PairingParams,
-  ParseResult,
+  ParseResult
 } from './types.js'
 export type { CryptoParams } from './shared/crypto.js'

@@ -106,6 +106,27 @@ const BRC74JSON = {
   ]
 }
 
+describe('MerklePath combination compatibility', () => {
+  const pathWithLeaf = (blockHeight: number, hash: string): MerklePath =>
+    new MerklePath(blockHeight, [[{ offset: 0, hash, txid: true }]])
+
+  it('rejects paths from different block heights', () => {
+    const first = pathWithLeaf(100, '00'.repeat(32))
+    const second = pathWithLeaf(101, '00'.repeat(32))
+    expect(() => first.combine(second)).toThrow(
+      'You cannot combine paths which do not have the same block height.'
+    )
+  })
+
+  it('rejects paths with different Merkle roots', () => {
+    const first = pathWithLeaf(100, '00'.repeat(32))
+    const second = pathWithLeaf(100, '11'.repeat(32))
+    expect(() => first.combine(second)).toThrow(
+      'You cannot combine paths which do not have the same root.'
+    )
+  })
+})
+
 const BRC74JSONTrimmed = {
   blockHeight: 813706,
   path: [...BRC74JSON.path]

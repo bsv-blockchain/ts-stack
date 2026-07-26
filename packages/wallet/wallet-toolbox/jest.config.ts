@@ -17,23 +17,26 @@ const getJestConfig = async (): Promise<Config> => {
     // Default is 'node'
     testEnvironment: 'node',
     // default [ '**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)' ]
-    testMatch: ['**/?(*.)+(test).[tj]s',"**/__test/**/*.test.ts"],
+    testMatch: ['**/?(*.)+(test).[tj]s', '**/__test/**/*.test.ts'],
     // default []
     testRegex: [],
     transform: {
-      '^.+\\.ts$': ['ts-jest', {
-        rootDir: '.',
-        tsconfig: {
-          module: 'commonjs',
-          moduleResolution: 'bundler'
+      '^.+\\.ts$': [
+        'ts-jest',
+        {
+          rootDir: '.',
+          tsconfig: {
+            module: 'commonjs',
+            moduleResolution: 'bundler'
+          }
         }
-      }]
+      ]
     },
     moduleNameMapper: {
       '^@bsv/sdk$': '<rootDir>/../../sdk/mod.ts',
       '^(\\.{1,2}/.*)\\.js$': '$1'
     },
-    testTimeout: 30000,
+    testTimeout: 30000
   }
 }
 

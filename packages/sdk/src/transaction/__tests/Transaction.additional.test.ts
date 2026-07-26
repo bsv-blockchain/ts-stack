@@ -28,6 +28,21 @@ describe('Transaction – additional coverage', () => {
         'beef must conform to BRC-95 and must contain the subject txid.'
       )
     })
+
+    it('also rejects non-atomic BEEF through the zero-copy parser', () => {
+      const beefBytes = Uint8Array.from(toArray(KNOWN_BEEF_V1_HEX, 'hex'))
+      expect(() => Transaction.fromAtomicBEEFView(beefBytes)).toThrow(
+        'beef must conform to BRC-95 and must contain the subject txid.'
+      )
+    })
+  })
+
+  describe('fromEF – marker validation', () => {
+    it('rejects an invalid EF marker before parsing transaction fields', () => {
+      const efBytes = Uint8Array.from(toArray(KNOWN_EF_HEX, 'hex'))
+      efBytes[4] = 1
+      expect(() => Transaction.fromEF(efBytes)).toThrow('Invalid EF marker')
+    })
   })
 
   describe('addInput', () => {

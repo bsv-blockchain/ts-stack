@@ -4,9 +4,5 @@
     "noEmit": true,
     "allowJs": true
   },
-  "include": [
-    "./src/**/*.ts",
-    ".eslintrc.js",
-    "jest.config.js",
-  ]
+  "include": ["./src/**/*.ts", ".eslintrc.js", "jest.config.js"]
 }

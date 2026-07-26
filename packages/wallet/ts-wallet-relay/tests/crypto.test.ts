@@ -29,7 +29,7 @@ describe('encryptEnvelope / decryptEnvelope', () => {
       id: 'req-1',
       seq: 1,
       method: 'pairing_approved',
-      params: { mobileIdentityKey: mobilePub, walletMeta: {} },
+      params: { mobileIdentityKey: mobilePub, walletMeta: {} }
     })
 
     const ciphertext = await encryptEnvelope(
@@ -58,7 +58,7 @@ describe('encryptEnvelope / decryptEnvelope', () => {
       id: 'req-2',
       seq: 2,
       method: 'getPublicKey',
-      params: { identityKey: true },
+      params: { identityKey: true }
     })
 
     const ciphertext = await encryptEnvelope(

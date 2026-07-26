@@ -49,9 +49,9 @@ export type WalletConnectionModalProps = {
 export function WalletConnectionModal({
   onLocalWallet,
   onMobileQR,
-  installUrl   = 'https://desktop.bsvb.tech',
+  installUrl = 'https://desktop.bsvb.tech',
   installLabel = 'Install BSV Wallet',
-  mobileLabel  = 'Connect via Mobile QR',
+  mobileLabel = 'Connect via Mobile QR',
   installLinkProps,
   mobileButtonProps,
   children,
@@ -77,7 +77,10 @@ export function WalletConnectionModal({
         if (!cancelled) setStatus('unavailable')
       }
     }, 0)
-    return () => { cancelled = true; clearTimeout(timer) }
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [])
 
   if (status !== 'unavailable') return null
@@ -86,12 +89,7 @@ export function WalletConnectionModal({
     <div data-wallet-detection={status} {...rootProps}>
       {children ?? (
         <>
-          <a
-            href={installUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            {...installLinkProps}
-          >
+          <a href={installUrl} target="_blank" rel="noopener noreferrer" {...installLinkProps}>
             {installLabel}
           </a>
           <button type="button" onClick={onMobileQR} {...mobileButtonProps}>

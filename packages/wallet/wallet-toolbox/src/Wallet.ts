@@ -150,8 +150,8 @@ export interface ContactRecord {
  * certificate has `trust: Infinity` by default so downstream `transformVerifiableCertificatesWithTrust`
  * style filtering treats contacts as authoritative.
  */
-function synthesizeContactResult (contacts: ContactRecord[]): DiscoverCertificatesResult {
-  const certificates = contacts.map((c) => ({
+function synthesizeContactResult(contacts: ContactRecord[]): DiscoverCertificatesResult {
+  const certificates = contacts.map(c => ({
     type: c.type ?? 'contact',
     subject: c.identityKey,
     serialNumber: '',
@@ -215,7 +215,7 @@ export interface WalletArgs {
   scriptVerifier?: SpendVerifierInterface
 }
 
-function isWalletSigner (args: WalletArgs | WalletSigner): args is WalletSigner {
+function isWalletSigner(args: WalletArgs | WalletSigner): args is WalletSigner {
   return args['isWalletSigner']
 }
 
@@ -272,7 +272,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    */
   randomVals?: number[] = undefined
 
-  constructor (
+  constructor(
     argsOrSigner: WalletArgs | WalletSigner,
     services?: WalletServices,
     monitor?: Monitor,
@@ -329,13 +329,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
     }
   }
 
-  async destroy (): Promise<void> {
+  async destroy(): Promise<void> {
     await this.actionBatch.abort()
     await this.storage.destroy()
     if (this.privilegedKeyManager != null) this.privilegedKeyManager.destroyKey()
   }
 
-  getClientChangeKeyPair (): KeyPair {
+  getClientChangeKeyPair(): KeyPair {
     const kp: KeyPair = {
       privateKey: this.keyDeriver.rootKey.toString(),
       publicKey: this.keyDeriver.rootKey.toPublicKey().toString()
@@ -343,13 +343,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return kp
   }
 
-  async getIdentityKey (): Promise<PubKeyHex> {
+  async getIdentityKey(): Promise<PubKeyHex> {
     return (await this.getPublicKey({ identityKey: true })).publicKey
   }
 
-  async getPublicKey (
+  async getPublicKey(
     args: GetPublicKeyArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    _originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
@@ -360,9 +360,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.getPublicKey(args)
   }
 
-  async revealCounterpartyKeyLinkage (
+  async revealCounterpartyKeyLinkage(
     args: RevealCounterpartyKeyLinkageArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    _originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
@@ -373,9 +373,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.revealCounterpartyKeyLinkage(args)
   }
 
-  async revealSpecificKeyLinkage (
+  async revealSpecificKeyLinkage(
     args: RevealSpecificKeyLinkageArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    _originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
@@ -386,7 +386,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.revealSpecificKeyLinkage(args)
   }
 
-  async encrypt (args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletEncryptResult> {
+  async encrypt(
+    args: WalletEncryptArgs,
+    _originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<WalletEncryptResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
         throw new Error('Privileged operations require the Wallet to be configured with a privileged key manager.')
@@ -396,7 +399,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.encrypt(args)
   }
 
-  async decrypt (args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletDecryptResult> {
+  async decrypt(
+    args: WalletDecryptArgs,
+    _originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<WalletDecryptResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
         throw new Error('Privileged operations require the Wallet to be configured with a privileged key manager.')
@@ -406,7 +412,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.decrypt(args)
   }
 
-  async createHmac (args: CreateHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<CreateHmacResult> {
+  async createHmac(
+    args: CreateHmacArgs,
+    _originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<CreateHmacResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
         throw new Error('Privileged operations require the Wallet to be configured with a privileged key manager.')
@@ -416,7 +425,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.createHmac(args)
   }
 
-  async verifyHmac (args: VerifyHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<VerifyHmacResult> {
+  async verifyHmac(
+    args: VerifyHmacArgs,
+    _originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<VerifyHmacResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
         throw new Error('Privileged operations require the Wallet to be configured with a privileged key manager.')
@@ -426,9 +438,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.verifyHmac(args)
   }
 
-  async createSignature (
+  async createSignature(
     args: CreateSignatureArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    _originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
@@ -439,9 +451,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.createSignature(args)
   }
 
-  async verifySignature (
+  async verifySignature(
     args: VerifySignatureArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    _originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
     if (args.privileged) {
       if (this.privilegedKeyManager == null) {
@@ -452,8 +464,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await this.proto.verifySignature(args)
   }
 
-  getServices (): WalletServices {
-    if (this.services == null) { throw new WERR_INVALID_PARAMETER('services', 'valid in constructor arguments to be retreived here.') }
+  getServices(): WalletServices {
+    if (this.services == null) {
+      throw new WERR_INVALID_PARAMETER('services', 'valid in constructor arguments to be retreived here.')
+    }
     return this.services
   }
 
@@ -462,7 +476,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    *
    * @param newKnownTxids Optional. Additional new txids known to be valid by the caller to be merged.
    */
-  getKnownTxids (newKnownTxids?: string[]): string[] {
+  getKnownTxids(newKnownTxids?: string[]): string[] {
     if (newKnownTxids != null) {
       for (const txid of newKnownTxids) this.beef.mergeTxidOnly(txid)
     }
@@ -471,7 +485,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return knownTxids
   }
 
-  getStorageIdentity (): StorageIdentity {
+  getStorageIdentity(): StorageIdentity {
     const s = this.storage.getSettings()
     return {
       storageIdentityKey: s.storageIdentityKey,
@@ -483,7 +497,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     args: A,
     validate: (args: A, logger?: WalletLoggerInterface) => T,
     logger?: WalletLoggerInterface
-  ): { vargs: T, auth: AuthId } {
+  ): { vargs: T; auth: AuthId } {
     const vargs = validate(args, logger)
     const auth: AuthId = { identityKey: this.identityKey }
     return { vargs, auth }
@@ -493,7 +507,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // List Methods
   /// ///////////////
 
-  async listActions (
+  async listActions(
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
@@ -512,11 +526,11 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return r
   }
 
-  get storageParty (): string {
+  get storageParty(): string {
     return `storage ${this.getStorageIdentity().storageIdentityKey}`
   }
 
-  async listOutputs (
+  async listOutputs(
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
@@ -525,10 +539,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.autoKnownTxids && !vargs.knownTxids) {
       vargs.knownTxids = this.getKnownTxids()
     }
-    const storageArgs = this.actionBatch.hasWorkspace && vargs.basket !== specOpWalletBalance &&
-      !vargs.tags.includes(specOpWalletBalance)
-      ? { ...vargs, limit: 10000, offset: 0 }
-      : vargs
+    const storageArgs =
+      this.actionBatch.hasWorkspace && vargs.basket !== specOpWalletBalance && !vargs.tags.includes(specOpWalletBalance)
+        ? { ...vargs, limit: 10000, offset: 0 }
+        : vargs
     const r = this.actionBatch.overlayListOutputs(await this.storage.listOutputs(storageArgs), vargs)
     if (r.BEEF != null) {
       this.beef.mergeBeefFromParty(this.storageParty, asArray(r.BEEF))
@@ -537,7 +551,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return r
   }
 
-  async listCertificates (
+  async listCertificates(
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
@@ -551,7 +565,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // Certificates
   /// ///////////////
 
-  async acquireCertificate (
+  async acquireCertificate(
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
@@ -714,7 +728,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     throw new WERR_INVALID_PARAMETER('acquisitionProtocol', `valid.${args.acquisitionProtocol} is unrecognized.`)
   }
 
-  async relinquishCertificate (
+  async relinquishCertificate(
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
@@ -724,7 +738,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { relinquished: true }
   }
 
-  async proveCertificate (
+  async proveCertificate(
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
@@ -741,9 +755,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
   }
 
   /** 2-minute cache of queryOverlay() results keyed by normalized query */
-  private readonly _overlayCache: Map<string, { expiresAt: number, value: unknown }> = new Map()
+  private readonly _overlayCache: Map<string, { expiresAt: number; value: unknown }> = new Map()
 
-  async discoverByIdentityKey (
+  async discoverByIdentityKey(
     args: DiscoverByIdentityKeyArgs & { forceRefresh?: boolean },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
@@ -768,7 +782,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     // --- trustSettings cache (2 minutes) ---
     let trustSettings =
-      (this._trustSettingsCache != null) && this._trustSettingsCache.expiresAt > now
+      this._trustSettingsCache != null && this._trustSettingsCache.expiresAt > now
         ? this._trustSettingsCache.trustSettings
         : undefined
 
@@ -788,7 +802,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     })
 
     let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
-    if ((cached == null) || cached.expiresAt <= now) {
+    if (cached == null || cached.expiresAt <= now) {
       const value = await queryOverlay({ identityKey: args.identityKey, certifiers }, this.lookupResolver)
       cached = { value, expiresAt: now + TTL_MS }
       this._overlayCache.set(cacheKey, cached)
@@ -801,7 +815,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return transformVerifiableCertificatesWithTrust(trustSettings, cached.value as any)
   }
 
-  async discoverByAttributes (
+  async discoverByAttributes(
     args: DiscoverByAttributesArgs & { forceRefresh?: boolean },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
@@ -826,7 +840,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     // --- trustSettings cache (2 minutes) ---
     let trustSettings =
-      (this._trustSettingsCache != null) && this._trustSettingsCache.expiresAt > now
+      this._trustSettingsCache != null && this._trustSettingsCache.expiresAt > now
         ? this._trustSettingsCache.trustSettings
         : undefined
 
@@ -854,7 +868,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     })
 
     let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
-    if ((cached == null) || cached.expiresAt <= now) {
+    if (cached == null || cached.expiresAt <= now) {
       const value = await queryOverlay({ attributes: args.attributes, certifiers }, this.lookupResolver)
       cached = { value, expiresAt: now + TTL_MS }
       this._overlayCache.set(cacheKey, cached)
@@ -867,7 +881,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return transformVerifiableCertificatesWithTrust(trustSettings, cached.value as any)
   }
 
-  verifyReturnedTxidOnly (beef: Beef, knownTxids?: string[]): Beef {
+  verifyReturnedTxidOnly(beef: Beef, knownTxids?: string[]): Beef {
     if (this.returnTxidOnly) return beef
     const onlyTxids = beef.txs.filter(btx => btx.isTxidOnly).map(btx => btx.txid)
     for (const txid of onlyTxids) {
@@ -883,36 +897,36 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return beef
   }
 
-  verifyReturnedTxidOnlyAtomicBEEF (beef: AtomicBEEF, knownTxids?: string[], parsedBeef?: Beef): AtomicBEEF {
+  verifyReturnedTxidOnlyAtomicBEEF(beef: AtomicBEEF, knownTxids?: string[], parsedBeef?: Beef): AtomicBEEF {
     if (this.returnTxidOnly) return beef
     const b = parsedBeef ?? Beef.fromBinary(beef)
     if (!b.atomicTxid) throw new WERR_INTERNAL()
     return this.verifyReturnedTxidOnly(b, knownTxids).toBinaryAtomic(b.atomicTxid)
   }
 
-  verifyReturnedTxidOnlyBEEF (beef: BEEF): BEEF {
+  verifyReturnedTxidOnlyBEEF(beef: BEEF): BEEF {
     if (this.returnTxidOnly) return beef
     const b = Beef.fromBinary(beef)
     return this.verifyReturnedTxidOnly(b).toBinary()
   }
 
-  logMakeLogger (method: string, args: any): WalletLoggerInterface | undefined {
+  logMakeLogger(method: string, args: any): WalletLoggerInterface | undefined {
     const logger = this.makeLogger?.(args.log)
     this.logMethodStart(method, logger)
     return logger
   }
 
-  logMethodStart (method: string, logger?: WalletLoggerInterface): void {
+  logMethodStart(method: string, logger?: WalletLoggerInterface): void {
     logger?.group(`Wallet ${method}`)
   }
 
-  logResult (r: any, logger?: WalletLoggerInterface): void {
+  logResult(r: any, logger?: WalletLoggerInterface): void {
     if (logger == null) return
     logger.groupEnd()
     r.log = logger.flush?.()
   }
 
-  logWalletError (eu: unknown, logger?: WalletLoggerInterface): void {
+  logWalletError(eu: unknown, logger?: WalletLoggerInterface): void {
     if (logger == null) return
     logger.error('WalletError:', WalletError.unknownToJson(eu))
     logger.flush?.()
@@ -922,7 +936,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // Actions
   /// ///////////////
 
-  async createAction (
+  async createAction(
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
@@ -932,7 +946,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
       args.options ??= {}
       args.options.trustSelf ||= this.trustSelf
-      if (this.autoKnownTxids && (args.options.knownTxids == null)) {
+      if (this.autoKnownTxids && args.options.knownTxids == null) {
         args.options.knownTxids = this.getKnownTxids(args.options.knownTxids)
       }
 
@@ -940,7 +954,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
       logger?.log('validated args')
 
       vargs.includeAllSourceTransactions = this.includeAllSourceTransactions
-      if ((this.randomVals != null) && this.randomVals.length > 1) {
+      if (this.randomVals != null && this.randomVals.length > 1) {
         vargs.randomVals = [...this.randomVals]
       }
 
@@ -965,7 +979,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     }
   }
 
-  async signAction (
+  async signAction(
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
@@ -973,19 +987,22 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateSignActionArgs)
     const prior = this.pendingSignActions[args.reference]
-    if (!prior) { throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.') }
+    if (!prior) {
+      throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.')
+    }
     // createAction options are merged with undefined signAction options before validation...
     const r = await signAction(this, auth, args)
 
     if (!vargs.isDelayed) throwIfAnyUnsuccessfulSignActions(r)
 
-    if (r.tx != null) r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, prior.args.options?.knownTxids, getResultBeef(r))
+    if (r.tx != null)
+      r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, prior.args.options?.knownTxids, getResultBeef(r))
     delete this.pendingSignActions[args.reference]
 
     return r
   }
 
-  async internalizeAction (
+  async internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
@@ -1001,7 +1018,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return r
   }
 
-  async abortAction (
+  async abortAction(
     args: AbortActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AbortActionResult> {
@@ -1015,7 +1032,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return r
   }
 
-  async relinquishOutput (
+  async relinquishOutput(
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
@@ -1025,7 +1042,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { relinquished: true }
   }
 
-  async isAuthenticated (args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+  async isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
     Validation.validateOriginator(originator)
     const r: { authenticated: true } = {
       authenticated: true
@@ -1033,7 +1050,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return r
   }
 
-  async waitForAuthentication (
+  async waitForAuthentication(
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AuthenticatedResult> {
@@ -1041,13 +1058,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { authenticated: true }
   }
 
-  async getHeight (args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
+  async getHeight(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
     Validation.validateOriginator(originator)
     const height = await this.getServices().getHeight()
     return { height }
   }
 
-  async getHeaderForHeight (
+  async getHeaderForHeight(
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
@@ -1056,12 +1073,12 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { header: Utils.toHex(serializedHeader) }
   }
 
-  async getNetwork (args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+  async getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
     Validation.validateOriginator(originator)
     return { network: toWalletNetwork(this.chain) }
   }
 
-  async getVersion (args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+  async getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
     Validation.validateOriginator(originator)
     return { version: 'wallet-brc100-1.0.0' }
   }
@@ -1071,7 +1088,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    *
    * @param toWallet wallet which will receive this wallet's satoshis.
    */
-  async sweepTo (toWallet: Wallet): Promise<void> {
+  async sweepTo(toWallet: Wallet): Promise<void> {
     const derivationPrefix = randomBytesBase64(8)
     const derivationSuffix = randomBytesBase64(8)
     const keyDeriver = this.keyDeriver
@@ -1137,7 +1154,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * @param {string} basket - Optional. Defaults to 'default', the wallet change basket.
    * @returns {WalletBalance} total sum of output satoshis and utxo details (satoshis and outpoints)
    */
-  async balanceAndUtxos (basket: string = 'default'): Promise<WalletBalance> {
+  async balanceAndUtxos(basket: string = 'default'): Promise<WalletBalance> {
     const r: WalletBalance = { total: 0, utxos: [] }
     const listBasket = basket === 'default' ? specOpWalletManagedUtxos : basket
     let offset = 0
@@ -1163,7 +1180,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    *
    * @returns {number} sum of output satoshis
    */
-  async balance (args?: ListOutputsArgs): Promise<number> {
+  async balance(args?: ListOutputsArgs): Promise<number> {
     args ||= { basket: specOpWalletBalance }
     if (args.basket !== specOpWalletBalance) {
       args.tags = [...(args.tags || []), specOpWalletBalance]
@@ -1183,7 +1200,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * @param optionalArgs Optional. Additional tags will constrain the outputs processed.
    * @returns outputs which are/where considered spendable but currently fail to verify as spendable.
    */
-  async reviewSpendableOutputs (
+  async reviewSpendableOutputs(
     all = false,
     release = false,
     optionalArgs?: Partial<ListOutputsArgs>
@@ -1206,7 +1223,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * @param count target number of change UTXOs to maintain.
    * @param satoshis target value for new change outputs.
    */
-  async setWalletChangeParams (count: number, satoshis: number): Promise<void> {
+  async setWalletChangeParams(count: number, satoshis: number): Promise<void> {
     const args: ListOutputsArgs = {
       basket: specOpSetWalletChangeParams,
       tags: [count.toString(), satoshis.toString()]
@@ -1220,7 +1237,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * @param abort Defaults to false. If true, runs `abortAction` on each 'nosend' action.
    * @returns {ListActionsResult} start `listActions` result restricted to 'nosend' (or 'failed' if aborted) actions.
    */
-  async listNoSendActions (args: ListActionsArgs, abort = false): Promise<ListActionsResult> {
+  async listNoSendActions(args: ListActionsArgs, abort = false): Promise<ListActionsResult> {
     const { vargs } = this.validateAuthAndArgs(args, Validation.validateListActionsArgs)
     vargs.labels.push(specOpNoSendActions)
     if (abort) {
@@ -1236,7 +1253,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * @param unfail Defaults to false. If true, queues the action for attempted recovery.
    * @returns {ListActionsResult} start `listActions` result restricted to 'failed' status actions.
    */
-  async listFailedActions (args: ListActionsArgs, unfail = false): Promise<ListActionsResult> {
+  async listFailedActions(args: ListActionsArgs, unfail = false): Promise<ListActionsResult> {
     const { vargs } = this.validateAuthAndArgs(args, Validation.validateListActionsArgs)
     vargs.labels.push(specOpFailedActions)
     if (unfail) vargs.labels.push('unfail')
@@ -1263,29 +1280,29 @@ export interface PendingSignAction {
   pdi: PendingStorageInput[]
 }
 
-function throwIfAnyUnsuccessfulCreateActions (r: CreateActionResultX) {
+function throwIfAnyUnsuccessfulCreateActions(r: CreateActionResultX) {
   const ndrs = r.notDelayedResults
   const swrs = r.sendWithResults
 
-  if ((ndrs == null) || (swrs == null) || swrs.every(r => r.status === 'unproven')) return
+  if (ndrs == null || swrs == null || swrs.every(r => r.status === 'unproven')) return
 
   throw new WERR_REVIEW_ACTIONS(ndrs, swrs, r.txid, r.tx, r.noSendChange)
 }
 
-function throwIfAnyUnsuccessfulSignActions (r: SignActionResultX) {
+function throwIfAnyUnsuccessfulSignActions(r: SignActionResultX) {
   const ndrs = r.notDelayedResults
   const swrs = r.sendWithResults
 
-  if ((ndrs == null) || (swrs == null) || swrs.every(r => r.status === 'unproven')) return
+  if (ndrs == null || swrs == null || swrs.every(r => r.status === 'unproven')) return
 
   throw new WERR_REVIEW_ACTIONS(ndrs, swrs, r.txid, r.tx)
 }
 
-function throwIfUnsuccessfulInternalizeAction (r: StorageInternalizeActionResult) {
+function throwIfUnsuccessfulInternalizeAction(r: StorageInternalizeActionResult) {
   const ndrs = r.notDelayedResults
   const swrs = r.sendWithResults
 
-  if ((ndrs == null) || (swrs == null) || swrs.every(r => r.status === 'unproven')) return
+  if (ndrs == null || swrs == null || swrs.every(r => r.status === 'unproven')) return
 
   throw new WERR_REVIEW_ACTIONS(ndrs, swrs, r.txid)
 }
@@ -1293,7 +1310,7 @@ function throwIfUnsuccessfulInternalizeAction (r: StorageInternalizeActionResult
 /**
  * Throws a WERR_REVIEW_ACTIONS with a full set of properties to test data formats and propagation.
  */
-export function throwDummyReviewActions () {
+export function throwDummyReviewActions() {
   const b58Beef =
     'gno9MC7VXii1KoCkc2nsVyYJpqzN3dhBzYATETJcys62emMKfpBof4R7GozwYEaSapUtnNvqQ57aaYYjm3U2dv9eUJ1sV46boHkQgppYmAz9YH8FdZduV8aJayPViaKcyPmbDhEw6UW8TM5iFZLXNs7HBnJHUKCeTdNK4FUEL7vAugxAV9WUUZ43BZjJk2SmSeps9TCXjt1Ci9fKWp3d9QSoYvTpxwzyUFHjRKtbUgwq55ZfkBp5bV2Bpz9qSuKywKewW7Hh4S1nCUScwwzpKDozb3zic1V9p2k8rQxoPsRxjUJ8bjhNDdsN8d7KukFuc3n47fXzdWttvnxwsujLJRGnQbgJuknQqx3KLf5kJXHzwjG6TzigZk2t24qeB6d3hbYiaDr2fFkUJBL3tukTHhfNkQYRXuz3kucVDzvejHyqJaF51mXG8BjMN5aQj91ZJXCaPVqkMWCzmvyaqmXMdRiJdSAynhXbQK91xf6RwdNhz1tg5f9B6oJJMhsi9UYSVymmax8VLKD9AKzBCBDcfyD83m3jyS1VgKGZn3SkQmr6bsoWq88L3GsMnnmYUGogvdAYarTqg3pzkjCMxHzmJBMN6ofnUk8c1sRTXQue7BbyUaN5uZu3KW6CmFsEfpuqVvnqFW93TU1jrPP2S8yz8AexAnARPCKE8Yz7RfVaT6RCavwQKL3u5iookwRWEZXW1QWmM37yJWHD87SjVynyg327a1CLwcBxmE2CB48QeNVGyQki4CTQMqw2o8TMhDPJej1g68oniAjBcxBLSCs7KGvK3k7AfrHbCMULX9CTibYhCjdFjbsbBoocqJpxxcvkMo1fEEiAzZuiBVZQDYktDdTVbhKHvYkW25HcYX75NJrpNAhm7AjFeKLzEVxqAQkMfvTufpESNRZF4kQqg2Rg8h2ajcKTd5cpEPwXCrZLHm4EaZEmZVbg3QNfGhn7BJu1bHMtLqPD4y8eJxm2uGrW6saf6qKYmmu64F8A667NbD4yskPRQ1S863VzwGpxxmgLc1Ta3R46jEqsAoRDoZVUaCgBBZG3Yg1CTgi1EVBMXU7qvY4n3h8o2FLCEMWY4KadnV3iD4FbcdCmg4yxBosNAZgbPjhgGjCimjh4YsLd9zymGLmivmz2ZBg5m3xaiXT9NN81X9C1JUujd'
   const beef = Beef.fromBinary(Utils.fromBase58(b58Beef))
@@ -1328,7 +1345,7 @@ export function throwDummyReviewActions () {
  * @param vargs
  * @returns
  */
-function validateListOutputsArgs (args: ListOutputsArgs): ValidListOutputsArgs {
+function validateListOutputsArgs(args: ListOutputsArgs): ValidListOutputsArgs {
   const vargs = Validation.validateListOutputsArgs(args)
   const balancePrefix = 'balance '
   if (vargs.basket.startsWith(balancePrefix)) {

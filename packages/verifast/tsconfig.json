@@ -5,6 +5,13 @@
     "noEmit": true,
     "types": ["jest", "node"]
   },
-  "include": ["mod.ts", "mod.browser.ts", "umd.ts", "src/**/*.ts", "bench/**/*.ts", "browser/**/*.ts"],
+  "include": [
+    "mod.ts",
+    "mod.browser.ts",
+    "umd.ts",
+    "src/**/*.ts",
+    "bench/**/*.ts",
+    "browser/**/*.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }

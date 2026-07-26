@@ -16,7 +16,7 @@ const textEncoder = new TextEncoder()
  * side genuinely exercises the package's own hand-rolled base64 decoder rather
  * than round-tripping through the same implementation.
  */
-function frame (sender: string, payload: unknown): Uint8Array {
+function frame(sender: string, payload: unknown): Uint8Array {
   const data = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')
   return textEncoder.encode(JSON.stringify({ name: sender, data }))
 }

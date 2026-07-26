@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/sdk",
+  "entry": ".",
+  "requiredExports": [
+    "AuthFetch",
+    "IdentityClient",
+    "PrivateKey",
+    "ProtoWallet",
+    "PublicKey",
+    "Script",
+    "Transaction",
+    "WalletClient"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 735000,
+      "gzip": 185000,
+      "brotli": 150000
+    },
+    "esbuild": {
+      "raw": 555000,
+      "gzip": 168000,
+      "brotli": 140000
+    }
+  },
+  "umd": {
+    "path": "dist/umd/bundle.js",
+    "global": "bsv",
+    "maximumBytes": {
+      "raw": 545000,
+      "gzip": 162000,
+      "brotli": 136000
+    }
+  }
+}

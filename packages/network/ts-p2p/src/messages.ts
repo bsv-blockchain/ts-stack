@@ -115,11 +115,7 @@ export interface NodeStatusMessage {
 // Union type for any decoded message
 // ---------------------------------------------------------------------------
 
-export type TeranodeMessage =
-  | BlockMessage
-  | SubtreeMessage
-  | RejectedTxMessage
-  | NodeStatusMessage
+export type TeranodeMessage = BlockMessage | SubtreeMessage | RejectedTxMessage | NodeStatusMessage
 
 // ---------------------------------------------------------------------------
 // Decoded result (envelope + typed payload)

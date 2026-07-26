@@ -23,7 +23,8 @@ export default class Curve {
   tinv: BigNumber
   zeroA: boolean
   threeA: boolean
-  endo: { beta: BigNumber, lambda: BigNumber, basis: Array<{ a: BigNumber, b: BigNumber }> } | undefined // beta, lambda, basis
+  endo:
+    { beta: BigNumber; lambda: BigNumber; basis: Array<{ a: BigNumber; b: BigNumber }> } | undefined // beta, lambda, basis
   _endoWnafT1: BigNumber[]
   _endoWnafT2: BigNumber[]
   _wnafT1: BigNumber[]
@@ -33,17 +34,14 @@ export default class Curve {
   _bitLength: number
 
   // Represent num in a w-NAF form
-  static assert (
-    expression: unknown,
-    message: string = 'Elliptic curve assertion failed'
-  ): void {
+  static assert(expression: unknown, message: string = 'Elliptic curve assertion failed'): void {
     if (!(expression as boolean)) {
       throw new Error(message)
     }
   }
 
-  getNAF (num: BigNumber, w: number, bits: number): number[] {
-    const naf = new Array(Math.max(num.bitLength(), bits) + 1)
+  getNAF(num: BigNumber, w: number, bits: number): number[] {
+    const naf = Array.from({ length: Math.max(num.bitLength(), bits) + 1 }, () => 0)
     naf.fill(0)
 
     const ws = 1 << (w + 1)
@@ -71,7 +69,7 @@ export default class Curve {
   }
 
   // Represent k1, k2 in a Joint Sparse Form
-  getJSF (k1: BigNumber, k2: BigNumber): number[][] {
+  getJSF(k1: BigNumber, k2: BigNumber): number[][] {
     const jsf: number[][] = [[], []]
 
     k1 = k1.clone()
@@ -128,9 +126,9 @@ export default class Curve {
     return jsf
   }
 
-  static cachedProperty (obj, name: string, computer): void {
+  static cachedProperty(obj, name: string, computer): void {
     const key = '_' + name
-    obj.prototype[name] = function cachedProperty () {
+    obj.prototype[name] = function cachedProperty() {
       if (this[key] === undefined) {
         this[key] = computer.call(this)
       }
@@ -138,15 +136,15 @@ export default class Curve {
     }
   }
 
-  static parseBytes (bytes: string | number[]): number[] {
+  static parseBytes(bytes: string | number[]): number[] {
     return typeof bytes === 'string' ? toArray(bytes, 'hex') : bytes
   }
 
-  static intFromLE (bytes: number[]): BigNumber {
+  static intFromLE(bytes: number[]): BigNumber {
     return new BigNumber(bytes, 'hex', 'le')
   }
 
-  constructor () {
+  constructor() {
     if (globalCurve === undefined) {
       /* eslint-disable-next-line @typescript-eslint/no-this-alias */
       globalCurve = this
@@ -944,8 +942,7 @@ export default class Curve {
 
       // Precomputed endomorphism
       beta: '7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee',
-      lambda:
-        '5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72',
+      lambda: '5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72',
       basis: [
         {
           a: '3086d221a7d46bcde86c90e49284eb15',
@@ -977,13 +974,23 @@ export default class Curve {
 
     // Curve configuration, optional
     this.n = new BigNumber(conf.n, 16)
-    this.g = Point.fromJSON(conf.g as [string, string, { doubles?: { step: number, points: Array<[string, string]> }, naf?: { wnd: number, points: Array<[string, string]> } }], conf.gRed)
+    this.g = Point.fromJSON(
+      conf.g as [
+        string,
+        string,
+        {
+          doubles?: { step: number; points: Array<[string, string]> }
+          naf?: { wnd: number; points: Array<[string, string]> }
+        }
+      ],
+      conf.gRed
+    )
 
     // Temporary arrays
-    this._wnafT1 = new Array(4)
-    this._wnafT2 = new Array(4)
-    this._wnafT3 = new Array(4)
-    this._wnafT4 = new Array(4)
+    this._wnafT1 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
+    this._wnafT2 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
+    this._wnafT3 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
+    this._wnafT4 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
 
     this._bitLength = this.n.bitLength()
     this.redN = this.n.toRed(this.red)
@@ -996,17 +1003,17 @@ export default class Curve {
 
     // If the curve is endomorphic, precalculate beta and lambda
     this.endo = this._getEndomorphism(conf)
-    this._endoWnafT1 = new Array(4)
-    this._endoWnafT2 = new Array(4)
+    this._endoWnafT1 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
+    this._endoWnafT2 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
   }
 
-  _getEndomorphism (conf):
-  | {
-    beta: BigNumber
-    lambda: BigNumber
-    basis: Array<{ a: BigNumber, b: BigNumber }>
-  }
-  | undefined {
+  _getEndomorphism(conf):
+    | {
+        beta: BigNumber
+        lambda: BigNumber
+        basis: Array<{ a: BigNumber; b: BigNumber }>
+      }
+    | undefined {
     // No efficient endomorphism
     if (!this.zeroA || this.p.modrn(3) !== 1) {
       return
@@ -1040,9 +1047,9 @@ export default class Curve {
       }
 
       const gMulX = this.g.mul(lambdas[0])?.x
-      const gXRedMulBeta = (this.g.x == null) ? undefined : this.g.x.redMul(beta)
+      const gXRedMulBeta = this.g.x == null ? undefined : this.g.x.redMul(beta)
 
-      if ((gMulX != null) && (gXRedMulBeta != null) && gMulX.cmp(gXRedMulBeta) === 0) {
+      if (gMulX != null && gXRedMulBeta != null && gMulX.cmp(gXRedMulBeta) === 0) {
         lambda = lambdas[0]
       } else {
         lambda = lambdas[1]
@@ -1052,10 +1059,12 @@ export default class Curve {
         }
 
         const gMulX = this.g.mul(lambda)?.x
-        const gXRedMulBeta = (this.g.x == null) ? undefined : this.g.x.redMul(beta)
+        const gXRedMulBeta = this.g.x == null ? undefined : this.g.x.redMul(beta)
 
-        if ((gMulX == null) || (gXRedMulBeta == null)) {
-          throw new Error('Lambda computation failed: g.mul(lambda).x or g.x.redMul(beta) is undefined.')
+        if (gMulX == null || gXRedMulBeta == null) {
+          throw new Error(
+            'Lambda computation failed: g.mul(lambda).x or g.x.redMul(beta) is undefined.'
+          )
         }
 
         Curve.assert(
@@ -1068,7 +1077,7 @@ export default class Curve {
     }
 
     // Get basis vectors, used for balanced length-two representation
-    let basis: Array<{ a: BigNumber, b: BigNumber }>
+    let basis: Array<{ a: BigNumber; b: BigNumber }>
     if (typeof conf.basis === 'object' && conf.basis !== null) {
       basis = conf.basis.map(function (vec) {
         return {
@@ -1087,7 +1096,7 @@ export default class Curve {
     }
   }
 
-  _getEndoRoots (num: BigNumber): [BigNumber, BigNumber] {
+  _getEndoRoots(num: BigNumber): [BigNumber, BigNumber] {
     // Find roots of for x^2 + x + 1 in F
     // Root = (-1 +- Sqrt(-3)) / 2
     //
@@ -1102,9 +1111,9 @@ export default class Curve {
     return [l1, l2]
   }
 
-  _getEndoBasis (
+  _getEndoBasis(
     lambda: BigNumber
-  ): [{ a: BigNumber, b: BigNumber }, { a: BigNumber, b: BigNumber }] {
+  ): [{ a: BigNumber; b: BigNumber }, { a: BigNumber; b: BigNumber }] {
     // aprxSqrt >= sqrt(this.n)
     const aprxSqrt = this.n.ushrn(Math.floor(this.n.bitLength() / 2))
 
@@ -1157,12 +1166,7 @@ export default class Curve {
     }
 
     // Ensure a0 and b0 have been assigned
-    if (
-      a0 === undefined ||
-      b0 === undefined ||
-      a1 === undefined ||
-      b1 === undefined
-    ) {
+    if (a0 === undefined || b0 === undefined || a1 === undefined || b1 === undefined) {
       throw new Error('Failed to compute Endo Basis values')
     }
 
@@ -1193,7 +1197,7 @@ export default class Curve {
     ]
   }
 
-  _endoSplit (k: BigNumber): { k1: BigNumber, k2: BigNumber } {
+  _endoSplit(k: BigNumber): { k1: BigNumber; k2: BigNumber } {
     if (this.endo == null) {
       throw new Error('Endomorphism is not defined.')
     }
@@ -1215,7 +1219,7 @@ export default class Curve {
     return { k1, k2 }
   }
 
-  validate (point: Point): boolean {
+  validate(point: Point): boolean {
     if (point.inf) {
       return true
     }

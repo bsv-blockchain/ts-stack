@@ -42,8 +42,8 @@ export function WalletConnectionModal({ onLocalWallet, onMobileQR, installUrl }:
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm mx-4">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Connect your wallet</h2>
         <p className="text-sm text-gray-500 mb-6">
-          No local wallet detected. Install a BSV wallet or connect your
-          mobile wallet by scanning a QR code.
+          No local wallet detected. Install a BSV wallet or connect your mobile wallet by scanning a
+          QR code.
         </p>
         <div className="flex flex-col gap-3">
           <a

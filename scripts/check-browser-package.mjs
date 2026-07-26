@@ -258,14 +258,23 @@ async function collectBundle(directory) {
   const code = Buffer.concat(await Promise.all(javascriptFiles.map(file => fs.readFile(file))))
   for (const file of mapFiles) {
     const sourceMap = JSON.parse(await fs.readFile(file, 'utf8'))
+    const sourcesWithoutContent = Array.isArray(sourceMap.sources)
+      ? sourceMap.sources.filter(
+          (_source, index) => typeof sourceMap.sourcesContent?.[index] !== 'string'
+        )
+      : []
     if (
       !Array.isArray(sourceMap.sources) ||
       sourceMap.sources.length === 0 ||
       !Array.isArray(sourceMap.sourcesContent) ||
       sourceMap.sourcesContent.length !== sourceMap.sources.length ||
-      sourceMap.sourcesContent.some(content => typeof content !== 'string')
+      sourcesWithoutContent.length > 0
     ) {
-      throw new Error(`source map ${file} must retain source paths and source content`)
+      const details =
+        sourcesWithoutContent.length > 0
+          ? `; missing content for: ${sourcesWithoutContent.join(', ')}`
+          : ''
+      throw new Error(`source map ${file} must retain source paths and source content${details}`)
     }
   }
   return { code, files }

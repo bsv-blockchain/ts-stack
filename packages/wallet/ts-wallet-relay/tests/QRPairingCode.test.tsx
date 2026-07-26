@@ -5,7 +5,8 @@ import { useQRPairing } from '../src/react/useQRPairing.js'
 import { renderHook, act } from '@testing-library/react'
 
 const MOCK_DATA_URL = 'data:image/png;base64,iVBORw0KGgo='
-const MOCK_PAIRING_URI = 'wallet://pair?topic=abc&relay=wss%3A%2F%2Fapp.example.com&origin=https%3A%2F%2Fapp.example.com'
+const MOCK_PAIRING_URI =
+  'wallet://pair?topic=abc&relay=wss%3A%2F%2Fapp.example.com&origin=https%3A%2F%2Fapp.example.com'
 
 describe('QRPairingCode', () => {
   it('renders the QR image with the correct src', () => {
@@ -129,7 +130,7 @@ describe('useQRPairing', () => {
     const hrefBefore = window.location.href
     const { result } = renderHook(() => useQRPairing(MOCK_PAIRING_URI, { openUrl }))
     act(() => result.current.open())
-    expect(window.location.href).toBe(hrefBefore)  // unchanged
+    expect(window.location.href).toBe(hrefBefore) // unchanged
   })
 
   it('returns the pairingUri unchanged', () => {

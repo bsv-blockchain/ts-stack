@@ -9,11 +9,13 @@ Graph Aware Sync Protocol (GASP) — a powerful protocol for synchronizing BSV t
 From `mod.ts` (re-exports from `src/GASP.ts`):
 
 **Main class:**
+
 - `GASP` — Orchestrator for graph-aware sync
   - Constructor: `new GASP(storage, remote, lastInteraction?, logPrefix?, log?, unidirectional?, logLevel?, sequential?)`
   - Methods: `sync()` → `Promise<void>`
 
 **Interfaces:**
+
 - `GASPStorage` — Local database layer for UTXOs, transactions, metadata, graph management
   - `findKnownUTXOs(since, limit?)` → `Promise<GASPOutput[]>`
   - `hydrateGASPNode(graphID, txid, outputIndex, metadata)` → `Promise<GASPNode>`
@@ -30,6 +32,7 @@ From `mod.ts` (re-exports from `src/GASP.ts`):
   - `submitNode(node)` → `Promise<GASPNodeResponse | void>`
 
 **Types:**
+
 - `GASPInitialRequest` — { version, since, limit? }
 - `GASPInitialResponse` — { UTXOList, since }
 - `GASPInitialReply` — { UTXOList }
@@ -38,6 +41,7 @@ From `mod.ts` (re-exports from `src/GASP.ts`):
 - `GASPNodeResponse` — { requestedInputs: { txid.index: { metadata: boolean } } }
 
 **Enums/Constants:**
+
 - `LogLevel` — { ERROR, WARN, INFO, DEBUG }
 - `GASPVersionMismatchError` — Custom error for version conflicts
 
@@ -151,12 +155,12 @@ const myRemote = new MyRemote()
 const gasp = new GASP(
   myStorage,
   myRemote,
-  0,                    // lastInteraction (UNIX seconds)
-  '[GASP] ',            // logPrefix
-  false,                // legacy log toggle
-  false,                // unidirectional? false = bidirectional
-  LogLevel.INFO,        // logLevel
-  false                 // sequential? false = parallel operations
+  0, // lastInteraction (UNIX seconds)
+  '[GASP] ', // logPrefix
+  false, // legacy log toggle
+  false, // unidirectional? false = bidirectional
+  LogLevel.INFO, // logLevel
+  false // sequential? false = parallel operations
 )
 
 await gasp.sync()
@@ -169,7 +173,7 @@ const gaspPullOnly = new GASP(
   0,
   '[GASP-Pull] ',
   false,
-  true,  // unidirectional = true (pull only, no push)
+  true, // unidirectional = true (pull only, no push)
   LogLevel.DEBUG,
   false
 )
@@ -186,7 +190,7 @@ const gaspSequential = new GASP(
   false,
   false,
   LogLevel.WARN,
-  true   // sequential = true (one operation at a time)
+  true // sequential = true (one operation at a time)
 )
 
 await gaspSequential.sync()
@@ -207,9 +211,11 @@ await gaspSequential.sync()
 ## Dependencies
 
 **Runtime:**
+
 - `@bsv/sdk` — Transaction, utils for encoding/decoding
 
 **Dev:**
+
 - jest, ts-jest, typescript, Oxlint
 
 ## Common pitfalls / gotchas

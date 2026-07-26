@@ -1,4 +1,5 @@
 import BigNumber from '../BigNumber'
+import ReductionContext from '../ReductionContext'
 
 describe('BigNumber – additional coverage', () => {
   it('rejects nominal word lengths that could exhaust memory', () => {
@@ -46,6 +47,11 @@ describe('BigNumber – additional coverage', () => {
       expect(s).toContain('ff')
       expect(s).toContain('BN')
     })
+
+    it('marks reduction-context values in the inspection string', () => {
+      const red = new ReductionContext(new BigNumber(17))
+      expect(new BigNumber(5).toRed(red).inspect()).toContain('BN-R')
+    })
   })
 
   describe('toBitArray', () => {
@@ -63,6 +69,60 @@ describe('BigNumber – additional coverage', () => {
     it('converts to base-3 string', () => {
       const bn = new BigNumber(9)
       expect(bn.toString(3)).toBe('100') // 9 in base 3 = 100
+    })
+
+    it('supports explicit signs and output padding', () => {
+      expect(new BigNumber('+15').toString(16, 4)).toBe('000f')
+      expect(new BigNumber('+').toString()).toBe('0')
+      expect(new BigNumber('-').toString()).toBe('0')
+      expect(new BigNumber('-4660', 10, 'le').toString()).toBe('-13330')
+      expect(new BigNumber(15).toString(16, 0)).toBe('f')
+    })
+
+    it('rejects non-integer and out-of-range output bases', () => {
+      expect(() => new BigNumber(1).toString(1)).toThrow(
+        'Base should be an integer between 2 and 36'
+      )
+      expect(() => new BigNumber(1).toString(2.5)).toThrow(
+        'Base should be an integer between 2 and 36'
+      )
+    })
+  })
+
+  describe('unsigned bitwise aliases', () => {
+    it('operates correctly when either operand has the longer magnitude', () => {
+      const short = new BigNumber('ff', 16)
+      const long = new BigNumber('100000000', 16)
+
+      expect(short.uor(long).toString(16)).toBe('1000000ff')
+      expect(short.uand(long).toString(16)).toBe('0')
+      expect(short.uxor(long).toString(16)).toBe('1000000ff')
+      expect(long.uor(short).toString(16)).toBe('1000000ff')
+      expect(long.uand(short).toString(16)).toBe('0')
+      expect(long.uxor(short).toString(16)).toBe('1000000ff')
+    })
+  })
+
+  describe('numeric validation and aliases', () => {
+    it('rejects invalid shift counts', () => {
+      expect(() => new BigNumber(1).iushln(-1)).toThrow('Shift bits must be a non-negative integer')
+      expect(() => new BigNumber(1).iushln(1.5)).toThrow(
+        'Shift bits must be a non-negative integer'
+      )
+      expect(() => new BigNumber(1).iushln(Number.POSITIVE_INFINITY)).toThrow(
+        'Shift bits must be a non-negative integer'
+      )
+    })
+
+    it('covers non-mutating small-number arithmetic aliases', () => {
+      expect(new BigNumber(5).addn(3).toNumber()).toBe(8)
+      expect(new BigNumber(9).divn(2).toNumber()).toBe(4)
+      expect(new BigNumber(5)._iaddn(4).toNumber()).toBe(9)
+    })
+
+    it('compares equal and unequal absolute magnitudes', () => {
+      expect(new BigNumber(-9).ucmp(new BigNumber(8))).toBe(1)
+      expect(new BigNumber(-9).ucmp(new BigNumber(9))).toBe(0)
     })
   })
 

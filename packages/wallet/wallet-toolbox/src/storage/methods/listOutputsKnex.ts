@@ -9,11 +9,11 @@ import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { managedChangeOutputFields } from './managedChange'
-export async function listOutputs (
+export async function listOutputs(
   dsk: StorageKnex,
   auth: AuthId,
   vargs: Validation.ValidListOutputsArgs,
-  originator?: OriginatorDomainNameStringUnder250Bytes
+  _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<ListOutputsResult> {
   const trx: TrxToken | undefined = undefined
   const userId = verifyId(auth.userId)
@@ -103,11 +103,15 @@ export async function listOutputs (
   const isQueryModeAll = vargs.tagQueryMode === 'all'
   if (isQueryModeAll && tagIds.length < tags.length)
   // all the required tags don't exist, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0)
   // any and only non-existing tags, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   let columns: string[] = [
     'outputId',
@@ -121,7 +125,9 @@ export async function listOutputs (
     'outputDescription',
     'spendingDescription'
   ]
-  if (vargs.includeLockingScripts || specOp?.includeOutputScripts) { columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset'] }
+  if (vargs.includeLockingScripts || specOp?.includeOutputScripts) {
+    columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset']
+  }
 
   const noTags = tagIds.length === 0
   const includeSpent = specOp?.includeSpent ?? false
@@ -313,7 +319,7 @@ export async function listOutputs (
       await dsk.validateOutputScript(o, trx)
       if (o.lockingScript != null) wo.lockingScript = asString(o.lockingScript)
     }
-    if (vargs.includeTransactions && (beef.findTxid(o.txid!) == null)) {
+    if (vargs.includeTransactions && beef.findTxid(o.txid!) == null) {
       await dsk.getValidBeefForKnownTxid(o.txid!, beef, undefined, vargs.knownTxids, trx)
     }
   }

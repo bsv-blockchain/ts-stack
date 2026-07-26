@@ -33,7 +33,7 @@ export type BdkFlagName = keyof typeof BDK_FLAG_BITS
  * Accepts a comma-separated string or an array. Unknown names throw so a typo
  * cannot silently weaken validation.
  */
-export function mapVerifyFlags (verifyFlags?: string | string[]): number {
+export function mapVerifyFlags(verifyFlags?: string | string[]): number {
   if (verifyFlags === undefined) return 0
   const names = Array.isArray(verifyFlags) ? verifyFlags : verifyFlags.split(',')
   let bits = 0

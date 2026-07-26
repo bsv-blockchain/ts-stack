@@ -6,7 +6,6 @@ import {
   HttpClientRequestOptions,
   MerklePath,
   Random,
-  Transaction,
   Utils
 } from '@bsv/sdk'
 import {
@@ -23,7 +22,7 @@ import { WalletError } from '../../sdk/WalletError'
 // configuration and `getTxData` response shape, so it reuses those interfaces.
 import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
 
-function defaultDeploymentId (): string {
+function defaultDeploymentId(): string {
   return `ts-sdk-${Utils.toHex(Random(16))}`
 }
 
@@ -60,9 +59,9 @@ export class Arcade {
    * @param URL - The Arcade endpoint base URL.
    * @param config - Arcade configuration (shares ARC's {@link ArcConfig} shape).
    */
-  constructor (URL: string, config?: ArcConfig, name?: string)
-  constructor (URL: string, apiKey?: string, name?: string)
-  constructor (URL: string, config?: string | ArcConfig, name?: string) {
+  constructor(URL: string, config?: ArcConfig, name?: string)
+  constructor(URL: string, apiKey?: string, name?: string)
+  constructor(URL: string, config?: string | ArcConfig, name?: string) {
     this.name = name ?? 'arcade'
     this.URL = URL
     if (typeof config === 'string') {
@@ -84,7 +83,7 @@ export class Arcade {
   }
 
   /** Constructs a dictionary of the default & supplied request headers. */
-  private requestHeaders (): Record<string, string> {
+  private requestHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'XDeployment-ID': this.deploymentId
@@ -117,7 +116,7 @@ export class Arcade {
    * `rawTx` must be a single (raw or Extended Format) transaction hex — NOT BEEF. The canonical
    * txid is taken from `txids` when supplied (Arcade derives the same txid from the parsed tx).
    */
-  async postRawTx (rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
+  async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
     let txid = Utils.toHex(doubleSha256BE(Utils.toArray(rawTx, 'hex')))
     if (txids == null) {
       txids = [txid]
@@ -139,7 +138,7 @@ export class Arcade {
     }
 
     const url = `${this.URL}/tx`
-    const nn = (): { name: string, when: string } => ({ name: this.name, when: new Date().toISOString() })
+    const nn = (): { name: string; when: string } => ({ name: this.name, when: new Date().toISOString() })
     const nne = () => ({ ...nn(), rawTx, txids: txids.join(','), url })
 
     try {
@@ -241,14 +240,14 @@ export class Arcade {
    * so cross-provider aggregation falls through to a BEEF-capable broadcaster, which can still
    * broadcast the (valid) transaction.
    */
-  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult> {
+  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
     const r: PostBeefResult = {
       name: this.name,
       status: 'success',
-      txidResults: new Array<PostTxResultForTxid>(txids.length),
+      txidResults: Array.from({ length: txids.length }),
       notes: []
     }
-    const nn = (): { name: string, when: string } => ({ name: this.name, when: new Date().toISOString() })
+    const nn = (): { name: string; when: string } => ({ name: this.name, when: new Date().toISOString() })
 
     const txidSet = new Set(txids)
     const prepared = txids.map(txid => {
@@ -260,7 +259,9 @@ export class Arcade {
         if (tx == null) throw new Error(`transaction ${txid} not found in beef`)
         const dependencies = tx.inputs
           .map(input => input.sourceTXID ?? input.sourceTransaction?.id('hex'))
-          .filter((sourceTxid): sourceTxid is string => sourceTxid != null && sourceTxid !== txid && txidSet.has(sourceTxid))
+          .filter(
+            (sourceTxid): sourceTxid is string => sourceTxid != null && sourceTxid !== txid && txidSet.has(sourceTxid)
+          )
         return { txid, efHex: tx.toHexEF(), dependencies }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
@@ -277,10 +278,12 @@ export class Arcade {
     const pending = new Set(txids.map((_, index) => index))
 
     while (pending.size > 0) {
-      let ready = [...pending].filter(index => prepared[index].dependencies.every(dependency => {
-        const dependencyIndex = indexByTxid.get(dependency)
-        return dependencyIndex == null || !pending.has(dependencyIndex)
-      }))
+      let ready = [...pending].filter(index =>
+        prepared[index].dependencies.every(dependency => {
+          const dependencyIndex = indexByTxid.get(dependency)
+          return dependencyIndex == null || !pending.has(dependencyIndex)
+        })
+      )
       // A valid transaction graph is acyclic. Preserve forward progress for a
       // malformed/cyclic graph and let Arcade return the authoritative error.
       if (ready.length === 0) ready = [[...pending][0]]
@@ -290,13 +293,11 @@ export class Arcade {
         while (nextReady < ready.length) {
           const index = ready[nextReady++]
           const item = prepared[index]
-          r.txidResults[index] = item.error ?? await this.postRawTx(item.efHex, [item.txid])
+          r.txidResults[index] = item.error ?? (await this.postRawTx(item.efHex, [item.txid]))
         }
       }
 
-      await Promise.all(
-        Array.from({ length: Math.min(ARCADE_POST_BEEF_CONCURRENCY, ready.length) }, worker)
-      )
+      await Promise.all(Array.from({ length: Math.min(ARCADE_POST_BEEF_CONCURRENCY, ready.length) }, worker))
       for (const index of ready) pending.delete(index)
     }
     if (r.txidResults.some(result => result.status === 'error')) r.status = 'error'
@@ -305,7 +306,7 @@ export class Arcade {
   }
 
   /** Look up a transaction's current status (and merkle path once mined) via `GET /tx/{txid}`. */
-  async getTxData (txid: string): Promise<ArcMinerGetTxData> {
+  async getTxData(txid: string): Promise<ArcMinerGetTxData> {
     const requestOptions: HttpClientRequestOptions = {
       method: 'GET',
       headers: this.requestHeaders()
@@ -329,14 +330,20 @@ export class Arcade {
    * and the BUMP's computed merkle root must equal that header's `merkleRoot`. Only then is the
    * proof returned, with the canonical `header` that downstream proof completion requires.
    */
-  async getMerklePath (txid: string, services: WalletServices): Promise<GetMerklePathResult> {
+  async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> {
     const r: GetMerklePathResult = { name: this.name, notes: [] }
-    const nn = (): { name: string, when: string } => ({ name: this.name, when: new Date().toISOString() })
+    const nn = (): { name: string; when: string } => ({ name: this.name, when: new Date().toISOString() })
 
     try {
       const data = await this.getTxData(txid)
       const mined = data.txStatus === 'MINED' || data.txStatus === 'IMMUTABLE'
-      if (!mined || data.merklePath == null || data.merklePath === '' || data.blockHash == null || data.blockHash === '') {
+      if (
+        !mined ||
+        data.merklePath == null ||
+        data.merklePath === '' ||
+        data.blockHash == null ||
+        data.blockHash === ''
+      ) {
         // No proof from Arcade yet (not mined / untracked / 404) — fall through to other providers.
         r.notes!.push({ ...nn(), what: 'getMerklePathArcadeNoProof', txid, txStatus: data.txStatus })
         return r
@@ -348,13 +355,26 @@ export class Arcade {
       const computedRoot = merklePath.computeRoot(txid)
       if (computedRoot !== header.merkleRoot) {
         // Arcade's BUMP does not reconcile with the canonical block — reject and fall through.
-        r.notes!.push({ ...nn(), what: 'getMerklePathArcadeRootMismatch', txid, computedRoot, headerRoot: header.merkleRoot, blockHash: data.blockHash })
+        r.notes!.push({
+          ...nn(),
+          what: 'getMerklePathArcadeRootMismatch',
+          txid,
+          computedRoot,
+          headerRoot: header.merkleRoot,
+          blockHash: data.blockHash
+        })
         return r
       }
 
       r.merklePath = merklePath
       r.header = header
-      r.notes!.push({ ...nn(), what: 'getMerklePathArcadeSuccess', txid, height: header.height, blockHash: header.hash })
+      r.notes!.push({
+        ...nn(),
+        what: 'getMerklePathArcadeSuccess',
+        txid,
+        height: header.height,
+        blockHash: header.hash
+      })
     } catch (error_: unknown) {
       const e = WalletError.fromUnknown(error_)
       r.error = e

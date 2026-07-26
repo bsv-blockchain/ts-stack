@@ -6,6 +6,7 @@ const __dirname = path.dirname(__filename)
 
 export default {
   mode: 'production',
+  devtool: 'source-map',
   entry: './dist/esm/mod.js',
   output: {
     filename: 'bundle.js',

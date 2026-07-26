@@ -26,7 +26,7 @@ import { EntityUser } from './EntityUser'
 import { MergeEntity } from './MergeEntity'
 
 export class EntitySyncState extends EntityBase<TableSyncState> {
-  constructor (api?: TableSyncState) {
+  constructor(api?: TableSyncState) {
     const now = new Date()
     super(
       api || {
@@ -46,20 +46,20 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
         syncMap: JSON.stringify(createSyncMap())
       }
     )
-    this.errorLocal = this.api.errorLocal ? JSON.parse(this.api.errorLocal) as SyncError : undefined
-    this.errorOther = this.api.errorOther ? JSON.parse(this.api.errorOther) as SyncError : undefined
+    this.errorLocal = this.api.errorLocal ? (JSON.parse(this.api.errorLocal) as SyncError) : undefined
+    this.errorOther = this.api.errorOther ? (JSON.parse(this.api.errorOther) as SyncError) : undefined
     this.syncMap = JSON.parse(this.api.syncMap) as SyncMap
     this.validateSyncMap(this.syncMap)
   }
 
-  validateSyncMap (sm: SyncMap) {
+  validateSyncMap(sm: SyncMap) {
     for (const key of Object.keys(sm)) {
       const esm: EntitySyncMap = sm[key]
       if (typeof esm.maxUpdated_at === 'string') esm.maxUpdated_at = new Date(esm.maxUpdated_at)
     }
   }
 
-  static async fromStorage (
+  static async fromStorage(
     storage: WalletStorageSync,
     userIdentityKey: string,
     remoteSettings: TableSettings
@@ -83,7 +83,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
    * @param notSyncMap if not new and true, excludes updating syncMap in storage.
    * @param trx
    */
-  async updateStorage (storage: EntityStorage, notSyncMap?: boolean, trx?: TrxToken) {
+  async updateStorage(storage: EntityStorage, notSyncMap?: boolean, trx?: TrxToken) {
     this.updated_at = new Date()
     this.updateApi(notSyncMap && this.id > 0)
     if (this.id === 0) {
@@ -96,122 +96,122 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     }
   }
 
-  override updateApi (notSyncMap?: boolean): void {
+  override updateApi(notSyncMap?: boolean): void {
     this.api.errorLocal = this.apiErrorLocal
     this.api.errorOther = this.apiErrorOther
     if (!notSyncMap) this.api.syncMap = this.apiSyncMap
   }
 
   // Pass through api properties
-  set created_at (v: Date) {
+  set created_at(v: Date) {
     this.api.created_at = v
   }
 
-  get created_at () {
+  get created_at() {
     return this.api.created_at
   }
 
-  set updated_at (v: Date) {
+  set updated_at(v: Date) {
     this.api.updated_at = v
   }
 
-  get updated_at () {
+  get updated_at() {
     return this.api.updated_at
   }
 
-  set userId (v: number) {
+  set userId(v: number) {
     this.api.userId = v
   }
 
-  get userId () {
+  get userId() {
     return this.api.userId
   }
 
-  set storageIdentityKey (v: string) {
+  set storageIdentityKey(v: string) {
     this.api.storageIdentityKey = v
   }
 
-  get storageIdentityKey () {
+  get storageIdentityKey() {
     return this.api.storageIdentityKey
   }
 
-  set storageName (v: string) {
+  set storageName(v: string) {
     this.api.storageName = v
   }
 
-  get storageName () {
+  get storageName() {
     return this.api.storageName
   }
 
-  set init (v: boolean) {
+  set init(v: boolean) {
     this.api.init = v
   }
 
-  get init () {
+  get init() {
     return this.api.init
   }
 
-  set refNum (v: string) {
+  set refNum(v: string) {
     this.api.refNum = v
   }
 
-  get refNum () {
+  get refNum() {
     return this.api.refNum
   }
 
-  set status (v: SyncStatus) {
+  set status(v: SyncStatus) {
     this.api.status = v
   }
 
-  get status (): SyncStatus {
+  get status(): SyncStatus {
     return this.api.status
   }
 
-  set when (v: Date | undefined) {
+  set when(v: Date | undefined) {
     this.api.when = v
   }
 
-  get when () {
+  get when() {
     return this.api.when
   }
 
-  set satoshis (v: number | undefined) {
+  set satoshis(v: number | undefined) {
     this.api.satoshis = v
   }
 
-  get satoshis () {
+  get satoshis() {
     return this.api.satoshis
   }
 
-  get apiErrorLocal () {
+  get apiErrorLocal() {
     return this.errorToString(this.errorLocal)
   }
 
-  get apiErrorOther () {
+  get apiErrorOther() {
     return this.errorToString(this.errorOther)
   }
 
-  get apiSyncMap () {
+  get apiSyncMap() {
     return JSON.stringify(this.syncMap)
   }
 
-  override get id (): number {
+  override get id(): number {
     return this.api.syncStateId
   }
 
-  set id (id: number) {
+  set id(id: number) {
     this.api.syncStateId = id
   }
 
-  override get entityName (): string {
+  override get entityName(): string {
     return 'syncState'
   }
 
-  override get entityTable (): string {
+  override get entityTable(): string {
     return 'sync_states'
   }
 
-  static mergeIdMap (fromMap: Record<number, number>, toMap: Record<number, number>) {
+  static mergeIdMap(fromMap: Record<number, number>, toMap: Record<number, number>) {
     for (const [key, value] of Object.entries(fromMap)) {
       const fromValue = fromMap[key]
       const toValue = toMap[key]
@@ -229,7 +229,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
    * Merge additions to the syncMap
    * @param iSyncMap
    */
-  mergeSyncMap (iSyncMap: SyncMap) {
+  mergeSyncMap(iSyncMap: SyncMap) {
     EntitySyncState.mergeIdMap(iSyncMap.provenTx.idMap, this.syncMap.provenTx.idMap)
     EntitySyncState.mergeIdMap(iSyncMap.outputBasket.idMap, this.syncMap.outputBasket.idMap)
     EntitySyncState.mergeIdMap(iSyncMap.transaction.idMap, this.syncMap.transaction.idMap)
@@ -250,7 +250,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
   /**
    * Eliminate any properties besides code and description
    */
-  private errorToString (e: SyncError | undefined): string | undefined {
+  private errorToString(e: SyncError | undefined): string | undefined {
     if (e == null) return undefined
     const es: SyncError = {
       code: e.code,
@@ -260,15 +260,15 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     return JSON.stringify(es)
   }
 
-  override equals (ei: TableSyncState, syncMap?: SyncMap | undefined): boolean {
+  override equals(ei: TableSyncState, syncMap?: SyncMap | undefined): boolean {
     return false
   }
 
-  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     // SyncState records are never created during a merge; they are managed separately
   }
 
-  override async mergeExisting (
+  override async mergeExisting(
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableSyncState,
@@ -278,7 +278,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     return false
   }
 
-  makeRequestSyncChunkArgs (
+  makeRequestSyncChunkArgs(
     forIdentityKey: string,
     forStorageIdentityKey: string,
     maxRoughSize?: number,
@@ -307,13 +307,12 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       this.syncMap.commission,
       this.syncMap.provenTxReq
     ]) {
-      if (!ess?.entityName) debugger
       a.offsets.push({ name: ess.entityName, offset: ess.count })
     }
     return a
   }
 
-  static syncChunkSummary (c: SyncChunk): string {
+  static syncChunkSummary(c: SyncChunk): string {
     let log = ''
     log += `SYNC CHUNK SUMMARY
   from storage: ${c.fromStorageIdentityKey}
@@ -348,16 +347,16 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     return log
   }
 
-  async processSyncChunk (
+  async processSyncChunk(
     writer: EntityStorage,
     args: RequestSyncChunkArgs,
     chunk: SyncChunk
   ): Promise<{
-      done: boolean
-      maxUpdated_at: Date | undefined
-      updates: number
-      inserts: number
-    }> {
+    done: boolean
+    maxUpdated_at: Date | undefined
+    updates: number
+    inserts: number
+  }> {
     const mes = [
       new MergeEntity(chunk.provenTxs, EntityProvenTx.mergeFind, this.syncMap.provenTx),
       new MergeEntity(chunk.outputBaskets, EntityOutputBasket.mergeFind, this.syncMap.outputBasket),

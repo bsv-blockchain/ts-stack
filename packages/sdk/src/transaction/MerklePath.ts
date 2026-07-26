@@ -1,4 +1,3 @@
-
 import { Reader, Writer, toHex, toArray, WriterUint8Array } from '../primitives/utils.js'
 import { hash256 } from '../primitives/Hash.js'
 import ChainTracker from './ChainTracker.js'
@@ -35,12 +34,12 @@ export interface MerklePathLeaf {
 export default class MerklePath {
   blockHeight: number
   path: Array<
-  Array<{
-    offset: number
-    hash?: string
-    txid?: boolean
-    duplicate?: boolean
-  }>
+    Array<{
+      offset: number
+      hash?: string
+      txid?: boolean
+      duplicate?: boolean
+    }>
   >
 
   /**
@@ -50,18 +49,20 @@ export default class MerklePath {
    * @param {string} hex - The hexadecimal string representation of the Merkle Path.
    * @returns {MerklePath} - A new MerklePath instance.
    */
-  static fromHex (hex: string): MerklePath {
+  static fromHex(hex: string): MerklePath {
     return MerklePath.fromBinary(toArray(hex, 'hex'))
   }
 
-  static fromReader (
+  static fromReader(
     reader: Reader | ReaderUint8Array,
     legalOffsetsOnly: boolean = true
   ): MerklePath {
     const blockHeight = reader.readVarIntNum()
     const treeHeight = reader.readUInt8()
     // Explicitly define the type of path as an array of arrays of leaf objects
-    const path: Array<Array<{ offset: number, hash?: string, txid?: boolean, duplicate?: boolean }>> = new Array(treeHeight)
+    const path: Array<
+      Array<{ offset: number; hash?: string; txid?: boolean; duplicate?: boolean }>
+    > = Array.from({ length: treeHeight })
       .fill(null)
       .map(() => [])
     let flags: number, offset: number, nLeavesAtThisHeight: number
@@ -104,7 +105,7 @@ export default class MerklePath {
    * @param {number[]} bump - The binary array representation of the Merkle Path.
    * @returns {MerklePath} - A new MerklePath instance.
    */
-  static fromBinary (bump: number[] | Uint8Array): MerklePath {
+  static fromBinary(bump: number[] | Uint8Array): MerklePath {
     const reader = new ReaderUint8Array(bump)
     return MerklePath.fromReader(reader)
   }
@@ -120,19 +121,19 @@ export default class MerklePath {
    * @param {number} height - The height of the block.
    * @returns {MerklePath} - A new MerklePath instance which assumes the tx is in a block with no other transactions.
    */
-  static fromCoinbaseTxidAndHeight (txid: string, height: number): MerklePath {
+  static fromCoinbaseTxidAndHeight(txid: string, height: number): MerklePath {
     return new MerklePath(height, [[{ offset: 0, hash: txid, txid: true }]])
   }
 
-  constructor (
+  constructor(
     blockHeight: number,
     path: Array<
-    Array<{
-      offset: number
-      hash?: string
-      txid?: boolean
-      duplicate?: boolean
-    }>
+      Array<{
+        offset: number
+        hash?: string
+        txid?: boolean
+        duplicate?: boolean
+      }>
     >,
     legalOffsetsOnly: boolean = true
   ) {
@@ -140,7 +141,7 @@ export default class MerklePath {
     this.path = path
 
     // store all of the legal offsets which we expect given the txid indices.
-    const legalOffsets = new Array(this.path.length)
+    const legalOffsets = Array.from({ length: this.path.length })
       .fill(0)
       .map(() => new Set())
     this.path.forEach((leaves, height) => {
@@ -148,11 +149,9 @@ export default class MerklePath {
         throw new Error(`Empty level at height: ${height}`)
       }
       const offsetsAtThisHeight = new Set()
-      leaves.forEach((leaf) => {
+      leaves.forEach(leaf => {
         if (offsetsAtThisHeight.has(leaf.offset)) {
-          throw new Error(
-            `Duplicate offset: ${leaf.offset}, at height: ${height}`
-          )
+          throw new Error(`Duplicate offset: ${leaf.offset}, at height: ${height}`)
         }
         offsetsAtThisHeight.add(leaf.offset)
         if (height === 0) {
@@ -184,7 +183,7 @@ export default class MerklePath {
    *
    * @param writer - The writer to which the Merkle Path will be serialized.
    */
-  toWriter (writer: Writer | WriterUint8Array): void {
+  toWriter(writer: Writer | WriterUint8Array): void {
     writer.writeVarIntNum(this.blockHeight)
     const treeHeight = this.path.length
     writer.writeUInt8(treeHeight)
@@ -213,7 +212,7 @@ export default class MerklePath {
    *
    * @returns {number[]} - The binary array representation of the Merkle Path.
    */
-  toBinary (): number[] {
+  toBinary(): number[] {
     const writer = new Writer()
     this.toWriter(writer)
     return writer.toArray()
@@ -224,7 +223,7 @@ export default class MerklePath {
    *
    * @returns {Uint8Array} - The binary array representation of the Merkle Path.
    */
-  toBinaryUint8Array (): Uint8Array {
+  toBinaryUint8Array(): Uint8Array {
     const writer = new WriterUint8Array()
     this.toWriter(writer)
     return writer.toUint8Array()
@@ -235,13 +234,13 @@ export default class MerklePath {
    *
    * @returns {string} - The hexadecimal string representation of the Merkle Path.
    */
-  toHex (): string {
+  toHex(): string {
     return toHex(this.toBinaryUint8Array())
   }
 
   //
-  private indexOf (txid: string): number {
-    const leaf = this.path[0].find((l) => l.hash === txid)
+  private indexOf(txid: string): number {
+    const leaf = this.path[0].find(l => l.hash === txid)
     if (leaf === null || leaf === undefined) {
       throw new Error(`Transaction ID ${txid} not found in the Merkle Path`)
     }
@@ -255,9 +254,9 @@ export default class MerklePath {
    * @returns {string} - The computed Merkle root as a hexadecimal string.
    * @throws {Error} - If the transaction ID is not part of the Merkle Path.
    */
-  computeRoot (txid?: string): string {
+  computeRoot(txid?: string): string {
     if (typeof txid !== 'string') {
-      const foundLeaf = this.path[0].find((leaf) => Boolean(leaf?.hash))
+      const foundLeaf = this.path[0].find(leaf => Boolean(leaf?.hash))
       if (foundLeaf == null) {
         throw new Error('No valid leaf found in the Merkle Path')
       }
@@ -269,8 +268,7 @@ export default class MerklePath {
     }
     const index = this.indexOf(txid)
     // Calculate the root using the index as a way to determine which direction to concatenate.
-    const hash = (m: string): string =>
-      toHex(hash256(toArray(m, 'hex').reverse()).reverse())
+    const hash = (m: string): string => toHex(hash256(toArray(m, 'hex').reverse()).reverse())
     let workingHash = txid
 
     // special case for blocks with only one transaction
@@ -288,7 +286,7 @@ export default class MerklePath {
       if (typeof leaf !== 'object') {
         // For single-level paths (all txids at level 0), the sibling may be beyond the tree
         // because this is the last odd node at this height. Bitcoin Merkle duplicates it.
-        if (this.path.length === 1 && (index >> height) === (maxOffset >> height)) {
+        if (this.path.length === 1 && index >> height === maxOffset >> height) {
           workingHash = hash((workingHash ?? '') + (workingHash ?? ''))
           continue
         }
@@ -312,16 +310,11 @@ export default class MerklePath {
    * @param height
    * @param offset
    */
-  findOrComputeLeaf (
-    height: number,
-    offset: number
-  ): MerklePathLeaf | undefined {
-    const hash = (m: string): string =>
-      toHex(hash256(toArray(m, 'hex').reverse()).reverse())
+  findOrComputeLeaf(height: number, offset: number): MerklePathLeaf | undefined {
+    const hash = (m: string): string => toHex(hash256(toArray(m, 'hex').reverse()).reverse())
 
-    let leaf: MerklePathLeaf | undefined = height < this.path.length
-      ? this.path[height].find((l) => l.offset === offset)
-      : undefined
+    let leaf: MerklePathLeaf | undefined =
+      height < this.path.length ? this.path[height].find(l => l.offset === offset) : undefined
 
     if (leaf != null) return leaf
 
@@ -342,7 +335,7 @@ export default class MerklePath {
       // For single-level paths, leaf0 may be the last odd node at height h — duplicate it.
       if (this.path.length === 1) {
         const maxOffset0 = this.path[0].reduce((max, lf) => Math.max(max, lf.offset), 0)
-        if (l === (maxOffset0 >> h)) {
+        if (l === maxOffset0 >> h) {
           return { offset, hash: hash(leaf0.hash + leaf0.hash) }
         }
       }
@@ -370,7 +363,7 @@ export default class MerklePath {
    * @param {ChainTracker} chainTracker - The ChainTracker instance used to verify the Merkle root.
    * @returns {boolean} - True if the transaction ID is valid within the Merkle Path at the specified block height.
    */
-  async verify (txid: string, chainTracker: ChainTracker): Promise<boolean> {
+  async verify(txid: string, chainTracker: ChainTracker): Promise<boolean> {
     const root = this.computeRoot(txid)
     if (this.indexOf(txid) === 0) {
       // Coinbase transaction outputs can only be spent once they're 100 blocks deep.
@@ -389,29 +382,25 @@ export default class MerklePath {
    * @param {MerklePath} other - Another MerklePath to combine with this path.
    * @throws {Error} - If the paths have different block heights or roots.
    */
-  combine (other: MerklePath): void {
+  combine(other: MerklePath): void {
     if (this.blockHeight !== other.blockHeight) {
-      throw new Error(
-        'You cannot combine paths which do not have the same block height.'
-      )
+      throw new Error('You cannot combine paths which do not have the same block height.')
     }
     const root1 = this.computeRoot()
     const root2 = other.computeRoot()
     if (root1 !== root2) {
-      throw new Error(
-        'You cannot combine paths which do not have the same root.'
-      )
+      throw new Error('You cannot combine paths which do not have the same root.')
     }
-    const combinedPath: Array<Array<{ offset: number, hash?: string, txid?: boolean, duplicate?: boolean }>> = []
+    const combinedPath: Array<
+      Array<{ offset: number; hash?: string; txid?: boolean; duplicate?: boolean }>
+    > = []
     for (let h = 0; h < this.path.length; h++) {
       combinedPath.push([])
       for (const leaf of this.path[h]) {
         combinedPath[h].push(leaf)
       }
       for (const otherLeaf of other.path[h]) {
-        const existingLeaf = combinedPath[h].find(
-          (leaf) => leaf.offset === otherLeaf.offset
-        )
+        const existingLeaf = combinedPath[h].find(leaf => leaf.offset === otherLeaf.offset)
         if (existingLeaf === undefined) {
           combinedPath[h].push(otherLeaf)
         } else if (otherLeaf?.txid !== undefined && otherLeaf?.txid !== null) {
@@ -429,7 +418,7 @@ export default class MerklePath {
    * Assumes that at least all required nodes are present.
    * Leaves all levels sorted by increasing offset.
    */
-  trim (): void {
+  trim(): void {
     const pushIfNew = (v: number, a: number[]): void => {
       if (a.length === 0 || a.at(-1) !== v) {
         a.push(v)
@@ -438,9 +427,7 @@ export default class MerklePath {
 
     const dropOffsetsFromLevel = (dropOffsets: number[], level: number): void => {
       for (let i = dropOffsets.length; i >= 0; i--) {
-        const l = this.path[level].findIndex(
-          (n) => n.offset === dropOffsets[i]
-        )
+        const l = this.path[level].findIndex(n => n.offset === dropOffsets[i])
         if (l >= 0) {
           this.path[level].splice(l, 1)
         }
@@ -487,7 +474,7 @@ export default class MerklePath {
    * Cached leaf finder for extract(). Uses Map-based indexes for O(1) lookups
    * and caches computed intermediate hashes to avoid redundant work.
    */
-  private cachedFindLeaf (
+  private cachedFindLeaf(
     height: number,
     offset: number,
     sourceIndex: Array<Map<number, MerklePathLeaf>>,
@@ -497,12 +484,10 @@ export default class MerklePath {
     const key = `${height}:${offset}`
     if (hashCache.has(key)) return hashCache.get(key)
 
-    const doHash = (m: string): string =>
-      toHex(hash256(toArray(m, 'hex').reverse()).reverse())
+    const doHash = (m: string): string => toHex(hash256(toArray(m, 'hex').reverse()).reverse())
 
-    let leaf: MerklePathLeaf | undefined = height < sourceIndex.length
-      ? sourceIndex[height].get(offset)
-      : undefined
+    let leaf: MerklePathLeaf | undefined =
+      height < sourceIndex.length ? sourceIndex[height].get(offset) : undefined
 
     if (leaf != null) {
       hashCache.set(key, leaf)
@@ -524,7 +509,7 @@ export default class MerklePath {
 
     const leaf1 = this.cachedFindLeaf(h, l + 1, sourceIndex, hashCache, maxOffset)
     if (leaf1?.hash == null) {
-      if (leaf1?.duplicate === true || (this.path.length === 1 && l === (maxOffset >> h))) {
+      if (leaf1?.duplicate === true || (this.path.length === 1 && l === maxOffset >> h)) {
         leaf = { offset, hash: doHash(leaf0.hash + leaf0.hash) }
         hashCache.set(key, leaf)
         return leaf
@@ -533,9 +518,10 @@ export default class MerklePath {
       return undefined
     }
 
-    const workinghash = leaf1.duplicate === true
-      ? doHash(leaf0.hash + leaf0.hash)
-      : doHash((leaf1.hash ?? '') + (leaf0.hash ?? ''))
+    const workinghash =
+      leaf1.duplicate === true
+        ? doHash(leaf0.hash + leaf0.hash)
+        : doHash((leaf1.hash ?? '') + (leaf0.hash ?? ''))
     leaf = { offset, hash: workinghash }
     hashCache.set(key, leaf)
     return leaf
@@ -562,7 +548,7 @@ export default class MerklePath {
    * const twoTxProof = fullBlock.extract([txid1, txid2])
    * twoTxProof.computeRoot(txid1) // === fullBlock.computeRoot()
    */
-  extract (txids: string[]): MerklePath {
+  extract(txids: string[]): MerklePath {
     if (txids.length === 0) {
       throw new Error('At least one txid must be provided to extract')
     }
@@ -572,7 +558,7 @@ export default class MerklePath {
     const treeHeight = Math.max(this.path.length, 32 - Math.clz32(maxOffset))
 
     // Build O(1) lookup indexes for the source path
-    const sourceIndex: Array<Map<number, MerklePathLeaf>> = new Array(this.path.length)
+    const sourceIndex: Array<Map<number, MerklePathLeaf>> = Array.from({ length: this.path.length })
     for (let h = 0; h < this.path.length; h++) {
       const map = new Map<number, MerklePathLeaf>()
       for (const leaf of this.path[h]) map.set(leaf.offset, leaf)
@@ -588,7 +574,7 @@ export default class MerklePath {
     }
 
     // Collect all needed leaves per level
-    const neededPerLevel: Array<Map<number, MerklePathLeaf>> = new Array(treeHeight)
+    const neededPerLevel: Array<Map<number, MerklePathLeaf>> = Array.from({ length: treeHeight })
     for (let h = 0; h < treeHeight; h++) neededPerLevel[h] = new Map()
 
     for (const txid of txids) {
@@ -612,17 +598,18 @@ export default class MerklePath {
         const sib = this.cachedFindLeaf(h, sibOffset, sourceIndex, hashCache, maxOffset)
         if (sib != null) {
           neededPerLevel[h].set(sibOffset, sib)
-        } else if ((txOffset >> h) === (maxOffset >> h)) {
+        } else if (txOffset >> h === maxOffset >> h) {
           neededPerLevel[h].set(sibOffset, { offset: sibOffset, duplicate: true })
         }
       }
     }
 
     // Build sorted compound path
-    const compoundPath: Array<Array<{ offset: number, hash?: string, txid?: boolean, duplicate?: boolean }>> = new Array(treeHeight)
+    const compoundPath: Array<
+      Array<{ offset: number; hash?: string; txid?: boolean; duplicate?: boolean }>
+    > = Array.from({ length: treeHeight })
     for (let h = 0; h < treeHeight; h++) {
-      compoundPath[h] = Array.from(neededPerLevel[h].values())
-        .sort((a, b) => a.offset - b.offset)
+      compoundPath[h] = Array.from(neededPerLevel[h].values()).sort((a, b) => a.offset - b.offset)
     }
 
     const compound = new MerklePath(this.blockHeight, compoundPath)

@@ -10,8 +10,7 @@ import BigNumber from '../primitives/BigNumber.js'
  *
  * @property {ScriptChunk[]} chunks - An array of script chunks that make up the script.
  */
-const BufferCtor =
-  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
+const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
 export default class Script {
   private _chunks: ScriptChunk[]
@@ -27,7 +26,7 @@ export default class Script {
    * @example
    * const script = Script.fromASM("OP_DUP OP_HASH160 abcd... OP_EQUALVERIFY OP_CHECKSIG")
    */
-  static fromASM (asm: string): Script {
+  static fromASM(asm: string): Script {
     const chunks: ScriptChunk[] = []
     const tokens = asm.split(' ')
     let i = 0
@@ -39,17 +38,17 @@ export default class Script {
     return new Script(chunks)
   }
 
-  private static pushdataOpCodeNum (len: number): number {
+  private static pushdataOpCodeNum(len: number): number {
     if (len >= 0 && len < OP.OP_PUSHDATA1) return len
     if (len < Math.pow(2, 8)) return OP.OP_PUSHDATA1
     if (len < Math.pow(2, 16)) return OP.OP_PUSHDATA2
     return OP.OP_PUSHDATA4
   }
 
-  private static parseASMToken (
+  private static parseASMToken(
     tokens: string[],
     i: number
-  ): { chunk: ScriptChunk, advance: number } {
+  ): { chunk: ScriptChunk; advance: number } {
     const token = tokens[i]
 
     // Special literal tokens
@@ -90,7 +89,7 @@ export default class Script {
    * @example
    * const script = Script.fromHex("76a9...");
    */
-  static fromHex (hex: string): Script {
+  static fromHex(hex: string): Script {
     if (hex.length === 0) return Script.fromBinary([])
     if (hex.length % 2 !== 0) {
       throw new Error(
@@ -112,7 +111,7 @@ export default class Script {
    * @example
    * const script = Script.fromBinary([0x76, 0xa9, ...])
    */
-  static fromBinary (bin: number[] | Uint8Array): Script {
+  static fromBinary(bin: number[] | Uint8Array): Script {
     const rawBytes = Uint8Array.from(bin)
     return new Script([], rawBytes, undefined, false)
   }
@@ -121,7 +120,7 @@ export default class Script {
    * Constructs a lazily parsed script over an existing byte view without a copy.
    * The caller must not mutate `bin` while the script is in use.
    */
-  static fromBinaryView (bin: Uint8Array): Script {
+  static fromBinaryView(bin: Uint8Array): Script {
     return new Script([], bin, undefined, false)
   }
 
@@ -133,7 +132,12 @@ export default class Script {
    * @param hexCache - Optional lowercase hex string that matches the serialized bytes, used to satisfy `toHex` quickly.
    * @param parsed - When false the script defers parsing `rawBytesCache` until `chunks` is accessed; defaults to true.
    */
-  constructor (chunks: ScriptChunk[] = [], rawBytesCache?: Uint8Array, hexCache?: string, parsed: boolean = true) {
+  constructor(
+    chunks: ScriptChunk[] = [],
+    rawBytesCache?: Uint8Array,
+    hexCache?: string,
+    parsed: boolean = true
+  ) {
     this._chunks = chunks
     this.parsed = parsed
     this.rawBytesCache = rawBytesCache
@@ -145,18 +149,18 @@ export default class Script {
    * array through this property; mutating returned chunk objects in place
    * bypasses serialization-cache invalidation.
    */
-  get chunks (): ScriptChunk[] {
+  get chunks(): ScriptChunk[] {
     this.ensureParsed()
     return this._chunks
   }
 
-  set chunks (value: ScriptChunk[]) {
+  set chunks(value: ScriptChunk[]) {
     this._chunks = value
     this.parsed = true
     this.invalidateSerializationCaches()
   }
 
-  private ensureParsed (): void {
+  private ensureParsed(): void {
     if (this.parsed) return
     if (this.rawBytesCache != null) {
       this._chunks = Script.parseChunks(this.rawBytesCache)
@@ -171,7 +175,7 @@ export default class Script {
    * Serializes the script to an ASM formatted string.
    * @returns The script in ASM string format.
    */
-  toASM (): string {
+  toASM(): string {
     let str = ''
     for (const chunk of this.chunks) {
       str += this._chunkToString(chunk)
@@ -185,7 +189,7 @@ export default class Script {
    * Serializes the script to a hexadecimal string.
    * @returns The script in hexadecimal format.
    */
-  toHex (): string {
+  toHex(): string {
     if (this.hexCache != null) {
       return this.hexCache
     }
@@ -203,11 +207,11 @@ export default class Script {
    * Serializes the script to a binary array.
    * @returns The script in binary array format.
    */
-  toBinary (): number[] {
+  toBinary(): number[] {
     return Array.from(this.toUint8Array())
   }
 
-  toUint8Array (): Uint8Array {
+  toUint8Array(): Uint8Array {
     this.rawBytesCache ??= this.serializeChunksToBytes()
     return this.rawBytesCache
   }
@@ -218,7 +222,7 @@ export default class Script {
    * @param script - The script to append.
    * @returns This script instance for chaining.
    */
-  writeScript (script: Script): this {
+  writeScript(script: Script): this {
     this.invalidateSerializationCaches()
     this.chunks = this.chunks.concat(script.chunks)
     return this
@@ -230,7 +234,7 @@ export default class Script {
    * @param op - The opcode to append.
    * @returns This script instance for chaining.
    */
-  writeOpCode (op: number): this {
+  writeOpCode(op: number): this {
     this.invalidateSerializationCaches()
     this.chunks.push({ op })
     return this
@@ -243,7 +247,7 @@ export default class Script {
    * @param op - The opcode to set.
    * @returns This script instance for chaining.
    */
-  setChunkOpCode (i: number, op: number): this {
+  setChunkOpCode(i: number, op: number): this {
     this.invalidateSerializationCaches()
     this.chunks[i] = { op }
     return this
@@ -255,7 +259,7 @@ export default class Script {
    * @param bn - The BigNumber to append.
    * @returns This script instance for chaining.
    */
-  writeBn (bn: BigNumber): this {
+  writeBn(bn: BigNumber): this {
     this.invalidateSerializationCaches()
     if (bn.cmpn(0) === OP.OP_0) {
       this.chunks.push({
@@ -284,7 +288,7 @@ export default class Script {
    * @returns This script instance for chaining.
    * @throws {Error} Throws an error if the data is too large to be pushed.
    */
-  writeBin (bin: number[]): this {
+  writeBin(bin: number[]): this {
     this.invalidateSerializationCaches()
     let op: number
     const data = bin.length > 0 ? bin : undefined
@@ -314,7 +318,7 @@ export default class Script {
    * @param num - The number to append.
    * @returns This script instance for chaining.
    */
-  writeNumber (num: number): this {
+  writeNumber(num: number): this {
     this.invalidateSerializationCaches()
     this.writeBn(new BigNumber(num))
     return this
@@ -325,7 +329,7 @@ export default class Script {
    * Removes all OP_CODESEPARATOR opcodes from the script.
    * @returns This script instance for chaining.
    */
-  removeCodeseparators (): this {
+  removeCodeseparators(): this {
     const bytes = this.toUint8Array()
     this.rawBytesCache = Uint8Array.from(Script.removeOpcodeBytes(bytes, OP.OP_CODESEPARATOR))
     this.hexCache = undefined
@@ -341,7 +345,7 @@ export default class Script {
    *
    * @returns This script instance for chaining.
    */
-  findAndDelete (script: Script): this {
+  findAndDelete(script: Script): this {
     this.invalidateSerializationCaches()
     const targetBytes = script.toUint8Array()
     const targetLen = targetBytes.length
@@ -424,7 +428,7 @@ export default class Script {
    * Checks if the script contains only push data operations.
    * @returns True if the script is push-only, otherwise false.
    */
-  isPushOnly (): boolean {
+  isPushOnly(): boolean {
     for (const chunk of this.chunks) {
       const opCodeNum = chunk.op
       if (opCodeNum > OP.OP_16) {
@@ -439,7 +443,7 @@ export default class Script {
    * Determines if the script is a locking script.
    * @returns True if the script is a locking script, otherwise false.
    */
-  isLockingScript (): boolean {
+  isLockingScript(): boolean {
     throw new Error('Not implemented')
   }
 
@@ -448,7 +452,7 @@ export default class Script {
    * Determines if the script is an unlocking script.
    * @returns True if the script is an unlocking script, otherwise false.
    */
-  isUnlockingScript (): boolean {
+  isUnlockingScript(): boolean {
     throw new Error('Not implemented')
   }
 
@@ -459,7 +463,7 @@ export default class Script {
    * @param chunk - The script chunk.
    * @returns The string representation of the chunk.
    */
-  private static computeSerializedLength (chunks: ScriptChunk[]): number {
+  private static computeSerializedLength(chunks: ScriptChunk[]): number {
     let total = 0
     for (const chunk of chunks) {
       total += 1
@@ -482,7 +486,7 @@ export default class Script {
     return total
   }
 
-  private serializeChunksToBytes (): Uint8Array {
+  private serializeChunksToBytes(): Uint8Array {
     const chunks = this.chunks
     const totalLength = Script.computeSerializedLength(chunks)
     const bytes = new Uint8Array(totalLength)
@@ -501,12 +505,12 @@ export default class Script {
     return bytes
   }
 
-  private invalidateSerializationCaches (): void {
+  private invalidateSerializationCaches(): void {
     this.rawBytesCache = undefined
     this.hexCache = undefined
   }
 
-  private static writeChunkData (
+  private static writeChunkData(
     target: Uint8Array,
     offset: number,
     op: number,
@@ -541,18 +545,18 @@ export default class Script {
    * Reads pushdata length bytes from `bytes` at `pos` and returns the resulting
    * `{ len, newPos, hasLength }` for a given opcode. Does not read the actual data.
    */
-  private static readPushdataLength (
+  private static readPushdataLength(
     op: number,
     bytes: ArrayLike<number>,
     pos: number,
     length: number
-  ): { len: number, newPos: number, hasLength: boolean } {
+  ): { len: number; newPos: number; hasLength: boolean } {
     if (op > 0 && op < OP.OP_PUSHDATA1) {
       return { len: op, newPos: pos, hasLength: true }
     }
     if (op === OP.OP_PUSHDATA1) {
       const hasLength = pos < length
-      const len = hasLength ? bytes[pos++] ?? 0 : 0
+      const len = hasLength ? (bytes[pos++] ?? 0) : 0
       return { len, newPos: pos, hasLength }
     }
     if (op === OP.OP_PUSHDATA2) {
@@ -562,16 +566,16 @@ export default class Script {
     }
     // OP_PUSHDATA4
     const hasLength = pos + 3 < length
-    const len = (
-      (bytes[pos] ?? 0) |
-      ((bytes[pos + 1] ?? 0) << 8) |
-      ((bytes[pos + 2] ?? 0) << 16) |
-      ((bytes[pos + 3] ?? 0) << 24)
-    ) >>> 0
+    const len =
+      ((bytes[pos] ?? 0) |
+        ((bytes[pos + 1] ?? 0) << 8) |
+        ((bytes[pos + 2] ?? 0) << 16) |
+        ((bytes[pos + 3] ?? 0) << 24)) >>>
+      0
     return { len, newPos: Math.min(pos + 4, length), hasLength }
   }
 
-  private static parseChunks (bytes: ArrayLike<number>): ScriptChunk[] {
+  private static parseChunks(bytes: ArrayLike<number>): ScriptChunk[] {
     const chunks: ScriptChunk[] = []
     const length = bytes.length
     let pos = 0
@@ -606,7 +610,7 @@ export default class Script {
     return chunks
   }
 
-  private static removeOpcodeBytes (bytes: ArrayLike<number>, opcode: number): number[] {
+  private static removeOpcodeBytes(bytes: ArrayLike<number>, opcode: number): number[] {
     const out: number[] = []
     const length = bytes.length
     let pos = 0
@@ -631,20 +635,16 @@ export default class Script {
     return out
   }
 
-  private static copyRange (
-    bytes: ArrayLike<number>,
-    start: number,
-    end: number
-  ): number[] {
+  private static copyRange(bytes: ArrayLike<number>, start: number, end: number): number[] {
     const size = Math.max(end - start, 0)
-    const data = new Array(size)
+    const data = Array.from({ length: size }, () => 0)
     for (let i = 0; i < size; i++) {
       data[i] = bytes[start + i] ?? 0
     }
     return data
   }
 
-  private _chunkToString (chunk: ScriptChunk): string {
+  private _chunkToString(chunk: ScriptChunk): string {
     const op = chunk.op
     let str = ''
     if (chunk.data === undefined) {

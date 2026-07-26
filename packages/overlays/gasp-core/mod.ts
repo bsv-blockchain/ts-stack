@@ -1,1 +1,1 @@
-export * from './src/GASP.js';
+export * from './src/GASP.js'

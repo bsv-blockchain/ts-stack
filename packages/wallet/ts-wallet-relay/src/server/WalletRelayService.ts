@@ -71,9 +71,12 @@ export interface WalletRelayServiceOptions {
    * `createSession({ origin })`, and (b) which browser origins may open a
    * desktop-role WebSocket connection.
    *
-   * Accepts a string, string[], RegExp, or predicate function. When unset, the
-   * lib falls back to the single-value `origin` for backward compatibility with
-   * the original API.
+   * Accepts a string, string[], RegExp, or predicate function. An explicitly
+   * supplied constructor `origin` remains a legacy single-origin allowlist.
+   * When neither option is supplied, origin validation is disabled so the relay
+   * remains usable as a public multi-application service. The `ORIGIN`
+   * environment variable is only the QR fallback and does not silently enable
+   * an allowlist.
    */
   allowedOrigins?: AllowedOrigins
   /** Called when a mobile completes pairing and the session transitions to 'connected'. */
@@ -153,10 +156,10 @@ export class WalletRelayService {
   private isOriginAllowed: ((origin: string) => boolean) | null
 
   constructor(private readonly opts: WalletRelayServiceOptions) {
-    this.wallet      = opts.wallet
-    this.relayUrl    = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
-    this.origin      = opts.origin   ?? process.env['ORIGIN']   ?? 'http://localhost:5173'
-    this.schema      = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-browser'
+    this.wallet = opts.wallet
+    this.relayUrl = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
+    this.origin = opts.origin ?? process.env['ORIGIN'] ?? 'http://localhost:5173'
+    this.schema = opts.schema ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-browser'
     this.signQrCodes = opts.signQrCodes ?? true
 
     // Compile the allowlist. Precedence: explicit `allowedOrigins` → legacy
@@ -171,7 +174,7 @@ export class WalletRelayService {
     this.relay = new WebSocketRelay(opts.server, {
       allowedOrigins: matcherSource,
       path: opts.path,
-      noServer: opts.noServer,
+      noServer: opts.noServer
     })
 
     // B6: clean up relay topic when a session is GC'd
@@ -196,7 +199,7 @@ export class WalletRelayService {
       // Lock pending sessions so a pairing_approved in-flight doesn't lose to a lazy
       // expiry check on the next poll (grace window in QRSessionManager.getSession).
       this.sessions.setPairingStarted(topic)
-      if (s.mobileIdentityKey) return  // already authenticated — no auth timer needed
+      if (s.mobileIdentityKey) return // already authenticated — no auth timer needed
       const timer = setTimeout(() => {
         this.mobileAuthTimers.delete(topic)
         this.relay.disconnectMobile(topic)
@@ -212,7 +215,10 @@ export class WalletRelayService {
     this.relay.onDisconnect((topic, role) => {
       if (role === 'mobile') {
         const authTimer = this.mobileAuthTimers.get(topic)
-        if (authTimer) { clearTimeout(authTimer); this.mobileAuthTimers.delete(topic) }
+        if (authTimer) {
+          clearTimeout(authTimer)
+          this.mobileAuthTimers.delete(topic)
+        }
         // Skip if already expired — this was a deliberate deleteSession(), not an unexpected drop
         if (this.sessions.getSession(topic)?.status === 'expired') return
         this.sessions.setStatus(topic, 'disconnected')
@@ -234,13 +240,21 @@ export class WalletRelayService {
    * If an allowlist is configured, the per-session origin must match — otherwise
    * a malicious caller could mint QRs claiming to be any domain.
    */
-  async createSession(
-    options?: { origin?: string }
-  ): Promise<{ sessionId: string; status: string; qrDataUrl: string; pairingUri: string; desktopToken: string }> {
+  async createSession(options?: { origin?: string }): Promise<{
+    sessionId: string
+    status: string
+    qrDataUrl: string
+    pairingUri: string
+    desktopToken: string
+  }> {
     const origin = options?.origin ?? this.origin
 
     // Validate caller-claimed origin against the allowlist (when set).
-    if (options?.origin !== undefined && this.isOriginAllowed && !this.isOriginAllowed(options.origin)) {
+    if (
+      options?.origin !== undefined &&
+      this.isOriginAllowed &&
+      !this.isOriginAllowed(options.origin)
+    ) {
       throw new Error(`Origin '${options.origin}' is not in the allowedOrigins list`)
     }
 
@@ -257,9 +271,9 @@ export class WalletRelayService {
       )
       const { signature } = await this.wallet.createSignature({
         data,
-        protocolID:   [0, 'qr pairing'],
-        keyID:        session.id,
-        counterparty: 'anyone',
+        protocolID: [0, 'qr pairing'],
+        keyID: session.id,
+        counterparty: 'anyone'
       })
       sig = bytesToBase64url(signature)
     }
@@ -271,10 +285,16 @@ export class WalletRelayService {
       origin,
       expiry,
       sig,
-      schema: this.schema,
+      schema: this.schema
     })
     const qrDataUrl = await this.sessions.generateQRCode(uri)
-    return { sessionId: session.id, status: session.status, qrDataUrl, pairingUri: uri, desktopToken: session.desktopToken }
+    return {
+      sessionId: session.id,
+      status: session.status,
+      qrDataUrl,
+      pairingUri: uri,
+      desktopToken: session.desktopToken
+    }
   }
 
   /** Return session status and relay URL, or null if not found. */
@@ -295,7 +315,12 @@ export class WalletRelayService {
    * Encrypt an RPC call, relay it to the mobile, and await the response.
    * Rejects if the session is not connected or if the mobile doesn't respond within 30 s.
    */
-  async sendRequest(sessionId: string, method: string, params: unknown, desktopToken?: string): Promise<RpcResponse> {
+  async sendRequest(
+    sessionId: string,
+    method: string,
+    params: unknown,
+    desktopToken?: string
+  ): Promise<RpcResponse> {
     const session = this.sessions.getSession(sessionId)
     if (session?.status !== 'connected' || !session.mobileIdentityKey) {
       const status = session?.status ?? 'not found'
@@ -358,7 +383,9 @@ export class WalletRelayService {
       if (sessionId === null || pending.sessionId === sessionId) {
         clearTimeout(pending.timer)
         this.pending.delete(id)
-        pending.reject(new Error(sessionId === null ? 'Server shutting down' : 'Session disconnected'))
+        pending.reject(
+          new Error(sessionId === null ? 'Server shutting down' : 'Session disconnected')
+        )
       }
     }
   }
@@ -377,22 +404,31 @@ export class WalletRelayService {
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : 'Failed'
           const code = (err as { code?: number }).code
-          const status = code === 429 ? 429
-            : msg.includes('allowedOrigins') ? 403
-            : 500
+          let status = 500
+          if (code === 429) {
+            status = 429
+          } else if (msg.includes('allowedOrigins')) {
+            status = 403
+          }
           res.status(status).json({ error: msg })
         })
     })
 
     app.get('/api/session/:id', (req: Request, res: Response) => {
       const info = this.getSession(req.params['id'] as string)
-      if (!info) { res.status(404).json({ error: 'Session not found' }); return }
+      if (!info) {
+        res.status(404).json({ error: 'Session not found' })
+        return
+      }
       res.json(info)
     })
 
     app.post('/api/request/:id', (req: Request, res: Response) => {
       const { method, params } = req.body as { method: string; params: unknown }
-      if (!method) { res.status(400).json({ error: 'method is required' }); return }
+      if (!method) {
+        res.status(400).json({ error: 'method is required' })
+        return
+      }
       const token = req.headers['x-desktop-token'] as string | undefined
       void this.sendRequest(req.params['id'] as string, method, params, token)
         .then(response => res.json(response))
@@ -410,15 +446,21 @@ export class WalletRelayService {
 
     app.delete('/api/session/:id', (req: Request, res: Response) => {
       const token = req.headers['x-desktop-token'] as string | undefined
-      if (!token) { res.status(401).json({ error: 'Missing desktop token' }); return }
+      if (!token) {
+        res.status(401).json({ error: 'Missing desktop token' })
+        return
+      }
       try {
         this.deleteSession(req.params['id'] as string, token)
         res.status(204).end()
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed'
-        const status = msg === 'Invalid desktop token' ? 401
-          : msg === 'Session not found' ? 404
-          : 500
+        let status = 500
+        if (msg === 'Invalid desktop token') {
+          status = 401
+        } else if (msg === 'Session not found') {
+          status = 404
+        }
         res.status(status).json({ error: msg })
       }
     })
@@ -451,7 +493,9 @@ export class WalletRelayService {
         { protocolID: PROTOCOL_ID, keyID: topic, counterparty: session.mobileIdentityKey },
         envelope.ciphertext
       )
-    } catch { return }
+    } catch {
+      return
+    }
 
     const msg = this.handler.parseMessage(plaintext)
     if (this.handler.isResponse(msg)) {
@@ -488,7 +532,10 @@ export class WalletRelayService {
 
     // Auth succeeded — cancel the proof timer
     const timer = this.mobileAuthTimers.get(topic)
-    if (timer) { clearTimeout(timer); this.mobileAuthTimers.delete(topic) }
+    if (timer) {
+      clearTimeout(timer)
+      this.mobileAuthTimers.delete(topic)
+    }
 
     this.sessions.setMobileIdentityKey(topic, mobileIdentityKey)
     this.sessions.setStatus(topic, 'connected')

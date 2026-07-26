@@ -4,12 +4,12 @@
 export {
   WalletPairingSession,
   DEFAULT_IMPLEMENTED_METHODS,
-  DEFAULT_AUTO_APPROVE_METHODS,
+  DEFAULT_AUTO_APPROVE_METHODS
 } from './client/WalletPairingSession.js'
 export type {
   PairingSessionStatus,
   RequestHandler,
-  WalletPairingSessionOptions,
+  WalletPairingSessionOptions
 } from './client/WalletPairingSession.js'
 
 export { WalletRelayClient, WalletRelayError } from './client/WalletRelayClient.js'
@@ -17,7 +17,11 @@ export type { WalletRelayClientOptions, WalletRelayErrorCode } from './client/Wa
 
 // ── Shared utilities ──────────────────────────────────────────────────────────
 
-export { parsePairingUri, verifyPairingSignature, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
+export {
+  parsePairingUri,
+  verifyPairingSignature,
+  DEFAULT_ACCEPTED_SCHEMAS
+} from './shared/pairingUri.js'
 export { encryptEnvelope, decryptEnvelope } from './shared/crypto.js'
 export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 
@@ -36,6 +40,6 @@ export type {
   WalletMethodName,
   WalletRequest,
   WalletResponse,
-  RequestLogEntry,
+  RequestLogEntry
 } from './types.js'
 export type { CryptoParams } from './shared/crypto.js'

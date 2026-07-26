@@ -27,14 +27,14 @@ export class TaskNewHeader extends WalletMonitorTask {
   queuedHeader?: BlockHeader
   queuedHeaderWhen?: Date
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = 1 * Monitor.oneMinute
   ) {
     super(monitor, TaskNewHeader.taskName)
   }
 
-  async getHeader (): Promise<BlockHeader> {
+  async getHeader(): Promise<BlockHeader> {
     return await this.monitor.chaintracks.findChainTipHeader()
   }
 
@@ -51,16 +51,16 @@ export class TaskNewHeader extends WalletMonitorTask {
    * and sometimes which block. In the case of coinbase transactions, a transaction may
    * also fail after a reorg.
    */
-  override async asyncSetup (): Promise<void> {
+  override async asyncSetup(): Promise<void> {
     // No async setup required for this task
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
     const run = true
     return { run }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     const oldHeader = this.header
     this.header = await this.getHeader()

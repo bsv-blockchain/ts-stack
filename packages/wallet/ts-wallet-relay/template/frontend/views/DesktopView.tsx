@@ -30,10 +30,10 @@
 import { useCallback, useState } from 'react'
 import { WalletClient } from '@bsv/sdk'
 import { WalletConnectionModal } from '../components/WalletConnectionModal'
-import { QRDisplay }             from '../components/QRDisplay'
-import { WalletActions }         from '../components/WalletActions'
-import { RequestLog }            from '../components/RequestLog'
-import { useWalletSession }      from '../hooks/useWalletSession'
+import { QRDisplay } from '../components/QRDisplay'
+import { WalletActions } from '../components/WalletActions'
+import { RequestLog } from '../components/RequestLog'
+import { useWalletSession } from '../hooks/useWalletSession'
 
 type WalletMode = 'detecting' | 'local' | 'mobile'
 
@@ -104,10 +104,7 @@ export function DesktopView() {
     <>
       {/* Modal is rendered (but invisible) during detection, shown if no wallet found */}
       {mode === 'detecting' && (
-        <WalletConnectionModal
-          onLocalWallet={handleLocalWallet}
-          onMobileQR={handleMobileQR}
-        />
+        <WalletConnectionModal onLocalWallet={handleLocalWallet} onMobileQR={handleMobileQR} />
       )}
 
       {/* Local wallet — NOTE: replace this placeholder with your app's main UI */}
@@ -115,8 +112,18 @@ export function DesktopView() {
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
           <div className="text-center">
             <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="w-6 h-6 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-1">Wallet connected</h2>

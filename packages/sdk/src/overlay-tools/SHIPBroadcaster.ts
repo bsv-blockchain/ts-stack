@@ -88,16 +88,14 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
   httpClient: typeof fetch
   allowHTTP: boolean
 
-  constructor (httpClient = fetch, allowHTTP: boolean = false) {
+  constructor(httpClient = fetch, allowHTTP: boolean = false) {
     this.httpClient = httpClient
     this.allowHTTP = allowHTTP
   }
 
-  async send (url: string, taggedBEEF: TaggedBEEF): Promise<STEAK> {
+  async send(url: string, taggedBEEF: TaggedBEEF): Promise<STEAK> {
     if (!url.startsWith('https:') && !this.allowHTTP) {
-      throw new Error(
-        'HTTPS facilitator can only use URLs that start with "https:"'
-      )
+      throw new Error('HTTPS facilitator can only use URLs that start with "https:"')
     }
     const headers = {
       'Content-Type': 'application/octet-stream',
@@ -138,11 +136,15 @@ export default class TopicBroadcaster implements Broadcaster {
   private readonly resolver: LookupResolver
   private readonly requireAcknowledgmentFromAllHostsForTopics: TopicAcknowledgmentRequirement
   private readonly requireAcknowledgmentFromAnyHostForTopics: TopicAcknowledgmentRequirement
-  private readonly requireAcknowledgmentFromSpecificHostsForTopics: Record<string, TopicAcknowledgmentRequirement>
+  private readonly requireAcknowledgmentFromSpecificHostsForTopics: Record<
+    string,
+    TopicAcknowledgmentRequirement
+  >
   private readonly networkPreset: 'mainnet' | 'testnet' | 'local'
 
   // Cache for findInterestedHosts to avoid repeated SHIP tracker lookups
-  private interestedHostsCache: { hosts: Record<string, Set<string>>, expiresAt: number } | null = null
+  private interestedHostsCache: { hosts: Record<string, Set<string>>; expiresAt: number } | null =
+    null
   private interestedHostsInFlight: Promise<Record<string, Set<string>>> | null = null
   private readonly interestedHostsTtlMs: number
 
@@ -152,16 +154,18 @@ export default class TopicBroadcaster implements Broadcaster {
    * @param {string[]} topics - The list of SHIP topic names where transactions are to be sent.
    * @param {SHIPBroadcasterConfig} config - Configuration options for the SHIP broadcaster.
    */
-  constructor (topics: string[], config: SHIPBroadcasterConfig = {}) {
+  constructor(topics: string[], config: SHIPBroadcasterConfig = {}) {
     if (topics.length === 0) {
       throw new Error('At least one topic is required for broadcast.')
     }
-    if (topics.some((x) => !x.startsWith('tm_'))) {
+    if (topics.some(x => !x.startsWith('tm_'))) {
       throw new Error('Every topic must start with "tm_".')
     }
     this.topics = topics
     this.networkPreset = config.networkPreset ?? 'mainnet'
-    this.facilitator = config.facilitator ?? new HTTPSOverlayBroadcastFacilitator(undefined, this.networkPreset === 'local')
+    this.facilitator =
+      config.facilitator ??
+      new HTTPSOverlayBroadcastFacilitator(undefined, this.networkPreset === 'local')
     this.resolver = config.resolver ?? new LookupResolver({ networkPreset: this.networkPreset })
     this.requireAcknowledgmentFromAllHostsForTopics =
       config.requireAcknowledgmentFromAllHostsForTopics ?? []
@@ -178,14 +182,12 @@ export default class TopicBroadcaster implements Broadcaster {
    * @param {Transaction} tx - The transaction to be sent.
    * @returns {Promise<BroadcastResponse | BroadcastFailure>} A promise that resolves to either a success or failure response.
    */
-  async broadcast (
-    tx: Transaction
-  ): Promise<BroadcastResponse | BroadcastFailure> {
+  async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> {
     let beef: number[]
     const offChainValues = tx.metadata.get('OffChainValues') as number[]
     try {
       beef = tx.toBEEF()
-    } catch (error) {
+    } catch {
       throw new Error(
         'Transactions sent via SHIP to Overlay Services must be serializable to BEEF format.'
       )
@@ -198,26 +200,24 @@ export default class TopicBroadcaster implements Broadcaster {
         description: `No ${this.networkPreset} hosts are interested in receiving this transaction.`
       }
     }
-    const hostPromises = Object.entries(interestedHosts).map(
-      async ([host, topics]) => {
-        try {
-          const steak = await this.facilitator.send(host, {
-            beef,
-            offChainValues,
-            topics: [...topics]
-          })
-          if (steak == null || Object.keys(steak).length === 0) {
-            throw new Error('Steak has no topics.')
-          }
-          return { host, success: true, steak }
-        } catch (error) {
-          return { host, success: false, error }
+    const hostPromises = Object.entries(interestedHosts).map(async ([host, topics]) => {
+      try {
+        const steak = await this.facilitator.send(host, {
+          beef,
+          offChainValues,
+          topics: [...topics]
+        })
+        if (steak == null || Object.keys(steak).length === 0) {
+          throw new Error('Steak has no topics.')
         }
+        return { host, success: true, steak }
+      } catch (error) {
+        return { host, success: false, error }
       }
-    )
+    })
 
     const results = await Promise.all(hostPromises)
-    const successfulHosts = results.filter((result) => result.success)
+    const successfulHosts = results.filter(result => result.success)
 
     if (successfulHosts.length === 0) {
       return {
@@ -241,11 +241,7 @@ export default class TopicBroadcaster implements Broadcaster {
         const coinsToRetain = instructions.coinsToRetain
         const coinsRemoved = instructions.coinsRemoved
 
-        if (
-          outputsToAdmit?.length > 0 ||
-          coinsToRetain?.length > 0 ||
-          coinsRemoved?.length > 0
-        ) {
+        if (outputsToAdmit?.length > 0 || coinsToRetain?.length > 0 || coinsRemoved?.length > 0) {
           acknowledgedTopics.add(topic)
         }
       }
@@ -272,7 +268,7 @@ export default class TopicBroadcaster implements Broadcaster {
   }
 
   /** Resolves the (requiredTopics, require) pair for requireAcknowledgmentFromAllHostsForTopics. */
-  private resolveAllHostsRequirement (): { requiredTopics: string[], require: RequireMode } {
+  private resolveAllHostsRequirement(): { requiredTopics: string[]; require: RequireMode } {
     const r = this.requireAcknowledgmentFromAllHostsForTopics
     if (r === 'any') return { requiredTopics: this.topics, require: 'any' }
     if (Array.isArray(r)) return { requiredTopics: r, require: 'all' }
@@ -280,17 +276,23 @@ export default class TopicBroadcaster implements Broadcaster {
     return { requiredTopics: this.topics, require: 'all' }
   }
 
-  private checkAllHostsRequirement (hostAcknowledgments: Record<string, Set<string>>): BroadcastFailure | null {
+  private checkAllHostsRequirement(
+    hostAcknowledgments: Record<string, Set<string>>
+  ): BroadcastFailure | null {
     const { requiredTopics, require } = this.resolveAllHostsRequirement()
     if (requiredTopics.length === 0) return null
     if (!this.checkAcknowledgmentFromAllHosts(hostAcknowledgments, requiredTopics, require)) {
-      return { status: 'error', code: 'ERR_REQUIRE_ACK_FROM_ALL_HOSTS_FAILED', description: 'Not all hosts acknowledged the required topics.' }
+      return {
+        status: 'error',
+        code: 'ERR_REQUIRE_ACK_FROM_ALL_HOSTS_FAILED',
+        description: 'Not all hosts acknowledged the required topics.'
+      }
     }
     return null
   }
 
   /** Resolves the (requiredTopics, require) pair for requireAcknowledgmentFromAnyHostForTopics. */
-  private resolveAnyHostRequirement (): { requiredTopics: string[], require: RequireMode } {
+  private resolveAnyHostRequirement(): { requiredTopics: string[]; require: RequireMode } {
     const r = this.requireAcknowledgmentFromAnyHostForTopics
     if (r === 'all') return { requiredTopics: this.topics, require: 'all' }
     if (r === 'any') return { requiredTopics: this.topics, require: 'any' }
@@ -298,19 +300,36 @@ export default class TopicBroadcaster implements Broadcaster {
     return { requiredTopics: [], require: 'all' }
   }
 
-  private checkAnyHostRequirement (hostAcknowledgments: Record<string, Set<string>>): BroadcastFailure | null {
+  private checkAnyHostRequirement(
+    hostAcknowledgments: Record<string, Set<string>>
+  ): BroadcastFailure | null {
     const { requiredTopics, require } = this.resolveAnyHostRequirement()
     if (requiredTopics.length === 0) return null
     if (!this.checkAcknowledgmentFromAnyHost(hostAcknowledgments, requiredTopics, require)) {
-      return { status: 'error', code: 'ERR_REQUIRE_ACK_FROM_ANY_HOST_FAILED', description: 'No host acknowledged the required topics.' }
+      return {
+        status: 'error',
+        code: 'ERR_REQUIRE_ACK_FROM_ANY_HOST_FAILED',
+        description: 'No host acknowledged the required topics.'
+      }
     }
     return null
   }
 
-  private checkSpecificHostsRequirement (hostAcknowledgments: Record<string, Set<string>>): BroadcastFailure | null {
+  private checkSpecificHostsRequirement(
+    hostAcknowledgments: Record<string, Set<string>>
+  ): BroadcastFailure | null {
     if (Object.keys(this.requireAcknowledgmentFromSpecificHostsForTopics).length === 0) return null
-    if (!this.checkAcknowledgmentFromSpecificHosts(hostAcknowledgments, this.requireAcknowledgmentFromSpecificHostsForTopics)) {
-      return { status: 'error', code: 'ERR_REQUIRE_ACK_FROM_SPECIFIC_HOSTS_FAILED', description: 'Specific hosts did not acknowledge the required topics.' }
+    if (
+      !this.checkAcknowledgmentFromSpecificHosts(
+        hostAcknowledgments,
+        this.requireAcknowledgmentFromSpecificHostsForTopics
+      )
+    ) {
+      return {
+        status: 'error',
+        code: 'ERR_REQUIRE_ACK_FROM_SPECIFIC_HOSTS_FAILED',
+        description: 'Specific hosts did not acknowledge the required topics.'
+      }
     }
     return null
   }
@@ -318,7 +337,7 @@ export default class TopicBroadcaster implements Broadcaster {
   /**
    * Returns true if `acknowledgedTopics` satisfies the given requirement against `requiredTopics`.
    */
-  private topicsMatchRequirement (
+  private topicsMatchRequirement(
     acknowledgedTopics: Set<string>,
     requiredTopics: string[],
     require: RequireMode
@@ -329,27 +348,27 @@ export default class TopicBroadcaster implements Broadcaster {
     return requiredTopics.some(t => acknowledgedTopics.has(t))
   }
 
-  private checkAcknowledgmentFromAllHosts (
+  private checkAcknowledgmentFromAllHosts(
     hostAcknowledgments: Record<string, Set<string>>,
     requiredTopics: string[],
     require: RequireMode
   ): boolean {
-    return Object.values(hostAcknowledgments).every(
-      acknowledged => this.topicsMatchRequirement(acknowledged, requiredTopics, require)
+    return Object.values(hostAcknowledgments).every(acknowledged =>
+      this.topicsMatchRequirement(acknowledged, requiredTopics, require)
     )
   }
 
-  private checkAcknowledgmentFromAnyHost (
+  private checkAcknowledgmentFromAnyHost(
     hostAcknowledgments: Record<string, Set<string>>,
     requiredTopics: string[],
     require: RequireMode
   ): boolean {
-    return Object.values(hostAcknowledgments).some(
-      acknowledged => this.topicsMatchRequirement(acknowledged, requiredTopics, require)
+    return Object.values(hostAcknowledgments).some(acknowledged =>
+      this.topicsMatchRequirement(acknowledged, requiredTopics, require)
     )
   }
 
-  private checkAcknowledgmentFromSpecificHosts (
+  private checkAcknowledgmentFromSpecificHosts(
     hostAcknowledgments: Record<string, Set<string>>,
     requirements: Record<string, 'all' | 'any' | string[]>
   ): boolean {
@@ -383,7 +402,7 @@ export default class TopicBroadcaster implements Broadcaster {
    *
    * @returns A mapping of URLs for hosts interested in this transaction. Keys are URLs, values are which of our topics the specific host cares about.
    */
-  private async findInterestedHosts (): Promise<Record<string, Set<string>>> {
+  private async findInterestedHosts(): Promise<Record<string, Set<string>>> {
     // Handle the local network preset
     if (this.networkPreset === 'local') {
       const resultSet = new Set<string>()
@@ -418,7 +437,7 @@ export default class TopicBroadcaster implements Broadcaster {
    * Performs the actual SHIP lookup to discover interested hosts.
    * @private
    */
-  private async fetchInterestedHosts (): Promise<Record<string, Set<string>>> {
+  private async fetchInterestedHosts(): Promise<Record<string, Set<string>>> {
     // Find all SHIP advertisements for the topics we care about
     const results: Record<string, Set<string>> = {}
     const answer = await this.resolver.query(
@@ -438,15 +457,12 @@ export default class TopicBroadcaster implements Broadcaster {
         const tx = Transaction.fromBEEF(output.beef)
         const script = tx.outputs[output.outputIndex].lockingScript
         const parsed = OverlayAdminTokenTemplate.decode(script)
-        if (
-          !this.topics.includes(parsed.topicOrService) ||
-          parsed.protocol !== 'SHIP'
-        ) {
+        if (!this.topics.includes(parsed.topicOrService) || parsed.protocol !== 'SHIP') {
           continue
         }
         results[parsed.domain] ??= new Set()
         results[parsed.domain].add(parsed.topicOrService)
-      } catch (_notShipOutput) {
+      } catch {
         // Output could not be decoded as an overlay admin token — not a SHIP advertisement; skip
         continue
       }

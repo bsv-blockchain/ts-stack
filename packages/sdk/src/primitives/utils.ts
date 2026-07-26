@@ -5,10 +5,8 @@ import { assertValidHex } from './hex.js'
 export { WriterUint8Array } from './WriterUint8Array.js'
 export { ReaderUint8Array } from './ReaderUint8Array.js'
 
-const BufferCtor =
-  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
-const CAN_USE_BUFFER =
-  BufferCtor != null && typeof BufferCtor.from === 'function'
+const BufferCtor = (globalThis as any).Buffer
+const CAN_USE_BUFFER = BufferCtor != null && typeof BufferCtor.from === 'function'
 
 /**
  * Prepends a '0' to an odd character length word to ensure it has an even number of characters.
@@ -29,10 +27,9 @@ export const zero2 = (word: string): string => {
  * @returns {string} - The hexadecimal string representation of the input array.
  */
 const HEX_DIGITS = '0123456789abcdef'
-const HEX_BYTE_STRINGS: string[] = new Array(256)
+const HEX_BYTE_STRINGS: string[] = Array.from({ length: 256 }, () => '')
 for (let i = 0; i < 256; i++) {
-  HEX_BYTE_STRINGS[i] =
-    HEX_DIGITS[(i >> 4) & 0xf] + HEX_DIGITS[i & 0xf]
+  HEX_BYTE_STRINGS[i] = HEX_DIGITS[(i >> 4) & 0xf] + HEX_DIGITS[i & 0xf]
 }
 
 export const toHex = (msg: number[] | Uint8Array): string => {
@@ -117,7 +114,7 @@ export const hexToUint8Array = (msg: string): Uint8Array => {
   return out
 }
 
-export function base64ToArray (msg: string): number[] {
+export function base64ToArray(msg: string): number[] {
   if (typeof msg !== 'string') {
     throw new TypeError('msg must be a string')
   }
@@ -184,7 +181,7 @@ export function base64ToArray (msg: string): number[] {
  * @param str - The string to encode.
  * @returns An array of numbers, each representing a byte in the UTF-8 encoded string.
  */
-function utf8ToArray (str: string): number[] {
+function utf8ToArray(str: string): number[] {
   return Array.from(new TextEncoder().encode(str))
 }
 
@@ -194,9 +191,7 @@ function utf8ToArray (str: string): number[] {
  * @returns {string} - The UTF-8 encoded string.
  */
 export const toUTF8 = (arr: number[] | Uint8Array): string => {
-  return new TextDecoder().decode(
-    arr instanceof Uint8Array ? arr : new Uint8Array(arr)
-  )
+  return new TextDecoder().decode(arr instanceof Uint8Array ? arr : new Uint8Array(arr))
 }
 
 /**
@@ -205,10 +200,7 @@ export const toUTF8 = (arr: number[] | Uint8Array): string => {
  * @param {('hex' | 'utf8')} enc - The desired encoding.
  * @returns {string | number[]} - The encoded message as a string (for 'hex' and 'utf8') or the original array.
  */
-export const encode = (
-  arr: number[],
-  enc?: 'hex' | 'utf8'
-): string | number[] => {
+export const encode = (arr: number[], enc?: 'hex' | 'utf8'): string | number[] => {
   switch (enc) {
     case 'hex':
       return toHex(arr)
@@ -230,9 +222,8 @@ export const encode = (
  * const bytes = [72, 101, 108, 108, 111]; // Represents the string "Hello"
  * console.log(toBase64(bytes)); // Outputs: SGVsbG8=
  */
-export function toBase64 (byteArray: number[] | Uint8Array): string {
-  const base64Chars =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+export function toBase64(byteArray: number[] | Uint8Array): string {
+  const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   let result = ''
   let i: number
 
@@ -254,8 +245,7 @@ export function toBase64 (byteArray: number[] | Uint8Array): string {
   return result
 }
 
-const base58chars =
-  '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+const base58chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 /**
  * Converts a string from base58 to a binary array
@@ -277,12 +267,10 @@ export const fromBase58 = (str: string): number[] => {
 
   const uint8 = new Uint8Array([
     ...new Uint8Array(psz),
-    ...(
-      str.match(/./gmu) ?? [] // ✅ Safe Fix: If null, use []
-    )
-      .map((i) => base58chars.indexOf(i))
+    ...(str.match(/./gmu) ?? []) // ✅ Safe Fix: If null, use []
+      .map(i => base58chars.indexOf(i))
       .reduce((acc, i) => {
-        acc = acc.map((j) => {
+        acc = acc.map(j => {
           const x = j * 58 + i
           i = x >> 8
           return x
@@ -292,7 +280,7 @@ export const fromBase58 = (str: string): number[] => {
       .reverse()
       .filter(
         (
-          (lastValue) => (value) =>
+          lastValue => value =>
             // @ts-expect-error
             (lastValue = lastValue || value)
         )(false)
@@ -307,7 +295,7 @@ export const fromBase58 = (str: string): number[] => {
  * @returns The base58 string representation
  */
 export const toBase58 = (bin: number[]): string => {
-  const base58Map = new Array(256).fill(-1)
+  const base58Map = Array.from({ length: 256 }, () => -1)
   for (let i = 0; i < base58chars.length; ++i) {
     base58Map[base58chars.codePointAt(i) as number] = i
   }
@@ -363,7 +351,7 @@ export const fromBase58Check = (
   str: string,
   enc?: 'hex',
   prefixLength: number = 1
-): { data: number[] | string, prefix: number[] | string } => {
+): { data: number[] | string; prefix: number[] | string } => {
   const bin = fromBase58(str)
   let prefix: string | number[] = bin.slice(0, prefixLength)
   let data: string | number[] = bin.slice(prefixLength, -4)
@@ -387,17 +375,17 @@ export class Writer {
   public bufs: WriterChunk[]
   private length: number
 
-  constructor (bufs?: WriterChunk[]) {
+  constructor(bufs?: WriterChunk[]) {
     this.bufs = bufs ?? []
     this.length = 0
     for (const b of this.bufs) this.length += b.length
   }
 
-  getLength (): number {
+  getLength(): number {
     return this.length
   }
 
-  toUint8Array (): Uint8Array {
+  toUint8Array(): Uint8Array {
     const out = new Uint8Array(this.length)
     let offset = 0
     for (const buf of this.bufs) {
@@ -407,9 +395,9 @@ export class Writer {
     return out
   }
 
-  toArray (): number[] {
+  toArray(): number[] {
     const totalLength = this.length
-    const ret = new Array(totalLength)
+    const ret = Array.from({ length: totalLength }, () => 0)
     let offset = 0
     for (const buf of this.bufs) {
       if (buf instanceof Uint8Array) {
@@ -426,36 +414,38 @@ export class Writer {
     return ret
   }
 
-  toHex (): string {
-    return this.toArray().map((n) => n.toString(16).padStart(2, '0')).join('')
+  toHex(): string {
+    return this.toArray()
+      .map(n => n.toString(16).padStart(2, '0'))
+      .join('')
   }
 
-  write (buf: WriterChunk): this {
+  write(buf: WriterChunk): this {
     this.bufs.push(buf)
     this.length += buf.length
     return this
   }
 
-  writeReverse (buf: number[]): this {
-    const buf2: number[] = new Array(buf.length)
+  writeReverse(buf: number[]): this {
+    const buf2: number[] = Array.from({ length: buf.length }, () => 0)
     for (let i = 0; i < buf2.length; i++) {
       buf2[i] = buf[buf.length - 1 - i]
     }
     return this.write(buf2)
   }
 
-  writeUInt8 (n: number): this {
-    const buf = new Array(1)
+  writeUInt8(n: number): this {
+    const buf = Array.from({ length: 1 }, () => 0)
     buf[0] = n & 0xff
     this.write(buf)
     return this
   }
 
-  writeInt8 (n: number): this {
+  writeInt8(n: number): this {
     return this.writeUInt8(n)
   }
 
-  writeUInt16BE (n: number): this {
+  writeUInt16BE(n: number): this {
     const buf = [
       (n >> 8) & 0xff, // shift right 8 bits to get the high byte
       n & 0xff // low byte is just the last 8 bits
@@ -463,11 +453,11 @@ export class Writer {
     return this.write(buf)
   }
 
-  writeInt16BE (n: number): this {
+  writeInt16BE(n: number): this {
     return this.writeUInt16BE(n & 0xffff) // Mask with 0xFFFF to get the lower 16 bits
   }
 
-  writeUInt16LE (n: number): this {
+  writeUInt16LE(n: number): this {
     const buf = [
       n & 0xff, // low byte is just the last 8 bits
       (n >> 8) & 0xff // shift right 8 bits to get the high byte
@@ -475,11 +465,11 @@ export class Writer {
     return this.write(buf)
   }
 
-  writeInt16LE (n: number): this {
+  writeInt16LE(n: number): this {
     return this.writeUInt16LE(n & 0xffff) // Mask with 0xFFFF to get the lower 16 bits
   }
 
-  writeUInt32BE (n: number): this {
+  writeUInt32BE(n: number): this {
     const buf = [
       (n >> 24) & 0xff, // highest byte
       (n >> 16) & 0xff,
@@ -489,11 +479,11 @@ export class Writer {
     return this.write(buf)
   }
 
-  writeInt32BE (n: number): this {
+  writeInt32BE(n: number): this {
     return this.writeUInt32BE(n >>> 0) // Using unsigned right shift to handle negative numbers
   }
 
-  writeUInt32LE (n: number): this {
+  writeUInt32LE(n: number): this {
     const buf = [
       n & 0xff, // lowest byte
       (n >> 8) & 0xff,
@@ -503,26 +493,26 @@ export class Writer {
     return this.write(buf)
   }
 
-  writeInt32LE (n: number): this {
+  writeInt32LE(n: number): this {
     return this.writeUInt32LE(n >>> 0) // Using unsigned right shift to handle negative numbers
   }
 
-  writeUInt64BEBn (bn: BigNumber): this {
+  writeUInt64BEBn(bn: BigNumber): this {
     const buf = bn.toArray('be', 8)
     this.write(buf)
     return this
   }
 
-  writeUInt64LEBn (bn: BigNumber): this {
+  writeUInt64LEBn(bn: BigNumber): this {
     const buf = bn.toArray('be', 8)
     this.writeReverse(buf)
     return this
   }
 
-  writeUInt64LE (n: number): this {
+  writeUInt64LE(n: number): this {
     if (n === -1) {
       // This value is used as a dummy satoshis value when serializing OTDA placeholder output for SIGHASH_SINGLE
-      this.write(new Array(8).fill(0xff))
+      this.write(Array.from({ length: 8 }, () => 0xff))
     } else {
       const buf = new BigNumber(n).toArray('be', 8)
       this.writeReverse(buf)
@@ -530,19 +520,19 @@ export class Writer {
     return this
   }
 
-  writeVarIntNum (n: number): this {
+  writeVarIntNum(n: number): this {
     const buf = Writer.varIntNum(n)
     this.write(buf)
     return this
   }
 
-  writeVarIntBn (bn: BigNumber): this {
+  writeVarIntBn(bn: BigNumber): this {
     const buf = Writer.varIntBn(bn)
     this.write(buf)
     return this
   }
 
-  static varIntNum (n: number): number[] {
+  static varIntNum(n: number): number[] {
     let buf: number[]
     if (n < 0) {
       return this.varIntBn(new BigNumber(n))
@@ -585,7 +575,7 @@ export class Writer {
     return buf
   }
 
-  static varIntBn (bn: BigNumber): number[] {
+  static varIntBn(bn: BigNumber): number[] {
     let buf: number[]
     if (bn.isNeg()) {
       bn = bn.add(OverflowUint64) // Adjust for negative numbers
@@ -601,13 +591,7 @@ export class Writer {
     } else if (bn.lt(new BigNumber(0x100000000))) {
       const n = bn.toNumber()
       // Value fits in a uint32
-      buf = [
-        254,
-        n & 0xff,
-        (n >> 8) & 0xff,
-        (n >> 16) & 0xff,
-        (n >> 24) & 0xff
-      ]
+      buf = [254, n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff]
     } else {
       const bw = new Writer()
       bw.writeUInt8(255)
@@ -623,25 +607,25 @@ export class Reader {
   public pos: number
   private readonly length: number
 
-  constructor (bin: number[] = [], pos: number = 0) {
+  constructor(bin: number[] = [], pos: number = 0) {
     this.bin = bin
     this.pos = pos
     this.length = bin.length
   }
 
-  public eof (): boolean {
+  public eof(): boolean {
     return this.pos >= this.length
   }
 
-  public read (len = this.length): number[] {
+  public read(len = this.length): number[] {
     const start = this.pos
     const end = this.pos + len
     this.pos = end
     return this.bin.slice(start, end)
   }
 
-  public readReverse (len = this.length): number[] {
-    const buf2 = new Array(len)
+  public readReverse(len = this.length): number[] {
+    const buf2 = Array.from({ length: len }, () => 0)
     for (let i = 0; i < len; i++) {
       buf2[i] = this.bin[this.pos + len - 1 - i]
     }
@@ -649,45 +633,45 @@ export class Reader {
     return buf2
   }
 
-  public readUInt8 (): number {
+  public readUInt8(): number {
     const val = this.bin[this.pos]
     this.pos += 1
     return val
   }
 
-  public readInt8 (): number {
+  public readInt8(): number {
     const val = this.bin[this.pos]
     this.pos += 1
     // If the sign bit is set, convert to negative value
     return (val & 0x80) === 0 ? val : val - 0x100
   }
 
-  public readUInt16BE (): number {
+  public readUInt16BE(): number {
     const val = (this.bin[this.pos] << 8) | this.bin[this.pos + 1]
     this.pos += 2
     return val
   }
 
-  public readInt16BE (): number {
+  public readInt16BE(): number {
     const val = this.readUInt16BE()
     // If the sign bit is set, convert to negative value
     return (val & 0x8000) === 0 ? val : val - 0x10000
   }
 
-  public readUInt16LE (): number {
+  public readUInt16LE(): number {
     const val = this.bin[this.pos] | (this.bin[this.pos + 1] << 8)
     this.pos += 2
     return val
   }
 
-  public readInt16LE (): number {
+  public readInt16LE(): number {
     const val = this.readUInt16LE()
     // If the sign bit is set, convert to negative value
     const x = (val & 0x8000) === 0 ? val : val - 0x10000
     return x
   }
 
-  public readUInt32BE (): number {
+  public readUInt32BE(): number {
     const val =
       this.bin[this.pos] * 0x1000000 + // Shift the first byte by 24 bits
       ((this.bin[this.pos + 1] << 16) | // Shift the second byte by 16 bits
@@ -697,13 +681,13 @@ export class Reader {
     return val
   }
 
-  public readInt32BE (): number {
+  public readInt32BE(): number {
     const val = this.readUInt32BE()
     // If the sign bit is set, convert to negative value
     return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
-  public readUInt32LE (): number {
+  public readUInt32LE(): number {
     const val =
       (this.bin[this.pos] |
         (this.bin[this.pos + 1] << 8) |
@@ -714,26 +698,26 @@ export class Reader {
     return val
   }
 
-  public readInt32LE (): number {
+  public readInt32LE(): number {
     const val = this.readUInt32LE()
     // Explicitly check if the sign bit is set and then convert to a negative value
     return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
-  public readUInt64BEBn (): BigNumber {
+  public readUInt64BEBn(): BigNumber {
     const bin = this.bin.slice(this.pos, this.pos + 8)
     const bn = new BigNumber(bin)
     this.pos = this.pos + 8
     return bn
   }
 
-  public readUInt64LEBn (): BigNumber {
+  public readUInt64LEBn(): BigNumber {
     const bin = this.readReverse(8)
     const bn = new BigNumber(bin)
     return bn
   }
 
-  public readInt64LEBn (): BigNumber {
+  public readInt64LEBn(): BigNumber {
     const bin = this.readReverse(8)
     let bn = new BigNumber(bin)
     if (bn.gte(OverflowInt64)) {
@@ -742,7 +726,7 @@ export class Reader {
     return bn
   }
 
-  public readVarIntNum (signed: boolean = true): number {
+  public readVarIntNum(signed: boolean = true): number {
     const first = this.readUInt8()
     let bn: BigNumber
     switch (first) {
@@ -755,16 +739,14 @@ export class Reader {
         if (bn.lte(new BigNumber(2).pow(new BigNumber(53)))) {
           return bn.toNumber()
         } else {
-          throw new Error(
-            'number too large to retain precision - use readVarIntBn'
-          )
+          throw new Error('number too large to retain precision - use readVarIntBn')
         }
       default:
         return first
     }
   }
 
-  public readVarInt (): number[] {
+  public readVarInt(): number[] {
     const first = this.bin[this.pos]
     switch (first) {
       case 0xfd:
@@ -778,7 +760,7 @@ export class Reader {
     }
   }
 
-  public readVarIntBn (): BigNumber {
+  public readVarIntBn(): BigNumber {
     const first = this.readUInt8()
     switch (first) {
       case 0xfd:
@@ -851,12 +833,15 @@ const OverflowUint64 = new BigNumber(2).pow(new BigNumber(64))
  * @example
  * const myValue = verifyNotNull(someValue, 'someValue must be defined')
  */
-export function verifyNotNull<T> (value: T | undefined | null, errorMessage: string = 'Expected a valid value, but got undefined or null.'): T {
+export function verifyNotNull<T>(
+  value: T | undefined | null,
+  errorMessage: string = 'Expected a valid value, but got undefined or null.'
+): T {
   if (value == null) throw new Error(errorMessage)
   return value
 }
 
-export function constantTimeEquals (a: Uint8Array | number[], b: Uint8Array | number[]): boolean {
+export function constantTimeEquals(a: Uint8Array | number[], b: Uint8Array | number[]): boolean {
   if (a.length !== b.length) return false
 
   let diff = 0

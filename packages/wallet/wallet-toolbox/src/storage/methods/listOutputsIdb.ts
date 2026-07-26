@@ -8,11 +8,11 @@ import { TransactionStatus } from '../../sdk/types'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { isManagedChangeOutput, managedChangeOutputFields } from './managedChange'
 
-export async function listOutputsIdb (
+export async function listOutputsIdb(
   storage: StorageIdb,
   auth: AuthId,
   vargs: Validation.ValidListOutputsArgs,
-  originator?: OriginatorDomainNameStringUnder250Bytes
+  _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<ListOutputsResult> {
   const userId = verifyId(auth.userId)
   const limit = vargs.limit
@@ -94,11 +94,15 @@ export async function listOutputsIdb (
   const isQueryModeAll = vargs.tagQueryMode === 'all'
   if (isQueryModeAll && tagIds.length < tags.length)
   // all the required tags don't exist, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0)
   // any and only non-existing labels, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   const includeSpent = false
 
@@ -197,7 +201,7 @@ export async function listOutputsIdb (
       await storage.validateOutputScript(o)
       if (o.lockingScript != null) wo.lockingScript = asString(o.lockingScript)
     }
-    if (vargs.includeTransactions && (beef.findTxid(o.txid!) == null)) {
+    if (vargs.includeTransactions && beef.findTxid(o.txid!) == null) {
       await storage.getValidBeefForKnownTxid(o.txid!, beef, undefined, vargs.knownTxids)
     }
   }

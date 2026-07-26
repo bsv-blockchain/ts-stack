@@ -25,8 +25,13 @@
   "scripts": {
     "build": "tsc",
     "demo": "tsx demo.ts",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/network/ts-p2p/{README.md,demo.ts,jest.config.js,package.json,tsconfig.json}\" \"packages/network/ts-p2p/{src,test}/**/*.ts\"",
+    "lint": "oxlint demo.ts jest.config.js src test --deny-warnings",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports TeranodeListener,decodeMessage,startSubscriber,tryDecodeMessage",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@chainsafe/libp2p-gossipsub": "^14.1.2",
@@ -53,7 +58,8 @@
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "tsx": "^4.23.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "oxlint": "^1.75.0"
   },
   "keywords": [
     "teranode",

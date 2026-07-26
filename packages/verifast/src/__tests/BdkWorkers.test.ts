@@ -5,17 +5,15 @@ import {
   type BdkWorkerRequest,
   type BdkWorkerResponse
 } from '../workers/BdkWorkerProtocol.js'
-import BdkWorkerPool, {
-  type WorkerAdapter
-} from '../workers/BdkWorkerPool.js'
+import BdkWorkerPool, { type WorkerAdapter } from '../workers/BdkWorkerPool.js'
 import BdkWorkerScheduler from '../workers/BdkWorkerScheduler.js'
 
 class MockVector {
-  push_back (_value: number): void {}
-  delete (): void {}
+  push_back(_value: number): void {}
+  delete(): void {}
 }
 
-function mockModule (): BdkWasmModule {
+function mockModule(): BdkWasmModule {
   return {
     VectorUInt8: MockVector,
     VectorInt32: MockVector,
@@ -26,55 +24,63 @@ function mockModule (): BdkWasmModule {
 
 describe('BDK worker protocol validation', () => {
   it('accepts each supported request shape', () => {
-    expect(isBdkWorkerRequest({
-      id: 0,
-      operation: 'preload',
-      verificationTables: new Uint8Array()
-    })).toBe(true)
-    expect(isBdkWorkerRequest({
-      id: 1,
-      operation: 'verifyScripts',
-      payload: {
-        extendedTransactions: new Uint8Array(),
-        transactionOffsets: new Uint32Array(),
-        utxoHeights: new Int32Array(),
-        heightOffsets: new Uint32Array(),
-        blockHeights: new Int32Array(),
-        consensus: new Uint8Array(),
-        customFlags: new Uint32Array(),
-        customFlagOffsets: new Uint32Array(),
-        network: 0
-      }
-    })).toBe(true)
-    expect(isBdkWorkerRequest({
-      id: 2,
-      operation: 'verifySpends',
-      payload: {
-        transactions: new Uint8Array(),
-        transactionOffsets: new Uint32Array(),
-        inputIndices: new Uint32Array(),
-        lockingScripts: new Uint8Array(),
-        lockingScriptOffsets: new Uint32Array(),
-        sourceSatoshis: new Float64Array(),
-        utxoHeights: new Int32Array(),
-        blockHeights: new Int32Array(),
-        consensus: new Uint8Array(),
-        hasCustomFlags: new Uint8Array(),
-        customFlags: new Uint32Array(),
-        network: 5
-      }
-    })).toBe(true)
-    expect(isBdkWorkerRequest({
-      id: 3,
-      operation: 'verifyDigests',
-      payload: {
-        publicKeys: new Uint8Array(),
-        publicKeyOffsets: new Uint32Array(),
-        digests: new Uint8Array(),
-        signatures: new Uint8Array(),
-        signatureOffsets: new Uint32Array()
-      }
-    })).toBe(true)
+    expect(
+      isBdkWorkerRequest({
+        id: 0,
+        operation: 'preload',
+        verificationTables: new Uint8Array()
+      })
+    ).toBe(true)
+    expect(
+      isBdkWorkerRequest({
+        id: 1,
+        operation: 'verifyScripts',
+        payload: {
+          extendedTransactions: new Uint8Array(),
+          transactionOffsets: new Uint32Array(),
+          utxoHeights: new Int32Array(),
+          heightOffsets: new Uint32Array(),
+          blockHeights: new Int32Array(),
+          consensus: new Uint8Array(),
+          customFlags: new Uint32Array(),
+          customFlagOffsets: new Uint32Array(),
+          network: 0
+        }
+      })
+    ).toBe(true)
+    expect(
+      isBdkWorkerRequest({
+        id: 2,
+        operation: 'verifySpends',
+        payload: {
+          transactions: new Uint8Array(),
+          transactionOffsets: new Uint32Array(),
+          inputIndices: new Uint32Array(),
+          lockingScripts: new Uint8Array(),
+          lockingScriptOffsets: new Uint32Array(),
+          sourceSatoshis: new Float64Array(),
+          utxoHeights: new Int32Array(),
+          blockHeights: new Int32Array(),
+          consensus: new Uint8Array(),
+          hasCustomFlags: new Uint8Array(),
+          customFlags: new Uint32Array(),
+          network: 5
+        }
+      })
+    ).toBe(true)
+    expect(
+      isBdkWorkerRequest({
+        id: 3,
+        operation: 'verifyDigests',
+        payload: {
+          publicKeys: new Uint8Array(),
+          publicKeyOffsets: new Uint32Array(),
+          digests: new Uint8Array(),
+          signatures: new Uint8Array(),
+          signatureOffsets: new Uint32Array()
+        }
+      })
+    ).toBe(true)
   })
 
   it.each([
@@ -116,10 +122,14 @@ describe('BDK worker warm-up', () => {
             messageHandler({ id: request.id, result: new Uint8Array() })
           })
         },
-        onMessage: handler => { messageHandler = handler },
+        onMessage: handler => {
+          messageHandler = handler
+        },
         onError: () => {},
         onExit: () => {},
-        terminate: () => { terminated++ }
+        terminate: () => {
+          terminated++
+        }
       }
     }
     const scheduler = new BdkWorkerScheduler(() => {
@@ -142,12 +152,18 @@ describe('BDK worker warm-up', () => {
     const module = mockModule()
     const imported: Uint8Array[] = []
     let prepared = 0
-    module.ImportVerificationTables = snapshot => { imported.push(snapshot) }
-    module.PrepareVerification = () => { prepared++ }
+    module.ImportVerificationTables = snapshot => {
+      imported.push(snapshot)
+    }
+    module.PrepareVerification = () => {
+      prepared++
+    }
     const responses: BdkWorkerResponse[] = []
     const handle = createWorkerRequestHandler(
       async () => module,
-      response => { responses.push(response) }
+      response => {
+        responses.push(response)
+      }
     )
     const snapshot = Uint8Array.of(1, 2, 3)
 
@@ -162,8 +178,13 @@ describe('BDK worker warm-up', () => {
   it('retains generation as a compatibility fallback for older BDK modules', async () => {
     const module = mockModule()
     let prepared = 0
-    module.PrepareVerification = () => { prepared++ }
-    const handle = createWorkerRequestHandler(async () => module, () => {})
+    module.PrepareVerification = () => {
+      prepared++
+    }
+    const handle = createWorkerRequestHandler(
+      async () => module,
+      () => {}
+    )
 
     await handle({ id: 1, operation: 'preload' })
 
@@ -179,7 +200,9 @@ describe('BDK worker warm-up', () => {
         if (attempts === 1) throw new Error('transient load failure')
         return mockModule()
       },
-      response => { responses.push(response) }
+      response => {
+        responses.push(response)
+      }
     )
 
     await handle({ id: 1, operation: 'preload' })
@@ -196,20 +219,24 @@ describe('BDK worker warm-up', () => {
       post: () => {},
       onMessage: () => {},
       onError: () => {},
-      onExit: handler => { exit = handler },
+      onExit: handler => {
+        exit = handler
+      },
       terminate: () => {}
     })
     const pool = new BdkWorkerPool(1, worker)
-    const pending = pool.execute([{
-      operation: 'verifyDigests',
-      payload: {
-        publicKeys: new Uint8Array(),
-        publicKeyOffsets: new Uint32Array(),
-        digests: new Uint8Array(),
-        signatures: new Uint8Array(),
-        signatureOffsets: new Uint32Array()
+    const pending = pool.execute([
+      {
+        operation: 'verifyDigests',
+        payload: {
+          publicKeys: new Uint8Array(),
+          publicKeyOffsets: new Uint32Array(),
+          digests: new Uint8Array(),
+          signatures: new Uint8Array(),
+          signatureOffsets: new Uint32Array()
+        }
       }
-    }])
+    ])
     exit(new Error('worker exited'))
     await expect(pending).rejects.toThrow('worker exited')
   })
@@ -221,9 +248,13 @@ describe('BDK worker warm-up', () => {
       return {
         post: request => {
           const result = Uint8Array.of(nextResult++)
-          queueMicrotask(() => { messageHandler({ id: request.id, result }) })
+          queueMicrotask(() => {
+            messageHandler({ id: request.id, result })
+          })
         },
-        onMessage: handler => { messageHandler = handler },
+        onMessage: handler => {
+          messageHandler = handler
+        },
         onError: () => {},
         onExit: () => {},
         terminate: () => {}
@@ -247,12 +278,16 @@ describe('BDK worker warm-up', () => {
         return {
           post: request => {
             queueMicrotask(() => {
-              messageHandler(fail
-                ? { id: request.id, error: 'startup failed' }
-                : { id: request.id, result: new Uint8Array() })
+              messageHandler(
+                fail
+                  ? { id: request.id, error: 'startup failed' }
+                  : { id: request.id, result: new Uint8Array() }
+              )
             })
           },
-          onMessage: handler => { messageHandler = handler },
+          onMessage: handler => {
+            messageHandler = handler
+          },
           onError: () => {},
           onExit: () => {},
           terminate: () => {}
@@ -275,7 +310,9 @@ describe('BDK worker warm-up', () => {
             messageHandler({ id: request.id, result: new Uint8Array() })
           })
         },
-        onMessage: handler => { messageHandler = handler },
+        onMessage: handler => {
+          messageHandler = handler
+        },
         onError: () => {},
         onExit: () => {},
         terminate: () => {}
@@ -294,25 +331,31 @@ describe('BDK worker warm-up', () => {
 
   it('places an item above the byte target in its own worker chunk', async () => {
     const scheduler = new BdkWorkerScheduler(
-      onFailure => new BdkWorkerPool(2, () => {
-        let messageHandler: (response: BdkWorkerResponse) => void = () => {}
-        return {
-          post: request => {
-            queueMicrotask(() => {
-              messageHandler({ id: request.id, result: new Uint8Array() })
-            })
+      onFailure =>
+        new BdkWorkerPool(
+          2,
+          () => {
+            let messageHandler: (response: BdkWorkerResponse) => void = () => {}
+            return {
+              post: request => {
+                queueMicrotask(() => {
+                  messageHandler({ id: request.id, result: new Uint8Array() })
+                })
+              },
+              onMessage: handler => {
+                messageHandler = handler
+              },
+              onError: () => {},
+              onExit: () => {},
+              terminate: () => {}
+            }
           },
-          onMessage: handler => { messageHandler = handler },
-          onError: () => {},
-          onExit: () => {},
-          terminate: () => {}
-        }
-      }, onFailure),
+          onFailure
+        ),
       { maxBatchBytes: 1 }
     )
     await scheduler.preload(mockModule())
 
-    expect(scheduler.parallelChunks([0, 1], item => item === 0 ? 2 : 1))
-      .toEqual([[0], [1]])
+    expect(scheduler.parallelChunks([0, 1], item => (item === 0 ? 2 : 1))).toEqual([[0], [1]])
   })
 })

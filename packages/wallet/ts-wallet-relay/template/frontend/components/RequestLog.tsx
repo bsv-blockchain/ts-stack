@@ -20,8 +20,8 @@ export function RequestLog({ entries }: Readonly<Props>) {
           '[&_[data-log-method]]:font-semibold [&_[data-log-method]]:text-gray-700',
           '[&_[data-log-status]]:text-gray-400 [&_[data-log-status]]:float-right',
           '[&_[data-log-result]]:block [&_[data-log-result]]:mt-1 [&_[data-log-result]]:text-gray-600',
-          '[&_[data-log-result]]:whitespace-pre-wrap [&_[data-log-result]]:break-all',
-        ].join(' '),
+          '[&_[data-log-result]]:whitespace-pre-wrap [&_[data-log-result]]:break-all'
+        ].join(' ')
       }}
     />
   )

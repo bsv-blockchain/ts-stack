@@ -6,7 +6,7 @@ export interface TscMerkleProofApi {
   nodes: string[]
 }
 
-export function convertProofToMerklePath (txid: string, proof: TscMerkleProofApi): MerklePath {
+export function convertProofToMerklePath(txid: string, proof: TscMerkleProofApi): MerklePath {
   const blockHeight = proof.height
   const treeHeight = proof.nodes.length
   interface Leaf {
@@ -15,7 +15,7 @@ export function convertProofToMerklePath (txid: string, proof: TscMerkleProofApi
     txid?: boolean
     duplicate?: boolean
   }
-  const path: Leaf[][] = new Array(treeHeight)
+  const path: Leaf[][] = Array.from({ length: treeHeight })
     .fill(0)
     .map(() => [])
   let index = proof.index

@@ -4,9 +4,11 @@ import { wait } from '../../../../utility/utilityHelpers'
 import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 
-export interface StopListenerToken { stop: (() => void) | undefined }
+export interface StopListenerToken {
+  stop: (() => void) | undefined
+}
 
-async function getWhatsOnChainTipHeight (chain: Chain = 'main', apiKey?: string): Promise<number> {
+async function getWhatsOnChainTipHeight(chain: Chain = 'main', apiKey?: string): Promise<number> {
   const config = apiKey ? { apiKey } : {}
   const woc = new WhatsOnChain(chain, config)
   const chainInfo = await woc.getChainInfo()
@@ -23,7 +25,7 @@ async function getWhatsOnChainTipHeight (chain: Chain = 'main', apiKey?: string)
  * @param idleWait how many milliseconds to timeout between completion checks.
  * @returns true on normal completion, false if should restart if no error received.
  */
-export async function WocHeadersBulkListener (
+export async function WocHeadersBulkListener(
   fromHeight: number,
   toHeight: number,
   enqueue: (header: BlockHeader) => void,
@@ -41,7 +43,7 @@ export async function WocHeadersBulkListener (
   let ok = false
   let wsIsOpen = false
 
-  function stopNow (): void {
+  function stopNow(): void {
     ok = true
     if (wsIsOpen) {
       wsIsOpen = false
@@ -62,10 +64,10 @@ export async function WocHeadersBulkListener (
       webSocketUrl = `wss://socket-v2.whatsonchain.com/websocket/blockheaders/history?from=${fromHeight}&to=${toHeight}`
       break
     case 'mock':
-      throw new Error('WocHeadersBulkListener does not support \'mock\' chain.')
+      throw new Error("WocHeadersBulkListener does not support 'mock' chain.")
   }
 
-  function processData (rawData) {
+  function processData(rawData) {
     if (rawData.length === 0) {
       ping++
       return
@@ -124,7 +126,7 @@ export async function WocHeadersBulkListener (
 
   const ws = new WebSocket(webSocketUrl)
 
-  ws.onopen = function (this, evt) {
+  ws.onopen = function (this, _evt) {
     // This is required to trigger connect on server side.
     ws.send(JSON.stringify({}))
     wsIsOpen = true
@@ -146,7 +148,7 @@ export async function WocHeadersBulkListener (
     if (!ignoreError) ws.close()
   }
 
-  ws.onclose = function (this, ev) {
+  ws.onclose = function (this, _ev) {
     // ok should be true if we got the last header, false otherwise.
     // error will have been called with anything abnormal...
     done = true
@@ -207,7 +209,7 @@ onmessage: "{\"type\":7,\"data\":{\"code\":200,\"reason\":\"Data Delivered\"}}"
 }
  */
 
-export async function WocHeadersBulkListener_test (): Promise<void> {
+export async function WocHeadersBulkListener_test(): Promise<void> {
   try {
     const chains: Chain[] = ['main', 'test']
     // eslint-disable-next-line prefer-const
@@ -253,22 +255,22 @@ export async function WocHeadersBulkListener_test (): Promise<void> {
  * @param idleWait without any input, after this many milliseconds, assume dead service and exit.
  * @returns true only if exit caused by `stop`
  */
-export async function WocHeadersLiveListener (
+export async function WocHeadersLiveListener(
   enqueue: (header: BlockHeader) => void,
   error: (code: number, message: string) => boolean,
   stop: StopListenerToken,
   chain: Chain,
-  logger: (...args: any[]) => void,
-  idleWait = 100000
+  _logger: (...args: any[]) => void,
+  _idleWait = 100000
 ): Promise<boolean> {
-  let count = 0
+  let _count = 0
   let ok = false
   let done = false
   let wsIsOpen = false
 
   let msecsWithoutPing = 0
 
-  function stopNow (): void {
+  function stopNow(): void {
     ok = true
     if (wsIsOpen) {
       wsIsOpen = false
@@ -289,10 +291,10 @@ export async function WocHeadersLiveListener (
       webSocketUrl = 'wss://socket-v2.whatsonchain.com/websocket/blockHeaders'
       break
     case 'mock':
-      throw new Error('WocHeadersLiveListener does not support \'mock\' chain.')
+      throw new Error("WocHeadersLiveListener does not support 'mock' chain.")
   }
 
-  function processData (rawData) {
+  function processData(rawData) {
     if (rawData.length === 0) {
       // Ping
       return
@@ -314,7 +316,7 @@ export async function WocHeadersLiveListener (
             if (wocHeader) {
               const header = convertWocToBlockHeaderHex(wocHeader)
               enqueue(header)
-              count++
+              _count++
             } else {
               error(42, `unknown data ${json}`)
             }
@@ -341,7 +343,7 @@ export async function WocHeadersLiveListener (
 
   const ws = new WebSocket(webSocketUrl)
 
-  ws.onopen = function (this, evt) {
+  ws.onopen = function (this, _evt) {
     // This is required to trigger connect on server side.
     ws.send(JSON.stringify({}))
     wsIsOpen = true
@@ -363,7 +365,7 @@ export async function WocHeadersLiveListener (
     if (!ignoreError) ws.close()
   }
 
-  ws.onclose = function (this, ev) {
+  ws.onclose = function (this, _ev) {
     // ok should be true if we got the last header, false otherwise.
     // error will have been called with anything abnormal...
     done = true
@@ -392,7 +394,7 @@ export async function WocHeadersLiveListener (
   return ok
 }
 
-export async function WocHeadersLiveListener_test (): Promise<void> {
+export async function WocHeadersLiveListener_test(): Promise<void> {
   try {
     const chain = 'main'
     const stop: StopListenerToken = { stop: undefined }

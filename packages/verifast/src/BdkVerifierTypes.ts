@@ -17,14 +17,7 @@ export enum BdkErrorDomain {
 }
 
 export type BdkNetwork =
-  | 'main'
-  | 'test'
-  | 'stn'
-  | 'regtest'
-  | 'ttn'
-  | 'teratestnet'
-  | 'terratestnet'
-  | 'tstn'
+  'main' | 'test' | 'stn' | 'regtest' | 'ttn' | 'teratestnet' | 'terratestnet' | 'tstn'
 
 export interface BdkVerificationResult {
   domain: number
@@ -109,7 +102,7 @@ const SIGNATURE_OPS = new Set<number>([
  * WASM advantage: more than the byte threshold or an executed signature opcode.
  * Pushed data is not scanned as opcodes, avoiding false positives.
  */
-export function isVeriFastCandidateScript (
+export function isVeriFastCandidateScript(
   script: Script,
   scriptByteThreshold: number = DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD
 ): boolean {
@@ -121,19 +114,21 @@ export function isVeriFastCandidateScript (
 }
 
 /** True only for the canonical 25-byte DUP HASH160 PUSH20 EQUALVERIFY CHECKSIG form. */
-export function isStandardP2PKHScript (script: Script): boolean {
+export function isStandardP2PKHScript(script: Script): boolean {
   const bytes = script.toUint8Array()
-  return bytes.byteLength === 25 &&
+  return (
+    bytes.byteLength === 25 &&
     bytes[0] === 0x76 &&
     bytes[1] === 0xa9 &&
     bytes[2] === 0x14 &&
     bytes[23] === 0x88 &&
     bytes[24] === 0xac
+  )
 }
 
 /** Raised when BDK reports an exception domain, malformed result, or unknown ABI domain. */
 export class BdkVerificationError extends Error {
-  constructor (public readonly result: BdkVerificationResult) {
+  constructor(public readonly result: BdkVerificationResult) {
     super(`BDK verification failed in domain ${result.domain} with code ${result.code}`)
     this.name = 'BdkVerificationError'
   }
@@ -147,53 +142,61 @@ export interface EmbindVector<T> {
 
 export type EmbindVectorCtor<T> = new () => EmbindVector<T>
 
-type BdkVerifyScriptBatchArray = (...args: [
-  extendedTXs: Uint8Array,
-  txOffsets: Uint32Array,
-  utxoHeights: Int32Array,
-  heightOffsets: Uint32Array,
-  blockHeights: Int32Array,
-  consensus: Uint8Array,
-  customFlags: Uint32Array,
-  customFlagOffsets: Uint32Array,
-  network: number
-]) => Int32Array
+type BdkVerifyScriptBatchArray = (
+  ...args: [
+    extendedTXs: Uint8Array,
+    txOffsets: Uint32Array,
+    utxoHeights: Int32Array,
+    heightOffsets: Uint32Array,
+    blockHeights: Int32Array,
+    consensus: Uint8Array,
+    customFlags: Uint32Array,
+    customFlagOffsets: Uint32Array,
+    network: number
+  ]
+) => Int32Array
 
-type BdkVerifySpendArray = (...args: [
-  transaction: Uint8Array,
-  inputIndex: number,
-  lockingScript: Uint8Array,
-  sourceSatoshis: number,
-  utxoHeight: number,
-  blockHeight: number,
-  consensus: boolean,
-  hasCustomFlags: boolean,
-  customFlags: number,
-  network: number
-]) => BdkVerificationResult
+type BdkVerifySpendArray = (
+  ...args: [
+    transaction: Uint8Array,
+    inputIndex: number,
+    lockingScript: Uint8Array,
+    sourceSatoshis: number,
+    utxoHeight: number,
+    blockHeight: number,
+    consensus: boolean,
+    hasCustomFlags: boolean,
+    customFlags: number,
+    network: number
+  ]
+) => BdkVerificationResult
 
-type BdkVerifySpendBatchArray = (...args: [
-  transactions: Uint8Array,
-  transactionOffsets: Uint32Array,
-  inputIndices: Uint32Array,
-  lockingScripts: Uint8Array,
-  lockingScriptOffsets: Uint32Array,
-  sourceSatoshis: Float64Array,
-  utxoHeights: Int32Array,
-  blockHeights: Int32Array,
-  consensus: Uint8Array,
-  hasCustomFlags: Uint8Array,
-  customFlags: Uint32Array,
-  network: number
-]) => Int32Array
+type BdkVerifySpendBatchArray = (
+  ...args: [
+    transactions: Uint8Array,
+    transactionOffsets: Uint32Array,
+    inputIndices: Uint32Array,
+    lockingScripts: Uint8Array,
+    lockingScriptOffsets: Uint32Array,
+    sourceSatoshis: Float64Array,
+    utxoHeights: Int32Array,
+    blockHeights: Int32Array,
+    consensus: Uint8Array,
+    hasCustomFlags: Uint8Array,
+    customFlags: Uint32Array,
+    network: number
+  ]
+) => Int32Array
 
-type BdkVerifyDigestBatchArray = (...args: [
-  publicKeys: Uint8Array,
-  publicKeyOffsets: Uint32Array,
-  digests: Uint8Array,
-  signatures: Uint8Array,
-  signatureOffsets: Uint32Array
-]) => Uint8Array
+type BdkVerifyDigestBatchArray = (
+  ...args: [
+    publicKeys: Uint8Array,
+    publicKeyOffsets: Uint32Array,
+    digests: Uint8Array,
+    signatures: Uint8Array,
+    signatureOffsets: Uint32Array
+  ]
+) => Uint8Array
 
 /** The BDK WASM verifier ABI. New methods remain optional for custom older modules. */
 export interface BdkWasmModule {
@@ -230,11 +233,7 @@ export interface BdkWasmModule {
   ExportVerificationTables?: () => Uint8Array
   ImportVerificationTables?: (snapshot: Uint8Array) => void
   SignDigest?: (privateKey: Uint8Array, digest: Uint8Array) => Uint8Array
-  VerifyDigest?: (
-    publicKey: Uint8Array,
-    digest: Uint8Array,
-    signature: Uint8Array
-  ) => boolean
+  VerifyDigest?: (publicKey: Uint8Array, digest: Uint8Array, signature: Uint8Array) => boolean
   VerifyDigestBatchArray?: BdkVerifyDigestBatchArray
   PublicKeyFromPrivate?: (privateKey: Uint8Array) => Uint8Array
   MultiplyPublicKey?: (publicKey: Uint8Array, scalar: Uint8Array) => Uint8Array

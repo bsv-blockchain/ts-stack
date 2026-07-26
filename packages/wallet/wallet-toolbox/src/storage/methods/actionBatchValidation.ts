@@ -18,7 +18,7 @@ export interface ValidatedBatchAction {
   inputBeef: Uint8Array
 }
 
-async function resolveManifestBytes (
+async function resolveManifestBytes(
   storage: StorageProvider,
   batch: TableActionBatch,
   inline: number[] | Uint8Array | undefined,
@@ -79,30 +79,33 @@ async function resolveManifestBytes (
   return Uint8Array.from(blob.bytes)
 }
 
-function sameStrings (left: string[] | undefined, right: string[] | undefined): boolean {
+function sameStrings(left: string[] | undefined, right: string[] | undefined): boolean {
   const a = left ?? []
   const b = right ?? []
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
-function sameNumbers (left: number[] | undefined, right: number[] | undefined): boolean {
+function sameNumbers(left: number[] | undefined, right: number[] | undefined): boolean {
   const a = left ?? []
   const b = right ?? []
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
-function validateActionInputs (action: ActionBatchCommitAction): void {
+function validateActionInputs(action: ActionBatchCommitAction): void {
   if (action.metadata.inputs.length > action.plan.inputs.length) {
     throw new WERR_INVALID_PARAMETER('metadata.inputs', 'align with planned inputs')
   }
   for (let index = 0; index < action.metadata.inputs.length; index++) {
     const requested = action.metadata.inputs[index]
     const planned = action.plan.inputs[index]
-    if (planned == null || planned.providedBy === 'storage' ||
+    if (
+      planned == null ||
+      planned.providedBy === 'storage' ||
       requested.outpoint.txid !== planned.sourceTxid ||
       requested.outpoint.vout !== planned.sourceVout ||
       requested.unlockingScriptLength !== planned.unlockingScriptLength ||
-      requested.inputDescription !== planned.spendingDescription) {
+      requested.inputDescription !== planned.spendingDescription
+    ) {
       throw new WERR_INVALID_PARAMETER('metadata.inputs', 'match planned explicit inputs')
     }
   }
@@ -111,33 +114,47 @@ function validateActionInputs (action: ActionBatchCommitAction): void {
   }
 }
 
-function validateActionOutputs (action: ActionBatchCommitAction): void {
+function validateActionOutputs(action: ActionBatchCommitAction): void {
   if (action.metadata.outputs.length > action.plan.outputs.length) {
     throw new WERR_INVALID_PARAMETER('metadata.outputs', 'align with planned outputs')
   }
   for (let index = 0; index < action.metadata.outputs.length; index++) {
     const requested = action.metadata.outputs[index]
     const planned = action.plan.outputs[index]
-    const satoshisMatch = requested.satoshis === maxPossibleSatoshis || requested.satoshis === planned?.satoshis
-    if (planned == null || planned.providedBy !== 'you' || !satoshisMatch ||
+    if (planned == null) {
+      throw new WERR_INVALID_PARAMETER('metadata.outputs', 'match planned requested outputs')
+    }
+    const satoshisMatch = requested.satoshis === maxPossibleSatoshis || requested.satoshis === planned.satoshis
+    if (
+      planned.providedBy !== 'you' ||
+      !satoshisMatch ||
       requested.lockingScript !== planned.lockingScript ||
       requested.outputDescription !== planned.outputDescription ||
       requested.basket !== planned.basket ||
       requested.customInstructions !== planned.customInstructions ||
-      !sameStrings(requested.tags, planned.tags)) {
+      !sameStrings(requested.tags, planned.tags)
+    ) {
       throw new WERR_INVALID_PARAMETER('metadata.outputs', 'match planned requested outputs')
     }
   }
   for (const planned of action.plan.outputs.slice(action.metadata.outputs.length)) {
     const isChange = planned.providedBy === 'storage' && planned.purpose === 'change'
-    const isCommission = planned.providedBy === 'storage' &&
+    const isCommission =
+      planned.providedBy === 'storage' &&
       (planned.purpose === 'storage-commission' || planned.purpose === 'service-charge')
     if (!isChange && !isCommission) {
       throw new WERR_INVALID_PARAMETER('plan.outputs', 'only requested, change, or commission outputs')
     }
-    if (isChange && (planned.basket !== 'default' || planned.tags.length !== 0 ||
-      planned.outputDescription !== '' || planned.customInstructions != null ||
-      planned.lockingScript !== '' || planned.derivationSuffix == null || action.plan.derivationPrefix.length === 0)) {
+    if (
+      isChange &&
+      (planned.basket !== 'default' ||
+        planned.tags.length !== 0 ||
+        planned.outputDescription !== '' ||
+        planned.customInstructions != null ||
+        planned.lockingScript !== '' ||
+        planned.derivationSuffix == null ||
+        action.plan.derivationPrefix.length === 0)
+    ) {
       throw new WERR_INVALID_PARAMETER('plan.outputs', 'canonical wallet-managed change metadata')
     }
     if (isCommission && (planned.basket != null || planned.tags.length !== 0 || planned.customInstructions != null)) {
@@ -146,7 +163,7 @@ function validateActionOutputs (action: ActionBatchCommitAction): void {
   }
 }
 
-function validateActionMetadata (action: ActionBatchCommitAction): void {
+function validateActionMetadata(action: ActionBatchCommitAction): void {
   Validation.validateCreateActionArgs({
     inputs: action.metadata.inputs.map(input => ({
       ...input,
@@ -167,9 +184,9 @@ function validateActionMetadata (action: ActionBatchCommitAction): void {
   validateActionOutputs(action)
 }
 
-function validateActionCommission (storage: StorageProvider, action: ActionBatchCommitAction): void {
-  const commissions = action.plan.outputs.filter(output =>
-    output.purpose === 'storage-commission' || output.purpose === 'service-charge'
+function validateActionCommission(storage: StorageProvider, action: ActionBatchCommitAction): void {
+  const commissions = action.plan.outputs.filter(
+    output => output.purpose === 'storage-commission' || output.purpose === 'service-charge'
   )
   if (storage.commissionSatoshis === 0) {
     if (commissions.length > 0 || action.commissionKeyOffset != null) {
@@ -181,28 +198,29 @@ function validateActionCommission (storage: StorageProvider, action: ActionBatch
     throw new WERR_INVALID_PARAMETER('commission', 'one output matching the active storage commission')
   }
   const commission = commissions[0]
-  const expected = lockScriptWithKeyOffsetFromPubKey(
-    storage.commissionPubKeyHex,
-    action.commissionKeyOffset
-  )
-  if (commission.providedBy !== 'storage' || commission.satoshis !== storage.commissionSatoshis ||
-    commission.lockingScript !== expected.script || expected.keyOffset !== action.commissionKeyOffset) {
+  const expected = lockScriptWithKeyOffsetFromPubKey(storage.commissionPubKeyHex, action.commissionKeyOffset)
+  if (
+    commission.providedBy !== 'storage' ||
+    commission.satoshis !== storage.commissionSatoshis ||
+    commission.lockingScript !== expected.script ||
+    expected.keyOffset !== action.commissionKeyOffset
+  ) {
     throw new WERR_INVALID_PARAMETER('commission', 'match the active storage commission')
   }
 }
 
-async function requireSourceOutput (
+async function requireSourceOutput(
   storage: StorageProvider,
   beef: Beef,
   txid: string,
   vout: number
-): Promise<{ satoshis: number, lockingScript: Script }> {
+): Promise<{ satoshis: number; lockingScript: Script }> {
   let source = beef.findTxid(txid)?.tx
   if (source == null) {
     try {
       beef.mergeBeef(await storage.getBeefForTransaction(txid, { ignoreServices: true }))
       source = beef.findTxid(txid)?.tx
-    } catch (_error: unknown) {
+    } catch {
       // The normalized invalid-parameter error below keeps the remote API
       // independent of provider-specific lookup failures.
     }
@@ -215,7 +233,7 @@ async function requireSourceOutput (
   }
 }
 
-async function materializeActionScripts (
+async function materializeActionScripts(
   storage: StorageProvider,
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
@@ -228,16 +246,20 @@ async function materializeActionScripts (
   const scripts: string[] = []
   for (let index = 0; index < action.plan.outputs.length; index++) {
     const digest = action.lockingScriptDigests[index]
-    scripts.push(digest == null
-      ? action.plan.outputs[index].lockingScript
-      : asString(await resolveManifestBytes(
-        storage,
-        batch,
-        manifest.inlineBlobs?.[digest],
-        digest,
-        `locking script ${index}`,
-        manifest.blobChunks?.[digest]
-      )))
+    scripts.push(
+      digest == null
+        ? action.plan.outputs[index].lockingScript
+        : asString(
+            await resolveManifestBytes(
+              storage,
+              batch,
+              manifest.inlineBlobs?.[digest],
+              digest,
+              `locking script ${index}`,
+              manifest.blobChunks?.[digest]
+            )
+          )
+    )
   }
   return {
     ...action,
@@ -252,17 +274,16 @@ async function materializeActionScripts (
   }
 }
 
-export async function validateManifestActions (
+export async function validateManifestActions(
   storage: StorageProvider,
   batch: TableActionBatch,
   manifest: ActionBatchManifest
-): Promise<{ actions: ValidatedBatchAction[], dependencyBeef: Uint8Array }> {
+): Promise<{ actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array }> {
   const dependencyBeef = await resolveManifestBytes(
     storage,
     batch,
-    manifest.dependencyBeef ?? (manifest.dependencyBeefDigest == null
-      ? undefined
-      : manifest.inlineBlobs?.[manifest.dependencyBeefDigest]),
+    manifest.dependencyBeef ??
+      (manifest.dependencyBeefDigest == null ? undefined : manifest.inlineBlobs?.[manifest.dependencyBeefDigest]),
     manifest.dependencyBeefDigest,
     'dependencyBeef',
     manifest.dependencyBeefDigest == null ? undefined : manifest.blobChunks?.[manifest.dependencyBeefDigest]
@@ -342,15 +363,18 @@ export async function validateManifestActions (
     )
     const feePaid = inputSatoshis - outputSatoshis
     const feeRate = validateStorageFeeModel(storage.feeModel).value ?? 0
-    if (feePaid < Math.ceil(rawTx.length * feeRate / 1000)) {
+    if (feePaid < Math.ceil((rawTx.length * feeRate) / 1000)) {
       throw new WERR_INVALID_PARAMETER('transaction fee', 'meet the active storage fee model')
     }
     for (const planned of action.plan.outputs) {
       const transactionOutput = tx.outputs[planned.vout]
-      if (transactionOutput == null || transactionOutput.satoshis !== planned.satoshis ||
+      if (
+        transactionOutput == null ||
+        transactionOutput.satoshis !== planned.satoshis ||
         (planned.lockingScript === ''
           ? planned.providedBy !== 'storage' || planned.purpose !== 'change'
-          : transactionOutput.lockingScript.toHex() !== planned.lockingScript)) {
+          : transactionOutput.lockingScript.toHex() !== planned.lockingScript)
+      ) {
         throw new WERR_INVALID_PARAMETER('outputs', 'match planned transaction outputs')
       }
     }

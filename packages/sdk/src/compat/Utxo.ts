@@ -36,7 +36,7 @@ interface jsonUtxo {
  * @param unlockingScriptTemplate: { sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>, estimateLength: (tx: Transaction, inputIndex: number) => Promise<number> }
  * @returns
  */
-export default function fromUtxo (
+export default function fromUtxo(
   utxo: jsonUtxo,
   unlockingScriptTemplate: {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
@@ -44,7 +44,10 @@ export default function fromUtxo (
   }
 ): TransactionInput {
   const sourceTransaction = new Transaction(0, [], [], 0)
-  sourceTransaction.outputs = new Array(utxo.vout + 1).fill(null)
+  sourceTransaction.outputs = Array.from(
+    { length: utxo.vout + 1 },
+    () => null
+  ) as unknown as Transaction['outputs']
   sourceTransaction.outputs[utxo.vout] = {
     satoshis: utxo.satoshis,
     lockingScript: LockingScript.fromHex(utxo.script)

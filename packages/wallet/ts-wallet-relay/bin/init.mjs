@@ -20,29 +20,44 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const __dirname   = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const templateDir = path.join(__dirname, '..', 'template')
 
 // ── Parse args ───────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2)
 
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(`Usage: wallet-relay [target] [options]
+
+Scaffold wallet-relay integration files without overwriting existing files.
+
+Options:
+  --backend                 scaffold the Express backend only
+  --frontend                scaffold the React frontend only
+  --backend-dir <directory> choose the backend output directory
+  --frontend-dir <directory> choose the frontend output directory
+  --nextjs                  scaffold the Next.js custom-server variant
+  -h, --help                show this help`)
+  process.exit(0)
+}
+
 function flagValue(name) {
   const i = args.indexOf(name)
   if (i === -1) return null
   // If next arg exists and isn't another flag, treat it as the value
   const next = args[i + 1]
-  return (next && !next.startsWith('--')) ? next : true
+  return next && !next.startsWith('--') ? next : true
 }
 
-const isNextjs     = args.includes('--nextjs')
-const backendOnly  = args.includes('--backend')
+const isNextjs = args.includes('--nextjs')
+const backendOnly = args.includes('--backend')
 const frontendOnly = args.includes('--frontend')
-const positional   = args.find(a => !a.startsWith('--'))
-const targetRoot   = path.resolve(positional ?? '.')
+const positional = args.find(a => !a.startsWith('--'))
+const targetRoot = path.resolve(positional ?? '.')
 
 const frontendDirName = flagValue('--frontend-dir') || 'frontend'
-const backendDirName  = flagValue('--backend-dir')  || 'backend'
+const backendDirName = flagValue('--backend-dir') || 'backend'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -50,7 +65,7 @@ function copyDir(src, dest, created) {
   if (!fs.existsSync(src)) return
   fs.mkdirSync(dest, { recursive: true })
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath  = path.join(src, entry.name)
+    const srcPath = path.join(src, entry.name)
     const destPath = path.join(dest, entry.name)
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath, created)
@@ -75,19 +90,11 @@ if (isNextjs) {
   // the right relative positions for App Router (app/api/..., lib/, components/).
   copyDir(path.join(templateDir, 'nextjs'), targetRoot, created)
 } else if (!frontendOnly) {
-  copyDir(
-    path.join(templateDir, 'backend'),
-    path.join(targetRoot, backendDirName),
-    created,
-  )
+  copyDir(path.join(templateDir, 'backend'), path.join(targetRoot, backendDirName), created)
 }
 
 if (!isNextjs && !backendOnly) {
-  copyDir(
-    path.join(templateDir, 'frontend'),
-    path.join(targetRoot, frontendDirName),
-    created,
-  )
+  copyDir(path.join(templateDir, 'frontend'), path.join(targetRoot, frontendDirName), created)
 }
 
 // ── Summary ──────────────────────────────────────────────────────────────────

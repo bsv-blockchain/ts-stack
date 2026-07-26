@@ -3,11 +3,8 @@ import { getRelay } from '../../../../lib/relay'
 
 // Next.js 15+: params is a Promise — change to `await params` if you see a type error.
 // Next.js 14:  params is a plain object — the signature below is correct.
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const body = await req.json() as { method?: string; params?: unknown }
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const body = (await req.json()) as { method?: string; params?: unknown }
   const { method, params: rpcParams } = body
 
   if (!method) {

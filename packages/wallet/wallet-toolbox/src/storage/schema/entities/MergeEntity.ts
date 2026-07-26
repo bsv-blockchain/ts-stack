@@ -11,7 +11,7 @@ import { EntityTimeStamp } from '../../../sdk/types'
 export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>> {
   idMap: Record<number, number>
 
-  constructor (
+  constructor(
     public stateArray: API[] | undefined,
     public find: (
       storage: EntityStorage,
@@ -19,14 +19,14 @@ export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>
       ei: API,
       syncMap: SyncMap,
       trx?: TrxToken
-    ) => Promise<{ found: boolean, eo: DE, eiId: number }>,
+    ) => Promise<{ found: boolean; eo: DE; eiId: number }>,
     /** id map for primary id of API and DE object. */
     public esm: EntitySyncMap
   ) {
     this.idMap = esm.idMap
   }
 
-  updateSyncMap (map: Record<number, number>, inId: number, outId: number) {
+  updateSyncMap(map: Record<number, number>, inId: number, outId: number) {
     const i = verifyId(inId)
     const o = verifyId(outId)
     if (map[i] === undefined) {
@@ -37,13 +37,13 @@ export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>
   /**
    * @param since date of current sync chunk
    */
-  async merge (
+  async merge(
     since: Date | undefined,
     storage: EntityStorage,
     userId: number,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ inserts: number, updates: number }> {
+  ): Promise<{ inserts: number; updates: number }> {
     let inserts = 0
     let updates = 0
     if (this.stateArray == null) return { inserts, updates }
@@ -52,20 +52,16 @@ export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>
       /**
        * Switch to using syncMap: if the ei id is in the map, it's an existing merge; otherwise it's new.
        */
-      try {
-        const { found, eo, eiId } = await this.find(storage, userId, ei, syncMap, trx)
-        if (found) {
-          if (await eo.mergeExisting(storage, since, ei, syncMap, trx)) {
-            updates++
-          }
-        } else {
-          await eo.mergeNew(storage, userId, syncMap, trx)
-          inserts++
+      const { found, eo, eiId } = await this.find(storage, userId, ei, syncMap, trx)
+      if (found) {
+        if (await eo.mergeExisting(storage, since, ei, syncMap, trx)) {
+          updates++
         }
-        if (eiId > -1) this.updateSyncMap(this.idMap, eiId, eo.id)
-      } catch (error_: unknown) {
-        throw error_
+      } else {
+        await eo.mergeNew(storage, userId, syncMap, trx)
+        inserts++
       }
+      if (eiId > -1) this.updateSyncMap(this.idMap, eiId, eo.id)
     }
     return { inserts, updates }
   }

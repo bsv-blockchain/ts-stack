@@ -205,4 +205,12 @@ describe('Writer', () => {
       expect(bw.toArray().length).toEqual(9)
     })
   })
+
+  describe('#toHex', () => {
+    it('serializes buffered bytes as zero-padded lowercase hex', () => {
+      const writer = new Writer()
+      writer.write([0, 1, 15, 16, 255])
+      expect(writer.toHex()).toBe('00010f10ff')
+    })
+  })
 })

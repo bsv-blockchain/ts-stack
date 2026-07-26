@@ -1,6 +1,12 @@
 import { WalletInterface } from '@bsv/sdk'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
-import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
+import {
+  BINARY_ENCODING,
+  BINARY_ENCODING_HEADER,
+  BINARY_REQUEST_ENCODING_HEADER,
+  parseJsonRpc,
+  stringifyJsonRpc
+} from './BinaryJson'
 
 /**
  * `StorageClient` (mobile variant) implements the `WalletStorageProvider` interface which allows it to
@@ -15,7 +21,7 @@ import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER
  * For details of the API implemented, follow the "See also" link for the `WalletStorageProvider` interface.
  */
 export class StorageClient extends StorageClientBase {
-  constructor (wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
+  constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     super(wallet, endpointUrl, options)
   }
 
@@ -29,50 +35,41 @@ export class StorageClient extends StorageClientBase {
    * @param params The array of parameters to pass to the method in order.
    */
   protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
-    try {
-      const id = this.nextId++
-      const body = {
-        jsonrpc: '2.0',
-        method,
-        params,
-        id
-      }
-
-      let response: Response
-      try {
-        const requestUsesBinary = this.binaryRequests && this.serverSupportsBinary
-        response = await this.authClient.fetch(this.endpointUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
-            ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {})
-          },
-          body: stringifyJsonRpc(body, requestUsesBinary)
-        })
-      } catch (error_: unknown) {
-        throw error_
-      }
-
-      if (!response.ok) {
-        throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
-      }
-
-      const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
-      if (responseUsesBinary) this.serverSupportsBinary = true
-      const json = parseJsonRpc(await response.text(), responseUsesBinary)
-      if (json.error) {
-        const { code, message, data } = json.error
-        const err = new Error(`RPC Error: ${message}`)
-        // You could attach more info here if you like:
-        ;(err as any).code = code
-        ;(err as any).data = data
-        throw err
-      }
-
-      return json.result
-    } catch (error_: unknown) {
-      throw error_
+    const id = this.nextId++
+    const body = {
+      jsonrpc: '2.0',
+      method,
+      params,
+      id
     }
+
+    const requestUsesBinary = this.binaryRequests && this.serverSupportsBinary
+    const response = await this.authClient.fetch(this.endpointUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
+        ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {})
+      },
+      body: stringifyJsonRpc(body, requestUsesBinary)
+    })
+
+    if (!response.ok) {
+      throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
+    }
+
+    const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+    if (responseUsesBinary) this.serverSupportsBinary = true
+    const json = parseJsonRpc(await response.text(), responseUsesBinary)
+    if (json.error) {
+      const { code, message, data } = json.error
+      const err = new Error(`RPC Error: ${message}`)
+      // You could attach more info here if you like:
+      ;(err as any).code = code
+      ;(err as any).data = data
+      throw err
+    }
+
+    return json.result
   }
 }
