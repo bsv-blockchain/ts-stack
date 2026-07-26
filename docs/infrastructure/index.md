@@ -59,7 +59,7 @@ Infrastructure components are deployed services — not npm packages, but applic
 - See each service's docker-compose.yml for example
 
 ### Docker/Kubernetes Production
-- Alpine-based container images with Node 20-22
+- Digest-pinned Alpine-based container images with Node 24
 - Persistent volumes for databases
 - Health checks and readiness probes configured
 - Horizontal scaling via stateless design (except local in-memory state, e.g., WebSocket rooms)
@@ -93,7 +93,7 @@ controls, threat model, and release retest checklist are maintained in
 [Public Service Edge Security](service-edge-security.md).
 
 All infrastructure services:
-- **Node.js 18+** – Runtime environment
+- **Node.js 24** – Runtime environment (`>=24 <25` for every image component)
 - **Docker & docker-compose** – Local development and containerization
 - **Environment variables** – Configuration (see each service's Configuration section)
 - **Database** – Data persistence (MySQL, MongoDB, or filesystem; see table above)
@@ -129,5 +129,6 @@ All infrastructure services:
 ## Source & References
 
 - [ts-stack GitHub](https://github.com/bsv-blockchain/ts-stack)
+- [Container Supply Chain](../reference/container-supply-chain.md) – Image inventory, gates, evidence verification, refresh, and rollback
 - Each service has GitHub links in its documentation
 - [BRC Standards](https://github.com/bitcoin-sv/BRCs) – Authentication (BRC-103), Wallet Interface (BRC-100), Payments (BRC-29/BRC-121), and related specifications

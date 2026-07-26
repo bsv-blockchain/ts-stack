@@ -29,7 +29,7 @@ spec:
               value: example
             - name: MONGO_INITDB_ROOT_USERNAME
               value: root
-          image: mongo:6
+          image: mongo:6.0.28@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
           name: mongo
           ports:
             - containerPort: 27017

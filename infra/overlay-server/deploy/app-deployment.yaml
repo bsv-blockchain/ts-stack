@@ -42,7 +42,7 @@ spec:
               value: ""
             - name: ADMIN_TOKEN
               value: ""
-          image: docker.io/bsvb/overlay-example:latest
+          image: ghcr.io/bsv-blockchain/overlay-server:v2.1.18@sha256:11e6c1ba404fec9c4ad300e5c3e0e21dce3f1ceddbba733c7ecce57801645fa9
           name: overlay
           ports:
             - containerPort: 3000

@@ -17,6 +17,7 @@ Quick reference material for API details and protocol indices.
 ## Contents
 
 - **[BRC Standards Index](./brc-index.md)** — All BRC standards with links to implementations
+- **[Container supply chain](./container-supply-chain.md)** — Immutable images, scanning, SBOMs, signatures, attestations, verification, and rollback
 - **[Dependency and release policy](./dependency-policy.md)** — Runtime baseline, supply-chain controls, advisory handling, and release rules
 - **[July 2026 modernization release](./release-2026-07-25.md)** — Package versions, compatibility notes, and verification scope
 - **TypeDoc API docs** — Per-package generated reference (see links below)

@@ -68,6 +68,39 @@ updates:
         exclude-patterns:
           - '@bsv/*'
 
+  # Keep deployment manifests current. Runtime Dockerfiles are digest-only, so
+  # ignore their bare `node` dependency here: a digest-only Dependabot update
+  # would incorrectly resolve the registry's `latest` tag.
+  - package-ecosystem: docker
+    directories:
+      - /infra
+      - /infra/chaintracks-server
+      - /infra/message-box-server
+      - /infra/overlay-server
+      - /infra/overlay-server/deploy
+      - /infra/uhrp-server-basic
+      - /infra/uhrp-server-cloud-bucket
+      - /infra/wab
+      - /infra/wab/deploy
+      - /infra/wallet-infra
+      - /infra/wallet-infra/guides/kube_samples
+    patterns:
+      - '*'
+    multi-ecosystem-group: monthly-stack-maintenance
+    rebase-strategy: auto
+    ignore:
+      - dependency-name: node
+
+  # Dependabot discovers readable Node version updates here. This file is never
+  # built; repository health requires its version, the governed digest, and all
+  # release Dockerfiles to move together before the grouped PR can merge.
+  - package-ecosystem: docker
+    directory: /governance
+    patterns:
+      - '*'
+    multi-ecosystem-group: monthly-stack-maintenance
+    rebase-strategy: auto
+
   - package-ecosystem: gomod
     directory: /tools/codegen
     patterns:
