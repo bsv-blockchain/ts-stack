@@ -1,6 +1,12 @@
 import express, { Request, Response, NextFunction } from 'express'
 import bodyParser from 'body-parser'
-import { CompletedProtoWallet, MasterCertificate, PrivateKey, RequestedCertificateSet, SessionManager, VerifiableCertificate } from '@bsv/sdk'
+import {
+  CompletedProtoWallet,
+  MasterCertificate,
+  PrivateKey,
+  SessionManager,
+  VerifiableCertificate
+} from '@bsv/sdk'
 import { MockWallet } from './MockWallet'
 import { createAuthMiddleware } from '../index'
 import { Server, createServer } from 'node:http'
@@ -10,7 +16,7 @@ import { Server, createServer } from 'node:http'
 
 // Create Express app instance
 // Export a function to start the server programmatically
-export const startServer = (port = 3000): Server => {
+export const startServer = (_port = 3000): Server => {
   const app = express()
 
   // Middleware setup
@@ -21,18 +27,15 @@ export const startServer = (port = 3000): Server => {
 
   // Mocked certificate and wallet setup
   // Used in the authentication middleware as needed:
-  const certificatesToRequest: RequestedCertificateSet = {
-    certifiers: ['03caa1baafa05ecbf1a5b310a7a0b00bc1633f56267d9f67b1fd6bb23b3ef1abfa'],
-    types: { 'z40BOInXkI8m7f/wBrv4MJ09bZfzZbTj2fJqCtONqCY=': ['firstName'] }
-  }
-
   const privKey = new PrivateKey(1)
   const mockWallet = new MockWallet(privKey)
-  const sessionManager = new SessionManager();
+  const sessionManager = new SessionManager()
 
   // Asynchronous setup for certificates and middleware
-  (async () => {
-    const certifierPrivateKey = PrivateKey.fromHex('5a4d867377bd44eba1cecd0806c16f24e293f7e218c162b1177571edaeeaecef')
+  ;(async () => {
+    const certifierPrivateKey = PrivateKey.fromHex(
+      '5a4d867377bd44eba1cecd0806c16f24e293f7e218c162b1177571edaeeaecef'
+    )
     const certifierWallet = new CompletedProtoWallet(certifierPrivateKey)
     const certificateType = 'z40BOInXkI8m7f/wBrv4MJ09bZfzZbTj2fJqCtONqCY='
     const fields = { firstName: 'Alice', lastName: 'Doe' }
@@ -90,7 +93,13 @@ export const startServer = (port = 3000): Server => {
     allowUnauthenticated: false,
     wallet: mockWallet,
     sessionManager,
-    onCertificatesReceived: (_senderPublicKey: string, _certs: VerifiableCertificate[], _req: Request, _res: Response, _next: NextFunction) => {}
+    onCertificatesReceived: (
+      _senderPublicKey: string,
+      _certs: VerifiableCertificate[],
+      _req: Request,
+      _res: Response,
+      _next: NextFunction
+    ) => {}
     // certificatesToRequest
   })
 
@@ -147,7 +156,7 @@ export const startServer = (port = 3000): Server => {
   })
 
   // Fallback for 404 errors
-  app.use((req, res, next) => {
+  app.use((req, res, _next) => {
     res.status(404).json({
       status: 'error',
       code: 'NOT_FOUND',

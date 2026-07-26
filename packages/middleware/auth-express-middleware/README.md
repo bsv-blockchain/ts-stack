@@ -1,332 +1,229 @@
 # @bsv/auth-express-middleware
 
-An **Express.js** middleware that implements **BRC-103** [Peer-to-Peer Mutual Authentication](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md) via **BRC-104** [HTTP Transport](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md). This library makes it easy to **mutually authenticate** and exchange **verifiable certificates** between clients and servers in a standardized way.
+Express middleware for BRC-103 peer-to-peer mutual authentication over the
+BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
+authenticated application requests, signs responses, and optionally exchanges
+verifiable certificates.
 
-By layering **BRC-103** on top of Express, you can:
+## Requirements
 
-- Perform a **cryptographic handshake** between two peers (your server and an external wallet/user).  
-- Request or respond with **certificates** that verify user identity or attributes.  
-- Enforce mutual authentication for your APIs, ensuring that each side proves its identity, without passwords or reliance on centralized authentication providers.  
-- Optionally enable **selective disclosure** of certificate fields.
+- Node.js 22 or newer
+- Express 5
+- A BRC-100 `WalletInterface`
 
----
+The package ships native ESM and CommonJS entry points with declarations for
+both module systems.
 
-## Table of Contents
-
-1. [Background](#background)  
-2. [Features](#features)  
-3. [Installation](#installation)  
-4. [Quick Start](#quick-start)  
-5. [Detailed Usage](#detailed-usage)  
-   - [Creating the Middleware](#creating-the-middleware)  
-   - [Injecting the Middleware into Express](#injecting-the-middleware-into-express)  
-   - [Handling Certificates](#handling-certificates)  
-   - [Interpreting Authenticated Requests](#interpreting-authenticated-requests)  
-6. [API Reference](#api-reference)  
-7. [Examples](#examples)  
-8. [Security Considerations](#security-considerations)  
-9. [Resources & References](#resources--references)  
-10. [License](#license)
-
----
-
-## Background
-
-**BRC-103** is a specification for **mutual authentication** and **certificate exchange** over a **peer-to-peer** channel. It uses nonce-based challenges, digital signatures, and an optional selective disclosure mechanism for certificates. **BRC-104** defines how to transport these messages specifically over **HTTP**, describing custom headers and the `.well-known/auth` endpoint.
-
-**`@bsv/auth-express-middleware`** abstracts the complexities of these specs behind a typical **Express** middleware. It verifies BRC-103/104–compliant requests and properly signs responses, all while letting you continue to write normal Express code for your routes.
-
----
-
-## Features
-
-- **Seamless Integration**  
-  Plug straight into your existing Express application—no need for rewriting your entire HTTP handling logic.
-
-- **Mutual Authentication**  
-  Authenticates **both** the server and the client cryptographically, preventing impersonation or MITM attacks.
-
-- **Certificate Handling**  
-  Request, receive, and verify BRC-103 identity certificates. Includes utility methods to request additional certificates from the client.
-
-- **Selective Disclosure**  
-  Supports BRC-103’s concept of revealing only certain fields in a certificate, helping to preserve privacy for you and your users while verifying necessary information.
-
-- **Extendable**  
-  Provide a custom `AsyncSessionManager`, including asynchronous shared stores, or plug in advanced logic for verifying user attributes.
-
----
-
-## Installation
+## Install
 
 ```bash
-npm i @bsv/auth-express-middleware
+npm install @bsv/auth-express-middleware @bsv/sdk express
 ```
 
-This package depends on [Express.js](https://www.npmjs.com/package/express) (4.x or 5.x) and a BRC-100–capable wallet (e.g., the `@bsv/sdk` implementation or your own code).
+## Basic use
 
----
-
-## Quick Start
-
-Below is the minimal setup to enable BRC-103 mutual authentication in your Express server:
+Parse the request body before authentication so the signed payload contains
+the same value your route receives:
 
 ```ts
 import express from 'express'
-import bodyParser from 'body-parser'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { ProtoWallet as Wallet } from '@bsv/sdk' // You need a wallet that supports BRC-100 keys & signing
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
-// 1. Initialize your BSV wallet (manages keys and signs messages)
-const wallet = new Wallet(new PrivateKey('...', 16))
-
-// 2. Create the auth middleware
-//    - Set `allowUnauthenticated` to false to require mutual auth on every route
-const authMiddleware = createAuthMiddleware({
-  wallet,
-  allowUnauthenticated: false
-})
-
-// 3. Create and configure the Express app
+const wallet = new ProtoWallet(PrivateKey.fromRandom())
 const app = express()
-app.use(bodyParser.json())
-
-// 4. Apply the auth middleware globally (or to specific routes)
-app.use(authMiddleware)
-
-// 5. Define your routes as usual
-app.get('/', (req, res) => {
-  if (req.auth && req.auth.identityKey !== 'unknown') {
-    // The request is authenticated
-    res.send(`Hello, authenticated peer with public key: ${req.auth.identityKey}`)
-  } else {
-    // Not authenticated
-    res.status(401).send('Unauthorized')
-  }
-})
-
-app.listen(3000, () => {
-  console.log('Server is running on port 3000')
-})
-```
-
-When the server receives a **BRC-103** handshake or "general" message, `@bsv/auth-express-middleware` automatically handles the cryptographic checks. Once verified, `req.auth.identityKey` will hold the **public key** of the authenticated peer.
-
----
-
-## Detailed Usage
-
-### Creating the Middleware
-
-Use the factory function:
-```ts
-createAuthMiddleware({
-  wallet: myWallet, 
-  allowUnauthenticated?: boolean,
-  sessionManager?: AsyncSessionManager,
-  certificatesToRequest?: RequestedCertificateSet,
-  onCertificatesReceived?: (senderPublicKey, certs, req, res, next) => void
-})
-```
-
-#### Options
-
-- **`wallet`** *(required)*: A wallet instance that implements signing and key management, typically from `@bsv/sdk` or your own custom build.  
-- **`allowUnauthenticated`** *(default: `false`)*: If `true`, requests without valid BRC-103 authentication will **not** be rejected. Instead, `req.auth.identityKey` is set to `"unknown"`.  
-- **`sessionManager`** *(optional)*: Customize session management (nonce tracking, etc.). By default, an internal `SessionManager` is used. For horizontally scaled servers, pass a `AsyncSessionManager` backed by shared storage so every instance can resolve the same nonce/session state.
-- **`certificatesToRequest`** *(optional)*: A specification of which certificates (by type, fields, issuer) to request automatically from the peer.  
-- **`onCertificatesReceived`** *(optional)*: Callback invoked when the peer responds with **Verifiable Certificates**.
-
-### Horizontal Scaling
-
-The default `SessionManager` stores handshake state in memory. That is appropriate for one process, but a load-balanced deployment can route the initial nonce exchange, certificate request, and general message to different server instances. In that topology, provide a `AsyncSessionManager` backed by shared storage so nonce lookups are available to every instance:
-
-```ts
-import { PeerSession, AsyncSessionManager } from '@bsv/sdk'
-
-async function getSharedSession(identifier: string): Promise<PeerSession | undefined> {
-  const session = await store.get(`auth:nonce:${identifier}`)
-  if (session != null) return session
-
-  const nonce = await store.get(`auth:identity:${identifier}`)
-  return nonce == null ? undefined : await store.get(`auth:nonce:${nonce}`)
-}
-
-const sessionManager: AsyncSessionManager = {
-  async addSession(session: PeerSession) {
-    await store.set(`auth:nonce:${session.sessionNonce}`, session)
-    await store.set(`auth:identity:${session.peerIdentityKey}`, session.sessionNonce)
-  },
-  async updateSession(session: PeerSession) {
-    await store.set(`auth:nonce:${session.sessionNonce}`, session)
-    await store.set(`auth:identity:${session.peerIdentityKey}`, session.sessionNonce)
-  },
-  async getSession(identifier: string) {
-    return await getSharedSession(identifier)
-  },
-  async removeSession(session: PeerSession) {
-    await store.delete(`auth:nonce:${session.sessionNonce}`)
-    await store.delete(`auth:identity:${session.peerIdentityKey}`)
-  },
-  async hasSession(identifier: string) {
-    return await getSharedSession(identifier) != null
-  }
-}
-
-app.use(createAuthMiddleware({ wallet: myWallet, sessionManager }))
-```
-
-### Injecting the Middleware into Express
-
-Simply call:
-
-```ts
-app.use(express.json()) // required before the middleware is used
-app.use(createAuthMiddleware({ wallet: myWallet }))
-```
-
-You can also place the middleware at the route level:
-
-```ts
-app.post('/secure-upload', createAuthMiddleware({ wallet: myWallet }), (req, res) => {
-  // ...
-})
-```
-
-### Handling Certificates
-
-If you set `certificatesToRequest`, the middleware will attempt to request certificates from the client during the handshake. When certificates arrive, the `onCertificatesReceived` callback (if provided) will fire:
-
-```ts
-function onCertificatesReceived(senderPublicKey, certs, req, res, next) {
-  // You can inspect the provided certificates here
-  console.log(`Received ${certs.length} certificate(s) from ${senderPublicKey}.`)
-  
-  // Continue to next middleware or route handler
-  next()
-}
-
-const authMiddleware = createAuthMiddleware({
-  wallet,
-  certificatesToRequest: {
-    certifiers: ['<33-byte-pubkey-of-certifier>'],
-    types: {
-      'age-verification': ['dateOfBirth', 'country']
-    }
-  },
-  onCertificatesReceived
-})
-```
-
-In your server logic, you can then verify or store these certificates as needed. Replace fields like `age-verification` with an actual base64 certificate type.
-
-### Interpreting Authenticated Requests
-
-Once a peer is authenticated, you'll have:
-
-- `req.auth.identityKey` ⇒ the authenticated user's **33-byte compressed public key** (hex-encoded).  
-- `req.body` ⇒ your normal request body (parsed by `express.json()` or similar).  
-- Standard `req.headers` ⇒ includes `x-bsv-auth-*` headers with BRC-103 handshake data (for debugging).  
-
-If `allowUnauthenticated` is **false**, any request without a valid handshake or signature is **rejected** with `401` automatically.
-
----
-
-## API Reference
-
-### `createAuthMiddleware(options: AuthMiddlewareOptions)`
-
-Returns an Express middleware function. **Options**:
-
-- **`wallet`**: (required) A BRC-100 object implementing your signing and verification logic.  
-- **`sessionManager`**: (optional) Manage nonces & state across requests. Supports synchronous or asynchronous `AsyncSessionManager` implementations.
-- **`allowUnauthenticated`**: (optional) If true, non-authenticated requests are allowed but marked as `identityKey: 'unknown'`.  
-- **`certificatesToRequest`**: (optional) Automatic certificate request data structure.  
-- **`onCertificatesReceived`**: (optional) A callback triggered when certs arrive from the client.
-
----
-
-## Examples
-
-### 1. Minimal Setup
-
-```ts
-import express from 'express'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { Wallet } from '@your/bsv-wallet'
-
-const app = express()
-const wallet = new Wallet({ /* config for your keys */ })
 
 app.use(express.json())
 app.use(createAuthMiddleware({ wallet }))
 
-app.get('/protected', (req, res) => {
-  if (req.auth && req.auth.identityKey !== 'unknown') {
-    return res.send('You are authenticated via BRC-103!')
-  }
-  res.status(401).send('Unauthorized')
+app.get('/private', (req: AuthRequest, res) => {
+  res.json({ identityKey: req.auth?.identityKey })
 })
-
-app.listen(3000, () => console.log('BRC-103 server listening on port 3000!'))
 ```
 
-### 2. Requesting Certificates at Handshake
+Authentication is required by default. Requests without BRC-103/104
+authentication receive `401`. With `allowUnauthenticated: true`, they continue
+with `req.auth.identityKey === 'unknown'`.
+
+The exact `/.well-known/auth` path is always reachable through this middleware
+because it establishes the session used by protected routes. Similar prefixes
+such as `/.well-known/auth/extra` are not treated as handshake traffic.
+
+## Options
 
 ```ts
-import express from 'express'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { Wallet } from '@your/bsv-wallet'
-
-const wallet = new Wallet()
-
-function onCertificatesReceived(senderPublicKey, certs, req, res, next) {
-  console.log(`Received certs from ${senderPublicKey}`, certs)
-  next()
-}
-
-const authMiddleware = createAuthMiddleware({
+const auth = createAuthMiddleware({
   wallet,
-  certificatesToRequest: {
-    certifiers: ['<certifier-pubkey-hex>'],
-    types: {
-      'someCertificateType': ['fieldA', 'fieldB']
-    }
-  },
-  onCertificatesReceived
+  allowUnauthenticated: false,
+  sessionManager,
+  certificatesToRequest,
+  onCertificatesReceived,
+  logger,
+  logLevel: 'error',
+  transportLimits: {
+    requestTimeoutMs: 30_000,
+    maxPendingRequests: 1_000
+  }
 })
-
-const app = express()
-app.use(express.json())
-app.use(authMiddleware)
-
-app.listen(3000, () => console.log('Server up!'))
 ```
 
----
+- `wallet` is required and must implement the BRC-100 wallet interface.
+- `allowUnauthenticated` defaults to `false`.
+- `sessionManager` accepts the SDK's `SessionManager` or an
+  `AsyncSessionManager`.
+- `certificatesToRequest` asks a peer for selected certificate fields.
+- `onCertificatesReceived` may be synchronous or asynchronous. It receives
+  `(senderPublicKey, certificates, req, res, next)`. Calling `next` more than
+  once has no effect.
+- `logger` and `logLevel` enable structured lifecycle logs. Authentication
+  headers, certificate bodies, signatures, response bodies, and wallet objects
+  are not logged.
+- `transportLimits.requestTimeoutMs` bounds handshake, verification,
+  certificate, and response-signing state. It defaults to 30 seconds.
+- `transportLimits.maxPendingRequests` bounds per-process pending protocol
+  state. It defaults to 1,000 and fails closed with `503` at capacity.
 
-## Security Considerations
+Invalid option types fail during startup.
 
-1. **TLS Encryption**: Although BRC-103 messages are authenticated, the protocol does **not** encrypt the entire payload. It's recommended to serve your Express app over **HTTPS** to maintain confidentiality.  
-2. **Nonce Replay Prevention**: This library implements a `SessionManager` that automatically rejects nonces not bound by the server's private key.  
-3. **Transport-Only**: BRC-104's HTTP specification focuses on message authenticity, not on anonymizing request metadata.  
-4. **Certificate Revocation**: BRC-103 allows for revocation references (`revocationOutpoint`). Ensure your app checks the blockchain or an appropriate certificate revocation overlay service if you require strict revocation handling.
+## Horizontally scaled services
 
----
+The default `SessionManager` is process-local. Use a shared
+`AsyncSessionManager` when a load balancer can route the handshake and the
+authenticated request to different instances:
 
-## Resources & References
+```ts
+import type { AsyncSessionManager } from '@bsv/sdk'
 
-- [BRC-103 Spec](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md) – Mutual authentication & certificate exchange.  
-- [BRC-104 Spec](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md) – HTTP Transport for BRC-103.  
-- [@bsv/sdk](https://www.npmjs.com/package/@bsv/sdk) – BSV TypeScript SDK (often used for cryptographic utilities, wallet logic, etc.).  
-- [Express.js](https://expressjs.com/) – Web framework for Node.js.
+const sessionManager: AsyncSessionManager = {
+  async addSession(session) {
+    await sessions.put(session.sessionNonce, session)
+  },
+  async updateSession(session) {
+    await sessions.put(session.sessionNonce, session)
+  },
+  async getSession(identifier) {
+    return await sessions.get(identifier)
+  },
+  async removeSession(session) {
+    await sessions.delete(session.sessionNonce)
+  },
+  async hasSession(identifier) {
+    return (await sessions.get(identifier)) !== undefined
+  }
+}
 
----
+app.use(createAuthMiddleware({ wallet, sessionManager }))
+```
+
+The backing store must preserve the SDK's session semantics and should use
+appropriate atomicity, expiry, availability, and encryption controls. Sticky
+routing is not a substitute for shared state when instances can be replaced.
+
+## Certificates
+
+```ts
+app.use(
+  createAuthMiddleware({
+    wallet,
+    certificatesToRequest: {
+      certifiers: ['<compressed-certifier-public-key>'],
+      types: {
+        '<base64-certificate-type>': ['firstName']
+      }
+    },
+    async onCertificatesReceived(senderPublicKey, certificates, req, res, next) {
+      await authorizeDisclosedFields(senderPublicKey, certificates)
+      next()
+    }
+  })
+)
+```
+
+The application remains responsible for authorization policy, certificate
+revocation checks, and safe storage of disclosed data. A missing required
+certificate fails with a stable public error. Internal wallet, signing, and
+certificate-handler errors are logged only through the optional logger and are
+not returned to callers.
+
+## Public services, CORS, and CSP
+
+This package does not impose CORS, CSP, or an origin allowlist. That is
+intentional: auth endpoints may serve browser apps, WUI, mobile clients, and
+other callers across many domains. Configure those policies at the application
+or edge layer:
+
+- Keep public-service access available by default when that is the service
+  contract.
+- Offer an operator-configured origin allowlist as an opt-in restriction.
+- Never combine `Access-Control-Allow-Origin: *` with credentialed CORS.
+- Expose the required `x-bsv-auth-*` response headers to browser clients.
+- Handle `OPTIONS` before authentication when browser preflight is supported.
+- Treat CSP as a browser-document policy; API responses generally need CORS
+  and transport controls instead.
+
+Do not hard-code a deployment-specific domain list in this middleware.
+
+## Error behavior
+
+Public errors are deliberately stable and do not include internal exception
+messages:
+
+| Status | Code                               | Meaning                                         |
+| ------ | ---------------------------------- | ----------------------------------------------- |
+| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers               |
+| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied         |
+| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent or failed             |
+| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out               |
+| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                 |
+| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed  |
+| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit |
+
+## Security notes
+
+- Use HTTPS. Mutual authentication provides integrity and identity, not
+  confidentiality for all HTTP metadata and content.
+- Install the middleware once per request path; response methods are
+  temporarily wrapped while an authenticated response is signed.
+- Do not trust `req.auth.identityKey === 'unknown'` as authorization.
+- Use shared session state for multi-instance deployments.
+- Keep timeouts and capacity limits finite and monitor `408`/`503` rates.
+- Validate authorization separately after identity authentication.
+- Keep request body limits and normal Express hardening in place.
+
+## API
+
+Runtime exports:
+
+- `createAuthMiddleware`
+- `ExpressTransport`
+
+Type exports:
+
+- `AuthMiddlewareOptions`
+- `AuthRequest`
+- `AuthTransportLimits`
+- `LogLevel`
+
+See [API.md](./API.md) for generated signatures.
+
+## Development
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm test:coverage
+pnpm pack:check
+```
+
+`pack:check` builds and validates the exact npm tarball in ESM and CommonJS
+consumer probes. Tests do not rebuild the package as a side effect.
+
+## Specifications
+
+- [BRC-103: Peer-to-Peer Mutual Authentication](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md)
+- [BRC-104: HTTP Transport for BRC-103](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0104.md)
 
 ## License
 
-[Open BSV License](./LICENSE.txt)
-
----
-
-**Happy hacking!** If you have questions, suggestions, or want to contribute improvements, feel free to open an issue or PR in our repository.
+See [LICENSE.txt](./LICENSE.txt).

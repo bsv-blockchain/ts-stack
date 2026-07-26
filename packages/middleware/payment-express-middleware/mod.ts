@@ -1,2 +1,9 @@
-export { createPaymentMiddleware } from "./src/index.js"
-export type { PaymentMiddlewareOptions } from './src/types.ts'
+export { InMemoryPaymentReplayStore, createPaymentMiddleware } from './src/index.js'
+export type {
+  BSVPayment,
+  PaymentLogger,
+  PaymentMiddlewareOptions,
+  PaymentReceipt,
+  PaymentReplayStore,
+  PaymentRequest
+} from './src/types.js'

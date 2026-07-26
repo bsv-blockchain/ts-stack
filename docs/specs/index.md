@@ -2,12 +2,12 @@
 id: specs-index
 title: Specifications
 kind: meta
-version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: 'n/a'
+last_updated: '2026-04-28'
+last_verified: '2026-04-28'
 review_cadence_days: 30
 status: stable
-tags: ["specs"]
+tags: ['specs']
 ---
 
 # Specifications
@@ -18,20 +18,20 @@ This section documents the protocols and standards that the ts-stack implements.
 
 ## Quick Reference
 
-| Spec | Format | Version | Implementations | Purpose |
-|------|--------|---------|-----------------|---------|
-| [BRC-100 Wallet](./brc-100-wallet.md) | JSON Schema | 1.0.0 | @bsv/wallet-toolbox, @bsv/sdk | Standard wallet interface for signing and key management |
-| [BRC-31 Auth](./brc-31-auth.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/auth-express-middleware, @bsv/authsocket | Mutual authentication handshake (BRC-103 + BRC-104) |
-| [BRC-29 Peer Payment](./brc-29-peer-payment.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/paymail, @bsv/message-box-client | P2P payment derivation and transmission |
-| [BRC-121 / 402](./brc-121-402.md) | OpenAPI 3.1 | 1.0.0 | @bsv/402-pay, @bsv/payment-express-middleware | HTTP micropayment protocol |
-| [Overlay HTTP](./overlay-http.md) | OpenAPI 3.1 | 1.0.0 | @bsv/overlay, @bsv/overlay-express | Transaction routing and topic management |
-| [Message Box HTTP](./message-box-http.md) | OpenAPI 3.1 | 1.0.0 | @bsv/message-box-client | Store-and-forward messaging API |
-| [AuthSocket](./authsocket.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/authsocket | Authenticated WebSocket for live messaging |
-| [ARC Broadcast](./arc-broadcast.md) | OpenAPI 3.1 | 1.0.0 | @bsv/sdk | Miner-facing transaction broadcast |
-| [Merkle Service](./merkle-service.md) | OpenAPI 3.1 | 1.0.0 | @bsv/sdk | SPV proof delivery service |
-| [Storage Adapter](./storage-adapter.md) | OpenAPI 3.1 | 1.0.0 | @bsv/wallet-toolbox | Remote wallet storage interface |
-| [GASP Sync](./gasp-sync.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/gasp | Transaction graph synchronization |
-| [UHRP](./uhrp.md) | OpenAPI 3.1 | 1.0.0 | @bsv/overlay-topics | Content-addressed file storage |
+| Spec                                            | Format       | Version | Implementations                               | Purpose                                                  |
+| ----------------------------------------------- | ------------ | ------- | --------------------------------------------- | -------------------------------------------------------- |
+| [BRC-100 Wallet](./brc-100-wallet.md)           | JSON Schema  | 1.0.0   | @bsv/wallet-toolbox, @bsv/sdk                 | Standard wallet interface for signing and key management |
+| [BRC-31 Auth](./brc-31-auth.md)                 | AsyncAPI 3.0 | 1.0.0   | @bsv/auth-express-middleware, @bsv/authsocket | Mutual authentication handshake (BRC-103 + BRC-104)      |
+| [BRC-29 Peer Payment](./brc-29-peer-payment.md) | AsyncAPI 3.0 | 1.0.0   | @bsv/paymail, @bsv/message-box-client         | P2P payment derivation and transmission                  |
+| [BRC-121 / 402](./brc-121-402.md)               | OpenAPI 3.1  | 1.0.0   | @bsv/402-pay                                  | HTTP micropayment protocol                               |
+| [Overlay HTTP](./overlay-http.md)               | OpenAPI 3.1  | 1.0.0   | @bsv/overlay, @bsv/overlay-express            | Transaction routing and topic management                 |
+| [Message Box HTTP](./message-box-http.md)       | OpenAPI 3.1  | 1.0.0   | @bsv/message-box-client                       | Store-and-forward messaging API                          |
+| [AuthSocket](./authsocket.md)                   | AsyncAPI 3.0 | 1.0.0   | @bsv/authsocket                               | Authenticated WebSocket for live messaging               |
+| [ARC Broadcast](./arc-broadcast.md)             | OpenAPI 3.1  | 1.0.0   | @bsv/sdk                                      | Miner-facing transaction broadcast                       |
+| [Merkle Service](./merkle-service.md)           | OpenAPI 3.1  | 1.0.0   | @bsv/sdk                                      | SPV proof delivery service                               |
+| [Storage Adapter](./storage-adapter.md)         | OpenAPI 3.1  | 1.0.0   | @bsv/wallet-toolbox                           | Remote wallet storage interface                          |
+| [GASP Sync](./gasp-sync.md)                     | AsyncAPI 3.0 | 1.0.0   | @bsv/gasp                                     | Transaction graph synchronization                        |
+| [UHRP](./uhrp.md)                               | OpenAPI 3.1  | 1.0.0   | @bsv/overlay-topics                           | Content-addressed file storage                           |
 
 ## About BRCs
 
@@ -42,29 +42,35 @@ The authoritative BRC repository is at [github.com/bitcoin-sv/BRCs](https://gith
 ## By Use Case
 
 **I'm building a wallet**
+
 - Start with [BRC-100 Wallet](./brc-100-wallet.md) to understand the standard interface
 - Implement cryptographic signing per [BRC-100](./brc-100-wallet.md) and key derivation per [BRC-42](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md)
 - Reference implementation: `@bsv/wallet-toolbox`
 
 **I'm implementing peer-to-peer payments**
+
 - Use [BRC-29 Peer Payment](./brc-29-peer-payment.md) for payment derivation and transmission
 - Combine with [BRC-31 Auth](./brc-31-auth.md) for mutual authentication
 - Implementation: `@bsv/paymail`, `@bsv/message-box-client`
 
 **I'm monetizing an API endpoint**
-- Implement [BRC-121 / 402](./brc-121-402.md) using `@bsv/402-pay` or `@bsv/payment-express-middleware`
+
+- Implement [BRC-121 / 402](./brc-121-402.md) using `@bsv/402-pay`
 - Gateway checks payment before serving content; wallet derives and submits satoshi transaction
 
 **I'm running an overlay service (topic manager)**
+
 - Deploy with [Overlay HTTP](./overlay-http.md) endpoints using `@bsv/overlay-express`
 - Implement topic managers per [Overlay spec](./overlay-http.md)
 - Reference implementations in `@bsv/overlay-topics`
 
 **I'm building transaction broadcasting**
+
 - Use [ARC Broadcast](./arc-broadcast.md) for miner-facing submission
 - Implement via `@bsv/sdk` `ARC` class
 
 **I need proof of transaction inclusion**
+
 - Use [Merkle Service](./merkle-service.md) for SPV proof delivery
 - Implement via `@bsv/sdk` or external Merkle Service
 

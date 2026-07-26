@@ -1,132 +1,85 @@
-# CLAUDE.md — @bsv/payment-express-middleware
+# AGENTS.md — @bsv/payment-express-middleware
 
-## Purpose
-Express.js middleware for HTTP 402 Payment Required micropayment gating. Builds on top of BRC-103 auth middleware to monetize API endpoints by requiring BSV satoshi payments derived using BRC-29 key derivation.
+## Purpose and protocol boundary
 
-## Public API surface
+This package implements the legacy authenticated `x-bsv-payment` JSON flow for
+Express. It must run after `@bsv/auth-express-middleware`. It is distinct from
+the BRC-121 client/server contract in `@bsv/402-pay`; do not silently mix their
+headers or claim conformance to one based on behavior from the other.
 
-- **createPaymentMiddleware** (function): `createPaymentMiddleware(options)`
-  - Options:
-    - `wallet` (required): BRC-100 wallet supporting `internalizeAction()` method for transaction acceptance
-    - `calculateRequestPrice` (optional, default 100): Function `(req) => number | Promise<number>` returning satoshis required; 0 = free
-  - Returns Express middleware function: `async (req, res, next) => void`
+## Public API
 
-- **Augmented Request** (extends Express Request)
-  - `.payment` object set by middleware:
-    - `satoshisPaid: number` — amount paid (matches required amount if accepted)
-    - `accepted?: boolean` — whether payment was accepted by wallet
-    - `tx?: string` — transaction hex (base64-encoded in request header)
+- Runtime: `createPaymentMiddleware`, `InMemoryPaymentReplayStore`
+- Types: `BSVPayment`, `PaymentLogger`, `PaymentMiddlewareOptions`,
+  `PaymentReceipt`, `PaymentReplayStore`, `PaymentRequest`
 
-- **Payment Response Headers**:
-  - `x-bsv-payment-version` — payment protocol version (e.g., '1.0')
-  - `x-bsv-payment-satoshis-required` — satoshis owed (if 402)
-  - `x-bsv-payment-derivation-prefix` — nonce for client to derive payment address
-  - `x-bsv-payment-satoshis-paid` — satoshis accepted (on success)
+Changing header names, error codes, output selection, replay semantics, receipt
+fields, or exported types is a public/protocol change.
 
-## Real usage patterns
+## Security invariants
 
-From README:
-```ts
-import express from 'express'
-import bodyParser from 'body-parser'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { Wallet } from '@your/bsv-wallet'
+- Require a valid compressed identity key supplied by auth middleware.
+- Prices are `0` or positive safe integers. Invalid or failed pricing must not
+  authorize a route.
+- Bound the raw header before JSON or transaction parsing.
+- Require canonical base64 for the prefix, suffix, and Atomic BEEF.
+- Verify the server-created prefix, parse Atomic BEEF, and require output zero
+  to cover the current price before wallet internalization.
+- Claim the transaction ID atomically before calling the wallet.
+- Never automatically release a claim after an ambiguous wallet error.
+- Only `{ accepted: true }` from a newly internalized transaction authorizes
+  the request. Reject merge/replay-like results.
+- Never expose wallet, store, pricing, or parser exception messages in HTTP
+  responses.
+- Use a shared durable replay store for multiple processes or replicas. A
+  derivation nonce is not an expiring single-use replay store.
+- Do not impose a hard-coded CORS/CSP policy. Public services must remain
+  configurable and may be cross-origin by default.
 
-// 1. Create wallet that can process transactions
-const wallet = new Wallet({ /* config */ })
+## Replay-store contract
 
-// 2. Create auth middleware
-const authMiddleware = createAuthMiddleware({ wallet })
+`claim(transactionId)` must be one atomic insert-if-absent operation. It returns
+`true` only for the first accepted claim and `false` thereafter.
 
-// 3. Create payment middleware
-const paymentMiddleware = createPaymentMiddleware({
-  wallet,
-  calculateRequestPrice: async (req) => {
-    return 50 // 50 satoshis per request
-  }
-})
+The in-memory implementation is process-local, bounded, and fail-closed at
+capacity. It is for tests and bounded single-process deployments. Do not add
+automatic eviction or restart-based assumptions to its security model.
 
-const app = express()
-app.use(bodyParser.json())
+## Build and verification
 
-// 4. Chain auth THEN payment
-app.use(authMiddleware)
-app.use(paymentMiddleware)
+Node.js 22+ is required. `tsdown` emits native ESM, CommonJS, and matching
+declarations. The published file allowlist is `dist`, `README.md`, and
+`LICENSE.txt`.
 
-// 5. Routes are now payment-gated
-app.post('/somePaidEndpoint', (req, res) => {
-  // If we reach here, payment was accepted (or amount was 0)
-  res.json({
-    message: 'Payment received, request authorized',
-    amount: req.payment.satoshisPaid
-  })
-})
+Before handing off a change, run:
 
-app.listen(3000)
+```bash
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm test:coverage
+pnpm pack:check
 ```
 
-Dynamic pricing:
-```ts
-const paymentMiddleware = createPaymentMiddleware({
-  wallet,
-  calculateRequestPrice: async (req) => {
-    if (req.path === '/premium') return 500  // premium endpoint costs 500 sats
-    if (req.path === '/free') return 0      // free endpoint
-    return 100  // default 100 sats
-  }
-})
-```
-
-## Key concepts
-
-- **402 Payment Required**: HTTP status code signaling payment is needed; client responds with BSV transaction
-- **Micropayments**: Small satoshi amounts (1-1000 typical) for API access
-- **BRC-29 derivation**: Payment output derived from `derivationPrefix` (server nonce) + `derivationSuffix` (client extension)
-- **Nonce reuse prevention**: Each 402 response includes fresh `derivationPrefix`; client must use it to build payment
-- **Wallet integration**: Server validates payment using `wallet.internalizeAction()` method
-- **Auth prerequisite**: Assumes `req.auth.identityKey` set by auth middleware; fails if missing
-- **Fallback allowed**: If `calculateRequestPrice` returns 0, no payment required; request proceeds
-- **Transaction format**: Client sends BSV transaction as base64 in `x-bsv-payment` header as JSON
-
-## Dependencies
-
-- `@bsv/sdk` ^2.0.14 — BRC-29 nonce creation/verification, `createNonce()`, `verifyNonce()`, `Utils`, `AtomicBEEF`
-- `@bsv/auth-express-middleware` ^2.0.5 — Auth middleware (peer dependency; must be installed)
-- `express` ^5.1.0 — Web framework
-- Dev: jest, ts-jest, TypeScript, Oxlint
-
-## Common pitfalls / gotchas
-
-1. **Auth middleware must run first** — Payment middleware expects `req.auth.identityKey` to be set; will return 500 if missing
-2. **Wallet must implement `internalizeAction()`** — This is the critical method for validating and accepting payments; custom wallet needed if using non-SDK wallet
-3. **Nonce verification required** — Middleware verifies `derivationPrefix` matches server's private key; client must use exact prefix from 402 response
-4. **Transaction format** — Client sends `x-bsv-payment` header as JSON with `{ derivationPrefix, derivationSuffix, transaction }`
-5. **Replay protection** — Wallet should reject duplicate `derivationPrefix` values; ensure wallet logic prevents replays
-6. **HTTPS recommended** — No encryption; use TLS to protect payment transactions in transit
-7. **Pricing must be consistent** — If `calculateRequestPrice` is async, ensure it doesn't have timing side-effects that cause inconsistency
-
-## Spec conformance
-
-- **HTTP 402 Payment Required** — Uses standard 402 status code; client must respond with payment
-- **BRC-29** (Payment Derivation): Uses BRC-29 nonce/derivation model for payment address generation
-- **BRC-100** (Wallet interface): Requires wallet implementing `internalizeAction()` method
-- **BRC-104** — Builds on top of BRC-104 HTTP auth transport (handles headers, etc.)
+Coverage must remain at least 85% lines/statements/functions and 80% branches
+over production source. Tests must be deterministic and must not call public
+APIs or rebuild as a side effect. `pack:check` must validate the exact tarball
+in both ESM and CommonJS consumer probes.
 
 ## File map
 
-```
-/Users/personal/git/ts-stack/packages/middleware/payment-express-middleware/
-  src/
-    index.ts              — exports createPaymentMiddleware
-    types.ts              — BSVPayment, PaymentMiddlewareOptions, PaymentResult interfaces
-  tests/
-    integration.test.ts   — end-to-end tests with payment flows
-```
+- `mod.ts` — package entry point and export contract
+- `src/index.ts` — validation, replay claim, wallet acceptance, middleware
+- `src/types.ts` — public request, receipt, store, logger, and option types
+- `src/__tests/PaymentMiddleware.test.ts` — deterministic security and behavior
+  coverage
+- `tsdown.config.ts` — ESM/CommonJS build
+- `tsconfig.typecheck.json` — strict source and test checking
+- `README.md` — user contract and deployment guidance
+- `BASELINE.md` — verified repository health snapshot
 
 ## Integration points
 
-- **auth-express-middleware** — Required; stacks after it in middleware chain
-- **@bsv/sdk** — Nonce creation/verification, wallet interface, transaction utilities
-- **express** — HTTP framework; middleware plugs into standard Express pipeline
-- **Custom wallet** — Must implement BRC-100 `internalizeAction()` method for payment acceptance
+- `@bsv/auth-express-middleware` provides authenticated payer identity.
+- `@bsv/sdk` supplies nonce utilities, Atomic BEEF parsing, and wallet types.
+- Express provides the request/response middleware lifecycle.

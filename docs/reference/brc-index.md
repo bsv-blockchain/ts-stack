@@ -1,10 +1,10 @@
 ---
 id: brc-index
-title: "BRC Standards Index"
+title: 'BRC Standards Index'
 kind: reference
-version: "n/a"
-last_updated: "2026-05-14"
-last_verified: "2026-05-14"
+version: 'n/a'
+last_updated: '2026-05-14'
+last_verified: '2026-05-14'
 review_cadence_days: 30
 status: stable
 tags: [reference, brc, standards]
@@ -16,57 +16,57 @@ All Bitcoin Request for Comments (BRC) standards referenced in ts-stack source, 
 
 ## Core Standards in ts-stack
 
-| BRC | Title | Domain | Spec | Key Packages |
-|-----|-------|--------|------|--------------|
-| BRC-14 | Script Evaluation & Sighash | Scripts | — | `@bsv/sdk` (5,116 conformance vectors) |
-| BRC-29 | Peer-to-Peer Payment Protocol | Payments | [spec](../specs/brc-29-peer-payment.md) | `@bsv/paymail`, `@bsv/message-box-client` |
-| BRC-31 | HTTP Mutual Authentication Handshake | Auth | [spec](../specs/brc-31-auth.md) | `@bsv/auth-express-middleware`, `@bsv/authsocket` |
-| BRC-42 | Key Derivation Scheme (BKDS) | Crypto | — | `@bsv/sdk`, `@bsv/wallet-toolbox` (heavy BRC-42 vector coverage in sdk/keys + wallet/brc100) |
-| BRC-43 | Security Levels for BKDS | Crypto | — | `@bsv/sdk` |
-| BRC-48 | PushDrop Token Protocol | Tokens | — | `@bsv/overlay-topics`, `@bsv/btms` |
-| BRC-62 | BEEF — Background Evaluation Extended Format | Transactions | — | `@bsv/sdk` |
-| BRC-74 | BUMP — BSV Unified Merkle Path | Transactions | — | `@bsv/sdk` |
-| BRC-95 | BEEF V2 | Transactions | — | `@bsv/sdk` |
-| BRC-62 | BEEF — Background Evaluation Extended Format | Transactions | — | `@bsv/sdk` (conformance vectors) |
-| BRC-74 | BUMP — BSV Unified Merkle Path | Transactions | — | `@bsv/sdk` (conformance vectors) |
-| BRC-77 | Bitcoin Signed Message (BSM) Compatibility | Crypto | — | `@bsv/sdk` (conformance vectors) |
-| BRC-100 | BRC-100 Wallet Interface | Wallet | [spec](../specs/brc-100-wallet.md) | `@bsv/wallet-toolbox`, `@bsv/sdk` (~950 vectors) |
-| BRC-101 | Wallet storage adapter | Wallet | [spec](../specs/storage-adapter.md) | `@bsv/wallet-toolbox` |
-| BRC-103 | Peer Mutual Authentication Framework | Auth | — | `@bsv/authsocket`, `@bsv/auth-express-middleware` |
-| BRC-104 | Message-Layer Transport | Auth | — | `@bsv/authsocket` |
-| BRC-121 | HTTP 402 Payment Protocol | Payments | [spec](../specs/brc-121-402.md) | `@bsv/402-pay`, `@bsv/payment-express-middleware` |
+| BRC     | Title                                        | Domain       | Spec                                    | Key Packages                                                                                 |
+| ------- | -------------------------------------------- | ------------ | --------------------------------------- | -------------------------------------------------------------------------------------------- |
+| BRC-14  | Script Evaluation & Sighash                  | Scripts      | —                                       | `@bsv/sdk` (5,116 conformance vectors)                                                       |
+| BRC-29  | Peer-to-Peer Payment Protocol                | Payments     | [spec](../specs/brc-29-peer-payment.md) | `@bsv/paymail`, `@bsv/message-box-client`                                                    |
+| BRC-31  | HTTP Mutual Authentication Handshake         | Auth         | [spec](../specs/brc-31-auth.md)         | `@bsv/auth-express-middleware`, `@bsv/authsocket`                                            |
+| BRC-42  | Key Derivation Scheme (BKDS)                 | Crypto       | —                                       | `@bsv/sdk`, `@bsv/wallet-toolbox` (heavy BRC-42 vector coverage in sdk/keys + wallet/brc100) |
+| BRC-43  | Security Levels for BKDS                     | Crypto       | —                                       | `@bsv/sdk`                                                                                   |
+| BRC-48  | PushDrop Token Protocol                      | Tokens       | —                                       | `@bsv/overlay-topics`, `@bsv/btms`                                                           |
+| BRC-62  | BEEF — Background Evaluation Extended Format | Transactions | —                                       | `@bsv/sdk`                                                                                   |
+| BRC-74  | BUMP — BSV Unified Merkle Path               | Transactions | —                                       | `@bsv/sdk`                                                                                   |
+| BRC-95  | BEEF V2                                      | Transactions | —                                       | `@bsv/sdk`                                                                                   |
+| BRC-62  | BEEF — Background Evaluation Extended Format | Transactions | —                                       | `@bsv/sdk` (conformance vectors)                                                             |
+| BRC-74  | BUMP — BSV Unified Merkle Path               | Transactions | —                                       | `@bsv/sdk` (conformance vectors)                                                             |
+| BRC-77  | Bitcoin Signed Message (BSM) Compatibility   | Crypto       | —                                       | `@bsv/sdk` (conformance vectors)                                                             |
+| BRC-100 | BRC-100 Wallet Interface                     | Wallet       | [spec](../specs/brc-100-wallet.md)      | `@bsv/wallet-toolbox`, `@bsv/sdk` (~950 vectors)                                             |
+| BRC-101 | Wallet storage adapter                       | Wallet       | [spec](../specs/storage-adapter.md)     | `@bsv/wallet-toolbox`                                                                        |
+| BRC-103 | Peer Mutual Authentication Framework         | Auth         | —                                       | `@bsv/authsocket`, `@bsv/auth-express-middleware`                                            |
+| BRC-104 | Message-Layer Transport                      | Auth         | —                                       | `@bsv/authsocket`                                                                            |
+| BRC-121 | HTTP 402 Payment Protocol                    | Payments     | [spec](../specs/brc-121-402.md)         | `@bsv/402-pay`                                                                               |
 
 ## Additional Referenced Standards
 
 These BRCs appear in the codebase, specs, or conformance vectors:
 
-| BRC | Title / Purpose |
-|-----|----------------|
-| BRC-1 | Transaction format |
-| BRC-2 | Script encoding |
-| BRC-3 | Address format |
-| BRC-10 | Script templates |
-| BRC-18 | Message signing (BSM) |
-| BRC-22 | Output description |
-| BRC-24 | Derivation path metadata |
-| BRC-26 | UHRP — Universal Hash Resolution Protocol |
-| BRC-30 | Output script hash |
-| BRC-45 | Merkle service HTTP |
-| BRC-52 | Script hash encoding |
-| BRC-56 | Wallet authentication protocol |
-| BRC-69 | Key derivation for encryption |
-| BRC-73 | HD key encoding |
-| BRC-76 | Wallet relay transport |
-| BRC-77 | Bitcoin Signed Message (BSM) compat |
-| BRC-78 | Transaction output locking |
-| BRC-87 | Overlay host discovery |
-| BRC-96 | Overlay sync |
-| BRC-98 | Token permission hooks |
-| BRC-99 | Token permission module |
-| BRC-111 | Auth certificate |
-| BRC-112 | Certificate field disclosure |
-| BRC-114 | Credential schema |
-| BRC-115 | Wallet storage |
+| BRC     | Title / Purpose                           |
+| ------- | ----------------------------------------- |
+| BRC-1   | Transaction format                        |
+| BRC-2   | Script encoding                           |
+| BRC-3   | Address format                            |
+| BRC-10  | Script templates                          |
+| BRC-18  | Message signing (BSM)                     |
+| BRC-22  | Output description                        |
+| BRC-24  | Derivation path metadata                  |
+| BRC-26  | UHRP — Universal Hash Resolution Protocol |
+| BRC-30  | Output script hash                        |
+| BRC-45  | Merkle service HTTP                       |
+| BRC-52  | Script hash encoding                      |
+| BRC-56  | Wallet authentication protocol            |
+| BRC-69  | Key derivation for encryption             |
+| BRC-73  | HD key encoding                           |
+| BRC-76  | Wallet relay transport                    |
+| BRC-77  | Bitcoin Signed Message (BSM) compat       |
+| BRC-78  | Transaction output locking                |
+| BRC-87  | Overlay host discovery                    |
+| BRC-96  | Overlay sync                              |
+| BRC-98  | Token permission hooks                    |
+| BRC-99  | Token permission module                   |
+| BRC-111 | Auth certificate                          |
+| BRC-112 | Certificate field disclosure              |
+| BRC-114 | Credential schema                         |
+| BRC-115 | Wallet storage                            |
 
 ## Standard Details
 
@@ -138,7 +138,9 @@ Transport option for BRC-103 Peer sessions.
 
 Stateless settlement-gated HTTP. Server responds `402 Payment Required`; client resends with a BEEF-encoded micropayment in headers. Single round-trip. Uses BRC-29 as its payment data structure. "Simple payments without any authentication other than HTTPS itself" — distinct from AuthExpress/PaymentExpress which require a mutual-auth handshake. <!-- audio: ts-stack.m4a @ 11:30 -->
 
-Implementations: `@bsv/402-pay` (client), `@bsv/payment-express-middleware` (server)
+Implementation: `@bsv/402-pay` (client and server). The separate
+`@bsv/payment-express-middleware` package uses an older authenticated
+`x-bsv-payment` JSON contract and is not interchangeable with BRC-121.
 
 Spec: `specs/payments/brc121.yaml`
 
@@ -156,12 +158,12 @@ ls conformance/vectors/sdk/keys/
 
 Each core BRC is validated against JSON test vectors in `conformance/vectors/`. The TypeScript implementation generates these vectors; Go, Python, and Rust implementations validate against them.
 
-| BRC | Vector path |
-|-----|-------------|
-| BRC-42 | `conformance/vectors/sdk/keys/` |
-| BRC-74 | `conformance/vectors/sdk/transactions/` |
-| BRC-29 | `conformance/vectors/wallet/brc29/` |
-| BRC-31 | `conformance/vectors/messaging/brc31/` |
-| BRC-100 | `conformance/vectors/wallet/brc100/` |
+| BRC     | Vector path                             |
+| ------- | --------------------------------------- |
+| BRC-42  | `conformance/vectors/sdk/keys/`         |
+| BRC-74  | `conformance/vectors/sdk/transactions/` |
+| BRC-29  | `conformance/vectors/wallet/brc29/`     |
+| BRC-31  | `conformance/vectors/messaging/brc31/`  |
+| BRC-100 | `conformance/vectors/wallet/brc100/`    |
 
 See [Conformance Testing](../conformance/index.md) for how to run the test suite.

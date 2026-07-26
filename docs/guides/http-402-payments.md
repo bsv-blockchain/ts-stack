@@ -1,10 +1,10 @@
 ---
 id: guide-http-402
-title: "HTTP 402 Payment Gating"
+title: 'HTTP 402 Payment Gating'
 kind: guide
-version: "1.0.1"
-last_updated: "2026-07-26"
-last_verified: "2026-07-26"
+version: '1.0.1'
+last_updated: '2026-07-26'
+last_verified: '2026-07-26'
 review_cadence_days: 30
 status: stable
 tags: [guide, payments, http-402, brc-121, monetization]
@@ -20,6 +20,7 @@ tags: [guide, payments, http-402, brc-121, monetization]
 ## What you'll build
 
 A complete end-to-end payment system:
+
 - **Server**: Express middleware that gates endpoints by payment, validates transactions
 - **Client**: Auto-paying fetch wrapper that transparently handles 402 responses
 - **Flow**: Client requests resource → server responds 402 with payment details → client signs & pays → access granted
@@ -85,23 +86,23 @@ async function setupServer() {
     network: 'main',
     storageUrl: 'https://store-us-1.bsvb.tech'
   })
-  
+
   // 2. Create payment middleware
   const paymentMiddleware = createPaymentMiddleware({
     wallet,
-    calculatePrice: (path) => {
+    calculatePrice: path => {
       // Dynamic pricing by route
-      if (path === '/api/premium') return 1000  // 1000 satoshis
-      if (path === '/api/free') return 0        // Free
-      return 100  // Default 100 satoshis
+      if (path === '/api/premium') return 1000 // 1000 satoshis
+      if (path === '/api/free') return 0 // Free
+      return 100 // Default 100 satoshis
     }
   })
-  
+
   // 3. Build Express app
   const app = express()
   app.use(bodyParser.json())
   app.use(paymentMiddleware)
-  
+
   // 4. Define routes
   app.get('/api/free', (req, res) => {
     res.json({
@@ -109,7 +110,7 @@ async function setupServer() {
       paid: false
     })
   })
-  
+
   app.get('/api/premium', (req, res) => {
     res.json({
       message: 'Premium content — paid!',
@@ -118,7 +119,7 @@ async function setupServer() {
       sender: req.payment?.senderIdentityKey
     })
   })
-  
+
   return app
 }
 
@@ -126,7 +127,7 @@ async function setupServer() {
 async function main() {
   const app = await setupServer()
   const port = process.env.PORT || 3000
-  
+
   app.listen(port, () => {
     console.log(`Payment server running on http://localhost:${port}`)
     console.log('- GET /api/free: No payment required')
@@ -138,6 +139,7 @@ main().catch(console.error)
 ```
 
 The middleware chain:
+
 1. **Payment middleware** checks if payment is required and validates provided payment headers
 2. **Route handler** receives the request only if payment was accepted or the route is free
 
@@ -146,6 +148,7 @@ The middleware chain:
 When client requests a paid endpoint without payment, the server responds with 402 and payment details.
 
 The payment middleware automatically:
+
 - Calculates required satoshis via `calculatePrice()`
 - Returns 402 status if unpaid
 - Includes headers:
@@ -166,18 +169,19 @@ dotenv.config()
 export async function setupPaymentClient() {
   // Initialize wallet for signing payments
   const wallet = new WalletClient()
-  
+
   // Create a fetch wrapper that auto-handles 402
   const fetch402 = create402Fetch({
     wallet,
-    cacheTimeoutMs: 30 * 60 * 1000  // Cache paid content for 30 minutes
+    cacheTimeoutMs: 30 * 60 * 1000 // Cache paid content for 30 minutes
   })
-  
+
   return fetch402
 }
 ```
 
 `create402Fetch()` returns a fetch-compatible function that:
+
 - Catches 402 responses
 - Signs a payment transaction
 - Retries with payment headers
@@ -191,7 +195,7 @@ Create `requests.ts` in client:
 export async function accessFreeContent(fetch402: any) {
   const response = await fetch402('http://localhost:3000/api/free')
   const data = await response.json()
-  
+
   console.log('Free content:', data)
   return data
 }
@@ -200,7 +204,7 @@ export async function accessPremiumContent(fetch402: any) {
   // Automatically handles 402 and pays
   const response = await fetch402('http://localhost:3000/api/premium')
   const data = await response.json()
-  
+
   console.log('Premium content:', data)
   return data
 }
@@ -213,6 +217,7 @@ export async function clearPaymentCache(fetch402: any) {
 ```
 
 When client calls `fetch402('/api/premium')`:
+
 1. Sends request (no payment)
 2. Receives 402 with `x-bsv-sats: 1000` and `x-bsv-server`
 3. Generates a fresh nonce and timestamp, then derives the payment address with BRC-29
@@ -235,13 +240,8 @@ export async function manualPayment(
   serverIdentityKey: string
 ) {
   // Build payment headers manually
-  const headers = await constructPaymentHeaders(
-    wallet,
-    serverUrl,
-    satoshis,
-    serverIdentityKey
-  )
-  
+  const headers = await constructPaymentHeaders(wallet, serverUrl, satoshis, serverIdentityKey)
+
   // Use with custom fetch
   const response = await fetch(serverUrl, { headers })
   return response
@@ -249,6 +249,7 @@ export async function manualPayment(
 ```
 
 Manual header construction gives you:
+
 - `x-bsv-beef`: Base64-encoded transaction proof
 - `x-bsv-sender`: Your identity public key
 - `x-bsv-nonce`: Derivation prefix (random 8 bytes)
@@ -272,27 +273,27 @@ async function main() {
     network: 'main',
     storageUrl: 'https://store-us-1.bsvb.tech'
   })
-  
+
   // Setup middleware
   const paymentMiddleware = createPaymentMiddleware({
     wallet,
-    calculatePrice: (path) => {
+    calculatePrice: path => {
       if (path === '/api/premium') return 1000
       if (path === '/api/free') return 0
       return 100
     }
   })
-  
+
   // Create app
   const app = express()
   app.use(bodyParser.json())
   app.use(paymentMiddleware)
-  
+
   // Routes
   app.get('/api/free', (req, res) => {
     res.json({ message: 'Free content', paid: false })
   })
-  
+
   app.get('/api/premium', (req, res) => {
     res.json({
       message: 'Premium content',
@@ -300,7 +301,7 @@ async function main() {
       satoshisPaid: req.payment?.satoshisPaid || 0
     })
   })
-  
+
   // Start
   app.listen(3000, () => {
     console.log('Server on http://localhost:3000')
@@ -319,23 +320,23 @@ import { WalletClient } from '@bsv/sdk'
 async function main() {
   // Setup wallet
   const wallet = new WalletClient()
-  
+
   // Create auto-paying fetch
   const fetch402 = create402Fetch({
     wallet,
     cacheTimeoutMs: 30 * 60 * 1000
   })
-  
+
   console.log('Accessing free content...')
   let response = await fetch402('http://localhost:3000/api/free')
   let data = await response.json()
   console.log('Free:', data)
-  
+
   console.log('\nAccessing premium content (will auto-pay 1000 sats)...')
   response = await fetch402('http://localhost:3000/api/premium')
   data = await response.json()
   console.log('Premium:', data)
-  
+
   console.log('\nAccessing premium again (cached, no new payment)...')
   response = await fetch402('http://localhost:3000/api/premium')
   data = await response.json()
@@ -378,7 +379,11 @@ npx ts-node main.ts
 → If cache timeout is very long, client may use stale payments for different resources. Use moderate timeout (30 min is safe)
 
 **"Replay protection"**
-→ Server wallet rejects duplicate payment internalization. Each payment must use a fresh nonce and transaction.
+→ For `@bsv/402-pay`, freshness fields bind the proof but the wallet must also
+avoid newly accepting the same transaction twice. For
+`@bsv/payment-express-middleware`, inject a durable atomic
+transaction-ID replay store in multi-process deployments; its derivation
+prefix is not a single-use replay database.
 
 ## What to read next
 

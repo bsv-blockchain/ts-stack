@@ -1,190 +1,185 @@
 ---
 id: pkg-payment-express-middleware
-title: "@bsv/payment-express-middleware"
+title: '@bsv/payment-express-middleware'
 kind: package
 domain: middleware
-version: "2.1.1"
-source_repo: "bsv-blockchain/payment-express-middleware"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.1.1'
+source_repo: 'bsv-blockchain/ts-stack'
+source_commit: 'unreleased'
+last_updated: '2026-07-26'
+last_verified: '2026-07-26'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/payment-express-middleware"
-repo: "https://github.com/bsv-blockchain/payment-express-middleware"
+npm: 'https://www.npmjs.com/package/@bsv/payment-express-middleware'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware'
 status: stable
-tags: [middleware, express, payment, brc-121, "402"]
+tags: [middleware, express, payment, '402', brc-29]
 ---
 
 # @bsv/payment-express-middleware
 
-> Express.js middleware for HTTP 402 Payment Required micropayment gating. Builds on top of BRC-103 auth middleware to monetize API endpoints by requiring BSV satoshi payments derived using BRC-29 key derivation.
+Express middleware for the legacy authenticated `x-bsv-payment` JSON flow. It
+runs after `@bsv/auth-express-middleware`, validates an Atomic BEEF payment,
+atomically rejects transaction-ID reuse, internalizes output zero, and exposes
+a verified receipt.
+
+This contract is distinct from the newer BRC-121 implementation in
+`@bsv/402-pay`. Their headers and clients are not interchangeable.
 
 ## Install
 
 ```bash
-npm install @bsv/payment-express-middleware @bsv/auth-express-middleware @bsv/simple
+npm install @bsv/payment-express-middleware @bsv/auth-express-middleware @bsv/sdk express
 ```
+
+Node.js 22 or newer is required. The package provides native ESM and CommonJS
+entry points with matching declarations.
 
 ## Quick start
 
-```typescript
+```ts
 import express from 'express'
-import bodyParser from 'body-parser'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { ServerWallet } from '@bsv/simple/server'
-
-const wallet = await ServerWallet.create({
-  privateKey: process.env.SERVER_PRIVATE_KEY!,
-  network: 'main',
-  storageUrl: 'https://store-us-1.bsvb.tech'
-})
-const authMiddleware = createAuthMiddleware({ wallet })
-const paymentMiddleware = createPaymentMiddleware({
-  wallet,
-  calculateRequestPrice: async (req) => {
-    return 50 // 50 satoshis per request
-  }
-})
+import { createPaymentMiddleware, type PaymentRequest } from '@bsv/payment-express-middleware'
 
 const app = express()
-app.use(bodyParser.json())
-app.use(authMiddleware)
-app.use(paymentMiddleware)
 
-app.post('/somePaidEndpoint', (req, res) => {
+app.use(express.json())
+app.use(createAuthMiddleware({ wallet }))
+app.use(
+  createPaymentMiddleware({
+    wallet,
+    calculateRequestPrice(req) {
+      if (req.path === '/free') return 0
+      return 100
+    },
+    replayStore
+  })
+)
+
+app.get('/paid', (req: PaymentRequest, res) => {
   res.json({
-    message: 'Payment received, request authorized',
-    amount: req.payment.satoshisPaid
+    satoshisPaid: req.payment?.satoshisPaid,
+    txid: req.payment?.txid
   })
 })
-
-app.listen(3000)
 ```
 
-## What it provides
+Prices must be zero or a positive safe integer. Zero-cost requests receive an
+accepted zero-value receipt. Invalid pricing fails closed.
 
-- **createPaymentMiddleware** — Express middleware factory for 402 payment gating
-- **HTTP 402 Payment Required** — Responds with 402 when payment needed
-- **BRC-29 derivation** — Payment output derived from `derivationPrefix` + `derivationSuffix`
-- **Nonce reuse prevention** — Each 402 response includes fresh `derivationPrefix`
-- **Wallet integration** — Validates payment using `wallet.internalizeAction()` method
-- **Dynamic pricing** — `calculateRequestPrice` function per endpoint/request
-- **Payment object** — `req.payment` with `satoshisPaid`, `accepted`, `tx` fields
-- **Response headers** — `x-bsv-payment-*` headers with invoice details
+## Validated flow
 
-## Common patterns
+1. Auth middleware supplies a valid compressed identity key.
+2. Missing payment produces `402` plus the version, required satoshis, and a
+   server-created derivation prefix.
+3. The retry supplies `x-bsv-payment` JSON with canonical-base64
+   `derivationPrefix`, `derivationSuffix`, and `transaction`.
+4. The transaction must be valid Atomic BEEF whose output zero covers the
+   current price.
+5. The transaction ID is atomically claimed before the wallet is called.
+6. Only `{ accepted: true }` from a newly internalized payment authorizes the
+   route.
+7. `req.payment.satoshisPaid` and the response header report the actual output
+   value.
 
-### Basic payment gating
+The raw header is bounded to 64 KiB by default. Duplicated, malformed,
+underfunded, replayed, rejected, or ambiguous payments never call `next()`.
 
-```typescript
-import express from 'express'
-import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+## Replay storage
 
-const paymentMiddleware = createPaymentMiddleware({
-  wallet,
-  calculateRequestPrice: async (req) => {
-    return 100 // 100 satoshis per request
+`PaymentReplayStore` has one required operation:
+
+```ts
+interface PaymentReplayStore {
+  claim(transactionId: string): boolean | Promise<boolean>
+}
+```
+
+The claim must be a single atomic insert-if-absent operation. It returns true
+once and false for every reuse.
+
+The default `InMemoryPaymentReplayStore` is bounded and fail-closed, but it is
+process-local and loses claims on restart. Use a shared durable implementation
+for replicas and production services:
+
+```ts
+const replayStore = {
+  async claim(transactionId: string) {
+    return await database.insertPaymentClaimIfAbsent(transactionId)
   }
-})
-
-const app = express()
-app.use(authMiddleware)
-app.use(paymentMiddleware)
-
-app.get('/content', (req, res) => {
-  if (req.payment.accepted) {
-    res.json({ content: 'Premium content here' })
-  }
-})
+}
 ```
 
-### Dynamic pricing
+Claims are retained after ambiguous wallet errors. A derivation nonce proves
+the server created a prefix; it is not an expiring single-use replay database.
 
-```typescript
-const paymentMiddleware = createPaymentMiddleware({
-  wallet,
-  calculateRequestPrice: async (req) => {
-    if (req.path === '/premium') return 500  // premium costs 500 sats
-    if (req.path === '/free') return 0      // free content
-    return 100  // default 100 sats
-  }
-})
+## Configuration
+
+- `wallet` — required BRC-100 wallet with `internalizeAction`
+- `calculateRequestPrice` — sync or async price; defaults to 100
+- `replayStore` — atomic transaction-ID claim store
+- `maxPaymentHeaderBytes` — positive safe integer; defaults to 64 KiB
+- `logger` — optional structured `error`/`warn` sink
+
+The logger receives sanitized failure metadata, not exception messages,
+transaction IDs, wallet objects, or payment bodies. HTTP responses are also
+stable and sanitized.
+
+## Payment receipt
+
+```ts
+interface PaymentReceipt {
+  satoshisPaid: number
+  accepted: true
+  tx: string
+  txid: string
+}
 ```
 
-### Chained with auth middleware
+For a free request, `satoshisPaid` is zero and `tx`/`txid` are empty.
 
-```typescript
-const app = express()
-app.use(bodyParser.json())
+## Browser and public-service policy
 
-// Auth first
-app.use(createAuthMiddleware({ wallet }))
+The middleware does not hard-code CORS, CSP, or origin restrictions. Public
+payment services may remain cross-origin by default, with an operator opt-in
+allowlist at the application or edge. Browser clients need
+`x-bsv-payment-*` response headers exposed through CORS. Do not combine a
+wildcard origin with credentialed CORS.
 
-// Then payment
-app.use(createPaymentMiddleware({
-  wallet,
-  calculateRequestPrice: async (req) => 100
-}))
+## Security and operations
 
-// Routes now require both auth AND payment
-app.post('/api/paid-endpoint', (req, res) => {
-  // req.auth.identityKey is authenticated
-  // req.payment.satoshisPaid was received
-  res.json({ result: 'success' })
-})
-```
+- Run auth first, then payment, then protected routes.
+- Use HTTPS and normal request/header/rate limits.
+- Use durable atomic replay storage across processes and replicas.
+- Never automatically delete a claim after an ambiguous wallet result.
+- Alert on replay (`409`) and unavailable/capacity (`503`) responses.
+- Keep pricing deterministic and security-reviewed.
+- The wallet remains responsible for safely internalizing the BRC-29
+  remittance.
 
-## Key concepts
+## Public API
 
-- **402 Payment Required** — HTTP status code signaling payment is needed
-- **Micropayments** — Small satoshi amounts (1-1000 typical) for API access
-- **BRC-29 derivation** — Payment output derived from `derivationPrefix` + `derivationSuffix`
-- **Nonce reuse prevention** — Each 402 response includes fresh `derivationPrefix`
-- **Wallet integration** — Server validates payment using `wallet.internalizeAction()` method
-- **Auth prerequisite** — Assumes `req.auth.identityKey` set by auth middleware
-- **Transaction format** — Client sends BSV transaction as base64 in header
+Runtime:
 
-## When to use this
+- `createPaymentMiddleware`
+- `InMemoryPaymentReplayStore`
 
-- Monetizing API endpoints with micropayments
-- Creating pay-per-request services
-- Building content that requires payment to access
-- Implementing dynamic pricing based on request
-- Creating subscription-like services with per-use charges
+Types:
 
-## When NOT to use this
-
-- Traditional subscription billing — use Stripe or similar
-- Complex payment workflows — use a payment processor
-- Free public APIs — skip this middleware
-- Offline payment tracking — use a database instead
-
-## Spec conformance
-
-- **HTTP 402 Payment Required** — Uses standard 402 status code
-- **BRC-29** (Payment Derivation): Uses BRC-29 nonce/derivation model for payment address generation
-- **BRC-100** (Wallet interface): Requires wallet implementing `internalizeAction()` method
-- **BRC-104** — Builds on top of BRC-104 HTTP auth transport
-
-## Common pitfalls
-
-1. **Auth middleware must run first** — Payment middleware expects `req.auth.identityKey`
-2. **Wallet must implement `internalizeAction()`** — Critical method for validating and accepting payments
-3. **Nonce verification required** — Middleware verifies `derivationPrefix` matches server's private key
-4. **Transaction format strict** — Client sends `x-bsv-payment` header as JSON with transaction
-5. **Replay protection essential** — Wallet should reject duplicate `derivationPrefix` values
-6. **HTTPS recommended** — No encryption; use TLS to protect payment transactions
-7. **Pricing consistency** — If `calculateRequestPrice` is async, ensure no timing side-effects
+- `BSVPayment`
+- `PaymentLogger`
+- `PaymentMiddlewareOptions`
+- `PaymentReceipt`
+- `PaymentReplayStore`
+- `PaymentRequest`
 
 ## Related packages
 
-- **@bsv/402-pay** — Client-side handler for paying 402 responses
-- **@bsv/auth-express-middleware** — Required for authentication before payment
-- **@bsv/sdk** — Nonce creation/verification, wallet interface, transaction utilities
+- `@bsv/auth-express-middleware` — required payer authentication
+- `@bsv/402-pay` — separate BRC-121 payment protocol
+- `@bsv/sdk` — nonce, Atomic BEEF, and wallet primitives
 
-## Reference
+## References
 
-- [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/payment-express-middleware/)
-- [Source on GitHub](https://github.com/bsv-blockchain/payment-express-middleware)
+- [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware)
 - [npm](https://www.npmjs.com/package/@bsv/payment-express-middleware)
