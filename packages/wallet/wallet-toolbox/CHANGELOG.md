@@ -6,14 +6,24 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Add capability-negotiated action-batch manifest format 2 without changing
+  BRC-100. It derives source/output scripts from the authenticated transaction
+  graph, retains only the external proof frontier, bulk-loads shared storage
+  rows, and commits an already prepared manifest by semantic digest. Version-1
+  providers and clients retain their existing behavior.
+- Add authenticated `ABP1` multi-blob uploads with bounded gzip/Brotli/identity
+  negotiation, decompression limits, prepared-manifest authorization, per-item
+  content verification, bounded concurrency, and one-transaction bulk storage.
+  The physical request limit chunks unbounded logical transactions; it is not
+  a script or consensus limit.
 - Add optional script-verifier injection to Wallet, setup helpers, and local
   storage providers. Internal checks use explicit consensus context, distinguish
   resource exhaustion from invalid scripts, and continue verifying resolvable
   inputs when another source transaction is intentionally omitted.
 - Retain typed bytes through action-batch planning, hashing, validation, and
   chunk assembly; preload external inputs and shared metadata once per atomic
-  manifest; and emit typed Atomic BEEF results without changing BRC-100 or
-  storage protocol contracts.
+  manifest; and convert Atomic BEEF only at the historical public `number[]`
+  boundary without changing BRC-100 or storage protocol contracts.
 - Make StorageServer, AdminServer, and the reusable ChaintracksService
   credential-free public-CORS compatible by default, with opt-in exact origin
   lists and configurable CSP/browser response headers. Add bounded parsers,

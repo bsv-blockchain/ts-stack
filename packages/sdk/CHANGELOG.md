@@ -235,6 +235,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Pre-size Wallet Wire frames and keep large BRC-100 binary arguments/results
+  as `Uint8Array` views through processor/transceiver handoff. The optional
+  compact-byte substrate avoids redundant response writers and aggregate
+  copies while the legacy `number[]` transport and every BRC-100 shape remain
+  unchanged.
 - Remove arbitrary post-Genesis script element and default interpreter-memory
   caps; explicit caller budgets remain enforceable but are not reported as
   invalid scripts.

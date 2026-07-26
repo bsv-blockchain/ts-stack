@@ -10,6 +10,7 @@ import {
   ActionBatchManifest,
   BeginActionBatchArgs,
   BeginActionBatchResult,
+  CommitActionBatchByDigestArgs,
   CommitActionBatchResult,
   ExtendActionBatchArgs,
   ExtendActionBatchResult,
@@ -21,6 +22,7 @@ import { ProvenTxReqStatus, TransactionStatus } from '../../sdk/types'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
 import { verifyActionBatchManifestDigest } from '../../utility/actionBatchDigest'
+import { supportedActionBatchPackEncodings } from '../../utility/actionBatchPack'
 import { validateStorageFeeModel } from '../StorageProvider'
 import type { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
@@ -34,13 +36,18 @@ import { TableTxLabel } from '../schema/tables/TableTxLabel'
 import { isAutoSpendableChangeOutput } from './managedChange'
 import { parseTxScriptOffsets } from '../../utility/parseTxScriptOffsets'
 import { shareReqsWithWorld } from './processAction'
+import type { GetReqsAndBeefResult } from './processAction'
+import { classifyReqStatus } from '../storageProviderHelpers'
 import { transactionSize } from './utils'
 import { selectCanonicalChange } from './actionPlanning'
 import {
   ACTION_BATCH_MAX_BLOB_BYTES,
   ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
   ACTION_BATCH_MAX_INLINE_BYTES,
-  validateActionBatchInlinePayload
+  ACTION_BATCH_MAX_PACK_BYTES,
+  ACTION_BATCH_MAX_PACK_ITEMS,
+  validateActionBatchInlinePayload,
+  validateCompactManifest
 } from './actionBatchBlobs'
 import { validateManifestActions } from './actionBatchValidation'
 import type { ValidatedBatchAction } from './actionBatchValidation'
@@ -60,7 +67,19 @@ export function getActionBatchCapabilities (): StorageCapabilities {
       maxConcurrentUploads: ACTION_BATCH_MAX_CONCURRENT_UPLOADS,
       leaseMs: ACTION_BATCH_LEASE_MS,
       hardLifetimeMs: ACTION_BATCH_HARD_LIFETIME_MS,
-      compactBegin: true
+      compactBegin: true,
+      manifestVersion: 2,
+      commitByDigest: true,
+      packedUploads: {
+        version: 1,
+        maxPackBytes: ACTION_BATCH_MAX_PACK_BYTES,
+        maxItems: ACTION_BATCH_MAX_PACK_ITEMS,
+        encodings: supportedActionBatchPackEncodings(),
+        // Require a prepared manifest to authorize every persisted digest.
+        // Clients still support eager uploads for providers that can enforce
+        // an equivalent bounded authorization policy.
+        eager: false
+      }
     }
   }
 }
@@ -84,7 +103,11 @@ async function releaseBatchState (
 ): Promise<void> {
   await storage.deleteActionBatchOutputReservations(batch.actionBatchId, trx)
   await storage.deleteActionBatchBlobRecords(batch.actionBatchId, trx)
-  await storage.updateActionBatch(batch.actionBatchId, { status }, trx)
+  await storage.updateActionBatch(batch.actionBatchId, {
+    status,
+    manifest: undefined,
+    uploadDigests: undefined
+  }, trx)
 }
 
 export async function cleanupExpiredActionBatches (storage: StorageProvider): Promise<number> {
@@ -583,7 +606,9 @@ async function persistOutputs (
     const isCommission = planned.providedBy === 'storage' &&
       (planned.purpose === 'storage-commission' || planned.purpose === 'service-charge')
     const offset = offsets.outputs[planned.vout]
-    const lockingScript = output.lockingScript.toBinary()
+    const lockingScript = offset.length <= storage.getSettings().maxOutputScript || isCommission
+      ? output.lockingScript.toBinary()
+      : undefined
     const now = new Date()
     const row: TableOutput = {
       outputId: 0,
@@ -604,7 +629,7 @@ async function persistOutputs (
       customInstructions: planned.customInstructions,
       scriptLength: offset.length,
       scriptOffset: offset.offset,
-      lockingScript: offset.length > storage.getSettings().maxOutputScript ? undefined : lockingScript,
+      lockingScript,
       created_at: now,
       updated_at: now
     }
@@ -614,6 +639,7 @@ async function persistOutputs (
       await storage.findOrInsertOutputTagMap(row.outputId, verifyId(tag.outputTagId), trx)
     }
     if (isCommission) {
+      if (lockingScript == null) throw new WERR_INTERNAL('commission locking script must be retained')
       const commission: TableCommission = {
         commissionId: 0,
         userId,
@@ -643,7 +669,7 @@ async function persistAction (
   baskets: Record<string, TableOutputBasket>,
   tags: Record<string, TableOutputTag>,
   trx: TrxToken
-): Promise<void> {
+): Promise<EntityProvenTxReq> {
   const { action, tx, rawTx } = validated
   const statuses = transactionStatuses(action)
   const managedInputSatoshis = action.plan.inputs
@@ -701,12 +727,12 @@ async function persistAction (
 
   const req = EntityProvenTxReq.fromTxid(
     action.txid,
-    Array.from(rawTx),
-    Array.from(validated.inputBeef)
+    rawTx,
+    validated.externalInputBeef
   )
   req.status = statuses.req
   req.addNotifyTransactionId(transaction.transactionId)
-  await req.insertOrMerge(storage, trx)
+  return await req.insertOrMerge(storage, trx)
 }
 
 async function persistManifestAtomically (
@@ -714,8 +740,12 @@ async function persistManifestAtomically (
   userId: number,
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
-  validated: { actions: ValidatedBatchAction[], dependencyBeef: Uint8Array }
-): Promise<{ batch: TableActionBatch, alreadyCommitted: boolean }> {
+  validated: { actions: ValidatedBatchAction[], dependencyBeef: Uint8Array, beef: Beef }
+): Promise<{
+    batch: TableActionBatch
+    alreadyCommitted: boolean
+    share?: GetReqsAndBeefResult
+  }> {
   return await storage.transaction(async trx => {
     const current = await storage.findActionBatchForUpdate(userId, batch.batchId, trx)
     if (current == null) throw new WERR_INVALID_OPERATION('action batch was not found')
@@ -769,14 +799,14 @@ async function persistManifestAtomically (
       ))],
       trx
     )
-    const labelsByName = new Map<string, TableTxLabel>()
     const labelNames = [...new Set(validated.actions.flatMap(({ action }) => action.metadata.labels))]
-    for (const label of labelNames) {
-      labelsByName.set(label, await storage.findOrInsertTxLabel(userId, label, trx))
-    }
+    const labelsByName = new Map(Object.entries(
+      await storage.findOrInsertTxLabelsBulk(userId, labelNames, trx)
+    ))
     const stagedByOutpoint = new Map<string, TableOutput>()
+    const reqsByTxid = new Map<string, EntityProvenTxReq>()
     for (const action of validated.actions) {
-      await persistAction(
+      const req = await persistAction(
         storage,
         userId,
         action,
@@ -788,6 +818,7 @@ async function persistManifestAtomically (
         tags,
         trx
       )
+      reqsByTxid.set(action.action.txid, req)
     }
     await storage.deleteActionBatchOutputReservations(current.actionBatchId, trx)
     await storage.deleteActionBatchBlobRecords(current.actionBatchId, trx)
@@ -797,7 +828,29 @@ async function persistManifestAtomically (
     }, trx)
     current.status = 'committed'
     current.manifestDigest = manifest.digest
-    return { batch: current, alreadyCommitted: false }
+    const details = manifest.sendWith.map(txid => {
+      const req = reqsByTxid.get(txid)
+      if (req == null) return undefined
+      const reqApi = req.toApi()
+      const detail: GetReqsAndBeefResult['details'][number] = {
+        txid,
+        req: reqApi,
+        status: 'unknown'
+      }
+      classifyReqStatus(detail, reqApi)
+      return detail
+    })
+    return {
+      batch: current,
+      alreadyCommitted: false,
+      share: details.every(detail => detail != null)
+        ? {
+            beef: validated.beef,
+            details: details.filter((detail): detail is NonNullable<typeof detail> => detail != null),
+            verified: true
+          }
+        : undefined
+    }
   })
 }
 
@@ -806,7 +859,8 @@ async function completeCommittedBatch (
   userId: number,
   batch: TableActionBatch,
   manifest: ActionBatchManifest,
-  alreadyCommitted: boolean
+  alreadyCommitted: boolean,
+  share?: GetReqsAndBeefResult
 ): Promise<CommitActionBatchResult> {
   if (batch.result != null) {
     const saved = JSON.parse(batch.result) as CommitActionBatchResult
@@ -820,7 +874,13 @@ async function completeCommittedBatch (
       log: saved.log
     }
   }
-  const { swr, ndr } = await shareReqsWithWorld(storage, userId, manifest.sendWith, manifest.isDelayed)
+  const { swr, ndr } = await shareReqsWithWorld(
+    storage,
+    userId,
+    manifest.sendWith,
+    manifest.isDelayed,
+    share
+  )
   const result: CommitActionBatchResult = {
     batchId: manifest.batchId,
     manifestDigest: manifest.digest,
@@ -860,7 +920,8 @@ async function commitActionBatchOnce (
     userId,
     persisted.batch,
     manifest,
-    persisted.alreadyCommitted
+    persisted.alreadyCommitted,
+    persisted.share
   )
 }
 
@@ -878,6 +939,7 @@ export async function commitActionBatch (
 ): Promise<CommitActionBatchResult> {
   validateActionBatchInlinePayload(manifest)
   if (!verifyActionBatchManifestDigest(manifest)) throw new WERR_INVALID_PARAMETER('manifest.digest', 'valid')
+  validateCompactManifest(manifest)
   const userId = verifyId(auth.userId)
   let commits = activeBatchCommits.get(storage)
   if (commits == null) {
@@ -896,6 +958,24 @@ export async function commitActionBatch (
     .finally(() => { commits?.delete(key) })
   commits.set(key, { digest: manifest.digest, promise })
   return await promise
+}
+
+export async function commitActionBatchByDigest (
+  storage: StorageProvider,
+  auth: AuthId,
+  args: CommitActionBatchByDigestArgs
+): Promise<CommitActionBatchResult> {
+  const userId = verifyId(auth.userId)
+  const batch = await storage.findActionBatch(userId, args.batchId)
+  if (batch?.manifestDigest !== args.digest || batch?.manifest == null) {
+    throw new WERR_INVALID_OPERATION('prepared action batch manifest was not found')
+  }
+  const manifest = JSON.parse(batch.manifest) as ActionBatchManifest
+  if (manifest.format !== 2 || manifest.batchId !== args.batchId || manifest.digest !== args.digest ||
+    !verifyActionBatchManifestDigest(manifest)) {
+    throw new WERR_INVALID_OPERATION('prepared action batch manifest is invalid')
+  }
+  return await commitActionBatch(storage, auth, manifest)
 }
 
 export async function abortActionBatch (

@@ -83,11 +83,13 @@ import {
   ActionBatchManifest,
   BeginActionBatchArgs,
   BeginActionBatchResult,
+  CommitActionBatchByDigestArgs,
   CommitActionBatchResult,
   ExtendActionBatchArgs,
   ExtendActionBatchResult,
   PrepareActionBatchCommitResult,
   PutActionBatchBlobArgs,
+  PutActionBatchPackArgs,
   RenewActionBatchResult,
   StorageCapabilities
 } from '../sdk/ActionBatch.interfaces'
@@ -96,13 +98,15 @@ import {
   beginActionBatch as beginBatch,
   cleanupExpiredActionBatches,
   commitActionBatch as commitBatch,
+  commitActionBatchByDigest as commitBatchByDigest,
   extendActionBatch as extendBatch,
   getActionBatchCapabilities,
   renewActionBatch as renewBatch
 } from './methods/actionBatch'
 import {
   prepareActionBatchCommit as prepareBatchCommit,
-  putActionBatchBlob as putBatchBlob
+  putActionBatchBlob as putBatchBlob,
+  putActionBatchPack as putBatchPack
 } from './methods/actionBatchBlobs'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
@@ -219,6 +223,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   ): Promise<TableActionBatchBlob | undefined> {
     throw new WERR_NOT_IMPLEMENTED()
   }
+  async findActionBatchBlobRecords(
+    actionBatchId: number,
+    digests: string[],
+    trx?: TrxToken
+  ): Promise<TableActionBatchBlob[]> {
+    return (await Promise.all(
+      digests.map(async digest => await this.findActionBatchBlobRecord(actionBatchId, digest, trx))
+    )).filter((blob): blob is TableActionBatchBlob => blob != null)
+  }
+  async putActionBatchBlobRecords(blobs: TableActionBatchBlob[], trx?: TrxToken): Promise<void> {
+    for (const blob of blobs) await this.putActionBatchBlobRecord(blob, trx)
+  }
 
   async deleteActionBatchBlobRecords(_actionBatchId: number, _trx?: TrxToken): Promise<void> {
     throw new WERR_NOT_IMPLEMENTED()
@@ -254,8 +270,19 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await putBatchBlob(this, auth, args)
   }
 
+  async putActionBatchPack(auth: AuthId, args: PutActionBatchPackArgs): Promise<void> {
+    return await putBatchPack(this, auth, args)
+  }
+
   async commitActionBatch(auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
     return await commitBatch(this, auth, manifest)
+  }
+
+  async commitActionBatchByDigest(
+    auth: AuthId,
+    args: CommitActionBatchByDigestArgs
+  ): Promise<CommitActionBatchResult> {
+    return await commitBatchByDigest(this, auth, args)
   }
 
   async abortActionBatch(auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {
@@ -317,6 +344,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const byTag: Record<string, TableOutputTag> = {}
     for (const tag of tags) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
     return byTag
+  }
+
+  async findOrInsertTxLabelsBulk(
+    userId: number,
+    labels: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableTxLabel>> {
+    const byLabel: Record<string, TableTxLabel> = {}
+    for (const label of labels) byLabel[label] ??= await this.findOrInsertTxLabel(userId, label, trx)
+    return byLabel
   }
 
   async sumSpendableSatoshisInBasket(

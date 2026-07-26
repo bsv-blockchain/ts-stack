@@ -51,9 +51,9 @@ function makePayload () {
   return bytes
 }
 
-function makeWalletWire (onInternalize) {
+function makeWalletWire (onInternalize, onCreate) {
   const wallet = new Proxy(
-    { internalizeAction: onInternalize },
+    { internalizeAction: onInternalize, createAction: onCreate },
     {
       get (target, property) {
         if (property in target) return target[property]
@@ -92,10 +92,21 @@ async function run () {
   }, 0)
 
   let receivedBytes = 0
-  const wallet = makeWalletWire(async args => {
-    receivedBytes = args.tx.length
-    return { accepted: true }
-  })
+  const wallet = makeWalletWire(
+    async args => {
+      receivedBytes = args.tx.length
+      return { accepted: true }
+    },
+    async args => {
+      receivedBytes = args.inputBEEF.length
+      return {
+        signableTransaction: {
+          tx: payload,
+          reference: 'AQIDBA=='
+        }
+      }
+    }
+  )
   const internalizeArgs = {
     tx: payload,
     outputs: [],
@@ -105,6 +116,18 @@ async function run () {
     await wallet.internalizeAction(internalizeArgs)
     if (receivedBytes !== payload.length) {
       throw new Error('Wallet Wire payload length changed')
+    }
+  })
+  await measure('Wallet Wire createAction BEEF round trip', async () => {
+    const result = await wallet.createAction({
+      description: 'generic large-data create benchmark',
+      inputBEEF: payload,
+      labels: [],
+      options: { signAndProcess: false }
+    })
+    if (receivedBytes !== payload.length ||
+      result.signableTransaction?.tx.length !== payload.length) {
+      throw new Error('Wallet Wire createAction BEEF length changed')
     }
   })
 }

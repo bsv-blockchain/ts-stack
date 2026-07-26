@@ -33,11 +33,13 @@ import {
   ActionBatchManifest,
   BeginActionBatchArgs,
   BeginActionBatchResult,
+  CommitActionBatchByDigestArgs,
   CommitActionBatchResult,
   ExtendActionBatchArgs,
   ExtendActionBatchResult,
   PrepareActionBatchCommitResult,
   PutActionBatchBlobArgs,
+  PutActionBatchPackArgs,
   RenewActionBatchResult,
   StorageCapabilities
 } from '../../sdk/ActionBatch.interfaces'
@@ -52,6 +54,13 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
+import {
+  ACTION_BATCH_PACK_ENCODING_HEADER,
+  actionBatchPackLength,
+  compressActionBatchPackItems,
+  encodeActionBatchPack,
+  supportedActionBatchPackEncodings
+} from '../../utility/actionBatchPack'
 
 export interface StorageClientOptions {
   /**
@@ -253,8 +262,44 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     }
   }
 
+  async putActionBatchPack(_auth: AuthId, args: PutActionBatchPackArgs): Promise<void> {
+    const available = new Set(supportedActionBatchPackEncodings())
+    const encoding = (args.preferredEncodings ?? ['identity'])
+      .find(candidate => available.has(candidate)) ?? 'identity'
+    const frameLength = actionBatchPackLength(args.items)
+    let body = await compressActionBatchPackItems(args.items, encoding, args.maxPackBytes, args.maxItems)
+    let transmittedEncoding = encoding
+    if (encoding !== 'identity' && body.length >= frameLength) {
+      body = encodeActionBatchPack(args.items, args.maxPackBytes, args.maxItems)
+      transmittedEncoding = 'identity'
+    }
+    const baseUrl = this.endpointUrl.endsWith('/') ? this.endpointUrl.slice(0, -1) : this.endpointUrl
+    const url = `${baseUrl}/action-batch/${encodeURIComponent(args.batchId)}/pack`
+    const response = await this.authClient.fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        [ACTION_BATCH_PACK_ENCODING_HEADER]: transmittedEncoding
+      },
+      body
+    })
+    if (!response.ok) {
+      const details = (await response.text()).slice(0, 512)
+      throw new Error(
+        `WalletStorageClient putActionBatchPack: network error ${response.status} ${response.statusText}: ${details}`
+      )
+    }
+  }
+
   async commitActionBatch(auth: AuthId, manifest: ActionBatchManifest): Promise<CommitActionBatchResult> {
     return await this.rpcCall<CommitActionBatchResult>('commitActionBatch', [auth, manifest])
+  }
+
+  async commitActionBatchByDigest(
+    auth: AuthId,
+    args: CommitActionBatchByDigestArgs
+  ): Promise<CommitActionBatchResult> {
+    return await this.rpcCall<CommitActionBatchResult>('commitActionBatchByDigest', [auth, args])
   }
 
   async abortActionBatch(auth: AuthId, batchId: string): Promise<AbortActionBatchResult> {

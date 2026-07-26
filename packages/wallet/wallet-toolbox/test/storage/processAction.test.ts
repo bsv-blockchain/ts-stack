@@ -27,7 +27,9 @@ function makeStorageFake () {
     getServices: jest.fn(() => ({
       getChainTracker: jest.fn(async () => ({}))
     })),
-    attemptToPostReqsToNetwork: jest.fn()
+    attemptToPostReqsToNetwork: jest.fn(async (reqs: TableProvenTxReq[]) => ({
+      details: reqs.map(req => ({ txid: req.txid, status: 'success' as const }))
+    }))
   }
 }
 
@@ -86,5 +88,25 @@ describe('processAction shareReqsWithWorld', () => {
 
     expect(beef.verify).toHaveBeenCalled()
     expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
+  })
+
+  test('immediate sends reuse the exact aggregate BEEF after prior validation', async () => {
+    const req = makeReadyReq()
+    const beef = {
+      verify: jest.fn(async () => {
+        throw new Error('the already validated BEEF must not be verified twice')
+      })
+    } as unknown as Beef
+    const storage = makeStorageFake()
+
+    const result = await shareReqsWithWorld(storage as any, 1, [req.txid], false, {
+      beef,
+      details: [{ txid: req.txid, status: 'readyToSend', req }],
+      verified: true
+    })
+
+    expect(beef.verify).not.toHaveBeenCalled()
+    expect(storage.attemptToPostReqsToNetwork).toHaveBeenCalledTimes(1)
+    expect(result.swr).toEqual([{ txid: req.txid, status: 'unproven' }])
   })
 })

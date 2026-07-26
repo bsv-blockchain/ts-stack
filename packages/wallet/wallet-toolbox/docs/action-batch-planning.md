@@ -17,6 +17,13 @@ Large first actions use compact bootstrap only when the provider also advertises
 `compactBegin: true`; this keeps new clients compatible with older version-1
 servers during a rolling deployment.
 
+The original manifest and one-blob-per-request transport remain version 1. A
+provider can independently advertise the additive `manifestVersion: 2`,
+`commitByDigest`, and `packedUploads` capabilities. A new client uses each
+optimization only when its provider advertises it. Old clients ignore the extra
+fields, new clients retain the version-1 path against old providers, and the two
+new storage methods are optional for third-party `WalletStorage` implementations.
+
 The capability and its methods are Wallet Toolbox storage extensions. They do not
 extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
 `noSendChange`, `sendWith`, or their results.
@@ -25,13 +32,15 @@ extend `WalletInterface`, `CreateActionArgs`, `SignActionArgs`, `noSend`,
 
 1. The first `noSend` action begins a workspace, reserves the canonical funding
    inputs needed for that action plus limited headroom, and returns their proof
-   data in one storage call. When its scripts or proof data exceed the inline
-   target, the client sends only planning metadata and exact script lengths.
-   Full transaction, script, and proof bytes follow through the chunked commit
-   path, so they never have to fit in the bootstrap JSON request.
+   data in one storage call. Format 2 sends only planning metadata and exact
+   output-script lengths at bootstrap. Signed transactions and the external
+   proof frontier follow through the binary commit path, so a hexadecimal
+   script is not duplicated into a large JSON request.
 2. The wallet plans, signs, validates, and indexes subsequent actions locally. A
-   shared BEEF graph and content-addressed locking-script blobs avoid retaining
-   repeated ancestry and script copies.
+   shared BEEF graph avoids retaining repeated ancestry. The signed transaction
+   is the canonical source for output scripts; format 2 carries script digests
+   for validation, rather than carrying the same scripts as transaction bytes,
+   plan strings, metadata strings, and standalone blobs.
 3. If confirmed funding runs low, the wallet extends its reservation pool using
    an EWMA estimate and geometrically increasing runway. Forwarded staged change
    needs no reservation or extension.
@@ -83,14 +92,30 @@ outputs, labels, tags, maps, and proof requests are written under one database
 transaction together with reservation consumption and release. Batch ID plus a
 semantic manifest digest makes persistence retries idempotent.
 
-Content-addressed raw transactions, dependency BEEF, and locking scripts travel
+Content-addressed raw transactions and the external dependency BEEF travel
 inline for batches up to the provider's inline limit (4 MiB by default). Larger
-workloads prepare a manifest, upload only missing blobs through authenticated raw
-binary requests, and commit by digest. Logical blobs are split at the provider's
-advertised limit (8 MiB by default), deduplicated by digest, and uploaded with at
-most four concurrent requests. The 8 MiB value is a physical request target, not
-a logical transaction limit: one transaction, locking script, or dependency BEEF
-may span any number of chunks. Incomplete uploads expire with their batch.
+format-2 workspaces prepare a compact digest-only manifest and upload only the
+content-addressed physical blobs the server reports missing. Multiple blobs
+share one `ABP1` binary pack, bounded by the provider's advertised request size
+and item count. Packs use the first mutually supported `CompressionStream`
+encoding (`gzip`, then optional Brotli) when it reduces bytes; otherwise they
+use identity encoding.
+
+The client sends no HTTP `Content-Encoding` header: a dedicated authenticated
+pack-encoding header describes the exact request body seen by BRC-103. The
+server bounds both compressed request bytes and decompressed pack bytes,
+validates the frame, every SHA-256 digest, prepared-manifest authorization,
+batch ownership, and hard lifetime, then inserts the pack in one storage
+transaction. The final JSON-RPC call sends only the batch ID and semantic
+manifest digest. The server commits the exact prepared manifest retained under
+that digest.
+
+Logical blobs are split at the provider's advertised limit (8 MiB by default),
+deduplicated by digest, and uploaded with at most four concurrent requests. The
+8 MiB value is a physical request target, not a logical transaction limit: one
+transaction or dependency BEEF may span any number of chunks. There is no
+consensus script-size limit in this path. Incomplete uploads remain scoped to
+their authenticated batch and expire with it.
 
 Allocation failure in a particular JavaScript host remains a local resource
 failure. It is reported as an operation/runtime failure rather than evidence that
@@ -98,12 +123,13 @@ the transaction or script is consensus-invalid.
 
 The planner, validator, digest pipeline, browser IndexedDB store, and chunk
 assembler retain `Uint8Array` storage throughout this path. SQL adapters create
-buffer views only at the driver boundary. Atomic commit also
-preloads external inputs, baskets, tags, and labels once per manifest instead of
-repeating those lookups for every action. These are implementation details; the
-manifest format and BRC-100 arguments and results are unchanged. The storage
-capability adds only the optional, negotiated `compactBegin` flag described
-above.
+buffer views only at the driver boundary. Atomic commit also preloads blob rows,
+external inputs, baskets, tags, and labels once per manifest instead of
+repeating those lookups for every action. It stores only the external input
+proof frontier for each persisted request and reuses the already validated
+complete BEEF graph for immediate/delayed share preparation. The full graph is
+still reconstructed and verified before persistence. These are storage
+implementation details; BRC-100 arguments and results are unchanged.
 
 Wallet and locally hosted storage construction can receive an optional
 `scriptVerifier`. Batch and ordinary action checks pass explicit consensus
@@ -124,9 +150,9 @@ operational failures and are never rewritten as invalid-script verdicts.
 
 | Deployment | Before these changes | Current behavior |
 | --- | --- | --- |
-| Local Node wallet with Knex | TypeScript execution was the normal path; its default 32 MiB stack budget could turn local exhaustion into an invalid-action error. Repeated action persistence added storage round trips. | A preloaded verifier can execute ordinary and batch checks in explicit consensus mode. Default JS execution has no arbitrary consensus stack cap. `noSend` chains plan in memory and commit atomically. |
-| Browser wallet with IndexedDB | Large byte values were commonly boxed or hex/string copied, and validation stayed on the TypeScript interpreter. | Browser VeriFast uses the same consensus context and packed typed-byte paths. IndexedDB and the wallet receive the configured verifier. Host quota or memory exhaustion remains a browser resource failure, not consensus invalidity. |
-| Browser/Node wallet using remote Toolbox storage | The first large action and later commit values could encounter JSON/body limits; each staged action was validated separately and server verification could not be configured independently. | Capability-negotiated compact bootstrap avoids sending large first-action bytes as JSON. Content-addressed binary chunks carry unbounded logical blobs. Client and server independently preload/inject verifiers, and server commit batches selected spends. |
+| Local Node wallet with Knex | TypeScript execution was the normal path; its default 32 MiB stack budget could turn local exhaustion into an invalid-action error. Repeated action persistence added storage round trips and row lookups. | A preloaded verifier can execute ordinary and batch checks in explicit consensus mode. Default JS execution has no arbitrary consensus stack cap. `noSend` chains plan in memory, bulk-load shared rows, and commit atomically. |
+| Browser wallet with IndexedDB | Large byte values were commonly boxed or hex/string copied, and validation stayed on the TypeScript interpreter. | Browser VeriFast uses the same consensus context and typed-byte paths. IndexedDB stores packed blobs in one transaction and the wallet receives the configured verifier. Host quota or memory exhaustion remains a browser resource failure, not consensus invalidity. |
+| Browser/Node wallet using remote Toolbox storage | The first large action and later commit values could encounter JSON/body limits; repeated scripts appeared in several JSON/manifest fields; every blob needed a request; and server verification could not be configured independently. | Compact bootstrap and format-2 manifests derive scripts from signed transactions. Manifest-authorized, compressed, multi-blob binary packs avoid JSON expansion and reduce request count. Digest-only commit makes the final request small. Client and server independently preload/inject verifiers, and server commit batches selected spends. |
 
 For latency-sensitive startup, call `await verifier.preload()` before constructing
 or first using the wallet. The default adaptive mode deliberately lets a cold
@@ -135,11 +161,12 @@ first call use the TypeScript interpreter while WASM warms in the background;
 startup step in both the client runtime and every storage-server process.
 
 The remaining transport boundaries are resource and protocol facts rather than
-consensus limits. Raw action-batch upload requests stay bounded and chunk around
-that bound. Cicada/Wallet Wire uses typed bytes. Browser XDM uses structured
-clone. HTTP JSON and React Native retain their existing BRC-100 encodings, so
-operators must configure infrastructure request limits for ordinary non-batched
-calls or use action batching for multi-megabyte transaction flows.
+consensus limits. Raw action-batch pack requests stay bounded and logical values
+chunk around that bound. Cicada/Wallet Wire uses typed bytes and zero-copy frame
+handoffs. Browser XDM uses structured clone. HTTP JSON and React Native retain
+their existing BRC-100 encodings, so operators must configure infrastructure
+request limits for ordinary non-batched calls or use action batching for
+multi-megabyte transaction flows.
 
 The remote server derives the batch user ID and active-storage state from the
 BRC-103 authenticated identity for every management call and binary upload.
@@ -165,26 +192,29 @@ pnpm --filter @bsv/wallet-toolbox bench:action-batch
 
 On the same Apple Silicon host with Node.js v25.9.0, a representative cold
 250-action, 1 KiB-script run reduced planning/signing/validation from
-19,020.51 ms in legacy mode to 11,785.46 ms in batch mode (38.0%, or 1.61x).
-Including the deliberately heavier atomic commit, total local time was
-19,062.33 ms versus 18,261.81 ms (4.2% lower), while storage calls fell from 501
-to 2 and database transactions from 252 to 3. At 100 ms storage RTT those calls
-represent 50,100 ms versus 200 ms of control-path latency, a 99.6% reduction.
+19,117.03 ms in legacy mode to 10,907.93 ms in batch mode (42.9%, or 1.75x).
+Including atomic commit, total local time was 19,163.87 ms versus 11,462.13 ms
+(40.2% lower), while storage calls fell from 501 to 2 and database transactions
+from 252 to 3. At 100 ms storage RTT those calls represent 50,100 ms versus
+200 ms of control-path latency, a 99.6% reduction.
 
-The same run reduced a single 1 MiB action from 304.86 ms to 215.30 ms total
-(29.4%) and a 4 MiB action from 1,231.91 ms to 826.64 ms (32.9%), including
-chunk upload and atomic commit. Retaining an existing generic 8 MiB
-`Uint8Array` at the persistence entry point took a 0.004 ms median versus
-142.9 ms to box it with `Array.from`; it also avoids approximately 64 MiB of
-number slots for an 8 MiB payload. Absolute times remain host- and
-database-dependent.
+A generic single 4 MiB zero-filled script took 1,258.13 ms through the legacy
+path and 208.60 ms through format 2, including upload and atomic commit: 83.4%
+less local time. Its instrumented requests fell from 13,982,465 bytes to 8,064
+bytes. The one 4,195,234-byte logical pack compressed to 5,233 bytes and was
+uploaded in one call. This synthetic compression ratio represents highly
+repetitive data; incompressible data falls back to identity encoding without
+expansion. Absolute times remain host- and database-dependent.
 
 It records planning, signing and validation, storage RPCs, database transactions,
 request bytes, commit and broadcast time, CPU, and incremental peak heap. Physical
 SQLite runs compare 1, 10, 50, and 250 action chains at 1 KiB and exercise each
-larger script size with a real action, including the 4 MiB upload path. Its complete
-model covers dependent, independent, explicit-input, and two-step signing workloads
-at every action count; 1 KiB, 64 KiB, 1 MiB, and 4 MiB scripts; and 25, 100, and
-250 ms storage RTT. Production rollout should additionally track reservation
-conflicts, extensions, expiries, commit retries, upload deduplication, commit
-duration, and broadcaster review outcomes by provider type.
+larger script size with a real action, including the 4 MiB upload path. Its
+complete model covers dependent, independent, explicit-input, and two-step
+signing workloads at every action count; 1 KiB, 64 KiB, 1 MiB, and 4 MiB
+scripts; and 25, 100, and 250 ms storage RTT. The measured cases deliberately
+include both many-small-action and few-large-action shapes so transport tuning
+is not fitted to one contract or graph. Production rollout should additionally
+track reservation conflicts, extensions, expiries, commit retries, pack
+compression, upload deduplication, commit duration, and broadcaster review
+outcomes by provider type.

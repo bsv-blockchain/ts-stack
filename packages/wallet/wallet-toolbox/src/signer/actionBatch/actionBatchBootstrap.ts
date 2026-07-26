@@ -26,7 +26,12 @@ export function actionBatchBootstrap (
     0
   )
   const totalBytes = scriptBytes + (args.inputBEEF?.length ?? 0)
-  if (totalBytes <= capabilities.maxInlineBytes) return { firstAction }
+  // Format 2 never needs these bytes remotely: the server reserves from exact
+  // lengths and derives scripts from the signed transaction at commit. Omit
+  // them even when small so a near-limit hexadecimal script cannot become a
+  // request roughly twice the advertised binary target.
+  if (capabilities.manifestVersion !== 2 &&
+    totalBytes <= capabilities.maxInlineBytes) return { firstAction }
 
   return {
     firstAction: {

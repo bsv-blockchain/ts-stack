@@ -81,6 +81,10 @@ See [Managed change, sweeping, and recovery](./docs/managed-change-policy.md)
 for the default-basket invariant, automatic funding policy, and supported
 `internalizeAction` repair paths.
 
+See [In-memory action batch planning](./docs/action-batch-planning.md) for
+capability-negotiated `noSend` planning, compact manifests, compressed binary
+pack transport, atomic commit, compatibility behavior, and retained benchmarks.
+
 The codebase has detailed JSDoc annotations throughout — these will surface inline in editors like VS Code.
 
 ### Horizontal Storage scaling

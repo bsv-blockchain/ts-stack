@@ -47,6 +47,16 @@ WALLET_BENCH_BYTES=8388608 BENCH_SAMPLES=7 \
 | 8 MiB warm `Beef.toUint8ArrayAtomic` | 1.701 ms | 0.0067 ms | 99.6% faster |
 | 8 MiB Wallet Wire `internalizeAction` round trip | 68.88 ms | 1.41 ms | 98.0% faster |
 
+The subsequent zero-copy Wallet Wire pass was measured separately against its
+immediate branch base (`af70681d9`) with nine samples on the same host. It
+pre-sizes the request/response writers and hands their written views directly
+to the compact-byte transport:
+
+| 8 MiB Wallet Wire workload (median) | Immediate base | Zero-copy handoff | Improvement |
+| --- | ---: | ---: | ---: |
+| `internalizeAction` round trip | 1.407 ms | 0.471 ms | 66.5% faster |
+| `createAction` BEEF request plus signable BEEF response | 2.905 ms | 0.712 ms | 75.5% faster |
+
 The benchmark accepts `SDK_DIST_ROOT` to run the exact same code against
 another built SDK. Atomic BEEF caching is mutation-aware, so graph changes
 invalidate the cached bytes before reuse.

@@ -114,6 +114,19 @@ export function plannerOutputLockingScript(state: ActionBatchPlannerState, outpu
   return script.toBinary()
 }
 
+export function plannerInputLockingScript(
+  state: ActionBatchPlannerState,
+  input: Pick<StorageCreateTransactionSdkInput, 'sourceTxid' | 'sourceVout'>
+): number[] {
+  return plannerOutputLockingScript(
+    state,
+    resolveInputOutput(state, {
+      txid: input.sourceTxid,
+      vout: input.sourceVout
+    })
+  )
+}
+
 function sdkInputFromExplicit(
   state: ActionBatchPlannerState,
   input: Validation.ValidCreateActionInput,
@@ -378,7 +391,7 @@ export function addPlannerOutputs(
 export function stageTransactionOutputs(
   state: ActionBatchPlannerState,
   tx: Transaction,
-  dcr: StorageCreateActionResult
+  dcr: Pick<StorageCreateActionResult, 'outputs' | 'derivationPrefix'>
 ): void {
   state.discardedStagedTxids.delete(tx.id('hex'))
   const now = new Date()

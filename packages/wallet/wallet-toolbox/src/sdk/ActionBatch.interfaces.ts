@@ -1,6 +1,13 @@
 import type { TXIDHexString, Validation } from '@bsv/sdk'
 import type { TableOutput, TableOutputBasket } from '../storage/schema/tables'
-import type { StorageCreateActionResult, StorageFeeModel, StorageProcessActionResults } from './WalletStorage.interfaces'
+import type {
+  StorageCreateActionResult,
+  StorageCreateTransactionSdkInput,
+  StorageFeeModel,
+  StorageProcessActionResults
+} from './WalletStorage.interfaces'
+
+export type ActionBatchPackEncoding = 'identity' | 'gzip' | 'brotli'
 
 /** Internal Wallet Toolbox capabilities. These do not extend the BRC-100 wallet interface. */
 export interface StorageCapabilities {
@@ -13,6 +20,22 @@ export interface StorageCapabilities {
     hardLifetimeMs: number
     /** Large first actions may omit bytes that will be uploaded at commit. */
     compactBegin?: boolean
+    /**
+     * Compact manifests derive source and output scripts from the transaction
+     * graph instead of transferring duplicate script strings and blobs.
+     */
+    manifestVersion?: 2
+    /** A prepared compact manifest may be committed by its semantic digest. */
+    commitByDigest?: boolean
+    /** Multiple logical blobs may share one authenticated binary request. */
+    packedUploads?: {
+      version: 1
+      maxPackBytes: number
+      maxItems: number
+      encodings: ActionBatchPackEncoding[]
+      /** Packs may be uploaded before the final manifest is prepared. */
+      eager: boolean
+    }
   }
 }
 
@@ -73,6 +96,18 @@ export interface ActionBatchCommitMetadata {
   outputs: Validation.ValidCreateActionOutput[]
 }
 
+export interface ActionBatchCommitInput extends Omit<StorageCreateTransactionSdkInput, 'sourceLockingScript'> {
+  /**
+   * Version-1 manifests carry this value. Version-2 manifests derive it from
+   * the proven source output and therefore omit it.
+   */
+  sourceLockingScript?: string
+}
+
+export interface ActionBatchCommitPlan extends Omit<StorageCreateActionResult, 'inputs'> {
+  inputs: ActionBatchCommitInput[]
+}
+
 export interface ActionBatchCommitAction {
   reference: string
   txid: TXIDHexString
@@ -80,12 +115,16 @@ export interface ActionBatchCommitAction {
   rawTxDigest?: string
   /** Content-addressed locking scripts aligned to plan.outputs for compact workspaces. */
   lockingScriptDigests?: Array<string | undefined>
-  plan: StorageCreateActionResult
+  /** Version 2 derives the scripts identified above from rawTx. */
+  deriveLockingScripts?: boolean
+  plan: ActionBatchCommitPlan
   metadata: ActionBatchCommitMetadata
   commissionKeyOffset?: string
 }
 
 export interface ActionBatchManifest {
+  /** Omitted for the original manifest format. */
+  format?: 2
   batchId: string
   digest: string
   actions: ActionBatchCommitAction[]
@@ -109,6 +148,24 @@ export interface PutActionBatchBlobArgs {
   batchId: string
   digest: string
   bytes: number[] | Uint8Array
+}
+
+export interface ActionBatchPackItem {
+  digest: string
+  bytes: number[] | Uint8Array
+}
+
+export interface PutActionBatchPackArgs {
+  batchId: string
+  items: ActionBatchPackItem[]
+  maxPackBytes: number
+  maxItems: number
+  preferredEncodings?: ActionBatchPackEncoding[]
+}
+
+export interface CommitActionBatchByDigestArgs {
+  batchId: string
+  digest: string
 }
 
 export interface CommitActionBatchResult extends StorageProcessActionResults {

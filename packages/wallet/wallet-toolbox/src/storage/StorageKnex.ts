@@ -69,6 +69,10 @@ export interface StorageKnexOptions extends StorageProviderOptions {
   knex: Knex
 }
 
+// Keep bulk statements below conservative SQLite/MySQL bind-parameter
+// ceilings. The surrounding transaction still makes a complete pack atomic.
+const ACTION_BATCH_BLOB_SQL_CHUNK = 500
+
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
 
@@ -360,6 +364,46 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
     this.deserialiseFromKnex(row)
     return this.validateEntity(row)
+  }
+
+  override async findActionBatchBlobRecords (
+    actionBatchId: number,
+    digests: string[],
+    trx?: TrxToken
+  ): Promise<TableActionBatchBlob[]> {
+    if (digests.length === 0) return []
+    const rows: TableActionBatchBlob[] = []
+    const uniqueDigests = [...new Set(digests)]
+    for (let offset = 0; offset < uniqueDigests.length; offset += ACTION_BATCH_BLOB_SQL_CHUNK) {
+      rows.push(...await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs')
+        .where({ actionBatchId })
+        .whereIn('digest', uniqueDigests.slice(offset, offset + ACTION_BATCH_BLOB_SQL_CHUNK)))
+    }
+    for (const row of rows) {
+      if (Buffer.isBuffer(row.bytes)) {
+        row.bytes = new Uint8Array(row.bytes.buffer, row.bytes.byteOffset, row.bytes.byteLength)
+      }
+      this.deserialiseFromKnex(row)
+    }
+    return this.validateEntities(rows)
+  }
+
+  override async putActionBatchBlobRecords (
+    blobs: TableActionBatchBlob[],
+    trx?: TrxToken
+  ): Promise<void> {
+    if (blobs.length === 0) return
+    const rows = await Promise.all(blobs.map(async blob => {
+      const row = await this.validateEntityForInsert(blob, trx)
+      if (row.actionBatchBlobId === 0) delete row.actionBatchBlobId
+      return row
+    }))
+    for (let offset = 0; offset < rows.length; offset += ACTION_BATCH_BLOB_SQL_CHUNK) {
+      await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs')
+        .insert(rows.slice(offset, offset + ACTION_BATCH_BLOB_SQL_CHUNK))
+        .onConflict(['actionBatchId', 'digest'])
+        .ignore()
+    }
   }
 
   override async deleteActionBatchBlobRecords (actionBatchId: number, trx?: TrxToken): Promise<void> {
@@ -1420,6 +1464,28 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       if (byTag[tag] == null) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
     }
     return byTag
+  }
+
+  override async findOrInsertTxLabelsBulk (
+    userId: number,
+    labels: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableTxLabel>> {
+    const byLabel: Record<string, TableTxLabel> = {}
+    if (labels.length < 1) return byLabel
+    const uniqueLabels = [...new Set(labels)]
+    const existing = await this.toDb(trx)<TableTxLabel>('tx_labels')
+      .where('userId', userId)
+      .whereIn('label', uniqueLabels)
+      .select('*')
+    for (const label of existing) {
+      if (label.isDeleted) await this.updateTxLabel(verifyId(label.txLabelId), { isDeleted: false }, trx)
+      byLabel[label.label] = label
+    }
+    for (const label of uniqueLabels) {
+      byLabel[label] ??= await this.findOrInsertTxLabel(userId, label, trx)
+    }
+    return byLabel
   }
 
   override async sumSpendableSatoshisInBasket (

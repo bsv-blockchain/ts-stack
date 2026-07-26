@@ -128,6 +128,54 @@ describe('in-memory action batch workspace', () => {
     expect(persisted.totalActions).toBe(10)
   })
 
+  test('persisted proof requests retain only the external frontier and reconstruct the full chain', async () => {
+    ctx.wallet.randomVals = randomVals
+    const script = '00'.repeat(64 * 1024)
+    const txids: string[] = []
+    let change: string[] = []
+    for (let index = 0; index < 8; index++) {
+      const staged = await ctx.wallet.createAction({
+        outputs: [{
+          satoshis: 1,
+          lockingScript: script,
+          outputDescription: 'generic repetitive data output'
+        }],
+        description: `Build generic proof-frontier action ${String(index)}`,
+        options: { noSend: true, noSendChange: change, randomizeOutputs: false }
+      })
+      txids.push(staged.txid!)
+      change = staged.noSendChange ?? []
+    }
+    await ctx.wallet.createAction({
+      description: 'Persist generic proof-frontier workload',
+      options: { sendWith: txids, acceptDelayedBroadcast: true }
+    })
+
+    const reqs = await ctx.activeStorage.findProvenTxReqs({ partial: {} })
+    const byTxid = new Map(reqs
+      .filter(req => txids.includes(req.txid))
+      .map(req => [req.txid, req]))
+    expect(byTxid.size).toBe(txids.length)
+
+    let frontierBytes = 0
+    for (const txid of txids) {
+      const inputBEEF = byTxid.get(txid)?.inputBEEF
+      expect(inputBEEF).toBeDefined()
+      frontierBytes += inputBEEF?.length ?? 0
+      const frontier = Beef.fromBinary(inputBEEF!)
+      expect(txids.some(batchTxid => frontier.findTxid(batchTxid) != null)).toBe(false)
+    }
+
+    const reconstructed = new Beef()
+    await ctx.activeStorage.mergeReqToBeefToShareExternally(
+      byTxid.get(txids.at(-1)!)!,
+      reconstructed,
+      []
+    )
+    expect(txids.every(txid => reconstructed.findTxid(txid) != null)).toBe(true)
+    expect(frontierBytes).toBeLessThan(reconstructed.toUint8Array().length * 2)
+  })
+
   test('concurrent planning shares one workspace without reusing inputs', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     ctx.wallet.randomVals = randomVals
@@ -379,6 +427,40 @@ describe('in-memory action batch workspace', () => {
     expect(capabilities).toHaveBeenCalledTimes(1)
     expect(legacyCreate).toHaveBeenCalledTimes(1)
     expect(legacyProcess).toHaveBeenCalledTimes(2)
+  })
+
+  test('version-1 action batch providers retain the original manifest protocol', async () => {
+    const currentCapabilities = await ctx.storage.getCapabilities()
+    const current = currentCapabilities.actionBatch
+    expect(current).toBeDefined()
+    jest.spyOn(ctx.storage, 'getCapabilities').mockResolvedValue({
+      actionBatch: {
+        version: 1,
+        maxInlineBytes: current!.maxInlineBytes,
+        maxBlobBytes: current!.maxBlobBytes,
+        maxConcurrentUploads: current!.maxConcurrentUploads,
+        leaseMs: current!.leaseMs,
+        hardLifetimeMs: current!.hardLifetimeMs,
+        compactBegin: current!.compactBegin
+      }
+    })
+    const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+    const commitByDigest = jest.spyOn(ctx.storage, 'commitActionBatchByDigest')
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction(actionArgs())
+    await ctx.wallet.createAction({
+      description: 'Commit through the original action batch protocol',
+      options: { sendWith: [staged.txid!] }
+    })
+
+    expect(commitByDigest).not.toHaveBeenCalled()
+    expect(commit).toHaveBeenCalledTimes(1)
+    const manifest = commit.mock.calls[0][0]
+    expect(manifest.format).toBeUndefined()
+    expect(manifest.actions[0].deriveLockingScripts).toBeUndefined()
+    expect(manifest.actions[0].plan.inputs.every(input => input.sourceLockingScript != null)).toBe(true)
+    const requestedScriptDigest = actionBatchBlobDigest(asArray(actionArgs().outputs![0].lockingScript))
+    expect(manifest.inlineBlobs?.[requestedScriptDigest]).toBeDefined()
   })
 
   test('capabilities are negotiated once for each active provider', async () => {
@@ -868,7 +950,7 @@ describe('in-memory action batch workspace', () => {
     expect(committed.actions[0].txid).toBe(normal.txid)
   })
 
-  test('large finalization uploads unique scripts once and commits by manifest digest', async () => {
+  test('large finalization derives scripts, packs raw transactions, and commits by manifest digest', async () => {
     const getCapabilities = ctx.storage.getCapabilities.bind(ctx.storage)
     jest.spyOn(ctx.storage, 'getCapabilities').mockImplementation(async () => {
       const capabilities = await getCapabilities()
@@ -882,7 +964,9 @@ describe('in-memory action batch workspace', () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     const prepare = jest.spyOn(ctx.storage, 'prepareActionBatchCommit')
     const upload = jest.spyOn(ctx.storage, 'putActionBatchBlob')
+    const uploadPack = jest.spyOn(ctx.storage, 'putActionBatchPack')
     const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+    const commitByDigest = jest.spyOn(ctx.storage, 'commitActionBatchByDigest')
     const script = '00'.repeat(256)
     ctx.wallet.randomVals = randomVals
     const txids: string[] = []
@@ -899,10 +983,62 @@ describe('in-memory action batch workspace', () => {
     await ctx.wallet.createAction({ description: 'Commit large payload batch', options: { sendWith: txids } })
     expect(begin).toHaveBeenCalledTimes(1)
     expect(prepare).toHaveBeenCalledTimes(1)
-    expect(commit).toHaveBeenCalledTimes(1)
+    expect(commit).not.toHaveBeenCalled()
+    expect(commitByDigest).toHaveBeenCalledTimes(1)
+    expect(upload).not.toHaveBeenCalled()
+    expect(uploadPack).toHaveBeenCalled()
+    const manifest = prepare.mock.calls[0][0]
+    expect(manifest.format).toBe(2)
+    expect(commitByDigest).toHaveBeenCalledWith({
+      batchId: manifest.batchId,
+      digest: manifest.digest
+    })
     const scriptDigest = actionBatchBlobDigest(asArray(script))
-    expect(upload.mock.calls.filter(([args]) => args.digest === scriptDigest)).toHaveLength(1)
-    expect(new Set(upload.mock.calls.map(([args]) => args.digest)).size).toBe(upload.mock.calls.length)
+    expect(manifest.actions.every(action =>
+      action.deriveLockingScripts === true &&
+      action.plan.inputs.every(input => input.sourceLockingScript == null) &&
+      action.plan.outputs.every(output => output.lockingScript === '') &&
+      action.lockingScriptDigests?.includes(scriptDigest) === true
+    )).toBe(true)
+    expect(uploadPack.mock.calls.flatMap(([args]) => args.items)
+      .some(item => item.digest === scriptDigest)).toBe(false)
+  })
+
+  test('final preparation retries a failed speculative eager pack', async () => {
+    const capabilities = (await ctx.storage.getCapabilities()).actionBatch
+    expect(capabilities?.packedUploads).toBeDefined()
+    jest.spyOn(ctx.storage, 'getCapabilities').mockResolvedValue({
+      actionBatch: {
+        ...capabilities!,
+        maxInlineBytes: 1,
+        maxBlobBytes: 512,
+        packedUploads: {
+          ...capabilities!.packedUploads!,
+          maxPackBytes: 512,
+          eager: true
+        }
+      }
+    })
+    const putPack = ctx.storage.putActionBatchPack.bind(ctx.storage)
+    const uploadPack = jest.spyOn(ctx.storage, 'putActionBatchPack')
+      .mockRejectedValueOnce(new Error('transient eager upload failure'))
+      .mockImplementation(async args => await putPack(args))
+    ctx.wallet.randomVals = randomVals
+    const staged = await ctx.wallet.createAction({
+      outputs: [{
+        satoshis: 1,
+        lockingScript: '00'.repeat(2048),
+        outputDescription: 'generic eager retry output'
+      }],
+      description: 'Stage an eager upload retry',
+      options: { noSend: true, randomizeOutputs: false }
+    })
+
+    await expect(ctx.wallet.createAction({
+      description: 'Commit after the speculative upload retry',
+      options: { sendWith: [staged.txid!] }
+    })).resolves.toBeDefined()
+    expect(uploadPack.mock.calls.length).toBeGreaterThan(1)
   })
 
   test('provider blob limits split logical blobs into deduplicated authenticated chunks', async () => {
@@ -919,7 +1055,8 @@ describe('in-memory action batch workspace', () => {
       }
     })
     const upload = jest.spyOn(ctx.storage, 'putActionBatchBlob')
-    const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+    const uploadPack = jest.spyOn(ctx.storage, 'putActionBatchPack')
+    const prepare = jest.spyOn(ctx.storage, 'prepareActionBatchCommit')
     const script = '00'.repeat(1024)
     ctx.wallet.randomVals = randomVals
     const staged = await ctx.wallet.createAction({
@@ -929,10 +1066,13 @@ describe('in-memory action batch workspace', () => {
     })
     await ctx.wallet.createAction({ description: 'Commit chunked payload batch', options: { sendWith: [staged.txid!] } })
 
-    const scriptDigest = actionBatchBlobDigest(asArray(script))
-    const manifest = commit.mock.calls[0][0]
-    expect(manifest.blobChunks?.[scriptDigest]?.length).toBeGreaterThan(1)
-    expect(upload.mock.calls.every(([args]) => args.bytes.length <= 128)).toBe(true)
-    expect(new Set(upload.mock.calls.map(([args]) => args.digest)).size).toBe(upload.mock.calls.length)
+    const manifest = prepare.mock.calls[0][0]
+    const rawDigest = manifest.actions[0].rawTxDigest
+    expect(rawDigest).toBeDefined()
+    expect(manifest.blobChunks?.[rawDigest!]?.length).toBeGreaterThan(1)
+    expect(upload).not.toHaveBeenCalled()
+    const packedItems = uploadPack.mock.calls.flatMap(([args]) => args.items)
+    expect(packedItems.every(item => item.bytes.length <= 128)).toBe(true)
+    expect(new Set(packedItems.map(item => item.digest)).size).toBe(packedItems.length)
   })
 })

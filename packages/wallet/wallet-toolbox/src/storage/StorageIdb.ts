@@ -1268,6 +1268,37 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return blob
   }
 
+  override async findActionBatchBlobRecords(
+    actionBatchId: number,
+    digests: string[],
+    trx?: TrxToken
+  ): Promise<TableActionBatchBlob[]> {
+    const tx = this.toDbTrx(['action_batch_blobs'], 'readonly', trx)
+    const store = tx.objectStore('action_batch_blobs')
+    if (store.get == null) throw new WERR_INTERNAL('IndexedDB action_batch_blobs store does not support get')
+    const blobs: TableActionBatchBlob[] = []
+    for (const digest of new Set(digests)) {
+      const blob = await store.get([actionBatchId, digest])
+      if (blob != null) blobs.push(blob)
+    }
+    if (trx == null) await tx.done
+    return blobs
+  }
+
+  override async putActionBatchBlobRecords(blobs: TableActionBatchBlob[], trx?: TrxToken): Promise<void> {
+    if (blobs.length === 0) return
+    const tx = this.toDbTrx(['action_batch_blobs'], 'readwrite', trx)
+    const store = tx.objectStore('action_batch_blobs')
+    if (store.put == null) throw new WERR_INTERNAL('IndexedDB action_batch_blobs store does not support put')
+    for (const blob of blobs) {
+      await store.put({
+        ...blob,
+        bytes: blob.bytes instanceof Uint8Array ? blob.bytes : Uint8Array.from(blob.bytes)
+      })
+    }
+    if (trx == null) await tx.done
+  }
+
   override async deleteActionBatchBlobRecords(actionBatchId: number, trx?: TrxToken): Promise<void> {
     const tx = this.toDbTrx(['action_batch_blobs'], 'readwrite', trx)
     const store = tx.objectStore('action_batch_blobs')
