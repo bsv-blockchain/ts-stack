@@ -2,14 +2,20 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Capability, CapabilityContext, BaseBuilder, RouteDef } from '../types.js'
 
-export function newBuilder (): BaseBuilder {
-  return { main: { imports: [], wraps: [] }, app: { imports: [], routes: [] }, server: { imports: [], routes: [], setup: [] } }
+export function newBuilder(): BaseBuilder {
+  return {
+    main: { imports: [], wraps: [] },
+    app: { imports: [], routes: [] },
+    server: { imports: [], routes: [], setup: [] }
+  }
 }
 
 // Relative import specifier from a base file (at `<target>/src/`) to a glue file
 // under `ctx.bsvDir`. Default bsvDir 'src/bsv' → './bsv/<name>'; e.g. 'lib/bsv' → '../lib/bsv/<name>'.
-export function bsvImport (ctx: CapabilityContext, name: string): string {
-  const rel = ctx.bsvDir.startsWith('src/') ? './' + ctx.bsvDir.slice('src/'.length) : '../' + ctx.bsvDir
+export function bsvImport(ctx: CapabilityContext, name: string): string {
+  const rel = ctx.bsvDir.startsWith('src/')
+    ? './' + ctx.bsvDir.slice('src/'.length)
+    : '../' + ctx.bsvDir
   return `${rel}/${name}`
 }
 
@@ -73,7 +79,7 @@ server.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`)
 `
 
 // Baseline server config — every env the server reads, in one place.
-export function serverConfig (ctx: CapabilityContext): string {
+export function serverConfig(ctx: CapabilityContext): string {
   return `// Centralized server configuration, read from the environment.
 import { PrivateKey } from '@bsv/sdk'
 
@@ -115,7 +121,7 @@ export function Home () {
 
 // Build the wrapped-app JSX: opens in push order, <App />, closes reversed — each
 // nesting level indented +2 (the marker's own column is added on top by assembleBaseFile).
-function wrappedApp (wraps: Array<{ open: string, close: string }>): string {
+function wrappedApp(wraps: Array<{ open: string; close: string }>): string {
   if (wraps.length === 0) return '<App />'
   const lines: string[] = []
   wraps.forEach((w, i) => lines.push('  '.repeat(i) + w.open))
@@ -125,21 +131,21 @@ function wrappedApp (wraps: Array<{ open: string, close: string }>): string {
 }
 
 // Render route descriptors → named imports + <Route> JSX (scaffolder owns the JSX).
-export function routeImports (routes: RouteDef[]): string {
+export function routeImports(routes: RouteDef[]): string {
   return routes.map(r => `import { ${r.component} } from '${r.importPath}'`).join('\n')
 }
 
-export function routeJsx (routes: RouteDef[]): string {
+export function routeJsx(routes: RouteDef[]): string {
   return routes.map(r => `<Route path="${r.path}" element={<${r.component} />} />`).join('\n')
 }
 
 // Home demo-hub links, one per capability route (label falls back to the path).
-function homeLinks (routes: RouteDef[]): string {
+function homeLinks(routes: RouteDef[]): string {
   if (routes.length === 0) return '<p>No capability demos installed.</p>'
   return routes.map(r => `<Link to="${r.path}">${r.label ?? r.path} →</Link>`).join('\n')
 }
 
-export function assembleBaseFile (template: string, b: BaseBuilder, ctx: CapabilityContext): string {
+export function assembleBaseFile(template: string, b: BaseBuilder, ctx: CapabilityContext): string {
   let out = template
   // Replace each marker, indenting every line after the first to the marker's own
   // column so multi-line insertions (wraps, routes, links) stay aligned.
@@ -154,7 +160,9 @@ export function assembleBaseFile (template: string, b: BaseBuilder, ctx: Capabil
     }
   }
   // app imports = explicit imports + one generated import per route descriptor
-  const appImports = [...b.app.imports, routeImports(b.app.routes)].filter(s => s.length > 0).join('\n')
+  const appImports = [...b.app.imports, routeImports(b.app.routes)]
+    .filter(s => s.length > 0)
+    .join('\n')
   // Generated base files (Home, server entry) live at <target>/src/ but import glue from bsvDir.
   sub("'./bsv/Home'", `'${bsvImport(ctx, 'Home')}'`)
   sub("'./bsv/config.js'", `'${bsvImport(ctx, 'config.js')}'`)
@@ -165,21 +173,26 @@ export function assembleBaseFile (template: string, b: BaseBuilder, ctx: Capabil
   sub('/*{{server.imports}}*/', b.server.imports.join('\n'))
   sub('/*{{server.routes}}*/', b.server.routes.join('\n'))
   sub('/*{{server.setup}}*/', b.server.setup.join('\n'))
-  sub('/*{{home.imports}}*/', b.app.routes.length > 0 ? "import { Link } from 'react-router-dom'" : '')
+  sub(
+    '/*{{home.imports}}*/',
+    b.app.routes.length > 0 ? "import { Link } from 'react-router-dom'" : ''
+  )
   sub('{/*{{home.links}}*/}', homeLinks(b.app.routes))
   return out
-    .split('\n').map(line => line.trimEnd()).join('\n') // drop trailing whitespace left by removed markers
+    .split('\n')
+    .map(line => line.trimEnd())
+    .join('\n') // drop trailing whitespace left by removed markers
     .replace(/\n{3,}/g, '\n\n') // collapse blank-line runs
 }
 
-export function assembleAndWrite (
+export function assembleAndWrite(
   caps: Capability[],
   ctx: CapabilityContext,
-  dirs: { clientDir?: string, serverDir?: string }
-): { client: string[], server: string[] } {
+  dirs: { clientDir?: string; serverDir?: string }
+): { client: string[]; server: string[] } {
   const builder = newBuilder()
   for (const cap of caps) cap.baseEdits?.({ builder, ctx })
-  const result: { client: string[], server: string[] } = { client: [], server: [] }
+  const result: { client: string[]; server: string[] } = { client: [], server: [] }
   const write = (dir: string, rel: string, content: string, bucket: string[]): void => {
     const abs = join(dir, rel)
     mkdirSync(dirname(abs), { recursive: true })
@@ -187,12 +200,32 @@ export function assembleAndWrite (
     bucket.push(rel)
   }
   if (dirs.clientDir != null) {
-    write(dirs.clientDir, 'src/main.tsx', assembleBaseFile(MAIN_TEMPLATE, builder, ctx), result.client)
-    write(dirs.clientDir, 'src/App.tsx', assembleBaseFile(APP_TEMPLATE, builder, ctx), result.client)
-    write(dirs.clientDir, `${ctx.bsvDir}/Home.tsx`, assembleBaseFile(HOME_TEMPLATE, builder, ctx), result.client)
+    write(
+      dirs.clientDir,
+      'src/main.tsx',
+      assembleBaseFile(MAIN_TEMPLATE, builder, ctx),
+      result.client
+    )
+    write(
+      dirs.clientDir,
+      'src/App.tsx',
+      assembleBaseFile(APP_TEMPLATE, builder, ctx),
+      result.client
+    )
+    write(
+      dirs.clientDir,
+      `${ctx.bsvDir}/Home.tsx`,
+      assembleBaseFile(HOME_TEMPLATE, builder, ctx),
+      result.client
+    )
   }
   if (dirs.serverDir != null) {
-    write(dirs.serverDir, 'src/index.ts', assembleBaseFile(SERVER_TEMPLATE, builder, ctx), result.server)
+    write(
+      dirs.serverDir,
+      'src/index.ts',
+      assembleBaseFile(SERVER_TEMPLATE, builder, ctx),
+      result.server
+    )
     write(dirs.serverDir, `${ctx.bsvDir}/config.ts`, serverConfig(ctx), result.server)
   }
   return result

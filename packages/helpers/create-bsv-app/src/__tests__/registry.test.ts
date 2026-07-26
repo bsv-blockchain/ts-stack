@@ -25,7 +25,9 @@ describe('capability registry', () => {
 describe('resolveCapabilities expandRequires', () => {
   // Item 8: expandRequires:false — no auto-pull of wallet-connect
   test('expandRequires:false returns only the named id (wallet-login, no wallet-connect pulled)', () => {
-    expect(resolveCapabilities(['wallet-login'], { expandRequires: false }).map(c => c.id)).toEqual(['wallet-login'])
+    expect(resolveCapabilities(['wallet-login'], { expandRequires: false }).map(c => c.id)).toEqual(
+      ['wallet-login']
+    )
   })
 
   // Item 8: default (expand) pulls wallet-connect first, then wallet-login

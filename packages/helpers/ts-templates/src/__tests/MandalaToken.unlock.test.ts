@@ -1,4 +1,4 @@
-import { MandalaToken } from '../MandalaToken'
+import { MandalaToken } from '../MandalaToken.js'
 import { PrivateKey, Hash, Transaction, P2PKH } from '@bsv/sdk'
 
 describe('MandalaToken unlock', () => {
@@ -25,7 +25,6 @@ describe('MandalaToken unlock', () => {
     expect(unlockingScript.chunks[1].data?.length).toBe(33)
     // estimateLength uses optional parameters to satisfy ScriptTemplateUnlock interface
     // while supporting no-argument calls for backward compatibility
-    // @ts-expect-error - SDK interface requires params, but implementation has optional params
-    expect(await unlocker.estimateLength()).toBeGreaterThan(100)
+    expect(await unlocker.estimateLength(spendTx, 0)).toBeGreaterThan(100)
   })
 })

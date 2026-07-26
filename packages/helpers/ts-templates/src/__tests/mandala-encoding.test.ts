@@ -1,7 +1,7 @@
 import {
   createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
   decodeScriptNumChunk, encodeAssetId, decodeAssetId
-} from '../mandala-encoding'
+} from '../mandala-encoding.js'
 
 describe('mandala-encoding', () => {
   it('round-trips small and large script numbers', () => {

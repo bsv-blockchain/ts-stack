@@ -22,9 +22,10 @@ export interface ConfigDraft {
   targets?: TargetPaths
 }
 
-export function draftToConfigInput (d: ConfigDraft): Record<string, unknown> {
+export function draftToConfigInput(d: ConfigDraft): Record<string, unknown> {
   const stack: Record<string, unknown> = {}
-  if (d.frontend === 'react') stack.frontend = { framework: 'react', variant: d.frontendVariant ?? 'react-ts' }
+  if (d.frontend === 'react')
+    stack.frontend = { framework: 'react', variant: d.frontendVariant ?? 'react-ts' }
   if (d.backend === 'express') stack.backend = { framework: 'express' }
   return {
     mode: d.mode,
@@ -41,11 +42,11 @@ export function draftToConfigInput (d: ConfigDraft): Record<string, unknown> {
   }
 }
 
-export function resolveDraft (d: ConfigDraft): ProjectConfig {
+export function resolveDraft(d: ConfigDraft): ProjectConfig {
   return resolveConfig(draftToConfigInput(d))
 }
 
-export function seedDraft (existing: ProjectManifest | null, flags: ConfigDraft): ConfigDraft {
+export function seedDraft(existing: ProjectManifest | null, flags: ConfigDraft): ConfigDraft {
   const mode = flags.mode ?? (existing == null ? 'new' : 'add')
   if (mode === 'add' && existing != null) {
     return {
@@ -65,9 +66,12 @@ export function seedDraft (existing: ProjectManifest | null, flags: ConfigDraft)
     }
   }
   const starter = flags.starter ?? 'custom'
-  const defaults = getStarter(starter)?.supportsCapabilities === true
-    ? listCapabilities().filter(capability => capability.defaultSelected).map(capability => capability.id)
-    : []
+  const defaults =
+    getStarter(starter)?.supportsCapabilities === true
+      ? listCapabilities()
+          .filter(capability => capability.defaultSelected)
+          .map(capability => capability.id)
+      : []
   return {
     ...flags,
     mode,

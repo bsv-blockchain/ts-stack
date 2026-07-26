@@ -7,10 +7,14 @@ import { resolveConfigFromFile } from '../file'
 import { ConfigError } from '../validate'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-file-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-file-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
-function writeFile (name: string, content: string): string {
+function writeFile(name: string, content: string): string {
   const p = join(dir, name)
   writeFileSync(p, content)
   return p
@@ -18,7 +22,14 @@ function writeFile (name: string, content: string): string {
 
 describe('resolveConfigFromFile', () => {
   test('loads and resolves a valid config file', () => {
-    const p = writeFile('config.json', JSON.stringify({ name: 'demo', stack: { frontend: { framework: 'react' } }, capabilities: ['wallet-login'] }))
+    const p = writeFile(
+      'config.json',
+      JSON.stringify({
+        name: 'demo',
+        stack: { frontend: { framework: 'react' } },
+        capabilities: ['wallet-login']
+      })
+    )
     const c = resolveConfigFromFile(p)
     expect(c.name).toBe('demo')
     expect(c.stack.frontend?.framework).toBe('react')
@@ -36,7 +47,14 @@ describe('resolveConfigFromFile', () => {
   })
 
   test('propagates ConfigError from resolveConfig (unknown capability)', () => {
-    const p = writeFile('bad-cap.json', JSON.stringify({ name: 'x', stack: { backend: { framework: 'express' } }, capabilities: ['nope'] }))
+    const p = writeFile(
+      'bad-cap.json',
+      JSON.stringify({
+        name: 'x',
+        stack: { backend: { framework: 'express' } },
+        capabilities: ['nope']
+      })
+    )
     expect(() => resolveConfigFromFile(p)).toThrow(/unknown capability/i)
   })
 })

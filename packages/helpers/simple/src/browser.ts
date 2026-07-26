@@ -63,7 +63,7 @@ export async function createWallet(defaults?: Partial<WalletDefaults>): Promise<
 // Re-exports
 // ============================================================================
 
-export { BrowserWallet as Wallet }
+export type { BrowserWallet as Wallet }
 export { Overlay } from './modules/overlay'
 export { Certifier } from './modules/certification'
 export { WalletCore } from './core/WalletCore'

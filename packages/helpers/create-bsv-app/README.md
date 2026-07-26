@@ -42,29 +42,29 @@ The catalogue is defined once in `src/starters.ts` and drives the CLI, interacti
 
 ### Generated starters
 
-| id | What it creates |
-| --- | --- |
-| `custom` | Choose React, Express, or both and select capabilities yourself. |
-| `react` | Vite + React + TypeScript with the wallet baseline. |
-| `express` | Express + TypeScript with the wallet/auth server baseline. |
+| id           | What it creates                                                           |
+| ------------ | ------------------------------------------------------------------------- |
+| `custom`     | Choose React, Express, or both and select capabilities yourself.          |
+| `react`      | Vite + React + TypeScript with the wallet baseline.                       |
+| `express`    | Express + TypeScript with the wallet/auth server baseline.                |
 | `full-stack` | Independent `client/` and `server/` packages plus one root `npm run dev`. |
 
 ### Complete example starters
 
-| id | Example | BRC-102 project structure |
-| --- | --- | --- |
-| `brc102-frontend` | Frontend project template | Yes |
-| `brc102-backend` | Overlay backend project template | Yes |
-| `pollr` | Blockchain polls backed by overlays | Yes |
-| `meter` | Wallets, sCrypt contracts, and overlays | Yes |
-| `metamarket` | Marketplace for 3D objects | Yes |
-| `todo` | Wallet baskets and encryption | Yes |
-| `marscast` | Micropayment-monetized Mars weather | No |
-| `coinflip` | Trustless peer-to-peer interactions | Yes |
-| `postboard` | Public message board on an overlay | Yes |
-| `locksmith` | Lock and unlock coins with a message | Yes |
-| `peerpay` | Identity-backed peer-to-peer payments | Yes |
-| `atfinder` | Alternative PeerPay interface | No |
+| id                | Example                                 | BRC-102 project structure |
+| ----------------- | --------------------------------------- | ------------------------- |
+| `brc102-frontend` | Frontend project template               | Yes                       |
+| `brc102-backend`  | Overlay backend project template        | Yes                       |
+| `pollr`           | Blockchain polls backed by overlays     | Yes                       |
+| `meter`           | Wallets, sCrypt contracts, and overlays | Yes                       |
+| `metamarket`      | Marketplace for 3D objects              | Yes                       |
+| `todo`            | Wallet baskets and encryption           | Yes                       |
+| `marscast`        | Micropayment-monetized Mars weather     | No                        |
+| `coinflip`        | Trustless peer-to-peer interactions     | Yes                       |
+| `postboard`       | Public message board on an overlay      | Yes                       |
+| `locksmith`       | Lock and unlock coins with a message    | Yes                       |
+| `peerpay`         | Identity-backed peer-to-peer payments   | Yes                       |
+| `atfinder`        | Alternative PeerPay interface           | No                        |
 
 Complete examples are shallow-cloned from their declared branch, detached from the source repository by removing the copied `.git` directory, and recorded with repository, ref, and commit provenance. BRC-102 is useful deployment metadata, not a requirement for inclusion in the catalogue.
 
@@ -72,11 +72,11 @@ Complete examples are shallow-cloned from their declared branch, detached from t
 
 Generated starters can include these composable capabilities:
 
-| id | What it adds |
-| --- | --- |
-| `wallet-connect` | Default baseline: connect a BRC-100 desktop or relay wallet, expose app-wide wallet state, and provide the shared BRC-103 proof primitive. |
-| `wallet-login` | Passwordless login using a proof bound to the server identity and `action: "login"`. |
-| `signed-requests` | Per-request authentication using a proof bound to the route and request body. |
+| id                | What it adds                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `wallet-connect`  | Default baseline: connect a BRC-100 desktop or relay wallet, expose app-wide wallet state, and provide the shared BRC-103 proof primitive. |
+| `wallet-login`    | Passwordless login using a proof bound to the server identity and `action: "login"`.                                                       |
+| `signed-requests` | Per-request authentication using a proof bound to the route and request body.                                                              |
 
 New generated projects include `wallet-connect` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
 
@@ -171,25 +171,25 @@ The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and 
 
 ## Flags
 
-| Flag | Description |
-| --- | --- |
-| `new` / `add` | Optional mode subcommand. |
-| `--dir <path>` | Target directory; also accepted as the one positional argument. |
-| `--starter <id>` | Generated or complete-example starter from the unified catalogue. |
-| `--name <name>` | Project name; defaults to the target directory in non-interactive new mode. |
-| `--frontend <react\|none>` | Custom generated frontend. |
-| `--backend <express\|none>` | Custom generated backend. |
-| `--variant <name>` | Vite template variant; defaults to `react-ts`. |
-| `--capabilities <a,b>` | Comma-separated generated capability ids. |
-| `--bsv-dir <path>` | Capability helper directory; defaults to `src/bsv`. |
-| `--package-manager <npm\|pnpm\|yarn\|bun>` | Generator and install package manager. |
-| `--network <main\|test>` | Generated BSV network default. |
-| `--install` / `--skip-install` | Enable or skip dependency installation; enabled by default. |
-| `--glue` / `--no-glue` | Enable or skip automatic generated app wiring. |
-| `--force` | In add mode, overwrite existing capability utility files. |
-| `--file <path>` | Read a complete JSON configuration. |
-| `--ui` | Use the local browser interface. |
-| `--yes` | Resolve from flags without prompting. |
+| Flag                                       | Description                                                                 |
+| ------------------------------------------ | --------------------------------------------------------------------------- |
+| `new` / `add`                              | Optional mode subcommand.                                                   |
+| `--dir <path>`                             | Target directory; also accepted as the one positional argument.             |
+| `--starter <id>`                           | Generated or complete-example starter from the unified catalogue.           |
+| `--name <name>`                            | Project name; defaults to the target directory in non-interactive new mode. |
+| `--frontend <react\|none>`                 | Custom generated frontend.                                                  |
+| `--backend <express\|none>`                | Custom generated backend.                                                   |
+| `--variant <name>`                         | Vite template variant; defaults to `react-ts`.                              |
+| `--capabilities <a,b>`                     | Comma-separated generated capability ids.                                   |
+| `--bsv-dir <path>`                         | Capability helper directory; defaults to `src/bsv`.                         |
+| `--package-manager <npm\|pnpm\|yarn\|bun>` | Generator and install package manager.                                      |
+| `--network <main\|test>`                   | Generated BSV network default.                                              |
+| `--install` / `--skip-install`             | Enable or skip dependency installation; enabled by default.                 |
+| `--glue` / `--no-glue`                     | Enable or skip automatic generated app wiring.                              |
+| `--force`                                  | In add mode, overwrite existing capability utility files.                   |
+| `--file <path>`                            | Read a complete JSON configuration.                                         |
+| `--ui`                                     | Use the local browser interface.                                            |
+| `--yes`                                    | Resolve from flags without prompting.                                       |
 
 Unknown options, missing flag values, invalid enum values, conflicting modes, and extra positional arguments are rejected.
 

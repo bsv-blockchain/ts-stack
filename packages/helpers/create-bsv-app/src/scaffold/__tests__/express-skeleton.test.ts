@@ -6,12 +6,21 @@ import { join } from 'node:path'
 import { expressSkeletonScaffolder, scaffolderFor, viteScaffolder } from '../base-scaffolder'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-exp-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-exp-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 describe('expressSkeletonScaffolder', () => {
   test('writes a runnable express-ts skeleton', () => {
-    expressSkeletonScaffolder.scaffold({ kind: 'backend', target: { framework: 'express' } }, dir, { packageManager: 'npm', runCommand: () => { throw new Error('should not run a command') } })
+    expressSkeletonScaffolder.scaffold({ kind: 'backend', target: { framework: 'express' } }, dir, {
+      packageManager: 'npm',
+      runCommand: () => {
+        throw new Error('should not run a command')
+      }
+    })
     expect(existsSync(join(dir, 'src/index.ts'))).toBe(true)
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
     expect(pkg.dependencies).toHaveProperty('express')

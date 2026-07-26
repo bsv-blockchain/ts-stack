@@ -6,8 +6,12 @@ import { join } from 'node:path'
 import { writeFiles } from '../engine'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 describe('writeFiles', () => {
   test('writes files and creates nested directories', () => {

@@ -2,7 +2,13 @@ import { describe, expect, test } from '@jest/globals'
 import { walletConnect } from '../wallet-connect'
 import { newBuilder } from '../../scaffold/base-app'
 
-const ctx = { name: 'demo', network: 'test' as const, bsvDir: 'src/bsv', stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } }, layout: 'frontend-only' as const }
+const ctx = {
+  name: 'demo',
+  network: 'test' as const,
+  bsvDir: 'src/bsv',
+  stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
+  layout: 'frontend-only' as const
+}
 
 describe('wallet-connect', () => {
   test('id + defaultSelected + roles', () => {
@@ -59,11 +65,17 @@ describe('wallet-connect', () => {
   test('baseEdits mounts the WalletRelayService on the server (relay needs a backend)', () => {
     const b = newBuilder()
     walletConnect.baseEdits?.({ builder: b, ctx })
-    expect(b.server.imports.join()).toContain("import { WalletRelayService } from '@bsv/wallet-relay'")
-    expect(b.server.setup.join()).toContain('new WalletRelayService({ app, server, wallet: serverWallet')
+    expect(b.server.imports.join()).toContain(
+      "import { WalletRelayService } from '@bsv/wallet-relay'"
+    )
+    expect(b.server.setup.join()).toContain(
+      'new WalletRelayService({ app, server, wallet: serverWallet'
+    )
   })
   test('relay client points at the server via API_BASE_URL', () => {
-    const provider = (walletConnect.files(ctx).client ?? []).find(f => f.path === 'WalletConnectionContext.tsx')
+    const provider = (walletConnect.files(ctx).client ?? []).find(
+      f => f.path === 'WalletConnectionContext.tsx'
+    )
     expect(provider?.content).toContain('apiUrl = API_BASE_URL')
     expect(provider?.content).toContain("from './config.js'")
   })
@@ -75,12 +87,22 @@ describe('wallet-connect', () => {
     expect(Object.keys(client)).not.toContain('@bsv/sdk')
     // server gets the relay + its peer deps (qrcode, ws)
     const server = walletConnect.npmDependencies(ctx).server ?? {}
-    expect(Object.keys(server)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'qrcode', 'ws']))
+    expect(Object.keys(server)).toEqual(
+      expect.arrayContaining(['@bsv/wallet-relay', 'qrcode', 'ws'])
+    )
   })
   test('wallet-connect provides ConnectWallet + client config and only main.* baseEdits (Home is a generated base file)', () => {
-    const ctx2 = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } }, layout: 'frontend-only' as const }
+    const ctx2 = {
+      name: 'd',
+      network: 'test' as const,
+      bsvDir: 'src/bsv',
+      stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
+      layout: 'frontend-only' as const
+    }
     const client = (walletConnect.files(ctx2).client ?? []).map(f => f.path)
-    expect(client).toEqual(expect.arrayContaining(['ConnectWallet.tsx', 'config.ts', 'WalletContext.tsx']))
+    expect(client).toEqual(
+      expect.arrayContaining(['ConnectWallet.tsx', 'config.ts', 'WalletContext.tsx'])
+    )
     expect(client).not.toContain('Home.tsx') // Home is assembled from HOME_TEMPLATE, not a capability file
     const b = newBuilder()
     walletConnect.baseEdits?.({ builder: b, ctx: ctx2 })
@@ -92,10 +114,19 @@ describe('wallet-connect', () => {
     expect(walletConnect.npmDependencies(ctx2).client).toHaveProperty('react-router-dom')
   })
   test('WalletContext is a connect state machine (connect/connectMobile/cancel/status)', () => {
-    const wc = (walletConnect.files({ name: 'd', network: 'test', bsvDir: 'src/bsv', stack: {}, layout: 'frontend-only' } as any).client ?? []).find(f => f.path === 'WalletContext.tsx')
-    for (const s of ['connect', 'connectMobile', 'cancel', 'status']) expect(wc?.content).toContain(s)
+    const wc = (
+      walletConnect.files({
+        name: 'd',
+        network: 'test',
+        bsvDir: 'src/bsv',
+        stack: {},
+        layout: 'frontend-only'
+      } as any).client ?? []
+    ).find(f => f.path === 'WalletContext.tsx')
+    for (const s of ['connect', 'connectMobile', 'cancel', 'status'])
+      expect(wc?.content).toContain(s)
   })
-  test('agentsSection has the How it works / How it\'s used / Future integrations structure', () => {
+  test("agentsSection has the How it works / How it's used / Future integrations structure", () => {
     const md = walletConnect.agentsSection(ctx)
     expect(md).toContain('### How it works')
     expect(md).toContain("### How it's used")

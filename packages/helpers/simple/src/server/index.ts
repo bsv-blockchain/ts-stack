@@ -3,10 +3,12 @@
  */
 
 // Handler types & utilities
-export {
+export type {
   HandlerRequest,
   HandlerResponse,
-  RouteHandler,
+  RouteHandler
+} from './handler-types'
+export {
   getSearchParams,
   jsonResponse,
   toNextHandlers
@@ -16,7 +18,8 @@ export {
 export { JsonFileStore } from './json-file-store'
 
 // Identity Registry
-export { IdentityRegistry, RegistryResult, createIdentityRegistryHandler } from './identity-registry'
+export type { RegistryResult } from './identity-registry'
+export { IdentityRegistry, createIdentityRegistryHandler } from './identity-registry'
 
 // DID Resolver
 export { DIDResolverService, createDIDResolverHandler } from './did-resolver'

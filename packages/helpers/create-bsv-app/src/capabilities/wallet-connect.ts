@@ -39,7 +39,7 @@ export async function connectDesktopWallet (): Promise<{ wallet: WalletInterface
 }
 `
 
-function clientConfig (ctx: CapabilityContext): string {
+function clientConfig(ctx: CapabilityContext): string {
   return `// Centralized client configuration. Vite loads VITE_-prefixed vars from client/.env.
 // Base URL of the server API. Defaults to the dev server; set VITE_API_URL in production
 // (or whenever the client is served from a different origin than the API).
@@ -280,7 +280,7 @@ export function ConnectWallet () {
 }
 `
 
-function agentsSection (_ctx: CapabilityContext): string {
+function agentsSection(_ctx: CapabilityContext): string {
   return `## wallet-connect (base)
 
 Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) or mobile/relay (\`@bsv/wallet-relay\`) — use it app-wide, and sign/verify the \`@bsv/auth\` proofs that \`wallet-login\` and \`signed-requests\` build on.
@@ -310,10 +310,11 @@ Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) o
 export const walletConnect: Capability = {
   id: 'wallet-connect',
   title: 'Wallet connect (desktop + relay, app-wide context)',
-  description: 'Base: connect any BRC-100 wallet (desktop or mobile/relay) and use it across the app, plus the @bsv/auth proof primitive.',
+  description:
+    'Base: connect any BRC-100 wallet (desktop or mobile/relay) and use it across the app, plus the @bsv/auth proof primitive.',
   roles: ['shared', 'client', 'server'],
   defaultSelected: true,
-  files: (ctx) => ({
+  files: ctx => ({
     shared: [{ path: 'auth.ts', content: AUTH_UTIL }],
     client: [
       { path: 'walletAcquisition.ts', content: ACQUISITION },
@@ -327,12 +328,16 @@ export const walletConnect: Capability = {
     ],
     server: [{ path: 'nonceStore.ts', content: NONCE_STORE }]
   }),
-  baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
-    builder.main.imports.push(`import { WalletProviders } from '${bsvImport(ctx, 'WalletProviders')}'`)
+  baseEdits: ({ builder, ctx }: { builder: BaseBuilder; ctx: CapabilityContext }) => {
+    builder.main.imports.push(
+      `import { WalletProviders } from '${bsvImport(ctx, 'WalletProviders')}'`
+    )
     builder.main.wraps.push({ open: '<WalletProviders>', close: '</WalletProviders>' })
     // Server side of the relay: one service registers REST /api/session(+/:id, /request/:id) and the /ws upgrade.
     builder.server.imports.push("import { WalletRelayService } from '@bsv/wallet-relay'")
-    builder.server.setup.push('new WalletRelayService({ app, server, wallet: serverWallet, origin: CLIENT_ORIGIN }) // mobile-wallet pairing relay (QR)')
+    builder.server.setup.push(
+      'new WalletRelayService({ app, server, wallet: serverWallet, origin: CLIENT_ORIGIN }) // mobile-wallet pairing relay (QR)'
+    )
   },
   npmDependencies: () => ({
     shared: { '@bsv/auth': '^0.1.0', '@bsv/sdk': '^2.1.0' },

@@ -21,6 +21,20 @@ const config: ProjectConfig = {
 }
 
 describe('renderAgentsMd', () => {
+  test('documents a project with no installed capabilities without empty wiring blocks', () => {
+    const md = renderAgentsMd(
+      {
+        ...config,
+        capabilities: []
+      },
+      []
+    )
+
+    expect(md).toContain('# demo — agent guide')
+    expect(md).not.toContain('## Wiring')
+    expect(md).not.toContain('### `server/src/index.ts`')
+  })
+
   test('includes header, deps, and the wallet-login section', () => {
     // wallet-login requires wallet-connect; render both so @bsv/auth (from wallet-connect) appears in deps
     const md = renderAgentsMd(config, [walletConnect, walletLogin])

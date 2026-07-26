@@ -1,4 +1,4 @@
-import { MandalaToken } from '../MandalaToken'
+import { MandalaToken } from '../MandalaToken.js'
 import { Hash, PrivateKey } from '@bsv/sdk'
 
 describe('MandalaToken lock/decode', () => {
@@ -41,7 +41,7 @@ describe('MandalaToken lock/decode', () => {
 
   it('decode throws when the amount chunk is empty/zero', () => {
     const assetId = `${'a'.repeat(64)}.0`
-    const pkh = new Array(20).fill(1)
+    const pkh = Array.from({ length: 20 }, () => 1)
     const script = new MandalaToken().lock(assetId, 5, pkh)
     // Replace the amount push (chunk index 1) with an empty (OP_0) push.
     script.chunks[1] = { op: 0 }

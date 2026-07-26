@@ -1,8 +1,8 @@
 // Browser-safe default entrypoint
 // Server-only exports are available via '@bsv/simple/server'
 
-export { createWallet, Wallet, Overlay, Certifier, WalletCore } from './browser'
-export type { BrowserWallet } from './browser'
+export { createWallet, Overlay, Certifier, WalletCore } from './browser'
+export type { BrowserWallet, Wallet } from './browser'
 
 // DID & Credentials (browser-safe)
 export { DID } from './modules/did'

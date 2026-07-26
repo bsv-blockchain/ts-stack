@@ -7,8 +7,12 @@ import type { ProjectConfig } from '../config/model'
 import type { RunCommand } from '../scaffold/base-scaffolder'
 
 let dir: string
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-pipe-')) })
-afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'cba-pipe-'))
+})
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
 
 const newConfig: ProjectConfig = {
   mode: 'new',
@@ -27,7 +31,9 @@ const newConfig: ProjectConfig = {
 
 test('applyConfig new-mode scaffolds via runCommand and reports skipped=[]', () => {
   const calls: string[][] = []
-  const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+  const fake: RunCommand = (command, args) => {
+    calls.push([command, ...args])
+  }
   const res = applyConfig(newConfig, dir, { runCommand: fake })
   expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
   // new-mode expands requires: wallet-login → wallet-connect + wallet-login, so auth.ts comes from wallet-connect
@@ -39,7 +45,9 @@ test('applyConfig new-mode scaffolds via runCommand and reports skipped=[]', () 
 test('applyConfig add-mode places only wallet-login files (no auth.ts, expandRequires:false)', () => {
   // add-mode does NOT expand requires, so only wallet-login's own files are placed
   const addConfig: ProjectConfig = { ...newConfig, mode: 'add' }
-  const boom: RunCommand = () => { throw new Error('must not run a command in add mode') }
+  const boom: RunCommand = () => {
+    throw new Error('must not run a command in add mode')
+  }
   const res = applyConfig(addConfig, dir, { runCommand: boom, force: false })
   // wallet-login has no shared/auth.ts — that lives in wallet-connect
   expect(res.written).not.toContain('src/bsv/auth.ts')
@@ -63,7 +71,9 @@ test('applyConfig add-mode with force:false preserves an existing util file', ()
 
 test('applyConfig new-mode written includes AGENTS.md, manifest, and main.tsx (matches /plan)', () => {
   const calls: string[][] = []
-  const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+  const fake: RunCommand = (command, args) => {
+    calls.push([command, ...args])
+  }
   const glueConfig: ProjectConfig = { ...newConfig, glue: true }
   const res = applyConfig(glueConfig, dir, { runCommand: fake })
   expect(res.written).toContain('src/bsv/auth.ts')

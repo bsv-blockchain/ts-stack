@@ -1,12 +1,17 @@
 import { configSchema, type ConfigSchema } from '../config/schema.js'
 import { listCapabilities } from '../registry.js'
 import { remainingCapabilityIds, type ProjectManifest } from '../config/project-manifest.js'
-export function serializeSchema (existing: ProjectManifest | null): ConfigSchema {
+export function serializeSchema(existing: ProjectManifest | null): ConfigSchema {
   const allIds = listCapabilities().map(c => c.id)
-  const defaultIds = new Set(listCapabilities().filter(c => c.defaultSelected === true).map(c => c.id))
-  const offerable = existing === null
-    ? allIds.filter(id => !defaultIds.has(id))
-    : remainingCapabilityIds(existing, allIds)
+  const defaultIds = new Set(
+    listCapabilities()
+      .filter(c => c.defaultSelected === true)
+      .map(c => c.id)
+  )
+  const offerable =
+    existing === null
+      ? allIds.filter(id => !defaultIds.has(id))
+      : remainingCapabilityIds(existing, allIds)
   return configSchema.map(section => ({
     ...section,
     fields: section.fields.map(field => {
@@ -112,7 +117,8 @@ body { background: #0b0e13; color: #cdd4de; font: 14px/1.5 system-ui, -apple-sys
 .overlay p { font: 400 13px/1.6 system-ui; color: #8b95a0; margin: 0 0 24px; }
 `
 
-const LOGO_SVG = '<svg id="logo-svg" width="450" height="450" viewBox="0 0 450 450" xmlns="http://www.w3.org/2000/svg"><line x1="405" y1="225" x2="352.27922061357856" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="224.99999999999997" y1="45" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><circle cx="405" cy="225" r="8" fill="#2196F3"></circle><circle cx="352.27922061357856" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="225" cy="405" r="8" fill="#2196F3"></circle><circle cx="97.72077938642146" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="45" cy="225.00000000000003" r="8" fill="#2196F3"></circle><circle cx="97.72077938642141" cy="97.72077938642146" r="8" fill="#2196F3"></circle><circle cx="224.99999999999997" cy="45" r="8" fill="#2196F3"></circle><circle cx="352.2792206135785" cy="97.72077938642141" r="8" fill="#2196F3"></circle></svg>'
+const LOGO_SVG =
+  '<svg id="logo-svg" width="450" height="450" viewBox="0 0 450 450" xmlns="http://www.w3.org/2000/svg"><line x1="405" y1="225" x2="352.27922061357856" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="224.99999999999997" y1="45" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><circle cx="405" cy="225" r="8" fill="#2196F3"></circle><circle cx="352.27922061357856" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="225" cy="405" r="8" fill="#2196F3"></circle><circle cx="97.72077938642146" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="45" cy="225.00000000000003" r="8" fill="#2196F3"></circle><circle cx="97.72077938642141" cy="97.72077938642146" r="8" fill="#2196F3"></circle><circle cx="224.99999999999997" cy="45" r="8" fill="#2196F3"></circle><circle cx="352.2792206135785" cy="97.72077938642141" r="8" fill="#2196F3"></circle></svg>'
 
 const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static page (no dependencies).
  * Reads window.__SCHEMA__ / __SEED__ / __INCLUDED__ and POSTs the draft to /generate.
@@ -506,7 +512,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
 })();
 `
 
-export function buildPage (opts: {
+export function buildPage(opts: {
   schema: unknown
   seed: unknown
   included?: Array<{ label: string }>
@@ -514,11 +520,19 @@ export function buildPage (opts: {
   commandLabel?: string
 }): string {
   const data =
-    'window.__SCHEMA__ = ' + JSON.stringify(opts.schema) + ';\n' +
-    'window.__SEED__ = ' + JSON.stringify(opts.seed) + ';\n' +
-    'window.__INCLUDED__ = ' + JSON.stringify(opts.included ?? []) + ';\n' +
+    'window.__SCHEMA__ = ' +
+    JSON.stringify(opts.schema) +
+    ';\n' +
+    'window.__SEED__ = ' +
+    JSON.stringify(opts.seed) +
+    ';\n' +
+    'window.__INCLUDED__ = ' +
+    JSON.stringify(opts.included ?? []) +
+    ';\n' +
     (opts.accent == null ? '' : 'window.__ACCENT__ = ' + JSON.stringify(opts.accent) + ';\n') +
-    (opts.commandLabel == null ? '' : 'window.__CMD_LABEL__ = ' + JSON.stringify(opts.commandLabel) + ';\n')
+    (opts.commandLabel == null
+      ? ''
+      : 'window.__CMD_LABEL__ = ' + JSON.stringify(opts.commandLabel) + ';\n')
 
   return `<!doctype html>
 <html lang="en">

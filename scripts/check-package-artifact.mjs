@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
-import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 
-const execFileAsync = promisify(execFile)
+import { createCommandRunner } from './lib/command-runner.mjs'
+
 const COMMAND_TIMEOUT_MS = 180_000
 const MAX_BUFFER_BYTES = 20 * 1024 * 1024
 
@@ -45,26 +44,10 @@ function entryExportsOption(arguments_, rootExports) {
   return entries
 }
 
-function commandError(error) {
-  const details = [error.stdout, error.stderr]
-    .map(value => value?.toString().trim())
-    .filter(Boolean)
-    .join('\n')
-  return details || error.message
-}
-
-async function run(command, arguments_, options = {}) {
-  try {
-    return await execFileAsync(command, arguments_, {
-      encoding: 'utf8',
-      maxBuffer: MAX_BUFFER_BYTES,
-      timeout: COMMAND_TIMEOUT_MS,
-      ...options
-    })
-  } catch (error) {
-    throw new Error(`${command} ${arguments_.join(' ')} failed:\n${commandError(error)}`)
-  }
-}
+const run = createCommandRunner({
+  timeoutMs: COMMAND_TIMEOUT_MS,
+  maxBufferBytes: MAX_BUFFER_BYTES
+})
 
 function isDeclarationFile(file) {
   return /\.d\.[cm]?ts$/i.test(file)
@@ -171,12 +154,7 @@ async function checkPublint(tarballPath) {
 
 export function typeProblemsForModes(problems, modes) {
   return problems.filter(
-    problem =>
-      !(
-        problem.kind === 'NoResolution' &&
-        problem.resolutionKind === 'node16-cjs' &&
-        !modes.includes('cjs')
-      )
+    problem => !(problem.resolutionKind === 'node16-cjs' && !modes.includes('cjs'))
   )
 }
 

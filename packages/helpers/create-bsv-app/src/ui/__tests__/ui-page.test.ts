@@ -61,7 +61,11 @@ describe('serializeSchema', () => {
 
 describe('buildPage', () => {
   test('buildPage is self-contained (no external src/href) and inlines schema/seed', () => {
-    const html = buildPage({ schema: serializeSchema(null), seed: { mode: 'new' }, included: [{ label: 'wallet-connect' }] })
+    const html = buildPage({
+      schema: serializeSchema(null),
+      seed: { mode: 'new' },
+      included: [{ label: 'wallet-connect' }]
+    })
     expect(html).toContain('<!doctype html>')
     expect(html).toContain('window.__SCHEMA__')
     expect(html).toContain('window.__SEED__')
@@ -81,7 +85,11 @@ describe('buildPage', () => {
 
   test('renders "Always included" chips when included list is provided', () => {
     const schema = serializeSchema(null)
-    const html = buildPage({ schema, seed: { mode: 'new' }, included: [{ label: 'Wallet connect' }] })
+    const html = buildPage({
+      schema,
+      seed: { mode: 'new' },
+      included: [{ label: 'Wallet connect' }]
+    })
     expect(html).toContain('Always included')
     expect(html).toContain('Wallet connect')
     expect(html).toContain('window.__INCLUDED__')
@@ -97,7 +105,11 @@ describe('buildPage', () => {
   })
 
   test('impact panel is captioned as BSV-files-only', () => {
-    const html = buildPage({ schema: serializeSchema(null), seed: { mode: 'new' }, included: [{ label: 'Wallet connect' }] })
+    const html = buildPage({
+      schema: serializeSchema(null),
+      seed: { mode: 'new' },
+      included: [{ label: 'Wallet connect' }]
+    })
     expect(html).toContain('scaffolded separately')
   })
 })

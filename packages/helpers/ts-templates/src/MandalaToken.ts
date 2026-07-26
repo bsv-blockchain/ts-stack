@@ -79,7 +79,7 @@ export class MandalaToken implements ScriptTemplate {
           { op: pubkeyForScript.length, data: pubkeyForScript }
         ])
       },
-      estimateLength: async (tx?: Transaction, inputIndex?: number) => 108
+      estimateLength: async (_tx?: Transaction, _inputIndex?: number) => 108
     }
   }
 

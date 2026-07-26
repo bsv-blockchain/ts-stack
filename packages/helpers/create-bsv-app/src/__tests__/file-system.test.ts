@@ -2,15 +2,15 @@ import { afterEach, beforeEach, expect, test } from '@jest/globals'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  readUtf8FileIfExists,
-  writeUtf8FileAtomic,
-  writeUtf8FileExclusive
-} from '../file-system'
+import { readUtf8FileIfExists, writeUtf8FileAtomic, writeUtf8FileExclusive } from '../file-system'
 
 let directory: string
-beforeEach(() => { directory = mkdtempSync(join(tmpdir(), 'cba-fs-')) })
-afterEach(() => { rmSync(directory, { recursive: true, force: true }) })
+beforeEach(() => {
+  directory = mkdtempSync(join(tmpdir(), 'cba-fs-'))
+})
+afterEach(() => {
+  rmSync(directory, { recursive: true, force: true })
+})
 
 test('reads existing files and returns undefined for missing files', () => {
   const file = join(directory, 'value.txt')
@@ -43,9 +43,8 @@ test('atomic writes replace a complete file without leaving a temporary file', (
 })
 
 test('atomic writes close and remove temporary files after a write failure', () => {
-  expect(() => writeUtf8FileAtomic(
-    join(directory, 'value.txt'),
-    null as unknown as string
-  )).toThrow()
+  expect(() =>
+    writeUtf8FileAtomic(join(directory, 'value.txt'), null as unknown as string)
+  ).toThrow()
   expect(readdirSync(directory)).toEqual([])
 })

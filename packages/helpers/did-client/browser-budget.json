@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/did-client",
+  "entry": ".",
+  "requiredExports": ["DIDClient"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 490000,
+      "gzip": 126000,
+      "brotli": 104000
+    },
+    "esbuild": {
+      "raw": 380000,
+      "gzip": 116000,
+      "brotli": 98000
+    }
+  },
+  "umd": {
+    "path": "dist/umd/bundle.js",
+    "global": "did-client",
+    "maximumBytes": {
+      "raw": 375000,
+      "gzip": 112000,
+      "brotli": 95000
+    }
+  }
+}

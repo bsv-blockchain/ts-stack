@@ -3,7 +3,7 @@ import { describe, expect, test } from '@jest/globals'
 import { configSchema, isFieldVisible, visibleFields, evaluateWhen } from '../schema'
 import type { ConfigField } from '../schema'
 
-function field (key: string): ConfigField {
+function field(key: string): ConfigField {
   for (const s of configSchema) {
     const f = s.fields.find(x => x.key === key)
     if (f !== undefined) return f
@@ -16,8 +16,12 @@ describe('evaluateWhen', () => {
     expect(evaluateWhen(undefined, {})).toBe(true)
   })
   test('all entries must match (AND)', () => {
-    expect(evaluateWhen({ mode: 'new', frontend: 'react' }, { mode: 'new', frontend: 'react' })).toBe(true)
-    expect(evaluateWhen({ mode: 'new', frontend: 'react' }, { mode: 'new', frontend: 'none' })).toBe(false)
+    expect(
+      evaluateWhen({ mode: 'new', frontend: 'react' }, { mode: 'new', frontend: 'react' })
+    ).toBe(true)
+    expect(
+      evaluateWhen({ mode: 'new', frontend: 'react' }, { mode: 'new', frontend: 'none' })
+    ).toBe(false)
     expect(evaluateWhen({ mode: 'new' }, { mode: 'add' })).toBe(false)
   })
   test('missing draft key fails the condition', () => {
@@ -27,7 +31,14 @@ describe('evaluateWhen', () => {
 
 describe('config schema', () => {
   test('has the expected sections', () => {
-    expect(configSchema.map(s => s.id)).toEqual(['mode', 'starter', 'project', 'stack', 'bsv', 'tooling'])
+    expect(configSchema.map(s => s.id)).toEqual([
+      'mode',
+      'starter',
+      'project',
+      'stack',
+      'bsv',
+      'tooling'
+    ])
   })
 
   test('mode is the first section', () => {
@@ -37,7 +48,11 @@ describe('config schema', () => {
 
   test('when conditions are declarative objects', () => {
     expect(field('frontend').when).toEqual({ mode: 'new', starter: 'custom' })
-    expect(field('frontendVariant').when).toEqual({ mode: 'new', starter: 'custom', frontend: 'react' })
+    expect(field('frontendVariant').when).toEqual({
+      mode: 'new',
+      starter: 'custom',
+      frontend: 'react'
+    })
     expect(field('capabilities').when).toEqual({ starter: expect.any(Array) })
   })
 
@@ -61,8 +76,12 @@ describe('config schema', () => {
   test('visibleFields filters the stack section by the draft', () => {
     const stack = configSchema.find(s => s.id === 'stack')
     if (stack === undefined) throw new Error('no stack section')
-    expect(visibleFields(stack, { mode: 'new', starter: 'custom', frontend: 'none' }).map(f => f.key)).not.toContain('frontendVariant')
-    expect(visibleFields(stack, { mode: 'new', starter: 'custom', frontend: 'react' }).map(f => f.key)).toContain('frontendVariant')
+    expect(
+      visibleFields(stack, { mode: 'new', starter: 'custom', frontend: 'none' }).map(f => f.key)
+    ).not.toContain('frontendVariant')
+    expect(
+      visibleFields(stack, { mode: 'new', starter: 'custom', frontend: 'react' }).map(f => f.key)
+    ).toContain('frontendVariant')
   })
 })
 
@@ -71,7 +90,11 @@ describe('schema ui/desc hints', () => {
     for (const s of configSchema) expect(typeof s.desc).toBe('string')
   })
   test('mode/frontend/backend/network fields are segmented; type stays select', () => {
-    const f = (k: string): ConfigField => configSchema.flatMap(s => s.fields).find(x => x.key === k) ?? (() => { throw new Error(k) })()
+    const f = (k: string): ConfigField =>
+      configSchema.flatMap(s => s.fields).find(x => x.key === k) ??
+      (() => {
+        throw new Error(k)
+      })()
     for (const k of ['mode', 'frontend', 'backend', 'network']) {
       expect(f(k).ui).toBe('segmented')
       expect(f(k).type).toBe('select')

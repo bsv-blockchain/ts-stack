@@ -1,4 +1,4 @@
-import { StasToken } from '../StasToken'
+import { StasToken } from '../StasToken.js'
 import { LockingScript } from '@bsv/sdk'
 
 // Build a synthetic classic STAS script matching stas-js CreateContract shape:

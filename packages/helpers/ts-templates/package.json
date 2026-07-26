@@ -10,35 +10,46 @@
   },
   "type": "module",
   "description": "BSV Blockchain Script Templates",
-  "main": "dist/cjs/mod.js",
-  "module": "dist/esm/mod.js",
-  "types": "dist/types/mod.d.ts",
+  "main": "./dist/mod.cjs",
+  "module": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
   "files": [
     "dist",
-    "src",
-    "mod.ts",
+    "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/mod.d.ts",
+        "default": "./dist/mod.js"
+      },
+      "require": {
+        "types": "./dist/mod.d.cts",
+        "default": "./dist/mod.cjs"
+      }
     },
     "./*.ts": {
-      "types": "./dist/types/src/*.d.ts",
-      "import": "./dist/esm/src/*.js",
-      "require": "./dist/cjs/src/*.js"
+      "import": {
+        "types": "./dist/src/*.d.ts",
+        "default": "./dist/src/*.js"
+      },
+      "require": {
+        "types": "./dist/src/*.d.cts",
+        "default": "./dist/src/*.cjs"
+      }
     }
   },
   "scripts": {
-    "test": "npm run build && jest --passWithNoTests",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
-    "lint": "oxlint src",
-    "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
-    "dev": "tsc -b -w",
-    "prepublish": "npm run build"
+    "build": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
+    "dev": "pnpm build --watch",
+    "lint": "oxlint src __tests__ --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports ADMIN_PROTOCOL,Bsv21Token,DstasToken,MandalaAdmin,MandalaToken,MultiPushDrop,OpReturn,P2MSKH,StasToken",
+    "prepublishOnly": "pnpm build",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "repository": {
     "type": "git",
@@ -65,7 +76,7 @@
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
-    "tsconfig-to-dual-package": "^1.2.0",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3",
     "oxlint": "^1.75.0"
   },

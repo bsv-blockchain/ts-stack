@@ -13,7 +13,6 @@ import {
   Utils,
   WalletClient,
   WalletInterface,
-  WalletOutput,
   WalletProtocol
 } from '@bsv/sdk'
 import { DIDRecord, DIDQuery } from './types/index.js'
@@ -22,7 +21,6 @@ import { DIDRecord, DIDQuery } from './types/index.js'
  * Constants
  * ────────────────────────────────────────────────────────── */
 const PROTOCOL_ID: WalletProtocol = [2, 'did token'] // NOTE: Change to: [1, 'metanet did']
-const DEFAULT_KEY_ID = '1' // NOTE: Update to take into account derivation prefix / suffix
 const DEFAULT_OVERLAY_TOPIC = 'tm_did'
 const DEFAULT_LOOKUP_SERVICE = 'ls_did'
 
@@ -154,7 +152,7 @@ export class DIDClient {
       })
 
       // Filter to only the matching outpoint
-      const matchingOutput: WalletOutput = walletOutputs.outputs.find((o: any) => o.outpoint === outpoint)
+      const matchingOutput = walletOutputs.outputs.find(output => output.outpoint === outpoint)
       if (matchingOutput) {
         walletOutputs.outputs = [matchingOutput]
       } else {
@@ -200,7 +198,7 @@ export class DIDClient {
       const instructions = JSON.parse(output.customInstructions)
       derivationPrefix = instructions.derivationPrefix
       derivationSuffix = instructions.derivationSuffix
-    } catch (_malformedJson) {
+    } catch {
       // customInstructions is not valid JSON — return a structured error rather than throwing.
       return {
         status: 'error',
