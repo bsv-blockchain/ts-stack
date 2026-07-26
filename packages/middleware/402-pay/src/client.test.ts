@@ -64,7 +64,7 @@ function makeWallet(): WalletInterface {
     proveCertificate: vi.fn(),
     relinquishCertificate: vi.fn(),
     discoverByIdentityKey: vi.fn(),
-    discoverByAttributes: vi.fn(),
+    discoverByAttributes: vi.fn()
   } as unknown as WalletInterface
 }
 
@@ -73,6 +73,14 @@ function makeWallet(): WalletInterface {
 // ---------------------------------------------------------------------------
 
 describe('constructPaymentHeaders', () => {
+  it('rejects non-positive, fractional, and unsafe payment amounts', async () => {
+    for (const satoshis of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(
+        constructPaymentHeaders(makeWallet(), TEST_URL, satoshis, SERVER_KEY)
+      ).rejects.toThrow('positive safe integer')
+    }
+  })
+
   it('returns all five payment headers', async () => {
     const wallet = makeWallet()
     const headers = await constructPaymentHeaders(wallet, TEST_URL, 100, SERVER_KEY)
@@ -133,7 +141,9 @@ describe('constructPaymentHeaders', () => {
     for (const call of (wallet.getPublicKey as ReturnType<typeof vi.fn>).mock.calls) {
       expect(call[1]).toBe('https://pay.example.com')
     }
-    expect((wallet.createAction as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('https://pay.example.com')
+    expect((wallet.createAction as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe(
+      'https://pay.example.com'
+    )
   })
 
   it('passes the correct satoshi amount to createAction', async () => {
@@ -141,9 +151,7 @@ describe('constructPaymentHeaders', () => {
     await constructPaymentHeaders(wallet, TEST_URL, 777, SERVER_KEY)
     expect(wallet.createAction).toHaveBeenCalledWith(
       expect.objectContaining({
-        outputs: expect.arrayContaining([
-          expect.objectContaining({ satoshis: 777 })
-        ])
+        outputs: expect.arrayContaining([expect.objectContaining({ satoshis: 777 })])
       }),
       expect.any(String)
     )
@@ -239,33 +247,52 @@ describe('create402Fetch', () => {
     })
 
     it('returns the 402 directly when sats is not a valid number', async () => {
-      fetchMock.mockResolvedValue(makeResponse(402, '', {
-        [HEADERS.SATS]: 'not-a-number',
-        [HEADERS.SERVER]: SERVER_KEY
-      }))
+      fetchMock.mockResolvedValue(
+        makeResponse(402, '', {
+          [HEADERS.SATS]: 'not-a-number',
+          [HEADERS.SERVER]: SERVER_KEY
+        })
+      )
       const fetch402 = create402Fetch({ wallet: makeWallet() })
       const res = await fetch402(TEST_URL)
       expect(res.status).toBe(402)
     })
 
     it('returns the 402 directly when sats is zero', async () => {
-      fetchMock.mockResolvedValue(makeResponse(402, '', {
-        [HEADERS.SATS]: '0',
-        [HEADERS.SERVER]: SERVER_KEY
-      }))
+      fetchMock.mockResolvedValue(
+        makeResponse(402, '', {
+          [HEADERS.SATS]: '0',
+          [HEADERS.SERVER]: SERVER_KEY
+        })
+      )
       const fetch402 = create402Fetch({ wallet: makeWallet() })
       const res = await fetch402(TEST_URL)
       expect(res.status).toBe(402)
     })
 
     it('returns the 402 directly when sats is negative', async () => {
-      fetchMock.mockResolvedValue(makeResponse(402, '', {
-        [HEADERS.SATS]: '-10',
-        [HEADERS.SERVER]: SERVER_KEY
-      }))
+      fetchMock.mockResolvedValue(
+        makeResponse(402, '', {
+          [HEADERS.SATS]: '-10',
+          [HEADERS.SERVER]: SERVER_KEY
+        })
+      )
       const fetch402 = create402Fetch({ wallet: makeWallet() })
       const res = await fetch402(TEST_URL)
       expect(res.status).toBe(402)
+    })
+
+    it('returns the 402 directly for non-canonical or unsafe integer prices', async () => {
+      for (const sats of ['100junk', '01', '1.5', String(Number.MAX_SAFE_INTEGER + 1)]) {
+        fetchMock.mockResolvedValueOnce(
+          makeResponse(402, '', {
+            [HEADERS.SATS]: sats,
+            [HEADERS.SERVER]: SERVER_KEY
+          })
+        )
+        const fetch402 = create402Fetch({ wallet: makeWallet() })
+        expect((await fetch402(TEST_URL)).status).toBe(402)
+      }
     })
 
     it('does not call wallet when 402 headers are malformed', async () => {
@@ -320,9 +347,7 @@ describe('create402Fetch', () => {
       await fetch402(TEST_URL)
       expect(wallet.createAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          outputs: expect.arrayContaining([
-            expect.objectContaining({ satoshis: 250 })
-          ])
+          outputs: expect.arrayContaining([expect.objectContaining({ satoshis: 250 })])
         }),
         expect.any(String)
       )
@@ -360,10 +385,7 @@ describe('create402Fetch', () => {
         .mockResolvedValueOnce(makeResponse(200, 'paid'))
       const fetch402 = create402Fetch({ wallet })
       await fetch402('https://example.com/articles/foo')
-      expect(wallet.createAction).toHaveBeenCalledWith(
-        expect.anything(),
-        'https://example.com'
-      )
+      expect(wallet.createAction).toHaveBeenCalledWith(expect.anything(), 'https://example.com')
     })
 
     it('tags the output with 402-payment', async () => {
@@ -375,9 +397,7 @@ describe('create402Fetch', () => {
       await fetch402(TEST_URL)
       expect(wallet.createAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          outputs: expect.arrayContaining([
-            expect.objectContaining({ tags: ['402-payment'] })
-          ]),
+          outputs: expect.arrayContaining([expect.objectContaining({ tags: ['402-payment'] })]),
           labels: expect.arrayContaining(['402-payment'])
         }),
         expect.any(String)
@@ -393,12 +413,12 @@ describe('create402Fetch', () => {
       await fetch402(TEST_URL)
 
       const [, [, retransmitInit]] = fetchMock.mock.calls
-      const headers = retransmitInit.headers as Record<string, string>
-      expect(headers[HEADERS.BEEF]).toBe(FAKE_TX_BASE64)
-      expect(headers[HEADERS.SENDER]).toBe(SENDER_KEY)
-      expect(headers[HEADERS.NONCE]).toBeDefined()
-      expect(headers[HEADERS.TIME]).toBeDefined()
-      expect(headers[HEADERS.VOUT]).toBe('0')
+      const headers = new Headers(retransmitInit.headers)
+      expect(headers.get(HEADERS.BEEF)).toBe(FAKE_TX_BASE64)
+      expect(headers.get(HEADERS.SENDER)).toBe(SENDER_KEY)
+      expect(headers.get(HEADERS.NONCE)).toBeTruthy()
+      expect(headers.get(HEADERS.TIME)).toBeTruthy()
+      expect(headers.get(HEADERS.VOUT)).toBe('0')
     })
 
     it('preserves existing init headers on the retransmit', async () => {
@@ -410,8 +430,20 @@ describe('create402Fetch', () => {
       await fetch402(TEST_URL, { headers: { Authorization: 'Bearer token' } })
 
       const [, [, retransmitInit]] = fetchMock.mock.calls
-      const headers = retransmitInit.headers as Record<string, string>
-      expect(headers['Authorization']).toBe('Bearer token')
+      const headers = new Headers(retransmitInit.headers)
+      expect(headers.get('Authorization')).toBe('Bearer token')
+    })
+
+    it('preserves Headers instances on the retransmit', async () => {
+      const wallet = makeWallet()
+      fetchMock
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'paid'))
+      const fetch402 = create402Fetch({ wallet })
+      await fetch402(TEST_URL, { headers: new Headers({ 'x-request-id': 'request-1' }) })
+
+      const [, [, retransmitInit]] = fetchMock.mock.calls
+      expect(new Headers(retransmitInit.headers).get('x-request-id')).toBe('request-1')
     })
 
     it('includes the URL pathname in the createAction description', async () => {
@@ -479,7 +511,7 @@ describe('create402Fetch', () => {
         .mockResolvedValueOnce(make402Response(100))
         .mockResolvedValueOnce(makeResponse(200, 'cached body'))
       const fetch402 = create402Fetch({ wallet })
-      await fetch402(TEST_URL)         // populates cache
+      await fetch402(TEST_URL) // populates cache
       const cached = await fetch402(TEST_URL) // should hit cache
       expect(fetchMock).toHaveBeenCalledTimes(2) // only the 2 calls from the first request
       expect(await cached.text()).toBe('cached body')
@@ -537,7 +569,7 @@ describe('create402Fetch', () => {
       const fetch402 = create402Fetch({ wallet, cacheTimeoutMs: 1_000 })
       await fetch402(TEST_URL)
       vi.advanceTimersByTime(999) // still within window
-      await fetch402(TEST_URL)   // should hit cache
+      await fetch402(TEST_URL) // should hit cache
       expect(fetchMock).toHaveBeenCalledTimes(2) // no additional fetch calls
       vi.useRealTimers()
     })
@@ -555,6 +587,19 @@ describe('create402Fetch', () => {
       const r2 = await fetch402(URL2)
       expect(await r1.text()).toBe('foo content')
       expect(await r2.text()).toBe('bar content')
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+    })
+
+    it('does not cache successful non-GET payment responses', async () => {
+      const wallet = makeWallet()
+      fetchMock
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'first'))
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'second'))
+      const fetch402 = create402Fetch({ wallet })
+      expect(await (await fetch402(TEST_URL, { method: 'POST' })).text()).toBe('first')
+      expect(await (await fetch402(TEST_URL, { method: 'post' })).text()).toBe('second')
       expect(fetchMock).toHaveBeenCalledTimes(4)
     })
   })

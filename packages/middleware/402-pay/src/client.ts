@@ -44,17 +44,23 @@ export async function constructPaymentHeaders(
   satoshis: number,
   serverIdentityKey: string
 ): Promise<PaymentHeaders> {
+  if (!Number.isSafeInteger(satoshis) || satoshis <= 0) {
+    throw new RangeError('Payment price must be a positive safe integer')
+  }
   const originator = new URL(url).origin
   const nonce = Utils.toBase64(Random(8))
   const time = String(Date.now())
   const timeSuffixB64 = Utils.toBase64(Utils.toArray(time, 'utf8'))
 
   // Derive recipient public key via BRC-42
-  const { publicKey: derivedPubKey } = await wallet.getPublicKey({
-    protocolID: BRC29_PROTOCOL_ID,
-    keyID: `${nonce} ${timeSuffixB64}`,
-    counterparty: serverIdentityKey
-  }, originator)
+  const { publicKey: derivedPubKey } = await wallet.getPublicKey(
+    {
+      protocolID: BRC29_PROTOCOL_ID,
+      keyID: `${nonce} ${timeSuffixB64}`,
+      counterparty: serverIdentityKey
+    },
+    originator
+  )
 
   const pkh = PublicKey.fromString(derivedPubKey).toHash('hex') as string
 
@@ -65,22 +71,27 @@ export async function constructPaymentHeaders(
   )
 
   // Create payment transaction
-  const actionResult = await wallet.createAction({
-    description: `Paid Content: ${new URL(url).pathname}`,
-    outputs: [{
-      satoshis,
-      lockingScript: `76a914${pkh}88ac`,
-      outputDescription: '402 web payment',
-      customInstructions: JSON.stringify({
-        derivationPrefix: nonce,
-        derivationSuffix: timeSuffixB64,
-        serverIdentityKey
-      }),
-      tags: ['402-payment']
-    }],
-    labels: ['402-payment'],
-    options: { randomizeOutputs: false }
-  }, originator)
+  const actionResult = await wallet.createAction(
+    {
+      description: `Paid Content: ${new URL(url).pathname}`,
+      outputs: [
+        {
+          satoshis,
+          lockingScript: `76a914${pkh}88ac`,
+          outputDescription: '402 web payment',
+          customInstructions: JSON.stringify({
+            derivationPrefix: nonce,
+            derivationSuffix: timeSuffixB64,
+            serverIdentityKey
+          }),
+          tags: ['402-payment']
+        }
+      ],
+      labels: ['402-payment'],
+      options: { randomizeOutputs: false }
+    },
+    originator
+  )
 
   const txBase64 = Utils.toBase64(actionResult.tx as number[])
 
@@ -120,9 +131,13 @@ export function create402Fetch(options: Payment402Options) {
   }
 
   async function fetch402(url: string, init: RequestInit = {}): Promise<Response> {
+    const method = (init.method ?? 'GET').toUpperCase()
+    const cacheKey = `${method} ${url}`
+    const canCache = method === 'GET'
+
     // Check cache
-    const cached = cache.get(url)
-    if (cached && (Date.now() - cached.timestamp) < cacheTimeoutMs) {
+    const cached = canCache ? cache.get(cacheKey) : undefined
+    if (cached && Date.now() - cached.timestamp < cacheTimeoutMs) {
       return new Response(cached.body, {
         status: cached.response.status,
         headers: cached.response.headers
@@ -140,25 +155,27 @@ export function create402Fetch(options: Payment402Options) {
     const serverHeader = res.headers.get(HEADERS.SERVER)
     if (!satsHeader || !serverHeader) return res
 
-    const satoshis = Number.parseInt(satsHeader)
-    if (Number.isNaN(satoshis) || satoshis <= 0) return res
+    if (!/^[1-9]\d*$/.test(satsHeader)) return res
+    const satoshis = Number(satsHeader)
+    if (!Number.isSafeInteger(satoshis)) return res
 
     // Construct payment headers
     const paymentHeaders = await constructPaymentHeaders(wallet, url, satoshis, serverHeader)
 
     // Retransmit with payment headers
+    const paidHeaders = new Headers(init.headers)
+    for (const [name, value] of Object.entries(paymentHeaders)) {
+      paidHeaders.set(name, value)
+    }
     const paidRes = await fetch(url, {
       ...init,
-      headers: {
-        ...(init.headers as Record<string, string> | undefined),
-        ...paymentHeaders
-      }
+      headers: paidHeaders
     })
 
     // Cache successful responses
-    if (paidRes.ok) {
+    if (paidRes.ok && canCache) {
       const body = await paidRes.text()
-      cache.set(url, {
+      cache.set(cacheKey, {
         response: paidRes,
         body,
         timestamp: Date.now()
