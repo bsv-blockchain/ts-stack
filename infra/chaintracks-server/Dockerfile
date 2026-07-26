@@ -1,5 +1,5 @@
 # Build stage
-FROM node:24-alpine AS builder
+FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 
@@ -23,15 +23,14 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:24-alpine
+FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 WORKDIR /app
 
-# Patch OS openssl libs (CVE-2026-45447) and install better-sqlite3 native build
-# tools (see builder stage). Upgrade and add toolchain in one layer; the toolchain
-# is removed after npm ci below to keep the image slim.
-RUN apk upgrade --no-cache libssl3 libcrypto3 \
- && apk add --no-cache --virtual .build-deps python3 make g++
+# Install better-sqlite3 native build tools (see builder stage). The pinned
+# base is refreshed by reviewed Dependabot changes instead of mutating it with
+# a time-dependent apk upgrade. The toolchain is removed after npm ci below.
+RUN apk add --no-cache --virtual .build-deps python3 make g++
 
 # Copy package files
 COPY package*.json ./

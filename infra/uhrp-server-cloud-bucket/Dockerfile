@@ -1,5 +1,5 @@
 # ── Stage 1: build ──────────────────────────────────────────
-FROM node:24-alpine AS build
+FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS build
 
 WORKDIR /app
 
@@ -15,9 +15,7 @@ RUN npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3
 
 # ── Stage 2: production ────────────────────────────────────
-FROM node:24-alpine
-
-RUN apk upgrade --no-cache
+FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)

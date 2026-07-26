@@ -30,7 +30,7 @@ x-otel-env: &otel-env
 services:
   # ── Reverse proxy / router ─────────────────────────────────
   traefik:
-    image: traefik:v3.5
+    image: traefik:v3.5.6@sha256:16acb89c6db341182970d6fdafece31303b0a380a8ed7aa51682e225229bf1d2
     # File provider (not docker): the local daemon rejects Traefik's docker API
     # calls with a bare 400, so routes are declared in local/traefik/dynamic.yml
     # and point at each service's Docker-network DNS name.
@@ -50,7 +50,7 @@ services:
   mysql:
     # Pinned to 8.0: `mysql:8` now resolves to 8.4, which removed the
     # --default-authentication-plugin option (and changes auth defaults).
-    image: mysql:8.0
+    image: mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
     volumes:
@@ -66,7 +66,7 @@ services:
       start_period: 30s
 
   mongo:
-    image: mongo:6
+    image: mongo:6.0.28@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: rootpass

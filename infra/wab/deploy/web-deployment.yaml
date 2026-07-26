@@ -18,7 +18,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         # General image from infra-release.yaml (GHCR). Pin to a released v* tag.
-        - image: ghcr.io/bsv-blockchain/wab:v1.4.7
+        - image: ghcr.io/bsv-blockchain/wab:v1.4.10@sha256:b770900fcdfd151eca342d0e3d9b1ed49dc987f961b68d38e112f136d1fe10e5
           env:
           - name: DB_CLIENT
             value: mysql2

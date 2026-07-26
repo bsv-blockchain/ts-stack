@@ -68,6 +68,27 @@ updates:
         exclude-patterns:
           - '@bsv/*'
 
+  # Keep every digest-pinned service base in the coordinated maintenance PR.
+  # Version tags remain beside digests for reviewability; the digest is the
+  # immutable build input enforced by repository controls.
+  - package-ecosystem: docker
+    directories:
+      - /infra
+      - /infra/chaintracks-server
+      - /infra/message-box-server
+      - /infra/overlay-server
+      - /infra/overlay-server/deploy
+      - /infra/uhrp-server-basic
+      - /infra/uhrp-server-cloud-bucket
+      - /infra/wab
+      - /infra/wab/deploy
+      - /infra/wallet-infra
+      - /infra/wallet-infra/guides/kube_samples
+    patterns:
+      - '*'
+    multi-ecosystem-group: monthly-stack-maintenance
+    rebase-strategy: auto
+
   - package-ecosystem: gomod
     directory: /tools/codegen
     patterns:

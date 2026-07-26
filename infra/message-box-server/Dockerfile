@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM node:24-alpine AS builder
+FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 
@@ -27,11 +27,10 @@ RUN npm run build
 RUN cp out/knexfile.js ./knexfile.js
 
 # ---- Production stage ----
-FROM node:24-alpine
+FROM node:24.18.0-alpine3.24@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
-# Ensure all OS packages are up to date (patch CVEs in base image) and install nginx
-RUN apk upgrade --no-cache && \
-    apk add --no-cache nginx && \
+# Install nginx from the repository associated with the pinned Alpine base.
+RUN apk add --no-cache nginx && \
     chown -R nginx:www-data /var/lib/nginx
 
 WORKDIR /app

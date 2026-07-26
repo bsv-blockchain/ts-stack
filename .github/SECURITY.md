@@ -72,8 +72,13 @@ This repository follows the MBGA reliability and security programme:
 - Supply chain controls currently enforce frozen lockfiles, deny dependency
   lifecycle scripts by default in CI, explicitly rebuild audited native/build
   tools, run dependency review and high/critical audits, and enable Dependabot
-  security updates. License enforcement, SBOMs, and signed container artifacts
-  remain tracked completion gates in the repository health program; they are
-  not represented here as already complete.
+  security updates. Container builds additionally use digest-pinned bases,
+  committed locks, high/critical image gates, SPDX SBOMs, SLSA provenance,
+  immutable release tags, and keyless signatures or attestations with
+  verification before release completion. Automated license-policy
+  enforcement and npm-package SBOM/signing remain tracked completion gates in
+  the repository health program; they are not represented here as complete.
 
 See `specs/reliability/` for per-package security status.
+See `docs/reference/container-supply-chain.md` for image release and
+verification procedures.

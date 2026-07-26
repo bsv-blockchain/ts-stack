@@ -1,6 +1,6 @@
 services:
   mongodb:
-    image: mongo:6
+    image: mongo:6.0.28@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
     container_name: mongo
     ports:
       - "27017:27017"
@@ -11,7 +11,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD}
 
   mysql:
-    image: mysql:8
+    image: mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6
     container_name: mysql
     ports:
       - "3306:3306"
@@ -64,7 +64,7 @@ services:
     command: ["node", "--import", "./dist/telemetry.js", "dist/index.js"]
 
   janitor:
-    image: alpine:latest
+    image: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: janitor
     depends_on:
       - overlay-server
