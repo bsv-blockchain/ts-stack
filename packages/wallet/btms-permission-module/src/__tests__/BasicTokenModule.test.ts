@@ -382,10 +382,20 @@ describe('BasicTokenModule security primitives', () => {
     })
     expect(module.readVarint([0xff], 0)).toBeNull()
     expect(module.readVarint([], 0)).toBeNull()
+    expect(() => module.readVarint([], 0, true)).toThrow('Preimage too short for varint')
     expect(module.readVarint([0xfd], 0)).toBeNull()
     expect(module.readVarint([0xfe, 1], 0)).toBeNull()
     expect(() => module.readVarint([0xfd], 0, true)).toThrow('Preimage too short for varint')
     expect(() => module.readVarint([0xfe, 1], 0, true)).toThrow('Preimage too short for varint')
+  })
+
+  it('handles create actions whose output list is absent', () => {
+    const module = state(new BasicTokenModule(jest.fn()))
+    expect(module.extractTokenSpendInfo({} as CreateActionArgs)).toMatchObject({
+      hasTokenOutputs: false,
+      outputChangeAmount: 0,
+      outputSendAmount: 0
+    })
   })
 
   it('classifies pure burns and rejects mixed burn-and-send actions', () => {

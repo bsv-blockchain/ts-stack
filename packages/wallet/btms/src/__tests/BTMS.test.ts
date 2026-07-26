@@ -1975,6 +1975,24 @@ describe('BTMS', () => {
       }
     })
   })
+
+  describe('change output strategies', () => {
+    it('splits random change without losing value', () => {
+      const outputs = BTMS.computeChangeOutputs(
+        {
+          assetId: `${MOCK_TXID}.0`,
+          changeAmount: 100,
+          paymentAmount: 50,
+          totalInput: 150
+        },
+        { minOutputAmount: 5, splitCount: 3, strategy: 'split-random' }
+      )
+
+      expect(outputs).toHaveLength(3)
+      expect(outputs.every(output => output.amount >= 5)).toBe(true)
+      expect(outputs.reduce((sum, output) => sum + output.amount, 0)).toBe(100)
+    })
+  })
 })
 
 describe('BTMS_BASKET constant', () => {

@@ -751,7 +751,7 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     if (!Array.isArray(args.data)) {
-      throw new Error('Signature request is missing data')
+      throw new TypeError('Signature request is missing data')
     }
 
     let digest: number[]
@@ -782,23 +782,20 @@ export class BasicTokenModule implements PermissionsModule {
   ): { value: number; nextOffset: number } | null {
     const firstByte = data[offset]
     if (firstByte === undefined) {
-      if (throwOnTruncated) throw new Error('Preimage too short for varint')
-      return null
+      return this.handleTruncatedVarint(throwOnTruncated)
     }
     if (firstByte < 0xfd) {
       return { value: firstByte, nextOffset: offset + 1 }
     }
     if (firstByte === 0xfd) {
       if (data.length < offset + 3) {
-        if (throwOnTruncated) throw new Error('Preimage too short for varint')
-        return null
+        return this.handleTruncatedVarint(throwOnTruncated)
       }
       return { value: data[offset + 1] | (data[offset + 2] << 8), nextOffset: offset + 3 }
     }
     if (firstByte === 0xfe) {
       if (data.length < offset + 5) {
-        if (throwOnTruncated) throw new Error('Preimage too short for varint')
-        return null
+        return this.handleTruncatedVarint(throwOnTruncated)
       }
       return {
         value:
@@ -810,6 +807,13 @@ export class BasicTokenModule implements PermissionsModule {
       }
     }
     return null // 0xff not expected for script lengths
+  }
+
+  private handleTruncatedVarint(throwOnTruncated: boolean): null {
+    if (throwOnTruncated) {
+      throw new Error('Preimage too short for varint')
+    }
+    return null
   }
 
   /**

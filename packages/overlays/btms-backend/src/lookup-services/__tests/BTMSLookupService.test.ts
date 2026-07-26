@@ -2,6 +2,7 @@ import { BTMSLookupService } from '../BTMSLookupServiceFactory'
 import { BTMSStorageManager } from '../BTMSStorageManager'
 import { LockingScript, PrivateKey, PublicKey, Transaction, Utils } from '@bsv/sdk'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
+import type { Db } from 'mongodb'
 
 /**
  * Helper to create a simple PushDrop-style locking script for testing.
@@ -407,6 +408,26 @@ describe('BTMS Lookup Service', () => {
       expect(includeMatching).toBe(true)
       expect(includeNonMatching).toBe(false)
     })
+
+    it('exposes an asset-bound history selector when requested', async () => {
+      const results = await service.lookup({
+        service: 'ls_btms',
+        query: { history: true }
+      } as LookupQuestion)
+      const assetResult = results.find(result => result.txid === 'tx1')
+      const tx = new Transaction()
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['asset1.0', '100']),
+        satoshis: 1000
+      })
+
+      const history = assetResult?.history
+      expect(typeof history).toBe('function')
+      if (typeof history !== 'function') {
+        throw new TypeError('Expected an asset-bound history selector')
+      }
+      await expect(history(tx.toBEEF(), 0, 0)).resolves.toBe(true)
+    })
   })
 
   describe('getDocumentation', () => {
@@ -423,5 +444,19 @@ describe('BTMS Lookup Service', () => {
       expect(meta.name).toBe('BTMS Lookup Service')
       expect(meta.shortDescription).toBeDefined()
     })
+  })
+})
+
+describe('BTMSStorageManager', () => {
+  it('binds the BTMS record collection supplied by MongoDB', () => {
+    const records = {}
+    const db = {
+      collection: jest.fn().mockReturnValue(records)
+    } as unknown as Db
+
+    const storage = new BTMSStorageManager(db)
+
+    expect(db.collection).toHaveBeenCalledWith('btmsRecords')
+    expect((storage as unknown as { records: unknown }).records).toBe(records)
   })
 })

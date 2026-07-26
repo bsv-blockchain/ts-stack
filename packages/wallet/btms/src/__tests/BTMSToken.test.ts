@@ -6,7 +6,7 @@
  */
 
 import { BTMSToken } from '../BTMSToken.js'
-import { LockingScript } from '@bsv/sdk'
+import { LockingScript, PushDrop, type WalletInterface } from '@bsv/sdk'
 
 describe('BTMSToken', () => {
   describe('decode', () => {
@@ -97,6 +97,17 @@ describe('BTMSToken', () => {
       const txid = 'a'.repeat(64)
       expect(BTMSToken.computeAssetId(txid, 0)).toBe(txid + '.0')
       expect(BTMSToken.computeAssetId(txid, 5)).toBe(txid + '.5')
+    })
+  })
+
+  describe('createUnlocker', () => {
+    it('configures the SDK PushDrop signer with the BTMS protocol context', () => {
+      const unlocker = { estimateLength: jest.fn(), sign: jest.fn() }
+      const unlock = jest.spyOn(PushDrop.prototype, 'unlock').mockReturnValue(unlocker)
+      const token = new BTMSToken({} as WalletInterface, [2, 'btms'], 'https://app.example')
+
+      expect(token.createUnlocker('key-id', 'self')).toBe(unlocker)
+      expect(unlock).toHaveBeenCalledWith([2, 'btms'], 'key-id', 'self')
     })
   })
 })
