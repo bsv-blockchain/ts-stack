@@ -2238,6 +2238,28 @@ describe('WalletWire Integration Tests', () => {
   })
 
   describe('discoverByAttributes', () => {
+    it.each([
+      ['__proto__', 'Unsafe attributes key: __proto__'],
+      ['', 'Invalid attributes key length: expected 1–50 bytes, received 0'],
+      [
+        'a'.repeat(51),
+        'Invalid attributes key length: expected 1–50 bytes, received 51'
+      ]
+    ])('rejects an unsafe wire attribute key', async (fieldName, message) => {
+      const discoverByAttributesMock = jest.fn()
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({
+          discoverByAttributes: discoverByAttributesMock
+        })
+      )
+      const attributes = Object.fromEntries([[fieldName, 'value']])
+
+      await expect(
+        wallet.discoverByAttributes({ attributes })
+      ).rejects.toThrow(message)
+      expect(discoverByAttributesMock).not.toHaveBeenCalled()
+    })
+
     it('should discover certificates by attributes with valid inputs', async () => {
       // Mock the discoverByAttributes method
       const discoverByAttributesMock = jest.fn().mockResolvedValue({

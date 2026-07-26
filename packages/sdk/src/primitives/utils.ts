@@ -318,12 +318,16 @@ export const toBase58 = (bin: number[]): string => {
     let carry = byte
     for (let j = 0; j < result.length; ++j) {
       const x = (base58Map[result[j]] << 8) + carry
-      result[j] = base58chars.codePointAt(x % 58) as number
-      carry = Math.trunc(x / 58)
+      const quotient = Math.trunc(x / 58)
+      const remainder = x - quotient * 58
+      result[j] = base58chars.codePointAt(remainder) as number
+      carry = quotient
     }
     while (carry !== 0) {
-      result.push(base58chars.codePointAt(carry % 58) as number)
-      carry = Math.trunc(carry / 58)
+      const quotient = Math.trunc(carry / 58)
+      const remainder = carry - quotient * 58
+      result.push(base58chars.codePointAt(remainder) as number)
+      carry = quotient
     }
   }
 
