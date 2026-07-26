@@ -12,7 +12,7 @@ import { AuthMessage, Transport } from '@bsv/sdk'
 export class SocketClientTransport implements Transport {
   private onDataCallback?: (message: AuthMessage) => Promise<void>
 
-  constructor (private readonly socket: IoClientSocket) {
+  constructor(private readonly socket: IoClientSocket) {
     // Subscribe to the 'authMessage' event from the server
     this.socket.on('authMessage', async (msg: AuthMessage) => {
       if (this.onDataCallback !== undefined) {
@@ -24,14 +24,14 @@ export class SocketClientTransport implements Transport {
   /**
    * Send an AuthMessage to the server.
    */
-  async send (message: AuthMessage): Promise<void> {
+  async send(message: AuthMessage): Promise<void> {
     this.socket.emit('authMessage', message)
   }
 
   /**
    * Register a callback to handle incoming AuthMessages.
    */
-  async onData (callback: (message: AuthMessage) => Promise<void>): Promise<void> {
+  async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
     this.onDataCallback = callback
   }
 }

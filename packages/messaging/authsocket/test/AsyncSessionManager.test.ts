@@ -2,11 +2,15 @@ import { AuthSocketServerOptions } from '../src/AuthSocketServer.js'
 import { AsyncSessionManager, PeerSession, WalletInterface } from '@bsv/sdk'
 
 class SharedAsyncSessionManager implements AsyncSessionManager {
-  async addSession (_session: PeerSession): Promise<void> {}
-  async updateSession (_session: PeerSession): Promise<void> {}
-  async getSession (_identifier: string): Promise<PeerSession | undefined> { return undefined }
-  async removeSession (_session: PeerSession): Promise<void> {}
-  async hasSession (_identifier: string): Promise<boolean> { return false }
+  async addSession(_session: PeerSession): Promise<void> {}
+  async updateSession(_session: PeerSession): Promise<void> {}
+  async getSession(_identifier: string): Promise<PeerSession | undefined> {
+    return undefined
+  }
+  async removeSession(_session: PeerSession): Promise<void> {}
+  async hasSession(_identifier: string): Promise<boolean> {
+    return false
+  }
 }
 
 describe('AuthSocketServerOptions', () => {

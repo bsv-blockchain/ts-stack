@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 66,
+  "findingCount": 59,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,34 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/messaging/authsocket-client::missing-script::format:check",
-      "message": "Profile browser-library requires script format:check"
-    },
-    {
-      "id": "packages/messaging/authsocket-client::missing-script::pack:check",
-      "message": "Profile browser-library requires script pack:check"
-    },
-    {
-      "id": "packages/messaging/authsocket-client::missing-script::test:browser",
-      "message": "Profile browser-library requires script test:browser"
-    },
-    {
-      "id": "packages/messaging/authsocket-client::missing-script::typecheck",
-      "message": "Profile browser-library requires script typecheck"
-    },
-    {
-      "id": "packages/messaging/authsocket::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/messaging/authsocket::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/messaging/authsocket::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
     },
     {
       "id": "packages/messaging/message-box-client::missing-script::format:check",

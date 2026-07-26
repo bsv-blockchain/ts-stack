@@ -33,15 +33,15 @@ interface PeerInfo {
  * - Tracks client connections and their associated `Peer` and `AuthSocket` instances.
  * - Allows broadcasting messages to all authenticated clients.
  * - Provides a seamless API for developers by wrapping Socket.IO functionality.
-**/
+ **/
 export class AuthSocketServer {
   // The real Socket.IO server underneath
   private readonly realIo: IoServer
 
-  /** 
-   * Map from socket.id -> peer info 
-   * 
-   * Once we discover the identity key, we store `identityKey` 
+  /**
+   * Map from socket.id -> peer info
+   *
+   * Once we discover the identity key, we store `identityKey`
    * for that connection to skip re-handshaking.
    */
   private readonly peers = new Map<string, PeerInfo>()
@@ -64,10 +64,11 @@ export class AuthSocketServer {
   }
 
   /**
-   * A direct pass-through to `io.on('connection', cb)`, 
+   * A direct pass-through to `io.on('connection', cb)`,
    * but the callback is invoked with an AuthSocket instead.
    */
   public on(eventName: 'connection', callback: (socket: AuthSocket) => void): void
+  public on(eventName: string, callback: (data: any) => void): void
   public on(eventName: string, callback: (data: any) => void): void {
     // We only override the 'connection' event. For other events, pass them through
     if (eventName === 'connection') {
@@ -80,7 +81,7 @@ export class AuthSocketServer {
   /**
    * Provide a classic pass-through to `io.emit(...)`.
    *
-   * Under the hood, we sign a separate BRC-103 AuthMessage for each 
+   * Under the hood, we sign a separate BRC-103 AuthMessage for each
    * authenticated peer. We'll embed eventName + data in the payload.
    */
   public emit(eventName: string, data: any) {
@@ -160,19 +161,18 @@ export class AuthSocketServer {
   }
 }
 
-
 /**
  * A wrapper around a real `IoSocket` used by a server that performs BRC-103
- * signing and verification via the Peer class. 
+ * signing and verification via the Peer class.
  */
 export class AuthSocket {
   // We store event callbacks for re-dispatch
   private readonly eventCallbacks: Map<string, Array<(data: any) => void>> = new Map()
 
   /**
-   * Current known identity key of the server, if discovered 
-   * (i.e. after the handshake yields a general message or 
-   * or we've forced a getAuthenticatedSession). 
+   * Current known identity key of the server, if discovered
+   * (i.e. after the handshake yields a general message or
+   * or we've forced a getAuthenticatedSession).
    */
   private peerIdentityKey?: string
 
@@ -214,11 +214,11 @@ export class AuthSocket {
 
   /**
    * Emulate `socket.emit(eventName, data)`.
-   * We'll sign a BRC-103 `general` message via Peer, 
+   * We'll sign a BRC-103 `general` message via Peer,
    * embedding the event name & data in the payload.
    *
-   * If we do not yet have the peer's identity key (handshake not done?), 
-   * the Peer will attempt the handshake. Once known, subsequent calls 
+   * If we do not yet have the peer's identity key (handshake not done?),
+   * the Peer will attempt the handshake. Once known, subsequent calls
    * will pass identityKey to skip the initial handshake.
    */
   public async emit(eventName: string, data: any): Promise<void> {
@@ -249,7 +249,7 @@ export class AuthSocket {
     return Array.from(Buffer.from(json, 'utf8'))
   }
 
-  private decodeEventPayload(payload: number[]): { eventName: string, data: any } {
+  private decodeEventPayload(payload: number[]): { eventName: string; data: any } {
     try {
       const str = Buffer.from(payload).toString('utf8')
       return JSON.parse(str)

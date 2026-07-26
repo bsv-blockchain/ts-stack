@@ -2,21 +2,27 @@
 
 ## Overview
 
-This repository provides a **drop-in server-side solution** for Socket.IO that enforces [BRC-103](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md) **mutual authentication** on all connected clients. 
+This package provides a **drop-in server-side solution** for Socket.IO that enforces [BRC-103](https://github.com/bitcoin-sv/BRCs/blob/master/peer-to-peer/0103.md) **mutual authentication** on all connected clients.
 
-- Each client message is **signed** using BRC-103 message format.  
-- The server **verifies** each message upon receipt.  
-- The server also **signs** its outbound messages, so clients can verify authenticity.  
+- Each client message is **signed** using the BRC-103 message format.
+- The server **verifies** each message upon receipt.
+- The server also **signs** its outbound messages, so clients can verify authenticity.
 
-It pairs seamlessly with the [`authsocket-client`](https://github.com/.../authsocket-client) library, which handles the client side of this handshake. However, if you are building your own client logic, you only need to ensure it also speaks BRC-103 and can sign/verify messages accordingly.
+It pairs with
+[`@bsv/authsocket-client`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client),
+which handles the client side of this handshake. A custom client can also
+connect if it implements the same BRC-103 signing and verification protocol.
 
 ## Installation
 
-1. **Install** the package (and its dependencies):
-   ```bash
-   npm install
-   ```
-2. Ensure you have a BRC-103-compatible `Wallet` implementation (for instance from `@bsv/sdk` or your own custom code) that can sign and verify messages.
+Install the server and its required SDK peer:
+
+```bash
+npm install @bsv/authsocket @bsv/sdk
+```
+
+Provide a BRC-103-compatible `Wallet` implementation, such as one from
+`@bsv/sdk`, that can sign and verify messages.
 
 ## Usage
 
@@ -65,9 +71,16 @@ server.listen(port, () => {
 })
 ```
 
-1. Create an `AuthSocketServer` with the `wallet` option.  
-2. On `'connection'`, you receive an `AuthSocket` instance that works like a normal Socket.IO socket: `socket.on(...)`, `socket.emit(...)`, etc.  
-3. All messages are automatically signed and verified under the hood.
+The `cors` setting belongs to Socket.IO and is intentionally configurable.
+Public Overlays, WAB, Storage, and other cross-domain services can remain
+accessible with `origin: '*'`; deployments with a closed caller set can supply
+an explicit allowlist instead. AuthSocket does not impose a restrictive
+cross-origin default of its own.
+
+1. Create an `AuthSocketServer` with the `wallet` option.
+2. On `'connection'`, receive an `AuthSocket` that supports normal
+   `socket.on(...)` and `socket.emit(...)` calls.
+3. Messages are signed and verified under the hood.
 
 ### Targeted authenticated delivery
 
@@ -117,3 +130,22 @@ operation and should be reserved for intentionally public events.
 ## License
 
 See [LICENSE.txt](./LICENSE.txt).
+
+## Development and distribution
+
+This package publishes Node.js ESM and CommonJS entry points, source maps, and
+declarations for both module systems. Pull requests and releases should run:
+
+```bash
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test:coverage
+pnpm build
+pnpm pack:check
+```
+
+`pack:check` validates the exact npm tarball with `publint`, strict ESM and
+CommonJS type resolution, and clean consumer installations. The package uses
+the Open BSV License Version 6; the repository license controls ensure the
+manifest, included license, and packed artifact remain in sync.

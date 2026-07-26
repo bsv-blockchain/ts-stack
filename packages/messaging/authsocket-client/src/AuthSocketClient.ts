@@ -1,5 +1,18 @@
-import { io as realIo, Socket as IoClientSocket, ManagerOptions, SocketOptions } from 'socket.io-client'
-import { RequestedCertificateSet, SessionManager, AsyncSessionManager, Peer, WalletInterface, Utils, OriginatorDomainNameStringUnder250Bytes } from '@bsv/sdk'
+import {
+  io as realIo,
+  Socket as IoClientSocket,
+  ManagerOptions,
+  SocketOptions
+} from 'socket.io-client'
+import {
+  RequestedCertificateSet,
+  SessionManager,
+  AsyncSessionManager,
+  Peer,
+  WalletInterface,
+  Utils,
+  OriginatorDomainNameStringUnder250Bytes
+} from '@bsv/sdk'
 import { SocketClientTransport } from './SocketClientTransport.js'
 
 /**
@@ -19,7 +32,7 @@ class AuthSocketClientImpl {
    * @param peer - The BRC-103 Peer instance responsible for managing authenticated
    *               communication, including message signing and verification.
    */
-  constructor (
+  constructor(
     private readonly ioSocket: IoClientSocket,
     private readonly peer: Peer
   ) {
@@ -31,7 +44,7 @@ class AuthSocketClientImpl {
       this.fireEventCallbacks('connect')
     })
 
-    this.ioSocket.on('disconnect', (reason) => {
+    this.ioSocket.on('disconnect', reason => {
       this.connected = false
       // Re-dispatch
       this.fireEventCallbacks('disconnect', reason)
@@ -46,7 +59,7 @@ class AuthSocketClientImpl {
     })
   }
 
-  on (eventName: string, callback: (data?: any) => void): this {
+  on(eventName: string, callback: (data?: any) => void): this {
     let arr = this.eventCallbacks.get(eventName)
     if (arr === undefined) {
       arr = []
@@ -56,7 +69,7 @@ class AuthSocketClientImpl {
     return this
   }
 
-  emit (eventName: string, data: any): this {
+  emit(eventName: string, data: any): this {
     // We sign a BRC-103 "general" message and send to the server
     // via peer.toPeer
     const encoded = this.encodeEventPayload(eventName, data)
@@ -66,12 +79,12 @@ class AuthSocketClientImpl {
     return this
   }
 
-  disconnect (): void {
+  disconnect(): void {
     this.serverIdentityKey = undefined
     this.ioSocket.disconnect()
   }
 
-  private fireEventCallbacks (eventName: string, data?: any): void {
+  private fireEventCallbacks(eventName: string, data?: any): void {
     const cbs = this.eventCallbacks.get(eventName)
     if (cbs === undefined) return
     for (const cb of cbs) {
@@ -79,12 +92,12 @@ class AuthSocketClientImpl {
     }
   }
 
-  private encodeEventPayload (eventName: string, data: any): number[] {
+  private encodeEventPayload(eventName: string, data: any): number[] {
     const obj = { eventName, data }
     return Utils.toArray(JSON.stringify(obj), 'utf8')
   }
 
-  private decodeEventPayload (payload: number[]): { eventName: string, data: any } {
+  private decodeEventPayload(payload: number[]): { eventName: string; data: any } {
     try {
       const str = Utils.toUTF8(payload)
       return JSON.parse(str)
@@ -100,7 +113,7 @@ class AuthSocketClientImpl {
  * @param url  - The server URL
  * @param opts - Contains wallet, requested certificates, and other optional settings
  */
-export function AuthSocketClient (
+export function AuthSocketClient(
   url: string,
   opts: {
     wallet: WalletInterface

@@ -408,48 +408,33 @@ importers:
         specifier: ^4.8.3
         version: 4.8.3
     devDependencies:
-      '@bsv/authsocket-client':
-        specifier: workspace:^
-        version: link:../authsocket-client
-      '@bsv/message-box-client':
-        specifier: workspace:^
-        version: link:../message-box-client
       '@bsv/sdk':
         specifier: workspace:^
         version: link:../../sdk
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
-      jest-environment-jsdom:
-        specifier: ^30.4.1
-        version: 30.4.1
       oxlint:
         specifier: ^1.75.0
         version: 1.75.0
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
-      ts-loader:
-        specifier: ^9.6.2
-        version: 9.6.2(typescript@6.0.3)(webpack@5.109.0)
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@6.0.3)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.22)(tsx@4.23.1)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-      webpack:
-        specifier: ^5.109.0
-        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
-      webpack-cli:
-        specifier: ^7.2.1
-        version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack-bundle-analyzer@5.3.1)(webpack@5.109.0)
 
   packages/messaging/authsocket-client:
     dependencies:
@@ -463,27 +448,24 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
-      jest-environment-jsdom:
-        specifier: ^30.4.1
-        version: 30.4.1
       oxlint:
         specifier: ^1.75.0
         version: 1.75.0
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)))(typescript@6.0.3)
-      ts-loader:
-        specifier: ^9.6.2
-        version: 9.6.2(typescript@6.0.3)(webpack@5.109.0)
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@6.0.3)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.22)(tsx@4.23.1)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -14683,14 +14665,6 @@ snapshots:
       source-map: 0.7.6
       typescript: 6.0.3
       webpack: 5.109.0(esbuild@0.28.1)
-
-  ts-loader@9.6.2(typescript@6.0.3)(webpack@5.109.0):
-    dependencies:
-      chalk: 4.1.2
-      picomatch: 4.0.5
-      source-map: 0.7.6
-      typescript: 6.0.3
-      webpack: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
 
   ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3):
     dependencies:
