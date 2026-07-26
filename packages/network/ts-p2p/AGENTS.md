@@ -137,7 +137,7 @@ listener.removeTopicCallback('bitcoin/mainnet-block')
 
 ## Common pitfalls / gotchas
 
-1. **Node.js 18+ required** — Modern async/await and crypto features needed
+1. **Node.js 22+ required** — This is the supported runtime floor declared by the package
 2. **ES modules only** — Package is published as ESM; use `.mjs` files or set `"type": "module"` in package.json
 3. **Teranode mainnet defaults** — If no config provided, connects to official Teranode mainnet; ensure correct `sharedKey` for private networks
 4. **PSK hex format** — `sharedKey` must be hex-encoded; library auto-formats to PSK protocol

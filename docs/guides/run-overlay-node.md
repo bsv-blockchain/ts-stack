@@ -2,9 +2,9 @@
 id: guide-overlay-node
 title: "Run an Overlay Node"
 kind: guide
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "1.0.1"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [guide, overlay, node, topics, typescript]
@@ -15,7 +15,7 @@ tags: [guide, overlay, node, topics, typescript]
 > Deploy a BSV overlay service that indexes and queries PushDrop data. You'll set up topic managers, configure storage, and advertise your node to peers via SHIP/SLAP.
 
 **Time:** ~30 minutes
-**Prerequisites:** Node.js ≥ 20, basic understanding of Express.js, MongoDB or SQLite
+**Prerequisites:** Node.js ≥ 22, basic understanding of Express.js, MongoDB or SQLite
 
 ## What you'll build
 
@@ -30,7 +30,7 @@ By the end, you'll have a running overlay service that other nodes can discover 
 
 ## Prerequisites
 
-- Node.js 20+ installed
+- Node.js 22+ installed
 - npm or pnpm
 - MongoDB or SQLite (we'll use MongoDB in this guide; SQLite is simpler for local dev)
 - A private key for the node identity

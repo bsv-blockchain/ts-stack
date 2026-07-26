@@ -562,8 +562,8 @@ function publicManifestChecks(manifest) {
   return [
     ['missing-license-field', !isNonEmptyString(manifest.license), 'Public package requires license'],
     ['missing-repository', !manifest.repository, 'Public package requires repository metadata'],
-    ['missing-node-engine', !isNonEmptyString(manifest.engines?.node),
-      'Public package requires engines.node'],
+    ['unsupported-node-engine', manifest.engines?.node !== '>=22',
+      'Public package requires engines.node >=22'],
     ['missing-files-allowlist', !Array.isArray(manifest.files) || manifest.files.length === 0,
       'Public package requires a non-empty files allowlist'],
     ['missing-publish-access', manifest.publishConfig?.access !== 'public',

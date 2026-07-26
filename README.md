@@ -30,7 +30,7 @@ Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders
 
 Prerequisites:
 
-- Node.js >= 22
+- Node.js >= 24.11 for repository development (published packages support Node.js >= 22)
 - pnpm >= 9; this repo is pinned to `pnpm@10.33.2`
 
 ```sh

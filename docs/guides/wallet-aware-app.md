@@ -2,9 +2,9 @@
 id: guide-wallet-aware
 title: "Build a Wallet-Aware App"
 kind: guide
-version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: "1.0.1"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [guide, wallet, brc-100, typescript]
@@ -15,7 +15,7 @@ tags: [guide, wallet, brc-100, typescript]
 > Add wallet capabilities to a web app without putting private keys in the app. The app talks to a BRC-100 wallet; the wallet chooses spendable outputs, signs, and returns the result.
 
 **Time:** ~15 minutes
-**Prerequisites:** Node.js 20+, TypeScript, and a local BRC-100 wallet such as BSV Desktop or BSV Browser.
+**Prerequisites:** Node.js 22+, TypeScript, and a local BRC-100 wallet such as BSV Desktop or BSV Browser.
 
 ![BRC-100 wallet flows for desktop localhost HTTP and mobile postMessage bridge](../assets/diagrams/brc100-wallet-flows.svg)
 

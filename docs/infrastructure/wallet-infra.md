@@ -108,7 +108,7 @@ npm start
 ## Deploy to production
 
 ```bash
-# Multi-stage Docker build: Node 22 alpine → production
+# Multi-stage Docker build: pinned Node 24 alpine → production
 docker build -t wallet-infra:latest .
 
 # Run with MySQL backend
@@ -135,7 +135,7 @@ docker run -d \
 docker compose up -d
 ```
 
-Dockerfile uses multi-stage build (Node 22 builder → production). Optional nginx.conf reverse proxy (if ENABLE_NGINX=true) on 8080 proxying to app on 8081.
+Dockerfile uses a digest-pinned Node 24 multi-stage build. Optional nginx.conf reverse proxy (if ENABLE_NGINX=true) on 8080 proxying to app on 8081.
 
 ## Migrations
 

@@ -1,6 +1,13 @@
 {
   "name": "@bsv/btms",
   "version": "1.1.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "description": "Basic Token Management System - UTXO-based token management for BSV",
   "module": "dist/esm/src/index.js",

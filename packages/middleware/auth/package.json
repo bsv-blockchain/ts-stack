@@ -1,6 +1,13 @@
 {
   "name": "@bsv/auth",
   "version": "0.1.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Signed, expiry-bound, single-use wallet auth proofs for BSV apps.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

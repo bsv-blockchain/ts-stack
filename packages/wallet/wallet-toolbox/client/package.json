@@ -1,9 +1,29 @@
 {
   "name": "@bsv/wallet-toolbox-client",
   "version": "2.4.4",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.client.js",
   "types": "./out/src/index.client.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/src/index.client.d.ts",
+      "require": "./out/src/index.client.js",
+      "default": "./out/src/index.client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "out/src",
+    "README.md",
+    "license.md"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: "Dependency and Release Policy"
 kind: reference
-version: "1.0.0"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+version: "1.1.0"
+last_updated: "2026-07-26"
+last_verified: "2026-07-26"
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -17,7 +17,7 @@ images on one reviewed dependency baseline.
 
 ## Supported toolchain
 
-- Node.js 24.11 or newer
+- Node.js 24.11 or newer for repository development, CI, and releases
 - pnpm 10
 - TypeScript 6
 - Oxlint for TypeScript linting
@@ -26,6 +26,14 @@ CI, conformance, documentation, and release workflows run on Node.js 24. Package
 lint errors fail the build. Existing warnings remain visible and are reduced
 progressively; a package may opt into stricter warning enforcement once its
 warning baseline reaches zero.
+
+Every published package declares `engines.node: ">=22"`. Node.js 22 is the
+consumer runtime floor; Node.js 24.11 is the stricter contributor and release
+toolchain. The repository-health check enforces the exact public-package
+contract so new packages cannot silently omit or weaken it. Browser and React
+Native entry points retain their declared non-Node runtime targets; the Node
+engine field describes supported Node consumers and package tooling, not a
+requirement that browsers provide Node APIs.
 
 TypeScript 7 is not yet the supported compiler because the current `ts-jest`
 29.4 line explicitly accepts TypeScript versions below 7. TypeScript 6.0.3 is

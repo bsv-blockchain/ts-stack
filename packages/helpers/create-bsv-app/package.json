@@ -1,6 +1,7 @@
 {
   "name": "create-bsv-app",
   "version": "1.0.2",
+  "sideEffects": false,
   "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",
   "main": "dist/index.js",

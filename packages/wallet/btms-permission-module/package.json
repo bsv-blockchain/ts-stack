@@ -1,6 +1,13 @@
 {
   "name": "@bsv/btms-permission-module",
   "version": "1.1.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "BTMS Permission Module for wallet integration",
   "type": "module",
   "main": "dist/index.js",
@@ -11,6 +18,10 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist"

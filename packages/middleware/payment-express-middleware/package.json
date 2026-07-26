@@ -1,6 +1,13 @@
 {
   "name": "@bsv/payment-express-middleware",
   "version": "2.1.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "BSV Blockchain service monetization express middleware",
   "type": "module",
   "main": "dist/cjs/mod.js",

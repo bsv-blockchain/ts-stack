@@ -1,6 +1,10 @@
 {
   "name": "@bsv/verifast",
   "version": "0.3.0",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

@@ -1,6 +1,13 @@
 {
   "name": "@bsv/amountinator",
   "version": "2.1.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Currency amount conversion",
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
   "license": "Open BSV License",
