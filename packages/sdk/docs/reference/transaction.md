@@ -2357,7 +2357,8 @@ Argument Details
 + **feeModel**
   + An instance of FeeModel, a fee model to use for fee calculation. If not provided then the default fee model will be used.
 + **memoryLimit**
-  + The maximum memory in bytes usage allowed for script evaluation. If not provided then the default memory limit will be used.
+  + Optional caller-supplied local interpreter memory budget. If omitted,
+post-Genesis validation does not impose an arbitrary SDK memory cap.
 
 Example
 

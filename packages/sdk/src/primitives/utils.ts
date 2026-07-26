@@ -53,6 +53,7 @@ export const toHex = (msg: number[] | Uint8Array): string => {
  */
 export const toUint8Array = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): Uint8Array => {
   if (msg instanceof Uint8Array) return msg
+  if (typeof msg === 'string' && enc === 'hex') return hexToUint8Array(msg)
   return new Uint8Array(toArray(msg, enc))
 }
 
@@ -92,12 +93,21 @@ for (let i = 0; i < 6; i++) {
 }
 
 const hexToArray = (msg: string): number[] => {
+  return Array.from(hexToUint8Array(msg))
+}
+
+/**
+ * Decodes hex directly into compact byte storage without an intermediate
+ * boxed number array. Odd-length inputs retain the legacy leading-zero rule.
+ */
+export const hexToUint8Array = (msg: string): Uint8Array => {
   assertValidHex(msg)
   const normalized = msg.length % 2 === 0 ? msg : '0' + msg
   if (CAN_USE_BUFFER) {
-    return Array.from(BufferCtor.from(normalized, 'hex'))
+    const decoded = BufferCtor.from(normalized, 'hex')
+    return new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength)
   }
-  const out = new Array(normalized.length / 2)
+  const out = new Uint8Array(normalized.length / 2)
   let o = 0
   for (let i = 0; i < normalized.length; i += 2) {
     const hi = HEX_CHAR_TO_VALUE[normalized.codePointAt(i) as number]
@@ -183,8 +193,10 @@ function utf8ToArray (str: string): number[] {
  * @param {number[]} arr - The input array of numbers.
  * @returns {string} - The UTF-8 encoded string.
  */
-export const toUTF8 = (arr: number[]): string => {
-  return new TextDecoder().decode(new Uint8Array(arr))
+export const toUTF8 = (arr: number[] | Uint8Array): string => {
+  return new TextDecoder().decode(
+    arr instanceof Uint8Array ? arr : new Uint8Array(arr)
+  )
 }
 
 /**
@@ -218,7 +230,7 @@ export const encode = (
  * const bytes = [72, 101, 108, 108, 111]; // Represents the string "Hello"
  * console.log(toBase64(bytes)); // Outputs: SGVsbG8=
  */
-export function toBase64 (byteArray: number[]): string {
+export function toBase64 (byteArray: number[] | Uint8Array): string {
   const base64Chars =
     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   let result = ''

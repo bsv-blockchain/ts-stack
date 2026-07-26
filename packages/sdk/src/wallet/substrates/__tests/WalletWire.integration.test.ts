@@ -6,6 +6,24 @@ import WalletWireProcessor from '../../../wallet/substrates/WalletWireProcessor'
 const sampleData = [3, 1, 4, 1, 5, 9]
 
 describe('WalletWire Integration Tests', () => {
+  it('prefers the compact-byte transport while preserving the legacy wire API', async () => {
+    const typedTransport = jest.fn(async (message: Uint8Array) => {
+      expect(message).toBeInstanceOf(Uint8Array)
+      return new Uint8Array([0, ...Utils.toArray('1.2.3-test', 'utf8')])
+    })
+    const legacyTransport = jest.fn(async () => {
+      throw new Error('legacy transport should not be selected')
+    })
+    const wallet = new WalletWireTransceiver({
+      transmitToWallet: legacyTransport,
+      transmitToWalletUint8Array: typedTransport
+    })
+
+    await expect(wallet.getVersion({})).resolves.toEqual({ version: '1.2.3-test' })
+    expect(typedTransport).toHaveBeenCalledTimes(1)
+    expect(legacyTransport).not.toHaveBeenCalled()
+  })
+
   /**
    * This is a copy of the test suite for CompletedProtoWallet, but instead of using a CompletedProtoWallet directly, we're using it over the WalletWire.
    * This serves as an imperfect but still useful way to ensure that the WalletWire doesn't contain serialization or deserialization issues.
@@ -695,7 +713,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.createAction(args)
       expect(result).toHaveProperty('txid')
       expect(result).toHaveProperty('tx')
-      expect(result.tx).toBeInstanceOf(Array)
+      expect(result.tx).toBeInstanceOf(Uint8Array)
       expect(createActionMock).toHaveBeenCalledWith(args, '')
     })
 
@@ -840,7 +858,10 @@ describe('WalletWire Integration Tests', () => {
       expect(result).toHaveProperty('noSendChange')
       expect(result).toHaveProperty('sendWithResults')
       expect(result).toHaveProperty('signableTransaction')
-      expect(createActionMock).toHaveBeenCalledWith(args, '')
+      expect(createActionMock).toHaveBeenCalledWith(
+        { ...args, inputBEEF: Uint8Array.from(args.inputBEEF) },
+        ''
+      )
     })
 
     it('should throw an error with invalid inputs', async () => {
@@ -884,7 +905,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.signAction(args)
       expect(result).toHaveProperty('txid')
       expect(result).toHaveProperty('tx')
-      expect(result.tx).toBeInstanceOf(Array)
+      expect(result.tx).toBeInstanceOf(Uint8Array)
       expect(signActionMock).toHaveBeenCalledWith(args, '')
     })
 
@@ -1052,7 +1073,10 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.internalizeAction(args)
       expect(result).toEqual({ accepted: true })
-      expect(internalizeActionMock).toHaveBeenCalledWith(args, '')
+      expect(internalizeActionMock).toHaveBeenCalledWith(
+        { ...args, tx: Uint8Array.from(args.tx) },
+        ''
+      )
     })
 
     it('should throw an error with invalid inputs', async () => {
@@ -1073,7 +1097,10 @@ describe('WalletWire Integration Tests', () => {
       await expect(wallet.internalizeAction(args)).rejects.toThrow(
         'Invalid inputs'
       )
-      expect(internalizeActionMock).toHaveBeenCalledWith(args, '')
+      expect(internalizeActionMock).toHaveBeenCalledWith(
+        { ...args, tx: Uint8Array.from(args.tx) },
+        ''
+      )
     })
     it('should internalize an action with "basket insertion" protocol', async () => {
       // Mock the internalizeAction method
@@ -1104,7 +1131,10 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.internalizeAction(args)
       expect(result).toEqual({ accepted: true })
-      expect(internalizeActionMock).toHaveBeenCalledWith(args, '')
+      expect(internalizeActionMock).toHaveBeenCalledWith(
+        { ...args, tx: Uint8Array.from(args.tx) },
+        ''
+      )
     })
   })
 

@@ -1,4 +1,12 @@
-import { Beef, SignActionSpend, Spend, Transaction, type SignatureHashCache } from '@bsv/sdk'
+import {
+  Beef,
+  ScriptResourceLimitError,
+  SignActionSpend,
+  Spend,
+  Transaction,
+  type SignatureHashCache,
+  type SpendVerifierInterface
+} from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
@@ -65,10 +73,20 @@ export async function completeSignedTransaction (
  * @param beef Must contain transactions for txid and all its inputs.
  * @throws WERR_INVALID_PARAMETER if any unlocking script is invalid, if sourceTXID is invalid, if beef doesn't contain required transactions.
  */
-export function verifyUnlockScripts (txid: string, beef: Beef): void {
+export interface UnlockScriptVerificationResult {
+  verifiedInputs: number
+  skippedInputs: number
+}
+
+export async function verifyUnlockScripts (
+  txid: string,
+  beef: Beef,
+  verifier?: SpendVerifierInterface
+): Promise<UnlockScriptVerificationResult> {
   const tx = beef.findTxid(txid)?.tx
   if (tx == null) throw new WERR_INVALID_PARAMETER('txid', `contained in beef, txid ${txid}`)
 
+  let skippedInputs = 0
   for (let i = 0; i < tx.inputs.length; i++) {
     const input = tx.inputs[i]
     if (!input.sourceTXID) throw new WERR_INVALID_PARAMETER(`inputs[${i}].sourceTXID`, 'valid')
@@ -77,16 +95,23 @@ export function verifyUnlockScripts (txid: string, beef: Beef): void {
     if (input.sourceTransaction == null) {
       // The beef doesn't contain all the source transactions only if advanced features
       // such as knownTxids are used.
-      // Skip unlock script checks.
-      return
-      // throw new WERR_INVALID_PARAMETER(`inputs[${i}].sourceTXID`, `contained in beef`)
+      // Skip only this unresolved input; all resolvable inputs remain verifiable.
+      skippedInputs++
     }
   }
 
+  let verifiedInputs = 0
   const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
   for (let i = 0; i < tx.inputs.length; i++) {
     const input = tx.inputs[i]
-    const sourceOutput = input.sourceTransaction!.outputs[input.sourceOutputIndex]
+    if (input.sourceTransaction == null) continue
+    const sourceOutput = input.sourceTransaction.outputs[input.sourceOutputIndex]
+    if (sourceOutput == null) {
+      throw new WERR_INVALID_PARAMETER(
+        `inputs[${i}].sourceOutputIndex`,
+        'reference an output in the source transaction'
+      )
+    }
 
     const spend = new Spend({
       sourceTXID: input.sourceTXID!,
@@ -105,12 +130,17 @@ export function verifyUnlockScripts (txid: string, beef: Beef): void {
     })
 
     try {
-      const spendValid = spend.validate()
+      const spendValid = verifier === undefined
+        ? spend.validate({ consensus: true })
+        : await spend.validateWith(verifier, { consensus: true })
 
       if (!spendValid) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, 'valid')
+      verifiedInputs++
     } catch (error_: unknown) {
+      if (error_ instanceof ScriptResourceLimitError) throw error_
       const e = WalletError.fromUnknown(error_)
       throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, `valid. ${e.message}`)
     }
   }
+  return { verifiedInputs, skippedInputs }
 }

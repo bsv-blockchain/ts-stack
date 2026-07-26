@@ -14,6 +14,7 @@ import Script from '../../script/Script'
 import BigNumber from '../../primitives/BigNumber'
 import ScriptChunk from '../../script/ScriptChunk'
 import OP from '../../script/OP'
+import ScriptResourceLimitError from '../../script/ScriptResourceLimitError'
 import { type SignatureHashCache } from '../../primitives/TransactionSignature'
 
 export class MockChain implements ChainTracker {
@@ -566,12 +567,19 @@ describe('Spend', () => {
       expect(() => spend.validate()).toThrow('OP_SPLIT requires the first stack item to be a non-negative number less than or equal to the size of the second-from-top stack item.')
     })
 
-    it('OP_NUM2BIN enforces the max element size before reaching JS number limits', () => {
+    it('OP_NUM2BIN reports an unrepresentable local allocation as resource exhaustion', () => {
       const spend = createSpendWithPushes('OP_NUM2BIN', [
         [0x01],
         scriptNumBytes(1n << 60n)
       ])
-      expect(() => spend.validate()).toThrow("It's not currently possible to push data larger than 1073741824 bytes or negative size.")
+      expect(() => spend.validate()).toThrow(ScriptResourceLimitError)
+      try {
+        spend.validate()
+      } catch (error) {
+        const resourceError = error as ScriptResourceLimitError
+        expect(resourceError.resource).toBe('element-size')
+        expect(resourceError.attempted).toBe(1n << 60n)
+      }
     })
 
     it('OP_LSHIFT accepts shift counts larger than Number.MAX_SAFE_INTEGER when no shift work is required', () => {

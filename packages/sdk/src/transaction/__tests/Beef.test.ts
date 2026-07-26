@@ -3,6 +3,7 @@ import BeefParty from '../../transaction/BeefParty'
 import { Beef, BEEF_V1, BEEF_V2 } from '../../transaction/Beef'
 import Transaction from '../../transaction/Transaction'
 import { fromBase58 } from '../../primitives/utils'
+import Script from '../../script/Script'
 
 // The following imports allow full type checking by the VsCode editor, but tests will fail to run:
 /*
@@ -484,6 +485,19 @@ describe('Beef tests', () => {
     expect(atomic).toEqual(beef2)
     const atomic2 = beef.toUint8ArrayAtomic(tx.id('hex'))
     expect(atomic).toEqual(Array.from(atomic2))
+
+    const cached = beef.toUint8ArrayAtomic(tx.id('hex'))
+    expect(cached).toBe(atomic2)
+
+    beef.mergeTxidOnly('11'.repeat(32))
+    const afterMutation = beef.toUint8ArrayAtomic(tx.id('hex'))
+    expect(afterMutation).not.toBe(cached)
+    expect(afterMutation).toEqual(cached)
+
+    tx.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
+    const afterNestedMutation = beef.toUint8ArrayAtomic(tx.id('hex'))
+    expect(afterNestedMutation).not.toBe(afterMutation)
+    expect(afterNestedMutation).not.toEqual(afterMutation)
   })
   test('9_sortTxs', async () => {
     {

@@ -2,6 +2,7 @@ import type {
   DigestVerification,
   Script,
   Spend,
+  SpendVerificationContext,
   Transaction
 } from '@bsv/sdk'
 
@@ -49,12 +50,7 @@ export interface BdkVerifyFromEFParams {
   customFlags?: readonly number[] | Uint32Array
 }
 
-export interface BdkVerifySpendOptions {
-  utxoHeight?: number
-  blockHeight?: number
-  consensus?: boolean
-  verifyFlags?: string | string[]
-}
+export type BdkVerifySpendOptions = Partial<SpendVerificationContext>
 
 export interface BdkSpendBatchItem extends BdkVerifySpendOptions {
   spend: Spend

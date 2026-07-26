@@ -7,6 +7,14 @@ import { hash256 } from '../primitives/Hash.js'
 import { BEEF_V1, BEEF_V2, ATOMIC_BEEF } from './BeefConstants.js'
 export { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT } from './BeefConstants.js'
 
+interface BeefTxSerializationState {
+  ref: BeefTx
+  bumpIndex: number | undefined
+  rawTx: Uint8Array | undefined
+  tx: Transaction | undefined
+  txid: string | undefined
+}
+
 /*
  * BEEF standard: BRC-62: Background Evaluation Extended Format (BEEF) Transactions
  * https://github.com/bsv-blockchain/BRCs/blob/master/transactions/0062.md
@@ -71,14 +79,12 @@ export class Beef {
   private bumpIndexByTxid: Map<string, number> | undefined = undefined
   private rawBytesCache?: Uint8Array
   private hexCache?: string
+  private readonly atomicBytesCache = new Map<string, Uint8Array>()
+  private atomicCacheTxs?: BeefTxSerializationState[]
+  private atomicCacheBumps?: MerklePath[]
+  private atomicCacheVersion?: number
   private rawCacheVersion?: number
-  private rawCacheTxs?: Array<{
-    ref: BeefTx
-    bumpIndex: number | undefined
-    rawTx: Uint8Array | undefined
-    tx: Transaction | undefined
-    txid: string | undefined
-  }>
+  private rawCacheTxs?: BeefTxSerializationState[]
 
   private rawCacheBumps?: MerklePath[]
   private bumpState?: Array<{
@@ -105,6 +111,10 @@ export class Beef {
   private invalidateSerializationCaches (): void {
     this.rawBytesCache = undefined
     this.hexCache = undefined
+    this.atomicBytesCache.clear()
+    this.atomicCacheTxs = undefined
+    this.atomicCacheBumps = undefined
+    this.atomicCacheVersion = undefined
     this.rawCacheVersion = undefined
     this.rawCacheTxs = undefined
     this.rawCacheBumps = undefined
@@ -112,7 +122,13 @@ export class Beef {
 
   private captureSerializationState (): void {
     this.rawCacheVersion = this.version
-    this.rawCacheTxs = this.txs.map(ref => ({
+    this.rawCacheTxs = this.captureTransactionState()
+    this.rawCacheBumps = Array.from(this.bumps)
+    this.captureBumpState()
+  }
+
+  private captureTransactionState (): BeefTxSerializationState[] {
+    return this.txs.map(ref => ({
       ref,
       bumpIndex: ref._bumpIndex,
       rawTx: ref._rawTx,
@@ -121,8 +137,24 @@ export class Beef {
       tx: ref._rawTx == null ? ref._tx : undefined,
       txid: ref._rawTx == null && ref._tx == null ? ref._txid : undefined
     }))
-    this.rawCacheBumps = Array.from(this.bumps)
-    this.captureBumpState()
+  }
+
+  private transactionStateMatches (
+    cachedTxs: BeefTxSerializationState[] | undefined
+  ): boolean {
+    if (cachedTxs?.length !== this.txs.length) return false
+    for (let i = 0; i < this.txs.length; i++) {
+      const tx = this.txs[i]
+      const cached = cachedTxs[i]
+      if (
+        cached.ref !== tx ||
+        cached.bumpIndex !== tx._bumpIndex ||
+        cached.rawTx !== tx._rawTx ||
+        cached.tx !== (tx._rawTx == null ? tx._tx : undefined) ||
+        cached.txid !== (tx._rawTx == null && tx._tx == null ? tx._txid : undefined)
+      ) return false
+    }
+    return true
   }
 
   private captureBumpState (): void {
@@ -188,20 +220,9 @@ export class Beef {
     if (
       this.rawBytesCache == null ||
       this.rawCacheVersion !== this.version ||
-      this.rawCacheTxs?.length !== this.txs.length ||
+      !this.transactionStateMatches(this.rawCacheTxs) ||
       this.rawCacheBumps?.length !== this.bumps.length
     ) return false
-    for (let i = 0; i < this.txs.length; i++) {
-      const tx = this.txs[i]
-      const cached = this.rawCacheTxs[i]
-      if (
-        cached.ref !== tx ||
-        cached.bumpIndex !== tx._bumpIndex ||
-        cached.rawTx !== tx._rawTx ||
-        cached.tx !== (tx._rawTx == null ? tx._tx : undefined) ||
-        cached.txid !== (tx._rawTx == null && tx._tx == null ? tx._txid : undefined)
-      ) return false
-    }
     for (let i = 0; i < this.bumps.length; i++) {
       if (this.rawCacheBumps[i] !== this.bumps[i]) return false
     }
@@ -253,10 +274,10 @@ export class Beef {
     return this.rawBytesCache
   }
 
-  private getBeefForAtomic (txid: string): { beef: Beef, writer: WriterUint8Array } {
+  private getBeefForAtomic (txid: string): Beef {
     this.synchronizeNestedTransactionMutations()
     this.synchronizeNestedBumpMutations()
-    const txidToTx = new Map(this.txs.map(tx => [tx.txid, tx]))
+    const txidToTx = this.ensureTxidIndex()
     const subject = txidToTx.get(txid)
     if (subject == null) {
       throw new Error(`${txid} does not exist in this Beef`)
@@ -269,11 +290,35 @@ export class Beef {
 
     const beef = this.copySelectedTransactions(included)
     beef.sortTxs()
-    const writer = new WriterUint8Array()
-    writer.writeUInt32LE(ATOMIC_BEEF)
-    writer.writeReverse(toArray(txid, 'hex'))
+    return beef
+  }
 
-    return { beef, writer }
+  private getAtomicSerializedBytes (txid: string): Uint8Array {
+    this.synchronizeNestedTransactionMutations()
+    this.synchronizeNestedBumpMutations()
+    const cacheMatches =
+      this.atomicCacheVersion === this.version &&
+      this.transactionStateMatches(this.atomicCacheTxs) &&
+      this.atomicCacheBumps?.length === this.bumps.length &&
+      this.bumps.every((bump, index) => this.atomicCacheBumps?.[index] === bump)
+    if (!cacheMatches) this.atomicBytesCache.clear()
+    const cached = this.atomicBytesCache.get(txid)
+    if (cached != null) return cached
+
+    const beefBytes = this.getBeefForAtomic(txid).getSerializedBytes()
+    const txidBytes = toUint8Array(txid, 'hex')
+    const atomic = new Uint8Array(4 + txidBytes.length + beefBytes.length)
+    const view = new DataView(atomic.buffer)
+    view.setUint32(0, ATOMIC_BEEF, true)
+    for (let i = 0; i < txidBytes.length; i++) {
+      atomic[4 + i] = txidBytes[txidBytes.length - 1 - i]
+    }
+    atomic.set(beefBytes, 4 + txidBytes.length)
+    this.atomicBytesCache.set(txid, atomic)
+    this.atomicCacheTxs = this.captureTransactionState()
+    this.atomicCacheBumps = Array.from(this.bumps)
+    this.atomicCacheVersion = this.version
+    return atomic
   }
 
   private collectAtomicTransactions (subject: BeefTx, txidToTx: Map<string, BeefTx>): Set<BeefTx> {
@@ -341,11 +386,8 @@ export class Beef {
     this.synchronizeNestedTransactionMutations()
     this.synchronizeNestedBumpMutations()
     if (txid.length === 0) return false
-    const txidToTx = new Map<string, BeefTx>()
-    for (const tx of this.txs) {
-      if (txidToTx.has(tx.txid)) return false
-      txidToTx.set(tx.txid, tx)
-    }
+    const txidToTx = this.ensureTxidIndex()
+    if (txidToTx.size !== this.txs.length) return false
     const subject = txidToTx.get(txid)
     if (subject == null) return false
     return this.collectAtomicTransactions(subject, txidToTx).size === this.txs.length
@@ -938,9 +980,7 @@ export class Beef {
    * @returns serialized contents of this Beef with AtomicBEEF prefix.
    */
   toBinaryAtomic (txid: string): number[] {
-    const { beef, writer } = this.getBeefForAtomic(txid)
-    writer.write(beef.getSerializedBytes())
-    return writer.toArray()
+    return Array.from(this.getAtomicSerializedBytes(txid))
   }
 
   /**
@@ -954,13 +994,7 @@ export class Beef {
    * @returns serialized contents of this Beef with AtomicBEEF prefix.
    */
   toUint8ArrayAtomic (txid: string): Uint8Array {
-    const { beef, writer } = this.getBeefForAtomic(txid)
-    const beefUint8 = beef.getSerializedBytes()
-    const prefix = writer.toUint8Array()
-    const atomic = new Uint8Array(prefix.length + beefUint8.length)
-    atomic.set(prefix, 0)
-    atomic.set(beefUint8, prefix.length)
-    return atomic
+    return this.getAtomicSerializedBytes(txid)
   }
 
   /**

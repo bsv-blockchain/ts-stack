@@ -1,9 +1,8 @@
 import { Hash, Utils } from '@bsv/sdk'
 import { ActionBatchManifest } from '../sdk/ActionBatch.interfaces'
-import { asArray } from './utilityHelpers.noBuffer'
 
 export function actionBatchBlobDigest (bytes: number[] | Uint8Array): string {
-  return Utils.toHex(Hash.sha256(asArray(bytes)))
+  return Utils.toHex(Hash.sha256(bytes))
 }
 
 /**
@@ -18,7 +17,9 @@ export function actionBatchManifestDigest (manifest: Omit<ActionBatchManifest, '
       txid: action.txid,
       rawTxDigest: action.rawTxDigest ?? actionBatchBlobDigest(action.rawTx ?? []),
       lockingScriptDigests: action.lockingScriptDigests ?? action.plan.outputs.map(output =>
-        output.lockingScript.length === 0 ? undefined : actionBatchBlobDigest(asArray(output.lockingScript))
+        output.lockingScript.length === 0
+          ? undefined
+          : actionBatchBlobDigest(Utils.toUint8Array(output.lockingScript, 'hex'))
       ),
       plan: {
         inputs: action.plan.inputs,

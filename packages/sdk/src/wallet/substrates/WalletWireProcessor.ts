@@ -14,23 +14,31 @@ export default class WalletWireProcessor implements WalletWire {
     this.wallet = wallet
   }
 
-  private decodeOutpoint(reader: Utils.Reader): string {
+  private decodeOutpoint(reader: Utils.ReaderUint8Array): string {
     const txidBytes = reader.read(32)
     const txid = Utils.toHex(txidBytes)
     const index = reader.readVarIntNum()
     return `${txid}.${index}`
   }
 
-  private encodeOutpoint(outpoint: string): number[] {
-    const writer = new Utils.Writer()
+  private encodeOutpoint(outpoint: string): Uint8Array {
+    const writer = new Utils.WriterUint8Array()
     const [txid, index] = outpoint.split('.')
-    writer.write(Utils.toArray(txid, 'hex'))
+    writer.write(Utils.toUint8Array(txid, 'hex'))
     writer.writeVarIntNum(Number(index))
-    return writer.toArray()
+    return writer.toUint8Array()
   }
 
   async transmitToWallet(message: number[]): Promise<number[]> {
-    const messageReader = new Utils.Reader(message)
+    return Array.from(await this.processMessage(Uint8Array.from(message)))
+  }
+
+  async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array> {
+    return await this.processMessage(message)
+  }
+
+  private async processMessage(message: Uint8Array): Promise<Uint8Array> {
+    const messageReader = new Utils.ReaderUint8Array(message)
     try {
       // Read call code
       const callCode = messageReader.readUInt8()
@@ -308,12 +316,12 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // txid
           if (createActionResult.txid != null && createActionResult.txid !== '') {
             resultWriter.writeInt8(1)
-            resultWriter.write(Utils.toArray(createActionResult.txid, 'hex'))
+            resultWriter.write(Utils.toUint8Array(createActionResult.txid, 'hex'))
           } else {
             resultWriter.writeInt8(0)
           }
@@ -345,7 +353,7 @@ export default class WalletWireProcessor implements WalletWire {
               createActionResult.sendWithResults.length
             )
             for (const result of createActionResult.sendWithResults) {
-              resultWriter.write(Utils.toArray(result.txid, 'hex'))
+              resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
               let statusCode
               if (result.status === 'unproven') statusCode = 1
               else if (result.status === 'sending') statusCode = 2
@@ -363,7 +371,7 @@ export default class WalletWireProcessor implements WalletWire {
               createActionResult.signableTransaction.tx.length
             )
             resultWriter.write(createActionResult.signableTransaction.tx)
-            const referenceBytes = Utils.toArray(
+            const referenceBytes = Utils.toUint8Array(
               createActionResult.signableTransaction.reference,
               'base64'
             )
@@ -372,10 +380,10 @@ export default class WalletWireProcessor implements WalletWire {
           }
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
         case 'signAction': {
           const args: any = {}
@@ -463,12 +471,12 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // txid
           if (signActionResult.txid != null && signActionResult.txid !== '') {
             resultWriter.writeInt8(1)
-            resultWriter.write(Utils.toArray(signActionResult.txid, 'hex'))
+            resultWriter.write(Utils.toUint8Array(signActionResult.txid, 'hex'))
           } else {
             resultWriter.writeInt8(0)
           }
@@ -490,7 +498,7 @@ export default class WalletWireProcessor implements WalletWire {
               signActionResult.sendWithResults.length
             )
             for (const result of signActionResult.sendWithResults) {
-              resultWriter.write(Utils.toArray(result.txid, 'hex'))
+              resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
               let statusCode
               if (result.status === 'unproven') statusCode = 1
               else if (result.status === 'sending') statusCode = 2
@@ -500,10 +508,10 @@ export default class WalletWireProcessor implements WalletWire {
           }
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
         case 'abortAction': {
           // Deserialize reference
@@ -514,9 +522,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.abortAction({ reference }, originator)
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
         case 'listActions': {
           const args: any = {}
@@ -589,7 +597,7 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // totalActions
           resultWriter.writeVarIntNum(listActionsResult.totalActions)
@@ -597,7 +605,7 @@ export default class WalletWireProcessor implements WalletWire {
           // actions
           for (const action of listActionsResult.actions) {
             // txid
-            resultWriter.write(Utils.toArray(action.txid, 'hex'))
+            resultWriter.write(Utils.toUint8Array(action.txid, 'hex'))
 
             // satoshis
             resultWriter.writeVarIntNum(action.satoshis)
@@ -639,7 +647,7 @@ export default class WalletWireProcessor implements WalletWire {
             resultWriter.writeInt8(action.isOutgoing ? 1 : 0)
 
             // description
-            const descriptionBytes = Utils.toArray(action.description, 'utf8')
+            const descriptionBytes = Utils.toUint8Array(action.description, 'utf8')
             resultWriter.writeVarIntNum(descriptionBytes.length)
             resultWriter.write(descriptionBytes)
 
@@ -649,7 +657,7 @@ export default class WalletWireProcessor implements WalletWire {
             } else {
               resultWriter.writeVarIntNum(action.labels.length)
               for (const label of action.labels) {
-                const labelBytes = Utils.toArray(label, 'utf8')
+                const labelBytes = Utils.toUint8Array(label, 'utf8')
                 resultWriter.writeVarIntNum(labelBytes.length)
                 resultWriter.write(labelBytes)
               }
@@ -677,7 +685,7 @@ export default class WalletWireProcessor implements WalletWire {
                 if (input.sourceLockingScript === undefined) {
                   resultWriter.writeVarIntNum(-1)
                 } else {
-                  const sourceLockingScriptBytes = Utils.toArray(
+                  const sourceLockingScriptBytes = Utils.toUint8Array(
                     input.sourceLockingScript,
                     'hex'
                   )
@@ -689,7 +697,7 @@ export default class WalletWireProcessor implements WalletWire {
                 if (input.unlockingScript === undefined) {
                   resultWriter.writeVarIntNum(-1)
                 } else {
-                  const unlockingScriptBytes = Utils.toArray(
+                  const unlockingScriptBytes = Utils.toUint8Array(
                     input.unlockingScript,
                     'hex'
                   )
@@ -698,7 +706,7 @@ export default class WalletWireProcessor implements WalletWire {
                 }
 
                 // inputDescription
-                const inputDescriptionBytes = Utils.toArray(
+                const inputDescriptionBytes = Utils.toUint8Array(
                   input.inputDescription,
                   'utf8'
                 )
@@ -726,7 +734,7 @@ export default class WalletWireProcessor implements WalletWire {
                 if (output.lockingScript === undefined) {
                   resultWriter.writeVarIntNum(-1)
                 } else {
-                  const lockingScriptBytes = Utils.toArray(
+                  const lockingScriptBytes = Utils.toUint8Array(
                     output.lockingScript,
                     'hex'
                   )
@@ -738,7 +746,7 @@ export default class WalletWireProcessor implements WalletWire {
                 resultWriter.writeInt8(output.spendable ? 1 : 0)
 
                 // outputDescription
-                const outputDescriptionBytes = Utils.toArray(
+                const outputDescriptionBytes = Utils.toUint8Array(
                   output.outputDescription,
                   'utf8'
                 )
@@ -749,7 +757,7 @@ export default class WalletWireProcessor implements WalletWire {
                 if (output.basket === undefined) {
                   resultWriter.writeVarIntNum(-1)
                 } else {
-                  const basketBytes = Utils.toArray(output.basket, 'utf8')
+                  const basketBytes = Utils.toUint8Array(output.basket, 'utf8')
                   resultWriter.writeVarIntNum(basketBytes.length)
                   resultWriter.write(basketBytes)
                 }
@@ -760,7 +768,7 @@ export default class WalletWireProcessor implements WalletWire {
                 } else {
                   resultWriter.writeVarIntNum(output.tags.length)
                   for (const tag of output.tags) {
-                    const tagBytes = Utils.toArray(tag, 'utf8')
+                    const tagBytes = Utils.toUint8Array(tag, 'utf8')
                     resultWriter.writeVarIntNum(tagBytes.length)
                     resultWriter.write(tagBytes)
                   }
@@ -770,7 +778,7 @@ export default class WalletWireProcessor implements WalletWire {
                 if (output.customInstructions === undefined) {
                   resultWriter.writeVarIntNum(-1)
                 } else {
-                  const customInstructionsBytes = Utils.toArray(
+                  const customInstructionsBytes = Utils.toUint8Array(
                     output.customInstructions,
                     'utf8'
                   )
@@ -781,10 +789,10 @@ export default class WalletWireProcessor implements WalletWire {
             }
           }
 
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
         case 'internalizeAction': {
           const args: any = {}
@@ -892,9 +900,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.internalizeAction(args, originator)
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'listOutputs': {
@@ -994,7 +1002,7 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // totalOutputs
           resultWriter.writeVarIntNum(listOutputsResult.totalOutputs)
@@ -1019,7 +1027,7 @@ export default class WalletWireProcessor implements WalletWire {
             if (output.lockingScript === undefined) {
               resultWriter.writeVarIntNum(-1)
             } else {
-              const lockingScriptBytes = Utils.toArray(
+              const lockingScriptBytes = Utils.toUint8Array(
                 output.lockingScript,
                 'hex'
               )
@@ -1031,7 +1039,7 @@ export default class WalletWireProcessor implements WalletWire {
             if (output.customInstructions === undefined) {
               resultWriter.writeVarIntNum(-1)
             } else {
-              const customInstructionsBytes = Utils.toArray(
+              const customInstructionsBytes = Utils.toUint8Array(
                 output.customInstructions,
                 'utf8'
               )
@@ -1045,7 +1053,7 @@ export default class WalletWireProcessor implements WalletWire {
             } else {
               resultWriter.writeVarIntNum(output.tags.length)
               for (const tag of output.tags) {
-                const tagBytes = Utils.toArray(tag, 'utf8')
+                const tagBytes = Utils.toUint8Array(tag, 'utf8')
                 resultWriter.writeVarIntNum(tagBytes.length)
                 resultWriter.write(tagBytes)
               }
@@ -1057,7 +1065,7 @@ export default class WalletWireProcessor implements WalletWire {
             } else {
               resultWriter.writeVarIntNum(output.labels.length)
               for (const label of output.labels) {
-                const labelBytes = Utils.toArray(label, 'utf8')
+                const labelBytes = Utils.toUint8Array(label, 'utf8')
                 resultWriter.writeVarIntNum(labelBytes.length)
                 resultWriter.write(labelBytes)
               }
@@ -1065,10 +1073,10 @@ export default class WalletWireProcessor implements WalletWire {
           }
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
 
         case 'relinquishOutput': {
@@ -1086,9 +1094,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.relinquishOutput(args, originator)
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'getPublicKey': {
@@ -1168,14 +1176,14 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          const publicKeyBytes = Utils.toArray(
+          const publicKeyBytes = Utils.toUint8Array(
             getPublicKeyResult.publicKey,
             'hex'
           )
           responseWriter.write(publicKeyBytes)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'encrypt': {
@@ -1183,7 +1191,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Deserialize plaintext
           const plaintextLength = paramsReader.readVarIntNum()
-          args.plaintext = paramsReader.read(plaintextLength)
+          args.plaintext = Array.from(paramsReader.read(plaintextLength))
 
           // Deserialize seekPermission
           const seekPermission = paramsReader.readInt8()
@@ -1197,10 +1205,10 @@ export default class WalletWireProcessor implements WalletWire {
           const encryptResult = await this.wallet.encrypt(args, originator)
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(encryptResult.ciphertext)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'decrypt': {
@@ -1208,7 +1216,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Deserialize ciphertext
           const ciphertextLength = paramsReader.readVarIntNum()
-          args.ciphertext = paramsReader.read(ciphertextLength)
+          args.ciphertext = Array.from(paramsReader.read(ciphertextLength))
 
           // Deserialize seekPermission
           const seekPermission = paramsReader.readInt8()
@@ -1222,10 +1230,10 @@ export default class WalletWireProcessor implements WalletWire {
           const decryptResult = await this.wallet.decrypt(args, originator)
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(decryptResult.plaintext)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'createHmac': {
@@ -1233,7 +1241,7 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Deserialize data
           const dataLength = paramsReader.readVarIntNum()
-          args.data = paramsReader.read(dataLength)
+          args.data = Array.from(paramsReader.read(dataLength))
 
           // Deserialize seekPermission
           const seekPermission = paramsReader.readInt8()
@@ -1250,21 +1258,21 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(createHmacResult.hmac)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'verifyHmac': {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize hmac
-          args.hmac = paramsReader.read(32)
+          args.hmac = Array.from(paramsReader.read(32))
 
           // Deserialize data
           const dataLength = paramsReader.readVarIntNum()
-          args.data = paramsReader.read(dataLength)
+          args.data = Array.from(paramsReader.read(dataLength))
 
           // Deserialize seekPermission
           const seekPermission = paramsReader.readInt8()
@@ -1278,9 +1286,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.verifyHmac(args, originator)
 
           // Serialize the result (no data to return)
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'createSignature': {
@@ -1290,9 +1298,9 @@ export default class WalletWireProcessor implements WalletWire {
           const dataTypeFlag = paramsReader.readUInt8()
           if (dataTypeFlag === 1) {
             const dataLength = paramsReader.readVarIntNum()
-            args.data = paramsReader.read(dataLength)
+            args.data = Array.from(paramsReader.read(dataLength))
           } else if (dataTypeFlag === 2) {
-            args.hashToDirectlySign = paramsReader.read(32)
+            args.hashToDirectlySign = Array.from(paramsReader.read(32))
           }
 
           // Deserialize seekPermission
@@ -1310,10 +1318,10 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(createSignatureResult.signature)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'verifySignature': {
@@ -1329,15 +1337,15 @@ export default class WalletWireProcessor implements WalletWire {
 
           // Deserialize signature
           const signatureLength = paramsReader.readVarIntNum()
-          args.signature = paramsReader.read(signatureLength)
+          args.signature = Array.from(paramsReader.read(signatureLength))
 
           // Deserialize data or hashToDirectlyVerify
           const dataTypeFlag = paramsReader.readUInt8()
           if (dataTypeFlag === 1) {
             const dataLength = paramsReader.readVarIntNum()
-            args.data = paramsReader.read(dataLength)
+            args.data = Array.from(paramsReader.read(dataLength))
           } else if (dataTypeFlag === 2) {
-            args.hashToDirectlyVerify = paramsReader.read(32)
+            args.hashToDirectlyVerify = Array.from(paramsReader.read(32))
           }
 
           // Deserialize seekPermission
@@ -1352,9 +1360,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.verifySignature(args, originator)
 
           // Serialize the result (no data to return)
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'isAuthenticated': {
@@ -1367,12 +1375,12 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.writeUInt8(
             isAuthenticatedResult.authenticated ? 1 : 0
           )
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'waitForAuthentication': {
@@ -1382,9 +1390,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.waitForAuthentication({}, originator)
 
           // Serialize the result (authenticated is always true)
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'getHeight': {
@@ -1394,10 +1402,10 @@ export default class WalletWireProcessor implements WalletWire {
           const getHeightResult = await this.wallet.getHeight({}, originator)
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.writeVarIntNum(getHeightResult.height)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'getHeaderForHeight': {
@@ -1413,11 +1421,11 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          const headerBytes = Utils.toArray(getHeaderResult.header, 'hex')
+          const headerBytes = Utils.toUint8Array(getHeaderResult.header, 'hex')
           responseWriter.write(headerBytes)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'getNetwork': {
@@ -1427,12 +1435,12 @@ export default class WalletWireProcessor implements WalletWire {
           const getNetworkResult = await this.wallet.getNetwork({}, originator)
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.writeUInt8(
             getNetworkResult.network === 'mainnet' ? 0 : 1
           )
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'getVersion': {
@@ -1442,11 +1450,11 @@ export default class WalletWireProcessor implements WalletWire {
           const getVersionResult = await this.wallet.getVersion({}, originator)
 
           // Serialize the result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          const versionBytes = Utils.toArray(getVersionResult.version, 'utf8')
+          const versionBytes = Utils.toUint8Array(getVersionResult.version, 'utf8')
           responseWriter.write(versionBytes)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'revealCounterpartyKeyLinkage': {
@@ -1485,19 +1493,19 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // Write prover
-          resultWriter.write(Utils.toArray(revealResult.prover, 'hex'))
+          resultWriter.write(Utils.toUint8Array(revealResult.prover, 'hex'))
 
           // Write verifier
-          resultWriter.write(Utils.toArray(revealResult.verifier, 'hex'))
+          resultWriter.write(Utils.toUint8Array(revealResult.verifier, 'hex'))
 
           // Write counterparty
-          resultWriter.write(Utils.toArray(revealResult.counterparty, 'hex'))
+          resultWriter.write(Utils.toUint8Array(revealResult.counterparty, 'hex'))
 
           // Write revelationTime
-          const revelationTimeBytes = Utils.toArray(
+          const revelationTimeBytes = Utils.toUint8Array(
             revealResult.revelationTime,
             'utf8'
           )
@@ -1515,10 +1523,10 @@ export default class WalletWireProcessor implements WalletWire {
           resultWriter.write(revealResult.encryptedLinkageProof)
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
 
         case 'revealSpecificKeyLinkage': {
@@ -1536,22 +1544,22 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // Write prover
-          resultWriter.write(Utils.toArray(revealResult.prover, 'hex'))
+          resultWriter.write(Utils.toUint8Array(revealResult.prover, 'hex'))
 
           // Write verifier
-          resultWriter.write(Utils.toArray(revealResult.verifier, 'hex'))
+          resultWriter.write(Utils.toUint8Array(revealResult.verifier, 'hex'))
 
           // Write counterparty
-          resultWriter.write(Utils.toArray(revealResult.counterparty, 'hex'))
+          resultWriter.write(Utils.toUint8Array(revealResult.counterparty, 'hex'))
 
           // Write securityLevel
           resultWriter.writeUInt8(revealResult.protocolID[0])
 
           // Write protocol string
-          const protocolBytesOut = Utils.toArray(
+          const protocolBytesOut = Utils.toUint8Array(
             revealResult.protocolID[1],
             'utf8'
           )
@@ -1559,7 +1567,7 @@ export default class WalletWireProcessor implements WalletWire {
           resultWriter.write(protocolBytesOut)
 
           // Write keyID
-          const keyIDBytesOut = Utils.toArray(revealResult.keyID, 'utf8')
+          const keyIDBytesOut = Utils.toUint8Array(revealResult.keyID, 'utf8')
           resultWriter.writeVarIntNum(keyIDBytesOut.length)
           resultWriter.write(keyIDBytesOut)
 
@@ -1577,10 +1585,10 @@ export default class WalletWireProcessor implements WalletWire {
           resultWriter.writeUInt8(revealResult.proofType)
 
           // Return success code and result
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
 
         case 'acquireCertificate': {
@@ -1650,9 +1658,9 @@ export default class WalletWireProcessor implements WalletWire {
             if (keyringRevealerIdentifier === 11) {
               args.keyringRevealer = 'certifier'
             } else {
-              const keyringRevealerBytes = [keyringRevealerIdentifier].concat(
-                paramsReader.read(32)
-              )
+              const keyringRevealerBytes = new Uint8Array(33)
+              keyringRevealerBytes[0] = keyringRevealerIdentifier
+              keyringRevealerBytes.set(paramsReader.read(32), 1)
               args.keyringRevealer = Utils.toHex(keyringRevealerBytes)
             }
 
@@ -1696,10 +1704,10 @@ export default class WalletWireProcessor implements WalletWire {
           const certBin = cert.toBinary()
 
           // Return success code and certificate binary
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(certBin)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'listCertificates': {
@@ -1761,7 +1769,7 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize the result
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           // totalCertificates
           resultWriter.writeVarIntNum(listResult.totalCertificates)
@@ -1788,11 +1796,11 @@ export default class WalletWireProcessor implements WalletWire {
               const keyringEntries = Object.entries(cert.keyring)
               resultWriter.writeVarIntNum(keyringEntries.length)
               for (const [fieldName, fieldValue] of keyringEntries) {
-                const fieldNameBytes = Utils.toArray(fieldName, 'utf8')
+                const fieldNameBytes = Utils.toUint8Array(fieldName, 'utf8')
                 resultWriter.writeVarIntNum(fieldNameBytes.length)
                 resultWriter.write(fieldNameBytes)
 
-                const fieldValueBytes = Utils.toArray(fieldValue, 'base64')
+                const fieldValueBytes = Utils.toUint8Array(fieldValue, 'base64')
                 resultWriter.writeVarIntNum(fieldValueBytes.length)
                 resultWriter.write(fieldValueBytes)
               }
@@ -1800,16 +1808,16 @@ export default class WalletWireProcessor implements WalletWire {
               resultWriter.writeInt8(0) // Flag indicating no keyring
             }
 
-            const verifierBytes = Utils.toArray(cert.verifier, 'hex')
+            const verifierBytes = Utils.toUint8Array(cert.verifier, 'hex')
             resultWriter.writeVarIntNum(verifierBytes.length)
             resultWriter.write(verifierBytes)
           }
 
           // Return the response
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
 
         case 'proveCertificate': {
@@ -1898,25 +1906,25 @@ export default class WalletWireProcessor implements WalletWire {
           )
 
           // Serialize keyringForVerifier
-          const resultWriter = new Utils.Writer()
+          const resultWriter = new Utils.WriterUint8Array()
 
           const keyringEntries = Object.entries(proveResult.keyringForVerifier)
           resultWriter.writeVarIntNum(keyringEntries.length)
           for (const [fieldName, fieldValue] of keyringEntries) {
-            const fieldNameBytes = Utils.toArray(fieldName, 'utf8')
+            const fieldNameBytes = Utils.toUint8Array(fieldName, 'utf8')
             resultWriter.writeVarIntNum(fieldNameBytes.length)
             resultWriter.write(fieldNameBytes)
 
-            const fieldValueBytes = Utils.toArray(fieldValue, 'base64')
+            const fieldValueBytes = Utils.toUint8Array(fieldValue, 'base64')
             resultWriter.writeVarIntNum(fieldValueBytes.length)
             resultWriter.write(fieldValueBytes)
           }
 
           // Return the response
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          responseWriter.write(resultWriter.toArray())
-          return responseWriter.toArray()
+          responseWriter.write(resultWriter.toUint8Array())
+          return responseWriter.toUint8Array()
         }
 
         case 'relinquishCertificate': {
@@ -1938,9 +1946,9 @@ export default class WalletWireProcessor implements WalletWire {
           await this.wallet.relinquishCertificate(args, originator)
 
           // Return success code
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'discoverByIdentityKey': {
@@ -1983,10 +1991,10 @@ export default class WalletWireProcessor implements WalletWire {
           const result = this.serializeDiscoveryResult(discoverResult)
 
           // Return the response
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(result)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         case 'discoverByAttributes': {
@@ -2040,36 +2048,36 @@ export default class WalletWireProcessor implements WalletWire {
           const result = this.serializeDiscoveryResult(discoverResult)
 
           // Return the response
-          const responseWriter = new Utils.Writer()
+          const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(result)
-          return responseWriter.toArray()
+          return responseWriter.toUint8Array()
         }
 
         default:
           throw new Error(`Method ${callName} not implemented`)
       }
     } catch (err) {
-      const responseWriter = new Utils.Writer()
+      const responseWriter = new Utils.WriterUint8Array()
       responseWriter.writeUInt8(typeof err.code === 'number' ? err.code : 1) // errorCode = 1 (generic error)
 
       // Serialize the error message
       const errorMessage = typeof err.message === 'string' ? err.message : 'Unknown error'
-      const errorMessageBytes = Utils.toArray(errorMessage, 'utf8')
+      const errorMessageBytes = Utils.toUint8Array(errorMessage, 'utf8')
       responseWriter.writeVarIntNum(errorMessageBytes.length)
       responseWriter.write(errorMessageBytes)
 
       // Serialize the stack trace
       const stackTrace = typeof err.stack === 'string' ? err.stack : ''
-      const stackTraceBytes = Utils.toArray(stackTrace, 'utf8')
+      const stackTraceBytes = Utils.toUint8Array(stackTrace, 'utf8')
       responseWriter.writeVarIntNum(stackTraceBytes.length)
       responseWriter.write(stackTraceBytes)
 
-      return responseWriter.toArray()
+      return responseWriter.toUint8Array()
     }
   }
 
-  private decodeProtocolID(reader: Utils.Reader): [SecurityLevel, string] {
+  private decodeProtocolID(reader: Utils.ReaderUint8Array): [SecurityLevel, string] {
     const securityLevel = reader.readUInt8() as SecurityLevel
     const protocolLength = reader.readVarIntNum()
     const protocolBytes = reader.read(protocolLength)
@@ -2077,14 +2085,14 @@ export default class WalletWireProcessor implements WalletWire {
     return [securityLevel, protocolString]
   }
 
-  private decodeString(reader: Utils.Reader): string {
+  private decodeString(reader: Utils.ReaderUint8Array): string {
     const length = reader.readVarIntNum()
     const bytes = reader.read(length)
     return Utils.toUTF8(bytes)
   }
 
   private decodeCounterparty(
-    reader: Utils.Reader
+    reader: Utils.ReaderUint8Array
   ): string | undefined {
     const counterpartyFlag = reader.readUInt8()
     if (counterpartyFlag === 11) {
@@ -2099,8 +2107,8 @@ export default class WalletWireProcessor implements WalletWire {
     }
   }
 
-  private serializeDiscoveryResult(discoverResult: any): number[] {
-    const resultWriter = new Utils.Writer()
+  private serializeDiscoveryResult(discoverResult: any): Uint8Array {
+    const resultWriter = new Utils.WriterUint8Array()
 
     // totalCertificates
     resultWriter.writeVarIntNum(discoverResult.totalCertificates)
@@ -2124,15 +2132,15 @@ export default class WalletWireProcessor implements WalletWire {
       resultWriter.write(certBin)
 
       // Serialize certifierInfo
-      const nameBytes = Utils.toArray(cert.certifierInfo.name, 'utf8')
+      const nameBytes = Utils.toUint8Array(cert.certifierInfo.name, 'utf8')
       resultWriter.writeVarIntNum(nameBytes.length)
       resultWriter.write(nameBytes)
 
-      const iconUrlBytes = Utils.toArray(cert.certifierInfo.iconUrl, 'utf8')
+      const iconUrlBytes = Utils.toUint8Array(cert.certifierInfo.iconUrl, 'utf8')
       resultWriter.writeVarIntNum(iconUrlBytes.length)
       resultWriter.write(iconUrlBytes)
 
-      const descriptionBytes = Utils.toArray(
+      const descriptionBytes = Utils.toUint8Array(
         cert.certifierInfo.description,
         'utf8'
       )
@@ -2145,11 +2153,11 @@ export default class WalletWireProcessor implements WalletWire {
       const publicKeyringEntries = Object.entries(cert.publiclyRevealedKeyring)
       resultWriter.writeVarIntNum(publicKeyringEntries.length)
       for (const [fieldName, fieldValue] of publicKeyringEntries) {
-        const fieldNameBytes = Utils.toArray(fieldName, 'utf8')
+        const fieldNameBytes = Utils.toUint8Array(fieldName, 'utf8')
         resultWriter.writeVarIntNum(fieldNameBytes.length)
         resultWriter.write(fieldNameBytes)
 
-        const fieldValueBytes = Utils.toArray(fieldValue, 'base64')
+        const fieldValueBytes = Utils.toUint8Array(fieldValue, 'base64')
         resultWriter.writeVarIntNum(fieldValueBytes.length)
         resultWriter.write(fieldValueBytes)
       }
@@ -2158,20 +2166,20 @@ export default class WalletWireProcessor implements WalletWire {
       const decryptedFieldEntries = Object.entries(cert.decryptedFields)
       resultWriter.writeVarIntNum(decryptedFieldEntries.length)
       for (const [fieldName, fieldValue] of decryptedFieldEntries) {
-        const fieldNameBytes = Utils.toArray(fieldName, 'utf8')
+        const fieldNameBytes = Utils.toUint8Array(fieldName, 'utf8')
         resultWriter.writeVarIntNum(fieldNameBytes.length)
         resultWriter.write(fieldNameBytes)
 
-        const fieldValueBytes = Utils.toArray(fieldValue, 'utf8')
+        const fieldValueBytes = Utils.toUint8Array(fieldValue, 'utf8')
         resultWriter.writeVarIntNum(fieldValueBytes.length)
         resultWriter.write(fieldValueBytes)
       }
     }
 
-    return resultWriter.toArray()
+    return resultWriter.toUint8Array()
   }
 
-  private decodeKeyRelatedParams(paramsReader: Utils.Reader): any {
+  private decodeKeyRelatedParams(paramsReader: Utils.ReaderUint8Array): any {
     const args: any = {}
 
     // Read protocolID

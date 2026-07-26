@@ -84,6 +84,20 @@ binary requests, and commit by digest. Logical blobs are split at the provider's
 advertised limit (8 MiB by default), deduplicated by digest, and uploaded with at
 most four concurrent requests. Incomplete uploads expire with their batch.
 
+The planner, validator, digest pipeline, and chunk assembler retain
+`Uint8Array` storage throughout this path. Conversion to database-compatible
+numeric arrays occurs only at persistence entity boundaries. Atomic commit also
+preloads external inputs, baskets, tags, and labels once per manifest instead of
+repeating those lookups for every action. These are implementation details; the
+storage capability, manifest format, and BRC-100 arguments and results are
+unchanged.
+
+Wallet and locally hosted storage construction can receive an optional
+`scriptVerifier`. Batch and ordinary action checks pass explicit consensus
+context to that verifier, allowing a warm native/WASM implementation to handle
+large scripts without changing the wallet contract. If no verifier is supplied,
+the SDK TypeScript interpreter remains the default.
+
 The remote server derives the batch user ID and active-storage state from the
 BRC-103 authenticated identity for every management call and binary upload.
 Caller-supplied user IDs or active-state claims are never authoritative, and the
@@ -105,6 +119,13 @@ The retained benchmark is the performance regression gate:
 ```bash
 pnpm --filter @bsv/wallet-toolbox bench:action-batch
 ```
+
+On the same Apple Silicon host with Node.js v25.9.0, a representative cold
+250-action, 1 KiB-script batch improved from 12,120.22 ms to 9,858.20 ms for
+planning/signing/validation (18.7% faster) and from 6,962.96 ms to 6,054.02 ms
+for atomic commit (13.1% faster). Combined local time fell from 19,083.18 ms to
+15,912.21 ms, a 16.6% reduction. The workload, database, random inputs, and
+benchmark code were identical; absolute times remain host-dependent.
 
 It records planning, signing and validation, storage RPCs, database transactions,
 request bytes, commit and broadcast time, CPU, and incremental peak heap. Physical

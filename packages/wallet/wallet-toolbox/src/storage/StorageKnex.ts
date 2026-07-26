@@ -1454,7 +1454,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
     const r: TableOutput | undefined = await this.knex.transaction(async trx => {
       const baseQuery = (): Knex.QueryBuilder<TableOutput, TableOutput[]> =>
-        trx<TableOutput>('outputs as o')
+        trx<TableOutput, TableOutput[]>('outputs as o')
           .join('transactions as t', 'o.transactionId', 't.transactionId')
           .where('o.userId', userId)
           .where('o.spendable', true)

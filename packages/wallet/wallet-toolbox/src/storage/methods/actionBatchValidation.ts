@@ -4,7 +4,7 @@ import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_e
 import { verifyUnlockScripts } from '../../signer/methods/completeSignedTransaction'
 import { actionBatchBlobDigest } from '../../utility/actionBatchDigest'
 import { beefForTxids } from '../../utility/beefForTxids'
-import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
+import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import type { StorageProvider } from '../StorageProvider'
 import { validateStorageFeeModel } from '../StorageProvider'
 import type { TableActionBatch } from '../schema/tables/TableActionBatch'
@@ -18,8 +18,8 @@ import {
 export interface ValidatedBatchAction {
   action: ActionBatchCommitAction
   tx: Transaction
-  rawTx: number[]
-  inputBeef: number[]
+  rawTx: Uint8Array
+  inputBeef: Uint8Array
 }
 
 async function resolveManifestBytes (
@@ -29,9 +29,9 @@ async function resolveManifestBytes (
   digest: string | undefined,
   name: string,
   chunkDigests?: string[]
-): Promise<number[]> {
+): Promise<Uint8Array> {
   if (inline != null) {
-    const bytes = asArray(inline)
+    const bytes = asUint8Array(inline)
     if (digest != null && actionBatchBlobDigest(bytes) !== digest) {
       throw new WERR_INVALID_PARAMETER(name, 'match digest')
     }
@@ -43,7 +43,7 @@ async function resolveManifestBytes (
     if (chunkDigests.length > ACTION_BATCH_MAX_CHUNKS_PER_BLOB) {
       throw new WERR_INVALID_PARAMETER(name, `at most ${ACTION_BATCH_MAX_CHUNKS_PER_BLOB} blob chunks`)
     }
-    const chunks: number[][] = []
+    const chunks: Uint8Array[] = []
     let totalBytes = 0
     for (const chunkDigest of chunkDigests) {
       const chunk = await storage.findActionBatchBlobRecord(batch.actionBatchId, chunkDigest)
@@ -55,12 +55,13 @@ async function resolveManifestBytes (
       if (totalBytes > ACTION_BATCH_MAX_LOGICAL_BLOB_BYTES) {
         throw new WERR_INVALID_PARAMETER(name, 'assembled bytes within provider limit')
       }
-      chunks.push(chunk.bytes)
+      chunks.push(Uint8Array.from(chunk.bytes))
     }
-    const bytes = new Array<number>(totalBytes)
+    const bytes = new Uint8Array(totalBytes)
     let offset = 0
     for (const chunk of chunks) {
-      for (let index = 0; index < chunk.length; index++) bytes[offset++] = chunk[index]
+      bytes.set(chunk, offset)
+      offset += chunk.length
     }
     if (actionBatchBlobDigest(bytes) !== digest) {
       throw new WERR_INVALID_PARAMETER(name, 'chunks matching digest')
@@ -72,7 +73,7 @@ async function resolveManifestBytes (
   if (actionBatchBlobDigest(blob.bytes) !== digest) {
     throw new WERR_INVALID_OPERATION(`corrupt action batch blob ${digest}`)
   }
-  return blob.bytes
+  return Uint8Array.from(blob.bytes)
 }
 
 function sameStrings (left: string[] | undefined, right: string[] | undefined): boolean {
@@ -252,7 +253,7 @@ export async function validateManifestActions (
   storage: StorageProvider,
   batch: TableActionBatch,
   manifest: ActionBatchManifest
-): Promise<{ actions: ValidatedBatchAction[], dependencyBeef: number[] }> {
+): Promise<{ actions: ValidatedBatchAction[], dependencyBeef: Uint8Array }> {
   const dependencyBeef = await resolveManifestBytes(
     storage,
     batch,
@@ -350,16 +351,18 @@ export async function validateManifestActions (
         throw new WERR_INVALID_PARAMETER('outputs', 'match planned transaction outputs')
       }
     }
-    const inputBeef = asArray(beefForTxids(
+    const inputBeef = beefForTxids(
       beef,
       action.plan.inputs.map(input => input.sourceTxid)
-    ).toUint8Array())
+    ).toUint8Array()
     beef.mergeRawTx(rawTx)
     seenTxids.add(action.txid)
     seenReferences.add(action.reference)
     actions.push({ action, tx, rawTx, inputBeef })
   }
-  for (const { action } of actions) verifyUnlockScripts(action.txid, beef)
+  for (const { action } of actions) {
+    await verifyUnlockScripts(action.txid, beef, storage.scriptVerifier)
+  }
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
     throw new WERR_INVALID_PARAMETER('manifest', 'valid dependency graph')
   }

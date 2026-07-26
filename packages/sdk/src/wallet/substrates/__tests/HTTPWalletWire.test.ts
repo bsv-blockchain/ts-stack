@@ -114,6 +114,17 @@ describe('HTTPWalletWire – transmitToWallet invalid call code', () => {
 // ---------------------------------------------------------------------------
 
 describe('HTTPWalletWire – transmitToWallet request', () => {
+  it('returns compact bytes through the optional typed transport', async () => {
+    mockGlobalFetch([1, 2, 3])
+    const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')
+
+    const result = await wire.transmitToWalletUint8Array(
+      Uint8Array.from(buildFrame('getVersion'))
+    )
+
+    expect(result).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
   it('calls global fetch with the correct URL derived from the call name', async () => {
     const mockFetch = mockGlobalFetch([1, 2, 3])
     const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')

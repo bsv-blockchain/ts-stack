@@ -8,6 +8,7 @@ import PrivateKey from '../../primitives/PrivateKey'
 import PublicKey from '../../primitives/PublicKey'
 import Transaction from '../../transaction/Transaction'
 import P2PKH from '../../script/templates/P2PKH'
+import ScriptResourceLimitError from '../../script/ScriptResourceLimitError'
 
 const ZERO_TXID = '0'.repeat(64)
 
@@ -67,6 +68,36 @@ function makeLocking (
 // Memory limit checks (lines 238, 246, 383-384, 387-388)
 // ---------------------------------------------------------------------------
 describe('Spend – memory limit enforcement', () => {
+  it('does not turn the default local resource budget into a validity rule', () => {
+    const payload = Array.from({ length: 1024 * 1024 }, () => 1)
+    const spend = makeLocking([
+      pushChunk(payload),
+      { op: OP.OP_DROP },
+      { op: OP.OP_1 }
+    ])
+
+    expect(spend.hasExplicitMemoryLimit).toBe(false)
+    expect(spend.validateJavaScript()).toBe(true)
+  })
+
+  it('reports an explicit local budget as resource exhaustion, not invalid script', () => {
+    const spend = makeLocking([pushChunk(Array.from({ length: 2048 }, () => 1))], {
+      memoryLimit: 1024
+    })
+
+    expect(spend.hasExplicitMemoryLimit).toBe(true)
+    try {
+      spend.validateJavaScript()
+      throw new Error('expected the local resource limit to be exhausted')
+    } catch (error) {
+      expect(error).toBeInstanceOf(ScriptResourceLimitError)
+      const resourceError = error as ScriptResourceLimitError
+      expect(resourceError.resource).toBe('stack')
+      expect(resourceError.limit).toBe(1024)
+      expect(resourceError.attempted).toBe(2048)
+    }
+  })
+
   it('step() throws when stackMem already exceeds memoryLimit', () => {
     const spend = makeLocking([{ op: OP.OP_1 }], { memoryLimit: 0 })
     spend.context = 'LockingScript'

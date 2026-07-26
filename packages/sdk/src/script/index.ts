@@ -4,8 +4,13 @@ export { default as LockingScript } from './LockingScript.js'
 export { default as UnlockingScript } from './UnlockingScript.js'
 export { default as Spend } from './Spend.js'
 export type { default as SpendVerifierInterface } from './SpendVerifierInterface.js'
+export type { default as SpendVerificationContext } from './SpendVerificationContext.js'
 export type { default as ScriptTemplateUnlock } from './ScriptTemplateUnlock.js'
 export { default as ScriptEvaluationError } from './ScriptEvaluationError.js'
+export {
+  default as ScriptResourceLimitError
+} from './ScriptResourceLimitError.js'
+export type { ScriptResource } from './ScriptResourceLimitError.js'
 export type { default as ScriptTemplate } from './ScriptTemplate.js'
 export * from './templates/index.js'
 export type { default as ScriptChunk } from './ScriptChunk.js'

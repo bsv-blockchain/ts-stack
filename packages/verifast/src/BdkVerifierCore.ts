@@ -1,7 +1,8 @@
 import type {
   AsyncCryptoBackend,
   AsyncCryptoOperation,
-  Spend
+  Spend,
+  SpendVerificationContext
 } from '@bsv/sdk'
 import {
   decodeResults,
@@ -234,6 +235,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
       input.sourceTransaction?.outputs[input.sourceOutputIndex]
     )
     if (
+      !params.consensus &&
       params.tx.version <= 1 &&
       sourceOutputs.some(output =>
         output === undefined || !isStandardP2PKHScript(output.lockingScript)
@@ -249,10 +251,17 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
   }
 
   /** Selection hook consumed by Spend.validateWith. */
-  shouldVerifySpend (spend: Spend): boolean {
-    if (spend.memoryLimit !== 32000000) return false
+  shouldVerifySpend (
+    spend: Spend,
+    context?: SpendVerificationContext
+  ): boolean {
+    if (spend.hasExplicitMemoryLimit) return false
     if (this.mode === 'always') return !this.disposed
-    if (spend.transactionVersion <= 1 && !isStandardP2PKHScript(spend.lockingScript)) return false
+    if (
+      context?.consensus !== true &&
+      spend.transactionVersion <= 1 &&
+      !isStandardP2PKHScript(spend.lockingScript)
+    ) return false
     if (this.module !== undefined && this.module.VerifySpendArray === undefined) return false
     return isVeriFastCandidateScript(spend.lockingScript, this.scriptByteThreshold) &&
       this.prepareCandidate()
@@ -456,8 +465,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
       customFlags: verifyFlags === undefined ? undefined : mapVerifyFlags(verifyFlags),
       utxoHeight: options.utxoHeight ?? this.defaultUtxoHeight,
       blockHeight: options.blockHeight ?? this.defaultBlockHeight,
-      consensus: options.consensus ??
-        (spend.transactionVersion <= 1 ? false : this.defaultConsensus)
+      consensus: options.consensus ?? this.defaultConsensus
     }
   }
 

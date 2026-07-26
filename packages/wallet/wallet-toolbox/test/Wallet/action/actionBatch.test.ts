@@ -102,6 +102,10 @@ describe('in-memory action batch workspace', () => {
     const staged = await ctx.wallet.listActions({ labels: ['action batch workload'] })
     expect(staged.totalActions).toBe(10)
 
+    const preloadInputs = jest.spyOn(ctx.activeStorage, 'findOutputsByOutpointsForUpdate')
+    const preloadBaskets = jest.spyOn(ctx.activeStorage, 'findOrInsertOutputBasketsBulk')
+    const preloadTags = jest.spyOn(ctx.activeStorage, 'findOrInsertOutputTagsBulk')
+    const preloadLabel = jest.spyOn(ctx.activeStorage, 'findOrInsertTxLabel')
     const final = await ctx.wallet.createAction({
       description: 'Commit planned action batch',
       options: { sendWith: txids }
@@ -110,6 +114,10 @@ describe('in-memory action batch workspace', () => {
     expect(commit).toHaveBeenCalledTimes(1)
     expect(begin).toHaveBeenCalledTimes(1)
     expect(extend).not.toHaveBeenCalled()
+    expect(preloadInputs).toHaveBeenCalledTimes(1)
+    expect(preloadBaskets).toHaveBeenCalledTimes(1)
+    expect(preloadTags).toHaveBeenCalledTimes(1)
+    expect(preloadLabel).toHaveBeenCalledTimes(1)
 
     const manifest = commit.mock.calls[0][0]
     const retry = await ctx.storage.commitActionBatch(manifest)

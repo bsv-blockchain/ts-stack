@@ -16,6 +16,7 @@ import {
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
+import type { SpendVerifierInterface } from '@bsv/sdk'
 import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { Chain } from './sdk/types'
 import { randomBytesHex, verifyTruthy } from './utility/utilityHelpers'
@@ -167,7 +168,8 @@ DEV_KEYS = '{
       storage,
       services,
       monitor,
-      privilegedKeyManager
+      privilegedKeyManager,
+      scriptVerifier: args.scriptVerifier
     })
     const r: SetupWallet = {
       rootKey,
@@ -195,6 +197,7 @@ DEV_KEYS = '{
     rootKeyHex: string
     storageUrl?: string
     privilegedKeyGetter?: () => Promise<PrivateKey>
+    scriptVerifier?: SpendVerifierInterface
   }): Promise<Wallet> {
     const chain = args.chain
     const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
@@ -210,7 +213,8 @@ DEV_KEYS = '{
       keyDeriver,
       storage,
       services,
-      privilegedKeyManager
+      privilegedKeyManager,
+      scriptVerifier: args.scriptVerifier
     })
     const client = new StorageClient(wallet, endpointUrl)
     await storage.addWalletStorageProvider(client)
@@ -388,7 +392,8 @@ DEV_KEYS = '{
       knex: args.knex,
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
-      feeModel: { model: 'sat/kb', value: 100 }
+      feeModel: { model: 'sat/kb', value: 100 },
+      scriptVerifier: args.scriptVerifier
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
     await storage.makeAvailable()
@@ -482,6 +487,11 @@ export interface SetupWalletArgs {
    * Optional. One or more storage providers managed as backup destinations. Can be added later.
    */
   backups?: WalletStorageProvider[]
+  /**
+   * Optional high-performance verifier for internal wallet and locally hosted
+   * storage validation. This does not alter the BRC-100 interface.
+   */
+  scriptVerifier?: SpendVerifierInterface
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   ChainTracker,
   Transaction
 } from '@bsv/sdk'
+import type { SpendVerifierInterface } from '@bsv/sdk'
 import { classifyReqStatus, mergeInputsIntoBeef, mergeInputBeefs, notifyTransactionsOfProof } from './storageProviderHelpers'
 import { getBeefForTransaction } from './methods/getBeefForTransaction'
 import { GetReqsAndBeefDetail, GetReqsAndBeefResult, processAction } from './methods/processAction'
@@ -106,6 +107,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   commissionSatoshis: number
   commissionPubKeyHex?: PubKeyHex
   maxRecursionDepth?: number
+  readonly scriptVerifier?: SpendVerifierInterface
 
   static defaultOptions (): { feeModel: StorageFeeModel, commissionSatoshis: number, commissionPubKeyHex: undefined } {
     const opts: { feeModel: StorageFeeModel, commissionSatoshis: number, commissionPubKeyHex: undefined } = {
@@ -130,6 +132,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.commissionPubKeyHex = options.commissionPubKeyHex
     this.commissionSatoshis = options.commissionSatoshis
     this.maxRecursionDepth = 12
+    this.scriptVerifier = options.scriptVerifier
   }
 
   abstract reviewStatus (args: { agedLimit: Date, trx?: TrxToken }): Promise<{ log: string }>
@@ -1278,6 +1281,11 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
    * from this key by information stored in the commissions table.
    */
   commissionPubKeyHex?: PubKeyHex
+  /**
+   * Optional verifier for server-side action-batch script checks. This Wallet
+   * Toolbox extension leaves the BRC-100 wallet interface unchanged.
+   */
+  scriptVerifier?: SpendVerifierInterface
 }
 
 export function validateStorageFeeModel (v?: StorageFeeModel): StorageFeeModel {

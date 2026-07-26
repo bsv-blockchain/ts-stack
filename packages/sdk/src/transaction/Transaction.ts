@@ -1042,7 +1042,9 @@ export default class Transaction {
    *
    * @param chainTracker - An instance of ChainTracker, a Bitcoin block header tracker. If the value is set to 'scripts only', headers will not be verified. If not provided then the default chain tracker will be used.
    * @param feeModel - An instance of FeeModel, a fee model to use for fee calculation. If not provided then the default fee model will be used.
-   * @param memoryLimit - The maximum memory in bytes usage allowed for script evaluation. If not provided then the default memory limit will be used.
+   * @param memoryLimit - Optional caller-supplied local script-interpreter
+   * memory budget. If omitted, post-Genesis validation does not impose an
+   * arbitrary SDK memory cap.
    * @param verifier - An optional asynchronous script backend. Adaptive backends may decline before execution to preserve the JavaScript path.
    *
    * @returns Whether the transaction is valid according to the rules of SPV.
@@ -1119,7 +1121,9 @@ export default class Transaction {
       const verifierParams = {
         tx,
         blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
-        consensus: tx.version > 1,
+        // Transaction version is script data, not a policy/consensus selector.
+        // Graph verification establishes consensus validity by default.
+        consensus: true,
         ...(memoryLimit === undefined ? {} : { memoryLimit })
       } as const
       const useVerifier = selectedVerifier !== undefined &&

@@ -30,11 +30,11 @@ export async function signAction (wallet: Wallet, auth: AuthId, args: SignAction
     : Beef.fromBinary(prior.dcr.inputBeef)
   beef.mergeTransaction(prior.tx)
 
-  verifyUnlockScripts(txid, beef)
+  await verifyUnlockScripts(txid, beef, wallet.scriptVerifier)
 
   const r: SignActionResultX = {
     txid: prior.tx.id('hex'),
-    tx: vargs.options.returnTXIDOnly ? undefined : beef.toBinaryAtomic(txid),
+    tx: vargs.options.returnTXIDOnly ? undefined : beef.toUint8ArrayAtomic(txid),
     sendWithResults,
     notDelayedResults
   }

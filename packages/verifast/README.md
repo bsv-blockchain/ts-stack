@@ -12,11 +12,12 @@ strictly larger than 100 bytes and scripts containing `CHECKSIG` or
 `CHECKMULTISIG` variants use WASM once it is ready, and smaller non-cryptographic
 scripts retain the SDK's JavaScript interpreter.
 
-Version-1 automatic routing is limited to canonical P2PKH spends and uses
-BDK's policy lane so LOW_S, MINIMALDATA, CLEANSTACK, and related interpreter
-strictness remain timing-independent. Calls with an explicit SDK script-memory
-limit stay on the JavaScript interpreter because this WASM ABI cannot enforce
-that limit.
+SDK transaction-graph verification supplies explicit consensus context, so
+transaction version never selects policy versus consensus rules. Direct Spend
+calls that omit context retain compatibility policy routing: version-1
+non-standard scripts stay on the TypeScript interpreter. Calls with an explicit
+SDK script-memory limit also stay on the TypeScript interpreter because this
+WASM ABI cannot enforce that caller-supplied resource budget.
 
 ```ts
 import { Transaction } from '@bsv/sdk'
@@ -62,16 +63,18 @@ invalidation.
 Call the same backend from code that already constructs SDK `Spend` objects:
 
 ```ts
-const valid = await spend.validateWith(verifier)
+const valid = await spend.validateWith(verifier, { consensus: true })
 // Equivalent direct form:
-const sameVerdict = await verifier.verifySpend(spend)
+const sameVerdict = await verifier.verifySpend(spend, { consensus: true })
 ```
 
 `validateWith` applies the same adaptive policy as transaction verification.
 The Spend path serializes an ordinary transaction and supplies the active
 source output separately, so it does not construct or parse EF ancestry.
 Explicit `Spend.verifyFlags` are preserved; otherwise BDK calculates flags from
-the configured network and heights.
+the configured network and heights. Pass `{ consensus: true }` when validity is
+being established and `{ consensus: false }` for policy checks; omitting the
+context preserves compatibility behavior only.
 
 Packed batch methods cross the JS/WASM boundary once per bounded chunk:
 

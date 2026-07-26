@@ -58,6 +58,7 @@ export interface SetupClientWalletArgs {
     active?: WalletStorageProvider;
     backups?: WalletStorageProvider[];
     taalApiKey?: string;
+    scriptVerifier?: SpendVerifierInterface;
 }
 ```
 
@@ -88,6 +89,15 @@ Defaults to undefined.
 
 ```ts
 privilegedKeyGetter?: () => Promise<PrivateKey>
+```
+
+###### Property scriptVerifier
+
+Optional high-performance verifier for internal wallet and locally hosted
+storage validation. This does not alter the BRC-100 interface.
+
+```ts
+scriptVerifier?: SpendVerifierInterface
 ```
 
 ###### Property rootKeyHex
@@ -332,6 +342,7 @@ export interface SetupWalletArgs {
     privilegedKeyGetter?: () => Promise<PrivateKey>;
     active?: WalletStorageProvider;
     backups?: WalletStorageProvider[];
+    scriptVerifier?: SpendVerifierInterface;
 }
 ```
 
@@ -371,6 +382,15 @@ Defaults to undefined.
 
 ```ts
 privilegedKeyGetter?: () => Promise<PrivateKey>
+```
+
+###### Property scriptVerifier
+
+Optional high-performance verifier for internal wallet and locally hosted
+storage validation. This does not alter the BRC-100 interface.
+
+```ts
+scriptVerifier?: SpendVerifierInterface
 ```
 
 ###### Property rootKeyHex

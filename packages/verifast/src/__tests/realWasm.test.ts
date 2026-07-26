@@ -100,7 +100,7 @@ describe('bundled BDK WASM in Node', () => {
     expect(expected.filter(valid => !valid)).toHaveLength(1)
   })
 
-  it('keeps version-1 strictness identical before and after WASM warm-up', async () => {
+  it('uses explicit consensus context for version-1 scripts without changing policy mode', async () => {
     const source = new Transaction()
     source.addInput({
       sourceTXID: '00'.repeat(32),
@@ -124,15 +124,23 @@ describe('bundled BDK WASM in Node', () => {
 
     await expect(tx.verify('scripts only')).rejects.toThrow('not minimally-encoded')
 
-    const verifier = new BdkVerifier({ registerAsDefault: false })
+    const verifier = new BdkVerifier({
+      registerAsDefault: false,
+      scriptByteThreshold: 0
+    })
     await verifier.preload()
     expect(verifier.shouldVerifyScripts({
       tx,
       blockHeight: 943816,
       consensus: false
     })).toBe(false)
+    expect(verifier.shouldVerifyScripts({
+      tx,
+      blockHeight: 943816,
+      consensus: true
+    })).toBe(true)
     await expect(tx.verify('scripts only', undefined, undefined, verifier))
-      .rejects.toThrow('not minimally-encoded')
+      .resolves.toBe(true)
 
     await expect(verifier.verifyScripts({
       tx,

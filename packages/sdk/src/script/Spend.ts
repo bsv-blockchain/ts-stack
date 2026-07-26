@@ -13,13 +13,15 @@ import { verify } from '../primitives/ECDSA.js'
 import TransactionInput from '../transaction/TransactionInput.js'
 import TransactionOutput from '../transaction/TransactionOutput.js'
 import type SpendVerifierInterface from './SpendVerifierInterface.js'
+import type SpendVerificationContext from './SpendVerificationContext.js'
+import ScriptResourceLimitError from './ScriptResourceLimitError.js'
 import { scriptVerificationBackend } from '../transaction/ScriptVerificationBackend.js'
 
 // These constants control the current behavior of the interpreter.
-const maxScriptElementSize = 1024 * 1024 * 1024
 const maxScriptElementSizeBeforeGenesis = 520
 const maxScriptSizeBeforeGenesis = 10000
 const maxOpsBeforeGenesis = 500
+const maxJavaScriptArrayLength = 0xffffffffn
 const maxStackItemsBeforeGenesis = 1000
 const maxMultisigKeyCount = Math.pow(2, 31) - 1
 const maxMultisigKeyCountBigInt = BigInt(maxMultisigKeyCount)
@@ -124,7 +126,8 @@ function isChunkMinimalPushHelper (chunk: ScriptChunk): boolean {
  * @property {UnlockingScript} unlockingScript - The unlocking script that unlocks the UTXO for spending.
  * @property {number} inputSequence - The sequence number of this input.
  * @property {number} lockTime - The lock time of the transaction.
- * @property {number} memoryLimit - Control over script interpreter memory usage.
+ * @property {number} memoryLimit - Optional caller-supplied local interpreter
+ *           budget. Omit it to avoid imposing a non-consensus post-Genesis cap.
  * @property {boolean} isRelaxed - Optional. If true, disables all the unlocking script maleability restrictions consitent with Chronicle release. Maleability restrictions are neve appliced to locking scripts.
  */
 export default class Spend {
@@ -149,6 +152,7 @@ export default class Spend {
   ifStack: boolean[]
   elseStack: boolean[]
   memoryLimit: number
+  readonly hasExplicitMemoryLimit: boolean
   stackMem: number
   altStackMem: number
   isRelaxedOverride: boolean
@@ -175,7 +179,9 @@ export default class Spend {
    * @param {UnlockingScript} params.unlockingScript - The unlocking script for this spend.
    * @param {number} params.inputSequence - The sequence number of this input.
    * @param {number} params.lockTime - The lock time of the transaction.
-   * @param {number} params.memoryLimit - Optional control over script interpreter memory usage.
+   * @param {number} params.memoryLimit - Optional caller-supplied local
+   *        interpreter budget. Resource exhaustion is reported separately from
+   *        script invalidity.
    * @param {boolean} params.isRelaxed - Optional. If true, disables all the unlocking script maleability restrictions consitent with Chronicle release. Maleability restrictions are neve appliced to locking scripts.
    *
    * @example
@@ -227,7 +233,8 @@ export default class Spend {
     this.unlockingScript = params.unlockingScript
     this.inputSequence = params.inputSequence
     this.lockTime = params.lockTime
-    this.memoryLimit = params.memoryLimit ?? 32000000
+    this.hasExplicitMemoryLimit = params.memoryLimit !== undefined
+    this.memoryLimit = params.memoryLimit ?? Number.POSITIVE_INFINITY
     this.isRelaxedOverride = params.isRelaxed === true
     if (params.verifyFlags === undefined) {
       this.verifyFlags = undefined
@@ -326,7 +333,7 @@ export default class Spend {
 
   private maxPushSize (): number {
     if (this.hasExplicitFlags() && !this.isAfterGenesis()) return maxScriptElementSizeBeforeGenesis
-    return maxScriptElementSize
+    return Number.POSITIVE_INFINITY
   }
 
   reset (): void {
@@ -351,16 +358,20 @@ export default class Spend {
 
   private ensureStackMem (additional: number): void {
     if (this.stackMem + additional > this.memoryLimit) {
-      this.scriptEvaluationError(
-        'Stack memory usage has exceeded ' + String(this.memoryLimit) + ' bytes'
+      throw new ScriptResourceLimitError(
+        'stack',
+        this.memoryLimit,
+        this.stackMem + additional
       )
     }
   }
 
   private ensureAltStackMem (additional: number): void {
     if (this.altStackMem + additional > this.memoryLimit) {
-      this.scriptEvaluationError(
-        'Alt stack memory usage has exceeded ' + String(this.memoryLimit) + ' bytes'
+      throw new ScriptResourceLimitError(
+        'alt-stack',
+        this.memoryLimit,
+        this.altStackMem + additional
       )
     }
   }
@@ -612,12 +623,10 @@ export default class Spend {
 
   step (): boolean {
     if (this.stackMem > this.memoryLimit) {
-      this.scriptEvaluationError('Stack memory usage has exceeded ' + String(this.memoryLimit) + ' bytes')
-      return false // Error thrown
+      throw new ScriptResourceLimitError('stack', this.memoryLimit, this.stackMem)
     }
     if (this.altStackMem > this.memoryLimit) {
-      this.scriptEvaluationError('Alt stack memory usage has exceeded ' + String(this.memoryLimit) + ' bytes')
-      return false // Error thrown
+      throw new ScriptResourceLimitError('alt-stack', this.memoryLimit, this.altStackMem)
     }
 
     if (
@@ -1403,8 +1412,19 @@ export default class Spend {
           if (this.stack.length < 2) this.scriptEvaluationError('OP_NUM2BIN requires at least two items to be on the stack.')
 
           const sizeBigInt = this.readScriptNumber(this.popStack()).toBigInt()
-          if (sizeBigInt > BigInt(this.maxPushSize()) || sizeBigInt < 0n) { // size can be 0
-            this.scriptEvaluationError(`It's not currently possible to push data larger than ${this.maxPushSize()} bytes or negative size.`)
+          const maxPushSize = this.maxPushSize()
+          if (
+            (Number.isFinite(maxPushSize) && sizeBigInt > BigInt(maxPushSize)) ||
+            sizeBigInt < 0n
+          ) { // size can be 0
+            this.scriptEvaluationError(`It's not currently possible to push data larger than ${maxPushSize} bytes or negative size.`)
+          }
+          if (sizeBigInt > maxJavaScriptArrayLength) {
+            throw new ScriptResourceLimitError(
+              'element-size',
+              maxJavaScriptArrayLength,
+              sizeBigInt
+            )
           }
           size = Number(sizeBigInt)
 
@@ -1474,20 +1494,31 @@ export default class Spend {
   /**
    * @method validate
    * Validates the spend action by interpreting the locking and unlocking scripts.
+   * @param {SpendVerificationContext} context - Optional explicit consensus or
+   *        policy context passed to a registered script backend.
    * @returns {boolean} Returns true when the spend is valid.
    * @throws {ScriptEvaluationError} If script validation fails.
+   * @throws {ScriptResourceLimitError} If a local interpreter resource is
+   *         exhausted before validity can be determined.
    * @example
    * spend.validate()
    * console.log("Spend is valid!")
    */
-  validate (): boolean {
+  validate (context?: SpendVerificationContext): boolean {
     const verifier = scriptVerificationBackend()
     if (
       verifier?.verifySpendSync !== undefined &&
       (verifier.isReady?.() ?? true) &&
-      (verifier.shouldVerifySpend?.(this) ?? true)
+      (
+        context === undefined
+          ? verifier.shouldVerifySpend?.(this)
+          : verifier.shouldVerifySpend?.(this, context)
+      ) !== false
     ) {
-      if (!verifier.verifySpendSync(this)) {
+      const valid = context === undefined
+        ? verifier.verifySpendSync(this)
+        : verifier.verifySpendSync(this, context)
+      if (!valid) {
         this.scriptEvaluationError(
           'The selected script-verification backend rejected the spend.'
         )
@@ -1559,10 +1590,23 @@ export default class Spend {
    * native/WASM counterpart to {@link validate}. An adaptive backend may decline
    * the Spend before execution, in which case the existing JavaScript validator
    * is used. Once selected, backend errors remain authoritative and propagate.
+   * @param verifier - The backend used when it accepts this Spend.
+   * @param context - Optional explicit consensus or policy context. Transaction
+   * version is never used as a substitute for this context.
    */
-  async validateWith (verifier: SpendVerifierInterface): Promise<boolean> {
-    if (verifier.shouldVerifySpend?.(this) === false) return this.validateJavaScript()
-    return await verifier.verifySpend(this)
+  async validateWith (
+    verifier: SpendVerifierInterface,
+    context?: SpendVerificationContext
+  ): Promise<boolean> {
+    const shouldVerify = context === undefined
+      ? verifier.shouldVerifySpend?.(this)
+      : verifier.shouldVerifySpend?.(this, context)
+    if (shouldVerify === false) {
+      return this.validateJavaScript()
+    }
+    return context === undefined
+      ? await verifier.verifySpend(this)
+      : await verifier.verifySpend(this, context)
   }
 
   /**

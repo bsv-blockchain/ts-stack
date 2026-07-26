@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Add optional script-verifier injection to Wallet, setup helpers, and local
+  storage providers. Internal checks use explicit consensus context, distinguish
+  resource exhaustion from invalid scripts, and continue verifying resolvable
+  inputs when another source transaction is intentionally omitted.
+- Retain typed bytes through action-batch planning, hashing, validation, and
+  chunk assembly; preload external inputs and shared metadata once per atomic
+  manifest; and emit typed Atomic BEEF results without changing BRC-100 or
+  storage protocol contracts.
 - Make StorageServer, AdminServer, and the reusable ChaintracksService
   credential-free public-CORS compatible by default, with opt-in exact origin
   lists and configurable CSP/browser response headers. Add bounded parsers,

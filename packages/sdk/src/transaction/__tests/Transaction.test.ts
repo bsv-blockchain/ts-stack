@@ -1432,8 +1432,9 @@ describe('Transaction', () => {
       await tx.fee()
       await tx.sign()
 
-      // default should be 100KB
-      await expect(tx.verify('scripts only', new SatoshisPerKilobyte(1))).rejects.toThrow('Stack memory usage has exceeded 32000000 bytes')
+      // An explicit local budget remains enforceable without becoming a
+      // consensus invalidity rule.
+      await expect(tx.verify('scripts only', new SatoshisPerKilobyte(1), 32_000_000)).rejects.toThrow('Stack memory usage has exceeded 32000000 bytes')
     })
   })
 

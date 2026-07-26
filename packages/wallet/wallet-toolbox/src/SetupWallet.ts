@@ -1,4 +1,5 @@
 import { PrivateKey, PublicKey, KeyDeriverApi } from '@bsv/sdk'
+import type { SpendVerifierInterface } from '@bsv/sdk'
 
 import { Wallet } from './Wallet'
 import { Chain } from './sdk/types'
@@ -94,6 +95,11 @@ export interface SetupClientWalletArgs {
   backups?: WalletStorageProvider[]
 
   taalApiKey?: string
+  /**
+   * Optional high-performance verifier for internal wallet and locally hosted
+   * storage validation. This does not alter the BRC-100 interface.
+   */
+  scriptVerifier?: SpendVerifierInterface
 }
 
 /**
