@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 
-import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { promisify } from 'node:util'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib'
 
-const execFileAsync = promisify(execFile)
+import { createCommandRunner } from './lib/command-runner.mjs'
+
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
 const MAX_ERROR_OUTPUT_CHARACTERS = 16_000
@@ -71,36 +70,11 @@ function compareText(left, right) {
   return left.localeCompare(right)
 }
 
-function truncateCommandOutput(value) {
-  const output = value?.toString().trim()
-  if (!output || output.length <= MAX_ERROR_OUTPUT_CHARACTERS) return output
-  const retainedCharacters = Math.floor(MAX_ERROR_OUTPUT_CHARACTERS / 2)
-  return [
-    output.slice(0, retainedCharacters),
-    `\n... ${output.length - MAX_ERROR_OUTPUT_CHARACTERS} characters omitted ...\n`,
-    output.slice(-retainedCharacters)
-  ].join('')
-}
-
-function commandError(error) {
-  return (
-    [error.stdout, error.stderr].map(truncateCommandOutput).filter(Boolean).join('\n') ||
-    error.message
-  )
-}
-
-async function run(command, arguments_, options = {}) {
-  try {
-    return await execFileAsync(command, arguments_, {
-      encoding: 'utf8',
-      maxBuffer: MAX_BUFFER_BYTES,
-      timeout: COMMAND_TIMEOUT_MS,
-      ...options
-    })
-  } catch (error) {
-    throw new Error(`${command} ${arguments_.join(' ')} failed:\n${commandError(error)}`)
-  }
-}
+const run = createCommandRunner({
+  timeoutMs: COMMAND_TIMEOUT_MS,
+  maxBufferBytes: MAX_BUFFER_BYTES,
+  maxErrorOutputCharacters: MAX_ERROR_OUTPUT_CHARACTERS
+})
 
 export function bundleSizes(buffer) {
   return {
