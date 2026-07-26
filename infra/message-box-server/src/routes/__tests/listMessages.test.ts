@@ -1,5 +1,9 @@
 /* eslint-env jest */
-import listMessages from '../listMessages.js'
+import listMessages, {
+  MAX_LIST_MESSAGE_BOX_BYTES,
+  MAX_LIST_MESSAGES_OFFSET,
+  MAX_LIST_MESSAGES_PAGE_SIZE
+} from '../listMessages.js'
 import mockKnex, { Tracker } from 'mock-knex'
 import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
@@ -8,8 +12,8 @@ import knexConfig from '../../../knexfile.js'
 import { bindMessageBoxRuntime } from '../../runtimeDeps.js'
 
 // Ensure proper handling of mock-knex
-const testKnex = (knexLib as any).default?.(knexConfig.development) ??
-  (knexLib as any)(knexConfig.development)
+const testKnex =
+  (knexLib as any).default?.(knexConfig.development) ?? (knexLib as any)(knexConfig.development)
 bindMessageBoxRuntime({ knex: testKnex })
 const knex = listMessages.knex
 let queryTracker: Tracker
@@ -38,46 +42,59 @@ const mockRes: jest.Mocked<Response> = {
 
 let validReq: AuthRequest
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-let validRes: { status: string, messages: any[] }
+let validRes: { status: string; messages: any[] }
 let validMessageBoxes: Array<{ messageBoxId: number }>
-let validMessages: Array<{ sender: string, messageId: string, body: string, created_at: string, updated_at: string }>
-let expectedMessages: Array<{ sender: string, messageId: string, body: string, createdAt: string, updatedAt: string }>
+let validMessages: Array<{
+  sender: string
+  messageId: string
+  body: string
+  created_at: string
+  updated_at: string
+}>
+let expectedMessages: Array<{
+  sender: string
+  messageId: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}>
 
 describe('listMessages', () => {
   beforeAll(() => {
-    (mockKnex as any).mock(knex)
+    ;(mockKnex as any).mock(knex)
   })
 
   beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => { })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
 
     queryTracker = (mockKnex as any).getTracker() as Tracker
     queryTracker.install()
 
-    validMessages = [{
-      sender: '028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1',
-      messageId: 'msg-1',
-      body: '{}',
-      created_at: '2024-01-01',
-      updated_at: '2024-01-01'
-    }]
-    expectedMessages = [{
-      sender: '028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1',
-      messageId: 'msg-1',
-      body: '{}',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01'
-    }]
+    validMessages = [
+      {
+        sender: '028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1',
+        messageId: 'msg-1',
+        body: '{}',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01'
+      }
+    ]
+    expectedMessages = [
+      {
+        sender: '028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1',
+        messageId: 'msg-1',
+        body: '{}',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01'
+      }
+    ]
 
     // Mock Data
     validRes = {
       status: 'success',
       messages: validMessages
     }
-    validMessageBoxes = [
-      { messageBoxId: 42 },
-      { messageBoxId: 31 }
-    ]
+    validMessageBoxes = [{ messageBoxId: 42 }, { messageBoxId: 31 }]
 
     // Fully typed mock request
     validReq = {
@@ -101,36 +118,80 @@ describe('listMessages', () => {
   })
 
   afterAll(async () => {
-    (mockKnex as any).unmock(knex)
+    ;(mockKnex as any).unmock(knex)
     await testKnex.destroy()
   })
 
   it('Throws an error if a messageBox is not provided', async () => {
     validReq.body.messageBox = undefined
-    queryTracker.on('query', (q) => {
+    queryTracker.on('query', q => {
       q.response([])
     })
     await listMessages.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_MESSAGEBOX_REQUIRED',
-      description: 'Please provide the name of a valid MessageBox!'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_MESSAGEBOX_REQUIRED',
+        description: 'Please provide the name of a valid MessageBox!'
+      })
+    )
+  })
+
+  it('requires an authenticated identity', async () => {
+    validReq.auth = undefined
+
+    await listMessages.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(401)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_AUTHENTICATION_REQUIRED'
+      })
+    )
+  })
+
+  it('rejects oversized messageBox names before querying storage', async () => {
+    validReq.body.messageBox = 'x'.repeat(MAX_LIST_MESSAGE_BOX_BYTES + 1)
+
+    await listMessages.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(400)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_INVALID_MESSAGEBOX'
+      })
+    )
+  })
+
+  it.each([
+    [{ limit: MAX_LIST_MESSAGES_PAGE_SIZE + 1 }, 'ERR_INVALID_LIMIT'],
+    [{ limit: 1.5 }, 'ERR_INVALID_LIMIT'],
+    [{ offset: MAX_LIST_MESSAGES_OFFSET + 1 }, 'ERR_INVALID_OFFSET'],
+    [{ offset: -1 }, 'ERR_INVALID_OFFSET']
+  ])('bounds message listing pagination', async (pagination, code) => {
+    Object.assign(validReq.body, pagination)
+
+    await listMessages.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(400)
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({ code }))
   })
 
   it('Throws an error if messageBox is not a string', async () => {
     validReq.body.messageBox = 123 as unknown as string
-    queryTracker.on('query', (q) => {
+    queryTracker.on('query', q => {
       q.response([])
     })
     await listMessages.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGEBOX',
-      description: 'MessageBox name must be a string!'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGEBOX',
+        description: 'MessageBox name must be a string!'
+      })
+    )
   })
 
   it('Throws an error if no matching messageBox is found', async () => {
@@ -148,10 +209,12 @@ describe('listMessages', () => {
     })
     await listMessages.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success',
-      messages: []
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        messages: []
+      })
+    )
   })
 
   it('Returns ID of messageBox', async () => {
@@ -161,10 +224,7 @@ describe('listMessages', () => {
         expect(q.sql).toEqual(
           'select `messageBoxId` from `messageBox` where `identityKey` = ? and `type` = ?'
         )
-        expect(q.bindings).toEqual([
-          'mockIdKey',
-          'payment_inbox'
-        ])
+        expect(q.bindings).toEqual(['mockIdKey', 'payment_inbox'])
         q.response([validMessageBoxes[0]])
       } else if (s === 2) {
         q.response(validMessages)
@@ -174,10 +234,12 @@ describe('listMessages', () => {
     })
     await listMessages.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success',
-      messages: expectedMessages
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        messages: expectedMessages
+      })
+    )
   })
 
   it('Returns empty array if no messages found', async () => {
@@ -186,8 +248,8 @@ describe('listMessages', () => {
         q.response([{ messageBoxId: 123 }])
       } else if (s === 2) {
         expect(q.method).toEqual('select')
-        expect(q.sql).toEqual(
-          'select `messageId`, `body`, `sender`, `created_at`, `updated_at` from `messages` where `recipient` = ? and `messageBoxId` = ?'
+        expect(q.sql).toContain(
+          'select `messageId`, `body`, `sender`, `created_at`, `updated_at` from `messages`'
         )
         q.response([])
       } else {
@@ -196,10 +258,12 @@ describe('listMessages', () => {
     })
     await listMessages.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success',
-      messages: []
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        messages: []
+      })
+    )
   })
 
   it('Returns list of messages found', async () => {
@@ -208,8 +272,8 @@ describe('listMessages', () => {
         q.response([{ messageBoxId: 123 }])
       } else if (s === 2) {
         expect(q.method).toEqual('select')
-        expect(q.sql).toEqual(
-          'select `messageId`, `body`, `sender`, `created_at`, `updated_at` from `messages` where `recipient` = ? and `messageBoxId` = ?'
+        expect(q.sql).toContain(
+          'select `messageId`, `body`, `sender`, `created_at`, `updated_at` from `messages`'
         )
         q.response(validMessages)
       } else {
@@ -218,10 +282,12 @@ describe('listMessages', () => {
     })
     await listMessages.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success',
-      messages: expectedMessages
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        messages: expectedMessages
+      })
+    )
   })
 
   it('Throws unknown errors', async () => {
@@ -232,10 +298,12 @@ describe('listMessages', () => {
     await listMessages.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(500)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INTERNAL_ERROR',
-      description: 'An internal error has occurred while listing messages.'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INTERNAL_ERROR',
+        description: 'An internal error has occurred while listing messages.'
+      })
+    )
   })
 })

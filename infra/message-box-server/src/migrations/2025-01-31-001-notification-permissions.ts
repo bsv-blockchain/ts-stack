@@ -2,7 +2,7 @@ import { Knex } from 'knex'
 
 export async function up(knex: Knex): Promise<void> {
   // Create generalized message permissions table for all box/sender combinations
-  await knex.schema.createTable('message_permissions', (table) => {
+  await knex.schema.createTable('message_permissions', table => {
     table.increments('id').primary()
     table.timestamp('created_at').defaultTo(knex.fn.now())
     table.timestamp('updated_at').defaultTo(knex.fn.now())
@@ -20,7 +20,7 @@ export async function up(knex: Knex): Promise<void> {
   })
 
   // Create server fee configuration table
-  await knex.schema.createTable('server_fees', (table) => {
+  await knex.schema.createTable('server_fees', table => {
     table.increments('id').primary()
     table.timestamp('created_at').defaultTo(knex.fn.now())
     table.timestamp('updated_at').defaultTo(knex.fn.now())

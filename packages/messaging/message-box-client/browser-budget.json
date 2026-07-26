@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/message-box-client",
+  "entry": ".",
+  "requiredExports": [
+    "DEFAULT_PAYMENT_REQUEST_MAX_AMOUNT",
+    "DEFAULT_PAYMENT_REQUEST_MIN_AMOUNT",
+    "MessageBoxClient",
+    "PAYMENT_REQUESTS_MESSAGEBOX",
+    "PAYMENT_REQUEST_RESPONSES_MESSAGEBOX",
+    "PeerPayClient",
+    "PeerTokenClient",
+    "RemittanceAdapter",
+    "STANDARD_PAYMENT_MESSAGEBOX",
+    "STANDARD_TOKEN_MESSAGEBOX",
+    "TOKEN_REQUESTS_MESSAGEBOX",
+    "TOKEN_REQUEST_RESPONSES_MESSAGEBOX"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 1700000,
+      "gzip": 410000,
+      "brotli": 345000
+    },
+    "esbuild": {
+      "raw": 1400000,
+      "gzip": 380000,
+      "brotli": 325000
+    }
+  },
+  "umd": {
+    "path": "dist/umd/bundle.js",
+    "global": "messageBoxClient",
+    "maximumBytes": {
+      "raw": 490000,
+      "gzip": 140000,
+      "brotli": 117000
+    }
+  }
+}

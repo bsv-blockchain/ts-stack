@@ -6,13 +6,16 @@ const config: JestConfigWithTsJest = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   transform: {
-    '^.+\\.ts?$': ['ts-jest', {
-      tsconfig: {
-        module: 'commonjs',
-        moduleResolution: 'bundler',
-        isolatedModules: true
+    '^.+\\.ts?$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'bundler',
+          isolatedModules: true
+        }
       }
-    }]
+    ]
   },
   moduleNameMapper: {
     // Ensure Jest resolves TypeScript files without ".js" errors

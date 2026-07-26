@@ -1,5 +1,13 @@
 /* eslint-env jest */
-import { WalletClient, AuthFetch, Transaction, LockingScript, PushDrop, TopicBroadcaster, Beef } from '@bsv/sdk'
+import {
+  WalletClient,
+  AuthFetch,
+  Transaction,
+  LockingScript,
+  PushDrop,
+  TopicBroadcaster,
+  Beef
+} from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
 // MOCK: WebSocket behavior
@@ -44,7 +52,7 @@ jest.spyOn(WalletClient.prototype, 'createSignature').mockResolvedValue({
 
 jest.spyOn(WalletClient.prototype, 'connectToSubstrate').mockImplementation(async function () {
   this.substrate = {
-    createSignature: async (message: Uint8Array) => {
+    createSignature: async (_message: Uint8Array) => {
       return Array.from(new Uint8Array([1, 2, 3])) // Return mock signature
     }
   }
@@ -75,11 +83,11 @@ jest.spyOn(MessageBoxClient.prototype as any, 'anointHost').mockImplementation(a
   return { txid: 'mocked-anoint-txid' }
 })
 
-jest.spyOn(MessageBoxClient.prototype as any, 'queryAdvertisements')
+jest
+  .spyOn(MessageBoxClient.prototype as any, 'queryAdvertisements')
   .mockResolvedValue([] as string[])
 
-jest.spyOn(AuthFetch.prototype, 'fetch')
-  .mockResolvedValue(defaultMockResponse as Response)
+jest.spyOn(AuthFetch.prototype, 'fetch').mockResolvedValue(defaultMockResponse as Response)
 
 // Optional: Global WebSocket override (not strictly needed with AuthSocketClient)
 class MockWebSocket {
@@ -168,21 +176,28 @@ describe('MessageBoxClient', () => {
     await messageBoxClient.init()
 
     // Bypass the real connection logic
-    jest.spyOn(messageBoxClient, 'initializeConnection').mockImplementation(async () => { })
+    const initializeConnection = jest
+      .spyOn(messageBoxClient, 'initializeConnection')
+      .mockImplementation(async () => {})
 
-      // Manually set identity key
-      ; (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    // Manually set identity key
+    ;(messageBoxClient as any).myIdentityKey =
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
 
-      // Simulate WebSocket not initialized
-      ; (messageBoxClient as any).socket = null
+    // Simulate WebSocket not initialized
+    ;(messageBoxClient as any).socket = null
 
     // Expect it to fall back to HTTP and succeed
-    const result = await messageBoxClient.sendLiveMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: 'test_inbox',
-      body: 'Test message'
-    })
+    const result = await messageBoxClient.sendLiveMessage(
+      {
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: 'test_inbox',
+        body: 'Test message'
+      },
+      'https://override.example'
+    )
 
+    expect(initializeConnection).toHaveBeenCalledWith('https://override.example')
     expect(result).toEqual({
       status: 'success',
       message: 'Mocked response',
@@ -249,7 +264,9 @@ describe('MessageBoxClient', () => {
 
     // Simulate WebSocket acknowledgment
     setTimeout(() => {
-      socketOnMap['sendMessageAck-02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox']?.({
+      socketOnMap[
+        'sendMessageAck-02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+      ]?.({
         status: 'success',
         messageId: 'mocked123'
       })
@@ -284,7 +301,8 @@ describe('MessageBoxClient', () => {
       enableLogging: true
     })
     await messageBoxClient.init()
-      ; (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    ;(messageBoxClient as any).myIdentityKey =
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       json: async () => ({
         status: 'success',
@@ -311,7 +329,8 @@ describe('MessageBoxClient', () => {
       enableLogging: true
     })
     await messageBoxClient.init()
-      ; (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    ;(messageBoxClient as any).myIdentityKey =
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
 
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       json: async () => JSON.parse(VALID_LIST_AND_READ_RESULT.body),
@@ -332,7 +351,8 @@ describe('MessageBoxClient', () => {
       enableLogging: true
     })
     await messageBoxClient.init()
-      ; (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    ;(messageBoxClient as any).myIdentityKey =
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
 
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       json: async () => JSON.parse(VALID_ACK_RESULT.body),
@@ -354,26 +374,32 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
 
-      ; (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    ;(messageBoxClient as any).myIdentityKey =
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
 
-    jest.spyOn(messageBoxClient.authFetch, 'fetch')
-      .mockResolvedValue({
-        status: 500,
-        statusText: 'Internal Server Error',
-        ok: false,
-        json: async () => ({ status: 'error', description: 'Internal Server Error' }),
-        headers: new Headers()
-      } as unknown as Response)
+    jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
+      status: 500,
+      statusText: 'Internal Server Error',
+      ok: false,
+      json: async () => ({ status: 'error', description: 'Internal Server Error' }),
+      headers: new Headers()
+    } as unknown as Response)
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: 'test_inbox',
-      body: 'Test Message'
-    })).rejects.toThrow('Message sending failed: HTTP 500 - Internal Server Error')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: 'test_inbox',
+        body: 'Test Message'
+      })
+    ).rejects.toThrow('Message sending failed: HTTP 500 - Internal Server Error')
   })
 
   it('throws when every host fails', async () => {
-    const client = new MessageBoxClient({ walletClient: mockWalletClient, host: 'https://primary', enableLogging: false })
+    const client = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://primary',
+      enableLogging: false
+    })
     await client.init()
 
     // Pretend there are no advertised replicas
@@ -387,35 +413,41 @@ describe('MessageBoxClient', () => {
       json: async () => ({ status: 'error', description: 'DB down' })
     } as unknown as Response)
 
-    await expect(client.listMessages({ messageBox: 'inbox' }))
-      .rejects.toThrow('Failed to retrieve messages from any host')
+    await expect(client.listMessages({ messageBox: 'inbox' })).rejects.toThrow(
+      'Failed to retrieve messages from any host'
+    )
   })
 
   it('returns [] when at least one host succeeds but has no messages', async () => {
-    const client = new MessageBoxClient({ walletClient: mockWalletClient, host: 'https://primary', enableLogging: false })
+    const client = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://primary',
+      enableLogging: false
+    })
     await client.init()
 
     // One failing replica, one healthy replica
-    jest.spyOn(client as any, 'queryAdvertisements').mockResolvedValue([{
-      host: 'https://replica'
-    }])
+    jest.spyOn(client as any, 'queryAdvertisements').mockResolvedValue([
+      {
+        host: 'https://replica'
+      }
+    ])
 
-    jest.spyOn(client.authFetch, 'fetch')
-      .mockImplementation(async url =>
-        // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-        url.startsWith('https://primary')
-          ? await Promise.resolve({
+    jest.spyOn(client.authFetch, 'fetch').mockImplementation(async url =>
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      url.startsWith('https://primary')
+        ? await Promise.resolve({
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
             json: async () => ({ status: 'error', description: 'DB down' })
           } as unknown as Response)
-          : await Promise.resolve({
+        : await Promise.resolve({
             ok: true,
             status: 200,
             json: async () => ({ status: 'success', messages: [] })
           } as unknown as Response)
-      )
+    )
 
     await expect(client.listMessages({ messageBox: 'inbox' })).resolves.toEqual([])
   })
@@ -427,16 +459,17 @@ describe('MessageBoxClient', () => {
       enableLogging: true
     })
     await messageBoxClient.init()
-      ; (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    ;(messageBoxClient as any).myIdentityKey =
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
 
-    jest.spyOn(messageBoxClient.authFetch, 'fetch')
-      .mockResolvedValue({
-        status: 500,
-        json: async () => ({ status: 'error', description: 'Failed to acknowledge messages' })
-      } as unknown as Response)
+    jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
+      status: 500,
+      json: async () => ({ status: 'error', description: 'Failed to acknowledge messages' })
+    } as unknown as Response)
 
-    await expect(messageBoxClient.acknowledgeMessage({ messageIds: ['42'] }))
-      .rejects.toThrow('Failed to acknowledge messages')
+    await expect(messageBoxClient.acknowledgeMessage({ messageIds: ['42'] })).rejects.toThrow(
+      'Failed to acknowledge messages'
+    )
   })
 
   it('Emits joinRoom event and listens for incoming messages', async () => {
@@ -448,7 +481,9 @@ describe('MessageBoxClient', () => {
     await messageBoxClient.init()
 
     // Mock identity key properly
-    jest.spyOn(mockWalletClient, 'getPublicKey').mockResolvedValue({ publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' })
+    jest.spyOn(mockWalletClient, 'getPublicKey').mockResolvedValue({
+      publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    })
 
     // Mock socket with `on` method capturing event handlers
     const mockSocket = {
@@ -458,10 +493,13 @@ describe('MessageBoxClient', () => {
 
     // Mock `initializeConnection` so it assigns `socket` & identity key
     jest.spyOn(messageBoxClient, 'initializeConnection').mockImplementation(async () => {
-      Object.defineProperty(messageBoxClient, 'testIdentityKey', { get: () => '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' })
-      Object.defineProperty(messageBoxClient, 'testSocket', { get: () => mockSocket });
-      (messageBoxClient as any).socket = mockSocket; // Ensures internal socket is set
-      (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' // Ensures identity key is set
+      Object.defineProperty(messageBoxClient, 'testIdentityKey', {
+        get: () => '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      })
+      Object.defineProperty(messageBoxClient, 'testSocket', { get: () => mockSocket })
+      ;(messageBoxClient as any).socket = mockSocket // Ensures internal socket is set
+      ;(messageBoxClient as any).myIdentityKey =
+        '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' // Ensures identity key is set
     })
 
     const onMessageMock = jest.fn()
@@ -472,14 +510,19 @@ describe('MessageBoxClient', () => {
     })
 
     // Ensure `joinRoom` event was emitted with the correct identity key
-    expect(mockSocket.emit).toHaveBeenCalledWith('joinRoom', '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox')
+    expect(mockSocket.emit).toHaveBeenCalledWith(
+      'joinRoom',
+      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+    )
 
     // Simulate receiving a message
     const receivedMessage = { text: 'Hello, world!' }
 
     // Extract & invoke the callback function stored in `on`
     const sendMessageCallback = mockSocket.on.mock.calls.find(
-      ([eventName]) => eventName === 'sendMessage-02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+      ([eventName]) =>
+        eventName ===
+        'sendMessage-02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
     )?.[1] // Extract the callback function
 
     if (typeof sendMessageCallback === 'function') {
@@ -499,7 +542,9 @@ describe('MessageBoxClient', () => {
     await messageBoxClient.init()
 
     // Simulate identity key
-    jest.spyOn(mockWalletClient, 'getPublicKey').mockResolvedValue({ publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' })
+    jest.spyOn(mockWalletClient, 'getPublicKey').mockResolvedValue({
+      publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    })
 
     // Simulate connection + disconnection + auth success
     setTimeout(() => {
@@ -525,10 +570,13 @@ describe('MessageBoxClient', () => {
 
     // Mock `initializeConnection` so it assigns `socket` & identity key
     jest.spyOn(messageBoxClient, 'initializeConnection').mockImplementation(async () => {
-      Object.defineProperty(messageBoxClient, 'testIdentityKey', { get: () => '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' })
-      Object.defineProperty(messageBoxClient, 'testSocket', { get: () => mockSocket });
-      (messageBoxClient as any).socket = mockSocket; // Ensures internal socket is set
-      (messageBoxClient as any).myIdentityKey = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' // Ensures identity key is set
+      Object.defineProperty(messageBoxClient, 'testIdentityKey', {
+        get: () => '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      })
+      Object.defineProperty(messageBoxClient, 'testSocket', { get: () => mockSocket })
+      ;(messageBoxClient as any).socket = mockSocket // Ensures internal socket is set
+      ;(messageBoxClient as any).myIdentityKey =
+        '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' // Ensures identity key is set
     })
 
     // Mock socket to ensure WebSocket validation does not fail
@@ -537,11 +585,13 @@ describe('MessageBoxClient', () => {
     } as any
     jest.spyOn(messageBoxClient, 'testSocket', 'get').mockReturnValue(mockSocket)
 
-    await expect(messageBoxClient.sendLiveMessage({
-      recipient: '  ',
-      messageBox: 'test_inbox',
-      body: 'Test message'
-    })).rejects.toThrow('[MB CLIENT ERROR] Recipient identity key is required')
+    await expect(
+      messageBoxClient.sendLiveMessage({
+        recipient: '  ',
+        messageBox: 'test_inbox',
+        body: 'Test message'
+      })
+    ).rejects.toThrow('[MB CLIENT ERROR] Recipient identity key is required')
   })
 
   it('throws an error when recipient is missing in sendMessage', async () => {
@@ -552,23 +602,29 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '', // Empty recipient
-      messageBox: 'test_inbox',
-      body: 'Test message'
-    })).rejects.toThrow('You must provide a message recipient!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '', // Empty recipient
+        messageBox: 'test_inbox',
+        body: 'Test message'
+      })
+    ).rejects.toThrow('You must provide a message recipient!')
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '   ', // Whitespace recipient
-      messageBox: 'test_inbox',
-      body: 'Test message'
-    })).rejects.toThrow('You must provide a message recipient!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '   ', // Whitespace recipient
+        messageBox: 'test_inbox',
+        body: 'Test message'
+      })
+    ).rejects.toThrow('You must provide a message recipient!')
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: null as any, // Null recipient
-      messageBox: 'test_inbox',
-      body: 'Test message'
-    })).rejects.toThrow('You must provide a message recipient!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: null as any, // Null recipient
+        messageBox: 'test_inbox',
+        body: 'Test message'
+      })
+    ).rejects.toThrow('You must provide a message recipient!')
   })
 
   it('throws an error when messageBox is missing in sendMessage', async () => {
@@ -579,23 +635,29 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: '', // Empty messageBox
-      body: 'Test message'
-    })).rejects.toThrow('You must provide a messageBox to send this message into!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: '', // Empty messageBox
+        body: 'Test message'
+      })
+    ).rejects.toThrow('You must provide a messageBox to send this message into!')
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: '   ', // Whitespace messageBox
-      body: 'Test message'
-    })).rejects.toThrow('You must provide a messageBox to send this message into!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: '   ', // Whitespace messageBox
+        body: 'Test message'
+      })
+    ).rejects.toThrow('You must provide a messageBox to send this message into!')
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: null as any, // Null messageBox
-      body: 'Test message'
-    })).rejects.toThrow('You must provide a messageBox to send this message into!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: null as any, // Null messageBox
+        body: 'Test message'
+      })
+    ).rejects.toThrow('You must provide a messageBox to send this message into!')
   })
 
   it('throws an error when message body is missing in sendMessage', async () => {
@@ -606,23 +668,29 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: 'test_inbox',
-      body: '' // Empty body
-    })).rejects.toThrow('Every message must have a body!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: 'test_inbox',
+        body: '' // Empty body
+      })
+    ).rejects.toThrow('Every message must have a body!')
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: 'test_inbox',
-      body: '   ' // Whitespace body
-    })).rejects.toThrow('Every message must have a body!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: 'test_inbox',
+        body: '   ' // Whitespace body
+      })
+    ).rejects.toThrow('Every message must have a body!')
 
-    await expect(messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
-      messageBox: 'test_inbox',
-      body: null as any // Null body
-    })).rejects.toThrow('Every message must have a body!')
+    await expect(
+      messageBoxClient.sendMessage({
+        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        messageBox: 'test_inbox',
+        body: null as any // Null body
+      })
+    ).rejects.toThrow('Every message must have a body!')
   })
 
   it('throws an error when messageBox is empty in listMessages', async () => {
@@ -633,13 +701,17 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
 
-    await expect(messageBoxClient.listMessages({
-      messageBox: '' // Empty messageBox
-    })).rejects.toThrow('MessageBox cannot be empty')
+    await expect(
+      messageBoxClient.listMessages({
+        messageBox: '' // Empty messageBox
+      })
+    ).rejects.toThrow('MessageBox cannot be empty')
 
-    await expect(messageBoxClient.listMessages({
-      messageBox: '   ' // Whitespace messageBox
-    })).rejects.toThrow('MessageBox cannot be empty')
+    await expect(
+      messageBoxClient.listMessages({
+        messageBox: '   ' // Whitespace messageBox
+      })
+    ).rejects.toThrow('MessageBox cannot be empty')
   })
 
   it('throws an error when messageIds is empty in acknowledgeMessage', async () => {
@@ -650,21 +722,29 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
 
-    await expect(messageBoxClient.acknowledgeMessage({
-      messageIds: [] // Empty array
-    })).rejects.toThrow('Message IDs array cannot be empty')
+    await expect(
+      messageBoxClient.acknowledgeMessage({
+        messageIds: [] // Empty array
+      })
+    ).rejects.toThrow('Message IDs array cannot be empty')
 
-    await expect(messageBoxClient.acknowledgeMessage({
-      messageIds: undefined as any // Undefined value
-    })).rejects.toThrow('Message IDs array cannot be empty')
+    await expect(
+      messageBoxClient.acknowledgeMessage({
+        messageIds: undefined as any // Undefined value
+      })
+    ).rejects.toThrow('Message IDs array cannot be empty')
 
-    await expect(messageBoxClient.acknowledgeMessage({
-      messageIds: null as any // Null value
-    })).rejects.toThrow('Message IDs array cannot be empty')
+    await expect(
+      messageBoxClient.acknowledgeMessage({
+        messageIds: null as any // Null value
+      })
+    ).rejects.toThrow('Message IDs array cannot be empty')
 
-    await expect(messageBoxClient.acknowledgeMessage({
-      messageIds: 'invalid' as any // Not an array
-    })).rejects.toThrow('Message IDs array cannot be empty')
+    await expect(
+      messageBoxClient.acknowledgeMessage({
+        messageIds: 'invalid' as any // Not an array
+      })
+    ).rejects.toThrow('Message IDs array cannot be empty')
   })
 
   it('Uses default host if none is provided', () => {
@@ -707,7 +787,6 @@ describe('MessageBoxClient', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 
-
   it('resolveHostForRecipient returns the first advertised host', async () => {
     const client = new MessageBoxClient({
       walletClient: mockWalletClient,
@@ -715,10 +794,11 @@ describe('MessageBoxClient', () => {
     })
     await client.init()
 
-      // For this ONE call return two adverts – the first is selected
-      ; (MessageBoxClient.prototype as any).queryAdvertisements
-        .mockResolvedValueOnce([
-          { host: 'https://peer.box' }, { host: 'https://second.box' }])
+    // For this ONE call return two adverts – the first is selected
+    ;(MessageBoxClient.prototype as any).queryAdvertisements.mockResolvedValueOnce([
+      { host: 'https://peer.box' },
+      { host: 'https://second.box' }
+    ])
 
     const result = await client.resolveHostForRecipient('02aa…deadbeef')
     expect(result).toBe('https://peer.box')
@@ -730,8 +810,7 @@ describe('MessageBoxClient', () => {
       host: 'https://default.box'
     })
     await client.init()
-      ; (MessageBoxClient.prototype as any).queryAdvertisements
-        .mockResolvedValueOnce([])
+    ;(MessageBoxClient.prototype as any).queryAdvertisements.mockResolvedValueOnce([])
 
     const result = await client.resolveHostForRecipient('03bb…cafef00d')
 
@@ -754,7 +833,9 @@ describe('MessageBoxClient', () => {
       toASM: () => 'OP_FALSE'
     } as any)
     jest.spyOn(Transaction, 'fromAtomicBEEF').mockReturnValue({} as any)
-    jest.spyOn(TopicBroadcaster.prototype as any, 'broadcast').mockResolvedValue({ txid: 'broadcasted-txid' })
+    jest
+      .spyOn(TopicBroadcaster.prototype as any, 'broadcast')
+      .mockResolvedValue({ txid: 'broadcasted-txid' })
 
     await client.anointHost('https://fresh.host')
 
@@ -799,7 +880,9 @@ describe('MessageBoxClient', () => {
 
     const unlockSignMock = jest
       .fn()
-      .mockImplementation(async (_tx: unknown, inputIndex: number) => ({ toHex: () => `unlock-${inputIndex}` }))
+      .mockImplementation(async (_tx: unknown, inputIndex: number) => ({
+        toHex: () => `unlock-${inputIndex}`
+      }))
     jest.spyOn(PushDrop.prototype, 'unlock').mockReturnValue({ sign: unlockSignMock } as any)
 
     const mergedBeef = {
@@ -809,10 +892,10 @@ describe('MessageBoxClient', () => {
     jest.spyOn(Beef, 'fromBinary').mockImplementation(() => mergedBeef as any)
 
     const fromAtomicSpy = jest.spyOn(Transaction, 'fromAtomicBEEF')
-    fromAtomicSpy
-      .mockReturnValueOnce({} as any)
-      .mockReturnValueOnce({} as any)
-    jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({ outputs: [{ satoshis: 1 }, { satoshis: 1 }] } as any)
+    fromAtomicSpy.mockReturnValueOnce({} as any).mockReturnValueOnce({} as any)
+    jest
+      .spyOn(Transaction, 'fromBEEF')
+      .mockReturnValue({ outputs: [{ satoshis: 1 }, { satoshis: 1 }] } as any)
 
     const createActionSpy = jest.spyOn(mockWalletClient, 'createAction').mockResolvedValue({
       signableTransaction: {
@@ -824,7 +907,9 @@ describe('MessageBoxClient', () => {
       tx: [8, 8, 8],
       txid: 'signed-txid'
     } as any)
-    jest.spyOn(TopicBroadcaster.prototype as any, 'broadcast').mockResolvedValue({ txid: 'broadcasted-txid' })
+    jest
+      .spyOn(TopicBroadcaster.prototype as any, 'broadcast')
+      .mockResolvedValue({ txid: 'broadcasted-txid' })
 
     const result = await client.anointHost('https://new.host')
 
@@ -855,12 +940,15 @@ describe('MessageBoxClient', () => {
     const recipientA = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
     const recipientB = '03b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
 
-    const makeClient = (): MessageBoxClient => new MessageBoxClient({
-      walletClient: mockWalletClient,
-      host: 'https://default.box'
-    })
+    const makeClient = (): MessageBoxClient =>
+      new MessageBoxClient({
+        walletClient: mockWalletClient,
+        host: 'https://default.box'
+      })
 
-    const DEFAULT_QUOTE_HEADERS: Record<string, string> = { 'x-bsv-auth-identity-key': 'delivery-agent' }
+    const DEFAULT_QUOTE_HEADERS: Record<string, string> = {
+      'x-bsv-auth-identity-key': 'delivery-agent'
+    }
     const makeQuoteResponse = (
       body: unknown,
       headers: Record<string, string> = DEFAULT_QUOTE_HEADERS
@@ -878,10 +966,15 @@ describe('MessageBoxClient', () => {
         })
       )
 
-      await expect(client.getMessageBoxQuote({
-        recipient: recipientA,
-        messageBox: 'inbox'
-      }, 'https://quote.box')).resolves.toEqual({
+      await expect(
+        client.getMessageBoxQuote(
+          {
+            recipient: recipientA,
+            messageBox: 'inbox'
+          },
+          'https://quote.box'
+        )
+      ).resolves.toEqual({
         recipientFee: 12,
         deliveryFee: 3,
         deliveryAgentIdentityKey: 'delivery-agent'
@@ -896,16 +989,24 @@ describe('MessageBoxClient', () => {
     it('throws when a single-recipient quote response has no delivery-agent key', async () => {
       const client = makeClient()
       jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
-        makeQuoteResponse({
-          status: 'success',
-          quote: { recipientFee: 0, deliveryFee: 0 }
-        }, {})
+        makeQuoteResponse(
+          {
+            status: 'success',
+            quote: { recipientFee: 0, deliveryFee: 0 }
+          },
+          {}
+        )
       )
 
-      await expect(client.getMessageBoxQuote({
-        recipient: recipientA,
-        messageBox: 'inbox'
-      }, 'https://quote.box')).rejects.toThrow('Delivery agent did not provide their identity key')
+      await expect(
+        client.getMessageBoxQuote(
+          {
+            recipient: recipientA,
+            messageBox: 'inbox'
+          },
+          'https://quote.box'
+        )
+      ).rejects.toThrow('Delivery agent did not provide their identity key')
     })
 
     it('aggregates a multi-recipient quote payload', async () => {
@@ -932,10 +1033,15 @@ describe('MessageBoxClient', () => {
         })
       )
 
-      await expect(client.getMessageBoxQuote({
-        recipient: [recipientA, recipientB],
-        messageBox: 'inbox'
-      }, 'https://quote.box')).resolves.toEqual({
+      await expect(
+        client.getMessageBoxQuote(
+          {
+            recipient: [recipientA, recipientB],
+            messageBox: 'inbox'
+          },
+          'https://quote.box'
+        )
+      ).resolves.toEqual({
         quotesByRecipient: [
           {
             recipient: recipientA,
@@ -975,10 +1081,15 @@ describe('MessageBoxClient', () => {
         })
       )
 
-      await expect(client.getMessageBoxQuote({
-        recipient: [recipientA, recipientB],
-        messageBox: 'inbox'
-      }, 'https://quote.box')).resolves.toMatchObject({
+      await expect(
+        client.getMessageBoxQuote(
+          {
+            recipient: [recipientA, recipientB],
+            messageBox: 'inbox'
+          },
+          'https://quote.box'
+        )
+      ).resolves.toMatchObject({
         quotesByRecipient: [
           {
             recipient: recipientA,
@@ -1006,15 +1117,18 @@ describe('MessageBoxClient', () => {
     it('rejects empty multi-recipient quote requests', async () => {
       const client = makeClient()
 
-      await expect(client.getMessageBoxQuote({
-        recipient: [],
-        messageBox: 'inbox'
-      })).rejects.toThrow('At least one recipient is required.')
+      await expect(
+        client.getMessageBoxQuote({
+          recipient: [],
+          messageBox: 'inbox'
+        })
+      ).rejects.toThrow('At least one recipient is required.')
     })
 
     it('groups multi-recipient quote requests by resolved host', async () => {
       const client = makeClient()
-      jest.spyOn(client, 'resolveHostForRecipient')
+      jest
+        .spyOn(client, 'resolveHostForRecipient')
         .mockResolvedValueOnce('https://one.box')
         .mockResolvedValueOnce('https://two.box')
         .mockResolvedValueOnce('https://one.box')
@@ -1035,13 +1149,15 @@ describe('MessageBoxClient', () => {
       const client = makeClient()
       const accumulator = (client as any).createMultiQuoteAccumulator()
 
-      expect(() => (client as any).mergeQuotePayload(
-        { unexpected: true },
-        'https://quote.box',
-        [recipientA],
-        'inbox',
-        accumulator
-      )).toThrow('Unexpected quote response shape from host https://quote.box')
+      expect(() =>
+        (client as any).mergeQuotePayload(
+          { unexpected: true },
+          'https://quote.box',
+          [recipientA],
+          'inbox',
+          accumulator
+        )
+      ).toThrow('Unexpected quote response shape from host https://quote.box')
     })
   })
 })

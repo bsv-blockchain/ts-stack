@@ -20,14 +20,8 @@ import sendMessageRoute from './routes/sendMessage.js'
 import { Logger } from './utils/logger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import type { MessageBoxContext } from './context.js'
-import {
-  authenticatedIdentityKey,
-  rateLimitOptions
-} from './security/rateLimitPolicy.js'
-import {
-  readCorsOriginSetting,
-  readBodyLimitBytes
-} from './security/edgePolicy.js'
+import { authenticatedIdentityKey, rateLimitOptions } from './security/rateLimitPolicy.js'
+import { readCorsOriginSetting, readBodyLimitBytes } from './security/edgePolicy.js'
 import {
   authenticatedWebSocketIdentity,
   isIdentityOwnedRoom,
@@ -45,15 +39,15 @@ type HttpMethod = 'get' | 'post' | 'put' | 'delete'
 /** Express app or router — embed mounts pieces on whichever it owns. */
 export type MessageBoxRouter = IRouter
 
-export function createMessageBoxApp (): Express {
+export function createMessageBoxApp(): Express {
   return express()
 }
 
-export function registerMessageBoxPreAuthRoutes (
+export function registerMessageBoxPreAuthRoutes(
   router: MessageBoxRouter,
   routingPrefix: string = ''
 ): void {
-  preAuth.forEach((route) => {
+  preAuth.forEach(route => {
     router[route.type as HttpMethod](
       `${routingPrefix}${route.path}`,
       route.func as unknown as (req: ExpressRequest, res: Response, next: NextFunction) => void
@@ -62,33 +56,40 @@ export function registerMessageBoxPreAuthRoutes (
 }
 
 /** Payment middleware (after auth) + postAuth route handlers. */
-export function registerMessageBoxPostAuthRoutes (
+export function registerMessageBoxPostAuthRoutes(
   router: MessageBoxRouter,
   ctx: Pick<MessageBoxContext, 'wallet' | 'calculateRequestPrice'>,
   routingPrefix: string = '',
   authenticatedRateLimitOptions: Partial<RateLimitOptions> = {}
 ): void {
-  router.use(rateLimit(rateLimitOptions(
-    'MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT',
-    { windowMs: 60_000, limit: 1_000 },
-    {
-      keyGenerator: authenticatedIdentityKey,
-      ...authenticatedRateLimitOptions
-    }
-  )))
+  router.use(
+    rateLimit(
+      rateLimitOptions(
+        'MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT',
+        { windowMs: 60_000, limit: 1_000 },
+        {
+          keyGenerator: authenticatedIdentityKey,
+          ...authenticatedRateLimitOptions
+        }
+      )
+    )
+  )
 
   router.use(
     createPaymentMiddleware({
       wallet: ctx.wallet,
-      calculateRequestPrice: async (req) =>
+      calculateRequestPrice: async req =>
         await Promise.resolve(ctx.calculateRequestPrice(req as unknown as ExpressRequest))
     })
   )
 
-  postAuth.forEach((route) => {
+  postAuth.forEach(route => {
     const method = route.type as HttpMethod
     if (route.path === '/sendMessage') {
-      router[method](`${routingPrefix}${route.path}`, sendMessageRoute.func as unknown as RequestHandler)
+      router[method](
+        `${routingPrefix}${route.path}`,
+        sendMessageRoute.func as unknown as RequestHandler
+      )
     } else {
       router[method](`${routingPrefix}${route.path}`, route.func as RequestHandler)
     }
@@ -100,7 +101,7 @@ export function registerMessageBoxPostAuthRoutes (
  * Same logic as standalone index.ts start(), with ctx.knex/ctx.wallet
  * instead of module singletons.
  */
-export function attachMessageBoxWebSockets (
+export function attachMessageBoxWebSockets(
   httpServer: HttpServer,
   ctx: MessageBoxContext
 ): AuthSocketServer | null {
@@ -125,7 +126,7 @@ export function attachMessageBoxWebSockets (
   const authenticatedSockets = new Map<string, string>()
   const connectedSockets = new Map<string, AuthSocket>()
 
-  io.on('connection', (socket) => {
+  io.on('connection', socket => {
     connectedSockets.set(socket.id, socket)
     Logger.log('[WEBSOCKET] New connection established.')
 
@@ -154,10 +155,7 @@ export function attachMessageBoxWebSockets (
         if (identityKeyHandled) return
 
         try {
-          const identityKey = authenticatedWebSocketIdentity(
-            socket.identityKey,
-            data?.identityKey
-          )
+          const identityKey = authenticatedWebSocketIdentity(socket.identityKey, data?.identityKey)
           authenticatedSockets.set(socket.id, identityKey)
           identityKeyHandled = true
 
@@ -170,9 +168,10 @@ export function attachMessageBoxWebSockets (
         } catch (error) {
           Logger.warn('[WEBSOCKET] Rejected an invalid authenticated peer or identity claim.')
           await socket.emit('authenticationFailed', {
-            reason: error instanceof WebSocketPolicyError
-              ? error.reason
-              : 'Invalid authenticated identity key'
+            reason:
+              error instanceof WebSocketPolicyError
+                ? error.reason
+                : 'Invalid authenticated identity key'
           })
         }
       }
@@ -184,7 +183,10 @@ export function attachMessageBoxWebSockets (
     // Handle sendMessage over WebSocket
     socket.on(
       'sendMessage',
-      async (data: { roomId: string, message: { messageId: string, recipient: string, body: string } }): Promise<void> => {
+      async (data: {
+        roomId: string
+        message: { messageId: string; recipient: string; body: string }
+      }): Promise<void> => {
         if (typeof data !== 'object' || data == null) {
           Logger.error('[WEBSOCKET ERROR] Invalid data object received.')
           await socket.emit('messageFailed', { reason: 'Invalid data object' })
@@ -195,7 +197,9 @@ export function attachMessageBoxWebSockets (
 
         if (!authenticatedSockets.has(socket.id)) {
           Logger.warn('[WEBSOCKET] Unauthorized attempt to send a message.')
-          await socket.emit('paymentFailed', { reason: 'Unauthorized: WebSocket not authenticated' })
+          await socket.emit('paymentFailed', {
+            reason: 'Unauthorized: WebSocket not authenticated'
+          })
           return
         }
 
@@ -229,7 +233,9 @@ export function attachMessageBoxWebSockets (
 
           const messageBoxType = messageBoxFromRecipientRoom(message.recipient, roomId)
           if (messageBoxType == null) {
-            await socket.emit('messageFailed', { reason: 'Room does not match recipient and message box' })
+            await socket.emit('messageFailed', {
+              reason: 'Room does not match recipient and message box'
+            })
             return
           }
 
@@ -249,17 +255,20 @@ export function attachMessageBoxWebSockets (
               return routeResponse
             }
           } as unknown as Response
-          await sendMessageRoute.func({
-            auth: { identityKey: authenticatedSockets.get(socket.id) },
-            body: {
-              message: {
-                messageId: message.messageId,
-                recipient: message.recipient,
-                messageBox: messageBoxType,
-                body: message.body
+          await sendMessageRoute.func(
+            {
+              auth: { identityKey: authenticatedSockets.get(socket.id) },
+              body: {
+                message: {
+                  messageId: message.messageId,
+                  recipient: message.recipient,
+                  messageBox: messageBoxType,
+                  body: message.body
+                }
               }
-            }
-          } as any, routeResponse)
+            } as any,
+            routeResponse
+          )
 
           if (routeStatus !== 200 || routeBody?.status !== 'success') {
             await socket.emit(`sendMessageAck-${roomId}`, {
@@ -277,15 +286,19 @@ export function attachMessageBoxWebSockets (
           const recipientSockets = recipientSocketIds(authenticatedSockets, message.recipient)
             .map(socketId => connectedSockets.get(socketId))
             .filter(recipientSocket => recipientSocket != null)
-          await Promise.all(recipientSockets.map(async recipientSocket => {
-            await recipientSocket.emit(`sendMessage-${roomId}`, {
-              sender: authenticatedSockets.get(socket.id),
-              messageId: message.messageId,
-              body: message.body
+          await Promise.all(
+            recipientSockets.map(async recipientSocket => {
+              await recipientSocket.emit(`sendMessage-${roomId}`, {
+                sender: authenticatedSockets.get(socket.id),
+                messageId: message.messageId,
+                body: message.body
+              })
             })
-          }))
+          )
           const recipientConnections = recipientSockets.length
-          Logger.log(`[WEBSOCKET] Delivered message notification to ${recipientConnections} authenticated recipient connection(s).`)
+          Logger.log(
+            `[WEBSOCKET] Delivered message notification to ${recipientConnections} authenticated recipient connection(s).`
+          )
         } catch (error) {
           Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler:', error)
           await socket.emit('messageFailed', { reason: 'Unexpected error occurred' })
@@ -309,7 +322,7 @@ export function attachMessageBoxWebSockets (
 
       const identityKey = authenticatedSockets.get(socket.id)
       if (identityKey == null || !isIdentityOwnedRoom(identityKey, roomId)) {
-        Logger.warn('[WEBSOCKET] Rejected an attempt to join another identity\'s room.')
+        Logger.warn("[WEBSOCKET] Rejected an attempt to join another identity's room.")
         await socket.emit('joinFailed', { reason: 'Room is not owned by authenticated identity' })
         return
       }
@@ -333,7 +346,7 @@ export function attachMessageBoxWebSockets (
 
       const identityKey = authenticatedSockets.get(socket.id)
       if (identityKey == null || !isIdentityOwnedRoom(identityKey, roomId)) {
-        Logger.warn('[WEBSOCKET] Rejected an attempt to leave another identity\'s room.')
+        Logger.warn("[WEBSOCKET] Rejected an attempt to leave another identity's room.")
         await socket.emit('leaveFailed', { reason: 'Room is not owned by authenticated identity' })
         return
       }

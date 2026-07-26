@@ -1,15 +1,16 @@
 import swaggerJsdoc from 'swagger-jsdoc'
 import swaggerUi from 'swagger-ui-express'
-import { Express } from 'express'
+import { Express, type RequestHandler } from 'express'
 
-export function setupSwagger (app: Express): void {
+export function setupSwagger(app: Express): void {
   const options = {
     definition: {
       openapi: '3.0.0',
       info: {
         title: 'MessageBox Server API',
         version: '1.0.0',
-        description: 'API documentation for the MessageBox Server, including message delivery, retrieval, acknowledgment, and overlay routing.'
+        description:
+          'API documentation for the MessageBox Server, including message delivery, retrieval, acknowledgment, and overlay routing.'
       },
       servers: [
         {
@@ -17,34 +18,36 @@ export function setupSwagger (app: Express): void {
           description: 'Local Development Server'
         },
         {
-          url: 'https://messagebox.babbage.systems',
+          url: 'https://message-box-us-1.bsvb.tech',
           description: 'Production MessageBox Server'
         }
       ],
       components: {
         securitySchemes: {
-          BearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT',
-            description: 'Provide your signed identity key JWT in the `Authorization` header as: `Bearer <token>`'
+          BsvMutualAuth: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'x-bsv-auth-identity-key',
+            description:
+              'BRC-103 mutual authentication over the BRC-104 HTTP binding. The complete x-bsv-auth-* header family is required.'
           }
         }
       },
       security: [
         {
-          BearerAuth: []
+          BsvMutualAuth: []
         }
       ]
     },
-    apis: ['./src/routes/*.ts']
+    apis: ['./src/routes/**/*.ts']
   }
 
   const swaggerSpec = swaggerJsdoc(options)
 
-  // Swagger UI at /docs — cast needed for @types/swagger-ui-express v4 + @types/express v5 compat
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(app as any).use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+  // Casts bridge @types/swagger-ui-express v4 to Express v5's handler types.
+  const swaggerHandlers = swaggerUi.serve as unknown as RequestHandler[]
+  const swaggerSetup = swaggerUi.setup(swaggerSpec) as unknown as RequestHandler
+  app.use('/docs', ...swaggerHandlers, swaggerSetup)
 
   // Serve raw OpenAPI spec at /openapi.json
   app.get('/openapi.json', (_req, res) => {

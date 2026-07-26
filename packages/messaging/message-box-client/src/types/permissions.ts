@@ -89,9 +89,9 @@ export interface SendListParams {
 export interface SendListResult {
   status: 'success' | 'partial' | 'error'
   description: string
-  sent: Array<{ recipient: PubKeyHex, messageId: string }>
+  sent: Array<{ recipient: PubKeyHex; messageId: string }>
   blocked: PubKeyHex[]
-  failed: Array<{ recipient: PubKeyHex, error: string }>
+  failed: Array<{ recipient: PubKeyHex; error: string }>
   totals?: {
     deliveryFees: number
     recipientFees: number

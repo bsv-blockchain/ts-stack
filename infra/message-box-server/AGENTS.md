@@ -1,92 +1,113 @@
-# CLAUDE.md — Message Box Server
+# Message Box Server Maintainer Guide
 
-## Purpose
-A secure peer-to-peer message routing server for the Bitcoin SV ecosystem. Provides identity-based message delivery, real-time WebSocket communication, and full mutual authentication using BRC-103 signatures. Messages are encrypted and stored until acknowledged, supporting both HTTP and WebSocket transports.
+## Scope
 
-## Service surface
-- **POST /sendMessage** – Send encrypted message to a recipient's message box
-- **POST /listMessages** – List all unacknowledged messages in a box (authenticated)
-- **POST /acknowledgeMessage** – Mark messages as read/delete them (authenticated)
-- **WebSocket** – Real-time authenticated messaging over `@bsv/authsocket` using rooms in format `{identityKey}-{messageBox}`
-  - Events: `authenticated`, `joinRoom`, `sendMessage`, `leaveRoom`
-- **Background jobs** – Firebase push notifications (optional, enabled via ENABLE_FIREBASE)
+`@bsv/messagebox-server` is the private deployable service behind
+`@bsv/message-box-client`. It stores encrypted messages, enforces
+recipient-controlled delivery permissions and fees, authenticates HTTP and
+WebSocket peers with BRC-103, and optionally delivers Firebase notifications.
+It is shipped as a container, not a public npm artifact.
 
-## Real deployment
-- **Dockerfile** – Multi-stage build: node:20-alpine builder → production runtime with nginx reverse proxy on port 8080 (app runs on 3000, nginx on 8080)
-- **docker-compose.yml** – Backend (Node), MySQL 8.0, PHPMyAdmin. MySQL connection pool with health checks
-- **knexfile.ts** – MySQL 8.0 via mysql2, default connection string configurable via KNEX_DB_CONNECTION
-- **nginx.conf** – HTTP/2 reverse proxy listening on 8080, proxying to localhost:3000, gzip enabled, 1GB max body size
-- **Migrations** – Knex migrations stored in `src/migrations/`:
-  - `2022-12-28-001-initial-migration.ts` – Core messages table with identity keys
-  - `2023-01-17-messages-update.ts` – Payload storage updates
-  - `2024-03-05-001-messageID-upgrade.ts` – MessageID uniqueness constraints
-  - `2025-01-31-001-notification-permissions.ts` – Firebase notification permissions
-  - `2025-01-31-002-device-registrations.ts` – Device registration tracking
+## Service contract
 
-## Configuration
-Environment variables (from `.env.example`):
-- **NODE_ENV** – `development`, `staging`, or `production`
-- **PORT** – Express port (default 3000 prod, 8080 dev)
-- **HTTP_PORT** – Alternative port alias
-- **HOSTING_DOMAIN** – Public domain for overlay advertisement (e.g., `http://localhost:8080`)
-- **SERVER_PRIVATE_KEY** – 256-bit hex private key for server identity and auth signing (required)
-- **ROUTING_PREFIX** – Optional path prefix for all routes (e.g., `/api`)
-- **ENABLE_WEBSOCKETS** – Set to `'true'` to enable real-time messaging (default true)
-- **LOGGING_ENABLED** – Set to `'true'` for verbose debug logging
-- **WALLET_STORAGE_URL** – URL of wallet storage service (e.g., `https://storage.babbage.systems`)
-- **KNEX_DB_CLIENT** – Database client (default: `mysql`)
-- **KNEX_DB_CONNECTION** – JSON connection config: `{"host":"localhost","port":3306,"user":"root","password":"...","database":"messagebox-backend"}`
-- **MIGRATE_KEY** – Optional key to authorize migration operations
-- **ENABLE_FIREBASE** – Set to `'true'` to enable Firebase push notifications
-- **FIREBASE_PROJECT_ID** – GCP project ID for Firebase
-- **FIREBASE_SERVICE_ACCOUNT_JSON** – Firebase service account JSON (inline)
-- **FIREBASE_SERVICE_ACCOUNT_PATH** – Path to Firebase service account JSON file
+Public pre-auth routes:
 
-## Dependencies
-- **Database** – MySQL 8.0 via knex + mysql2
-- **@bsv packages**
-  - `@bsv/sdk` – Cryptography, key handling
-  - `@bsv/auth-express-middleware` – BRC-103 request/response authentication
-  - `@bsv/authsocket` – Authenticated WebSocket server
-  - `@bsv/payment-express-middleware` – Optional payment verification
-  - `@bsv/wallet-toolbox` – Wallet operations
-- **External services**
-  - Wallet Storage (via `WALLET_STORAGE_URL`) – Stores key derivation metadata
-  - Firebase Admin SDK (optional) – Push notifications to registered devices
-- **Key packages** – Express, body-parser, dotenv, socket.io (WebSocket), web-push, firebase-admin, swagger-jsdoc
+- `GET /health` — process liveness
+- `GET /ready` — non-sensitive database readiness
+- `GET /docs` and `GET /openapi.json` — runtime documentation
 
-## Operational concerns
-- **Local dev** – `npm run dev` with hot-reload via nodemon, requires MySQL running (use docker-compose)
-- **Production** – `npm run build && npm start` compiles TypeScript to `out/`, then `node out/src/index.js` starts
-- **Migrations** – Auto-run after server starts (5s delay in code); use `MIGRATE_KEY` to authorize if needed
-- **Health endpoint** – No explicit health check route; monitor WebSocket and HTTP endpoints
-- **Scaling** – Single instance by design; WebSocket rooms are in-memory, horizontal scaling requires sticky sessions or external message broker
-- **Database** – MySQL 8.0 required; note query performance with large message volumes (index on identity keys + messageBox)
-- **WebSocket** – `@bsv/authsocket` handles multiplexing; each client connects once but can join multiple rooms
+Authenticated routes:
 
-## Spec conformance
-- **BRC-103** – Mutual authentication on all requests and WebSocket handshakes
-- **BRC-2** – Optional AES-encrypted message payloads (client-side encryption supported)
-- **SHIP** – Overlay advertisement via `@bsv/sdk` PublicKey operations
-- **MessageBox protocol** – Custom identity + messageBox type routing model
+- `POST /sendMessage` — one to 100 recipients
+- `POST /listMessages` — deterministic pages of at most 1,000 records
+- `POST /acknowledgeMessage` — at most 1,000 IDs
+- `POST /registerDevice` — an FCM token cannot be reassigned across identities
+- `GET /devices` — redacted, bounded pagination
+- `POST /permissions/set`
+- `GET /permissions/get`
+- `GET /permissions/list` — bounded pagination
+- `GET /permissions/quote` — one to 100 recipients with bounded concurrency
 
-## Integration points
-- **@bsv/messagebox-client** – Client library that connects to this server, handles auth, encryption, WebSocket
-- **Wallet Storage** – Derives keys from SERVER_PRIVATE_KEY via configured wallet storage endpoint
-- **Overlay nodes** – Can advertise MessageBox capabilities via SHIP protocol using HOSTING_DOMAIN
-- **Payment processing** – Optionally enforces BRC-100 payment verification on message send (via `@bsv/payment-express-middleware`)
+WebSocket rooms are `{identityKey}-{messageBox}`. Identity comes from the
+authenticated transport, never solely from a payload claim. WebSocket sends
+reuse the complete HTTP validation, permission, fee, payment, duplicate, and
+persistence path.
+
+## Security and availability invariants
+
+- Message Box is a public protocol service. Default CORS is credential-free
+  wildcard access, including opaque `Origin: null`. Operators may explicitly
+  select an exact allowlist or disable cross-origin browser access.
+- Do not use CORS or CSP as authentication. Preserve BRC-103 authentication,
+  recipient ownership, end-to-end encryption, permission/payment policy,
+  bounded work, and rate limits.
+- Permission/fee storage failures fail closed. They must never become free or
+  allowed delivery.
+- Implicit default permission reads do not write rows. Explicit box-wide and
+  sender-specific permissions are uniquely keyed by normalized sender scope.
+- Log no service private keys, complete FCM tokens, auth material, payment
+  payloads, or plaintext message bodies.
+- Database migrations, wallet/auth initialization, and WebSocket setup finish
+  before the process listens. A failed prerequisite is a failed process.
+- `PORT` takes precedence over compatibility fallback `HTTP_PORT`; the default
+  is 8080. The container serves Node HTTP/WebSocket traffic directly. A trusted
+  platform ingress may sit in front of it.
+- Horizontal WebSocket routing and the default rate-limit store are
+  process-local. Multiple replicas require sticky routing or an authenticated
+  shared broker/store.
+
+## Shared policy files
+
+`src/security/edgePolicy.ts` and `src/security/rateLimitPolicy.ts` are
+byte-for-byte synchronized from the canonical WAB implementations. Do not make
+message-box-only edits or reformat them. Change the canonical policy and run:
+
+```bash
+pnpm sync:service-edge-policy
+pnpm sync:service-rate-limit-policy
+```
+
+They are intentionally excluded from this service's local Prettier pass.
 
 ## File map
-- **src/**
-  - `index.ts` – Entry point: loads env, creates HTTP + WebSocket servers, starts migrations
-  - `app.ts` – Express app setup, route mounting, auth middleware
-  - `routes/` – HTTP endpoints: `sendMessage.ts`, `listMessages.ts`, `acknowledgeMessage.ts`, device listing, permissions
-  - `config/firebase.ts` – Firebase Admin SDK initialization
-  - `utils/` – Helpers: logger, notification sending, message permissions
-  - `migrations/` – Knex schema migrations for messages, permissions, devices
-  - `types/` – TypeScript interfaces for notifications, permissions
-- **knexfile.ts** – Knex configuration, driver selection, connection pooling
-- **Dockerfile** – Multi-stage Node + nginx container
-- **docker-compose.yml** – Services: backend, MySQL, PHPMyAdmin
-- **nginx.conf** – Reverse proxy config
-- **.env.example** – Template with all required/optional variables
+
+- `src/index.ts` — standalone migration/init/listen lifecycle
+- `src/app.ts` — Express, auth, public edge policy, and route wiring
+- `src/compose.ts`, `src/context.ts`, `src/runtimeDeps.ts` — embeddable API and
+  dependency binding
+- `src/routes/` — HTTP handlers
+- `src/security/` — shared edge/rate policy and Message Box WebSocket policy
+- `src/migrations/` — Knex schema history
+- `src/config/firebase.ts` — optional Firebase initialization
+- `src/telemetry.ts`, `src/utils/logger.ts` — observability
+- `Dockerfile` — digest-pinned Node 24 build/runtime
+- `README.md`, `DEPLOYING.md` — developer and operator documentation
+- `specs/messaging/message-box-http.yaml` — reviewed source contract
+
+## Required checks
+
+From `infra/message-box-server`:
+
+```bash
+npm ci --ignore-scripts
+npm rebuild better-sqlite3
+npm run typecheck
+npm run format:check
+npm run lint
+npm test
+npm run test:coverage
+npm run build
+npm audit --audit-level=high
+```
+
+From the repository root, also run synchronized-policy, OpenAPI/codegen,
+documentation, repository-health, and Linux container CI gates. Do not rely on
+a macOS image build as Linux/amd64 release evidence.
+
+## Deployment
+
+Use the repository's git-triggered release/deployment path and immutable image
+evidence. Keep CORS mode, trusted proxy hops, database and wallet endpoints,
+Firebase credentials, OTLP settings, probes, rollback, and migration evidence
+under operator control. Never commit secrets. Do not bump or publish an npm
+version as part of service maintenance.

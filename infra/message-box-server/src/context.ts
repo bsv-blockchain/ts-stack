@@ -22,9 +22,7 @@ export interface CreateMessageBoxContextOptions {
   logger?: Console
 }
 
-export function createMessageBoxContext (
-  deps: CreateMessageBoxContextOptions
-): MessageBoxContext {
+export function createMessageBoxContext(deps: CreateMessageBoxContextOptions): MessageBoxContext {
   if (deps.wallet == null) {
     throw new Error('createMessageBoxContext requires a wallet')
   }
@@ -38,12 +36,14 @@ export function createMessageBoxContext (
     routingPrefix: deps.routingPrefix ?? '',
     enableWebSockets: deps.enableWebSockets ?? true,
     enableSwagger: deps.enableSwagger ?? true,
-    calculateRequestPrice: deps.calculateRequestPrice ?? (async (req: Request) => {
-      if (req.url.includes('/sendMessage')) {
-        // configurable via deps.calculateRequestPrice
-      }
-      return 0
-    }),
+    calculateRequestPrice:
+      deps.calculateRequestPrice ??
+      (async (req: Request) => {
+        if (req.url.includes('/sendMessage')) {
+          // configurable via deps.calculateRequestPrice
+        }
+        return 0
+      }),
     logger: deps.logger ?? console
   }
 }

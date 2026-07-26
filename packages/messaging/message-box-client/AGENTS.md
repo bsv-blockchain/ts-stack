@@ -1,172 +1,101 @@
-# CLAUDE.md — @bsv/message-box-client
+# Message Box Client Maintainer Guide
 
-## Purpose
-Toolkit for peer-to-peer messaging and Bitcoin SV payments via store-and-forward architecture. Provides `MessageBoxClient` (message inbox management) and `PeerPayClient` (higher-level P2P payments) leveraging BRC-103 mutual authentication and BRC-29 payment derivation.
+## Scope
 
-## Public API surface
+`@bsv/message-box-client` is the browser- and Node-compatible client for the
+Message Box HTTP/WebSocket protocol. It provides encrypted store-and-forward
+messaging, BRC-29 peer payments, token-settlement adapters, delivery
+permissions and quotes, and push-device registration.
 
-### MessageBoxClient
-- **Constructor**: `new MessageBoxClient(options)`
-  - Options: `walletClient` (BRC-100 wallet), `host` (MessageBox server URL), `enableLogging`, `networkPreset` ('local'|'mainnet'|'testnet')
-  - Auto-initializes on first use if needed
+Public entry points are exported from `mod.ts`. Preserve both ESM and CommonJS
+consumers and the UMD browser bundle.
 
-- **Methods**:
-  - `init(targetHost?)` — manually initialize (optional, auto-runs)
-  - `sendMessage({ recipient, messageBox, body, skipEncryption? })` — send via HTTP
-  - `sendLiveMessage(...)` — send via WebSocket, fallback to HTTP
-  - `listMessages({ messageBox })` — retrieve messages from inbox
-  - `acknowledgeMessage({ messageIds })` — delete messages after reading
-  - `listenForLiveMessages({ messageBox, onMessage })` — subscribe to push updates
-  - `initializeConnection()` — establish WebSocket link
-  - `joinRoom(messageBox)` / `leaveRoom(messageBox)` — room subscription
-  - `resolveHostForRecipient(identityKey)` — overlay discovery for peer's MessageBox host
-  - `anointHost(url)` — advertise your MessageBox host to overlay network
+## Security and compatibility invariants
 
-### PeerPayClient
-- **Constructor**: `new PeerPayClient(options)`
-  - Options: `walletClient`, `messageBoxHost`, `enableLogging`
-  
-- **Methods**:
-  - `sendPayment({ recipient, amount })` — HTTP payment
-  - `sendLivePayment({ recipient, amount })` — WebSocket payment
-  - `listenForLivePayments({ onPayment })` — listen for incoming payments
-  - `acceptPayment(payment)` — internalize into wallet
-  - `rejectPayment(payment)` — send refund (minus 1000 sats)
-  - `listIncomingPayments()` — list pending payments
+- Messages are encrypted per recipient by default. Plaintext requires an
+  explicit `skipEncryption: true`.
+- A shared multi-recipient body cannot be encrypted per recipient. The batch
+  API therefore requires explicit plaintext opt-in; notification convenience
+  APIs send bounded individual encrypted requests.
+- Explicitly configured hosts may use HTTP for local/operator-controlled
+  environments. Overlay-advertised hosts are untrusted and must be public
+  HTTPS destinations; reject loopback, private, link-local, reserved, and
+  documentation-only targets.
+- Preserve configured URL path prefixes when constructing route URLs.
+- BRC-103 authentication, recipient ownership, permission/payment checks, and
+  encryption are the access boundaries. Message Box is a public protocol
+  service; compatible servers use credential-free wildcard CORS by default and
+  may opt into an exact allowlist.
+- Keep `sendMesagetoRecepients` as a deprecated compatibility wrapper around
+  the correctly spelled `sendMessageToRecipients`.
+- Never silently contact a deployed integration target. Live integration tests
+  require explicit environment configuration and a separate acknowledgement
+  for `*.bsvb.tech`.
 
-## Real usage patterns
+## Server contract
 
-From README:
-```ts
-const { WalletClient } = require('@bsv/sdk')
-const { MessageBoxClient } = require('@bsv/message-box-client')
+Authenticated routes:
 
-const myWallet = new WalletClient()
-const msgBoxClient = new MessageBoxClient({
-  host: 'https://message-box-us-1.bsvb.tech',
-  walletClient: myWallet
-})
+- `POST /sendMessage`
+- `POST /listMessages` (bounded pagination)
+- `POST /acknowledgeMessage`
+- `POST /registerDevice`
+- `GET /devices`
+- `POST /permissions/set`
+- `GET /permissions/get`
+- `GET /permissions/list`
+- `GET /permissions/quote`
 
-// Auto-init on first use, or manually
-await msgBoxClient.init()
-
-// Send message to John
-await msgBoxClient.sendMessage({
-  recipient: '022600d2ef37d123fdcac7d25d7a464ada7acd3fb65a0daf85412140ee20884311',
-  messageBox: 'demo_inbox',
-  body: 'Hello John!'
-})
-
-// List John's messages
-const messages = await msgBoxClient.listMessages({ messageBox: 'demo_inbox' })
-console.log(messages[0].body)
-
-// Acknowledge (delete)
-await msgBoxClient.acknowledgeMessage({
-  messageIds: messages.map(msg => msg.messageId.toString())
-})
-
-// Listen for live messages
-await msgBoxClient.listenForLiveMessages({
-  messageBox: 'demo_inbox',
-  onMessage: (msg) => console.log('Live:', msg.body)
-})
-```
-
-PeerPayClient:
-```ts
-import { WalletClient } from '@bsv/sdk'
-import { PeerPayClient } from '@bsv/message-box-client'
-
-const wallet = new WalletClient()
-const peerPay = new PeerPayClient({ walletClient: wallet })
-
-// Listen for incoming payments
-await peerPay.listenForLivePayments({
-  onPayment: async (payment) => {
-    console.log('Received payment:', payment)
-    await peerPay.acceptPayment(payment)
-  }
-})
-
-// Send 50,000 sats
-await peerPay.sendLivePayment({
-  recipient: '0277a2b...e3f4',
-  amount: 50000
-})
-```
-
-From tests:
-```ts
-const mockWalletClient = new WalletClient()
-mockWalletClient.getPublicKey.mockResolvedValue({
-  publicKey: PrivateKey.fromRandom().toPublicKey().toString()
-})
-
-const peerPayClient = new PeerPayClient({
-  messageBoxHost: 'https://message-box-us-1.bsvb.tech',
-  walletClient: mockWalletClient
-})
-
-const payment = { recipient: PrivateKey.fromRandom().toPublicKey().toString(), amount: 5 }
-const token = await peerPayClient.createPaymentToken(payment)
-expect(token).toHaveProperty('amount', 5)
-```
-
-## Key concepts
-
-- **Store-and-forward**: Messages posted to named "inboxes" on server; recipient polls or subscribes via WebSocket
-- **Ephemeral storage**: Messages deleted once acknowledged by recipient
-- **Message encryption**: AES-256-GCM by default; `skipEncryption` flag disables
-- **BRC-103 auth**: All requests signed with wallet identity; server verifies sender
-- **Message box naming**: Arbitrary string per inbox (e.g., 'inbox', 'payment_inbox', 'notifications')
-- **BRC-29 derivation**: Payment addresses derived from sender+recipient identity keys
-- **Overlay network**: Can discover peers' MessageBox hosts via decentralized overlay service
-- **Live vs HTTP**: WebSocket for push notifications; HTTP for polling
-
-## Dependencies
-
-- `@bsv/authsocket-client` ^2.0.2 — WebSocket auth
-- `@bsv/sdk` ^2.0.14 — Wallet, crypto, auth
-- Dev: jest, ts-jest, Oxlint, webpack, supertest
-
-## Common pitfalls / gotchas
-
-1. **Auto-init now default** — `init()` is optional but recommended for explicit control; first use auto-initializes
-2. **Encryption on by default** — message bodies are AES-256-GCM encrypted; set `skipEncryption: true` for raw data
-3. **Message ID format** — treat messageId as string; don't assume numeric
-4. **Live vs HTTP tradeoff** — WebSocket faster but requires connection; HTTP more reliable for offline use
-5. **Payment rejection** — rejecting a payment sends a refund minus 1000 sats; if amount < 1000, payment is just dropped
-6. **Overlay discovery** — if no explicit host provided, client queries overlay network; this takes ~10s per peer
-7. **Room subscription** — WebSocket requires explicit `joinRoom()` before `listenForLiveMessages()`
-
-## Spec conformance
-
-- **BRC-103** (Peer-to-Peer Mutual Authentication): All messages signed/verified; handshake per-connection
-- **BRC-29** (Payment Derivation): Payment address derivation using sender+recipient keys
-- **BRC-100** (Wallet interface): Uses standard wallet methods for signing/verifying
-- **MessageBox server protocol**: Custom HTTP + WebSocket endpoints for store-and-forward
+Live delivery uses authenticated Socket.IO rooms named
+`{identityKey}-{messageBox}`. The reviewed source contract is
+`specs/messaging/message-box-http.yaml`.
 
 ## File map
 
-```
-/Users/personal/git/ts-stack/packages/messaging/message-box-client/
-  src/
-    index.ts              — main exports
-    MessageBoxClient.ts   — store-and-forward client
-    PeerPayClient.ts      — higher-level payment client
-    types.ts              — interfaces (PeerMessage, SendMessageParams, etc.)
-    authFetch.ts          — HTTP request signing
-  tests/
-    PeerPayClientUnit.test.ts
-    integration/
-      integrationWS.test.ts
-      integrationOverlay.test.ts
+- `mod.ts` — public exports
+- `src/MessageBoxClient.ts` — base HTTP, WebSocket, overlay, permission, quote,
+  device, and message APIs
+- `src/PeerPayClient.ts` — BRC-29 payments and payment requests
+- `src/PeerTokenClient.ts` — token transfer/request transport
+- `src/TokenSettlementAdapter.ts` — token-standard adapter contract
+- `src/RemittanceAdapter.ts` — SDK remittance integration
+- `src/host.ts` — configured-host and untrusted-overlay URL policy
+- `src/types.ts`, `src/types/permissions.ts` — public types
+- `src/__tests/` — deterministic unit and contract tests
+- `src/__tests/integration/` — explicitly configured live tests
+- `tsdown.config.ts` — unbundled ESM/CommonJS/declaration build
+- `webpack.config.js` — UMD build
+- `browser-budget.json` — Vite, esbuild, and UMD size/composition budgets
+
+## Required checks
+
+Run from the repository root:
+
+```bash
+pnpm --filter @bsv/message-box-client typecheck
+pnpm --filter @bsv/message-box-client format:check
+pnpm --filter @bsv/message-box-client lint
+pnpm --filter @bsv/message-box-client test
+pnpm --filter @bsv/message-box-client test:coverage
+pnpm --filter @bsv/message-box-client pack:check
+pnpm --filter @bsv/message-box-client test:browser
 ```
 
-## Integration points
+The integration suite additionally requires:
 
-- **authsocket-client** — underlying WebSocket with BRC-103 auth for live features
-- **@bsv/sdk** — wallet, identity keys, crypto, AuthFetch for HTTP signing
-- **MessageBox server** (infrastructure repo) — store-and-forward backend
-- **Overlay network** — LARS service for peer discovery
+```bash
+MESSAGE_BOX_RUN_INTEGRATION=true \
+MESSAGE_BOX_INTEGRATION_HOST=http://127.0.0.1:8080 \
+MESSAGE_BOX_WALLET_ORIGINATOR=localhost \
+pnpm --filter @bsv/message-box-client test:integration
+```
+
+Do not weaken browser budgets to hide growth. Update a budget only with measured
+artifact evidence and an explanation.
+
+## Release contract
+
+The tarball contains compiled `dist/` artifacts, declarations, source maps,
+README, and license only. It must not contain source tests, coverage, editor
+files, package-manager locks, or repository workflows. Do not bump or publish a
+version as an incidental part of maintenance work.

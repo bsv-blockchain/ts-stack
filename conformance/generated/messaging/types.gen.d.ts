@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report process liveness */
+        get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report database readiness */
+        get: operations["readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sendMessage": {
         parameters: {
             query?: never;
@@ -55,9 +89,10 @@ export interface paths {
         put?: never;
         /**
          * Retrieve messages from a named message box
-         * @description Returns all stored messages belonging to the authenticated identity in the
-         *     specified message box. Returns an empty array if the box does not exist.
-         *     Message bodies are always returned as strings (JSON objects are stringified).
+         * @description Returns one deterministic, bounded page of stored messages belonging
+         *     to the authenticated identity in the specified message box. Returns an
+         *     empty array if the box does not exist. Message bodies are always
+         *     returned as strings (JSON objects are stringified).
          */
         post: operations["listMessages"];
         delete?: never;
@@ -99,10 +134,10 @@ export interface paths {
         put?: never;
         /**
          * Register a device for FCM push notifications
-         * @description Stores or updates an FCM token for the authenticated identity. If the
-         *     token already exists it is updated (identity key, device ID, platform,
-         *     last_used timestamp). The FCM token is unique-indexed; upsert semantics
-         *     are applied via ON CONFLICT MERGE.
+         * @description Stores or refreshes an FCM token for the authenticated identity. A
+         *     token already owned by another identity cannot be reassigned through
+         *     this route. Re-registering a token for the same identity updates its
+         *     device metadata and last-used timestamp.
          */
         post: operations["registerDevice"];
         delete?: never;
@@ -120,7 +155,7 @@ export interface paths {
         };
         /**
          * List registered devices for the authenticated identity
-         * @description Returns all device registrations for the authenticated user, sorted by
+         * @description Returns one bounded page of device registrations for the authenticated user, sorted by
          *     `updated_at` descending. FCM tokens are truncated for security (last 10
          *     characters prefixed with "...").
          */
@@ -170,8 +205,7 @@ export interface paths {
          * Get the message permission for a sender/box combination
          * @description Retrieves the permission record for a specific sender + message box pair
          *     owned by the authenticated user. If `sender` is omitted, returns the
-         *     box-wide default. Returns `permission: undefined` (null in JSON) when no
-         *     record is set.
+         *     box-wide default. Returns `permission: null` when no record is set.
          */
         get: operations["getPermission"];
         put?: never;
@@ -190,12 +224,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List all message permissions for the authenticated user
-         * @description Returns all permission records owned by the authenticated identity with
-         *     optional filtering and pagination. Results are ordered by
-         *     `(message_box ASC, sender ASC NULLS FIRST, created_at DESC/ASC)`.
-         *     Box-wide defaults (sender = null) appear before sender-specific entries
-         *     within each message box.
+         * List message permissions for the authenticated user
+         * @description Returns one bounded page of permission records owned by the
+         *     authenticated identity, with optional filtering. Results are ordered by
+         *     `(message_box ASC, normalized sender scope ASC, created_at DESC/ASC)`.
+         *     Box-wide defaults (sender = null) use the empty normalized scope and
+         *     therefore appear before sender-specific entries within each message box.
          */
         get: operations["listPermissions"];
         put?: never;
@@ -325,10 +359,11 @@ export interface components {
              * @example xyz123
              */
             messageId: string | string[];
-            /** @description Message payload. Strings and JSON objects are both accepted. */
-            body: string | {
-                [key: string]: unknown;
-            };
+            /**
+             * @description Serialized message payload. The official client serializes object
+             *     bodies before sending them.
+             */
+            body: string;
         };
         /** @description A single output inside a Payment describing how to route satoshis. */
         PaymentOutput: {
@@ -429,6 +464,63 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Process is alive. */
+            200: {
+                headers: {
+                    /** @description Always `no-store`. */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "ok";
+                    };
+                };
+            };
+        };
+    };
+    readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Required dependencies are ready. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "ready";
+                    };
+                };
+            };
+            /** @description A required dependency is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     sendMessage: {
         parameters: {
             query?: never;
@@ -537,6 +629,10 @@ export interface operations {
                      * @example payment_inbox
                      */
                     messageBox: string;
+                    /** @default 1000 */
+                    limit?: number;
+                    /** @default 0 */
+                    offset?: number;
                 };
             };
         };
@@ -551,6 +647,9 @@ export interface operations {
                         /** @enum {string} */
                         status: "success";
                         messages: components["schemas"]["StoredMessage"][];
+                        limit: number;
+                        offset: number;
+                        hasMore: boolean;
                     };
                 };
             };
@@ -712,6 +811,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Device token is already registered to another identity. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error (`ERR_DATABASE_ERROR`, `ERR_INTERNAL`). */
             500: {
                 headers: {
@@ -725,7 +833,10 @@ export interface operations {
     };
     listDevices: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -741,6 +852,8 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         status: "success";
+                        limit: number;
+                        offset: number;
                         devices: components["schemas"]["RegisteredDevice"][];
                     };
                 };
@@ -856,7 +969,7 @@ export interface operations {
                         /** @enum {string} */
                         status: "success";
                         description: string;
-                        /** @description The permission record, or null/undefined if not set. */
+                        /** @description The permission record, or null if not set. */
                         permission?: components["schemas"]["PermissionRecord"] | null;
                     };
                 };

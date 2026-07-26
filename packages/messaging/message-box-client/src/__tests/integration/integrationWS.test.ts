@@ -4,17 +4,17 @@ import { PeerMessage } from '../../types.js'
 import { WalletClient } from '@bsv/sdk'
 import { webcrypto } from 'crypto'
 
-(global as any).self = { crypto: webcrypto }
+;(global as any).self = { crypto: webcrypto }
 
 jest.setTimeout(20000)
 
-const WS_URL = 'https://message-box-us-1.bsvb.tech'
+const WS_URL = process.env.MESSAGE_BOX_INTEGRATION_HOST!
 
 let recipientKey: string
 const messageBox = 'testBox'
 const testMessage = 'Hello, this is a WebSocket integration test.'
 
-const walletClient = new WalletClient('json-api', 'localhost')
+const walletClient = new WalletClient('json-api', process.env.MESSAGE_BOX_WALLET_ORIGINATOR!)
 const messageBoxClient = new MessageBoxClient({
   host: WS_URL,
   walletClient

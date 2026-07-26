@@ -1,0 +1,8 @@
+# Canonical shared policies are synchronized byte-for-byte from infra/wab.
+src/security/edgePolicy.ts
+src/security/rateLimitPolicy.ts
+
+# Generated build and coverage output.
+out/
+coverage/
+node_modules/

@@ -9,17 +9,20 @@
  * and handled on the client side (e.g., after syncing or displaying them).
  */
 
-import { Request, Response } from 'express'
+import { Response } from 'express'
+import { AuthRequest } from '@bsv/auth-express-middleware'
 import { Logger } from '../utils/logger.js'
 import { runtimeDeps } from '../runtimeDeps.js'
+
+export const MAX_ACKNOWLEDGMENT_IDS = 1_000
+export const MAX_MESSAGE_ID_BYTES = 256
 
 /**
  * @interface AcknowledgeRequest
  * @extends Request
  * @description Represents an authenticated request body for acknowledging messages.
  */
-export interface AcknowledgeRequest extends Request {
-  auth: { identityKey: string }
+export interface AcknowledgeRequest extends AuthRequest {
   body: { messageIds?: string[] }
 }
 
@@ -70,7 +73,9 @@ export interface AcknowledgeRequest extends Request {
 export default {
   type: 'post',
   path: '/acknowledgeMessage',
-  get knex () { return runtimeDeps.knex },
+  get knex() {
+    return runtimeDeps.knex
+  },
   summary: 'Use this route to acknowledge a message has been received',
   parameters: {
     messageIds: ['3301']
@@ -100,11 +105,24 @@ export default {
   func: async (req: AcknowledgeRequest, res: Response): Promise<Response> => {
     try {
       const { messageIds } = req.body
+      const identityKey = req.auth?.identityKey
 
-      Logger.log('[SERVER] acknowledgeMessage called for messageIds:', messageIds, 'by', req.auth.identityKey)
+      if (identityKey == null || identityKey.trim() === '') {
+        return res.status(401).json({
+          status: 'error',
+          code: 'ERR_AUTHENTICATION_REQUIRED',
+          description: 'Authentication required.'
+        })
+      }
+
+      Logger.log(
+        '[SERVER] acknowledgeMessage called for',
+        Array.isArray(messageIds) ? messageIds.length : 0,
+        'message(s)'
+      )
 
       // Validate request: must be a non-empty array of strings
-      if ((messageIds == null) || (Array.isArray(messageIds) && messageIds.length === 0)) {
+      if (messageIds == null || (Array.isArray(messageIds) && messageIds.length === 0)) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_MESSAGE_ID_REQUIRED',
@@ -112,18 +130,32 @@ export default {
         })
       }
 
-      if (!Array.isArray(messageIds) || messageIds.some(id => typeof id !== 'string')) {
+      if (
+        !Array.isArray(messageIds) ||
+        messageIds.length > MAX_ACKNOWLEDGMENT_IDS ||
+        messageIds.some(
+          id =>
+            typeof id !== 'string' ||
+            id.trim() === '' ||
+            Buffer.byteLength(id, 'utf8') > MAX_MESSAGE_ID_BYTES
+        )
+      ) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_ID',
-          description: 'Message IDs must be formatted as an array of strings!'
+          description:
+            `Message IDs must be a non-empty array of at most ${MAX_ACKNOWLEDGMENT_IDS} ` +
+            `non-empty strings no longer than ${MAX_MESSAGE_ID_BYTES} bytes each.`
         })
       }
 
+      const uniqueMessageIds = [...new Set(messageIds)]
+
       // Delete acknowledged messages for this recipient from the database
-      const deleted = await runtimeDeps.knex('messages')
-        .where({ recipient: req.auth.identityKey })
-        .whereIn('messageId', Array.isArray(messageIds) ? messageIds : [messageIds])
+      const deleted = await runtimeDeps
+        .knex('messages')
+        .where({ recipient: identityKey })
+        .whereIn('messageId', uniqueMessageIds)
         .del()
 
       // No matching messages found

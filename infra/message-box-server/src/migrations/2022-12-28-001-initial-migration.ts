@@ -1,7 +1,7 @@
 import { Knex } from 'knex'
 
-export async function up (knex: Knex): Promise<void> {
-  await knex.schema.createTable('messageBox', (table) => {
+export async function up(knex: Knex): Promise<void> {
+  await knex.schema.createTable('messageBox', table => {
     table.increments('messageBoxId').primary()
     table.timestamps(true, true)
     table.string('type').notNullable() // What type of messages go in here?
@@ -9,7 +9,7 @@ export async function up (knex: Knex): Promise<void> {
     table.unique(['type', 'identityKey'])
   })
 
-  await knex.schema.createTable('messages', (table) => {
+  await knex.schema.createTable('messages', table => {
     table.increments('messageId').primary()
     table.timestamps(true, true)
     table
@@ -25,7 +25,7 @@ export async function up (knex: Knex): Promise<void> {
   })
 }
 
-export async function down (knex: Knex): Promise<void> {
+export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('messages')
   await knex.schema.dropTableIfExists('messageBox')
 }

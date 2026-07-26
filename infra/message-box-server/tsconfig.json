@@ -1,9 +1,6 @@
 {
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "ESNext"
-    ],
+    "lib": ["dom", "ESNext"],
     "module": "NodeNext",
     "target": "esnext",
     "moduleResolution": "NodeNext",
@@ -23,14 +20,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "files": [
-    "src/index.ts",
-  ],
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "out",
-    "node_modules"
-  ]
+  "files": ["src/index.ts"],
+  "include": ["src"],
+  "exclude": ["out", "node_modules"]
 }

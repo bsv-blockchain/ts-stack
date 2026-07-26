@@ -11,24 +11,32 @@
  */
 import { MessageBoxClient } from './MessageBoxClient.js'
 import {
-  PeerMessage, TokenToken, IncomingToken, TokenRequestMessage, TokenRequestResponse,
+  PeerMessage,
+  TokenToken,
+  IncomingToken,
+  TokenRequestMessage,
+  TokenRequestResponse,
   IncomingTokenRequest
 } from './types.js'
 import {
-  TokenSettlementAdapter, TokenSourceRef, TokenAdapterContext
+  TokenSettlementAdapter,
+  TokenSourceRef,
+  TokenAdapterContext
 } from './TokenSettlementAdapter.js'
 import { WalletInterface, OriginatorDomainNameStringUnder250Bytes, createNonce } from '@bsv/sdk'
 
 import * as Logger from './Utils/logger.js'
 
-function hexToBytes (hex: string): number[] {
-  const matches = hex.match(/.{1,2}/g)
-  return (matches ?? []).map(byte => Number.parseInt(byte, 16))
+function hexToBytes(hex: string): number[] {
+  if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) {
+    throw new TypeError('HMAC proof must be a non-empty, even-length hexadecimal string')
+  }
+  return hex.match(/.{2}/g)!.map(byte => Number.parseInt(byte, 16))
 }
 
-function safeParse<T> (input: any): T | undefined {
+function safeParse<T>(input: unknown): T | undefined {
   try {
-    return typeof input === 'string' ? JSON.parse(input) : input
+    return typeof input === 'string' ? (JSON.parse(input) as T) : (input as T)
   } catch (parseError) {
     Logger.error('[PT CLIENT] Failed to parse input in safeParse:', input, parseError)
     return undefined
@@ -72,8 +80,13 @@ export class PeerTokenClient extends MessageBoxClient {
    */
   private readonly tokenHost?: string
 
-  constructor (config: PeerTokenClientConfig) {
-    const { messageBoxHost = 'https://message-box-us-1.bsvb.tech', walletClient, enableLogging = false, originator } = config
+  constructor(config: PeerTokenClientConfig) {
+    const {
+      messageBoxHost = 'https://message-box-us-1.bsvb.tech',
+      walletClient,
+      enableLogging = false,
+      originator
+    } = config
     super({ host: messageBoxHost, walletClient, enableLogging, originator })
 
     this.messageBox = config.messageBox ?? STANDARD_TOKEN_MESSAGEBOX
@@ -83,7 +96,7 @@ export class PeerTokenClient extends MessageBoxClient {
     this.adapters = new Map(config.adapters.map(a => [a.protocol, a]))
   }
 
-  private adapterFor (protocol: string): TokenSettlementAdapter {
+  private adapterFor(protocol: string): TokenSettlementAdapter {
     const adapter = this.adapters.get(protocol)
     if (adapter == null) {
       throw new Error(`No token settlement adapter registered for protocol '${protocol}'`)
@@ -91,8 +104,13 @@ export class PeerTokenClient extends MessageBoxClient {
     return adapter
   }
 
-  private adapterContext (dryRun = false): TokenAdapterContext {
-    return { wallet: this.peerTokenWalletClient, originator: this.originator, logger: Logger, dryRun }
+  private adapterContext(dryRun = false): TokenAdapterContext {
+    return {
+      wallet: this.peerTokenWalletClient,
+      originator: this.originator,
+      logger: Logger,
+      dryRun
+    }
   }
 
   /**
@@ -100,7 +118,7 @@ export class PeerTokenClient extends MessageBoxClient {
    * adapter for the requested protocol. With `dryRun`, the adapter derives and
    * validates only — no signing, no broadcast (mainnet rehearsal).
    */
-  async createTokenToken (params: SendTokenParams, dryRun = false): Promise<TokenToken> {
+  async createTokenToken(params: SendTokenParams, dryRun = false): Promise<TokenToken> {
     const adapter = this.adapterFor(params.protocol)
     const result = await adapter.buildTokenSettlement(
       { recipient: params.recipient, source: params.source, amount: params.amount },
@@ -122,42 +140,51 @@ export class PeerTokenClient extends MessageBoxClient {
   }
 
   /** Sends a token to a recipient over HTTP. Returns the sent token (incl. txid). */
-  async sendToken (params: SendTokenParams, hostOverride?: string): Promise<TokenToken> {
+  async sendToken(params: SendTokenParams, hostOverride?: string): Promise<TokenToken> {
     if (params.recipient == null || params.recipient.trim() === '') {
       throw new Error('Invalid token transfer: recipient is required')
     }
     const token = await this.createTokenToken(params)
-    await this.sendMessage({
-      recipient: params.recipient,
-      messageBox: this.messageBox,
-      body: JSON.stringify(token)
-    }, hostOverride ?? this.tokenHost)
+    await this.sendMessage(
+      {
+        recipient: params.recipient,
+        messageBox: this.messageBox,
+        body: JSON.stringify(token)
+      },
+      hostOverride ?? this.tokenHost
+    )
     return token
   }
 
   /** Sends a token over WebSocket, falling back to HTTP if the socket fails. Returns the sent token. */
-  async sendLiveToken (params: SendTokenParams, overrideHost?: string): Promise<TokenToken> {
+  async sendLiveToken(params: SendTokenParams, overrideHost?: string): Promise<TokenToken> {
     const token = await this.createTokenToken(params)
     const host = overrideHost ?? this.tokenHost
     try {
-      await this.sendLiveMessage({
-        recipient: params.recipient,
-        messageBox: this.messageBox,
-        body: JSON.stringify(token)
-      }, host)
+      await this.sendLiveMessage(
+        {
+          recipient: params.recipient,
+          messageBox: this.messageBox,
+          body: JSON.stringify(token)
+        },
+        host
+      )
     } catch (err) {
       Logger.warn('[PT CLIENT] sendLiveMessage failed, falling back to HTTP:', err)
-      await this.sendMessage({
-        recipient: params.recipient,
-        messageBox: this.messageBox,
-        body: JSON.stringify(token)
-      }, host)
+      await this.sendMessage(
+        {
+          recipient: params.recipient,
+          messageBox: this.messageBox,
+          body: JSON.stringify(token)
+        },
+        host
+      )
     }
     return token
   }
 
   /** Listens for incoming tokens in real time over WebSocket. */
-  async listenForLiveTokens ({
+  async listenForLiveTokens({
     onToken,
     overrideHost
   }: {
@@ -179,7 +206,7 @@ export class PeerTokenClient extends MessageBoxClient {
    * Accepts an incoming token by delegating to the adapter for its protocol,
    * then acknowledges the transport message.
    */
-  async acceptToken (incoming: IncomingToken): Promise<any> {
+  async acceptToken(incoming: IncomingToken): Promise<any> {
     try {
       const adapter = this.adapterFor(incoming.token.protocol)
       const result = await adapter.acceptTokenSettlement(
@@ -208,15 +235,20 @@ export class PeerTokenClient extends MessageBoxClient {
   }
 
   /** Lists pending incoming tokens from the token message box. */
-  async listIncomingTokens (overrideHost?: string): Promise<IncomingToken[]> {
+  async listIncomingTokens(overrideHost?: string): Promise<IncomingToken[]> {
     // listMessagesLite talks to the host directly and skips overlay (SLAP)
     // resolution, which has no advertised ls_messagebox hosts on mainnet.
-    const messages = await this.listMessagesLite({ messageBox: this.messageBox, host: overrideHost ?? this.tokenHost })
-    return messages.map((msg: any) => {
-      const token = safeParse<TokenToken>(msg.body)
-      if (token == null) return null
-      return { messageId: msg.messageId, sender: msg.sender, token }
-    }).filter((t): t is IncomingToken => t != null)
+    const messages = await this.listMessagesLite({
+      messageBox: this.messageBox,
+      host: overrideHost ?? this.tokenHost
+    })
+    return messages
+      .map((msg: any) => {
+        const token = safeParse<TokenToken>(msg.body)
+        if (token == null) return null
+        return { messageId: msg.messageId, sender: msg.sender, token }
+      })
+      .filter((t): t is IncomingToken => t != null)
   }
 
   // ── Token request flow (mirrors PeerPayClient's payment requests) ──────────
@@ -225,21 +257,33 @@ export class PeerTokenClient extends MessageBoxClient {
    * Requests a token transfer from a payer. Generates a unique requestId and an
    * HMAC proof tying the request to the sender, then posts it to the requests box.
    */
-  async requestToken (
-    params: { recipient: string, protocol: string, assetId: string, amount: string, description: string, expiresAt: number },
+  async requestToken(
+    params: {
+      recipient: string
+      protocol: string
+      assetId: string
+      amount: string
+      description: string
+      expiresAt: number
+    },
     hostOverride?: string
-  ): Promise<{ requestId: string, requestProof: string }> {
+  ): Promise<{ requestId: string; requestProof: string }> {
     const requestId = await createNonce(this.peerTokenWalletClient, 'self', this.originator)
     const senderIdentityKey = await this.getIdentityKey()
 
     const proofData = Array.from(new TextEncoder().encode(requestId + params.recipient))
-    const { hmac } = await this.peerTokenWalletClient.createHmac({
-      data: proofData,
-      protocolID: [2, 'token request auth'],
-      keyID: requestId,
-      counterparty: params.recipient
-    }, this.originator)
-    const requestProof = Array.from(hmac).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+    const { hmac } = await this.peerTokenWalletClient.createHmac(
+      {
+        data: proofData,
+        protocolID: [2, 'token request auth'],
+        keyID: requestId,
+        counterparty: params.recipient
+      },
+      this.originator
+    )
+    const requestProof = Array.from(hmac)
+      .map((b: number) => b.toString(16).padStart(2, '0'))
+      .join('')
 
     const body: TokenRequestMessage = {
       requestId,
@@ -252,17 +296,20 @@ export class PeerTokenClient extends MessageBoxClient {
       requestProof
     }
 
-    await this.sendMessage({
-      recipient: params.recipient,
-      messageBox: TOKEN_REQUESTS_MESSAGEBOX,
-      body: JSON.stringify(body)
-    }, hostOverride ?? this.tokenHost)
+    await this.sendMessage(
+      {
+        recipient: params.recipient,
+        messageBox: TOKEN_REQUESTS_MESSAGEBOX,
+        body: JSON.stringify(body)
+      },
+      hostOverride ?? this.tokenHost
+    )
 
     return { requestId, requestProof }
   }
 
   /** Listens for incoming token requests in real time over WebSocket. */
-  async listenForLiveTokenRequests ({
+  async listenForLiveTokenRequests({
     onRequest,
     overrideHost
   }: {
@@ -293,18 +340,21 @@ export class PeerTokenClient extends MessageBoxClient {
    * Fulfills an incoming token request by sending the requested token and
    * notifying the requester with a 'sent' response. Acknowledges the request.
    */
-  async fulfillTokenRequest (
-    params: { request: IncomingTokenRequest, source: TokenSourceRef, note?: string },
+  async fulfillTokenRequest(
+    params: { request: IncomingTokenRequest; source: TokenSourceRef; note?: string },
     hostOverride?: string
   ): Promise<void> {
     const { request, source, note } = params
 
-    await this.sendToken({
-      recipient: request.sender,
-      protocol: request.protocol,
-      source,
-      amount: request.amount
-    }, hostOverride ?? this.tokenHost)
+    await this.sendToken(
+      {
+        recipient: request.sender,
+        protocol: request.protocol,
+        source,
+        amount: request.amount
+      },
+      hostOverride ?? this.tokenHost
+    )
 
     const response: TokenRequestResponse = {
       requestId: request.requestId,
@@ -315,18 +365,24 @@ export class PeerTokenClient extends MessageBoxClient {
       ...(note != null && { note })
     }
 
-    await this.sendMessage({
-      recipient: request.sender,
-      messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-      body: JSON.stringify(response)
-    }, hostOverride ?? this.tokenHost)
+    await this.sendMessage(
+      {
+        recipient: request.sender,
+        messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
+        body: JSON.stringify(response)
+      },
+      hostOverride ?? this.tokenHost
+    )
 
-    await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride ?? this.tokenHost })
+    await this.acknowledgeMessage({
+      messageIds: [request.messageId],
+      host: hostOverride ?? this.tokenHost
+    })
   }
 
   /** Declines an incoming token request and acknowledges it. */
-  async declineTokenRequest (
-    params: { request: IncomingTokenRequest, note?: string },
+  async declineTokenRequest(
+    params: { request: IncomingTokenRequest; note?: string },
     hostOverride?: string
   ): Promise<void> {
     const { request, note } = params
@@ -335,17 +391,23 @@ export class PeerTokenClient extends MessageBoxClient {
       status: 'declined',
       ...(note != null && { note })
     }
-    await this.sendMessage({
-      recipient: request.sender,
-      messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-      body: JSON.stringify(response)
-    }, hostOverride ?? this.tokenHost)
-    await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride ?? this.tokenHost })
+    await this.sendMessage(
+      {
+        recipient: request.sender,
+        messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
+        body: JSON.stringify(response)
+      },
+      hostOverride ?? this.tokenHost
+    )
+    await this.acknowledgeMessage({
+      messageIds: [request.messageId],
+      host: hostOverride ?? this.tokenHost
+    })
   }
 
   /** Cancels a previously sent token request. */
-  async cancelTokenRequest (
-    params: { recipient: string, requestId: string, requestProof: string },
+  async cancelTokenRequest(
+    params: { recipient: string; requestId: string; requestProof: string },
     hostOverride?: string
   ): Promise<void> {
     const senderIdentityKey = await this.getIdentityKey()
@@ -355,17 +417,24 @@ export class PeerTokenClient extends MessageBoxClient {
       requestProof: params.requestProof,
       cancelled: true
     }
-    await this.sendMessage({
-      recipient: params.recipient,
-      messageBox: TOKEN_REQUESTS_MESSAGEBOX,
-      body: JSON.stringify(body)
-    }, hostOverride ?? this.tokenHost)
+    await this.sendMessage(
+      {
+        recipient: params.recipient,
+        messageBox: TOKEN_REQUESTS_MESSAGEBOX,
+        body: JSON.stringify(body)
+      },
+      hostOverride ?? this.tokenHost
+    )
   }
 
   /** Lists responses to token requests this client has sent. */
-  async listTokenRequestResponses (hostOverride?: string): Promise<TokenRequestResponse[]> {
-    const messages = await this.listMessagesLite({ messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX, host: hostOverride ?? this.tokenHost })
-    return messages.map((msg: any) => safeParse<TokenRequestResponse>(msg.body))
+  async listTokenRequestResponses(hostOverride?: string): Promise<TokenRequestResponse[]> {
+    const messages = await this.listMessagesLite({
+      messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
+      host: hostOverride ?? this.tokenHost
+    })
+    return messages
+      .map((msg: any) => safeParse<TokenRequestResponse>(msg.body))
       .filter((r): r is TokenRequestResponse => r != null)
   }
 
@@ -373,17 +442,24 @@ export class PeerTokenClient extends MessageBoxClient {
    * Verifies the HMAC proof on an incoming token request, confirming it came
    * from the claimed sender. Mirrors PeerPayClient's request-proof check.
    */
-  async verifyTokenRequestProof (request: { requestId: string, sender: string, requestProof: string }): Promise<boolean> {
+  async verifyTokenRequestProof(request: {
+    requestId: string
+    sender: string
+    requestProof: string
+  }): Promise<boolean> {
     const myIdentityKey = await this.getIdentityKey()
     try {
       const proofData = Array.from(new TextEncoder().encode(request.requestId + myIdentityKey))
-      await this.peerTokenWalletClient.verifyHmac({
-        data: proofData,
-        hmac: hexToBytes(request.requestProof),
-        protocolID: [2, 'token request auth'],
-        keyID: request.requestId,
-        counterparty: request.sender
-      }, this.originator)
+      await this.peerTokenWalletClient.verifyHmac(
+        {
+          data: proofData,
+          hmac: hexToBytes(request.requestProof),
+          protocolID: [2, 'token request auth'],
+          keyID: request.requestId,
+          counterparty: request.sender
+        },
+        this.originator
+      )
       return true
     } catch {
       return false

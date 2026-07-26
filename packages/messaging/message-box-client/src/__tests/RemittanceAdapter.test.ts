@@ -9,48 +9,64 @@ describe('RemittanceAdapter', () => {
 
   it('delegates sendMessage and returns the transport messageId', async () => {
     const messageBox = {
-      sendMessage: jest.fn<() => Promise<{ status: string, messageId: string }>>().mockResolvedValue({
-        status: 'success',
-        messageId: 'http-mid'
-      })
+      sendMessage: jest
+        .fn<() => Promise<{ status: string; messageId: string }>>()
+        .mockResolvedValue({
+          status: 'success',
+          messageId: 'http-mid'
+        })
     } as unknown as MessageBoxClient
 
     const adapter = new RemittanceAdapter(messageBox)
-    const result = await adapter.sendMessage({
-      recipient: senderKey,
-      messageBox: 'remittance_inbox',
-      body: '{"v":1}'
-    }, 'https://override-host')
+    const result = await adapter.sendMessage(
+      {
+        recipient: senderKey,
+        messageBox: 'remittance_inbox',
+        body: '{"v":1}'
+      },
+      'https://override-host'
+    )
 
     expect(result).toBe('http-mid')
-    expect(messageBox.sendMessage).toHaveBeenCalledWith({
-      recipient: senderKey,
-      messageBox: 'remittance_inbox',
-      body: '{"v":1}'
-    }, 'https://override-host')
+    expect(messageBox.sendMessage).toHaveBeenCalledWith(
+      {
+        recipient: senderKey,
+        messageBox: 'remittance_inbox',
+        body: '{"v":1}'
+      },
+      'https://override-host'
+    )
   })
 
   it('delegates sendLiveMessage (live path) and returns the transport messageId', async () => {
     const messageBox = {
-      sendLiveMessage: jest.fn<() => Promise<{ status: string, messageId: string }>>().mockResolvedValue({
-        status: 'success',
-        messageId: 'ws-mid'
-      })
+      sendLiveMessage: jest
+        .fn<() => Promise<{ status: string; messageId: string }>>()
+        .mockResolvedValue({
+          status: 'success',
+          messageId: 'ws-mid'
+        })
     } as unknown as MessageBoxClient
 
     const adapter = new RemittanceAdapter(messageBox)
-    const result = await adapter.sendLiveMessage({
-      recipient: senderKey,
-      messageBox: 'remittance_inbox',
-      body: '{"v":1}'
-    }, 'https://override-host')
+    const result = await adapter.sendLiveMessage(
+      {
+        recipient: senderKey,
+        messageBox: 'remittance_inbox',
+        body: '{"v":1}'
+      },
+      'https://override-host'
+    )
 
     expect(result).toBe('ws-mid')
-    expect(messageBox.sendLiveMessage).toHaveBeenCalledWith({
-      recipient: senderKey,
-      messageBox: 'remittance_inbox',
-      body: '{"v":1}'
-    }, 'https://override-host')
+    expect(messageBox.sendLiveMessage).toHaveBeenCalledWith(
+      {
+        recipient: senderKey,
+        messageBox: 'remittance_inbox',
+        body: '{"v":1}'
+      },
+      'https://override-host'
+    )
   })
 
   it('normalizes listMessages shape for remittance and forwards host', async () => {
@@ -106,13 +122,15 @@ describe('RemittanceAdapter', () => {
 
   it('forwards live listener setup and normalizes inbound message shape', async () => {
     const onPaymentMessage = jest.fn()
-    let forwardedListener: ((msg: {
-      messageId: string
-      sender: string
-      body: unknown
-      created_at: string
-      updated_at: string
-    }) => void) | undefined
+    let forwardedListener:
+      | ((msg: {
+          messageId: string
+          sender: string
+          body: unknown
+          created_at: string
+          updated_at: string
+        }) => void)
+      | undefined
 
     const messageBox = {
       getIdentityKey: jest.fn<() => Promise<string>>().mockResolvedValue(myIdentityKey),

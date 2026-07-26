@@ -2,139 +2,124 @@
 id: spec-message-box-http
 title: MessageBox Server HTTP API
 kind: spec
-version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: '1.0.0'
+last_updated: '2026-07-26'
+last_verified: '2026-07-26'
 status: stable
-tags: ["spec", "messaging"]
+tags: ['spec', 'messaging', 'brc-103']
 ---
 
 # MessageBox Server HTTP API
 
-> The MessageBox Server provides a store-and-forward REST API for peer-to-peer messaging. Clients send messages to named inboxes, recipients retrieve messages later, and messages are deleted once acknowledged. All requests use BRC-31 mutual authentication so the server knows sender and recipient identity without passwords.
+> An authenticated store-and-forward API for sending messages to named boxes,
+> retrieving them later, and deleting them after acknowledgment.
 
-## At a glance
+## Contract
 
-| Field | Value |
-|---|---|
-| Format | OpenAPI 3.1 |
-| Version | 1.0.0 |
-| Status | stable |
-| Implementations | @bsv/message-box-client |
+| Field          | Value                                         |
+| -------------- | --------------------------------------------- |
+| Artifact       | OpenAPI 3.1                                   |
+| Authentication | BRC-103 over the BRC-104 HTTP binding         |
+| Client         | `@bsv/message-box-client`                     |
+| Server         | `infra/message-box-server` in this repository |
 
-## What problem this solves
+Except for health and API-documentation routes, requests use the
+`x-bsv-auth-*` header family emitted and verified by the BSV auth middleware.
+The authenticated identity is the sender for sends and the owner for list,
+acknowledgment, device, and permission operations.
 
-**Asynchronous peer-to-peer messaging without accounts or servers**. Traditional messaging requires accounts, servers, and complex infrastructure. MessageBox enables store-and-forward: sender encrypts and posts to recipient's inbox, recipient polls or listens via WebSocket, and messages are automatically deleted after reading. Identity is cryptographic (no username/password).
+## Endpoints
 
-**Encrypted message storage**. Messages are encrypted with AES-256-GCM before storage. Only the recipient (holder of the private key) can decrypt. The server cannot read message contents.
+| Method | Path                  | Authentication | Purpose                                          |
+| ------ | --------------------- | -------------- | ------------------------------------------------ |
+| GET    | `/health`             | Public         | Process liveness                                 |
+| GET    | `/ready`              | Public         | Database readiness without dependency details    |
+| POST   | `/sendMessage`        | BRC-103        | Send to one or up to 100 recipients              |
+| POST   | `/listMessages`       | BRC-103        | List a bounded page of an identity-owned box     |
+| POST   | `/acknowledgeMessage` | BRC-103        | Delete up to 1,000 identity-owned messages by ID |
+| POST   | `/registerDevice`     | BRC-103        | Register a push-notification device              |
+| GET    | `/devices`            | BRC-103        | List registered devices with redacted tokens     |
+| POST   | `/permissions/set`    | BRC-103        | Set a sender-specific or box-wide permission     |
+| GET    | `/permissions/get`    | BRC-103        | Get a permission                                 |
+| GET    | `/permissions/list`   | BRC-103        | List permissions with pagination                 |
+| GET    | `/permissions/quote`  | BRC-103        | Quote one or up to 100 recipients                |
+| GET    | `/docs`               | Public         | Swagger UI                                       |
+| GET    | `/openapi.json`       | Public         | Runtime OpenAPI document                         |
 
-**Peer discovery via overlay network**. Clients can discover peers' MessageBox hosts by querying the overlay network (UHRP protocol), enabling dynamic host discovery without DNS or a central directory.
+`ROUTING_PREFIX` may prefix every route in a deployment.
 
-## Protocol overview
+## Send, retrieve, acknowledge
 
-**Three-step flow** (send → store → retrieve):
-
-1. **Sender → MessageBox** `POST /messages`
-   - Recipient public key in body
-   - Message body (encrypted with AES-256-GCM)
-   - `x-bsv-auth-*` headers (BRC-31 mutual auth)
-   - Server stores message in recipient's inbox
-
-2. **Recipient → MessageBox** `GET /messages/{messageBox}`
-   - Retrieves all pending messages in their inbox
-   - `x-bsv-auth-*` headers
-   - Server returns array of messages
-
-3. **Recipient → MessageBox** `POST /acknowledge`
-   - Acknowledges (deletes) messages by ID
-   - `x-bsv-auth-*` headers
-   - Server deletes messages
-
-**Live subscription** (alternative to polling):
-
-- **Recipient → MessageBox** WebSocket upgrade + BRC-103 handshake
-- Server pushes new messages in real-time via WebSocket
-- Recipient can `joinRoom(messageBox)` / `listenForMessages()`
-
-## Key types / endpoints
-
-| Method | Path | Purpose | Request | Response |
-|--------|------|---------|---------|----------|
-| POST | `/messages` | Send message | `{ recipient, messageBox, body }` | `{ messageId }` |
-| GET | `/messages/{messageBox}` | List messages | (via auth headers) | `[ { messageId, body, sender, timestamp } ]` |
-| POST | `/acknowledge` | Delete messages | `{ messageIds: [...] }` | OK |
-| GET | `/resolve-host` | Discover peer's MessageBox host | `{ identityKey }` | `{ host }` |
-| WebSocket | `/live` | Listen for live messages | BRC-103 handshake + `joinRoom` | Real-time message push |
-
-## Example: Send encrypted message
-
-```typescript
+```ts
 import { MessageBoxClient } from '@bsv/message-box-client'
 import { WalletClient } from '@bsv/sdk'
 
-const wallet = new WalletClient('auto', 'example.com')
-
-const msgBox = new MessageBoxClient({
-  walletClient: wallet,
+const client = new MessageBoxClient({
+  walletClient: new WalletClient(),
   host: 'https://message-box-us-1.bsvb.tech'
 })
 
-// 1. Send message (auto-encrypted with AES-256-GCM)
-await msgBox.sendMessage({
+await client.sendMessage({
   recipient: '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366',
   messageBox: 'general_inbox',
-  body: 'Hello! This is encrypted and only you can read it.'
+  body: 'Hello'
+})
+
+const messages = await client.listMessages({ messageBox: 'general_inbox' })
+await client.acknowledgeMessage({
+  messageIds: messages.map(message => message.messageId)
 })
 ```
 
-Example: Retrieve and acknowledge messages
+The client encrypts message bodies by default. The server persists the opaque
+payload together with routing metadata. Acknowledgment deletes only rows owned
+by the authenticated recipient.
 
-```typescript
-// 2. Retrieve all messages in inbox
-const messages = await msgBox.listMessages({ 
-  messageBox: 'general_inbox' 
-})
+## Live transport
 
-for (const msg of messages) {
-  console.log(`From ${msg.sender}: ${msg.body}`)
-}
+Authenticated Socket.IO connections use the same BRC-103 peer identity.
+Connections may join only rooms owned by that identity. Live sends reuse the
+HTTP handler's validation, permission, payment, deduplication, and persistence
+logic; delivery notifications go only to connections authenticated as the
+recipient. The client falls back to HTTP if the WebSocket does not acknowledge
+a send.
 
-// 3. Acknowledge (delete) messages
-await msgBox.acknowledgeMessage({
-  messageIds: messages.map(m => m.messageId)
-})
-```
+## Permissions and payments
 
-Example: Listen for live messages
+Recipient permissions use:
 
-```typescript
-// 4. Subscribe to real-time messages
-await msgBox.listenForLiveMessages({
-  messageBox: 'general_inbox',
-  onMessage: (msg) => {
-    console.log('Live message:', msg.body)
-  }
-})
-```
+- `-1` — blocked
+- `0` — allowed without recipient payment
+- positive integer — required recipient fee in satoshis
 
-## Conformance vectors
+The quote route caps a request at 100 recipients and executes permission
+lookups with bounded concurrency. Permission or fee storage failures fail
+closed with an internal error; they do not silently grant free delivery.
 
-There is no standalone MessageBox vector directory in the current conformance corpus. Related portable coverage lives in `conformance/vectors/messaging/brc31/authrite-signature.json`; MessageBox client/server behavior is covered by package tests and the OpenAPI artifact linked below.
+Message reads are deterministic pages of at most 1,000 records with a bounded
+offset and `hasMore` indicator. The client follows those pages with an explicit
+100,000-message ceiling, preventing any single database response or accidental
+client loop from becoming unbounded. Device and permission listings likewise
+use strict, bounded pagination.
 
-## Implementations in ts-stack
+## Public-service edge policy
 
-| Package | Notes |
-|---------|-------|
-| @bsv/message-box-client | Client library for sending/receiving messages; WebSocket support via Socket.IO; BRC-31 auth integration |
-| MessageBox Server | Infrastructure repository (not in ts-stack); HTTP + WebSocket endpoints |
+Message Box is intentionally callable from deployed applications, wallet UIs,
+mobile webviews, native shells, and unknown future domains. The default browser
+policy is credential-free wildcard CORS, including opaque `Origin: null`.
+Operators may opt into an exact-origin allowlist or disable CORS. Wildcard
+origin is never combined with credentials.
 
-## Related specs
+CSP applies to served documents such as `/docs`; it is not API access control.
+BRC-103 authentication, recipient ownership, permissions, payments, quotas,
+request limits, and encryption remain the service's security boundaries.
 
-- [BRC-31 Auth](./brc-31-auth.md) — Mutual authentication for all endpoints
-- [AuthSocket](./authsocket.md) — WebSocket implementation of BRC-31
-- [BRC-29 Peer Payment](./brc-29-peer-payment.md) — Payment delivery via message box
-- [UHRP](./uhrp.md) — Host discovery overlay protocol
+## Conformance
 
-## Spec artifact
+The OpenAPI artifact is code-generated and checked for deterministic drift.
+Message Box behavior is covered by client and server tests; there is no
+standalone Message Box vector directory in the portable conformance corpus.
+
+## Artifact
 
 [message-box-http.yaml](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/messaging/message-box-http.yaml)

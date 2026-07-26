@@ -19,9 +19,7 @@
  */
 
 import * as dotenv from 'dotenv'
-import express, {
-  Express
-} from 'express'
+import express, { Express } from 'express'
 import bodyParser from 'body-parser'
 import { Logger } from './utils/logger.js'
 import { Setup } from '@bsv/wallet-toolbox'
@@ -32,10 +30,7 @@ import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { rateLimit } from 'express-rate-limit'
 import { setupSwagger } from './swagger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
-import {
-  registerMessageBoxPreAuthRoutes,
-  registerMessageBoxPostAuthRoutes
-} from './compose.js'
+import { registerMessageBoxPreAuthRoutes, registerMessageBoxPostAuthRoutes } from './compose.js'
 import * as crypto from 'crypto'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy.js'
 import {
@@ -45,7 +40,7 @@ import {
   readBodyLimitBytes,
   securityHeaders
 } from './security/edgePolicy.js'
-(global.self as any) = { crypto }
+;(global.self as any) = { crypto }
 
 dotenv.config()
 
@@ -71,20 +66,22 @@ if (NODE_ENV === 'development' || process.env.LOGGING_ENABLED === 'true') {
 /**
  * Knex instance connected based on environment (development, production, or staging).
  */
-export const knex: Knex = (knexLib as any).default?.(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-) ?? (knexLib as any)(
-  NODE_ENV === 'production' || NODE_ENV === 'staging'
-    ? knexConfig.production
-    : knexConfig.development
-)
+export const knex: Knex =
+  (knexLib as any).default?.(
+    NODE_ENV === 'production' || NODE_ENV === 'staging'
+      ? knexConfig.production
+      : knexConfig.development
+  ) ??
+  (knexLib as any)(
+    NODE_ENV === 'production' || NODE_ENV === 'staging'
+      ? knexConfig.production
+      : knexConfig.development
+  )
 
 // Wallet initialization logic
 let _wallet: WalletInterface | undefined
 let _resolveReady: () => void
-export const walletReady = new Promise<void>((resolve) => {
+export const walletReady = new Promise<void>(resolve => {
   _resolveReady = resolve
 })
 
@@ -97,7 +94,7 @@ export const walletReady = new Promise<void>((resolve) => {
  * @returns {Promise<void>} Resolves when the wallet is initialized.
  * @throws If SERVER_PRIVATE_KEY is missing or invalid.
  */
-export async function initializeWallet (): Promise<void> {
+export async function initializeWallet(): Promise<void> {
   if (SERVER_PRIVATE_KEY == null || SERVER_PRIVATE_KEY.trim() === '') {
     throw new Error('SERVER_PRIVATE_KEY is not defined in environment variables.')
   }
@@ -119,7 +116,7 @@ export async function initializeWallet (): Promise<void> {
  * @returns {Promise<WalletInterface>} The initialized wallet client
  * @throws {Error} If called before the wallet is initialized
  */
-export async function getWallet (): Promise<WalletInterface> {
+export async function getWallet(): Promise<WalletInterface> {
   await walletReady
   if (_wallet == null) {
     throw new Error('Wallet has not been initialized yet.')
@@ -139,7 +136,7 @@ export const appReady = (async () => {
  *
  * Steps:
  * - Applies JSON body parser
- * - Enables CORS headers for all routes
+ * - Applies the configured public, allowlist, or disabled CORS policy
  * - Waits for WalletClient to initialize
  * - Adds authentication middleware
  * - Mounts pre-auth and post-auth route handlers
@@ -147,24 +144,30 @@ export const appReady = (async () => {
  * @returns {Promise<void>} Once all middleware and routes are mounted
  * @throws If wallet is not available when needed
  */
-export async function useRoutes (): Promise<void> {
-  app.use(securityHeaders({
-    environmentPrefix: 'MESSAGE_BOX',
-    contentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-  }))
-  app.use(corsPolicy({
-    environmentPrefix: 'MESSAGE_BOX',
-    methods: ['GET', 'POST', 'OPTIONS']
-  }))
+export async function useRoutes(): Promise<void> {
+  app.use(
+    securityHeaders({
+      environmentPrefix: 'MESSAGE_BOX',
+      contentSecurityPolicy:
+        "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    })
+  )
+  app.use(
+    corsPolicy({
+      environmentPrefix: 'MESSAGE_BOX',
+      methods: ['GET', 'POST', 'OPTIONS']
+    })
+  )
   app.use(concurrencyLimit('MESSAGE_BOX', 200))
-  app.use(rateLimit(rateLimitOptions(
-    'MESSAGE_BOX_PRE_AUTH_RATE_LIMIT',
-    { windowMs: 60_000, limit: 300 }
-  )))
-  app.use(bodyParser.json({
-    limit: readBodyLimitBytes('MESSAGE_BOX', 4 * 1024 * 1024),
-    type: 'application/json'
-  }))
+  app.use(
+    rateLimit(rateLimitOptions('MESSAGE_BOX_PRE_AUTH_RATE_LIMIT', { windowMs: 60_000, limit: 300 }))
+  )
+  app.use(
+    bodyParser.json({
+      limit: readBodyLimitBytes('MESSAGE_BOX', 4 * 1024 * 1024),
+      type: 'application/json'
+    })
+  )
   app.use(bodyParserErrorHandler)
 
   // Enable Swagger docs
@@ -184,13 +187,17 @@ export async function useRoutes (): Promise<void> {
     })
   )
 
-  registerMessageBoxPostAuthRoutes(app, {
-    wallet: _wallet,
-    calculateRequestPrice: async (req) => {
-      if (req.url.includes('/sendMessage')) {
-        // TODO: Configure a custom price calculation as needed.
+  registerMessageBoxPostAuthRoutes(
+    app,
+    {
+      wallet: _wallet,
+      calculateRequestPrice: async req => {
+        if (req.url.includes('/sendMessage')) {
+          // TODO: Configure a custom price calculation as needed.
+        }
+        return 0
       }
-      return 0
-    }
-  }, ROUTING_PREFIX)
+    },
+    ROUTING_PREFIX
+  )
 }

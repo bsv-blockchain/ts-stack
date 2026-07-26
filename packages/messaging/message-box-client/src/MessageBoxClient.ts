@@ -39,11 +39,30 @@ import {
   InternalizeOutput,
   Random,
   OriginatorDomainNameStringUnder250Bytes,
-  Beef,
+  Beef
 } from '@bsv/sdk'
 import { AuthSocketClient } from '@bsv/authsocket-client'
 import * as Logger from './Utils/logger.js'
-import { AcknowledgeMessageParams, AdvertisementToken, EncryptedMessage, ListMessagesParams, MessageBoxClientOptions, Payment, PeerMessage, SendMessageParams, SendMessageResponse, DeviceRegistrationParams, DeviceRegistrationResponse, RegisteredDevice, ListDevicesResponse } from './types.js'
+import {
+  messageBoxEndpoint,
+  normalizeMessageBoxHost,
+  normalizeOverlayMessageBoxHost
+} from './host.js'
+import {
+  AcknowledgeMessageParams,
+  AdvertisementToken,
+  EncryptedMessage,
+  ListMessagesParams,
+  MessageBoxClientOptions,
+  Payment,
+  PeerMessage,
+  SendMessageParams,
+  SendMessageResponse,
+  DeviceRegistrationParams,
+  DeviceRegistrationResponse,
+  RegisteredDevice,
+  ListDevicesResponse
+} from './types.js'
 import {
   SetMessageBoxPermissionParams,
   GetMessageBoxPermissionParams,
@@ -60,11 +79,11 @@ const DEFAULT_MAINNET_HOST = 'https://message-box-us-1.bsvb.tech'
 const DEFAULT_TESTNET_HOST = DEFAULT_MAINNET_HOST
 
 /** Build status + description for a batch send result. */
-function buildBatchSendResult (
+function buildBatchSendResult(
   sentCount: number,
   allowedCount: number,
   blockedCount: number
-): { status: SendListResult['status'], description: string } {
+): { status: SendListResult['status']; description: string } {
   if (sentCount === allowedCount) {
     return { status: 'success', description: `Sent to ${sentCount} recipients.` }
   }
@@ -78,6 +97,63 @@ function buildBatchSendResult (
     status: 'error',
     description: `Failed to send to ${allowedCount} allowed recipients. ${blockedCount} blocked.`
   }
+}
+
+function assertBatchSendParams(params: SendListParams): void {
+  if (!Array.isArray(params.recipients) || params.recipients.length === 0) {
+    throw new Error('You must provide at least one recipient!')
+  }
+  if (params.recipients.length > 100) {
+    throw new Error('A batch may include at most 100 recipients.')
+  }
+  if (!params.messageBox || params.messageBox.trim() === '') {
+    throw new Error('You must provide a messageBox to send this message into!')
+  }
+  if (params.body == null || (typeof params.body === 'string' && params.body.trim().length === 0)) {
+    throw new Error('Every message must have a body!')
+  }
+  if (params.skipEncryption !== true) {
+    throw new Error(
+      'A shared multi-recipient batch cannot be encrypted per recipient. ' +
+        'Set skipEncryption: true explicitly or send encrypted messages individually.'
+    )
+  }
+}
+
+function buildRecipientQuoteMap(
+  quotes: MessageBoxMultiQuote['quotesByRecipient']
+): Map<string, { recipientFee: number; deliveryFee: number }> {
+  return new Map(
+    quotes.map(quote => [
+      quote.recipient,
+      {
+        recipientFee: quote.recipientFee,
+        deliveryFee: quote.deliveryFee
+      }
+    ])
+  )
+}
+
+function selectDeliveryAgentIdentityKey(
+  identityKeysByHost: Record<string, string> | undefined,
+  finalHost: string,
+  hasOverrideHost: boolean
+): string {
+  const entries = Object.entries(identityKeysByHost ?? {})
+  if (entries.length === 0) {
+    throw new Error('Missing delivery agent identity keys in quote response.')
+  }
+  if (entries.length > 1 && !hasOverrideHost) {
+    throw new Error(
+      'Recipients resolve to multiple hosts. Use overrideHost to force a single server or split by host.'
+    )
+  }
+
+  const identityKey = identityKeysByHost?.[finalHost] ?? entries[0][1]
+  if (!identityKey) {
+    throw new Error('Could not determine server delivery agent identity key.')
+  }
+  return identityKey
 }
 
 type MessageBoxRecipientQuote = MessageBoxMultiQuote['quotesByRecipient'][number]
@@ -164,12 +240,9 @@ export class MessageBoxClient {
       originator = undefined
     } = options
 
-    const defaultHost =
-      networkPreset === 'testnet'
-        ? DEFAULT_TESTNET_HOST
-        : DEFAULT_MAINNET_HOST
+    const defaultHost = networkPreset === 'testnet' ? DEFAULT_TESTNET_HOST : DEFAULT_MAINNET_HOST
 
-    this.host = host?.trim() ?? defaultHost
+    this.host = normalizeMessageBoxHost(host ?? defaultHost)
     this.originator = originator
     this.walletClient = walletClient ?? new WalletClient('auto', originator)
     this.authFetch = new AuthFetch(this.walletClient, undefined, undefined, originator)
@@ -209,9 +282,13 @@ export class MessageBoxClient {
    * await client.sendMessage({ recipient, messageBox: 'inbox', body: 'Hello' })
    */
   async init(targetHost: string = this.host): Promise<void> {
-    const normalizedHost = targetHost?.trim()
-    if (normalizedHost === '') {
-      throw new Error('Cannot initialize: No valid host provided')
+    let normalizedHost: string
+    try {
+      normalizedHost = normalizeMessageBoxHost(targetHost)
+    } catch (error) {
+      throw new Error(
+        `Cannot initialize: ${error instanceof Error ? error.message : 'No valid host provided'}`
+      )
     }
 
     // Check if this is an override host
@@ -256,13 +333,13 @@ export class MessageBoxClient {
   }
 
   /**
- * @method getIdentityKey
- * @param {string} [originator] - Optional originator to use for identity key lookup
- * @returns {Promise<string>} The identity public key of the user
- * @description
- * Returns the client's identity key, used for signing, encryption, and addressing.
- * If not already loaded, it will fetch and cache it.
- */
+   * @method getIdentityKey
+   * @param {string} [originator] - Optional originator to use for identity key lookup
+   * @returns {Promise<string>} The identity public key of the user
+   * @description
+   * Returns the client's identity key, used for signing, encryption, and addressing.
+   * If not already loaded, it will fetch and cache it.
+   */
   public async getIdentityKey(): Promise<string> {
     if (this.myIdentityKey != null && this.myIdentityKey.trim() !== '') {
       return this.myIdentityKey
@@ -343,11 +420,11 @@ export class MessageBoxClient {
     }
 
     if (this.socket == null) {
-      const targetHost = overrideHost ?? this.host
-      if (typeof targetHost !== 'string' || targetHost.trim() === '') {
-        throw new Error('Cannot initialize WebSocket: No valid host provided')
-      }
-      this.socket = AuthSocketClient(targetHost, { wallet: this.walletClient, originator: this.originator })
+      const targetHost = normalizeMessageBoxHost(overrideHost ?? this.host)
+      this.socket = AuthSocketClient(targetHost, {
+        wallet: this.walletClient,
+        originator: this.originator
+      })
 
       this.socket.on('connect', () => {
         Logger.log('[MB CLIENT] Connected to WebSocket.')
@@ -361,13 +438,13 @@ export class MessageBoxClient {
       })
 
       // Listen for authentication success from the server
-      this.socket.on('authenticationSuccess', (data) => {
+      this.socket.on('authenticationSuccess', data => {
         Logger.log(`[MB CLIENT] WebSocket authentication successful: ${JSON.stringify(data)}`)
         this.socketAuthenticated = true
       })
 
       // Handle authentication failures
-      this.socket.on('authenticationFailed', (data) => {
+      this.socket.on('authenticationFailed', data => {
         Logger.error(`[MB CLIENT ERROR] WebSocket authentication failed: ${JSON.stringify(data)}`)
         this.socketAuthenticated = false
       })
@@ -378,7 +455,7 @@ export class MessageBoxClient {
         this.socketAuthenticated = false
       })
 
-      this.socket.on('error', (error) => {
+      this.socket.on('error', error => {
         Logger.error('[MB CLIENT ERROR] WebSocket error:', error)
       })
     }
@@ -482,7 +559,9 @@ export class MessageBoxClient {
   async resolveHostForRecipient(identityKey: string): Promise<string> {
     const advertisementTokens = await this.queryAdvertisements(identityKey)
     if (advertisementTokens.length === 0) {
-      Logger.warn(`[MB CLIENT] No advertisements for ${identityKey}, using default host ${this.host}`)
+      Logger.warn(
+        `[MB CLIENT] No advertisements for ${identityKey}, using default host ${this.host}`
+      )
       return this.host
     }
     // Return the first host found
@@ -497,13 +576,12 @@ export class MessageBoxClient {
    * @param host?        if passed, only look for adverts anointed at that host
    * @returns            0-length array if nothing valid was found
    */
-  async queryAdvertisements(
-    identityKey?: string,
-    host?: string
-  ): Promise<AdvertisementToken[]> {
+  async queryAdvertisements(identityKey?: string, host?: string): Promise<AdvertisementToken[]> {
     const hosts: AdvertisementToken[] = []
     try {
-      const query: Record<string, string> = { identityKey: identityKey ?? await this.getIdentityKey() }
+      const query: Record<string, string> = {
+        identityKey: identityKey ?? (await this.getIdentityKey())
+      }
       if (host != null && host.trim() !== '') query.host = host
 
       const result = await this.lookupResolver.query({
@@ -539,28 +617,9 @@ export class MessageBoxClient {
     } catch (err) {
       Logger.error('[MB CLIENT ERROR] _queryAdvertisements failed:', err)
     }
-    return hosts.filter(item => {
-      const h = item.host.trim().toLowerCase()
-      if (!h) return false
-      try {
-        const url = new URL(h)
-        if (url.protocol !== 'https:') return false
-        const hostname = url.hostname
-        if (
-          hostname === 'localhost' ||
-          hostname === '127.0.0.1' ||
-          hostname === '0.0.0.0' ||
-          hostname === '::1' ||
-          hostname.endsWith('.local') ||
-          hostname.endsWith('.example.com') ||
-          hostname.endsWith('.test') ||
-          hostname.endsWith('.invalid') ||
-          hostname.endsWith('.localhost')
-        ) return false
-        return true
-      } catch {
-        return false
-      }
+    return hosts.flatMap(item => {
+      const normalizedHost = normalizeOverlayMessageBoxHost(item.host)
+      return normalizedHost == null ? [] : [{ ...item, host: normalizedHost }]
     })
   }
 
@@ -659,7 +718,7 @@ export class MessageBoxClient {
     }
 
     // Join the room
-    await this.joinRoom(messageBox, this.originator)
+    await this.joinRoom(messageBox, overrideHost)
 
     // Ensure identity key is available before creating roomId
     if (this.myIdentityKey == null || this.myIdentityKey.trim() === '') {
@@ -691,19 +750,29 @@ export class MessageBoxClient {
             typeof (parsedBody as any).encryptedMessage === 'string'
           ) {
             Logger.log(`[MB CLIENT] Decrypting message from ${String(message.sender)}...`)
-            const decrypted = await this.walletClient.decrypt({
-              protocolID: [1, 'messagebox'],
-              keyID: '1',
-              counterparty: message.sender,
-              ciphertext: Utils.toArray((parsedBody as any).encryptedMessage, 'base64')
-            }, this.originator)
+            const decrypted = await this.walletClient.decrypt(
+              {
+                protocolID: [1, 'messagebox'],
+                keyID: '1',
+                counterparty: message.sender,
+                ciphertext: Utils.toArray((parsedBody as any).encryptedMessage, 'base64')
+              },
+              this.originator
+            )
 
             message.body = Utils.toUTF8(decrypted.plaintext)
           } else {
             Logger.log('[MB CLIENT] Message is not encrypted.')
-            message.body = typeof parsedBody === 'string'
-              ? parsedBody
-              : (() => { try { return JSON.stringify(parsedBody) } catch { return '[Error: Unstringifiable message]' } })()
+            message.body =
+              typeof parsedBody === 'string'
+                ? parsedBody
+                : (() => {
+                    try {
+                      return JSON.stringify(parsedBody)
+                    } catch {
+                      return '[Error: Unstringifiable message]'
+                    }
+                  })()
           }
         } catch (err) {
           Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt live message:', err)
@@ -744,14 +813,10 @@ export class MessageBoxClient {
    *   body: { amount: 1000 }
    * })
    */
-  async sendLiveMessage({
-    recipient,
-    messageBox,
-    body,
-    messageId,
-    skipEncryption,
-    checkPermissions
-  }: SendMessageParams, overrideHost?: string): Promise<SendMessageResponse> {
+  async sendLiveMessage(
+    { recipient, messageBox, body, messageId, skipEncryption, checkPermissions }: SendMessageParams,
+    overrideHost?: string
+  ): Promise<SendMessageResponse> {
     if (recipient == null || recipient.trim() === '') {
       throw new Error('[MB CLIENT ERROR] Recipient identity key is required')
     }
@@ -763,23 +828,33 @@ export class MessageBoxClient {
     }
 
     // Ensure room is joined before sending
-    await this.joinRoom(messageBox, this.originator)
+    await this.joinRoom(messageBox, overrideHost)
 
     // Fallback to HTTP if WebSocket is not connected
     if (this.socket == null || !this.socket.connected) {
       Logger.warn('[MB CLIENT WARNING] WebSocket not connected, falling back to HTTP')
-      return await this.sendMessage({ recipient, messageBox, body, messageId, skipEncryption, checkPermissions }, overrideHost)
+      return await this.sendMessage(
+        { recipient, messageBox, body, messageId, skipEncryption, checkPermissions },
+        overrideHost
+      )
     }
 
     let finalMessageId: string
     try {
-      const hmac = await this.walletClient.createHmac({
-        data: Array.from(new TextEncoder().encode(JSON.stringify(body))),
-        protocolID: [1, 'messagebox'],
-        keyID: '1',
-        counterparty: recipient
-      }, this.originator)
-      finalMessageId = messageId ?? Array.from(hmac.hmac).map(b => b.toString(16).padStart(2, '0')).join('')
+      const hmac = await this.walletClient.createHmac(
+        {
+          data: Array.from(new TextEncoder().encode(JSON.stringify(body))),
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: recipient
+        },
+        this.originator
+      )
+      finalMessageId =
+        messageId ??
+        Array.from(hmac.hmac)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')
     } catch (error) {
       Logger.error('[MB CLIENT ERROR] Failed to generate HMAC:', error)
       throw new Error('Failed to generate message identifier.')
@@ -792,12 +867,15 @@ export class MessageBoxClient {
     if (skipEncryption === true) {
       outgoingBody = typeof body === 'string' ? body : JSON.stringify(body)
     } else {
-      const encryptedMessage = await this.walletClient.encrypt({
-        protocolID: [1, 'messagebox'],
-        keyID: '1',
-        counterparty: recipient,
-        plaintext: Utils.toArray(typeof body === 'string' ? body : JSON.stringify(body), 'utf8')
-      }, this.originator)
+      const encryptedMessage = await this.walletClient.encrypt(
+        {
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: recipient,
+          plaintext: Utils.toArray(typeof body === 'string' ? body : JSON.stringify(body), 'utf8')
+        },
+        this.originator
+      )
 
       outgoingBody = JSON.stringify({
         encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext)
@@ -825,7 +903,9 @@ export class MessageBoxClient {
         Logger.log('[MB CLIENT] Received WebSocket acknowledgment:', response)
 
         if (response == null || response.status !== 'success') {
-          Logger.warn('[MB CLIENT] WebSocket message failed or returned unexpected response. Falling back to HTTP.')
+          Logger.warn(
+            '[MB CLIENT] WebSocket message failed or returned unexpected response. Falling back to HTTP.'
+          )
           const fallbackMessage: SendMessageParams = {
             recipient,
             messageBox,
@@ -835,9 +915,7 @@ export class MessageBoxClient {
             checkPermissions
           }
 
-          this.sendMessage(fallbackMessage, overrideHost)
-            .then(resolve)
-            .catch(reject)
+          this.sendMessage(fallbackMessage, overrideHost).then(resolve).catch(reject)
         } else {
           Logger.log('[MB CLIENT] Message sent successfully via WebSocket:', response)
           resolve(response)
@@ -876,9 +954,7 @@ export class MessageBoxClient {
             checkPermissions
           }
 
-          this.sendMessage(fallbackMessage, overrideHost)
-            .then(resolve)
-            .catch(reject)
+          this.sendMessage(fallbackMessage, overrideHost).then(resolve).catch(reject)
         }
       }, 10000)
     })
@@ -986,30 +1062,38 @@ export class MessageBoxClient {
     }
 
     try {
-      const finalHost = overrideHost ?? await this.resolveHostForRecipient(message.recipient)
+      const finalHost = normalizeMessageBoxHost(
+        overrideHost ?? (await this.resolveHostForRecipient(message.recipient))
+      )
 
-      Logger.log('[MB CLIENT] Sending HTTP request to:', `${finalHost}/sendMessage`)
+      const sendUrl = messageBoxEndpoint(finalHost, '/sendMessage')
+      Logger.log('[MB CLIENT] Sending HTTP request to:', sendUrl)
       Logger.log('[MB CLIENT] Request Body:', JSON.stringify(requestBody, null, 2))
 
       await this.ensureIdentityKey()
 
-      const response = await this.authFetch.fetch(`${finalHost}/sendMessage`, {
+      const response = await this.authFetch.fetch(sendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       })
 
-      if (response.bodyUsed) throw new Error('[MB CLIENT ERROR] Response body has already been used!')
+      if (response.bodyUsed)
+        throw new Error('[MB CLIENT ERROR] Response body has already been used!')
 
       const parsedResponse = await response.json()
       Logger.log('[MB CLIENT] Raw Response Body:', parsedResponse)
 
       if (!response.ok) {
-        Logger.error(`[MB CLIENT ERROR] Failed to send message. HTTP ${response.status}: ${response.statusText}`)
+        Logger.error(
+          `[MB CLIENT ERROR] Failed to send message. HTTP ${response.status}: ${response.statusText}`
+        )
         throw new Error(`Message sending failed: HTTP ${response.status} - ${response.statusText}`)
       }
       if (parsedResponse.status !== 'success') {
-        Logger.error(`[MB CLIENT ERROR] Server returned an error: ${String(parsedResponse.description)}`)
+        Logger.error(
+          `[MB CLIENT ERROR] Server returned an error: ${String(parsedResponse.description)}`
+        )
         throw new Error(parsedResponse.description ?? 'Unknown error from server.')
       }
 
@@ -1023,27 +1107,36 @@ export class MessageBoxClient {
   }
 
   /** Validate required fields on SendMessageParams. */
-  private validateSendMessageParams (message: SendMessageParams): void {
+  private validateSendMessageParams(message: SendMessageParams): void {
     if (message.recipient == null || message.recipient.trim() === '') {
       throw new Error('You must provide a message recipient!')
     }
     if (message.messageBox == null || message.messageBox.trim() === '') {
       throw new Error('You must provide a messageBox to send this message into!')
     }
-    if (message.body == null || (typeof message.body === 'string' && message.body.trim().length === 0)) {
+    if (
+      message.body == null ||
+      (typeof message.body === 'string' && message.body.trim().length === 0)
+    ) {
       throw new Error('Every message must have a body!')
     }
   }
 
   /** Resolve optional payment data if permission checking is enabled. */
-  private async resolveMessagePayment (message: SendMessageParams, overrideHost?: string): Promise<Payment | undefined> {
+  private async resolveMessagePayment(
+    message: SendMessageParams,
+    overrideHost?: string
+  ): Promise<Payment | undefined> {
     if (message.checkPermissions !== true) return undefined
     try {
       Logger.log('[MB CLIENT] Checking permissions and fees for message...')
-      const quote = await this.getMessageBoxQuote({
-        recipient: message.recipient,
-        messageBox: message.messageBox
-      }, overrideHost) as MessageBoxQuote
+      const quote = (await this.getMessageBoxQuote(
+        {
+          recipient: message.recipient,
+          messageBox: message.messageBox
+        },
+        overrideHost
+      )) as MessageBoxQuote
 
       if (quote.recipientFee === -1) {
         throw new Error('You have been blocked from sending messages to this recipient.')
@@ -1058,20 +1151,30 @@ export class MessageBoxClient {
       Logger.log('[MB CLIENT] Payment data prepared:', paymentData)
       return paymentData
     } catch (error) {
-      throw new Error(`Permission check failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(
+        `Permission check failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
   }
 
   /** Generate the HMAC-based message ID. */
-  private async generateMessageId (message: SendMessageParams): Promise<string> {
+  private async generateMessageId(message: SendMessageParams): Promise<string> {
     try {
-      const hmac = await this.walletClient.createHmac({
-        data: Array.from(new TextEncoder().encode(JSON.stringify(message.body))),
-        protocolID: [1, 'messagebox'],
-        keyID: '1',
-        counterparty: message.recipient
-      }, this.originator)
-      return message.messageId ?? Array.from(hmac.hmac).map(b => b.toString(16).padStart(2, '0')).join('')
+      const hmac = await this.walletClient.createHmac(
+        {
+          data: Array.from(new TextEncoder().encode(JSON.stringify(message.body))),
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: message.recipient
+        },
+        this.originator
+      )
+      return (
+        message.messageId ??
+        Array.from(hmac.hmac)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')
+      )
     } catch (error) {
       Logger.error('[MB CLIENT ERROR] Failed to generate HMAC:', error)
       throw new Error('Failed to generate message identifier.')
@@ -1079,20 +1182,23 @@ export class MessageBoxClient {
   }
 
   /** Encode the message body (encrypt unless skipEncryption is set). */
-  private async encodeMessageBody (message: SendMessageParams): Promise<string | EncryptedMessage> {
+  private async encodeMessageBody(message: SendMessageParams): Promise<string | EncryptedMessage> {
     const bodyStr = typeof message.body === 'string' ? message.body : JSON.stringify(message.body)
     if (message.skipEncryption === true) return bodyStr
-    const encryptedMessage = await this.walletClient.encrypt({
-      protocolID: [1, 'messagebox'],
-      keyID: '1',
-      counterparty: message.recipient,
-      plaintext: Utils.toArray(bodyStr, 'utf8')
-    }, this.originator)
+    const encryptedMessage = await this.walletClient.encrypt(
+      {
+        protocolID: [1, 'messagebox'],
+        keyID: '1',
+        counterparty: message.recipient,
+        plaintext: Utils.toArray(bodyStr, 'utf8')
+      },
+      this.originator
+    )
     return JSON.stringify({ encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext) })
   }
 
   /** Ensure myIdentityKey is populated, fetching it if needed. */
-  private async ensureIdentityKey (): Promise<void> {
+  private async ensureIdentityKey(): Promise<void> {
     if (this.myIdentityKey != null && this.myIdentityKey !== '') return
     try {
       const keyResult = await this.walletClient.getPublicKey({ identityKey: true }, this.originator)
@@ -1105,34 +1211,53 @@ export class MessageBoxClient {
   }
 
   /** Parse a raw PeerMessage into its envelope components (body, payload, payment). */
-  private parseMessageEnvelope (message: PeerMessage): { message: PeerMessage, parsedBody: unknown, messageContent: any, paymentData: Payment | undefined } {
-    const parsedBody: unknown = typeof message.body === 'string' ? this.tryParse(message.body) : message.body
+  private parseMessageEnvelope(message: PeerMessage): {
+    message: PeerMessage
+    parsedBody: unknown
+    messageContent: any
+    paymentData: Payment | undefined
+  } {
+    const parsedBody: unknown =
+      typeof message.body === 'string' ? this.tryParse(message.body) : message.body
     let messageContent: any = parsedBody
     let paymentData: Payment | undefined
 
     if (parsedBody != null && typeof parsedBody === 'object' && 'message' in parsedBody) {
       const wrappedMessage = (parsedBody as any).message
-      messageContent = typeof wrappedMessage === 'string' ? this.tryParse(wrappedMessage) : wrappedMessage
+      messageContent =
+        typeof wrappedMessage === 'string' ? this.tryParse(wrappedMessage) : wrappedMessage
       paymentData = (parsedBody as any).payment
     }
     return { message, parsedBody, messageContent, paymentData }
   }
 
   /** Internalize wallet-payment outputs from a payment-carrying message. */
-  private async internalizeRecipientPayment (p: { message: PeerMessage, paymentData?: Payment }): Promise<void> {
+  private async internalizeRecipientPayment(p: {
+    message: PeerMessage
+    paymentData?: Payment
+  }): Promise<void> {
     try {
-      Logger.log(`[MB CLIENT] Processing recipient payment in message from ${String(p.message.sender)}…`)
-      const recipientOutputs = p.paymentData!.outputs.filter(output => output.protocol === 'wallet payment')
+      Logger.log(
+        `[MB CLIENT] Processing recipient payment in message from ${String(p.message.sender)}…`
+      )
+      const recipientOutputs = p.paymentData!.outputs.filter(
+        output => output.protocol === 'wallet payment'
+      )
       if (recipientOutputs.length === 0) {
         Logger.log('[MB CLIENT] No wallet payment outputs found in payment data')
         return
       }
-      Logger.log(`[MB CLIENT] Internalizing ${recipientOutputs.length} recipient payment output(s)…`)
-      const result = await this.walletClient.internalizeAction({
-        tx: p.paymentData!.tx,
-        outputs: recipientOutputs,
-        description: p.paymentData!.description ?? 'MessageBox recipient payment'
-      }, this.originator)
+      Logger.log(
+        `[MB CLIENT] Internalizing ${recipientOutputs.length} recipient payment output(s)…`
+      )
+      const result = await this.walletClient.internalizeAction(
+        {
+          tx: p.paymentData!.tx,
+          outputs: recipientOutputs,
+          description: p.paymentData!.description ?? 'MessageBox recipient payment'
+        },
+        this.originator
+      )
       if (result.accepted) {
         Logger.log('[MB CLIENT] Successfully internalized recipient payment')
       } else {
@@ -1144,16 +1269,27 @@ export class MessageBoxClient {
   }
 
   /** Decrypt or unwrap an encrypted message in place. */
-  private async decryptMessageBody (p: { message: PeerMessage, parsedBody: unknown, messageContent: any }): Promise<void> {
+  private async decryptMessageBody(p: {
+    message: PeerMessage
+    parsedBody: unknown
+    messageContent: any
+  }): Promise<void> {
     try {
-      if (p.messageContent != null && typeof p.messageContent === 'object' && typeof (p.messageContent as any).encryptedMessage === 'string') {
+      if (
+        p.messageContent != null &&
+        typeof p.messageContent === 'object' &&
+        typeof (p.messageContent as any).encryptedMessage === 'string'
+      ) {
         Logger.log(`[MB CLIENT] Decrypting message from ${String(p.message.sender)}…`)
-        const decrypted = await this.walletClient.decrypt({
-          protocolID: [1, 'messagebox'],
-          keyID: '1',
-          counterparty: p.message.sender,
-          ciphertext: Utils.toArray((p.messageContent as any).encryptedMessage, 'base64')
-        }, this.originator)
+        const decrypted = await this.walletClient.decrypt(
+          {
+            protocolID: [1, 'messagebox'],
+            keyID: '1',
+            counterparty: p.message.sender,
+            ciphertext: Utils.toArray((p.messageContent as any).encryptedMessage, 'base64')
+          },
+          this.originator
+        )
         p.message.body = this.tryParse(Utils.toUTF8(decrypted.plaintext))
       } else {
         p.message.body = p.messageContent ?? p.parsedBody
@@ -1165,39 +1301,45 @@ export class MessageBoxClient {
   }
 
   /**
- * Multi-recipient sender. Uses the multi-quote route to:
- *  - identify blocked recipients
- *  - compute per-recipient payment
- * Then sends to the allowed recipients with payment attached.
- */
+   * @deprecated Use `sendMessageToRecipients`. This misspelled name remains
+   * available for source compatibility.
+   */
   async sendMesagetoRecepients(
     params: SendListParams,
     overrideHost?: string
   ): Promise<SendListResult> {
+    return this.sendMessageToRecipients(params, overrideHost)
+  }
+
+  /**
+   * Multi-recipient sender. Uses the multi-quote route to:
+   *  - identify blocked recipients
+   *  - compute per-recipient payment
+   * Then sends to the allowed recipients with payment attached.
+   */
+  async sendMessageToRecipients(
+    params: SendListParams,
+    overrideHost?: string
+  ): Promise<SendListResult> {
     await this.assertInitialized()
+    assertBatchSendParams(params)
 
     const { recipients, messageBox, body } = params
-    if (!Array.isArray(recipients) || recipients.length === 0) {
-      throw new Error('You must provide at least one recipient!')
-    }
-    if (!messageBox || messageBox.trim() === '') {
-      throw new Error('You must provide a messageBox to send this message into!')
-    }
-    if (body == null || (typeof body === 'string' && body.trim().length === 0)) {
-      throw new Error('Every message must have a body!')
-    }
 
     // 1) Multi-quote for all recipients
-    const quoteResponse = await this.getMessageBoxQuote({
-      recipient: recipients,
-      messageBox
-    }, overrideHost) as MessageBoxMultiQuote
+    const quoteResponse = (await this.getMessageBoxQuote(
+      {
+        recipient: recipients,
+        messageBox
+      },
+      overrideHost
+    )) as MessageBoxMultiQuote
 
     const quotesByRecipient = Array.isArray(quoteResponse?.quotesByRecipient)
       ? quoteResponse.quotesByRecipient
       : []
 
-    const blocked = (quoteResponse?.blockedRecipients ?? [])
+    const blocked = quoteResponse?.blockedRecipients ?? []
     const totals = quoteResponse?.totals
 
     // 2) Filter allowed recipients
@@ -1214,32 +1356,20 @@ export class MessageBoxClient {
     }
 
     // 3) Map recipient -> fees
-    const perRecipientQuotes = new Map<string, { recipientFee: number, deliveryFee: number }>()
-    for (const q of quotesByRecipient) {
-      perRecipientQuotes.set(q.recipient, { recipientFee: q.recipientFee, deliveryFee: q.deliveryFee })
-    }
+    const perRecipientQuotes = buildRecipientQuoteMap(quotesByRecipient)
 
     // 4) One delivery agent only (batch goes to one server)
     const { deliveryAgentIdentityKeyByHost } = quoteResponse
-    if (!deliveryAgentIdentityKeyByHost || Object.keys(deliveryAgentIdentityKeyByHost).length === 0) {
-      throw new Error('Missing delivery agent identity keys in quote response.')
-    }
-    if (Object.keys(deliveryAgentIdentityKeyByHost).length > 1 && !overrideHost) {
-      // To keep the single-POST invariant, we require all recipients to share a host
-      throw new Error('Recipients resolve to multiple hosts. Use overrideHost to force a single server or split by host.')
-    }
 
     // pick the host to POST to
-    let finalHost = overrideHost ?? await this.resolveHostForRecipient(allowedRecipients[0])
-    while (finalHost.endsWith('/')) {
-      finalHost = finalHost.slice(0, -1)
-    }
-    const singleDeliveryKey = deliveryAgentIdentityKeyByHost[finalHost] ??
-      Object.values(deliveryAgentIdentityKeyByHost)[0]
-
-    if (!singleDeliveryKey) {
-      throw new Error('Could not determine server delivery agent identity key.')
-    }
+    const finalHost = normalizeMessageBoxHost(
+      overrideHost ?? (await this.resolveHostForRecipient(allowedRecipients[0]))
+    )
+    const singleDeliveryKey = selectDeliveryAgentIdentityKey(
+      deliveryAgentIdentityKeyByHost,
+      finalHost,
+      overrideHost != null
+    )
 
     // 5) Identity key (sender)
     if (!this.myIdentityKey) {
@@ -1249,14 +1379,19 @@ export class MessageBoxClient {
 
     // 6) Build per-recipient messageIds (HMAC), same order as allowedRecipients
     const bodyBytes = Array.from(new TextEncoder().encode(JSON.stringify(body)))
-    const messageIds: string[] = await this.mapWithConcurrency(allowedRecipients, 8, async (r) => {
-      const hmac = await this.walletClient.createHmac({
-        data: bodyBytes,
-        protocolID: [1, 'messagebox'],
-        keyID: '1',
-        counterparty: r
-      }, this.originator)
-      return Array.from(hmac.hmac).map(b => b.toString(16).padStart(2, '0')).join('')
+    const messageIds: string[] = await this.mapWithConcurrency(allowedRecipients, 8, async r => {
+      const hmac = await this.walletClient.createHmac(
+        {
+          data: bodyBytes,
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: r
+        },
+        this.originator
+      )
+      return Array.from(hmac.hmac)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
     })
 
     // 7) Body: for batch route the server expects a single shared body.
@@ -1281,25 +1416,35 @@ export class MessageBoxClient {
       payment: paymentData
     }
 
-    Logger.log('[MB CLIENT] Sending HTTP request to:', `${finalHost}/sendMessage`)
-    Logger.log('[MB CLIENT] Request Body (batch):', JSON.stringify({ ...requestBody, payment: { ...paymentData, tx: '<omitted>' } }, null, 2))
+    const sendUrl = messageBoxEndpoint(finalHost, '/sendMessage')
+    Logger.log('[MB CLIENT] Sending HTTP request to:', sendUrl)
+    Logger.log(
+      '[MB CLIENT] Request Body (batch):',
+      JSON.stringify({ ...requestBody, payment: { ...paymentData, tx: '<omitted>' } }, null, 2)
+    )
 
     try {
-      const response = await this.authFetch.fetch(`${finalHost}/sendMessage`, {
+      const response = await this.authFetch.fetch(sendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       })
 
-      const parsed = await response.json().catch(() => ({} as any))
+      const parsed = await response.json().catch(() => ({}) as any)
       if (!response.ok || parsed.status !== 'success') {
-        const msg = response.ok ? (parsed.description ?? 'Unknown server error') : `HTTP ${response.status} - ${response.statusText}`
+        const msg = response.ok
+          ? (parsed.description ?? 'Unknown server error')
+          : `HTTP ${response.status} - ${response.statusText}`
         throw new Error(msg)
       }
 
       const sent = Array.isArray(parsed.results) ? parsed.results : []
-      const failed: Array<{ recipient: string, error: string }> = []
-      const { status, description } = buildBatchSendResult(sent.length, allowedRecipients.length, blocked.length)
+      const failed: Array<{ recipient: string; error: string }> = []
+      const { status, description } = buildBatchSendResult(
+        sent.length,
+        allowedRecipients.length,
+        blocked.length
+      )
       return { status, description, sent, blocked, failed, totals }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -1339,7 +1484,7 @@ export class MessageBoxClient {
    */
   async anointHost(host: string): Promise<{ txid: string }> {
     Logger.log('[MB CLIENT] Starting anointHost...')
-    if (!host.startsWith('http')) throw new Error('Invalid host URL')
+    host = normalizeMessageBoxHost(host)
 
     const identityKey = await this.getIdentityKey()
     const overlayTokens = await this.queryAdvertisements(identityKey)
@@ -1348,32 +1493,28 @@ export class MessageBoxClient {
     // Fetch ALL spendable wallet basket outputs and cross-reference with overlay tokens.
     // Only overlay tokens the wallet considers spendable are safe to spend as inputs.
     // This prevents stale overlay tokens (spent externally) from breaking the combined tx.
-    const basketResult = await this.walletClient.listOutputs({
-      basket: 'overlay advertisements',
-      limit: 10000
-    }, this.originator)
+    const basketResult = await this.walletClient.listOutputs(
+      {
+        basket: 'overlay advertisements',
+        limit: 10000
+      },
+      this.originator
+    )
     const spendableOutpoints = new Set(
       basketResult.outputs.filter(o => o.spendable).map(o => o.outpoint)
     )
-    const tokensToSpend = overlayTokens.filter(t => spendableOutpoints.has(`${t.txid}.${t.outputIndex}`))
+    const tokensToSpend = overlayTokens.filter(t =>
+      spendableOutpoints.has(`${t.txid}.${t.outputIndex}`)
+    )
     const skipped = overlayTokens.length - tokensToSpend.length
     if (skipped > 0) {
       Logger.log(`[MB CLIENT] Skipping ${skipped} overlay token(s) not in spendable wallet basket`)
     }
     Logger.log(`[MB CLIENT] Revoking ${tokensToSpend.length} spendable token(s) in combined tx`)
 
-    const fields: number[][] = [
-      Utils.toArray(identityKey, 'hex'),
-      Utils.toArray(host, 'utf8')
-    ]
+    const fields: number[][] = [Utils.toArray(identityKey, 'hex'), Utils.toArray(host, 'utf8')]
     const pushdrop = new PushDrop(this.walletClient, this.originator)
-    const script = await pushdrop.lock(
-      fields,
-      [1, 'messagebox advertisement'],
-      '1',
-      'anyone',
-      true
-    )
+    const script = await pushdrop.lock(fields, [1, 'messagebox advertisement'], '1', 'anyone', true)
     Logger.log('[MB CLIENT] PushDrop script:', script.toASM())
 
     try {
@@ -1386,32 +1527,44 @@ export class MessageBoxClient {
         inputBEEF = mergedBeef.toBinary()
       }
 
-      const { signableTransaction, tx: directTx, txid: directTxid } = await this.walletClient.createAction({
-        description: 'Anoint host for overlay routing',
-        ...(inputBEEF !== undefined && {
-          inputBEEF,
-          inputs: tokensToSpend.map(token => ({
-            outpoint: `${token.txid}.${token.outputIndex}`,
-            unlockingScriptLength: 73,
-            inputDescription: `Revoking advertisement for ${token.host}`
-          }))
-        }),
-        outputs: [{
-          basket: 'overlay advertisements',
-          lockingScript: script.toHex(),
-          satoshis: 1,
-          outputDescription: 'Overlay advertisement output'
-        }],
-        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-      }, this.originator)
+      const {
+        signableTransaction,
+        tx: directTx,
+        txid: directTxid
+      } = await this.walletClient.createAction(
+        {
+          description: 'Anoint host for overlay routing',
+          ...(inputBEEF !== undefined && {
+            inputBEEF,
+            inputs: tokensToSpend.map(token => ({
+              outpoint: `${token.txid}.${token.outputIndex}`,
+              unlockingScriptLength: 73,
+              inputDescription: `Revoking advertisement for ${token.host}`
+            }))
+          }),
+          outputs: [
+            {
+              basket: 'overlay advertisements',
+              lockingScript: script.toHex(),
+              satoshis: 1,
+              outputDescription: 'Overlay advertisement output'
+            }
+          ],
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+        },
+        this.originator
+      )
 
       if (signableTransaction === undefined) {
         if (directTx === undefined) throw new Error('Anoint failed: no transaction returned')
         Logger.log('[MB CLIENT] Transaction created (no inputs to sign):', directTxid)
-        const broadcaster = new TopicBroadcaster(['tm_messagebox'], { networkPreset: this.networkPreset })
+        const broadcaster = new TopicBroadcaster(['tm_messagebox'], {
+          networkPreset: this.networkPreset
+        })
         const result = await broadcaster.broadcast(Transaction.fromAtomicBEEF(directTx))
         Logger.log('[MB CLIENT] Advertisement broadcast succeeded. TXID:', result.txid)
-        if (typeof result.txid !== 'string') throw new Error('Anoint failed: broadcast did not return a txid')
+        if (typeof result.txid !== 'string')
+          throw new Error('Anoint failed: broadcast did not return a txid')
         return { txid: result.txid }
       }
 
@@ -1435,20 +1588,27 @@ export class MessageBoxClient {
         spends[i] = { unlockingScript: finalUnlockScript.toHex() }
       }
 
-      const { tx: signedTx, txid: signedTxid } = await this.walletClient.signAction({
-        reference: signableTransaction.reference,
-        spends,
-        options: { acceptDelayedBroadcast: false }
-      }, this.originator)
+      const { tx: signedTx, txid: signedTxid } = await this.walletClient.signAction(
+        {
+          reference: signableTransaction.reference,
+          spends,
+          options: { acceptDelayedBroadcast: false }
+        },
+        this.originator
+      )
 
-      if (signedTx === undefined) throw new Error('Anoint failed: signing did not return a transaction')
+      if (signedTx === undefined)
+        throw new Error('Anoint failed: signing did not return a transaction')
       Logger.log('[MB CLIENT] Transaction created:', signedTxid)
 
-      const broadcaster = new TopicBroadcaster(['tm_messagebox'], { networkPreset: this.networkPreset })
+      const broadcaster = new TopicBroadcaster(['tm_messagebox'], {
+        networkPreset: this.networkPreset
+      })
       const result = await broadcaster.broadcast(Transaction.fromAtomicBEEF(signedTx))
       Logger.log('[MB CLIENT] Advertisement broadcast succeeded. TXID:', result.txid)
 
-      if (typeof result.txid !== 'string') throw new Error('Anoint failed: broadcast did not return a txid')
+      if (typeof result.txid !== 'string')
+        throw new Error('Anoint failed: broadcast did not return a txid')
       return { txid: result.txid }
     } catch (err) {
       Logger.error('[MB CLIENT ERROR] anointHost threw:', err)
@@ -1474,17 +1634,20 @@ export class MessageBoxClient {
     Logger.log('[MB CLIENT] Starting revokeHost...')
     const outpoint = `${advertisementToken.txid}.${advertisementToken.outputIndex}`
     try {
-      const { signableTransaction } = await this.walletClient.createAction({
-        description: 'Revoke MessageBox host advertisement',
-        inputBEEF: advertisementToken.beef,
-        inputs: [
-          {
-            outpoint,
-            unlockingScriptLength: 73,
-            inputDescription: 'Revoking host advertisement token'
-          }
-        ]
-      }, this.originator)
+      const { signableTransaction } = await this.walletClient.createAction(
+        {
+          description: 'Revoke MessageBox host advertisement',
+          inputBEEF: advertisementToken.beef,
+          inputs: [
+            {
+              outpoint,
+              unlockingScriptLength: 73,
+              inputDescription: 'Revoking host advertisement token'
+            }
+          ]
+        },
+        this.originator
+      )
 
       if (signableTransaction === undefined) {
         throw new Error('Failed to create signable transaction.')
@@ -1512,17 +1675,20 @@ export class MessageBoxClient {
       const finalUnlockScript = await unlocker.sign(partialTx, 0)
 
       // Complete signing with the final unlock script
-      const { tx: signedTx } = await this.walletClient.signAction({
-        reference: signableTransaction.reference,
-        spends: {
-          0: {
-            unlockingScript: finalUnlockScript.toHex()
+      const { tx: signedTx } = await this.walletClient.signAction(
+        {
+          reference: signableTransaction.reference,
+          spends: {
+            0: {
+              unlockingScript: finalUnlockScript.toHex()
+            }
+          },
+          options: {
+            acceptDelayedBroadcast: false
           }
         },
-        options: {
-          acceptDelayedBroadcast: false
-        }
-      }, this.originator)
+        this.originator
+      )
 
       if (signedTx === undefined) {
         throw new Error('Failed to finalize the transaction signature.')
@@ -1577,19 +1743,19 @@ export class MessageBoxClient {
    * messages.forEach(msg => console.log(msg.sender, msg.body))
    * // Payments included with messages are automatically received
    */
-  async listMessages({ messageBox, host, acceptPayments }: ListMessagesParams): Promise<PeerMessage[]> {
-    if (typeof acceptPayments !== 'boolean') {
-      acceptPayments = true
-    }
-    if (messageBox.trim() === '') {
+  async listMessages({
+    messageBox,
+    host,
+    acceptPayments
+  }: ListMessagesParams): Promise<PeerMessage[]> {
+    const shouldAcceptPayments = acceptPayments !== false
+    if (typeof messageBox !== 'string' || messageBox.trim() === '') {
       throw new Error('MessageBox cannot be empty')
     }
 
-    let hosts: string[] = host != null ? [host] : []
+    let hosts: string[] = host != null ? [normalizeMessageBoxHost(host)] : []
     if (hosts.length === 0) {
-      const advertisedHosts = await this.queryAdvertisements(
-        await this.getIdentityKey()
-      )
+      const advertisedHosts = await this.queryAdvertisements(await this.getIdentityKey())
       hosts = Array.from(new Set([this.host, ...advertisedHosts.map(h => h.host)]))
     }
 
@@ -1597,15 +1763,7 @@ export class MessageBoxClient {
     const fetchFromHost = async (host: string): Promise<PeerMessage[]> => {
       try {
         Logger.log(`[MB CLIENT] Listing messages from ${host}…`)
-        const res = await this.authFetch.fetch(`${host}/listMessages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageBox })
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-        const data = await res.json()
-        if (data.status === 'error') throw new Error(data.description ?? 'Unknown server error')
-        return data.messages as PeerMessage[]
+        return await this.fetchMessagePages(host, messageBox)
       } catch (err) {
         Logger.log(`[MB CLIENT DEBUG] listMessages failed for ${host}:`, err)
         throw err // re-throw to be caught in the settled promise
@@ -1643,24 +1801,23 @@ export class MessageBoxClient {
 
     const parsed = messages.map(message => this.parseMessageEnvelope(message))
 
-    if (acceptPayments) {
-      const paymentJobs = parsed.filter(p => p.paymentData?.tx != null && p.paymentData.outputs != null)
-      await this.mapWithConcurrency(paymentJobs, 2, async (p) => {
+    if (shouldAcceptPayments) {
+      const paymentJobs = parsed.filter(
+        p => p.paymentData?.tx != null && p.paymentData.outputs != null
+      )
+      await this.mapWithConcurrency(paymentJobs, 2, async p => {
         await this.internalizeRecipientPayment(p)
         return null
       })
     }
 
-    await this.mapWithConcurrency(parsed, 4, async (p) => {
+    await this.mapWithConcurrency(parsed, 4, async p => {
       await this.decryptMessageBody(p)
       return null
     })
 
     // Sort newest‑first for a deterministic order
-    messages.sort(
-      (a, b) =>
-        Number((b as any).timestamp ?? 0) - Number((a as any).timestamp ?? 0)
-    )
+    messages.sort((a, b) => Number((b as any).timestamp ?? 0) - Number((a as any).timestamp ?? 0))
 
     return messages
   }
@@ -1697,29 +1854,21 @@ export class MessageBoxClient {
    * console.log(messages)
    */
   async listMessagesLite({ messageBox, host }: ListMessagesParams): Promise<PeerMessage[]> {
-    const res = await this.authFetch.fetch(`${host!}/listMessages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messageBox })
-    })
-    const data = await res.json()
-    if (data.status === 'error') throw new Error(data.description ?? 'Unknown server error')
-    const messages = data.messages as PeerMessage[]
+    if (typeof messageBox !== 'string' || messageBox.trim() === '') {
+      throw new Error('MessageBox cannot be empty')
+    }
+    const finalHost = normalizeMessageBoxHost(host ?? this.host)
+    const messages = await this.fetchMessagePages(finalHost, messageBox)
 
-    await this.mapWithConcurrency(messages, 4, async (message) => {
+    await this.mapWithConcurrency(messages, 4, async message => {
       try {
         const parsedBody: unknown =
           typeof message.body === 'string' ? this.tryParse(message.body) : message.body
         let messageContent: any = parsedBody
-        if (
-          parsedBody != null &&
-          typeof parsedBody === 'object' &&
-          'message' in parsedBody
-        ) {
+        if (parsedBody != null && typeof parsedBody === 'object' && 'message' in parsedBody) {
           const wrappedMessage = (parsedBody as any).message
-          messageContent = typeof wrappedMessage === 'string'
-            ? this.tryParse(wrappedMessage)
-            : wrappedMessage
+          messageContent =
+            typeof wrappedMessage === 'string' ? this.tryParse(wrappedMessage) : wrappedMessage
         }
         if (
           messageContent != null &&
@@ -1730,10 +1879,7 @@ export class MessageBoxClient {
             protocolID: [1, 'messagebox'],
             keyID: '1',
             counterparty: message.sender,
-            ciphertext: Utils.toArray(
-              messageContent.encryptedMessage,
-              'base64'
-            )
+            ciphertext: Utils.toArray(messageContent.encryptedMessage, 'base64')
           })
           const decryptedText = Utils.toUTF8(decrypted.plaintext)
           message.body = this.tryParse(decryptedText)
@@ -1741,15 +1887,47 @@ export class MessageBoxClient {
           message.body = messageContent ?? parsedBody
         }
       } catch (err) {
-        Logger.error(
-          '[MB CLIENT ERROR] Failed to parse or decrypt message in list:',
-          err
-        )
+        Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt message in list:', err)
         message.body = '[Error: Failed to decrypt or parse message]'
       }
       return null
     })
     return messages
+  }
+
+  private async fetchMessagePages(host: string, messageBox: string): Promise<PeerMessage[]> {
+    const pageSize = 1_000
+    const maximumPages = 100
+    const messages: PeerMessage[] = []
+
+    for (let page = 0; page < maximumPages; page++) {
+      const offset = page * pageSize
+      const res = await this.authFetch.fetch(messageBoxEndpoint(host, '/listMessages'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageBox, limit: pageSize, offset })
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+
+      const data = await res.json()
+      if (data.status === 'error') {
+        throw new Error(data.description ?? 'Unknown server error')
+      }
+      if (!Array.isArray(data.messages)) {
+        throw new TypeError('Message Box server returned an invalid messages payload')
+      }
+      messages.push(...(data.messages as PeerMessage[]))
+
+      // Legacy Message Box servers returned the complete collection without
+      // pagination metadata and may ignore limit/offset. Only continue when a
+      // pagination-aware server explicitly advertises another page.
+      if (data.hasMore !== true) return messages
+    }
+
+    throw new Error(
+      `Message Box pagination exceeded ${maximumPages * pageSize} messages; ` +
+        'acknowledge messages or request smaller application-level batches.'
+    )
   }
 
   /**
@@ -1788,7 +1966,7 @@ export class MessageBoxClient {
     }
 
     const workerCount = Math.max(1, Math.min(limit, items.length))
-    const results: R[] = new Array(items.length)
+    const results: R[] = []
     let nextIndex = 0
 
     const workers = Array.from({ length: workerCount }, async () => {
@@ -1834,11 +2012,7 @@ export class MessageBoxClient {
 
     let paymentData: Payment | undefined
 
-    if (
-      parsedBody != null &&
-      typeof parsedBody === 'object' &&
-      'message' in parsedBody
-    ) {
+    if (parsedBody != null && typeof parsedBody === 'object' && 'message' in parsedBody) {
       paymentData = (parsedBody as any).payment
     }
 
@@ -1856,9 +2030,7 @@ export class MessageBoxClient {
         )
 
         if (recipientOutputs.length < 1) {
-          Logger.log(
-            '[MB CLIENT] No wallet payment outputs found in payment data'
-          )
+          Logger.log('[MB CLIENT] No wallet payment outputs found in payment data')
           return false
         }
 
@@ -1873,21 +2045,14 @@ export class MessageBoxClient {
         })
 
         if (internalizeResult.accepted) {
-          Logger.log(
-            '[MB CLIENT] Successfully internalized recipient payment'
-          )
+          Logger.log('[MB CLIENT] Successfully internalized recipient payment')
           return true
         } else {
-          Logger.warn(
-            '[MB CLIENT] Recipient payment internalization was not accepted'
-          )
+          Logger.warn('[MB CLIENT] Recipient payment internalization was not accepted')
           return false
         }
       } catch (paymentError) {
-        Logger.error(
-          '[MB CLIENT ERROR] Failed to internalize recipient payment:',
-          paymentError
-        )
+        Logger.error('[MB CLIENT ERROR] Failed to internalize recipient payment:', paymentError)
         return false
       }
     }
@@ -1922,7 +2087,7 @@ export class MessageBoxClient {
 
     Logger.log(`[MB CLIENT] Acknowledging messages ${JSON.stringify(messageIds)}…`)
 
-    let hosts: string[] = host != null ? [host] : []
+    let hosts: string[] = host != null ? [normalizeMessageBoxHost(host)] : []
     if (hosts.length === 0) {
       // 1. Determine all hosts (advertised + default)
       const identityKey = await this.getIdentityKey()
@@ -1933,7 +2098,7 @@ export class MessageBoxClient {
     // 2. Dispatch parallel acknowledge requests
     const ackFromHost = async (host: string): Promise<string | null> => {
       try {
-        const res = await this.authFetch.fetch(`${host}/acknowledgeMessage`, {
+        const res = await this.authFetch.fetch(messageBoxEndpoint(host, '/acknowledgeMessage'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messageIds })
@@ -1966,9 +2131,7 @@ export class MessageBoxClient {
     for (const r of settled) {
       if (r.status === 'rejected') errs.push(r.reason)
     }
-    throw new Error(
-      `Failed to acknowledge messages on all hosts: ${errs.map(String).join('; ')}`
-    )
+    throw new Error(`Failed to acknowledge messages on all hosts: ${errs.map(String).join('; ')}`)
   }
 
   // ===========================
@@ -2001,11 +2164,11 @@ export class MessageBoxClient {
     params: SetMessageBoxPermissionParams,
     overrideHost?: string
   ): Promise<void> {
-    const finalHost = overrideHost ?? this.host
+    const finalHost = normalizeMessageBoxHost(overrideHost ?? this.host)
 
     Logger.log('[MB CLIENT] Setting messageBox permission...')
 
-    const response = await this.authFetch.fetch(`${finalHost}/permissions/set`, {
+    const response = await this.authFetch.fetch(messageBoxEndpoint(finalHost, '/permissions/set'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2017,7 +2180,9 @@ export class MessageBoxClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(`Failed to set permission: HTTP ${response.status} - ${String(errorData.description) !== '' ? String(errorData.description) : response.statusText}`)
+      throw new Error(
+        `Failed to set permission: HTTP ${response.status} - ${String(errorData.description) !== '' ? String(errorData.description) : response.statusText}`
+      )
     }
 
     const { status, description } = await response.json()
@@ -2048,22 +2213,28 @@ export class MessageBoxClient {
     params: GetMessageBoxPermissionParams,
     overrideHost?: string
   ): Promise<MessageBoxPermission | null> {
-    const finalHost = overrideHost ?? await this.resolveHostForRecipient(params.recipient)
+    const finalHost = normalizeMessageBoxHost(
+      overrideHost ?? (await this.resolveHostForRecipient(params.recipient))
+    )
     const queryParams = new URLSearchParams({
-      recipient: params.recipient,
       messageBox: params.messageBox,
       ...(params.sender != null && { sender: params.sender })
     })
 
     Logger.log('[MB CLIENT] Getting messageBox permission...')
 
-    const response = await this.authFetch.fetch(`${finalHost}/permissions/get?${queryParams.toString()}`, {
-      method: 'GET'
-    })
+    const response = await this.authFetch.fetch(
+      `${messageBoxEndpoint(finalHost, '/permissions/get')}?${queryParams.toString()}`,
+      {
+        method: 'GET'
+      }
+    )
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(`Failed to get permission: HTTP ${response.status} - ${String(errorData.description) !== '' ? String(errorData.description) : response.statusText}`)
+      throw new Error(
+        `Failed to get permission: HTTP ${response.status} - ${String(errorData.description) !== '' ? String(errorData.description) : response.statusText}`
+      )
     }
 
     const data = await response.json()
@@ -2071,7 +2242,7 @@ export class MessageBoxClient {
       throw new Error(data.description ?? 'Failed to get permission')
     }
 
-    return data.permission
+    return data.permission ?? null
   }
 
   /**
@@ -2105,19 +2276,18 @@ export class MessageBoxClient {
     messageBox: string,
     overrideHost?: string
   ): Promise<MessageBoxQuote> {
-    const finalHost = overrideHost ?? await this.resolveHostForRecipient(recipient)
+    const finalHost = normalizeMessageBoxHost(
+      overrideHost ?? (await this.resolveHostForRecipient(recipient))
+    )
     const queryParams = new URLSearchParams({
       recipient,
       messageBox
     })
 
     Logger.log('[MB CLIENT] Getting messageBox quote (single)...')
-    console.log('HELP IM QUOTING', `${finalHost}/permissions/quote?${queryParams.toString()}`)
-    const response = await this.authFetch.fetch(
-      `${finalHost}/permissions/quote?${queryParams.toString()}`,
-      { method: 'GET' }
-    )
-    console.log('server response from getquote]', response)
+    const quoteUrl = `${messageBoxEndpoint(finalHost, '/permissions/quote')}?${queryParams.toString()}`
+    Logger.log('[MB CLIENT] Quote request:', quoteUrl)
+    const response = await this.authFetch.fetch(quoteUrl, { method: 'GET' })
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(
@@ -2131,7 +2301,6 @@ export class MessageBoxClient {
     }
 
     const deliveryAgentIdentityKey = response.headers.get('x-bsv-auth-identity-key')
-    console.log('deliveryAgentIdentityKey', deliveryAgentIdentityKey)
     if (deliveryAgentIdentityKey == null) {
       throw new Error('Failed to get quote: Delivery agent did not provide their identity key')
     }
@@ -2153,14 +2322,15 @@ export class MessageBoxClient {
     }
 
     Logger.log('[MB CLIENT] Getting messageBox quotes (multi)...')
-    console.log('[MB CLIENT] Getting messageBox quotes (multi)...')
     const hostGroups = await this.groupQuoteRecipientsByHost(recipients, overrideHost)
     const accumulator = this.createMultiQuoteAccumulator()
 
-    await Promise.all(Array.from(hostGroups.entries()).map(async ([host, group]) => {
-      const payload = await this.fetchQuotePayloadForHost(host, group, messageBox, accumulator)
-      this.mergeQuotePayload(payload, host, group, messageBox, accumulator)
-    }))
+    await Promise.all(
+      Array.from(hostGroups.entries()).map(async ([host, group]) => {
+        const payload = await this.fetchQuotePayloadForHost(host, group, messageBox, accumulator)
+        this.mergeQuotePayload(payload, host, group, messageBox, accumulator)
+      })
+    )
 
     const { deliveryFees, recipientFees } = accumulator
 
@@ -2190,9 +2360,12 @@ export class MessageBoxClient {
     recipients: PubKeyHex[],
     overrideHost?: string
   ): Promise<Map<string, PubKeyHex[]>> {
-    const resolvedHosts = overrideHost != null
-      ? recipients.map(() => overrideHost)
-      : await this.mapWithConcurrency(recipients, 8, (recipient) => this.resolveHostForRecipient(recipient))
+    const resolvedHosts =
+      overrideHost != null
+        ? recipients.map(() => normalizeMessageBoxHost(overrideHost))
+        : await this.mapWithConcurrency(recipients, 8, recipient =>
+            this.resolveHostForRecipient(recipient)
+          )
     const hostGroups = new Map<string, PubKeyHex[]>()
 
     for (let i = 0; i < recipients.length; i++) {
@@ -2215,7 +2388,7 @@ export class MessageBoxClient {
     for (const recipient of groupRecipients) qp.append('recipient', recipient)
     qp.set('messageBox', messageBox)
 
-    const url = `${host}/permissions/quote?${qp.toString()}`
+    const url = `${messageBoxEndpoint(host, '/permissions/quote')}?${qp.toString()}`
     Logger.log('[MB CLIENT] Multi-quote GET:', url)
 
     const response = await this.authFetch.fetch(url, { method: 'GET' })
@@ -2259,21 +2432,25 @@ export class MessageBoxClient {
     quotesByRecipient: MessageBoxRecipientQuote[]
     blockedRecipients?: PubKeyHex[]
   } {
-    return typeof payload === 'object' &&
+    return (
+      typeof payload === 'object' &&
       payload != null &&
       Array.isArray((payload as { quotesByRecipient?: unknown }).quotesByRecipient)
+    )
   }
 
   private isSingleQuotePayload(payload: unknown): payload is {
     quote: Pick<MessageBoxRecipientQuote, 'deliveryFee' | 'recipientFee'>
   } {
-    return typeof payload === 'object' &&
+    return (
+      typeof payload === 'object' &&
       payload != null &&
       (payload as { quote?: unknown }).quote != null
+    )
   }
 
   private mergeRecipientQuotes(
-    payload: { quotesByRecipient: MessageBoxRecipientQuote[], blockedRecipients?: PubKeyHex[] },
+    payload: { quotesByRecipient: MessageBoxRecipientQuote[]; blockedRecipients?: PubKeyHex[] },
     accumulator: MessageBoxMultiQuoteAccumulator
   ): void {
     for (const quote of payload.quotesByRecipient) {
@@ -2353,12 +2530,15 @@ export class MessageBoxClient {
    *   offset: 0
    * })
    */
-  async listMessageBoxPermissions(params?: ListPermissionsParams, overrideHost?: string): Promise<MessageBoxPermission[]> {
-    const finalHost = overrideHost ?? this.host
+  async listMessageBoxPermissions(
+    params?: ListPermissionsParams,
+    overrideHost?: string
+  ): Promise<MessageBoxPermission[]> {
+    const finalHost = normalizeMessageBoxHost(overrideHost ?? this.host)
     const queryParams = new URLSearchParams()
 
     if (params?.messageBox != null) {
-      queryParams.set('message_box', params.messageBox)
+      queryParams.set('messageBox', params.messageBox)
     }
     if (params?.limit !== undefined) {
       queryParams.set('limit', params.limit.toString())
@@ -2369,13 +2549,18 @@ export class MessageBoxClient {
 
     Logger.log('[MB CLIENT] Listing messageBox permissions with params:', queryParams.toString())
 
-    const response = await this.authFetch.fetch(`${finalHost}/permissions/list?${queryParams.toString()}`, {
-      method: 'GET'
-    })
+    const response = await this.authFetch.fetch(
+      `${messageBoxEndpoint(finalHost, '/permissions/list')}?${queryParams.toString()}`,
+      {
+        method: 'GET'
+      }
+    )
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(`Failed to list permissions: HTTP ${response.status} - ${String(errorData.description) !== '' ? String(errorData.description) : response.statusText}`)
+      throw new Error(
+        `Failed to list permissions: HTTP ${response.status} - ${String(errorData.description) !== '' ? String(errorData.description) : response.statusText}`
+      )
     }
 
     const data = await response.json()
@@ -2383,14 +2568,43 @@ export class MessageBoxClient {
       throw new Error(data.description ?? 'Failed to list permissions')
     }
 
-    return data.permissions.map((p: any) => ({
-      sender: p.sender,
-      messageBox: p.message_box,
-      recipientFee: p.recipient_fee,
-      status: MessageBoxClient.getStatusFromFee(p.recipient_fee),
-      createdAt: p.created_at,
-      updatedAt: p.updated_at
-    }))
+    if (!Array.isArray(data.permissions)) {
+      throw new TypeError(
+        'Failed to list permissions: server returned an invalid permissions payload'
+      )
+    }
+
+    return data.permissions.map((permission: unknown) => {
+      if (typeof permission !== 'object' || permission == null) {
+        throw new Error('Failed to list permissions: server returned an invalid permission record')
+      }
+
+      const record = permission as Record<string, unknown>
+      const sender = record.sender
+      const messageBox = record.messageBox ?? record.message_box
+      const recipientFee = record.recipientFee ?? record.recipient_fee
+      const createdAt = record.createdAt ?? record.created_at
+      const updatedAt = record.updatedAt ?? record.updated_at
+
+      if (
+        (sender !== null && typeof sender !== 'string') ||
+        typeof messageBox !== 'string' ||
+        !Number.isSafeInteger(recipientFee) ||
+        typeof createdAt !== 'string' ||
+        typeof updatedAt !== 'string'
+      ) {
+        throw new Error('Failed to list permissions: server returned an invalid permission record')
+      }
+
+      return {
+        sender,
+        messageBox,
+        recipientFee: recipientFee as number,
+        status: MessageBoxClient.getStatusFromFee(recipientFee as number),
+        createdAt,
+        updatedAt
+      }
+    })
   }
 
   // ===========================
@@ -2412,12 +2626,19 @@ export class MessageBoxClient {
    * await client.allowNotificationsFromPeer('03abc123...') // Always allow
    * await client.allowNotificationsFromPeer('03def456...', 5) // Allow for 5 sats
    */
-  async allowNotificationsFromPeer(identityKey: PubKeyHex, recipientFee: number = 0, overrideHost?: string): Promise<void> {
-    await this.setMessageBoxPermission({
-      messageBox: 'notifications',
-      sender: identityKey,
-      recipientFee
-    }, overrideHost)
+  async allowNotificationsFromPeer(
+    identityKey: PubKeyHex,
+    recipientFee: number = 0,
+    overrideHost?: string
+  ): Promise<void> {
+    await this.setMessageBoxPermission(
+      {
+        messageBox: 'notifications',
+        sender: identityKey,
+        recipientFee
+      },
+      overrideHost
+    )
   }
 
   /**
@@ -2433,11 +2654,14 @@ export class MessageBoxClient {
    * await client.denyNotificationsFromPeer('03spam123...')
    */
   async denyNotificationsFromPeer(identityKey: PubKeyHex, overrideHost?: string): Promise<void> {
-    await this.setMessageBoxPermission({
-      messageBox: 'notifications',
-      sender: identityKey,
-      recipientFee: -1
-    }, overrideHost)
+    await this.setMessageBoxPermission(
+      {
+        messageBox: 'notifications',
+        sender: identityKey,
+        recipientFee: -1
+      },
+      overrideHost
+    )
   }
 
   /**
@@ -2453,13 +2677,19 @@ export class MessageBoxClient {
    * const status = await client.checkPeerNotificationStatus('03abc123...')
    * console.log(status.allowed) // true/false
    */
-  async checkPeerNotificationStatus(identityKey: PubKeyHex, overrideHost?: string): Promise<MessageBoxPermission | null> {
+  async checkPeerNotificationStatus(
+    identityKey: PubKeyHex,
+    overrideHost?: string
+  ): Promise<MessageBoxPermission | null> {
     const myIdentityKey = await this.getIdentityKey()
-    return await this.getMessageBoxPermission({
-      recipient: myIdentityKey,
-      messageBox: 'notifications',
-      sender: identityKey
-    }, overrideHost)
+    return await this.getMessageBoxPermission(
+      {
+        recipient: myIdentityKey,
+        messageBox: 'notifications',
+        sender: identityKey
+      },
+      overrideHost
+    )
   }
 
   /**
@@ -2505,20 +2735,58 @@ export class MessageBoxClient {
 
     // Single recipient → keep original flow
     if (!Array.isArray(recipient)) {
-      return await this.sendMessage({
-        recipient,
-        messageBox: 'notifications',
-        body,
-        checkPermissions: true
-      }, overrideHost)
+      return await this.sendMessage(
+        {
+          recipient,
+          messageBox: 'notifications',
+          body,
+          checkPermissions: true
+        },
+        overrideHost
+      )
     }
 
-    // Multiple recipients → new flow
-    return await this.sendMesagetoRecepients({
-      recipients: recipient,
-      messageBox: 'notifications',
-      body
-    }, overrideHost)
+    // Shared batch payloads cannot be encrypted to multiple counterparties.
+    // Preserve encryption-by-default by sending bounded individual requests.
+    const outcomes = await this.mapWithConcurrency(recipient, 8, async target => {
+      try {
+        const response = await this.sendMessage(
+          {
+            recipient: target,
+            messageBox: 'notifications',
+            body,
+            checkPermissions: true
+          },
+          overrideHost
+        )
+        return { recipient: target, messageId: response.messageId }
+      } catch (error) {
+        return {
+          recipient: target,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      }
+    })
+    const sent = outcomes.filter(
+      (outcome): outcome is { recipient: PubKeyHex; messageId: string } => 'messageId' in outcome
+    )
+    const failed = outcomes.filter(
+      (outcome): outcome is { recipient: PubKeyHex; error: string } => 'error' in outcome
+    )
+    let status: SendListResult['status'] = 'error'
+    if (sent.length === recipient.length) {
+      status = 'success'
+    } else if (sent.length > 0) {
+      status = 'partial'
+    }
+
+    return {
+      status,
+      description: `Sent ${sent.length} of ${recipient.length} encrypted notifications.`,
+      sent,
+      blocked: [],
+      failed
+    }
   }
 
   /**
@@ -2547,6 +2815,12 @@ export class MessageBoxClient {
     if (params.fcmToken == null || params.fcmToken.trim() === '') {
       throw new Error('fcmToken is required and must be a non-empty string')
     }
+    if (params.fcmToken.trim().length > 500) {
+      throw new Error('fcmToken must not exceed 500 characters')
+    }
+    if (params.deviceId != null && params.deviceId.trim().length > 255) {
+      throw new Error('deviceId must not exceed 255 characters')
+    }
 
     // Validate platform if provided
     const validPlatforms = ['ios', 'android', 'web']
@@ -2554,11 +2828,11 @@ export class MessageBoxClient {
       throw new Error('platform must be one of: ios, android, web')
     }
 
-    const finalHost = overrideHost ?? this.host
+    const finalHost = normalizeMessageBoxHost(overrideHost ?? this.host)
 
     Logger.log('[MB CLIENT] Registering device for FCM notifications...')
 
-    const response = await this.authFetch.fetch(`${finalHost}/registerDevice`, {
+    const response = await this.authFetch.fetch(messageBoxEndpoint(finalHost, '/registerDevice'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2570,7 +2844,8 @@ export class MessageBoxClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      const description = typeof errorData.description === 'string' ? errorData.description : response.statusText
+      const description =
+        typeof errorData.description === 'string' ? errorData.description : response.statusText
       throw new Error(`Failed to register device: HTTP ${response.status} - ${description}`)
     }
 
@@ -2588,14 +2863,15 @@ export class MessageBoxClient {
   }
 
   /**
-   * List all registered devices for push notifications.
+   * List one bounded page of registered devices for push notifications.
    *
    * @async
    * @param {string} [overrideHost] - Optional host override
    * @returns {Promise<RegisteredDevice[]>} Array of registered devices
    *
    * @description
-   * Retrieves all devices registered by the authenticated user for FCM push notifications.
+   * Retrieves a bounded page of devices registered by the authenticated user for FCM push
+   * notifications.
    * Only shows devices belonging to the current user (authenticated via AuthFetch).
    *
    * @example
@@ -2606,19 +2882,26 @@ export class MessageBoxClient {
    * })
    */
   async listRegisteredDevices(
-    overrideHost?: string
+    overrideHost?: string,
+    pagination: { limit?: number; offset?: number } = {}
   ): Promise<RegisteredDevice[]> {
-    const finalHost = overrideHost ?? this.host
+    const finalHost = normalizeMessageBoxHost(overrideHost ?? this.host)
+    const query = new URLSearchParams()
+    if (pagination.limit != null) query.set('limit', String(pagination.limit))
+    if (pagination.offset != null) query.set('offset', String(pagination.offset))
+    const suffix = query.size > 0 ? `?${query.toString()}` : ''
 
     Logger.log('[MB CLIENT] Listing registered devices...')
 
-    const response = await this.authFetch.fetch(`${finalHost}/devices`, {
-      method: 'GET'
-    })
+    const response = await this.authFetch.fetch(
+      `${messageBoxEndpoint(finalHost, '/devices')}${suffix}`,
+      { method: 'GET' }
+    )
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      const description = typeof errorData.description === 'string' ? errorData.description : response.statusText
+      const description =
+        typeof errorData.description === 'string' ? errorData.description : response.statusText
       throw new Error(`Failed to list devices: HTTP ${response.status} - ${description}`)
     }
 
@@ -2642,31 +2925,31 @@ export class MessageBoxClient {
   }
 
   /**
-  * @method createMessagePayment
-  * @private
-  * @param {string} recipient - Recipient's identity key.
-  * @param {MessageBoxQuote} quote - Quote object containing recipient and delivery fees.
-  * @param {string} [description='MessageBox delivery payment'] - Description for the payment action.
-  * @param {string} [originator] - Optional originator to use for wallet operations.
-  * @returns {Promise<Payment>} - Payment data including the transaction and remittance outputs.
-  *
-  * @description
-  * Constructs and signs a payment transaction covering both delivery and recipient fees for
-  * message delivery, based on a previously obtained quote.
-  *
-  * The transaction includes:
-  * - An optional delivery fee output for the MessageBox server.
-  * - An optional recipient fee output for the message recipient.
-  *
-  * Payment remittance metadata (derivation prefix/suffix, sender identity) is embedded to allow
-  * the payee to derive their private key and spend the output.
-  *
-  * @throws {Error} If no payment is required, key derivation fails, or the action creation fails.
-  *
-  * @example
-  * const payment = await client.createMessagePayment(recipientKey, quote)
-  * await client.sendMessage({ recipient, messageBox, body, payment })
-  */
+   * @method createMessagePayment
+   * @private
+   * @param {string} recipient - Recipient's identity key.
+   * @param {MessageBoxQuote} quote - Quote object containing recipient and delivery fees.
+   * @param {string} [description='MessageBox delivery payment'] - Description for the payment action.
+   * @param {string} [originator] - Optional originator to use for wallet operations.
+   * @returns {Promise<Payment>} - Payment data including the transaction and remittance outputs.
+   *
+   * @description
+   * Constructs and signs a payment transaction covering both delivery and recipient fees for
+   * message delivery, based on a previously obtained quote.
+   *
+   * The transaction includes:
+   * - An optional delivery fee output for the MessageBox server.
+   * - An optional recipient fee output for the message recipient.
+   *
+   * Payment remittance metadata (derivation prefix/suffix, sender identity) is embedded to allow
+   * the payee to derive their private key and spend the output.
+   *
+   * @throws {Error} If no payment is required, key derivation fails, or the action creation fails.
+   *
+   * @example
+   * const payment = await client.createMessagePayment(recipientKey, quote)
+   * await client.sendMessage({ recipient, messageBox, body, payment })
+   */
   private async createMessagePayment(
     recipient: string,
     quote: MessageBoxQuote,
@@ -2676,7 +2959,9 @@ export class MessageBoxClient {
       throw new Error('No payment required')
     }
 
-    Logger.log(`[MB CLIENT] Creating payment transaction for ${quote.recipientFee} sats (delivery: ${quote.deliveryFee}, recipient: ${quote.recipientFee})`)
+    Logger.log(
+      `[MB CLIENT] Creating payment transaction for ${quote.recipientFee} sats (delivery: ${quote.deliveryFee}, recipient: ${quote.recipientFee})`
+    )
 
     const outputs: InternalizeOutput[] = []
     const createActionOutputs: CreateActionOutput[] = []
@@ -2691,15 +2976,20 @@ export class MessageBoxClient {
       const derivationSuffix = Utils.toBase64(Random(32))
 
       // Get host's derived public key
-      console.log('delivery agent:', quote.deliveryAgentIdentityKey)
-      const { publicKey: derivedKeyResult } = await this.walletClient.getPublicKey({
-        protocolID: [2, '3241645161d8'],
-        keyID: `${derivationPrefix} ${derivationSuffix}`,
-        counterparty: quote.deliveryAgentIdentityKey
-      }, this.originator)
+      Logger.log('[MB CLIENT] Delivery agent:', quote.deliveryAgentIdentityKey)
+      const { publicKey: derivedKeyResult } = await this.walletClient.getPublicKey(
+        {
+          protocolID: [2, '3241645161d8'],
+          keyID: `${derivationPrefix} ${derivationSuffix}`,
+          counterparty: quote.deliveryAgentIdentityKey
+        },
+        this.originator
+      )
 
       // Create locking script using host's public key
-      const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedKeyResult).toAddress()).toHex()
+      const lockingScript = new P2PKH()
+        .lock(PublicKey.fromString(derivedKeyResult).toAddress())
+        .toHex()
 
       // Add to createAction outputs
       createActionOutputs.push({
@@ -2737,11 +3027,13 @@ export class MessageBoxClient {
       })
 
       if (derivedKeyResult == null || derivedKeyResult.trim() === '') {
-        throw new Error('Failed to derive recipient\'s public key')
+        throw new Error("Failed to derive recipient's public key")
       }
 
       // Create locking script using recipient's public key
-      const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedKeyResult).toAddress()).toHex()
+      const lockingScript = new P2PKH()
+        .lock(PublicKey.fromString(derivedKeyResult).toAddress())
+        .toHex()
 
       // Add to createAction outputs
       createActionOutputs.push({
@@ -2766,11 +3058,14 @@ export class MessageBoxClient {
       })
     }
 
-    const { tx } = await this.walletClient.createAction({
-      description,
-      outputs: createActionOutputs,
-      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-    }, this.originator)
+    const { tx } = await this.walletClient.createAction(
+      {
+        description,
+        outputs: createActionOutputs,
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      },
+      this.originator
+    )
 
     if (tx == null) {
       throw new Error('Failed to create payment transaction')
@@ -2786,7 +3081,7 @@ export class MessageBoxClient {
 
   private async createMessagePaymentBatch(
     recipients: string[],
-    perRecipientQuotes: Map<string, { recipientFee: number, deliveryFee: number }>,
+    perRecipientQuotes: Map<string, { recipientFee: number; deliveryFee: number }>,
     // server (delivery agent) identity key to pay the delivery fee to
     serverIdentityKey: string,
     description = 'MessageBox delivery payment (batch)'
@@ -2798,7 +3093,7 @@ export class MessageBoxClient {
     const deliveryFeeOnce =
       recipients.reduce<number | undefined>((acc, r) => {
         const q = perRecipientQuotes.get(r)
-        return (q != null) ? (acc ?? q.deliveryFee) : acc
+        return q != null ? (acc ?? q.deliveryFee) : acc
       }, undefined) ?? 0
 
     const senderIdentityKey = await this.getIdentityKey()
@@ -2809,11 +3104,14 @@ export class MessageBoxClient {
       const derivationPrefix = Utils.toBase64(Random(32))
       const derivationSuffix = Utils.toBase64(Random(32))
 
-      const { publicKey: agentDerived } = await this.walletClient.getPublicKey({
-        protocolID: [2, '3241645161d8'],
-        keyID: `${derivationPrefix} ${derivationSuffix}`,
-        counterparty: serverIdentityKey
-      }, this.originator)
+      const { publicKey: agentDerived } = await this.walletClient.getPublicKey(
+        {
+          protocolID: [2, '3241645161d8'],
+          keyID: `${derivationPrefix} ${derivationSuffix}`,
+          counterparty: serverIdentityKey
+        },
+        this.originator
+      )
 
       const lockingScript = new P2PKH().lock(PublicKey.fromString(agentDerived).toAddress()).toHex()
 
@@ -2841,7 +3139,7 @@ export class MessageBoxClient {
 
     for (const r of recipients) {
       const q = perRecipientQuotes.get(r)
-      if ((q == null) || q.recipientFee <= 0) continue
+      if (q == null || q.recipientFee <= 0) continue
 
       const derivationPrefix = Utils.toBase64(Random(32))
       const derivationSuffix = Utils.toBase64(Random(32))
@@ -2852,7 +3150,9 @@ export class MessageBoxClient {
         counterparty: r
       })
 
-      const lockingScript = new P2PKH().lock(PublicKey.fromString(recipientDerived).toAddress()).toHex()
+      const lockingScript = new P2PKH()
+        .lock(PublicKey.fromString(recipientDerived).toAddress())
+        .toHex()
 
       createActionOutputs.push({
         satoshis: q.recipientFee,
@@ -2876,11 +3176,14 @@ export class MessageBoxClient {
       })
     }
 
-    const { tx } = await this.walletClient.createAction({
-      description,
-      outputs: createActionOutputs,
-      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-    }, this.originator)
+    const { tx } = await this.walletClient.createAction(
+      {
+        description,
+        outputs: createActionOutputs,
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      },
+      this.originator
+    )
 
     if (tx == null) throw new Error('Failed to create payment transaction')
 

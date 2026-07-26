@@ -118,6 +118,21 @@ func (e ListDevices200JSONResponseBodyStatus) Valid() bool {
 	}
 }
 
+// Defines values for Health200JSONResponseBodyStatus.
+const (
+	Ok Health200JSONResponseBodyStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the Health200JSONResponseBodyStatus enum.
+func (e Health200JSONResponseBodyStatus) Valid() bool {
+	switch e {
+	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListMessages200JSONResponseBodyStatus.
 const (
 	ListMessages200JSONResponseBodyStatusSuccess ListMessages200JSONResponseBodyStatus = "success"
@@ -226,6 +241,21 @@ func (e SetPermission200JSONResponseBodyStatus) Valid() bool {
 	}
 }
 
+// Defines values for Readiness200JSONResponseBodyStatus.
+const (
+	Ready Readiness200JSONResponseBodyStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the Readiness200JSONResponseBodyStatus enum.
+func (e Readiness200JSONResponseBodyStatus) Valid() bool {
+	switch e {
+	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RegisterDeviceJSONBodyPlatform.
 const (
 	RegisterDeviceJSONBodyPlatformAndroid RegisterDeviceJSONBodyPlatform = "android"
@@ -315,8 +345,9 @@ type ErrorResponseStatus string
 // recipients are provided, `messageId` must be an array of the same length
 // with one ID per recipient (same order).
 type MessageObject struct {
-	// Body Message payload. Strings and JSON objects are both accepted.
-	Body MessageObject_Body `json:"body"`
+	// Body Serialized message payload. The official client serializes object
+	// bodies before sending them.
+	Body string `json:"body"`
 
 	// MessageBox Named message box (e.g. `payment_inbox`, `notifications`).
 	//
@@ -338,17 +369,6 @@ type MessageObject struct {
 
 	// Recipients Preferred plural form. Takes precedence over `recipient` when both are present.
 	Recipients *[]PubKeyHex `json:"recipients,omitempty"`
-}
-
-// MessageObjectBody0 defines model for MessageObject.Body.0.
-type MessageObjectBody0 = string
-
-// MessageObjectBody1 defines model for MessageObject.Body.1.
-type MessageObjectBody1 map[string]interface{}
-
-// MessageObject_Body Message payload. Strings and JSON objects are both accepted.
-type MessageObject_Body struct {
-	union json.RawMessage
 }
 
 // MessageObjectMessageId0 defines model for MessageObject.MessageId.0.
@@ -502,15 +522,27 @@ type AcknowledgeMessageJSONBody struct {
 // AcknowledgeMessage200JSONResponseBodyStatus defines parameters for AcknowledgeMessage.
 type AcknowledgeMessage200JSONResponseBodyStatus string
 
+// ListDevicesParams defines parameters for ListDevices.
+type ListDevicesParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListDevices200JSONResponseBodyStatus defines parameters for ListDevices.
 type ListDevices200JSONResponseBodyStatus string
 
+// Health200JSONResponseBodyStatus defines parameters for Health.
+type Health200JSONResponseBodyStatus string
+
 // ListMessagesJSONBody defines parameters for ListMessages.
 type ListMessagesJSONBody struct {
+	Limit *int `json:"limit,omitempty"`
+
 	// MessageBox Name of the message box to retrieve messages from.
 	//
 	// Examples: payment_inbox
 	MessageBox string `json:"messageBox"`
+	Offset     *int   `json:"offset,omitempty"`
 }
 
 // ListMessages200JSONResponseBodyStatus defines parameters for ListMessages.
@@ -632,6 +664,9 @@ type SetPermissionJSONBody struct {
 // SetPermission200JSONResponseBodyStatus defines parameters for SetPermission.
 type SetPermission200JSONResponseBodyStatus string
 
+// Readiness200JSONResponseBodyStatus defines parameters for Readiness.
+type Readiness200JSONResponseBodyStatus string
+
 // RegisterDeviceJSONBody defines parameters for RegisterDevice.
 type RegisterDeviceJSONBody struct {
 	// DeviceId Optional caller-supplied device identifier.
@@ -683,68 +718,6 @@ type RegisterDeviceJSONRequestBody RegisterDeviceJSONBody
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody SendMessageJSONBody
-
-// AsMessageObjectBody0 returns the union data inside the MessageObject_Body as a MessageObjectBody0
-func (t MessageObject_Body) AsMessageObjectBody0() (MessageObjectBody0, error) {
-	var body MessageObjectBody0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMessageObjectBody0 overwrites any union data inside the MessageObject_Body as the provided MessageObjectBody0
-func (t *MessageObject_Body) FromMessageObjectBody0(v MessageObjectBody0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeMessageObjectBody0 performs a merge with any union data inside the MessageObject_Body, using the provided MessageObjectBody0
-func (t *MessageObject_Body) MergeMessageObjectBody0(v MessageObjectBody0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMessageObjectBody1 returns the union data inside the MessageObject_Body as a MessageObjectBody1
-func (t MessageObject_Body) AsMessageObjectBody1() (MessageObjectBody1, error) {
-	var body MessageObjectBody1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMessageObjectBody1 overwrites any union data inside the MessageObject_Body as the provided MessageObjectBody1
-func (t *MessageObject_Body) FromMessageObjectBody1(v MessageObjectBody1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeMessageObjectBody1 performs a merge with any union data inside the MessageObject_Body, using the provided MessageObjectBody1
-func (t *MessageObject_Body) MergeMessageObjectBody1(v MessageObjectBody1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t MessageObject_Body) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *MessageObject_Body) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
 
 // AsMessageObjectMessageId0 returns the union data inside the MessageObject_MessageId as a MessageObjectMessageId0
 func (t MessageObject_MessageId) AsMessageObjectMessageId0() (MessageObjectMessageId0, error) {

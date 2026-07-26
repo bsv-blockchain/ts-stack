@@ -1,13 +1,14 @@
 /* eslint-env jest */
 import acknowledgeMessage, { AcknowledgeRequest } from '../acknowledgeMessage.js'
+import { MAX_ACKNOWLEDGMENT_IDS, MAX_MESSAGE_ID_BYTES } from '../acknowledgeMessage.js'
 import mockKnex, { Tracker } from 'mock-knex'
 import { Response } from 'express'
 import knexLib from 'knex'
 import knexConfig from '../../../knexfile.js'
 import { bindMessageBoxRuntime } from '../../runtimeDeps.js'
 
-const testKnex = (knexLib as any).default?.(knexConfig.development) ??
-  (knexLib as any)(knexConfig.development)
+const testKnex =
+  (knexLib as any).default?.(knexConfig.development) ?? (knexLib as any)(knexConfig.development)
 bindMessageBoxRuntime({ knex: testKnex })
 const knex = acknowledgeMessage.knex
 let queryTracker: Tracker
@@ -38,11 +39,11 @@ let validReq: AcknowledgeRequest
 
 describe('acknowledgeMessage', () => {
   beforeAll(() => {
-    (mockKnex as any).mock(knex)
+    ;(mockKnex as any).mock(knex)
   })
 
   beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => { })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
 
     queryTracker = (mockKnex as any).getTracker() as Tracker
     queryTracker.install()
@@ -68,7 +69,7 @@ describe('acknowledgeMessage', () => {
   })
 
   afterAll(async () => {
-    (mockKnex as any).unmock(knex)
+    ;(mockKnex as any).unmock(knex)
     await testKnex.destroy()
   })
 
@@ -76,10 +77,12 @@ describe('acknowledgeMessage', () => {
     delete validReq.body.messageIds
     await acknowledgeMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_MESSAGE_ID_REQUIRED'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_MESSAGE_ID_REQUIRED'
+      })
+    )
   })
 
   it('Throws an error if messageIds is not an Array', async () => {
@@ -88,24 +91,50 @@ describe('acknowledgeMessage', () => {
     await acknowledgeMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_MESSAGE_ID',
-      description: 'Message IDs must be formatted as an array of strings!'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_MESSAGE_ID'
+      })
+    )
   }, 7000)
+
+  it('requires an authenticated identity', async () => {
+    validReq.auth = undefined
+
+    await acknowledgeMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(401)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_AUTHENTICATION_REQUIRED'
+      })
+    )
+  })
+
+  it.each([
+    Array(MAX_ACKNOWLEDGMENT_IDS + 1).fill('id'),
+    [''],
+    ['x'.repeat(MAX_MESSAGE_ID_BYTES + 1)]
+  ])('rejects resource-exhausting or malformed ID collections', async messageIds => {
+    validReq.body.messageIds = messageIds
+
+    await acknowledgeMessage.func(validReq, mockRes as Response)
+
+    expect(mockRes.status).toHaveBeenCalledWith(400)
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'ERR_INVALID_MESSAGE_ID'
+      })
+    )
+  })
 
   it('Deletes a message', async () => {
     queryTracker.on('query', (q, s) => {
       if (s === 1) {
         expect(q.method).toEqual('del')
-        expect(q.sql).toEqual(
-          'delete from `messages` where `recipient` = ? and `messageId` in (?)'
-        )
-        expect(q.bindings).toEqual([
-          'mockIdKey',
-          '123'
-        ])
+        expect(q.sql).toEqual('delete from `messages` where `recipient` = ? and `messageId` in (?)')
+        expect(q.bindings).toEqual(['mockIdKey', '123'])
         q.response(true)
       } else {
         q.response([])
@@ -114,9 +143,11 @@ describe('acknowledgeMessage', () => {
 
     await acknowledgeMessage.func(validReq, mockRes as Response)
     expect(mockRes.status).toHaveBeenCalledWith(200)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'success'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success'
+      })
+    )
   })
 
   it('Throws an error if deletion fails', async () => {
@@ -135,11 +166,13 @@ describe('acknowledgeMessage', () => {
     await acknowledgeMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(400)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INVALID_ACKNOWLEDGMENT',
-      description: 'Message not found!'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INVALID_ACKNOWLEDGMENT',
+        description: 'Message not found!'
+      })
+    )
   }, 7000)
 
   it('Throws unknown errors', async () => {
@@ -150,10 +183,12 @@ describe('acknowledgeMessage', () => {
     await acknowledgeMessage.func(validReq, mockRes as Response)
 
     expect(mockRes.status).toHaveBeenCalledWith(500)
-    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'error',
-      code: 'ERR_INTERNAL_ERROR',
-      description: 'An internal error has occurred while acknowledging the message'
-    }))
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'error',
+        code: 'ERR_INTERNAL_ERROR',
+        description: 'An internal error has occurred while acknowledging the message'
+      })
+    )
   })
 })

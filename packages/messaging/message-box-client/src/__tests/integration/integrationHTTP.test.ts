@@ -4,18 +4,19 @@ import { WalletClient } from '@bsv/sdk'
 import { webcrypto } from 'crypto'
 
 // Ensure Jest doesn't mock WalletClient
-jest.unmock('@bsv/sdk');
+jest.unmock('@bsv/sdk')
 
-(global as any).self = { crypto: webcrypto }
+;(global as any).self = { crypto: webcrypto }
 
 jest.setTimeout(20000)
 
 // Explicitly initialize WalletClient with Meta Net Client (MNC)
-const walletClient = new WalletClient('json-api', 'localhost')
+const integrationHost = process.env.MESSAGE_BOX_INTEGRATION_HOST!
+const walletClient = new WalletClient('json-api', process.env.MESSAGE_BOX_WALLET_ORIGINATOR!)
 
 // Initialize MessageBoxClient for HTTP-Only Testing
 const messageBoxClient = new MessageBoxClient({
-  host: 'https://message-box-us-1.bsvb.tech',
+  host: integrationHost,
   walletClient
 })
 

@@ -24,12 +24,16 @@ import {
   OutputTagStringUnder300Bytes,
   PositiveIntegerOrZero,
   PubKeyHex,
-  PublicKey,
+  PublicKey
 } from '@bsv/sdk'
 import { Logger, log } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { sendFCMNotification } from '../utils/sendFCMNotification.js'
-import { getRecipientFee, getServerDeliveryFee, shouldUseFCMDelivery } from '../utils/messagePermissions.js'
+import {
+  getRecipientFee,
+  getServerDeliveryFee,
+  shouldUseFCMDelivery
+} from '../utils/messagePermissions.js'
 import { runtimeDeps, getWallet } from '../runtimeDeps.js'
 
 // Type definition for the incoming message format
@@ -170,7 +174,9 @@ export function calculateMessagePrice(message: string, _priority: boolean = fals
 export default {
   type: 'post',
   path: '/sendMessage',
-  get knex () { return runtimeDeps.knex },
+  get knex() {
+    return runtimeDeps.knex
+  },
   summary: "Use this route to send a message to a recipient's message box.",
   parameters: {
     message: {
@@ -196,7 +202,14 @@ export default {
 
     try {
       const { message, payment } = req.body
-      log.info({ operation: 'message.send', message_box: message?.messageBox, has_payment: payment != null }, 'Received message send request')
+      log.info(
+        {
+          operation: 'message.send',
+          message_box: message?.messageBox,
+          has_payment: payment != null
+        },
+        'Received message send request'
+      )
 
       if (message == null) {
         Logger.error('[ERROR] No message provided in request body!')
@@ -208,7 +221,11 @@ export default {
       }
 
       if (typeof message.messageBox !== 'string' || message.messageBox.trim() === '') {
-        return res.status(400).json({ status: 'error', code: 'ERR_INVALID_MESSAGEBOX', description: 'Invalid message box.' })
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_MESSAGEBOX',
+          description: 'Invalid message box.'
+        })
       }
       if (Buffer.byteLength(message.messageBox.trim(), 'utf8') > MAX_MESSAGE_BOX_BYTES) {
         return res.status(400).json({
@@ -222,7 +239,11 @@ export default {
         typeof message.body !== 'string' ||
         (typeof message.body === 'string' && message.body.trim() === '')
       ) {
-        return res.status(400).json({ status: 'error', code: 'ERR_INVALID_MESSAGE_BODY', description: 'Invalid message body.' })
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_MESSAGE_BODY',
+          description: 'Invalid message body.'
+        })
       }
       if (Buffer.byteLength(message.body, 'utf8') > MAX_MESSAGE_BODY_BYTES) {
         return res.status(413).json({
@@ -242,9 +263,7 @@ export default {
           description: 'Missing recipient(s). Provide "recipient" or "recipients".'
         })
       }
-      const recipients: string[] = Array.isArray(recipientsRaw)
-        ? recipientsRaw
-        : [recipientsRaw]
+      const recipients: string[] = Array.isArray(recipientsRaw) ? recipientsRaw : [recipientsRaw]
       if (recipients.length === 0 || recipients.length > MAX_MESSAGE_RECIPIENTS) {
         return res.status(400).json({
           status: 'error',
@@ -261,9 +280,7 @@ export default {
           description: 'Missing messageId.'
         })
       }
-      const messageIds: string[] = Array.isArray(messageIdRaw)
-        ? messageIdRaw
-        : [messageIdRaw]
+      const messageIds: string[] = Array.isArray(messageIdRaw) ? messageIdRaw : [messageIdRaw]
 
       // If multiple recipients but only one messageId provided, fail clearly (avoid accidental reuse)
       if (recipients.length > 1 && messageIds.length === 1) {
@@ -288,7 +305,11 @@ export default {
           id.trim() === '' ||
           Buffer.byteLength(id, 'utf8') > MAX_MESSAGE_ID_BYTES
         ) {
-          return res.status(400).json({ status: 'error', code: 'ERR_INVALID_MESSAGEID', description: 'Each messageId must be a non-empty string.' })
+          return res.status(400).json({
+            status: 'error',
+            code: 'ERR_INVALID_MESSAGEID',
+            description: 'Each messageId must be a non-empty string.'
+          })
         }
       }
 
@@ -313,10 +334,16 @@ export default {
       // Ensure messageBox exists for each recipient
       const boxType = message.messageBox.trim()
       for (const r of recipientsTrimmed) {
-        const existing = await runtimeDeps.knex('messageBox').where({ identityKey: r, type: boxType }).first()
+        const existing = await runtimeDeps
+          .knex('messageBox')
+          .where({ identityKey: r, type: boxType })
+          .first()
         if (!existing) {
           await runtimeDeps.knex('messageBox').insert({
-            identityKey: r, type: boxType, created_at: new Date(), updated_at: new Date()
+            identityKey: r,
+            type: boxType,
+            created_at: new Date(),
+            updated_at: new Date()
           })
         }
       }
@@ -324,11 +351,22 @@ export default {
       // ---------- Fee evaluation ----------
       const deliveryFeeOnce = await getServerDeliveryFee(boxType)
 
-      type FeeRow = { recipient: string; recipientFee: number; allowed: boolean; blockedReason?: string }
+      type FeeRow = {
+        recipient: string
+        recipientFee: number
+        allowed: boolean
+        blockedReason?: string
+      }
       const feeRows: FeeRow[] = []
       for (const r of recipientsTrimmed) {
         const rf = await getRecipientFee(r, senderKey, boxType) // -1 = blocked; 0 = allow; >0 = sats required
-        if (rf === -1) feeRows.push({ recipient: r, recipientFee: rf, allowed: false, blockedReason: `Messages to ${r} are blocked` })
+        if (rf === -1)
+          feeRows.push({
+            recipient: r,
+            recipientFee: rf,
+            allowed: false,
+            blockedReason: `Messages to ${r} are blocked`
+          })
         else feeRows.push({ recipient: r, recipientFee: rf, allowed: true })
       }
 
@@ -344,7 +382,7 @@ export default {
       }
 
       const anyRecipientFee = feeRows.some(f => f.recipientFee > 0)
-      const requiresPayment = (deliveryFeeOnce > 0) || anyRecipientFee
+      const requiresPayment = deliveryFeeOnce > 0 || anyRecipientFee
 
       // ---------- Payment internalization (batch) ----------
       const perRecipientOutputs = new Map<string, any[]>()
@@ -395,7 +433,14 @@ export default {
 
         // ---------- Build per-recipient outputs ----------
         const recipientSideOutputs = payment.outputs.slice(deliveryFeeOnce > 0 ? 1 : 0)
-        log.info({ operation: 'message.send', recipient_output_count: recipientSideOutputs.length, total_output_count: payment.outputs.length }, 'Payment outputs')
+        log.info(
+          {
+            operation: 'message.send',
+            recipient_output_count: recipientSideOutputs.length,
+            total_output_count: payment.outputs.length
+          },
+          'Payment outputs'
+        )
 
         const feeRecipients = feeRows.filter(f => f.recipientFee > 0).map(f => f.recipient)
 
@@ -489,7 +534,8 @@ export default {
       // ---------- Store messages (one per recipient) ----------
       const results: Array<{ recipient: string; messageId: string }> = []
       for (const { recipient: r } of feeRows) {
-        const mb = await runtimeDeps.knex('messageBox')
+        const mb = await runtimeDeps
+          .knex('messageBox')
           .where({ identityKey: r, type: boxType })
           .select('messageBoxId')
           .first()
@@ -514,7 +560,8 @@ export default {
         }
 
         try {
-          await runtimeDeps.knex('messages')
+          await runtimeDeps
+            .knex('messages')
             .insert({
               messageId: perRecipientMessageId,
               messageBoxId: mb?.messageBoxId ?? null,

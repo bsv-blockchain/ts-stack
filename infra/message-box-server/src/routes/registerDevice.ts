@@ -3,6 +3,9 @@ import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { runtimeDeps } from '../runtimeDeps.js'
 
+export const MAX_FCM_TOKEN_LENGTH = 500
+export const MAX_DEVICE_ID_LENGTH = 255
+
 export interface RegisterDeviceRequest extends AuthRequest {
   body: {
     fcmToken: string
@@ -59,6 +62,8 @@ export interface RegisterDeviceRequest extends AuthRequest {
  *         description: Invalid request parameters
  *       401:
  *         description: Authentication required
+ *       409:
+ *         description: The FCM token is already registered to another authenticated identity
  *       500:
  *         description: Internal server error
  */
@@ -93,6 +98,26 @@ export default {
         })
       }
 
+      const normalizedFcmToken = fcmToken.trim()
+      if (normalizedFcmToken.length > MAX_FCM_TOKEN_LENGTH) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_FCM_TOKEN',
+          description: `fcmToken must not exceed ${MAX_FCM_TOKEN_LENGTH} characters.`
+        })
+      }
+
+      if (
+        deviceId != null &&
+        (typeof deviceId !== 'string' || deviceId.trim().length > MAX_DEVICE_ID_LENGTH)
+      ) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_DEVICE_ID',
+          description: `deviceId must be a string of at most ${MAX_DEVICE_ID_LENGTH} characters.`
+        })
+      }
+
       // Validate platform if provided
       const validPlatforms = ['ios', 'android', 'web']
       if (platform != null && !validPlatforms.includes(platform)) {
@@ -105,30 +130,49 @@ export default {
       }
 
       try {
-        // Insert or update device registration
+        // A token is a credential-like delivery address. Never let one
+        // authenticated identity silently take a token already owned by
+        // another identity.
         const now = new Date()
-        const [deviceRegistrationId] = await runtimeDeps.knex('device_registrations')
-          .insert({
-            identity_key: identityKey,
-            fcm_token: fcmToken.trim(),
-            device_id: deviceId?.trim() ?? null,
-            platform: platform ?? null,
-            created_at: now,
-            updated_at: now,
-            active: true,
-            last_used: now
-          })
-          .onConflict('fcm_token')
-          .merge({
-            identity_key: identityKey, // Update identity key in case token was reassigned
-            device_id: deviceId?.trim() ?? null,
-            platform: platform ?? null,
-            updated_at: now,
-            active: true,
-            last_used: now
-          })
+        const existing = await runtimeDeps
+          .knex('device_registrations')
+          .select('id', 'identity_key')
+          .where('fcm_token', normalizedFcmToken)
+          .first()
 
-        Logger.log(`[DEBUG] Device registered successfully: ${identityKey} with token ending in ...${fcmToken.slice(-10)}`)
+        if (existing != null && existing.identity_key !== identityKey) {
+          return res.status(409).json({
+            status: 'error',
+            code: 'ERR_DEVICE_TOKEN_ALREADY_REGISTERED',
+            description: 'This device token is already registered to another identity.'
+          })
+        }
+
+        const values = {
+          device_id: deviceId?.trim() ?? null,
+          platform: platform ?? null,
+          updated_at: now,
+          active: true,
+          last_used: now
+        }
+
+        let deviceRegistrationId: number
+        if (existing != null) {
+          await runtimeDeps.knex('device_registrations').where('id', existing.id).update(values)
+          deviceRegistrationId = existing.id
+        } else {
+          const [insertedId] = await runtimeDeps.knex('device_registrations').insert({
+            identity_key: identityKey,
+            fcm_token: normalizedFcmToken,
+            created_at: now,
+            ...values
+          })
+          deviceRegistrationId = Number(insertedId)
+        }
+
+        Logger.log(
+          `[DEBUG] Device registered successfully for authenticated identity with token ending in ...${normalizedFcmToken.slice(-10)}`
+        )
 
         return res.status(200).json({
           status: 'success',

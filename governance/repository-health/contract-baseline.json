@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 54,
+  "findingCount": 51,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,18 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/messaging/message-box-client::missing-script::format:check",
-      "message": "Profile dual-runtime-library requires script format:check"
-    },
-    {
-      "id": "packages/messaging/message-box-client::missing-script::pack:check",
-      "message": "Profile dual-runtime-library requires script pack:check"
-    },
-    {
-      "id": "packages/messaging/message-box-client::missing-script::typecheck",
-      "message": "Profile dual-runtime-library requires script typecheck"
     },
     {
       "id": "packages/middleware/auth-express-middleware::missing-script::format:check",

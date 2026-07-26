@@ -26,7 +26,7 @@ export interface TokenSourceRef {
 
 /** The transferable result produced by an adapter; travels in the message body. */
 export interface TokenSettlementArtifact {
-  customInstructions: { derivationPrefix: Base64String, derivationSuffix: Base64String }
+  customInstructions: { derivationPrefix: Base64String; derivationSuffix: Base64String }
   transaction: AtomicBEEF
   protocol: string
   assetId: string
@@ -65,19 +65,28 @@ export interface AcceptTokenSettlementArgs {
   settlement: TokenSettlementArtifact
 }
 
-export interface Termination { code: string, message: string }
+export interface Termination {
+  code: string
+  message: string
+}
 
 export type TokenBuildResult =
-  | { action: 'settle', artifact: TokenSettlementArtifact }
-  | { action: 'terminate', termination: Termination }
+  | { action: 'settle'; artifact: TokenSettlementArtifact }
+  | { action: 'terminate'; termination: Termination }
 
 export type TokenAcceptResult =
-  | { action: 'accept', receiptData?: { internalizeResult?: unknown } }
-  | { action: 'terminate', termination: Termination }
+  | { action: 'accept'; receiptData?: { internalizeResult?: unknown } }
+  | { action: 'terminate'; termination: Termination }
 
 export interface TokenSettlementAdapter {
   /** Discriminator matched against TokenSourceRef.protocol / TokenToken.protocol. */
   readonly protocol: string
-  buildTokenSettlement: (args: BuildTokenSettlementArgs, ctx: TokenAdapterContext) => Promise<TokenBuildResult>
-  acceptTokenSettlement: (args: AcceptTokenSettlementArgs, ctx: TokenAdapterContext) => Promise<TokenAcceptResult>
+  buildTokenSettlement: (
+    args: BuildTokenSettlementArgs,
+    ctx: TokenAdapterContext
+  ) => Promise<TokenBuildResult>
+  acceptTokenSettlement: (
+    args: AcceptTokenSettlementArgs,
+    ctx: TokenAdapterContext
+  ) => Promise<TokenAcceptResult>
 }

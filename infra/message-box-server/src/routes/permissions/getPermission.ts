@@ -4,6 +4,8 @@ import { Logger } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { runtimeDeps } from '../../runtimeDeps.js'
 
+const MAX_MESSAGE_BOX_BYTES = 128
+
 export interface GetPermissionRequest extends AuthRequest {
   query: {
     sender?: string // identityKey of sender to check
@@ -34,7 +36,7 @@ export interface GetPermissionRequest extends AuthRequest {
  *         description: messageBox type to check
  *     responses:
  *       200:
- *         description: Permission setting retrieved successfully (or undefined if not set)
+ *         description: Permission setting retrieved successfully (or null if not set)
  *       400:
  *         description: Invalid request parameters
  *       401:
@@ -62,12 +64,16 @@ export default {
       const { sender, messageBox } = req.query
 
       // Validate required parameters
-      if (messageBox == null) {
+      if (
+        typeof messageBox !== 'string' ||
+        messageBox.trim() === '' ||
+        Buffer.byteLength(messageBox.trim(), 'utf8') > MAX_MESSAGE_BOX_BYTES
+      ) {
         Logger.log('[DEBUG] Missing required parameters for get permission')
         return res.status(400).json({
           status: 'error',
-          code: 'ERR_MISSING_PARAMETERS',
-          description: 'messageBox parameter is required.'
+          code: 'ERR_INVALID_MESSAGE_BOX',
+          description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
         })
       }
 
@@ -86,26 +92,25 @@ export default {
       }
 
       const recipient = req.auth.identityKey
+      const normalizedMessageBox = messageBox.trim()
 
       // Get message permission directly from database
-      const whereClause: any = {
+      const whereClause = {
         recipient,
-        message_box: messageBox
+        message_box: normalizedMessageBox,
+        sender_scope: sender ?? ''
       }
 
-      // Add sender condition (null for box-wide, specific sender for sender-specific)
-      if (sender != null) {
-        whereClause.sender = sender
-      } else {
-        whereClause.sender = null
-      }
-
-      const permission = await runtimeDeps.knex('message_permissions')
+      const permission = await runtimeDeps
+        .knex('message_permissions')
         .where(whereClause)
         .select('recipient_fee', 'created_at', 'updated_at')
         .first()
 
-      Logger.log(`[DEBUG] Permission record for ${sender ?? 'box-wide'} -> ${recipient} (${messageBox}): ${JSON.stringify(permission)}`)
+      Logger.log(
+        `[DEBUG] Permission record for ${sender ?? 'box-wide'} -> authenticated recipient ` +
+          `(${normalizedMessageBox}): ${permission == null ? 'not found' : 'found'}`
+      )
 
       if (permission != null) {
         // Helper function to determine status from recipient fee
@@ -118,12 +123,13 @@ export default {
         // Permission is set, return it
         return res.status(200).json({
           status: 'success',
-          description: sender != null
-            ? `Permission setting found for sender ${sender} to ${messageBox}.`
-            : `Box-wide permission setting found for ${messageBox}.`,
+          description:
+            sender != null
+              ? `Permission setting found for sender ${sender} to ${normalizedMessageBox}.`
+              : `Box-wide permission setting found for ${normalizedMessageBox}.`,
           permission: {
             sender: sender ?? null,
-            messageBox,
+            messageBox: normalizedMessageBox,
             recipientFee: permission.recipient_fee,
             status: getStatusFromFee(permission.recipient_fee),
             createdAt: permission.created_at.toISOString(),
@@ -134,10 +140,11 @@ export default {
         // No permission set, return undefined
         return res.status(200).json({
           status: 'success',
-          description: sender != null
-            ? `No permission setting found for sender ${sender} to ${messageBox}.`
-            : `No box-wide permission setting found for ${messageBox}.`,
-          permission: undefined
+          description:
+            sender != null
+              ? `No permission setting found for sender ${sender} to ${normalizedMessageBox}.`
+              : `No box-wide permission setting found for ${normalizedMessageBox}.`,
+          permission: null
         })
       }
     } catch (error) {
