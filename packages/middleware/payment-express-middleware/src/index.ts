@@ -152,6 +152,33 @@ function isPaymentLogger(value: unknown): boolean {
   )
 }
 
+async function issuePaymentChallenge(
+  wallet: PaymentMiddlewareOptions['wallet'],
+  res: Response,
+  requestPrice: number,
+  logger: PaymentMiddlewareOptions['logger']
+): Promise<void> {
+  try {
+    const derivationPrefix = await createNonce(wallet)
+    res
+      .status(402)
+      .set({
+        'x-bsv-payment-version': PAYMENT_VERSION,
+        'x-bsv-payment-satoshis-required': String(requestPrice),
+        'x-bsv-payment-derivation-prefix': derivationPrefix
+      })
+      .json({
+        status: 'error',
+        code: 'ERR_PAYMENT_REQUIRED',
+        satoshisRequired: requestPrice,
+        description: 'A BSV payment is required. Provide the X-BSV-Payment header.'
+      })
+  } catch (error) {
+    logger?.error?.('Failed to create a payment challenge.', safeErrorContext(error))
+    sendError(res, 503, 'ERR_PAYMENT_UNAVAILABLE', 'Payment processing is temporarily unavailable.')
+  }
+}
+
 /**
  * Creates middleware that enforces a BRC-29 wallet payment after BRC-103 auth.
  */
@@ -229,30 +256,7 @@ export function createPaymentMiddleware(
 
     const rawPayment = paymentHeader(req)
     if (rawPayment === undefined) {
-      try {
-        const derivationPrefix = await createNonce(wallet)
-        res
-          .status(402)
-          .set({
-            'x-bsv-payment-version': PAYMENT_VERSION,
-            'x-bsv-payment-satoshis-required': String(requestPrice),
-            'x-bsv-payment-derivation-prefix': derivationPrefix
-          })
-          .json({
-            status: 'error',
-            code: 'ERR_PAYMENT_REQUIRED',
-            satoshisRequired: requestPrice,
-            description: 'A BSV payment is required. Provide the X-BSV-Payment header.'
-          })
-      } catch (error) {
-        logger?.error?.('Failed to create a payment challenge.', safeErrorContext(error))
-        sendError(
-          res,
-          503,
-          'ERR_PAYMENT_UNAVAILABLE',
-          'Payment processing is temporarily unavailable.'
-        )
-      }
+      await issuePaymentChallenge(wallet, res, requestPrice, logger)
       return
     }
 

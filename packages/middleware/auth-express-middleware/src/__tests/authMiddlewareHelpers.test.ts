@@ -205,6 +205,7 @@ describe('auth middleware helpers', () => {
     expect(convertValueToArray([5, 6], {})).toEqual([5, 6])
     expect(convertValueToArray(42, {})).toEqual(Utils.toArray('42', 'utf8'))
     expect(convertValueToArray(true, {})).toEqual(Utils.toArray('true', 'utf8'))
+    expect(convertValueToArray(Symbol('unsupported'), {})).toEqual([])
 
     const inferredHeaders: Record<string, string> = {}
     expect(convertValueToArray({ ok: true }, inferredHeaders)).toEqual(

@@ -66,10 +66,14 @@ export function writeRequestHeadersToWriter(req: Request, writer: Utils.Writer):
     // Normalise to a single string — Express may return string[] when a header
     // is repeated (e.g. `Set-Cookie`).  Take the first value to avoid
     // type-confusion (CodeQL js/type-confusion-through-parameter-tampering).
-    const vStr: string = Array.isArray(v) ? v[0] : typeof v === 'string' ? v : ''
-    let headerValue = vStr
+    let headerValue = ''
+    if (Array.isArray(v)) {
+      headerValue = v[0]
+    } else if (typeof v === 'string') {
+      headerValue = v
+    }
     if (k === 'content-type') {
-      headerValue = vStr.split(';')[0].trim()
+      headerValue = headerValue.split(';')[0].trim()
     }
     if (
       (k.startsWith('x-bsv-') || k === 'content-type' || k === 'authorization') &&
@@ -202,10 +206,10 @@ export function convertValueToArray(
     }
     return Utils.toArray(JSON.stringify(val), 'utf8')
   }
-  if (typeof val === 'number') {
+  if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') {
     return Utils.toArray(val.toString(), 'utf8')
   }
-  return Utils.toArray(String(val), 'utf8')
+  return []
 }
 
 /**

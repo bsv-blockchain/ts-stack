@@ -23,7 +23,7 @@
 | Oxlint              | Passing with zero warnings                                                           |
 | Prettier check      | Passing                                                                              |
 | Deterministic tests | 37 passing in 1 suite; no public-network calls                                       |
-| Production coverage | 98.49% lines, 98.13% branches, 100% functions, 97.88% statements                     |
+| Production coverage | 98.50% lines, 98.13% branches, 100% functions, 97.90% statements                     |
 | Coverage floor      | 85% lines/statements/functions; 80% branches                                         |
 | Build               | `tsdown` passing                                                                     |
 | Artifact            | Exact tarball validated for ESM, CommonJS, declarations, exports, and file allowlist |

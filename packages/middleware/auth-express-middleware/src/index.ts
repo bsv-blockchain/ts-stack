@@ -125,7 +125,7 @@ function singleHeader(req: Request, name: string, required = true): string | und
 
 function containsUnsafeHeaderCharacter(value: string): boolean {
   for (const character of value) {
-    const code = character.charCodeAt(0)
+    const code = character.codePointAt(0)
     if (code === 0 || code === 10 || code === 13) return true
   }
   return false
@@ -223,8 +223,6 @@ class ResponseWriterWrapper {
   private statusCode: number = 200
   private headers: Record<string, string> = {}
   private body: number[] = []
-
-  constructor(_res: Response) {}
 
   status(code: number): this {
     this.statusCode = code
@@ -930,7 +928,7 @@ export class ExpressTransport implements Transport {
     this.log('debug', 'General message from the correct identity key')
     req.auth = { identityKey: senderPublicKey }
 
-    const wrapper = new ResponseWriterWrapper(res)
+    const wrapper = new ResponseWriterWrapper()
     let responseSent = false
 
     const buildAndSendResponse = async (): Promise<void> => {
