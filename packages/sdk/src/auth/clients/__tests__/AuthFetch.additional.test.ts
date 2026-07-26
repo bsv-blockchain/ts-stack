@@ -825,7 +825,36 @@ describe('AuthFetch.wait (private)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 13. isPaymentContextCompatible
+// 13. waitForPendingCertificateRequests()
+// ---------------------------------------------------------------------------
+
+describe('AuthFetch.waitForPendingCertificateRequests (private)', () => {
+  it('waits until the pending certificate queue is empty', async () => {
+    const authFetch = new AuthFetch(buildWallet())
+    const peer = { pendingCertificateRequests: [true] }
+    jest.spyOn(authFetch as any, 'wait').mockImplementation(async () => {
+      peer.pendingCertificateRequests.shift()
+    })
+
+    await expect((authFetch as any).waitForPendingCertificateRequests(peer)).resolves.toBeUndefined()
+    expect(peer.pendingCertificateRequests).toEqual([])
+  })
+
+  it('fails closed when a pending certificate decision times out', async () => {
+    const authFetch = new AuthFetch(buildWallet())
+    const peer = { pendingCertificateRequests: [true] }
+    jest.spyOn(Date, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(30_001)
+
+    await expect((authFetch as any).waitForPendingCertificateRequests(peer)).rejects.toThrow(
+      'Timeout waiting for certificate request to complete'
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 14. isPaymentContextCompatible
 // ---------------------------------------------------------------------------
 
 describe('AuthFetch.isPaymentContextCompatible (private)', () => {

@@ -5,7 +5,7 @@ import { assertValidHex } from './hex.js'
 export { WriterUint8Array } from './WriterUint8Array.js'
 export { ReaderUint8Array } from './ReaderUint8Array.js'
 
-const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
+const BufferCtor = (globalThis as any).Buffer
 const CAN_USE_BUFFER = BufferCtor != null && typeof BufferCtor.from === 'function'
 
 /**

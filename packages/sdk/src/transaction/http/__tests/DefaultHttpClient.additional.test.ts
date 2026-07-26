@@ -98,6 +98,7 @@ describe('defaultHttpClient — noHttpClient fallback paths', () => {
     if ('window' in globalThis) {
       delete (globalThis as { window?: unknown }).window
     }
+    delete (globalThis as { fetch?: unknown }).fetch
 
     let defaultHttpClient: any
     jest.isolateModules(() => {
@@ -195,6 +196,7 @@ describe('binaryHttpClient — noHttpClient fallback paths', () => {
     if ('window' in globalThis) {
       delete (globalThis as { window?: unknown }).window
     }
+    delete (globalThis as { fetch?: unknown }).fetch
 
     let binaryHttpClient: any
     jest.isolateModules(() => {

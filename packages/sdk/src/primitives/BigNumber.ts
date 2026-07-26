@@ -4,7 +4,7 @@ import ReductionContext from './ReductionContext.js'
 /** Comparison result: -1 (less than), 0 (equal), or 1 (greater than). */
 type CompareResult = 1 | 0 | -1
 
-const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
+const BufferCtor = (globalThis as any).Buffer
 const CAN_USE_BUFFER = BufferCtor != null && typeof BufferCtor.from === 'function'
 const HEX_CHAR_TO_VALUE = new Int8Array(256).fill(-1)
 for (let i = 0; i < 10; i++) {
@@ -246,10 +246,6 @@ export default class BigNumber {
     this.red = null
     number ??= 0
 
-    if (number === null) {
-      this._initializeState(0n, 0)
-      return
-    }
     if (typeof number === 'bigint') {
       this._initializeState(number < 0n ? -number : number, number < 0n ? 1 : 0)
       this.normSign()
@@ -389,12 +385,6 @@ export default class BigNumber {
   }
 
   private _parseBaseString(numberStr: string, base: number): void {
-    if (numberStr.length === 0) {
-      this._magnitude = 0n
-      this._finishInitialization()
-      return
-    }
-
     this._magnitude = 0n
     const bigBase = BigInt(base)
 
@@ -1647,16 +1637,6 @@ export default class BigNumber {
     mB = mB.slice(firstNonZeroIdx)
 
     let nSize = mB.length
-    if (nSize === 0 && !bnAbs.isZero()) {
-      // Should not happen if bnAbs is truly non-zero and toArray is correct
-      mB = [0] // Should not be needed if toArray works for small numbers
-      nSize = 1
-    }
-    if (bnAbs.isZero()) {
-      // if original was, e.g., -0, bnAbs is 0.
-      nSize = 0 // Size for 0 is 0, unless it's negative 0 to be encoded
-      mB = []
-    }
 
     let nWordNum
     if (nSize === 0) {

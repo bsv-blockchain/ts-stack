@@ -51,6 +51,36 @@ describe('SHIPCast', () => {
     )
   })
 
+  it('rejects insecure facilitator URLs unless HTTP is explicitly enabled', async () => {
+    const httpClient = jest.fn()
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(
+      httpClient as unknown as typeof fetch
+    )
+
+    await expect(
+      facilitator.send('http://overlay.example', {
+        beef: [1, 2, 3],
+        topics: ['tm_foo']
+      })
+    ).rejects.toThrow('HTTPS facilitator can only use URLs that start with "https:"')
+    expect(httpClient).not.toHaveBeenCalled()
+  })
+
+  it('reports the all-host acknowledgment failure directly', () => {
+    const broadcaster = new SHIPCast(['tm_foo'], {
+      requireAcknowledgmentFromAllHostsForTopics: 'all'
+    })
+    expect(
+      (broadcaster as any).checkAllHostsRequirement({
+        'https://overlay.example': new Set()
+      })
+    ).toEqual({
+      status: 'error',
+      code: 'ERR_REQUIRE_ACK_FROM_ALL_HOSTS_FAILED',
+      description: 'Not all hosts acknowledged the required topics.'
+    })
+  })
+
   it('Handles constructor errors', () => {
     expect(() => new SHIPCast([])).toThrow(
       new Error('At least one topic is required for broadcast.')
