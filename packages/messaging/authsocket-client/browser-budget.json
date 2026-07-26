@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/authsocket-client",
+  "entry": ".",
+  "requiredExports": ["AuthSocketClient", "SocketClientTransport"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 300000,
+      "gzip": 90000,
+      "brotli": 75000
+    },
+    "esbuild": {
+      "raw": 240000,
+      "gzip": 85000,
+      "brotli": 72000
+    }
+  },
+  "umd": {
+    "path": "dist/umd/bundle.js",
+    "global": "bsv",
+    "maximumBytes": {
+      "raw": 225000,
+      "gzip": 77000,
+      "brotli": 66000
+    }
+  }
+}

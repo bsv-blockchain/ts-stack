@@ -1,4 +1,4 @@
-import { AuthSocketServer } from '../src/AuthSocketServer'
+import { AuthSocketServer } from '../src/AuthSocketServer.js'
 
 describe('AuthSocketServer identity routing', () => {
   it('delivers only to peers whose BRC-103 identity matches', () => {

@@ -10,33 +10,42 @@
   },
   "description": "Mutually Authenticated Web Sockets Client",
   "type": "module",
-  "main": "dist/cjs/mod.js",
-  "module": "dist/esm/mod.js",
-  "types": "dist/types/mod.d.ts",
+  "main": "./dist/mod.cjs",
+  "module": "./dist/mod.js",
+  "types": "./dist/mod.d.ts",
   "files": [
     "dist",
-    "src",
+    "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js",
-      "types": "./dist/types/mod.d.ts"
+      "import": {
+        "types": "./dist/mod.d.ts",
+        "default": "./dist/mod.js"
+      },
+      "require": {
+        "types": "./dist/mod.d.cts",
+        "default": "./dist/mod.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "npm run build && jest",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
-    "lint": "oxlint src",
-    "build": "npm run build:ts",
-    "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "build": "pnpm build:ts && pnpm build:umd",
+    "build:ts": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform browser --tsconfig tsconfig.base.json --unbundle",
     "build:umd": "webpack --config webpack.config.js",
-    "dev": "tsc -b -w",
-    "prepublish": "npm run build",
-    "doc": "ts2md"
+    "dev": "pnpm build:ts --watch",
+    "doc": "ts2md",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/messaging/authsocket-client/**/*.{js,json,ts}\"",
+    "lint": "oxlint mod.ts src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports AuthSocketClient,SocketClientTransport",
+    "prepublishOnly": "pnpm build",
+    "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "repository": {
     "type": "git",
@@ -62,16 +71,15 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.1",
     "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1",
+    "oxlint": "^1.75.0",
     "ts-jest": "^29.4.12",
-    "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
-    "tsconfig-to-dual-package": "^1.2.0",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3",
     "webpack": "^5.109.0",
-    "webpack-cli": "^7.2.1",
-    "oxlint": "^1.75.0"
+    "webpack-cli": "^7.2.1"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"
