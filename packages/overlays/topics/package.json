@@ -14,20 +14,26 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     }
   },
   "files": [
     "dist",
+    "!dist/**/*.tsbuildinfo",
     "README.md",
     "LICENSE.txt"
   ],
   "scripts": {
     "build": "tsc",
-    "lint": "oxlint src",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/topics/{README.md,jest.config.js,package.json,tsconfig.json}\" \"packages/overlays/topics/src/index.ts\"",
+    "lint": "oxlint src jest.config.js --deny-warnings",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports AnyTopicManager,AppsTopicManager,BTMSTopicManager,BasketMapTopicManager,Bsv21LookupService,Bsv21StorageManager,Bsv21TopicManager,CertMapTopicManager,DIDTopicManager,DesktopIntegrityTopicManager,DstasLookupService,DstasStorageManager,DstasTopicManager,FractionalizeTopicManager,HelloWorldTopicManager,IdentityTopicManager,InMemoryScreeningProvider,KVStoreTopicManager,MandalaLookupService,MandalaStorageManager,MandalaTopicManager,MessageBoxTopicManager,MonsterBattleTopicManager,ProtoMapTopicManager,SlackThreadsTopicManager,StasLookupService,StasStorageManager,StasTopicManager,SupplyChainTopicManager,TokenDemoTopicManager,UHRPTopicManager,UMPTopicManager,WalletConfigTopicManager,allowlistIssuerPolicy,btmsProtocol,createAnyLookupService,createAppsLookupService,createBTMSLookupService,createBasketMapLookupService,createBsv21LookupService,createCertMapLookupService,createDIDLookupService,createDesktopIntegrityLookupService,createDstasLookupService,createFractionalizeLookupService,createHelloWorldLookupService,createIdentityLookupService,createKVStoreLookupService,createMandalaLookupService,createMessageBoxLookupService,createMonsterBattleLookupService,createProtoMapLookupService,createSlackThreadsLookupService,createStasLookupService,createSupplyChainLookupService,createTokenDemoLookupService,createUHRPLookupService,createUMPLookupService,createWalletConfigLookupService,deserializeWalletProtocol,kvProtocol,verifyKeyLinkage",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@bsv/overlay": "workspace:^",

@@ -58,7 +58,7 @@ function buildMonsterBattleTransferScript(): LockingScript {
   const jsonPayload = JSON.stringify({ p: 'bsv-20', op: 'transfer', id: 'monster_token_001', amt: '100' })
   const jsonBytes = Utils.toArray(jsonPayload, 'utf8')
   const formatMiddle = Utils.toArray('6876a9', 'hex')
-  const pubkeyHash = new Array(20).fill(0xcd)
+  const pubkeyHash = Array.from({ length: 20 }, () => 0xcd)
   const formatEnd = Utils.toArray('88ac', 'hex')
   const opReturnData = Utils.toArray('deadbeef', 'hex')
 
@@ -87,7 +87,7 @@ function buildMonsterBattleDeployMintScript(): LockingScript {
   const jsonPayload = JSON.stringify({ p: 'bsv-20', op: 'deploy+mint', tick: 'MSTR', amt: '10000' })
   const jsonBytes = Utils.toArray(jsonPayload, 'utf8')
   const formatMiddle = Utils.toArray('6876a9', 'hex')
-  const pubkeyHash = new Array(20).fill(0xef)
+  const pubkeyHash = Array.from({ length: 20 }, () => 0xef)
   const formatEnd = Utils.toArray('88ac', 'hex')
   const opReturnData = [0x01, 0x02, 0x03]
 
@@ -149,7 +149,7 @@ describe('MonsterBattleTopicManager', () => {
     const formatStart = Utils.toArray('0063036f726451126170706c69636174696f6e2f6273762d323000', 'hex')
     const badJson = Utils.toArray(JSON.stringify({ p: 'not-bsv-20', op: 'transfer', id: 'x', amt: '1' }), 'utf8')
     const formatMiddle = Utils.toArray('6876a9', 'hex')
-    const pubkeyHash = new Array(20).fill(0)
+    const pubkeyHash = Array.from({ length: 20 }, () => 0)
     const formatEnd = Utils.toArray('88ac', 'hex')
     const opReturnData = [0x01]
 
@@ -182,7 +182,7 @@ describe('MonsterBattleTopicManager', () => {
   })
 
   it('does not admit a P2PKH script (it is silently skipped)', async () => {
-    const pubkeyHash = new Array(20).fill(0xab)
+    const pubkeyHash = Array.from({ length: 20 }, () => 0xab)
     const p2pkh = new LockingScript([
       { op: 0x76 },                       // OP_DUP
       { op: 0xa9 },                       // OP_HASH160

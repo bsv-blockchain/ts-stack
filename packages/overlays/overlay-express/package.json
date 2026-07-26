@@ -15,32 +15,44 @@
   "types": "dist/types/mod.d.ts",
   "files": [
     "dist",
-    "src",
-    "docs",
-    "mod.ts",
+    "!dist/**/*.tsbuildinfo",
+    "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/types/mod.d.ts",
+        "default": "./dist/esm/mod.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mod.d.ts",
+        "default": "./dist/cjs/mod.js"
+      }
     },
     "./*.ts": {
-      "types": "./dist/types/src/*.d.ts",
-      "import": "./dist/esm/src/*.js",
-      "require": "./dist/cjs/src/*.js"
+      "import": {
+        "types": "./dist/types/src/*.d.ts",
+        "default": "./dist/esm/src/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/*.d.ts",
+        "default": "./dist/cjs/src/*.js"
+      }
     }
   },
   "scripts": {
-    "test": "jest",
+    "test": "jest --watchman=false",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "lint": "oxlint src",
-    "lint:ci": "oxlint src",
+    "test:coverage": "jest --coverage --watchman=false",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay-express/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
+    "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
+    "lint:ci": "pnpm lint",
+    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --local-consumer-dependencies ../overlay,../overlay-discovery-services --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus",
+    "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
-    "prepublish": "npm run build",
+    "prepublishOnly": "pnpm build",
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1",
     "demo": "rm -r dist && npm run build && npx tsx demo-ui.ts"
   },

@@ -5,6 +5,9 @@
     "module": "commonjs",
     "moduleResolution": "bundler",
     "rootDir": "./",
-    "outDir": "./dist/cjs"
+    "outDir": "./dist/cjs",
+    "declaration": true,
+    "declarationMap": true,
+    "tsBuildInfoFile": "./node_modules/.cache/overlay-express-cjs.tsbuildinfo"
   }
 }

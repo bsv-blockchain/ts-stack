@@ -96,13 +96,13 @@ export class OverlayGASPRemote implements GASPRemote {
   // ---- Now optional methods ----
 
   // When are only syncing to them
-  async getInitialReply (response: GASPInitialResponse): Promise<GASPInitialReply> {
+  async getInitialReply (_response: GASPInitialResponse): Promise<GASPInitialReply> {
     throw new Error('Function not supported!')
   }
 
   // Only used when supporting bidirectional sync.
   // Overlay services does not support this.
-  async submitNode (node: GASPNode): Promise<GASPNodeResponse | undefined> {
+  async submitNode (_node: GASPNode): Promise<GASPNodeResponse | undefined> {
     throw new Error('Node submission not supported!')
   }
 }

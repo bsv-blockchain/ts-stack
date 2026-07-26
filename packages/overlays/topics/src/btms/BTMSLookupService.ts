@@ -163,7 +163,7 @@ class BTMSLookupService implements LookupService {
         txid: result.txid,
         outputIndex: result.outputIndex,
         history: query.history
-          ? async (beef: number[], outputIndex: number, currentDepth: number) => {
+          ? async (beef: number[], outputIndex: number, _currentDepth: number) => {
             return await this.historySelector(beef, outputIndex, result.assetId)
           }
           : undefined
@@ -192,7 +192,7 @@ class BTMSLookupService implements LookupService {
       }
 
       return true
-    } catch (_e) {
+    } catch {
       // Malformed BEEF or script — output is not a valid BTMS token; exclude from history
       return false
     }

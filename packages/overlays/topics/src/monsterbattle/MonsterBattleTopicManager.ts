@@ -76,10 +76,12 @@ function checkScriptFormat (script: Script) {
     if (formatStart !== TEMPLATES.formatStart) throw new Error('Malformed formatStart')
 
     try {
-      const formatJsonPayload = JSON.parse(Utils.toUTF8(chunks[6].data))
+      const jsonPayload = chunks[6].data
+      if (jsonPayload === undefined) throw new Error('Missing JSON payload')
+      const formatJsonPayload = JSON.parse(Utils.toUTF8(jsonPayload))
       const incorrectlyFormatted = (formatJsonPayload.p !== 'bsv-20') || !(formatJsonPayload.op === 'transfer' || formatJsonPayload.op === 'deploy+mint') || formatJsonPayload.amt === undefined || (formatJsonPayload.op === 'transfer' && !formatJsonPayload.id)
       if (incorrectlyFormatted) throw new Error('Malformed JSON payload')
-    } catch (error) { throw new Error(`Invalid JSON payload: ${error.message}`) }
+    } catch (error) { throw new Error(`Invalid JSON payload: ${error instanceof Error ? error.message : String(error)}`) }
 
     const formatMiddle = new Script(chunks.slice(7, 10)).toHex()
     if (formatMiddle !== TEMPLATES.formatMiddle) throw new Error('Malformed formatMiddle')
@@ -92,7 +94,7 @@ function checkScriptFormat (script: Script) {
 
     return { valid: true, message: 'Script is valid' }
   } catch (error) {
-    return { valid: false, message: error?.message || 'Invalid script format' }
+    return { valid: false, message: error instanceof Error ? error.message : 'Invalid script format' }
   }
 }
 

@@ -96,7 +96,7 @@ function buildPushDropScript(
  * Encode a JavaScript number as uint64 little-endian (8 bytes).
  */
 function encodeUInt64LE(value: number): number[] {
-  const buf = new Array(8).fill(0)
+  const buf = Array.from({ length: 8 }, () => 0)
   let v = value
   for (let i = 0; i < 8; i++) {
     buf[i] = v & 0xff
@@ -121,23 +121,6 @@ function buildMintTokenScript(
   const customFieldsBytes = Utils.toArray(JSON.stringify(customFields), 'utf8')
 
   return buildPushDropScript(pubKeyHex, [tokenId, amountBytes, customFieldsBytes])
-}
-
-/**
- * Build a valid TokenDemo PushDrop locking script (non-mint token).
- * Used when we have previousCoins providing the input balance.
- */
-function buildTransferTokenScript(
-  pubKeyHex: string,
-  tokenId: string,
-  amount: number,
-  customFields: Record<string, unknown> = {}
-): LockingScript {
-  const tokenIdBytes = Utils.toArray(tokenId, 'utf8')
-  const amountBytes = encodeUInt64LE(amount)
-  const customFieldsBytes = Utils.toArray(JSON.stringify(customFields), 'utf8')
-
-  return buildPushDropScript(pubKeyHex, [tokenIdBytes, amountBytes, customFieldsBytes])
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +177,7 @@ describe('TokenDemoTopicManager', () => {
   // --- Rejection cases ---
 
   it('rejects a P2PKH script (chunks[1].op is not OP_CHECKSIG at index 1)', async () => {
-    const pubkeyHash = new Array(20).fill(0xab)
+    const pubkeyHash = Array.from({ length: 20 }, () => 0xab)
     const badScript = new LockingScript([
       { op: 0x76 },                       // OP_DUP (chunks[0])
       { op: 0xa9 },                       // OP_HASH160 (chunks[1] — not OP_CHECKSIG)

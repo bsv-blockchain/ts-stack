@@ -1,5 +1,4 @@
-// Note: References Engine from dist due to issues with compiled code references in Engine.ts
-import { Engine } from '../../dist/cjs/src/Engine.js'
+import { Engine } from '../Engine'
 import { LookupService } from '../LookupService'
 import { TopicManager } from '../TopicManager'
 import { Storage } from '../storage/Storage'
@@ -14,7 +13,7 @@ const mockChainTracker = {
 }
 
 // Call the method that would normally trigger syncAdvertisements
-const engineSubmit = jest.fn(async (taggedBEEF: TaggedBEEF, onSteakReady: any, mode?: string): Promise<STEAK> => {
+const engineSubmit = jest.fn(async (_taggedBEEF: TaggedBEEF, _onSteakReady: any, _mode?: string): Promise<STEAK> => {
   const result: STEAK = { tm_helloworld: { outputsToAdmit: [], coinsToRetain: [], coinsRemoved: [] } }
   return result
 })
@@ -388,7 +387,7 @@ describe('BSV Overlay Services Engine', () => {
 
     it('1 recurse proof', async () => {
       const outputs: Output[] = []
-      const findOutput = (txid: string, outputIndex: number, includeBEEF?: boolean): Output => {
+      const findOutput = (txid: string, outputIndex: number, _includeBEEF?: boolean): Output => {
         const i = outputs.findIndex(o => o.txid === txid && o.outputIndex === outputIndex)
         if (i < 0) throw new Error(`missing output ${txid} ${outputIndex}`)
         return outputs[i]
@@ -418,10 +417,10 @@ describe('BSV Overlay Services Engine', () => {
 
       mockLookupService.lookup = jest.fn(async () => [{ txid: txid17d182, outputIndex: 0, history: 1 }])
       const newBEEF: Record<string, string> = {}
-      mockStorageEngine.findOutput = jest.fn(async (txid: string, outputIndex: number, topic?: string, spent?: boolean, includeBEEF?: boolean) => {
+      mockStorageEngine.findOutput = jest.fn(async (txid: string, outputIndex: number, _topic?: string, _spent?: boolean, _includeBEEF?: boolean) => {
         return findOutput(txid, outputIndex, true)
       })
-      mockStorageEngine.findOutputsForTransaction = jest.fn(async (txid: string, includeBEEF?: boolean) => {
+      mockStorageEngine.findOutputsForTransaction = jest.fn(async (txid: string, _includeBEEF?: boolean) => {
         const os = outputs.filter(o => o.txid === txid)
         return os
       })
@@ -1166,7 +1165,7 @@ describe('BSV Overlay Services Engine', () => {
         return true
       })
       it('Invokes the history selector function with the correct data', async () => {
-        const mockedHistorySelector = jest.fn(async (beef, outputIndex, currentDepth) => {
+        const mockedHistorySelector = jest.fn(async (_beef, _outputIndex, currentDepth) => {
           if (currentDepth !== 2) {
             return true
           }
@@ -1202,7 +1201,7 @@ describe('BSV Overlay Services Engine', () => {
         expect(mockedHistorySelector).toHaveBeenCalled()
       })
       it('Returns undefined if history should not be traversed', async () => {
-        const mockedHistorySelector = jest.fn(async (beef, outputIndex, currentDepth) => {
+        const mockedHistorySelector = jest.fn(async (_beef, _outputIndex, _currentDepth) => {
           return false
         })
         mockLookupService.lookup = jest.fn(async () => [{

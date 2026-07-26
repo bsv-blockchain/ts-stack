@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 24,
+  "findingCount": 12,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,54 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/overlays/overlay-discovery-services::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/overlays/overlay-discovery-services::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/overlays/overlay-discovery-services::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/overlays/overlay-express::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/overlays/overlay-express::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/overlays/overlay-express::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/overlays/overlay::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/overlays/overlay::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/overlays/overlay::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
-    },
-    {
-      "id": "packages/overlays/topics::missing-script::format:check",
-      "message": "Profile node-library requires script format:check"
-    },
-    {
-      "id": "packages/overlays/topics::missing-script::pack:check",
-      "message": "Profile node-library requires script pack:check"
-    },
-    {
-      "id": "packages/overlays/topics::missing-script::typecheck",
-      "message": "Profile node-library requires script typecheck"
     },
     {
       "id": "packages/wallet/wallet-toolbox-examples::missing-script::format:check",

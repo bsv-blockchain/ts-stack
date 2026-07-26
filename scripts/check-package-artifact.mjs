@@ -263,7 +263,8 @@ async function checkConsumer(
   entryExports,
   binName,
   binArguments,
-  consumerDependencies
+  consumerDependencies,
+  localConsumerDependencyTarballs
 ) {
   const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-consumer-'))
   try {
@@ -281,7 +282,8 @@ async function checkConsumer(
         '--package-lock=false',
         '--omit=dev',
         tarballPath,
-        ...consumerDependencies
+        ...consumerDependencies,
+        ...localConsumerDependencyTarballs
       ],
       { cwd: consumerDirectory }
     )
@@ -325,12 +327,35 @@ export async function checkPackageArtifact({
   allowedSourcePrefixes = [],
   esmOnlyEntrypoints = [],
   consumerDependencies = [],
+  localConsumerDependencyDirectories = [],
   untypedAssetEntrypoints = []
 }) {
   const manifestPath = path.join(packageDirectory, 'package.json')
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
   const packed = await packPackage(packageDirectory)
+  const localDependencies = []
+  const localDependencyNames = new Set()
+  const declaredDependencies = {
+    ...manifest.dependencies,
+    ...manifest.optionalDependencies,
+    ...manifest.peerDependencies
+  }
   try {
+    for (const dependencyDirectory of localConsumerDependencyDirectories) {
+      const dependencyManifest = JSON.parse(
+        await fs.readFile(path.join(dependencyDirectory, 'package.json'), 'utf8')
+      )
+      if (
+        typeof dependencyManifest.name !== 'string' ||
+        dependencyManifest.name === manifest.name ||
+        localDependencyNames.has(dependencyManifest.name) ||
+        !(dependencyManifest.name in declaredDependencies)
+      ) {
+        throw new Error(`invalid local consumer dependency ${JSON.stringify(dependencyDirectory)}`)
+      }
+      localDependencyNames.add(dependencyManifest.name)
+      localDependencies.push(await packPackage(dependencyDirectory))
+    }
     const payloadErrors = validatePackedFiles(packed.result, manifest, allowedSourcePrefixes)
     const publintErrors = await checkPublint(packed.tarballPath)
     const errors = [...payloadErrors, ...publintErrors]
@@ -347,10 +372,16 @@ export async function checkPackageArtifact({
       entryExports,
       binName,
       binArguments,
-      consumerDependencies
+      consumerDependencies,
+      localDependencies.map(dependency => dependency.tarballPath)
     )
     return manifest
   } finally {
+    await Promise.all(
+      localDependencies.map(dependency =>
+        fs.rm(dependency.temporaryDirectory, { recursive: true, force: true })
+      )
+    )
     await fs.rm(packed.temporaryDirectory, { recursive: true, force: true })
   }
 }
@@ -378,6 +409,11 @@ async function main(arguments_) {
       throw new Error(`invalid consumer dependency ${JSON.stringify(dependency)}`)
     }
   }
+  const localConsumerDependencyDirectories = csvOption(
+    arguments_,
+    '--local-consumer-dependencies',
+    ''
+  ).map(dependency => path.resolve(packageDirectory, dependency))
   const manifest = await checkPackageArtifact({
     packageDirectory,
     modes,
@@ -389,6 +425,7 @@ async function main(arguments_) {
     allowedSourcePrefixes,
     esmOnlyEntrypoints,
     consumerDependencies,
+    localConsumerDependencyDirectories,
     untypedAssetEntrypoints
   })
   const validations = [
@@ -405,6 +442,13 @@ async function main(arguments_) {
       : []),
     ...(consumerDependencies.length > 0
       ? [`consumer peers ${consumerDependencies.join(',')}`]
+      : []),
+    ...(localConsumerDependencyDirectories.length > 0
+      ? [
+          `local consumer dependencies ${localConsumerDependencyDirectories
+            .map(directory => path.basename(directory))
+            .join(',')}`
+        ]
       : []),
     ...(untypedAssetEntrypoints.length > 0
       ? [`untyped assets ${untypedAssetEntrypoints.join(',')}`]

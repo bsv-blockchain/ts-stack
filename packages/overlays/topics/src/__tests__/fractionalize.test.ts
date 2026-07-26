@@ -74,7 +74,7 @@ function buildServerTokenScript(): LockingScript {
   const jsonPayload = JSON.stringify({ p: 'bsv-20', op: 'deploy+mint', tick: 'TEST', amt: '1000' })
   const jsonBytes = Utils.toArray(jsonPayload, 'utf8')
   const formatMiddle = Utils.toArray('686e7ea9', 'hex')
-  const hash20 = new Array(20).fill(0xab)   // 20-byte placeholder hash
+  const hash20 = Array.from({ length: 20 }, () => 0xab)   // 20-byte placeholder hash
   const formatEnd = Utils.toArray('886b6b516c6c52ae', 'hex')
   const opReturnData = Utils.toArray('deadbeef', 'hex')  // non-empty OP_RETURN data
 
@@ -112,7 +112,7 @@ function buildTransferTokenScript(): LockingScript {
   const jsonPayload = JSON.stringify({ p: 'bsv-20', op: 'transfer', id: 'abcdef1234', amt: '500' })
   const jsonBytes = Utils.toArray(jsonPayload, 'utf8')
   const formatMiddle = Utils.toArray('6876a9', 'hex')
-  const pubkeyHash = new Array(20).fill(0xcd)
+  const pubkeyHash = Array.from({ length: 20 }, () => 0xcd)
   const formatEnd = Utils.toArray('88ac', 'hex')
   const opReturnData = Utils.toArray('cafebabe', 'hex')
 
@@ -138,7 +138,7 @@ function buildTransferTokenScript(): LockingScript {
  */
 function buildPaymentScript(): LockingScript {
   const formatStart = Utils.toArray('6e7ea9', 'hex')
-  const hash20 = new Array(20).fill(0xef)
+  const hash20 = Array.from({ length: 20 }, () => 0xef)
   const formatEnd = Utils.toArray('886b6b516c6c52ae', 'hex')
 
   const raw: number[] = [
@@ -187,7 +187,7 @@ describe('FractionalizeTopicManager', () => {
     const formatStart = Utils.toArray('0063036f726451126170706c69636174696f6e2f6273762d323000', 'hex')
     const badJson = Utils.toArray(JSON.stringify({ p: 'not-bsv-20', op: 'deploy+mint', amt: '1' }), 'utf8')
     const formatMiddle = Utils.toArray('686e7ea9', 'hex')
-    const hash20 = new Array(20).fill(0)
+    const hash20 = Array.from({ length: 20 }, () => 0)
     const formatEnd = Utils.toArray('886b6b516c6c52ae', 'hex')
     const opReturnData = [0xde, 0xad]
 

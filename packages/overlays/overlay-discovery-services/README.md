@@ -17,7 +17,9 @@ This package ships:
 npm install @bsv/overlay-discovery-services
 ```
 
-Peer dependencies: `@bsv/sdk`, `@bsv/overlay`, `@bsv/wallet-toolbox-client`.
+Requires Node.js 22 or newer. Install `@bsv/sdk` alongside this package to
+satisfy its peer dependency. The overlay engine, wallet toolbox client, and
+MongoDB driver are direct runtime dependencies.
 
 ## Quick start (advertiser)
 
@@ -25,17 +27,17 @@ Peer dependencies: `@bsv/sdk`, `@bsv/overlay`, `@bsv/wallet-toolbox-client`.
 import { WalletAdvertiser } from '@bsv/overlay-discovery-services'
 
 const advertiser = new WalletAdvertiser(
-  'main',                                // chain
-  privateKeyHex,                         // signing key
-  'https://my-storage.example.com',      // wallet storage URL
-  'https://my-overlay.example.com'       // advertisable URI clients should connect to
+  'main', // chain
+  privateKeyHex, // signing key
+  'https://my-storage.example.com', // wallet storage URL
+  'https://my-overlay.example.com' // advertisable URI clients should connect to
 )
 await advertiser.init()
 
 // Advertise that we host the tm_did topic and ls_did lookup service.
 await advertiser.createAdvertisements([
   { protocol: 'SHIP', topicOrServiceName: 'tm_did' },
-  { protocol: 'SLAP', topicOrServiceName: 'ls_did' },
+  { protocol: 'SLAP', topicOrServiceName: 'ls_did' }
 ])
 
 // Discover everyone else hosting tm_did.
@@ -48,17 +50,27 @@ Mount the SHIP/SLAP topic managers and lookup services on your overlay node so p
 
 ```ts
 import {
+  SHIPLookupService,
+  SHIPStorage,
   SHIPTopicManager,
-  SLAPTopicManager,
-  SHIPLookupServiceFactory,
-  SLAPLookupServiceFactory,
+  SLAPLookupService,
+  SLAPStorage,
+  SLAPTopicManager
 } from '@bsv/overlay-discovery-services'
 
-engine.registerTopicManager('tm_ship', new SHIPTopicManager())
-engine.registerTopicManager('tm_slap', new SLAPTopicManager())
-engine.registerLookupService('ls_ship', SHIPLookupServiceFactory(db))
-engine.registerLookupService('ls_slap', SLAPLookupServiceFactory(db))
+const topicManagers = {
+  tm_ship: new SHIPTopicManager(),
+  tm_slap: new SLAPTopicManager()
+}
+
+const lookupServices = {
+  ls_ship: new SHIPLookupService(new SHIPStorage(db)),
+  ls_slap: new SLAPLookupService(new SLAPStorage(db))
+}
 ```
+
+Pass these maps to `Engine`, or register the same instances with your chosen
+Overlay Services wrapper.
 
 ## Use cases
 
@@ -70,25 +82,56 @@ Host a topic (e.g. `tm_did`) and publish a SHIP advertisement so other nodes rou
 
 ```ts
 const hosts = await advertiser.findAllAdvertisements('SHIP')
-const didHosts = hosts.filter(a => a.topicOrServiceName === 'tm_did')
+const didHosts = hosts.filter(a => a.topicOrService === 'tm_did')
 ```
 
 ### Take a service offline
 
 ```ts
 const mine = await advertiser.findAllAdvertisements('SLAP')
-await advertiser.revokeAdvertisements(mine.filter(a => a.topicOrServiceName === 'ls_did'))
+await advertiser.revokeAdvertisements(mine.filter(a => a.topicOrService === 'ls_did'))
 ```
 
 ## API
 
-| Export | Purpose |
-|--------|---------|
-| `SHIPTopicManager` | Admits well-formed SHIP advertisement outputs to the `tm_ship` topic |
-| `SLAPTopicManager` | Admits well-formed SLAP advertisement outputs to the `tm_slap` topic |
-| `SHIPLookupServiceFactory` / `SLAPLookupServiceFactory` | Build the matching lookup services |
-| `WalletAdvertiser` | High-level advertise/find/revoke API backed by a wallet |
-| `isAdvertisableURI` / `isValidTopicOrServiceName` | Validation helpers |
+| Export                                            | Purpose                                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| `SHIPTopicManager`                                | Admits well-formed SHIP advertisement outputs to the `tm_ship` topic |
+| `SLAPTopicManager`                                | Admits well-formed SLAP advertisement outputs to the `tm_slap` topic |
+| `SHIPLookupService` / `SLAPLookupService`         | Index and answer discovery queries                                   |
+| `SHIPStorage` / `SLAPStorage`                     | MongoDB-backed discovery records                                     |
+| `WalletAdvertiser`                                | High-level advertise/find/revoke API backed by a wallet              |
+| `isAdvertisableURI` / `isValidTopicOrServiceName` | Validation helpers                                                   |
+
+## Runtime and security
+
+The package publishes matching ESM and CommonJS entry points with
+condition-specific TypeScript declarations. Advertisement names, signatures,
+and URIs are validated before admission.
+
+Discovery advertisements contain public connection endpoints. Treat discovered
+hosts as untrusted network input: retain TLS validation, apply request timeouts,
+do not forward credentials to discovered origins, and validate responses. The
+HTTP service that hosts SHIP and SLAP normally remains reachable from arbitrary
+browser and mobile origins; use an exact-origin CORS allowlist only when a
+deployment has a genuinely closed caller set. CORS does not replace protocol or
+administrative authentication.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm --filter @bsv/overlay-discovery-services format:check
+pnpm --filter @bsv/overlay-discovery-services lint
+pnpm --filter @bsv/overlay-discovery-services typecheck
+pnpm --filter @bsv/overlay-discovery-services test
+pnpm --filter @bsv/overlay-discovery-services test:coverage
+pnpm --filter @bsv/overlay-discovery-services pack:check
+```
+
+The package check verifies the published tarball, declarations, and clean ESM
+and CommonJS consumers.
 
 ## License
 

@@ -34,7 +34,7 @@ export const isTokenSignatureCorrectlyLinked = async (
     if (!valid) {
       return false
     }
-  } catch (_e) {
+  } catch {
     // Signature verification threw (e.g. malformed key/data) — treat as invalid
     return false
   }

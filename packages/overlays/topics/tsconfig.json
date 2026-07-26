@@ -10,10 +10,18 @@
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "strict": false,
+    "strict": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/overlay-topics.tsbuildinfo",
     "esModuleInterop": true,
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/**/__tests__/**", "src/**/__tests/**", "src/**/*.test.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/__tests__/**",
+    "src/**/__tests/**",
+    "src/**/*.test.ts"
+  ]
 }

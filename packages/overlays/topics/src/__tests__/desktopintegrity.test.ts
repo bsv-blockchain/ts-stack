@@ -126,7 +126,7 @@ describe('DesktopIntegrityTopicManager', () => {
   })
 
   it('rejects a P2PKH script', async () => {
-    const pubkeyHash = new Array(20).fill(0xab)
+    const pubkeyHash = Array.from({ length: 20 }, () => 0xab)
     const badScript = new LockingScript([
       { op: 0x76 },                           // OP_DUP
       { op: 0xa9 },                           // OP_HASH160

@@ -104,11 +104,7 @@ export class Engine {
   ) {
     // To encourage synchronization of overlay services, the SHIP sync strategy is used by default for all overlay topics, except for 'tm_ship' and 'tm_slap'.
     // For these two topics, any existing trackers are combined with the provided shipTrackers and slapTrackers omitting any duplicates.
-    if (syncConfiguration === undefined) {
-      this.syncConfiguration = {}
-    } else {
-      this.syncConfiguration = syncConfiguration
-    }
+    this.syncConfiguration ??= {}
 
     for (const managerName of Object.keys(managers)) {
       if (managerName === 'tm_ship' && this.shipTrackers !== undefined && this.syncConfiguration[managerName] !== false) {
@@ -2187,7 +2183,7 @@ export class Engine {
 
       // If none of the disallowed conditions matched, the URL is valid
       return true
-    } catch (_e) {
+    } catch {
       // URL constructor throws on malformed input — not a valid URL, return false
       return false
     }

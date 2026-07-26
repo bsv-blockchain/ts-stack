@@ -34,7 +34,7 @@ export class SlackThreadLookupService implements LookupService {
 
     try {
       const threadHash = lockingScript.chunks[1].data
-      if (threadHash.length !== 32) throw new Error('Invalid SlackThread token: thread hash must be exactly 32 bytes')
+      if (threadHash === undefined || threadHash.length !== 32) throw new Error('Invalid SlackThread token: thread hash must be exactly 32 bytes')
       const threadHashString = Utils.toHex(threadHash)
       await this.storage.storeRecord(txid, outputIndex, threadHashString)
     } catch (err) {

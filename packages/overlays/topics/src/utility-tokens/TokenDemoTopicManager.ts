@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { OP, Transaction, PushDrop, Utils } from '@bsv/sdk'
 
 export default class TokenDemoTopicManager implements TopicManager {
-  async identifyNeededInputs (beef: number[], offChainValues?: number[]): Promise<Array<{ txid: string, outputIndex: number }>> {
+  async identifyNeededInputs (beef: number[], _offChainValues?: number[]): Promise<Array<{ txid: string, outputIndex: number }>> {
     console.log('identifyNeededInputs called')
     const tx = Transaction.fromBEEF(beef)
 
@@ -10,7 +10,7 @@ export default class TokenDemoTopicManager implements TopicManager {
 
     const previousOutpoints: Array<{ txid: string, outputIndex: number }> = []
     tx.inputs.forEach(input => {
-      if (!input.sourceTransaction) {
+      if (!input.sourceTransaction && input.sourceTXID !== undefined) {
         previousOutpoints.push({ txid: input.sourceTXID, outputIndex: input.sourceOutputIndex })
       }
     })
@@ -35,8 +35,12 @@ export default class TokenDemoTopicManager implements TopicManager {
       for (const [index, input] of parsedTx.inputs.entries()) {
         if (!previousCoins.includes(index)) continue
         try {
-          const sourceTxid = input.sourceTransaction.id('hex')
-          const token = PushDrop.decode(input.sourceTransaction.outputs[input.sourceOutputIndex].lockingScript)
+          const sourceTransaction = input.sourceTransaction
+          if (sourceTransaction === undefined) throw new Error('Missing source transaction')
+          const sourceOutput = sourceTransaction.outputs[input.sourceOutputIndex]
+          if (sourceOutput === undefined) throw new Error('Missing source output')
+          const sourceTxid = sourceTransaction.id('hex')
+          const token = PushDrop.decode(sourceOutput.lockingScript)
           const r = new Utils.Reader(token.fields[1])
           const amount = String(r.readUInt64LEBn())
           const customFields = JSON.parse(Utils.toUTF8(token.fields[2]))

@@ -44,7 +44,7 @@ export class SLAPTopicManager implements TopicManager {
           if (!(await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, result.fields))) continue // Signatures must be properly linked
 
           outputsToAdmit.push(i)
-        } catch (_error) {
+        } catch {
           // It's common for other outputs to be invalid SLAP advertisements; skip silently
           continue
         }
