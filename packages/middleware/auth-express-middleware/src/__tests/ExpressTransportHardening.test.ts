@@ -386,6 +386,26 @@ describe('ExpressTransport hardening', () => {
     }
   })
 
+  it('rejects a duplicate pending general request identifier', async () => {
+    const peer = peerMock()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+
+    await transport.handleIncomingRequest(validGeneralRequest(), responseMock(), jest.fn())
+    const duplicateResponse = responseMock()
+    await transport.handleIncomingRequest(validGeneralRequest(), duplicateResponse, jest.fn())
+
+    expect(duplicateResponse.status).toHaveBeenCalledWith(400)
+    expect(duplicateResponse.json).toHaveBeenCalledWith({
+      status: 'error',
+      code: 'ERR_AUTH_MALFORMED',
+      description: 'The authentication request is malformed.'
+    })
+    expect(peer.listenForGeneralMessages).toHaveBeenCalledTimes(1)
+
+    ;(transport as any).clearActiveGeneralRequest(REQUEST_ID)
+  })
+
   it.each([
     [new Error('invalid signature'), 401, 'ERR_AUTH_FAILED', 'Authentication failed.'],
     [
@@ -653,6 +673,17 @@ describe('ExpressTransport hardening', () => {
   it('validates createAuthMiddleware options before creating a peer', () => {
     expect(() => createAuthMiddleware(null as any)).toThrow('options are required')
     expect(() => createAuthMiddleware({ wallet: null } as any)).toThrow('wallet')
+    const error = jest.fn()
+    expect(() =>
+      createAuthMiddleware({
+        wallet: null,
+        logger: { log: jest.fn(), error } as unknown as typeof console,
+        logLevel: 'error'
+      } as any)
+    ).toThrow('wallet')
+    expect(error).toHaveBeenCalledWith(
+      '[createAuthMiddleware] No wallet provided in AuthMiddlewareOptions.'
+    )
     expect(() =>
       createAuthMiddleware({
         wallet: {} as any,

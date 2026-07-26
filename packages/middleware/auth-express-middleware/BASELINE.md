@@ -21,8 +21,8 @@
 | Strict typecheck    | Passing                                                                              |
 | Oxlint              | Passing with zero warnings                                                           |
 | Prettier check      | Passing                                                                              |
-| Deterministic tests | 96 passing across 5 suites                                                           |
-| Production coverage | 93.07% lines, 87.64% branches, 88.88% functions, 92.29% statements                   |
+| Deterministic tests | 97 passing across 5 suites                                                           |
+| Production coverage | 93.39% lines, 89.31% branches, 88.88% functions, 92.60% statements                   |
 | Coverage floor      | 85% lines/statements/functions; 80% branches                                         |
 | Build               | `tsdown` passing                                                                     |
 | Artifact            | Exact tarball validated for ESM, CommonJS, declarations, exports, and file allowlist |

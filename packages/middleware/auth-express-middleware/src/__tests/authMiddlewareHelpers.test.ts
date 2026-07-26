@@ -44,15 +44,22 @@ describe('auth middleware helpers', () => {
     expect(logger[level]).toHaveBeenCalledWith('message')
   })
 
-  it('falls back to logger.log when a selected method is unavailable', () => {
+  it('falls back to logger.log when selected or unknown methods are unavailable', () => {
     const log = jest.fn()
-    const logger = { log, debug: undefined } as unknown as typeof console
+    const logger = {
+      log,
+      debug: undefined,
+      info: undefined,
+      warn: undefined,
+      error: undefined
+    } as unknown as typeof console
 
-    getLogMethod(logger, 'debug')('fallback')
+    for (const level of ['debug', 'info', 'warn', 'error'] as const) {
+      getLogMethod(logger, level)(level)
+    }
     getLogMethod(logger, 'unsupported' as any)('default')
 
-    expect(log).toHaveBeenNthCalledWith(1, 'fallback')
-    expect(log).toHaveBeenNthCalledWith(2, 'default')
+    expect(log.mock.calls).toEqual([['debug'], ['info'], ['warn'], ['error'], ['default']])
   })
 
   it('writes URL path and query components including empty sentinels', () => {
