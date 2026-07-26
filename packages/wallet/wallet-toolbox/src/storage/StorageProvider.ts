@@ -410,7 +410,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         )
       }
       const unAbortableStatus: TransactionStatus[] = ['completed', 'failed', 'sending', 'unproven']
-      if (tx == null || !tx.isOutgoing || unAbortableStatus.findIndex(s => s === tx.status) > -1) {
+      if (tx == null || !tx.isOutgoing || unAbortableStatus.includes(tx.status)) {
         throw new WERR_INVALID_PARAMETER(
           'reference',
           'an inprocess, outgoing action that has not been signed and shared to the network.'

@@ -286,7 +286,8 @@ export class TeranodeListener {
     if (!this.node) return
 
     // Subscribe to topics and handle messages with callbacks
-    ;(this.node.services.pubsub as any).addEventListener('gossipsub:message', (evt: any) => {
+    const pubsub = this.node.services.pubsub as any
+    pubsub.addEventListener('gossipsub:message', (evt: any) => {
       const msg = evt.detail.msg
       const topicKey = msg.topic as Topic
       const callback = this.topicCallbacks[topicKey]
@@ -299,10 +300,12 @@ export class TeranodeListener {
             // frames (e.g. libp2p discovery probes) decode to null and are skipped.
             const decoded = tryDecodeMessage(msg.data)
             if (decoded) {
-              ;(callback as DecodedMessageCallback)(decoded, topicKey, from)
+              const decodedCallback = callback as DecodedMessageCallback
+              decodedCallback(decoded, topicKey, from)
             }
           } else {
-            ;(callback as MessageCallback)(msg.data, topicKey, from)
+            const messageCallback = callback as MessageCallback
+            messageCallback(msg.data, topicKey, from)
           }
         } catch (error) {
           console.error(`Error in callback for topic ${topicKey}:`, error)

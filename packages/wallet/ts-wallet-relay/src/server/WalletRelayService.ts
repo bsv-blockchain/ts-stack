@@ -404,7 +404,12 @@ export class WalletRelayService {
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : 'Failed'
           const code = (err as { code?: number }).code
-          const status = code === 429 ? 429 : msg.includes('allowedOrigins') ? 403 : 500
+          let status = 500
+          if (code === 429) {
+            status = 429
+          } else if (msg.includes('allowedOrigins')) {
+            status = 403
+          }
           res.status(status).json({ error: msg })
         })
     })
@@ -450,8 +455,12 @@ export class WalletRelayService {
         res.status(204).end()
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed'
-        const status =
-          msg === 'Invalid desktop token' ? 401 : msg === 'Session not found' ? 404 : 500
+        let status = 500
+        if (msg === 'Invalid desktop token') {
+          status = 401
+        } else if (msg === 'Session not found') {
+          status = 404
+        }
         res.status(status).json({ error: msg })
       }
     })

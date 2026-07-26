@@ -69,7 +69,8 @@ function readmeErrors(files) {
 
 function normalizeSourcePrefixes(prefixes) {
   return prefixes.map(prefix => {
-    const normalized = prefix.replace(/\/+$/g, '')
+    let normalized = prefix
+    while (normalized.endsWith('/')) normalized = normalized.slice(0, -1)
     if (
       normalized === '' ||
       normalized.startsWith('/') ||

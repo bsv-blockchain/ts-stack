@@ -3565,34 +3565,43 @@ export class WalletPermissionsManager implements WalletInterface {
         },
         this.adminOriginator
       )
-
-      for (const out of result.outputs) {
-        if (seen.has(out.outpoint)) continue
-        const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = this.transactionFromResultBeef(result, txid)
-        const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
-        if (!dec?.fields || dec.fields.length < 3) continue
-        const [domainRaw, expiryRaw, basketRaw] = dec.fields
-        const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
-        const normalizedDomain = this.normalizeOriginator(domainDecoded)
-        if (originFilter != null && normalizedDomain !== originFilter.normalized) continue
-        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
-        const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(basketRaw))
-        seen.add(out.outpoint)
-        tokens.push({
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex,
-          satoshis: out.satoshis,
-          outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
-          originator: normalizedDomain,
-          rawOriginator: domainDecoded,
-          basketName: basketDecoded,
-          expiry: expiryDecoded
-        })
-      }
+      await this.collectBasketTokens(result, originFilter, seen, tokens)
     }
     return tokens
+  }
+
+  /** Decodes and appends basket permission tokens from a listOutputs result. */
+  private async collectBasketTokens(
+    result: Awaited<ReturnType<WalletInterface['listOutputs']>>,
+    originFilter: ReturnType<WalletPermissionsManager['prepareOriginator']> | undefined,
+    seen: Set<string>,
+    tokens: PermissionToken[]
+  ): Promise<void> {
+    for (const out of result.outputs) {
+      if (seen.has(out.outpoint)) continue
+      const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
+      const tx = this.transactionFromResultBeef(result, txid)
+      const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+      if (!dec?.fields || dec.fields.length < 3) continue
+      const [domainRaw, expiryRaw, basketRaw] = dec.fields
+      const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
+      const normalizedDomain = this.normalizeOriginator(domainDecoded)
+      if (originFilter != null && normalizedDomain !== originFilter.normalized) continue
+      const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+      const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(basketRaw))
+      seen.add(out.outpoint)
+      tokens.push({
+        tx: tx.toBEEF(),
+        txid,
+        outputIndex,
+        satoshis: out.satoshis,
+        outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
+        originator: normalizedDomain,
+        rawOriginator: domainDecoded,
+        basketName: basketDecoded,
+        expiry: expiryDecoded
+      })
+    }
   }
 
   /**
@@ -4084,9 +4093,7 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   /** Encrypts all description/instruction fields in args in-place; returns original (plaintext) copies. */
-  private async encryptActionMetadata(
-    args: Parameters<WalletInterface['createAction']>[0]
-  ): Promise<{
+  private async encryptActionMetadata(args: Parameters<WalletInterface['createAction']>[0]): Promise<{
     originalInputDescriptions: Record<number, string>
     originalOutputDescriptions: Record<number, string>
   }> {

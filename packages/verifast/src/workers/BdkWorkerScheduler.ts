@@ -67,6 +67,15 @@ export default class BdkWorkerScheduler {
     if (items.length === 0) return []
     if (this.pool === undefined) return []
     const sizes = items.map(itemBytes)
+    const chunks = this.createSizeBoundChunks(items, sizes)
+    const desiredChunks = Math.min(this.pool.size, items.length)
+    while (chunks.length < desiredChunks) {
+      if (!this.splitLargestChunk(chunks, itemBytes)) break
+    }
+    return chunks
+  }
+
+  private createSizeBoundChunks<T>(items: readonly T[], sizes: number[]): T[][] {
     const chunks: T[][] = []
     let chunk: T[] = []
     let chunkBytes = 0
@@ -83,30 +92,32 @@ export default class BdkWorkerScheduler {
       chunkBytes += sizes[index]
     }
     if (chunk.length > 0) chunks.push(chunk)
-    const desiredChunks = Math.min(this.pool.size, items.length)
-    while (chunks.length < desiredChunks) {
-      let splitIndex = -1
-      let splitBytes = -1
-      for (let index = 0; index < chunks.length; index++) {
-        if (chunks[index].length < 2) continue
-        const bytes = chunks[index].reduce((sum, item) => sum + itemBytes(item), 0)
-        if (bytes > splitBytes) {
-          splitIndex = index
-          splitBytes = bytes
-        }
-      }
-      if (splitIndex < 0) break
-      const candidate = chunks[splitIndex]
-      let leftBytes = 0
-      let at = 1
-      for (; at < candidate.length; at++) {
-        leftBytes += itemBytes(candidate[at - 1])
-        if (leftBytes >= splitBytes / 2) break
-      }
-      at = Math.min(at, candidate.length - 1)
-      chunks.splice(splitIndex, 1, candidate.slice(0, at), candidate.slice(at))
-    }
     return chunks
+  }
+
+  private splitLargestChunk<T>(chunks: T[][], itemBytes: (item: T) => number): boolean {
+    let splitIndex = -1
+    let splitBytes = -1
+    for (let index = 0; index < chunks.length; index++) {
+      if (chunks[index].length < 2) continue
+      const bytes = chunks[index].reduce((sum, item) => sum + itemBytes(item), 0)
+      if (bytes > splitBytes) {
+        splitIndex = index
+        splitBytes = bytes
+      }
+    }
+    if (splitIndex < 0) return false
+
+    const candidate = chunks[splitIndex]
+    let leftBytes = 0
+    let at = 1
+    for (; at < candidate.length; at++) {
+      leftBytes += itemBytes(candidate[at - 1])
+      if (leftBytes >= splitBytes / 2) break
+    }
+    at = Math.min(at, candidate.length - 1)
+    chunks.splice(splitIndex, 1, candidate.slice(0, at), candidate.slice(at))
+    return true
   }
 
   async execute(requests: readonly BdkWorkerRequestWithoutId[]): Promise<BdkWorkerResult[]> {

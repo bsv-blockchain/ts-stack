@@ -506,7 +506,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage2.findKnownUTXOs(0)).length).not.toEqual(
+    expect(await storage2.findKnownUTXOs(0)).not.toHaveLength(
       (await storage1.findKnownUTXOs(0)).length
     )
   })
@@ -627,9 +627,9 @@ describe('GASP', () => {
       await gasp1.sync('test-host')
 
       // No UTXOs were synced between the parties
-      expect((await storage2.findKnownUTXOs(0)).length).toBe(0)
+      expect(await storage2.findKnownUTXOs(0)).toHaveLength(0)
       // The sync process did not complete
-      expect((await storage2.findKnownUTXOs(0)).length).not.toEqual(
+      expect(await storage2.findKnownUTXOs(0)).not.toHaveLength(
         (await storage1.findKnownUTXOs(0)).length
       )
       // Two nodes were appended to the temporary graph
@@ -833,12 +833,12 @@ describe('GASP', () => {
 
       await gasp1.sync('test-host')
 
-      expect((await storage2.findKnownUTXOs(0)).length).toBe(0)
-      expect((await storage2.findKnownUTXOs(0)).length).not.toEqual(
+      expect(await storage2.findKnownUTXOs(0)).toHaveLength(0)
+      expect(await storage2.findKnownUTXOs(0)).not.toHaveLength(
         (await storage1.findKnownUTXOs(0)).length
       )
       expect(storage2.appendToGraph).toHaveBeenCalledTimes(3)
-      expect(Object.keys(storage2.tempGraphStore).length).toEqual(3)
+      expect(Object.keys(storage2.tempGraphStore)).toHaveLength(3)
     })
 
     it('Prevents infinite recursion with complex cyclic dependencies in the other direction', async () => {
@@ -960,8 +960,8 @@ describe('GASP', () => {
 
       await gasp1.sync('test-host')
 
-      expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
-      expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
+      expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
+      expect(await storage2.findKnownUTXOs(0)).toHaveLength(1)
       expect(storage1.appendToGraph).toHaveBeenCalledTimes(3)
     })
   })

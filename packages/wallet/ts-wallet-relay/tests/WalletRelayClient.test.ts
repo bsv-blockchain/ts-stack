@@ -197,7 +197,7 @@ describe('WalletRelayClient session lifecycle', () => {
       'expired',
       'expired'
     ])
-    expect(sessionStorage.length).toBe(0)
+    expect(sessionStorage).toHaveLength(0)
   })
 
   it('disconnects server-side when authenticated and always tears down locally', async () => {

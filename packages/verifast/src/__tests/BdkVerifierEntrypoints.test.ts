@@ -60,6 +60,7 @@ describe('published verifier entrypoints', () => {
       batchWorkers: 1,
       registerAsDefault: false
     })
+    expect(verifier.isReady()).toBe(false)
     verifier.dispose()
   })
 
@@ -74,6 +75,7 @@ describe('published verifier entrypoints', () => {
         batchWorkers: 2,
         registerAsDefault: false
       })
+      expect(verifier.isReady()).toBe(false)
       verifier.dispose()
     } finally {
       Object.defineProperty(globalThis, 'Worker', {

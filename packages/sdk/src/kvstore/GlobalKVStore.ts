@@ -1,6 +1,11 @@
 import Transaction from '../transaction/Transaction.js'
 import * as Utils from '../primitives/utils.js'
-import { TopicBroadcaster, LookupResolver, withDoubleSpendRetry } from '../overlay-tools/index.js'
+import {
+  TopicBroadcaster,
+  LookupResolver,
+  withDoubleSpendRetry,
+  type LookupAnswer
+} from '../overlay-tools/index.js'
 import { BroadcastResponse, BroadcastFailure } from '../transaction/Broadcaster.js'
 import {
   WalletInterface,
@@ -527,79 +532,83 @@ export class GlobalKVStore {
     const entries: KVStoreEntry[] = []
 
     for (const result of answer.outputs) {
-      try {
-        const tx = Transaction.fromBEEF(result.beef)
-        const output = tx.outputs[result.outputIndex]
-        const decoded = PushDrop.decode(output.lockingScript)
-
-        // Support backwards compatibility: old format without tags, new format with tags
-        const expectedFieldCount = Object.keys(kvProtocol).length
-        const hasTagsField = decoded.fields.length === expectedFieldCount
-        const isOldFormat = decoded.fields.length === expectedFieldCount - 1
-
-        if (!isOldFormat && !hasTagsField) {
-          continue
-        }
-
-        // Verify signature
-        const anyoneWallet = new ProtoWallet('anyone')
-        const signature = decoded.fields.pop() as number[]
-        try {
-          await anyoneWallet.verifySignature({
-            data: decoded.fields.flat(),
-            signature,
-            counterparty: Utils.toHex(decoded.fields[kvProtocol.controller]),
-            protocolID: JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.protocolID])),
-            keyID: Utils.toUTF8(decoded.fields[kvProtocol.key])
-          })
-        } catch {
-          // Skip all outputs that fail signature verification
-          continue
-        }
-
-        // Extract tags if present (backwards compatible)
-        let tags: string[] | undefined
-        if (hasTagsField && decoded.fields[kvProtocol.tags] != null) {
-          try {
-            tags = JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.tags]))
-          } catch {
-            // If tags parsing fails, continue without tags
-            tags = undefined
-          }
-        }
-
-        const entry: KVStoreEntry = {
-          key: Utils.toUTF8(decoded.fields[kvProtocol.key]),
-          value: Utils.toUTF8(decoded.fields[kvProtocol.value]),
-          controller: Utils.toHex(decoded.fields[kvProtocol.controller]),
-          protocolID: JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.protocolID])),
-          tags
-        }
-
-        if (options.includeToken === true) {
-          entry.token = {
-            txid: tx.id('hex'),
-            outputIndex: result.outputIndex,
-            beef: Beef.fromBinary(result.beef),
-            satoshis: output.satoshis ?? 1
-          }
-        }
-
-        if (options.history === true) {
-          entry.history = await this.historian.buildHistory(tx, {
-            key: entry.key,
-            protocolID: entry.protocolID
-          })
-        }
-
-        entries.push(entry)
-      } catch {
-        // Skip malformed or undecodable outputs rather than failing the entire query
-        continue
-      }
+      const entry = await this.decodeOverlayEntry(result, options)
+      if (entry != null) entries.push(entry)
     }
 
     return entries
+  }
+
+  private async decodeOverlayEntry(
+    result: LookupAnswer['outputs'][number],
+    options: KVStoreGetOptions
+  ): Promise<KVStoreEntry | undefined> {
+    try {
+      const tx = Transaction.fromBEEF(result.beef)
+      const output = tx.outputs[result.outputIndex]
+      const decoded = PushDrop.decode(output.lockingScript)
+      const expectedFieldCount = Object.keys(kvProtocol).length
+      const hasTagsField = decoded.fields.length === expectedFieldCount
+      const isOldFormat = decoded.fields.length === expectedFieldCount - 1
+      if (!isOldFormat && !hasTagsField) return undefined
+
+      const signature = decoded.fields.pop() as number[]
+      if (!(await this.hasValidOverlaySignature(decoded.fields, signature))) return undefined
+
+      const entry: KVStoreEntry = {
+        key: Utils.toUTF8(decoded.fields[kvProtocol.key]),
+        value: Utils.toUTF8(decoded.fields[kvProtocol.value]),
+        controller: Utils.toHex(decoded.fields[kvProtocol.controller]),
+        protocolID: JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.protocolID])),
+        tags: this.decodeOverlayTags(decoded.fields, hasTagsField)
+      }
+      if (options.includeToken === true) {
+        entry.token = {
+          txid: tx.id('hex'),
+          outputIndex: result.outputIndex,
+          beef: Beef.fromBinary(result.beef),
+          satoshis: output.satoshis ?? 1
+        }
+      }
+      if (options.history === true) {
+        entry.history = await this.historian.buildHistory(tx, {
+          key: entry.key,
+          protocolID: entry.protocolID
+        })
+      }
+      return entry
+    } catch {
+      // Skip malformed or undecodable outputs rather than failing the entire query.
+      return undefined
+    }
+  }
+
+  private async hasValidOverlaySignature(
+    fields: number[][],
+    signature: number[]
+  ): Promise<boolean> {
+    try {
+      const anyoneWallet = new ProtoWallet('anyone')
+      await anyoneWallet.verifySignature({
+        data: fields.flat(),
+        signature,
+        counterparty: Utils.toHex(fields[kvProtocol.controller]),
+        protocolID: JSON.parse(Utils.toUTF8(fields[kvProtocol.protocolID])),
+        keyID: Utils.toUTF8(fields[kvProtocol.key])
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private decodeOverlayTags(fields: number[][], hasTagsField: boolean): string[] | undefined {
+    if (!hasTagsField || fields[kvProtocol.tags] == null) return undefined
+    try {
+      return JSON.parse(Utils.toUTF8(fields[kvProtocol.tags]))
+    } catch {
+      return undefined
+    }
   }
 
   /**

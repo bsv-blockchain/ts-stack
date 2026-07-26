@@ -1024,7 +1024,12 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         protocolFields.length >= 15 && protocolFields[12]?.length === 1 && protocolFields[12][0] === 3
       const hasV3MetadataWithoutProfiles =
         protocolFields.length >= 14 && protocolFields[11]?.length === 1 && protocolFields[11][0] === 3
-      const kdfVersionFieldIndex = hasV3MetadataWithProfiles ? 12 : hasV3MetadataWithoutProfiles ? 11 : -1
+      let kdfVersionFieldIndex = -1
+      if (hasV3MetadataWithProfiles) {
+        kdfVersionFieldIndex = 12
+      } else if (hasV3MetadataWithoutProfiles) {
+        kdfVersionFieldIndex = 11
+      }
 
       const token: UMPToken = {
         passwordSalt: protocolFields[0],

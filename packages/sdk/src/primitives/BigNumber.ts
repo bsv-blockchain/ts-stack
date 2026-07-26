@@ -256,12 +256,9 @@ export default class BigNumber {
       return
     }
 
-    let effectiveBase: number | 'hex' = base
-    let effectiveEndian: 'be' | 'le' = endian
-    if (base === 'le' || base === 'be') {
-      effectiveEndian = base
-      effectiveBase = 10
-    }
+    const baseIsEndian = base === 'le' || base === 'be'
+    const effectiveBase: number | 'hex' = baseIsEndian ? 10 : base
+    const effectiveEndian: 'be' | 'le' = baseIsEndian ? base : endian
 
     if (typeof number === 'number') {
       this.initNumber(number, effectiveEndian)
@@ -289,10 +286,9 @@ export default class BigNumber {
     effectiveEndian: 'be' | 'le'
   ): void {
     if (effectiveBase === 'hex') effectiveBase = 16
-    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); required for integer base validation.
     this.assert(
       typeof effectiveBase === 'number' &&
-        effectiveBase === (effectiveBase | 0) &&
+        effectiveBase === Math.trunc(effectiveBase) &&
         effectiveBase >= 2 &&
         effectiveBase <= 36,
       'Base must be an integer between 2 and 36'

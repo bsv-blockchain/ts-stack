@@ -58,6 +58,11 @@ interface PaymentRetryContext {
   }
 }
 
+interface RequestBodySummary {
+  type: string
+  byteLength: number
+}
+
 const PAYMENT_VERSION = '1.0'
 
 /**
@@ -171,7 +176,7 @@ export class AuthFetch {
                 }
               } finally {
                 // Give the backend 500 ms to process the certificates we just sent, before releasing the queue entry
-                await new Promise(resolve => setTimeout(resolve, 500))
+                await this.wait(500)
                 this.peers[baseURL].pendingCertificateRequests.shift()
               }
             }) as Function)
@@ -264,28 +269,7 @@ export class AuthFetch {
           // If the server has a resource that requires certificates to be sent before access would be granted,
           // this makes sure the user has a chance to send the certificates before the resource is requested.
           if (peerToUse.pendingCertificateRequests.length > 0) {
-            const CERTIFICATE_WAIT_TIMEOUT_MS = 30000
-            const CHECK_INTERVAL_MS = 100
-
-            await new Promise<void>((resolve, reject) => {
-              const startTime = Date.now()
-
-              const checkPending = (): void => {
-                if (peerToUse.pendingCertificateRequests.length === 0) {
-                  resolve()
-                  return
-                }
-
-                if (Date.now() - startTime > CERTIFICATE_WAIT_TIMEOUT_MS) {
-                  reject(new Error('Timeout waiting for certificate request to complete'))
-                  return
-                }
-
-                setTimeout(checkPending, CHECK_INTERVAL_MS)
-              }
-
-              checkPending()
-            })
+            await this.waitForPendingCertificateRequests(peerToUse)
           }
 
           // Send the request, now that all listeners are set up
@@ -783,7 +767,15 @@ export class AuthFetch {
     }
   }
 
-  private describeRequestBodyForLogging(body: any): { type: string; byteLength: number } {
+  private describeRequestBodyForLogging(body: any): RequestBodySummary {
+    return (
+      this.describeSimpleRequestBody(body) ??
+      this.describePlatformRequestBody(body) ??
+      this.describeSerializableRequestBody(body)
+    )
+  }
+
+  private describeSimpleRequestBody(body: any): RequestBodySummary | undefined {
     if (body == null) {
       return { type: 'none', byteLength: 0 }
     }
@@ -798,7 +790,10 @@ export class AuthFetch {
       }
       return { type: 'array', byteLength: body.length }
     }
+    return undefined
+  }
 
+  private describePlatformRequestBody(body: any): RequestBodySummary | undefined {
     if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
       return { type: 'ArrayBuffer', byteLength: body.byteLength }
     }
@@ -826,7 +821,10 @@ export class AuthFetch {
     if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
       return { type: 'ReadableStream', byteLength: 0 }
     }
+    return undefined
+  }
 
+  private describeSerializableRequestBody(body: any): RequestBodySummary {
     try {
       const serialized = JSON.stringify(body)
       if (typeof serialized === 'string') {
@@ -837,6 +835,18 @@ export class AuthFetch {
     }
 
     return { type: typeof body, byteLength: 0 }
+  }
+
+  private async waitForPendingCertificateRequests(peer: AuthPeer): Promise<void> {
+    const timeoutMs = 30000
+    const checkIntervalMs = 100
+    const startedAt = Date.now()
+    while (peer.pendingCertificateRequests.length > 0) {
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error('Timeout waiting for certificate request to complete')
+      }
+      await this.wait(checkIntervalMs)
+    }
   }
 
   private composePaymentLogDetails(url: string, context: PaymentRetryContext): Record<string, any> {

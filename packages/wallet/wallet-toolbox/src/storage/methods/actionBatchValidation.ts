@@ -121,9 +121,11 @@ function validateActionOutputs(action: ActionBatchCommitAction): void {
   for (let index = 0; index < action.metadata.outputs.length; index++) {
     const requested = action.metadata.outputs[index]
     const planned = action.plan.outputs[index]
-    const satoshisMatch = requested.satoshis === maxPossibleSatoshis || requested.satoshis === planned?.satoshis
+    if (planned == null) {
+      throw new WERR_INVALID_PARAMETER('metadata.outputs', 'match planned requested outputs')
+    }
+    const satoshisMatch = requested.satoshis === maxPossibleSatoshis || requested.satoshis === planned.satoshis
     if (
-      planned == null ||
       planned.providedBy !== 'you' ||
       !satoshisMatch ||
       requested.lockingScript !== planned.lockingScript ||

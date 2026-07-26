@@ -307,8 +307,6 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       this.syncMap.commission,
       this.syncMap.provenTxReq
     ]) {
-      if (!ess?.entityName) {
-      }
       a.offsets.push({ name: ess.entityName, offset: ess.count })
     }
     return a

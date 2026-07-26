@@ -337,7 +337,7 @@ function zero8(word: string): string {
 const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 const CAN_USE_BUFFER = BufferCtor != null && typeof BufferCtor.from === 'function'
 const HEX_DIGITS = '0123456789abcdef'
-const HEX_BYTE_STRINGS = Array.from({ length: 256 })
+const HEX_BYTE_STRINGS: string[] = Array.from({ length: 256 })
 for (let i = 0; i < HEX_BYTE_STRINGS.length; i++) {
   HEX_BYTE_STRINGS[i] = HEX_DIGITS[(i >> 4) & 0xf] + HEX_DIGITS[i & 0xf]
 }
@@ -346,7 +346,7 @@ function bytesToHex(data: Uint8Array): string {
   if (CAN_USE_BUFFER) {
     return BufferCtor.from(data).toString('hex')
   }
-  const out = Array.from({ length: data.length })
+  const out: string[] = Array.from({ length: data.length })
   for (let i = 0; i < data.length; i++) out[i] = HEX_BYTE_STRINGS[data[i]]
   return out.join('')
 }
@@ -1343,14 +1343,12 @@ function add(Ah: number, Al: number, Bh: number, Bl: number): { h: number; l: nu
   return { h: (Ah + Bh + ((l / 2 ** 32) | 0)) | 0, l: l | 0 }
 }
 const add3L = (Al: number, Bl: number, Cl: number): number => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0)
-// eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
 const add3H = (low: number, Ah: number, Bh: number, Ch: number): number =>
-  (Ah + Bh + Ch + ((low / 2 ** 32) | 0)) | 0
+  Math.trunc(Ah + Bh + Ch + Math.trunc(low / 2 ** 32))
 const add4L = (Al: number, Bl: number, Cl: number, Dl: number): number =>
   (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0)
-// eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
 const add4H = (low: number, Ah: number, Bh: number, Ch: number, Dh: number): number =>
-  (Ah + Bh + Ch + Dh + ((low / 2 ** 32) | 0)) | 0
+  Math.trunc(Ah + Bh + Ch + Dh + Math.trunc(low / 2 ** 32))
 const add5L = (Al: number, Bl: number, Cl: number, Dl: number, El: number): number =>
   (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0)
 // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.

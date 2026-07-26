@@ -1455,161 +1455,11 @@ export default class Transaction {
     const outputCount = this.outputs.length
     const description =
       actionDescription ?? `Transaction with ${inputCount} input(s) and ${outputCount} output(s)`
-
-    const actionArgs: CreateActionArgs = {
-      description,
-      inputs: [] as any[],
-      outputs: [] as any[],
-      lockTime: this.lockTime,
-      version: this.version
-    }
-
-    // Check if any input has an unlocking script template
     const hasTemplates = this.inputs.some(input => input.unlockingScriptTemplate != null)
-
-    this.materializeSourceTXIDs()
-    // Process inputs and merge the shared source graph once.
-    const beefData = new Beef()
-    for (let i = 0; i < this.inputs.length; i++) {
-      const input = this.inputs[i]
-
-      if (input.sourceTransaction == null) {
-        throw new Error('All inputs must have a sourceTransaction when using completeWithWallet')
-      }
-
-      beefData.mergeTransaction(input.sourceTransaction)
-
-      const sourceTXID = input.sourceTransaction.id('hex')
-
-      const inputArg: any = {
-        outpoint: `${sourceTXID}.${input.sourceOutputIndex}`,
-        inputDescription: 'Input from source transaction',
-        sequenceNumber: input.sequence
-      }
-
-      // Handle inputs with templates vs scripts
-      if (hasTemplates) {
-        // When using signAction flow, need to provide length for templates
-        if (input.unlockingScriptTemplate != null) {
-          const estimatedLength = await input.unlockingScriptTemplate.estimateLength(this, i)
-          inputArg.unlockingScriptLength = estimatedLength
-        } else if (input.unlockingScript != null) {
-          // Still provide the script if it exists
-          inputArg.unlockingScript = input.unlockingScript.toHex()
-        } else {
-          throw new Error(
-            `Input ${i} must have either an unlockingScript or unlockingScriptTemplate`
-          )
-        }
-      } else {
-        // Original flow: all inputs must have unlocking scripts
-        if (input.unlockingScript == null) {
-          throw new Error('All inputs must have an unlockingScript when using completeWithWallet')
-        }
-        inputArg.unlockingScript = input.unlockingScript.toHex()
-      }
-
-      actionArgs.inputs.push(inputArg)
-    }
-
-    // Add inputBEEF if there are inputs
-    if (this.inputs.length > 0) {
-      actionArgs.inputBEEF = beefData.toUint8Array()
-    }
-
-    // Process outputs
-    for (const output of this.outputs) {
-      actionArgs.outputs.push({
-        satoshis: output.satoshis,
-        lockingScript: output.lockingScript.toHex(),
-        outputDescription: 'Output from source transaction'
-      })
-    }
-
-    // Add any labels from metadata if they exist
-    if (this.metadata?.labels != null && Array.isArray(this.metadata.labels)) {
-      actionArgs.labels = this.metadata.labels
-    }
-
-    let atomicBEEF: number[]
-
-    // Use signAction flow for templates
-    if (hasTemplates) {
-      // Merge user options with required signAndProcess: false for template flow
-      actionArgs.options = {
-        ...options,
-        signAndProcess: false
-      }
-
-      const { signableTransaction } = await wallet.createAction(actionArgs, originator)
-
-      if (signableTransaction == null) {
-        throw new Error('Wallet createAction did not return signableTransaction')
-      }
-
-      // Parse the signable transaction BEEF to get the unsigned transaction
-      const partialTx = Transaction.fromBEEF(signableTransaction.tx)
-
-      // Sign inputs with templates and collect all unlocking scripts
-      const spends: Record<number, { unlockingScript: string }> = {}
-
-      for (let i = 0; i < this.inputs.length; i++) {
-        const input = this.inputs[i]
-
-        if (input.unlockingScriptTemplate != null) {
-          // Use the template to sign this input
-          const unlockingScript = await input.unlockingScriptTemplate.sign(partialTx, i)
-          spends[i] = {
-            unlockingScript: unlockingScript.toHex()
-          }
-        } else if (input.unlockingScript != null) {
-          // Include pre-existing unlocking scripts
-          spends[i] = {
-            unlockingScript: input.unlockingScript.toHex()
-          }
-        }
-      }
-
-      // Extract options that apply to signAction (subset of CreateActionOptions)
-      const signActionOptions: SignActionOptions | undefined =
-        options == null
-          ? undefined
-          : {
-              acceptDelayedBroadcast: options.acceptDelayedBroadcast,
-              returnTXIDOnly: options.returnTXIDOnly,
-              noSend: options.noSend,
-              sendWith: options.sendWith
-            }
-
-      // Call signAction with the generated unlocking scripts
-      const signResult = await wallet.signAction(
-        {
-          reference: signableTransaction.reference,
-          spends,
-          options: signActionOptions
-        },
-        originator
-      )
-
-      if (signResult.tx == null) {
-        throw new Error('Wallet signAction did not return transaction data')
-      }
-
-      atomicBEEF = signResult.tx
-    } else {
-      // Pass through user options for standard flow
-      if (options != null) {
-        actionArgs.options = options
-      }
-
-      const { tx } = await wallet.createAction(actionArgs, originator)
-
-      if (tx == null) {
-        throw new Error('Wallet createAction did not return transaction data')
-      }
-
-      atomicBEEF = tx
-    }
+    const actionArgs = await this.buildWalletActionArgs(description, hasTemplates)
+    const atomicBEEF = hasTemplates
+      ? await this.completeWalletTemplateAction(wallet, actionArgs, originator, options)
+      : await this.completeWalletScriptAction(wallet, actionArgs, originator, options)
 
     // Create a new transaction from the atomic BEEF
     const newTransaction = Transaction.fromAtomicBEEF(atomicBEEF)
@@ -1627,6 +1477,135 @@ export default class Transaction {
       ...this.metadata,
       ...newTransaction.metadata
     }
+  }
+
+  private async buildWalletActionArgs(
+    description: DescriptionString5to50Bytes,
+    hasTemplates: boolean
+  ): Promise<CreateActionArgs> {
+    const actionArgs: CreateActionArgs = {
+      description,
+      inputs: [],
+      outputs: [],
+      lockTime: this.lockTime,
+      version: this.version
+    }
+    this.materializeSourceTXIDs()
+    const beefData = new Beef()
+    for (let index = 0; index < this.inputs.length; index++) {
+      const input = this.inputs[index]
+      if (input.sourceTransaction == null) {
+        throw new Error('All inputs must have a sourceTransaction when using completeWithWallet')
+      }
+      beefData.mergeTransaction(input.sourceTransaction)
+      actionArgs.inputs.push(await this.buildWalletInputArg(input, index, hasTemplates))
+    }
+    if (this.inputs.length > 0) actionArgs.inputBEEF = beefData.toUint8Array()
+    actionArgs.outputs = this.outputs.map(output => ({
+      satoshis: output.satoshis,
+      lockingScript: output.lockingScript.toHex(),
+      outputDescription: 'Output from source transaction'
+    }))
+    if (Array.isArray(this.metadata?.labels)) actionArgs.labels = this.metadata.labels
+    return actionArgs
+  }
+
+  private async buildWalletInputArg(
+    input: TransactionInput,
+    index: number,
+    hasTemplates: boolean
+  ): Promise<any> {
+    const inputArg: any = {
+      outpoint: `${input.sourceTransaction.id('hex')}.${input.sourceOutputIndex}`,
+      inputDescription: 'Input from source transaction',
+      sequenceNumber: input.sequence
+    }
+    if (!hasTemplates) {
+      if (input.unlockingScript == null) {
+        throw new Error('All inputs must have an unlockingScript when using completeWithWallet')
+      }
+      inputArg.unlockingScript = input.unlockingScript.toHex()
+      return inputArg
+    }
+    if (input.unlockingScriptTemplate != null) {
+      inputArg.unlockingScriptLength = await input.unlockingScriptTemplate.estimateLength(
+        this,
+        index
+      )
+    } else if (input.unlockingScript != null) {
+      inputArg.unlockingScript = input.unlockingScript.toHex()
+    } else {
+      throw new Error(
+        `Input ${index} must have either an unlockingScript or unlockingScriptTemplate`
+      )
+    }
+    return inputArg
+  }
+
+  private async completeWalletTemplateAction(
+    wallet: WalletInterface,
+    actionArgs: CreateActionArgs,
+    originator?: string,
+    options?: CreateActionOptions
+  ): Promise<number[]> {
+    actionArgs.options = { ...options, signAndProcess: false }
+    const { signableTransaction } = await wallet.createAction(actionArgs, originator)
+    if (signableTransaction == null) {
+      throw new Error('Wallet createAction did not return signableTransaction')
+    }
+    const partialTx = Transaction.fromBEEF(signableTransaction.tx)
+    const spends = await this.buildWalletSpends(partialTx)
+    const signActionOptions: SignActionOptions | undefined =
+      options == null
+        ? undefined
+        : {
+            acceptDelayedBroadcast: options.acceptDelayedBroadcast,
+            returnTXIDOnly: options.returnTXIDOnly,
+            noSend: options.noSend,
+            sendWith: options.sendWith
+          }
+    const signResult = await wallet.signAction(
+      {
+        reference: signableTransaction.reference,
+        spends,
+        options: signActionOptions
+      },
+      originator
+    )
+    if (signResult.tx == null) {
+      throw new Error('Wallet signAction did not return transaction data')
+    }
+    return signResult.tx
+  }
+
+  private async buildWalletSpends(
+    partialTx: Transaction
+  ): Promise<Record<number, { unlockingScript: string }>> {
+    const spends: Record<number, { unlockingScript: string }> = {}
+    for (let index = 0; index < this.inputs.length; index++) {
+      const input = this.inputs[index]
+      if (input.unlockingScriptTemplate != null) {
+        const unlockingScript = await input.unlockingScriptTemplate.sign(partialTx, index)
+        spends[index] = { unlockingScript: unlockingScript.toHex() }
+      } else if (input.unlockingScript != null) {
+        spends[index] = { unlockingScript: input.unlockingScript.toHex() }
+      }
+    }
+    return spends
+  }
+
+  private async completeWalletScriptAction(
+    wallet: WalletInterface,
+    actionArgs: CreateActionArgs,
+    originator?: string,
+    options?: CreateActionOptions
+  ): Promise<number[]> {
+    if (options != null) actionArgs.options = options
+    const { tx } = await wallet.createAction(actionArgs, originator)
+    if (tx == null) {
+      throw new Error('Wallet createAction did not return transaction data')
+    }
+    return tx
   }
 
   /**
