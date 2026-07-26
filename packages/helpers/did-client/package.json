@@ -47,6 +47,7 @@
     "build:umd": "webpack --config webpack.config.js",
     "dev": "pnpm build:ts --watch",
     "doc": "ts2md",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/did-client/src/**/*.ts\" \"packages/helpers/did-client/*.{js,json,ts}\"",
     "lint": "oxlint src --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports DIDClient",
     "prepublishOnly": "pnpm build",

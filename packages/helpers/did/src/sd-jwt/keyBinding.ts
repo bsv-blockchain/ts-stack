@@ -10,7 +10,7 @@ export interface KeyBindingOptions {
 
 // Implements RFC 9901 section 4.3 Key Binding JWT. The sd_hash is computed
 // over the US-ASCII bytes of the selected SD-JWT ending with "~".
-export function createKeyBindingJwt (
+export function createKeyBindingJwt(
   selectedSdJwt: string,
   holderPrivateKey: PrivateKeyInput,
   options: KeyBindingOptions = {}
@@ -24,7 +24,7 @@ export function createKeyBindingJwt (
   return signJwt({ typ: 'kb+jwt' }, payload, holderPrivateKey)
 }
 
-export function verifyKeyBindingJwt (
+export function verifyKeyBindingJwt(
   selectedSdJwt: string,
   kbJwt: string,
   holderJwk: Jwk,

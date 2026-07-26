@@ -9,13 +9,16 @@ export default {
   // Ignore compiled output
   testPathIgnorePatterns: ['dist/'],
   transform: {
-      '^.+\\.test.ts?$': ['ts-jest', { 
+    '^.+\\.test.ts?$': [
+      'ts-jest',
+      {
         useESM: true,
         tsconfig: {
           module: 'ESNext',
           moduleResolution: 'bundler'
         }
-      }],
+      }
+    ]
   },
 
   // Tell Jest that files ending in .ts should be treated as ESM modules

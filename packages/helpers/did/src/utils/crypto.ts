@@ -2,21 +2,20 @@ import { BigNumber, Hash, PrivateKey, PublicKey, Random, Signature, Utils } from
 import type { Jwk, PrivateKeyInput, PublicKeyInput, SdJwtAlgorithm } from '../types.js'
 import { base64UrlDecode, base64UrlEncode } from './base64url.js'
 
-export function normalizePrivateKey (privateKey: PrivateKeyInput): PrivateKey {
+export function normalizePrivateKey(privateKey: PrivateKeyInput): PrivateKey {
   if (privateKey instanceof PrivateKey) return privateKey
   if (typeof privateKey === 'string') return PrivateKey.fromHex(privateKey)
   return new PrivateKey(Array.from(privateKey))
 }
 
-export function normalizePublicKey (publicKey: PublicKeyInput): PublicKey {
+export function normalizePublicKey(publicKey: PublicKeyInput): PublicKey {
   if (publicKey instanceof PublicKey) return publicKey
-  const bytes = typeof publicKey === 'string'
-    ? Utils.toArray(publicKey, 'hex')
-    : Array.from(publicKey)
+  const bytes =
+    typeof publicKey === 'string' ? Utils.toArray(publicKey, 'hex') : Array.from(publicKey)
   return PublicKey.fromDER(bytes)
 }
 
-export function publicKeyToJwk (publicKey: PublicKeyInput, kid?: string): Jwk {
+export function publicKeyToJwk(publicKey: PublicKeyInput, kid?: string): Jwk {
   const key = normalizePublicKey(publicKey)
   return {
     kty: 'EC',
@@ -28,11 +27,11 @@ export function publicKeyToJwk (publicKey: PublicKeyInput, kid?: string): Jwk {
   }
 }
 
-export function privateKeyToJwk (privateKey: PrivateKeyInput, kid?: string): Jwk {
+export function privateKeyToJwk(privateKey: PrivateKeyInput, kid?: string): Jwk {
   return publicKeyToJwk(normalizePrivateKey(privateKey).toPublicKey(), kid)
 }
 
-export function jwkToPublicKey (jwk: Jwk): PublicKey {
+export function jwkToPublicKey(jwk: Jwk): PublicKey {
   if (jwk.kty !== 'EC' || jwk.crv !== 'secp256k1') {
     throw new Error('Only secp256k1 EC JWKs are supported')
   }
@@ -41,16 +40,22 @@ export function jwkToPublicKey (jwk: Jwk): PublicKey {
   return new PublicKey(x, y)
 }
 
-export function signCompact (data: string, privateKey: PrivateKeyInput, alg: SdJwtAlgorithm = 'ES256K'): string {
+export function signCompact(
+  data: string,
+  privateKey: PrivateKeyInput,
+  alg: SdJwtAlgorithm = 'ES256K'
+): string {
   assertSupportedAlg(alg)
   const signature = normalizePrivateKey(privateKey).sign(Array.from(new TextEncoder().encode(data)))
-  return base64UrlEncode([
-    ...signature.r.toArray('be', 32),
-    ...signature.s.toArray('be', 32)
-  ])
+  return base64UrlEncode([...signature.r.toArray('be', 32), ...signature.s.toArray('be', 32)])
 }
 
-export function verifyCompact (data: string, signatureValue: string, publicKey: PublicKeyInput | Jwk, alg: SdJwtAlgorithm = 'ES256K'): boolean {
+export function verifyCompact(
+  data: string,
+  signatureValue: string,
+  publicKey: PublicKeyInput | Jwk,
+  alg: SdJwtAlgorithm = 'ES256K'
+): boolean {
   assertSupportedAlg(alg)
   const key = isJwk(publicKey) ? jwkToPublicKey(publicKey) : normalizePublicKey(publicKey)
   const signatureBytes = base64UrlDecode(signatureValue)
@@ -62,23 +67,22 @@ export function verifyCompact (data: string, signatureValue: string, publicKey: 
   return key.verify(Array.from(new TextEncoder().encode(data)), signature)
 }
 
-export function sha256Base64Url (value: string | number[] | Uint8Array): string {
-  const bytes = typeof value === 'string'
-    ? Array.from(new TextEncoder().encode(value))
-    : Array.from(value)
+export function sha256Base64Url(value: string | number[] | Uint8Array): string {
+  const bytes =
+    typeof value === 'string' ? Array.from(new TextEncoder().encode(value)) : Array.from(value)
   return base64UrlEncode(Hash.sha256(bytes))
 }
 
-export function randomSalt (byteLength = 16): string {
+export function randomSalt(byteLength = 16): string {
   return base64UrlEncode(Random(byteLength))
 }
 
-function assertSupportedAlg (alg: SdJwtAlgorithm): void {
+function assertSupportedAlg(alg: SdJwtAlgorithm): void {
   if (alg !== 'ES256K') {
     throw new Error('Unsupported JOSE algorithm')
   }
 }
 
-function isJwk (value: PublicKeyInput | Jwk): value is Jwk {
+function isJwk(value: PublicKeyInput | Jwk): value is Jwk {
   return typeof value === 'object' && value != null && 'kty' in value && 'crv' in value
 }

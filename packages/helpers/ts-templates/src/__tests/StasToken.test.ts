@@ -41,4 +41,13 @@ describe('StasToken.decode', () => {
     expect(decoded.symbol).toBeNull()
     expect(decoded.assetId).toMatch(/^stas:/)
   })
+
+  it('removes control characters from the decoded symbol', () => {
+    const symbolWithSpace = '05' + '2054455354'
+    const decoded = StasToken.decode(
+      LockingScript.fromHex(`76a914${ownerHash160}88ac69${engine}6a${flagsPush}${symbolWithSpace}`)
+    )
+
+    expect(decoded.symbol).toBe('TEST')
+  })
 })

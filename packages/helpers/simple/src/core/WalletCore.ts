@@ -30,26 +30,26 @@ export abstract class WalletCore {
   public readonly identityKey: string
   public readonly defaults: WalletDefaults
 
-  constructor (identityKey: string, defaults?: Partial<WalletDefaults>) {
+  constructor(identityKey: string, defaults?: Partial<WalletDefaults>) {
     this.identityKey = identityKey
     this.defaults = mergeDefaults(defaults ?? {})
   }
 
-  abstract getClient (): WalletInterface
+  abstract getClient(): WalletInterface
 
   // ============================================================================
   // Wallet Info
   // ============================================================================
 
-  getIdentityKey (): string {
+  getIdentityKey(): string {
     return this.identityKey
   }
 
-  getAddress (): string {
+  getAddress(): string {
     return PublicKey.fromString(this.identityKey).toAddress()
   }
 
-  getStatus (): WalletStatus {
+  getStatus(): WalletStatus {
     return {
       isConnected: true,
       identityKey: this.identityKey,
@@ -57,7 +57,7 @@ export abstract class WalletCore {
     }
   }
 
-  getWalletInfo (): WalletInfo {
+  getWalletInfo(): WalletInfo {
     return {
       identityKey: this.identityKey,
       address: this.getAddress(),
@@ -70,15 +70,21 @@ export abstract class WalletCore {
   // Balance
   // ============================================================================
 
-  async getBalance (basket?: string): Promise<BalanceResult> {
+  async getBalance(basket?: string): Promise<BalanceResult> {
     const client = this.getClient()
 
     if (basket != null) {
       const result = await client.listOutputs({ basket })
       const outputs = result?.outputs ?? []
-      const totalSatoshis = outputs.reduce((sum: number, o: any) => sum + ((o.satoshis as number) ?? 0), 0)
+      const totalSatoshis = outputs.reduce(
+        (sum: number, o: any) => sum + ((o.satoshis as number) ?? 0),
+        0
+      )
       const spendable = outputs.filter((o: any) => o.spendable !== false)
-      const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + ((o.satoshis as number) ?? 0), 0)
+      const spendableSatoshis = spendable.reduce(
+        (sum: number, o: any) => sum + ((o.satoshis as number) ?? 0),
+        0
+      )
       return {
         totalSatoshis,
         totalOutputs: result?.totalOutputs ?? outputs.length,
@@ -103,7 +109,7 @@ export abstract class WalletCore {
   // Key Derivation
   // ============================================================================
 
-  async derivePublicKey (
+  async derivePublicKey(
     protocolID: [SecurityLevel, string],
     keyID: string,
     counterparty?: string,
@@ -118,7 +124,7 @@ export abstract class WalletCore {
     return result.publicKey
   }
 
-  async derivePaymentKey (counterparty: string, invoiceNumber?: string): Promise<string> {
+  async derivePaymentKey(counterparty: string, invoiceNumber?: string): Promise<string> {
     const protocolID: [SecurityLevel, string] = [2 as SecurityLevel, '3241645161d8']
     const keyID = invoiceNumber ?? Utils.toBase64(Random(8))
     const result = await this.getClient().getPublicKey({
@@ -134,13 +140,15 @@ export abstract class WalletCore {
   // Multi-Output Send (core primitive)
   // ============================================================================
 
-  private convertDataElement (element: string | object | number[]): number[] {
+  private convertDataElement(element: string | object | number[]): number[] {
     if (Array.isArray(element)) return element
-    if (typeof element === 'object' && element !== null) { return Array.from(Utils.toArray(JSON.stringify(element), 'utf8')) }
+    if (typeof element === 'object' && element !== null) {
+      return Array.from(Utils.toArray(JSON.stringify(element), 'utf8'))
+    }
     return Array.from(Utils.toArray(String(element), 'utf8'))
   }
 
-  async send (options: SendOptions): Promise<SendResult> {
+  async send(options: SendOptions): Promise<SendResult> {
     try {
       if (options.outputs == null || options.outputs.length === 0) {
         throw new Error('At least one output is required')
@@ -154,11 +162,9 @@ export abstract class WalletCore {
         const spec = options.outputs[i]
         const desc = spec.description ?? this.defaults.outputDescription
 
-        if ((spec.data != null) && (spec.to == null)) {
+        if (spec.data != null && spec.to == null) {
           // OP_RETURN: data fields, no recipient
-          const script = new Script()
-            .writeOpCode(OP.OP_FALSE)
-            .writeOpCode(OP.OP_RETURN)
+          const script = new Script().writeOpCode(OP.OP_FALSE).writeOpCode(OP.OP_RETURN)
           for (const element of spec.data) {
             script.writeBin(this.convertDataElement(element))
           }
@@ -169,24 +175,20 @@ export abstract class WalletCore {
             ...(spec.basket == null ? {} : { basket: spec.basket })
           })
           outputDetails.push({ index: i, type: 'op_return', satoshis: 0, description: desc })
-        } else if ((spec.to != null) && (spec.data != null)) {
+        } else if (spec.to != null && spec.data != null) {
           // PushDrop: data fields locked to recipient
           const sats = spec.satoshis ?? 1
           if (sats < 1) throw new Error(`PushDrop output #${i} needs satoshis >= 1`)
-          const protocolID = (spec.protocolID ?? this.defaults.tokenProtocolID) as [SecurityLevel, string]
+          const protocolID = (spec.protocolID ?? this.defaults.tokenProtocolID) as [
+            SecurityLevel,
+            string
+          ]
           const keyID = spec.keyID ?? Utils.toBase64(Random(8))
           const basket = spec.basket ?? this.defaults.tokenBasket
 
           const fields = spec.data.map(el => this.convertDataElement(el))
           const pushdrop = new PushDrop(client)
-          const lockingScript = await pushdrop.lock(
-            fields,
-            protocolID,
-            keyID,
-            'self',
-            true,
-            false
-          )
+          const lockingScript = await pushdrop.lock(fields, protocolID, keyID, 'self', true, false)
 
           actionOutputs.push({
             lockingScript: lockingScript.toHex(),
@@ -197,14 +199,12 @@ export abstract class WalletCore {
             tags: ['token']
           })
           outputDetails.push({ index: i, type: 'pushdrop', satoshis: sats, description: desc })
-        } else if ((spec.to != null) && (spec.data == null)) {
+        } else if (spec.to != null && spec.data == null) {
           // P2PKH: simple payment
           const sats = spec.satoshis ?? 0
           if (sats <= 0) throw new Error(`P2PKH output #${i} needs satoshis > 0`)
 
-          const lockingScript = new P2PKH()
-            .lock(PublicKey.fromString(spec.to).toAddress())
-            .toHex()
+          const lockingScript = new P2PKH().lock(PublicKey.fromString(spec.to).toAddress()).toHex()
 
           actionOutputs.push({
             lockingScript,
@@ -214,7 +214,9 @@ export abstract class WalletCore {
           })
           outputDetails.push({ index: i, type: 'p2pkh', satoshis: sats, description: desc })
         } else {
-          throw new Error(`Output #${i}: must have 'to' (P2PKH), 'data' (OP_RETURN), or both (PushDrop)`)
+          throw new Error(
+            `Output #${i}: must have 'to' (P2PKH), 'data' (OP_RETURN), or both (PushDrop)`
+          )
         }
       }
 
@@ -238,7 +240,7 @@ export abstract class WalletCore {
   // Pay (convenience wrapper around send)
   // ============================================================================
 
-  async pay (options: PaymentOptions): Promise<TransactionResult> {
+  async pay(options: PaymentOptions): Promise<TransactionResult> {
     try {
       const peerPay = new PeerPayClient({
         walletClient: this.getClient() as any,
@@ -268,7 +270,7 @@ export abstract class WalletCore {
    * Generate a payment request containing BRC-29 derivation data.
    * Share this with the sender so they can create a payment via `sendDirectPayment()`.
    */
-  createPaymentRequest (options: { satoshis: number, memo?: string }): PaymentRequest {
+  createPaymentRequest(options: { satoshis: number; memo?: string }): PaymentRequest {
     const derivationPrefix = Utils.toBase64(Utils.toArray('payment', 'utf8'))
     const derivationSuffix = Utils.toBase64(Random(8))
     return {
@@ -284,7 +286,7 @@ export abstract class WalletCore {
    * Create a BRC-29 derived P2PKH transaction for the recipient described in the request.
    * Returns the transaction plus remittance data the recipient needs to call `receiveDirectPayment()`.
    */
-  async sendDirectPayment (request: PaymentRequest): Promise<DirectPaymentResult> {
+  async sendDirectPayment(request: PaymentRequest): Promise<DirectPaymentResult> {
     try {
       const client = this.getClient()
       const protocolID: [SecurityLevel, string] = [2 as SecurityLevel, '3241645161d8']
@@ -297,20 +299,20 @@ export abstract class WalletCore {
         forSelf: false
       })
 
-      const lockingScript = new P2PKH()
-        .lock(PublicKey.fromString(derivedKey).toAddress())
-        .toHex()
+      const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedKey).toAddress()).toHex()
 
-      const outputs: any[] = [{
-        lockingScript,
-        satoshis: request.satoshis,
-        outputDescription: `Direct payment: ${request.satoshis} sats`,
-        customInstructions: JSON.stringify({
-          derivationPrefix: request.derivationPrefix,
-          derivationSuffix: request.derivationSuffix,
-          payee: request.serverIdentityKey
-        })
-      }]
+      const outputs: any[] = [
+        {
+          lockingScript,
+          satoshis: request.satoshis,
+          outputDescription: `Direct payment: ${request.satoshis} sats`,
+          customInstructions: JSON.stringify({
+            derivationPrefix: request.derivationPrefix,
+            derivationSuffix: request.derivationSuffix,
+            payee: request.serverIdentityKey
+          })
+        }
+      ]
 
       if (request.memo != null && request.memo !== '') {
         const memoScript = new Script()
@@ -348,25 +350,26 @@ export abstract class WalletCore {
    * using the `wallet payment` protocol. This does NOT put the output into a basket —
    * it becomes a regular spendable UTXO managed by the wallet.
    */
-  async receiveDirectPayment (payment: IncomingPayment): Promise<void> {
+  async receiveDirectPayment(payment: IncomingPayment): Promise<void> {
     try {
       const client = this.getClient()
-      const tx = payment.tx instanceof Uint8Array
-        ? Array.from(payment.tx)
-        : payment.tx
+      const tx = payment.tx instanceof Uint8Array ? Array.from(payment.tx) : payment.tx
 
       await (client as any).internalizeAction({
         tx,
-        outputs: [{
-          outputIndex: payment.outputIndex,
-          protocol: 'wallet payment',
-          paymentRemittance: {
-            senderIdentityKey: payment.senderIdentityKey,
-            derivationPrefix: payment.derivationPrefix,
-            derivationSuffix: payment.derivationSuffix
+        outputs: [
+          {
+            outputIndex: payment.outputIndex,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              senderIdentityKey: payment.senderIdentityKey,
+              derivationPrefix: payment.derivationPrefix,
+              derivationSuffix: payment.derivationSuffix
+            }
           }
-        }],
-        description: payment.description ?? `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`,
+        ],
+        description:
+          payment.description ?? `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`,
         labels: ['direct_payment']
       })
     } catch (error) {
@@ -378,7 +381,7 @@ export abstract class WalletCore {
   // Fund Server Wallet
   // ============================================================================
 
-  async fundServerWallet (request: PaymentRequest, basket?: string): Promise<TransactionResult> {
+  async fundServerWallet(request: PaymentRequest, basket?: string): Promise<TransactionResult> {
     try {
       const client = this.getClient()
       const protocolID: [SecurityLevel, string] = [2 as SecurityLevel, '3241645161d8']
@@ -391,16 +394,16 @@ export abstract class WalletCore {
         forSelf: false
       })
 
-      const lockingScript = new P2PKH()
-        .lock(PublicKey.fromString(derivedKey).toAddress())
-        .toHex()
+      const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedKey).toAddress()).toHex()
 
-      const outputs: any[] = [{
-        lockingScript,
-        satoshis: request.satoshis,
-        outputDescription: `Server wallet funding: ${request.satoshis} sats`,
-        ...(basket == null ? {} : { basket })
-      }]
+      const outputs: any[] = [
+        {
+          lockingScript,
+          satoshis: request.satoshis,
+          outputDescription: `Server wallet funding: ${request.satoshis} sats`,
+          ...(basket == null ? {} : { basket })
+        }
+      ]
 
       if (request.memo != null && request.memo !== '') {
         const memoScript = new Script()

@@ -24,15 +24,13 @@ import {
 // Lazy issuer singleton
 // ============================================================================
 
-function createIssuerFactory (
-  config: CredentialIssuerHandlerConfig
-): () => Promise<any> {
+function createIssuerFactory(config: CredentialIssuerHandlerConfig): () => Promise<any> {
   let issuerInstance: any = null
   let issuerInitPromise: Promise<any> | null = null
 
   const envVar = config.envVar ?? 'CREDENTIAL_ISSUER_KEY'
   const keyFile = config.keyFile ?? join(process.cwd(), '.credential-issuer-key.json')
-  const keyStore = new JsonFileStore<{ privateKey: string, publicKey: string }>(keyFile)
+  const keyStore = new JsonFileStore<{ privateKey: string; publicKey: string }>(keyFile)
 
   return async () => {
     if (issuerInstance != null) return issuerInstance
@@ -85,7 +83,7 @@ function createIssuerFactory (
 // Helper: detect legacy path-based requests
 // ============================================================================
 
-function getLegacySubPath (url: string): string | null {
+function getLegacySubPath(url: string): string | null {
   try {
     const pathname = new URL(url).pathname
     // Match patterns like /api/credential-issuer/api/info or /api/credential-issuer/api/certify
@@ -104,11 +102,13 @@ function getLegacySubPath (url: string): string | null {
 // Next.js handler factory
 // ============================================================================
 
-export function createCredentialIssuerHandler (config: CredentialIssuerHandlerConfig): ReturnType<typeof toNextHandlers> {
+export function createCredentialIssuerHandler(
+  config: CredentialIssuerHandlerConfig
+): ReturnType<typeof toNextHandlers> {
   const getIssuer = createIssuerFactory(config)
 
   const coreHandlers = {
-    async GET (req: HandlerRequest): Promise<HandlerResponse> {
+    async GET(req: HandlerRequest): Promise<HandlerResponse> {
       try {
         const legacyPath = getLegacySubPath(req.url)
         const params = getSearchParams(req.url)
@@ -149,14 +149,16 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
           const id = params.get('id') ?? config.schemas[0]?.id
           const info = issuer.getInfo()
           const schema = info.schemas?.find((s: any) => s.id === id)
-          if (schema == null) return jsonResponse({ success: false, error: `Schema "${String(id)}" not found` }, 404)
+          if (schema == null)
+            return jsonResponse({ success: false, error: `Schema "${String(id)}" not found` }, 404)
           return jsonResponse({ success: true, schema })
         }
 
         if (action === 'status') {
           const issuer = await getIssuer()
           const sn = params.get('serialNumber')
-          if (sn == null || sn === '') return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
+          if (sn == null || sn === '')
+            return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
           const revoked = await issuer.isRevoked(sn)
           return jsonResponse({ success: true, serialNumber: sn, revoked })
         }
@@ -173,7 +175,7 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
       }
     },
 
-    async POST (req: HandlerRequest): Promise<HandlerResponse> {
+    async POST(req: HandlerRequest): Promise<HandlerResponse> {
       try {
         const body = await req.json()
         const legacyPath = getLegacySubPath(req.url)
@@ -182,7 +184,7 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
         // Legacy path: POST .../api/certify
         if (legacyPath === 'certify') {
           const { identityKey, schemaId, fields } = body
-          if ((identityKey == null) || (fields == null)) {
+          if (identityKey == null || fields == null) {
             return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
           }
           const issuer = await getIssuer()
@@ -195,7 +197,7 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
         // New query-param based certify — also used by acquireCredential()
         if (action === 'certify') {
           const { identityKey, schemaId, fields } = body
-          if ((identityKey == null) || (fields == null)) {
+          if (identityKey == null || fields == null) {
             return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
           }
           const issuer = await getIssuer()
@@ -205,7 +207,7 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
 
         if (action === 'issue') {
           const { subjectKey, schemaId, fields } = body
-          if ((subjectKey == null) || (fields == null)) {
+          if (subjectKey == null || fields == null) {
             return jsonResponse({ success: false, error: 'Missing subjectKey or fields' }, 400)
           }
           const issuer = await getIssuer()
@@ -215,7 +217,8 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
 
         if (action === 'verify') {
           const { credential } = body
-          if (credential == null) return jsonResponse({ success: false, error: 'Missing credential' }, 400)
+          if (credential == null)
+            return jsonResponse({ success: false, error: 'Missing credential' }, 400)
           const issuer = await getIssuer()
           const result = await issuer.verify(credential)
           return jsonResponse({ success: true, verification: result })
@@ -223,7 +226,8 @@ export function createCredentialIssuerHandler (config: CredentialIssuerHandlerCo
 
         if (action === 'revoke') {
           const { serialNumber } = body
-          if (serialNumber == null || serialNumber === '') return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
+          if (serialNumber == null || serialNumber === '')
+            return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
           const issuer = await getIssuer()
           const result = await issuer.revoke(serialNumber)
           return jsonResponse({ success: true, ...result })

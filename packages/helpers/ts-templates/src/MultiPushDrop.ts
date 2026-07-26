@@ -8,14 +8,16 @@ import {
   Hash,
   TransactionSignature,
   Signature,
-  WalletInterface, SecurityLevel, WalletCounterparty,
+  WalletInterface,
+  SecurityLevel,
+  WalletCounterparty,
   Transaction,
   PubKeyHex
 } from '@bsv/sdk'
 import { createMinimallyEncodedScriptChunk } from './mandala-encoding.js'
 
 // Helper to ensure a value is not null or undefined
-function verifyTruthy<T> (v: T | undefined | null, err?: string): T {
+function verifyTruthy<T>(v: T | undefined | null, err?: string): T {
   if (v === null || v === undefined) throw new Error(err || 'Value must not be null or undefined')
   return v
 }
@@ -49,12 +51,12 @@ export class MultiPushDrop implements ScriptTemplate {
   originator?: string
 
   /**
-     * Decodes a MultiPushDrop locking script back into its data fields and the list of locking public keys.
-     * @param script The MultiPushDrop locking script to decode.
-     * @returns {MultiPushDropDecoded} An object containing the locking public keys and data fields.
-     * @throws {Error} If the script structure is not a valid MultiPushDrop script.
-     */
-  static decode (script: LockingScript): MultiPushDropDecoded {
+   * Decodes a MultiPushDrop locking script back into its data fields and the list of locking public keys.
+   * @param script The MultiPushDrop locking script to decode.
+   * @returns {MultiPushDropDecoded} An object containing the locking public keys and data fields.
+   * @throws {Error} If the script structure is not a valid MultiPushDrop script.
+   */
+  static decode(script: LockingScript): MultiPushDropDecoded {
     const chunks = script.chunks
     let cursor = 0
 
@@ -107,27 +109,27 @@ export class MultiPushDrop implements ScriptTemplate {
   }
 
   /**
-    * Constructs a new instance of the MultiPushDrop class.
-    *
-    * @param {WalletInterface} wallet - The wallet interface used for deriving keys and signing.
-    * @param {string} [originator] - The originator domain for wallet requests.
-    */
-  constructor (wallet: WalletInterface, originator?: string) {
+   * Constructs a new instance of the MultiPushDrop class.
+   *
+   * @param {WalletInterface} wallet - The wallet interface used for deriving keys and signing.
+   * @param {string} [originator] - The originator domain for wallet requests.
+   */
+  constructor(wallet: WalletInterface, originator?: string) {
     this.wallet = wallet
     this.originator = originator
   }
 
   /**
-    * Creates a MultiPushDrop locking script.
-    *
-    * @param {number[][]} fields - The arbitrary data fields to include in the script.
-    * @param {[SecurityLevel, string]} protocolID - The protocol ID used for key derivation.
-    * @param {string} keyID - The key ID used for key derivation.
-    * @param {WalletCounterparty[]} counterparties - An array of counterparties ('self' or PubKeyHex) whose derived keys can unlock the script. Must contain at least one.
-    * @returns {Promise<LockingScript>} The generated MultiPushDrop locking script.
-    * @throws {Error} If counterparties array is empty.
-    */
-  async lock (
+   * Creates a MultiPushDrop locking script.
+   *
+   * @param {number[][]} fields - The arbitrary data fields to include in the script.
+   * @param {[SecurityLevel, string]} protocolID - The protocol ID used for key derivation.
+   * @param {string} keyID - The key ID used for key derivation.
+   * @param {WalletCounterparty[]} counterparties - An array of counterparties ('self' or PubKeyHex) whose derived keys can unlock the script. Must contain at least one.
+   * @returns {Promise<LockingScript>} The generated MultiPushDrop locking script.
+   * @throws {Error} If counterparties array is empty.
+   */
+  async lock(
     fields: number[][],
     protocolID: [SecurityLevel, string],
     keyID: string,
@@ -139,16 +141,19 @@ export class MultiPushDrop implements ScriptTemplate {
 
     const publicKeys: string[] = []
     for (const counterparty of counterparties) {
-      const { publicKey } = await this.wallet.getPublicKey({
-        protocolID,
-        keyID,
-        counterparty
-      }, this.originator)
+      const { publicKey } = await this.wallet.getPublicKey(
+        {
+          protocolID,
+          keyID,
+          counterparty
+        },
+        this.originator
+      )
       publicKeys.push(publicKey)
     }
 
     const nPublicKeys = publicKeys.length
-    const lockPart: Array<{ op: number, data?: number[] }> = []
+    const lockPart: Array<{ op: number; data?: number[] }> = []
 
     // Push Public Keys
     for (const publicKeyHex of publicKeys) {
@@ -172,7 +177,7 @@ export class MultiPushDrop implements ScriptTemplate {
     lockPart.push({ op: OP.OP_SWAP }, { op: OP.OP_CHECKSIGVERIFY })
 
     // Construct PushDrop Part for fields
-    const pushDropPart: Array<{ op: number, data?: number[] }> = []
+    const pushDropPart: Array<{ op: number; data?: number[] }> = []
     for (const field of fields) {
       pushDropPart.push(createMinimallyEncodedScriptChunk(field))
     }
@@ -191,25 +196,21 @@ export class MultiPushDrop implements ScriptTemplate {
     }
 
     // Combine parts and return
-    return new LockingScript([
-      ...lockPart,
-      ...pushDropPart,
-      { op: OP.OP_TRUE }
-    ])
+    return new LockingScript([...lockPart, ...pushDropPart, { op: OP.OP_TRUE }])
   }
 
   /**
-     * Creates an unlocking script template for spending a MultiPushDrop output.
-     *
-     * @param {[SecurityLevel, string]} protocolID - The protocol ID used for key derivation.
-     * @param {string} keyID - The key ID used for key derivation.
-     * @param {WalletCounterparty} creator - The identity key of the person who made the locking script. Could come from one of the fields or be passed off chain.
-     * @param {'all' | 'none' | 'single'} [signOutputs='all'] - Specifies which transaction outputs to sign.
-     * @param {boolean} [anyoneCanPay=false] - Specifies if the SIGHASH_ANYONECANPAY flag should be used.
-     * @returns {ScriptTemplateUnlock} An object containing `sign` and `estimateLength` functions.
-     * @throws {Error} If we are not found in the list of keys, or if required signing info (sourceTXID, satoshis, lockingScript) is missing.
-     */
-  unlock (
+   * Creates an unlocking script template for spending a MultiPushDrop output.
+   *
+   * @param {[SecurityLevel, string]} protocolID - The protocol ID used for key derivation.
+   * @param {string} keyID - The key ID used for key derivation.
+   * @param {WalletCounterparty} creator - The identity key of the person who made the locking script. Could come from one of the fields or be passed off chain.
+   * @param {'all' | 'none' | 'single'} [signOutputs='all'] - Specifies which transaction outputs to sign.
+   * @param {boolean} [anyoneCanPay=false] - Specifies if the SIGHASH_ANYONECANPAY flag should be used.
+   * @returns {ScriptTemplateUnlock} An object containing `sign` and `estimateLength` functions.
+   * @throws {Error} If we are not found in the list of keys, or if required signing info (sourceTXID, satoshis, lockingScript) is missing.
+   */
+  unlock(
     protocolID: [SecurityLevel, string],
     keyID: string,
     creator: WalletCounterparty,
@@ -217,10 +218,7 @@ export class MultiPushDrop implements ScriptTemplate {
     anyoneCanPay = false
   ): ScriptTemplateUnlock {
     return {
-      sign: async (
-        tx: Transaction,
-        inputIndex: number
-      ): Promise<UnlockingScript> => {
+      sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
         // Prepare for signing
         let signatureScope = TransactionSignature.SIGHASH_FORKID
         if (signOutputs === 'all') signatureScope |= TransactionSignature.SIGHASH_ALL
@@ -229,22 +227,30 @@ export class MultiPushDrop implements ScriptTemplate {
         if (anyoneCanPay) signatureScope |= TransactionSignature.SIGHASH_ANYONECANPAY
         const input = tx.inputs[inputIndex]
         const currentSourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-        const currentSourceSatoshis = input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis
-        const currentLockingScript = input.sourceTransaction?.outputs[input.sourceOutputIndex]?.lockingScript
-        if (typeof currentSourceTXID !== 'string') throw new Error('Input sourceTXID or sourceTransaction required for signing.')
-        if (currentSourceSatoshis === undefined) throw new Error('Input sourceSatoshis or sourceTransaction required for signing.')
-        if (currentLockingScript == null) throw new Error('Input lockingScript or sourceTransaction required for signing.')
+        const currentSourceSatoshis =
+          input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis
+        const currentLockingScript =
+          input.sourceTransaction?.outputs[input.sourceOutputIndex]?.lockingScript
+        if (typeof currentSourceTXID !== 'string')
+          throw new Error('Input sourceTXID or sourceTransaction required for signing.')
+        if (currentSourceSatoshis === undefined)
+          throw new Error('Input sourceSatoshis or sourceTransaction required for signing.')
+        if (currentLockingScript == null)
+          throw new Error('Input lockingScript or sourceTransaction required for signing.')
         const otherInputs = tx.inputs.filter((_, index) => index !== inputIndex)
         const decoded = MultiPushDrop.decode(currentLockingScript)
 
         // Find the index of the unlocker's public key
         let unlockerIndex = -1
-        const { publicKey: unlockerPubKeyHex } = await this.wallet.getPublicKey({
-          protocolID,
-          keyID,
-          counterparty: creator,
-          forSelf: true
-        }, this.originator)
+        const { publicKey: unlockerPubKeyHex } = await this.wallet.getPublicKey(
+          {
+            protocolID,
+            keyID,
+            counterparty: creator,
+            forSelf: true
+          },
+          this.originator
+        )
         for (let i = 0; i < decoded.lockingPublicKeys.length; i++) {
           if (decoded.lockingPublicKeys[i] === unlockerPubKeyHex) {
             unlockerIndex = i
@@ -252,7 +258,9 @@ export class MultiPushDrop implements ScriptTemplate {
           }
         }
         if (unlockerIndex === -1) {
-          throw new Error(`Unlocker key derived for counterparty (creator) "${creator}" not found in the list of locking keys.`)
+          throw new Error(
+            `Unlocker key derived for counterparty (creator) "${creator}" not found in the list of locking keys.`
+          )
         }
         unlockerIndex = decoded.lockingPublicKeys.length - 1 - unlockerIndex
 
@@ -273,19 +281,25 @@ export class MultiPushDrop implements ScriptTemplate {
 
         // Create Signature
         const preimageHash = Hash.hash256(preimage)
-        const { signature: bareSignature } = await this.wallet.createSignature({
-          hashToDirectlySign: preimageHash,
-          protocolID,
-          keyID,
-          counterparty: creator
-        }, this.originator)
+        const { signature: bareSignature } = await this.wallet.createSignature(
+          {
+            hashToDirectlySign: preimageHash,
+            protocolID,
+            keyID,
+            counterparty: creator
+          },
+          this.originator
+        )
         const signature = Signature.fromDER([...bareSignature])
         const txSignature = new TransactionSignature(signature.r, signature.s, signatureScope)
         const sigForScript = txSignature.toChecksigFormat()
 
         // Create Unlocking Script Chunks: <Signature> <Index>
-        const unlockingChunks: Array<{ op: number, data?: number[] }> = []
-        unlockingChunks.push({ op: sigForScript.length, data: sigForScript }, createMinimallyEncodedScriptChunk([unlockerIndex]))
+        const unlockingChunks: Array<{ op: number; data?: number[] }> = []
+        unlockingChunks.push(
+          { op: sigForScript.length, data: sigForScript },
+          createMinimallyEncodedScriptChunk([unlockerIndex])
+        )
         return new UnlockingScript(unlockingChunks)
       },
       // Estimate length: Signature (~71-73 bytes) + Index push (1 byte for 0-15, potentially more)

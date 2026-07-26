@@ -5,12 +5,12 @@ export type SignOutputs = 'all' | 'none' | 'single'
 /**
  * Builds the BIP143 sighash preimage and scope shared by the Mandala unlock templates.
  */
-export function buildSighashPreimage (
+export function buildSighashPreimage(
   tx: Transaction,
   inputIndex: number,
   signOutputs: SignOutputs,
   anyoneCanPay: boolean
-): { preimage: number[], scope: number } {
+): { preimage: number[]; scope: number } {
   let scope = TransactionSignature.SIGHASH_FORKID
   if (signOutputs === 'all') scope |= TransactionSignature.SIGHASH_ALL
   else if (signOutputs === 'none') scope |= TransactionSignature.SIGHASH_NONE

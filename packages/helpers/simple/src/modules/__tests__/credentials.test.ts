@@ -49,7 +49,7 @@ describe('CredentialSchema', () => {
       id: 'employee',
       name: 'Employee',
       fields: [{ key: 'name', label: 'Name', type: 'text', required: true }],
-      validate: values => values.name === 'blocked' ? 'Name is blocked' : null,
+      validate: values => (values.name === 'blocked' ? 'Name is blocked' : null),
       computedFields: values => ({ slug: values.name.toLowerCase() })
     })
 
@@ -122,10 +122,13 @@ describe('Verifiable credential helpers', () => {
   })
 
   it('adds credential status when the revocation outpoint is non-zero', () => {
-    const vc = toVerifiableCredential({
-      ...certificate,
-      revocationOutpoint: 'abc.0'
-    }, CERTIFIER_KEY)
+    const vc = toVerifiableCredential(
+      {
+        ...certificate,
+        revocationOutpoint: 'abc.0'
+      },
+      CERTIFIER_KEY
+    )
 
     expect(vc.credentialStatus).toEqual({
       id: 'bsv:abc.0',
@@ -145,20 +148,24 @@ describe('Verifiable credential helpers', () => {
 
 describe('CredentialIssuer', () => {
   it('requires a wallet when revocation is enabled', async () => {
-    await expect(CredentialIssuer.create({
-      privateKey: PRIVATE_KEY,
-      revocation: { enabled: true }
-    })).rejects.toThrow('Revocation enabled but no wallet provided')
+    await expect(
+      CredentialIssuer.create({
+        privateKey: PRIVATE_KEY,
+        revocation: { enabled: true }
+      })
+    ).rejects.toThrow('Revocation enabled but no wallet provided')
   })
 
   it('reports issuer metadata and schema names', async () => {
     const issuer = await CredentialIssuer.create({
       privateKey: PRIVATE_KEY,
-      schemas: [{
-        id: 'employee',
-        name: 'Employee',
-        fields: [{ key: 'name', label: 'Name', type: 'text' }]
-      }]
+      schemas: [
+        {
+          id: 'employee',
+          name: 'Employee',
+          fields: [{ key: 'name', label: 'Name', type: 'text' }]
+        }
+      ]
     })
 
     const info = issuer.getInfo()
@@ -180,13 +187,15 @@ describe('CredentialIssuer', () => {
       subject: `did:bsv:${SUBJECT_KEY}`
     })
 
-    await expect(issuer.verify({
-      ...vc,
-      '@context': [],
-      type: [],
-      proof: undefined,
-      _bsv: undefined
-    } as any)).resolves.toMatchObject({
+    await expect(
+      issuer.verify({
+        ...vc,
+        '@context': [],
+        type: [],
+        proof: undefined,
+        _bsv: undefined
+      } as any)
+    ).resolves.toMatchObject({
       valid: false,
       errors: [
         'Missing W3C VC context',
@@ -200,19 +209,23 @@ describe('CredentialIssuer', () => {
       `https://evil.example/${vc['@context'][0]}`,
       `${vc['@context'][0]}.evil.example`
     ]) {
-      await expect(issuer.verify({
-        ...vc,
-        '@context': [deceptiveContext]
-      })).resolves.toMatchObject({
+      await expect(
+        issuer.verify({
+          ...vc,
+          '@context': [deceptiveContext]
+        })
+      ).resolves.toMatchObject({
         valid: false,
         errors: ['Missing W3C VC context']
       })
     }
 
-    await expect(issuer.verify({
-      ...vc,
-      '@context': 'https://www.w3.org/2018/credentials/v1'
-    } as any)).resolves.toMatchObject({
+    await expect(
+      issuer.verify({
+        ...vc,
+        '@context': 'https://www.w3.org/2018/credentials/v1'
+      } as any)
+    ).resolves.toMatchObject({
       valid: false,
       errors: ['Missing W3C VC context']
     })
@@ -220,10 +233,13 @@ describe('CredentialIssuer', () => {
 
   it('detects revoked credentials when revocation records are missing', async () => {
     const issuer = await CredentialIssuer.create({ privateKey: PRIVATE_KEY })
-    const vc = toVerifiableCredential({
-      ...certificate,
-      revocationOutpoint: 'abc.0'
-    }, CERTIFIER_KEY)
+    const vc = toVerifiableCredential(
+      {
+        ...certificate,
+        revocationOutpoint: 'abc.0'
+      },
+      CERTIFIER_KEY
+    )
 
     await expect(issuer.verify(vc)).resolves.toMatchObject({
       valid: false,
@@ -252,10 +268,12 @@ describe('createCredentialMethods', () => {
     global.fetch = fetchMock as unknown as typeof fetch
     client = {
       listCertificates: jest.fn().mockResolvedValue({
-        certificates: [{
-          serialNumber: 'old-serial',
-          certifier: CERTIFIER_KEY
-        }]
+        certificates: [
+          {
+            serialNumber: 'old-serial',
+            certifier: CERTIFIER_KEY
+          }
+        ]
       }),
       relinquishCertificate: jest.fn().mockResolvedValue({ relinquished: true }),
       acquireCertificate: jest.fn().mockResolvedValue(certificate)
@@ -312,11 +330,13 @@ describe('createCredentialMethods', () => {
         fields: { name: 'Alice' }
       })
     })
-    expect(client.acquireCertificate).toHaveBeenCalledWith(expect.objectContaining({
-      type: certificate.type,
-      certifier: certificate.certifier,
-      acquisitionProtocol: 'direct'
-    }))
+    expect(client.acquireCertificate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: certificate.type,
+        certifier: certificate.certifier,
+        acquisitionProtocol: 'direct'
+      })
+    )
     expect(vc.issuer).toBe(`did:bsv:${CERTIFIER_KEY}`)
   })
 
@@ -353,9 +373,36 @@ describe('createCredentialMethods', () => {
 
     const methods = createCredentialMethods(core)
 
-    await expect(methods.acquireCredential({
-      serverUrl: 'https://issuer.example'
-    })).rejects.toThrow('Credential acquisition failed: Server returned 503')
+    await expect(
+      methods.acquireCredential({
+        serverUrl: 'https://issuer.example'
+      })
+    ).rejects.toThrow('Credential acquisition failed: Server returned 503')
+  })
+
+  it('surfaces issuer errors from rejected certification requests', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          certifierPublicKey: CERTIFIER_KEY,
+          certificateType: certificate.type
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: 'Certification denied' })
+      })
+
+    const methods = createCredentialMethods(core)
+
+    await expect(
+      methods.acquireCredential({
+        serverUrl: 'https://issuer.example',
+        replaceExisting: false
+      })
+    ).rejects.toThrow('Credential acquisition failed: Certification denied')
   })
 
   it('lists wallet certificates as verifiable credentials', async () => {
@@ -383,10 +430,12 @@ describe('createCredentialMethods', () => {
 
     const methods = createCredentialMethods(core)
 
-    await expect(methods.listCredentials({
-      certifiers: [CERTIFIER_KEY],
-      types: [certificate.type]
-    })).rejects.toThrow('Failed to list credentials: wallet offline')
+    await expect(
+      methods.listCredentials({
+        certifiers: [CERTIFIER_KEY],
+        types: [certificate.type]
+      })
+    ).rejects.toThrow('Failed to list credentials: wallet offline')
   })
 
   it('creates presentations for the wallet identity key', () => {

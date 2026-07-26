@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 70,
+  "findingCount": 66,
   "findings": [
     {
       "id": ".::missing-script::format:check",
@@ -38,22 +38,6 @@
     {
       "id": "docs-site::missing-script::test",
       "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/helpers/did-client::missing-script::format:check",
-      "message": "Profile browser-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/did::missing-script::format:check",
-      "message": "Profile dual-runtime-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/simple::missing-script::format:check",
-      "message": "Profile browser-library requires script format:check"
-    },
-    {
-      "id": "packages/helpers/ts-templates::missing-script::format:check",
-      "message": "Profile dual-runtime-library requires script format:check"
     },
     {
       "id": "packages/messaging/authsocket-client::missing-script::format:check",

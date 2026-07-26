@@ -1,21 +1,28 @@
 import { PeerPayClient } from '@bsv/message-box-client'
 import { WalletCore } from '../core/WalletCore'
 
-export function createMessageBoxMethods (core: WalletCore): {
-  certifyForMessageBox: (handle: string, registryUrl?: string, host?: string) => Promise<{ txid: string, handle: string }>
+export function createMessageBoxMethods(core: WalletCore): {
+  certifyForMessageBox: (
+    handle: string,
+    registryUrl?: string,
+    host?: string
+  ) => Promise<{ txid: string; handle: string }>
   getMessageBoxHandle: (registryUrl?: string) => Promise<string | null>
   revokeMessageBoxCertification: (registryUrl?: string) => Promise<void>
   sendMessageBoxPayment: (to: string, satoshis: number) => Promise<any>
   listIncomingPayments: () => Promise<any[]>
   acceptIncomingPayment: (payment: any, basket?: string) => Promise<any>
   registerIdentityTag: (tag: string, registryUrl?: string) => Promise<{ tag: string }>
-  lookupIdentityByTag: (query: string, registryUrl?: string) => Promise<Array<{ tag: string, identityKey: string }>>
-  listMyTags: (registryUrl?: string) => Promise<Array<{ tag: string, createdAt: string }>>
+  lookupIdentityByTag: (
+    query: string,
+    registryUrl?: string
+  ) => Promise<Array<{ tag: string; identityKey: string }>>
+  listMyTags: (registryUrl?: string) => Promise<Array<{ tag: string; createdAt: string }>>
   revokeIdentityTag: (tag: string, registryUrl?: string) => Promise<void>
 } {
   let peerPay: PeerPayClient | null = null
 
-  function getPeerPay (): PeerPayClient {
+  function getPeerPay(): PeerPayClient {
     peerPay ??= new PeerPayClient({
       walletClient: core.getClient() as any,
       messageBoxHost: core.defaults.messageBoxHost,
@@ -25,7 +32,11 @@ export function createMessageBoxMethods (core: WalletCore): {
   }
 
   return {
-    async certifyForMessageBox (handle: string, registryUrl?: string, host?: string): Promise<{ txid: string, handle: string }> {
+    async certifyForMessageBox(
+      handle: string,
+      registryUrl?: string,
+      host?: string
+    ): Promise<{ txid: string; handle: string }> {
       try {
         const client = getPeerPay()
         const targetHost = host ?? core.defaults.messageBoxHost
@@ -40,7 +51,7 @@ export function createMessageBoxMethods (core: WalletCore): {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag: handle, identityKey: core.getIdentityKey() })
         })
-        const data = await res.json() as { success: boolean, error?: string }
+        const data = (await res.json()) as { success: boolean; error?: string }
         if (!data.success) throw new Error(data.error ?? 'Registration failed')
 
         return { txid: result.txid, handle }
@@ -49,35 +60,42 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async getMessageBoxHandle (registryUrl?: string): Promise<string | null> {
+    async getMessageBoxHandle(registryUrl?: string): Promise<string | null> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
         if (effectiveRegistry == null) return null
 
-        const res = await fetch(`${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`)
-        const data = await res.json() as { success: boolean, tags?: Array<{ tag: string }> }
-        if (!data.success || (data.tags == null) || data.tags.length === 0) return null
+        const res = await fetch(
+          `${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`
+        )
+        const data = (await res.json()) as { success: boolean; tags?: Array<{ tag: string }> }
+        if (!data.success || data.tags == null || data.tags.length === 0) return null
         return data.tags[0].tag
       } catch {
         return null
       }
     },
 
-    async revokeMessageBoxCertification (registryUrl?: string): Promise<void> {
+    async revokeMessageBoxCertification(registryUrl?: string): Promise<void> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
         if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
-        const listRes = await fetch(`${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`)
-        const listData = await listRes.json() as { success: boolean, tags?: Array<{ tag: string }> }
-        if (listData.success && (listData.tags != null)) {
+        const listRes = await fetch(
+          `${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`
+        )
+        const listData = (await listRes.json()) as {
+          success: boolean
+          tags?: Array<{ tag: string }>
+        }
+        if (listData.success && listData.tags != null) {
           for (const t of listData.tags) {
             const res = await fetch(`${effectiveRegistry}?action=revoke`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ tag: t.tag, identityKey: core.getIdentityKey() })
             })
-            const data = await res.json() as { success: boolean }
+            const data = (await res.json()) as { success: boolean }
             if (!data.success) throw new Error('Revoke failed')
           }
         }
@@ -86,7 +104,7 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async sendMessageBoxPayment (to: string, satoshis: number): Promise<any> {
+    async sendMessageBoxPayment(to: string, satoshis: number): Promise<any> {
       try {
         const client = getPeerPay()
 
@@ -108,7 +126,7 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async listIncomingPayments (): Promise<any[]> {
+    async listIncomingPayments(): Promise<any[]> {
       try {
         const client = getPeerPay()
         return await client.listIncomingPayments()
@@ -117,7 +135,7 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async acceptIncomingPayment (payment: any, basket?: string): Promise<any> {
+    async acceptIncomingPayment(payment: any, basket?: string): Promise<any> {
       const pp = getPeerPay()
       const walletClient = core.getClient()
 
@@ -130,44 +148,52 @@ export function createMessageBoxMethods (core: WalletCore): {
         try {
           await (walletClient as any).internalizeAction({
             tx: payment.token.transaction,
-            outputs: [{
-              outputIndex: payment.token.outputIndex ?? 0,
-              protocol: 'wallet payment',
-              paymentRemittance: {
-                senderIdentityKey: payment.sender,
-                derivationPrefix: payment.token.customInstructions.derivationPrefix,
-                derivationSuffix: payment.token.customInstructions.derivationSuffix
+            outputs: [
+              {
+                outputIndex: payment.token.outputIndex ?? 0,
+                protocol: 'wallet payment',
+                paymentRemittance: {
+                  senderIdentityKey: payment.sender,
+                  derivationPrefix: payment.token.customInstructions.derivationPrefix,
+                  derivationSuffix: payment.token.customInstructions.derivationSuffix
+                }
               }
-            }],
+            ],
             labels: ['peerpay'],
             description: 'MessageBox Payment'
           })
         } catch (error) {
-          throw new Error(`Internalization failed (wallet payment), message preserved: ${(error as Error).message}`)
+          throw new Error(
+            `Internalization failed (wallet payment), message preserved: ${(error as Error).message}`
+          )
         }
       } else {
         // Basket insertion: output goes into a named basket
         try {
           await (walletClient as any).internalizeAction({
             tx: payment.token.transaction,
-            outputs: [{
-              outputIndex: payment.token.outputIndex ?? 0,
-              protocol: 'basket insertion',
-              insertionRemittance: {
-                basket,
-                customInstructions: JSON.stringify({
-                  derivationPrefix: payment.token.customInstructions.derivationPrefix,
-                  derivationSuffix: payment.token.customInstructions.derivationSuffix,
-                  senderIdentityKey: payment.sender
-                }),
-                tags: ['messagebox-payment']
+            outputs: [
+              {
+                outputIndex: payment.token.outputIndex ?? 0,
+                protocol: 'basket insertion',
+                insertionRemittance: {
+                  basket,
+                  customInstructions: JSON.stringify({
+                    derivationPrefix: payment.token.customInstructions.derivationPrefix,
+                    derivationSuffix: payment.token.customInstructions.derivationSuffix,
+                    senderIdentityKey: payment.sender
+                  }),
+                  tags: ['messagebox-payment']
+                }
               }
-            }],
+            ],
             labels: ['peerpay'],
             description: 'MessageBox Payment'
           })
         } catch (error) {
-          throw new Error(`Internalization failed (basket insertion), message preserved: ${(error as Error).message}`)
+          throw new Error(
+            `Internalization failed (basket insertion), message preserved: ${(error as Error).message}`
+          )
         }
       }
 
@@ -180,13 +206,15 @@ export function createMessageBoxMethods (core: WalletCore): {
         // Payment is safe; ack failure is non-fatal. The message may be re-delivered
         // but the wallet will reject the duplicate internalization attempt.
         const msgId = String(payment.messageId)
-        console.warn(`Payment internalized but message ack failed (messageId: ${msgId}): ${(ackError as Error).message}`)
+        console.warn(
+          `Payment internalized but message ack failed (messageId: ${msgId}): ${(ackError as Error).message}`
+        )
       }
 
       return { payment, paymentResult: 'accepted' }
     },
 
-    async registerIdentityTag (tag: string, registryUrl?: string): Promise<{ tag: string }> {
+    async registerIdentityTag(tag: string, registryUrl?: string): Promise<{ tag: string }> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
         if (effectiveRegistry == null) throw new Error('registryUrl is required')
@@ -196,7 +224,7 @@ export function createMessageBoxMethods (core: WalletCore): {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag, identityKey: core.getIdentityKey() })
         })
-        const data = await res.json() as { success: boolean, error?: string, tag?: string }
+        const data = (await res.json()) as { success: boolean; error?: string; tag?: string }
         if (!data.success) throw new Error(data.error ?? 'Registration failed')
         return { tag: data.tag ?? tag }
       } catch (error) {
@@ -204,13 +232,22 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async lookupIdentityByTag (query: string, registryUrl?: string): Promise<Array<{ tag: string, identityKey: string }>> {
+    async lookupIdentityByTag(
+      query: string,
+      registryUrl?: string
+    ): Promise<Array<{ tag: string; identityKey: string }>> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
         if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
-        const res = await fetch(`${effectiveRegistry}?action=lookup&query=${encodeURIComponent(query)}`)
-        const data = await res.json() as { success: boolean, error?: string, results?: Array<{ tag: string, identityKey: string }> }
+        const res = await fetch(
+          `${effectiveRegistry}?action=lookup&query=${encodeURIComponent(query)}`
+        )
+        const data = (await res.json()) as {
+          success: boolean
+          error?: string
+          results?: Array<{ tag: string; identityKey: string }>
+        }
         if (!data.success) throw new Error(data.error ?? 'Lookup failed')
         return data.results ?? []
       } catch (error) {
@@ -218,13 +255,19 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async listMyTags (registryUrl?: string): Promise<Array<{ tag: string, createdAt: string }>> {
+    async listMyTags(registryUrl?: string): Promise<Array<{ tag: string; createdAt: string }>> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
         if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
-        const res = await fetch(`${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`)
-        const data = await res.json() as { success: boolean, error?: string, tags?: Array<{ tag: string, createdAt: string }> }
+        const res = await fetch(
+          `${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`
+        )
+        const data = (await res.json()) as {
+          success: boolean
+          error?: string
+          tags?: Array<{ tag: string; createdAt: string }>
+        }
         if (!data.success) throw new Error(data.error ?? 'List failed')
         return data.tags ?? []
       } catch (error) {
@@ -232,7 +275,7 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async revokeIdentityTag (tag: string, registryUrl?: string): Promise<void> {
+    async revokeIdentityTag(tag: string, registryUrl?: string): Promise<void> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
         if (effectiveRegistry == null) throw new Error('registryUrl is required')
@@ -242,7 +285,7 @@ export function createMessageBoxMethods (core: WalletCore): {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag, identityKey: core.getIdentityKey() })
         })
-        const data = await res.json() as { success: boolean, error?: string }
+        const data = (await res.json()) as { success: boolean; error?: string }
         if (!data.success) throw new Error(data.error ?? 'Revoke failed')
       } catch (error) {
         throw new Error(`Tag revocation failed: ${(error as Error).message}`)

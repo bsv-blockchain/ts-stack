@@ -1,5 +1,5 @@
 import { MandalaToken } from '../MandalaToken.js'
-import { Hash, PrivateKey } from '@bsv/sdk'
+import { Hash, PrivateKey, WalletInterface } from '@bsv/sdk'
 
 describe('MandalaToken lock/decode', () => {
   const assetId = `${'a'.repeat(64)}.0`
@@ -52,5 +52,32 @@ describe('MandalaToken lock/decode', () => {
     const script = new MandalaToken().lock(assetId, 1, pubKeyHash)
     expect(script.chunks).toHaveLength(8)
     expect(script.chunks[0].data?.length).toBe(36) // assetId bytes, not a marker
+  })
+
+  it('derives a BRC-29 owner through the configured wallet', async () => {
+    const publicKey = PrivateKey.fromRandom().toPublicKey().toString()
+    const getPublicKey = jest.fn().mockResolvedValue({ publicKey })
+    const token = new MandalaToken({ getPublicKey } as unknown as WalletInterface, 'example.com')
+
+    const script = await token.lockBRC29(assetId, 5, [1, 'mandala'], 'owner', 'self')
+
+    expect(MandalaToken.decode(script).amount).toBe(5)
+    expect(getPublicKey).toHaveBeenCalledWith(
+      { protocolID: [1, 'mandala'], keyID: 'owner', counterparty: 'self' },
+      'example.com'
+    )
+  })
+
+  it.each([0, 1.5])('rejects invalid token amount %s', amount => {
+    expect(() => new MandalaToken().lock(assetId, amount, pubKeyHash)).toThrow(
+      'amount must be a positive integer'
+    )
+  })
+
+  it('rejects a malformed P2PKH tail during decode', () => {
+    const script = new MandalaToken().lock(assetId, 5, pubKeyHash)
+    script.chunks[3] = { op: 0 }
+
+    expect(() => MandalaToken.decode(script)).toThrow('bad P2PKH tail')
   })
 })

@@ -34,10 +34,13 @@ export interface StasTokenDecoded {
 const P2PKH_PREFIX = '76a914'
 const STAS_MARKER = '88ac69'
 
-interface PushLength { len: number, dataStart: number }
+interface PushLength {
+  len: number
+  dataStart: number
+}
 
 /** Resolves a push opcode's payload length + data offset, or null for a non-push opcode. */
-function pushDataLength (scriptHex: string, opcode: number, pos: number): PushLength | null {
+function pushDataLength(scriptHex: string, opcode: number, pos: number): PushLength | null {
   if (opcode >= 0x01 && opcode <= 0x4b) return { len: opcode, dataStart: pos }
   if (opcode === 0x4c) {
     if (pos + 2 > scriptHex.length) return null
@@ -61,7 +64,7 @@ function pushDataLength (scriptHex: string, opcode: number, pos: number): PushLe
 }
 
 /** Reads push-data slots starting at a hex offset (after OP_RETURN). */
-function readPushes (scriptHex: string, startPos: number, max = 8): string[] {
+function readPushes(scriptHex: string, startPos: number, max = 8): string[] {
   const pushes: string[] = []
   let pos = startPos
   while (pos < scriptHex.length && pushes.length < max) {
@@ -81,7 +84,7 @@ function readPushes (scriptHex: string, startPos: number, max = 8): string[] {
   return pushes
 }
 
-function hexToUtf8 (hex: string): string {
+function hexToUtf8(hex: string): string {
   if (hex === '') return ''
   try {
     return Utils.toUTF8(Utils.toArray(hex, 'hex'))
@@ -92,7 +95,7 @@ function hexToUtf8 (hex: string): string {
 
 export class StasToken {
   /** True if the script carries the classic STAS prefix + marker. */
-  static isStas (script: LockingScript): boolean {
+  static isStas(script: LockingScript): boolean {
     const hex = script.toHex()
     return hex.startsWith(P2PKH_PREFIX) && hex.substring(46, 52) === STAS_MARKER
   }
@@ -101,11 +104,12 @@ export class StasToken {
    * Decodes a classic STAS locking script into its identity fields.
    * @throws if the script is not a classic STAS script.
    */
-  static decode (script: LockingScript): StasTokenDecoded {
+  static decode(script: LockingScript): StasTokenDecoded {
     const hex = script.toHex()
     if (hex.length < 56) throw new Error('not a STAS script: too short')
     if (!hex.startsWith(P2PKH_PREFIX)) throw new Error('not a STAS script: missing P2PKH prefix')
-    if (hex.substring(46, 52) !== STAS_MARKER) throw new Error('not a STAS script: missing STAS marker')
+    if (hex.substring(46, 52) !== STAS_MARKER)
+      throw new Error('not a STAS script: missing STAS marker')
 
     const ownerHash160 = hex.substring(6, 46)
 
@@ -120,12 +124,13 @@ export class StasToken {
       // Layout after OP_RETURN: [flagsByte, symbol, data, ...].
       flagsHex = pushes[0]?.length === 2 ? pushes[0] : null
       const symbolHex = pushes[1] ?? null
-      symbol = (symbolHex != null && symbolHex !== '')
-        ? (Array.from(hexToUtf8(symbolHex))
-            .filter(character => (character.codePointAt(0) ?? 0) > 0x20)
-            .join('')
-            .trim() || null)
-        : null
+      symbol =
+        symbolHex != null && symbolHex !== ''
+          ? Array.from(hexToUtf8(symbolHex))
+              .filter(character => (character.codePointAt(0) ?? 0) > 0x20)
+              .join('')
+              .trim() || null
+          : null
     }
 
     // assetId groups inputs/outputs of the same token for conservation. The

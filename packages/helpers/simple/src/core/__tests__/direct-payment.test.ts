@@ -26,12 +26,12 @@ const VALID_KEY_4 = '03509d5a5d90f53ee5273f59e85292fd3e5bb90c6bd52ba2c5872037cd4
 class TestWallet extends WalletCore {
   private mockClient: any
 
-  constructor (mockClient: any, identityKey?: string) {
+  constructor(mockClient: any, identityKey?: string) {
     super(identityKey ?? VALID_KEY_1)
     this.mockClient = mockClient
   }
 
-  getClient (): WalletInterface {
+  getClient(): WalletInterface {
     return this.mockClient as unknown as WalletInterface
   }
 }
@@ -167,9 +167,7 @@ describe('WalletCore Direct Payment', () => {
       // Should create action with P2PKH output
       expect(mockClient.createAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          outputs: expect.arrayContaining([
-            expect.objectContaining({ satoshis: 3000 })
-          ])
+          outputs: expect.arrayContaining([expect.objectContaining({ satoshis: 3000 })])
         })
       )
 
@@ -209,8 +207,9 @@ describe('WalletCore Direct Payment', () => {
         satoshis: 999999999
       }
 
-      await expect(wallet.sendDirectPayment(request))
-        .rejects.toThrow('Direct payment failed: Insufficient funds')
+      await expect(wallet.sendDirectPayment(request)).rejects.toThrow(
+        'Direct payment failed: Insufficient funds'
+      )
     })
 
     it('should include derivation data in customInstructions of first output', async () => {
@@ -345,15 +344,17 @@ describe('WalletCore Direct Payment', () => {
 
       expect(mockClient.internalizeAction).toHaveBeenCalledWith({
         tx: [1, 2, 3],
-        outputs: [{
-          outputIndex: 0,
-          protocol: 'wallet payment',
-          paymentRemittance: {
-            senderIdentityKey: '02' + 'aa'.repeat(32),
-            derivationPrefix: 'prefix',
-            derivationSuffix: 'suffix'
+        outputs: [
+          {
+            outputIndex: 0,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              senderIdentityKey: '02' + 'aa'.repeat(32),
+              derivationPrefix: 'prefix',
+              derivationSuffix: 'suffix'
+            }
           }
-        }],
+        ],
         description: expect.stringContaining('Payment from'),
         labels: ['direct_payment']
       })
@@ -396,13 +397,15 @@ describe('WalletCore Direct Payment', () => {
       mockClient.internalizeAction.mockRejectedValue(new Error('Invalid tx'))
       const wallet = new TestWallet(mockClient)
 
-      await expect(wallet.receiveDirectPayment({
-        tx: [1],
-        senderIdentityKey: '02' + 'dd'.repeat(32),
-        derivationPrefix: 'p',
-        derivationSuffix: 's',
-        outputIndex: 0
-      })).rejects.toThrow('Failed to receive direct payment: Invalid tx')
+      await expect(
+        wallet.receiveDirectPayment({
+          tx: [1],
+          senderIdentityKey: '02' + 'dd'.repeat(32),
+          derivationPrefix: 'p',
+          derivationSuffix: 's',
+          outputIndex: 0
+        })
+      ).rejects.toThrow('Failed to receive direct payment: Invalid tx')
     })
 
     it('should handle outputIndex > 0', async () => {
@@ -513,15 +516,17 @@ describe('WalletCore Direct Payment', () => {
 
       expect(receiverClient.internalizeAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          outputs: [{
-            outputIndex: 0,
-            protocol: 'wallet payment',
-            paymentRemittance: expect.objectContaining({
-              senderIdentityKey: sender.getIdentityKey(),
-              derivationPrefix: request.derivationPrefix,
-              derivationSuffix: request.derivationSuffix
-            })
-          }]
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'wallet payment',
+              paymentRemittance: expect.objectContaining({
+                senderIdentityKey: sender.getIdentityKey(),
+                derivationPrefix: request.derivationPrefix,
+                derivationSuffix: request.derivationSuffix
+              })
+            }
+          ]
         })
       )
     })
@@ -579,19 +584,21 @@ describe('WalletCore Direct Payment', () => {
       expect(messageboxMockClient.internalizeAction).toHaveBeenCalledWith(
         expect.objectContaining({
           tx: payment.token.transaction,
-          outputs: [{
-            outputIndex: 0,
-            protocol: 'basket insertion',
-            insertionRemittance: {
-              basket: 'received-payments',
-              customInstructions: JSON.stringify({
-                derivationPrefix: 'cGF5bWVudA==',
-                derivationSuffix: 'dGVzdA==',
-                senderIdentityKey: VALID_KEY_2
-              }),
-              tags: ['messagebox-payment']
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'basket insertion',
+              insertionRemittance: {
+                basket: 'received-payments',
+                customInstructions: JSON.stringify({
+                  derivationPrefix: 'cGF5bWVudA==',
+                  derivationSuffix: 'dGVzdA==',
+                  senderIdentityKey: VALID_KEY_2
+                }),
+                tags: ['messagebox-payment']
+              }
             }
-          }],
+          ],
           labels: ['peerpay'],
           description: 'MessageBox Payment'
         })
@@ -608,15 +615,17 @@ describe('WalletCore Direct Payment', () => {
       expect(messageboxMockClient.internalizeAction).toHaveBeenCalledWith(
         expect.objectContaining({
           tx: payment.token.transaction,
-          outputs: [{
-            outputIndex: 0,
-            protocol: 'wallet payment',
-            paymentRemittance: {
-              senderIdentityKey: VALID_KEY_4,
-              derivationPrefix: 'cGF5bWVudA==',
-              derivationSuffix: 'dGVzdA=='
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'wallet payment',
+              paymentRemittance: {
+                senderIdentityKey: VALID_KEY_4,
+                derivationPrefix: 'cGF5bWVudA==',
+                derivationSuffix: 'dGVzdA=='
+              }
             }
-          }],
+          ],
           labels: ['peerpay'],
           description: 'MessageBox Payment'
         })
@@ -732,8 +741,9 @@ describe('WalletCore Direct Payment', () => {
       const methods = createMessageBoxMethods(wallet)
       const payment = createMockPayment(VALID_KEY_2)
 
-      await expect(methods.acceptIncomingPayment(payment))
-        .rejects.toThrow('Internalization failed (wallet payment), message preserved')
+      await expect(methods.acceptIncomingPayment(payment)).rejects.toThrow(
+        'Internalization failed (wallet payment), message preserved'
+      )
 
       // Message must NOT be acknowledged — derivation data would be lost
       expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
@@ -745,8 +755,9 @@ describe('WalletCore Direct Payment', () => {
       const methods = createMessageBoxMethods(wallet)
       const payment = createMockPayment(VALID_KEY_2)
 
-      await expect(methods.acceptIncomingPayment(payment, 'my-basket'))
-        .rejects.toThrow('Internalization failed (basket insertion), message preserved')
+      await expect(methods.acceptIncomingPayment(payment, 'my-basket')).rejects.toThrow(
+        'Internalization failed (basket insertion), message preserved'
+      )
 
       expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
     })
@@ -766,9 +777,7 @@ describe('WalletCore Direct Payment', () => {
       expect(messageboxMockClient.internalizeAction).toHaveBeenCalled()
 
       // Warning logged
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('message ack failed')
-      )
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('message ack failed'))
       consoleSpy.mockRestore()
     })
   })
@@ -800,22 +809,23 @@ describe('WalletCore Direct Payment', () => {
 
       // The deprecated receivePayment calls internalizeAction with 'server_funding' label
       // Replicate the exact behavior from src/server.ts _ServerWallet.receivePayment
-      const tx = payment.tx instanceof Uint8Array
-        ? Array.from(payment.tx)
-        : payment.tx
+      const tx = payment.tx instanceof Uint8Array ? Array.from(payment.tx) : payment.tx
 
       await serverMockClient.internalizeAction({
         tx,
-        outputs: [{
-          outputIndex: payment.outputIndex,
-          protocol: 'wallet payment',
-          paymentRemittance: {
-            senderIdentityKey: payment.senderIdentityKey,
-            derivationPrefix: payment.derivationPrefix,
-            derivationSuffix: payment.derivationSuffix
+        outputs: [
+          {
+            outputIndex: payment.outputIndex,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              senderIdentityKey: payment.senderIdentityKey,
+              derivationPrefix: payment.derivationPrefix,
+              derivationSuffix: payment.derivationSuffix
+            }
           }
-        }],
-        description: payment.description || `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`,
+        ],
+        description:
+          payment.description || `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`,
         labels: ['server_funding']
       })
 
@@ -829,9 +839,11 @@ describe('WalletCore Direct Payment', () => {
       // Verify it still uses 'wallet payment' protocol (same as receiveDirectPayment)
       expect(serverMockClient.internalizeAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          outputs: [expect.objectContaining({
-            protocol: 'wallet payment'
-          })]
+          outputs: [
+            expect.objectContaining({
+              protocol: 'wallet payment'
+            })
+          ]
         })
       )
     })

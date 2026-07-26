@@ -2,7 +2,7 @@ import { Utils } from '@bsv/sdk'
 
 export const createMinimallyEncodedScriptChunk = (
   data: number[]
-): { op: number, data?: number[] } => {
+): { op: number; data?: number[] } => {
   if (data.length === 0) return { op: 0 }
   if (data.length === 1 && data[0] === 0) return { op: 0 }
   if (data.length === 1 && data[0] > 0 && data[0] <= 16) return { op: 0x50 + data[0] }
@@ -23,7 +23,7 @@ export const encodeScriptNum = (value: number): number[] => {
     result.push(abs & 0xff)
     abs = Math.floor(abs / 256)
   }
-  if ((((result.at(-1)) ?? 0) & 0x80) !== 0) {
+  if (((result.at(-1) ?? 0) & 0x80) !== 0) {
     result.push(negative ? 0x80 : 0x00)
   } else if (negative) {
     result[result.length - 1] |= 0x80
@@ -35,9 +35,9 @@ export const decodeScriptNum = (data: number[]): number => {
   if (data.length === 0) return 0
   let result = 0
   for (let i = 0; i < data.length; i++) {
-    result += (i === data.length - 1 ? (data[i] & 0x7f) : data[i]) * Math.pow(256, i)
+    result += (i === data.length - 1 ? data[i] & 0x7f : data[i]) * Math.pow(256, i)
   }
-  if ((((data.at(-1)) ?? 0) & 0x80) !== 0) result = -result
+  if (((data.at(-1) ?? 0) & 0x80) !== 0) result = -result
   return result
 }
 
@@ -46,7 +46,7 @@ export const decodeScriptNum = (data: number[]): number => {
 // collapses 0, -1 and 1..16 to OP_0 / OP_1NEGATE / OP_1..OP_16 (no data bytes),
 // so a decoder that only reads chunk.data would mis-read those as 0. This reads
 // both encodings symmetrically.
-export const decodeScriptNumChunk = (chunk: { op: number, data?: number[] }): number => {
+export const decodeScriptNumChunk = (chunk: { op: number; data?: number[] }): number => {
   if (chunk.op === 0) return 0 // OP_0 / OP_FALSE
   if (chunk.op === 0x4f) return -1 // OP_1NEGATE
   if (chunk.op >= 0x51 && chunk.op <= 0x60) return chunk.op - 0x50 // OP_1..OP_16
@@ -59,7 +59,8 @@ export const encodeAssetId = (assetId: string): number[] => {
   const txid = assetId.slice(0, dot)
   const vout = Number(assetId.slice(dot + 1))
   if (txid.length !== 64) throw new Error('assetId txid must be 32 bytes (64 hex chars)')
-  if (!Number.isInteger(vout) || vout < 0) throw new Error('assetId vout must be a non-negative integer')
+  if (!Number.isInteger(vout) || vout < 0)
+    throw new Error('assetId vout must be a non-negative integer')
   // On-chain assetId bytes use outpoint format: the txid in internal (hash) byte
   // order — i.e. the display hex reversed (tx.hash() vs tx.id('hex')) — followed by
   // the 4-byte little-endian vout. This lets a contract compare the embedded assetId

@@ -88,12 +88,7 @@ export { ServerWallet } from './server/server-wallet'
 // Re-export server handler utilities
 // ============================================================================
 
-export type {
-  HandlerRequest,
-  HandlerResponse,
-  RouteHandler,
-  RegistryResult
-} from './server/index'
+export type { HandlerRequest, HandlerResponse, RouteHandler, RegistryResult } from './server/index'
 
 export {
   // Handler utilities

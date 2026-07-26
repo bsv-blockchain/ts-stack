@@ -1,4 +1,17 @@
-import { ScriptTemplate, LockingScript, UnlockingScript, OP, Hash, PublicKey, TransactionSignature, Signature, Utils, WalletInterface, Transaction, ScriptChunk } from '@bsv/sdk'
+import {
+  ScriptTemplate,
+  LockingScript,
+  UnlockingScript,
+  OP,
+  Hash,
+  PublicKey,
+  TransactionSignature,
+  Signature,
+  Utils,
+  WalletInterface,
+  Transaction,
+  ScriptChunk
+} from '@bsv/sdk'
 
 export interface MultiSigInstructions {
   keyID: string
@@ -6,14 +19,14 @@ export interface MultiSigInstructions {
   pubkeys: string[]
 }
 
-function concatPubkeys (pubkeys: PublicKey[]): number[] {
-  return pubkeys.map((p) => p.toDER() as number[]).flat()
+function concatPubkeys(pubkeys: PublicKey[]): number[] {
+  return pubkeys.flatMap(p => p.toDER() as number[])
 }
 
-function numberFromScriptChunk (chunk: ScriptChunk): number {
+function numberFromScriptChunk(chunk: ScriptChunk): number {
   let returnNum: number
   if (chunk.data == null) {
-    returnNum = 1 + (chunk.op) - OP.OP_1
+    returnNum = 1 + chunk.op - OP.OP_1
   } else {
     const reader = new Utils.Reader(chunk.data)
     const threshold = reader.readInt64LEBn()
@@ -23,9 +36,11 @@ function numberFromScriptChunk (chunk: ScriptChunk): number {
 }
 
 export class P2MSKH implements ScriptTemplate {
-  static address (pubkeys: PublicKey[], threshold: number): string {
-    if (threshold < 1 || threshold > pubkeys.length) throw new Error('threshold must be between 1 and the number of pubkeys')
-    if (!pubkeys || pubkeys.length < 2 || pubkeys.length < threshold) throw new Error(`at least ${threshold || 2} pubkeys are required`)
+  static address(pubkeys: PublicKey[], threshold: number): string {
+    if (threshold < 1 || threshold > pubkeys.length)
+      throw new Error('threshold must be between 1 and the number of pubkeys')
+    if (!pubkeys || pubkeys.length < 2 || pubkeys.length < threshold)
+      throw new Error(`at least ${threshold || 2} pubkeys are required`)
     const concat = concatPubkeys(pubkeys)
     const hash = Hash.hash160(concat)
     const writer = new Utils.Writer()
@@ -36,19 +51,30 @@ export class P2MSKH implements ScriptTemplate {
     return Utils.toBase58Check(data, [0x98])
   }
 
-  static async addressBRC29 (wallet: WalletInterface, counterparties: string[], keyID: string, threshold: number): Promise<{ pubkeys: string[], address: string }> {
-    const pubkeys = await Promise.all(counterparties.map(async (counterparty) => {
-      const { publicKey } = await wallet.getPublicKey({
-        protocolID: [1, 'multi sig brc29'],
-        keyID,
-        counterparty
+  static async addressBRC29(
+    wallet: WalletInterface,
+    counterparties: string[],
+    keyID: string,
+    threshold: number
+  ): Promise<{ pubkeys: string[]; address: string }> {
+    const pubkeys = await Promise.all(
+      counterparties.map(async counterparty => {
+        const { publicKey } = await wallet.getPublicKey({
+          protocolID: [1, 'multi sig brc29'],
+          keyID,
+          counterparty
+        })
+        return PublicKey.fromString(publicKey)
       })
-      return PublicKey.fromString(publicKey)
-    }))
+    )
     return { pubkeys: pubkeys.map(p => p.toString()), address: this.address(pubkeys, threshold) }
   }
 
-  static thresholdAndTotalFromAddress (address: string): { hash: number[], threshold: number, total: number } {
+  static thresholdAndTotalFromAddress(address: string): {
+    hash: number[]
+    threshold: number
+    total: number
+  } {
     const h = Utils.fromBase58Check(address)
     if (h.prefix[0] !== 0x98) {
       throw new Error('only P2MSH is supported, set your prefix byte to 0x98')
@@ -60,11 +86,7 @@ export class P2MSKH implements ScriptTemplate {
     return { hash, threshold, total }
   }
 
-  lock (
-    address?: string,
-    pubkeys?: PublicKey[],
-    threshold: number = 1
-  ): LockingScript {
+  lock(address?: string, pubkeys?: PublicKey[], threshold: number = 1): LockingScript {
     let hash: number[]
     let total: number = pubkeys?.length || 0
     if (address) {
@@ -74,11 +96,12 @@ export class P2MSKH implements ScriptTemplate {
       total = result.total
       threshold = result.threshold
     } else {
-      if ((pubkeys == null) || total < 2) throw new Error('at least 2 pubkeys are required')
+      if (pubkeys == null || total < 2) throw new Error('at least 2 pubkeys are required')
       const concat = concatPubkeys(pubkeys)
       hash = Hash.hash160(concat)
     }
-    if (!threshold || threshold < 1 || threshold > total) throw new Error('threshold must be between 1 and the number of pubkeys')
+    if (!threshold || threshold < 1 || threshold > total)
+      throw new Error('threshold must be between 1 and the number of pubkeys')
     if (total > 10) throw new Error('total must be less than or equal to 10')
 
     const script = new LockingScript()
@@ -90,9 +113,7 @@ export class P2MSKH implements ScriptTemplate {
       .writeNumber(threshold)
       .writeOpCode(OP.OP_SWAP)
     for (let i = 0; i < total - 1; i++) {
-      script
-        .writeNumber(33)
-        .writeOpCode(OP.OP_SPLIT)
+      script.writeNumber(33).writeOpCode(OP.OP_SPLIT)
     }
     script.writeNumber(total)
     script.writeOpCode(OP.OP_CHECKMULTISIG)
@@ -100,7 +121,7 @@ export class P2MSKH implements ScriptTemplate {
     return script
   }
 
-  unlock (
+  unlock(
     wallet: WalletInterface,
     customInstructions: MultiSigInstructions,
     workingUnlockingScript?: UnlockingScript,
@@ -109,15 +130,17 @@ export class P2MSKH implements ScriptTemplate {
     sourceSatoshis?: number,
     lockingScript?: LockingScript
   ): {
-      sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-      estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>
-    } {
+    sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
+    estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>
+  } {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
         if (workingUnlockingScript == null) {
           workingUnlockingScript = new UnlockingScript()
           workingUnlockingScript.writeOpCode(OP.OP_0)
-          const pubkeys = concatPubkeys(customInstructions.pubkeys.map(p => PublicKey.fromString(p)))
+          const pubkeys = concatPubkeys(
+            customInstructions.pubkeys.map(p => PublicKey.fromString(p))
+          )
           workingUnlockingScript.writeBin(pubkeys)
         }
 
@@ -136,13 +159,9 @@ export class P2MSKH implements ScriptTemplate {
         }
         const input = tx.inputs[inputIndex]
 
-        const otherInputs = tx.inputs.filter(
-          (_, index) => index !== inputIndex
-        )
+        const otherInputs = tx.inputs.filter((_, index) => index !== inputIndex)
 
-        const sourceTXID = input.sourceTXID
-          ? input.sourceTXID
-          : input.sourceTransaction?.id('hex')
+        const sourceTXID = input.sourceTXID ? input.sourceTXID : input.sourceTransaction?.id('hex')
 
         if (!sourceTXID) {
           throw new Error(
@@ -201,17 +220,18 @@ export class P2MSKH implements ScriptTemplate {
         let numberOfSignatures
         const staticLength = 8
         const input = tx.inputs[inputIndex]
-        const lockingScript = input.sourceTransaction?.outputs[input.sourceOutputIndex].lockingScript
+        const lockingScript =
+          input.sourceTransaction?.outputs[input.sourceOutputIndex].lockingScript
         if (lockingScript == null) {
           return await Promise.resolve(1000) // guess
         }
 
-        const totalChunk = lockingScript.chunks.at(-2) as { op: number, data: number[] }
+        const totalChunk = lockingScript.chunks.at(-2) as { op: number; data: number[] }
         numberOfPubkeys = numberFromScriptChunk(totalChunk)
 
-        const thresholdChunk = lockingScript.chunks[4] as { op: number, data: number[] }
+        const thresholdChunk = lockingScript.chunks[4] as { op: number; data: number[] }
         numberOfSignatures = numberFromScriptChunk(thresholdChunk)
-        return await Promise.resolve(staticLength + (numberOfSignatures * 74) + (numberOfPubkeys * 34))
+        return await Promise.resolve(staticLength + numberOfSignatures * 74 + numberOfPubkeys * 34)
       }
     }
   }

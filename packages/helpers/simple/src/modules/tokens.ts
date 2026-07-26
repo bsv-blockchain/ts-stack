@@ -1,12 +1,4 @@
-import {
-  Utils,
-  PushDrop,
-  SecurityLevel,
-  Random,
-  LockingScript,
-  Transaction,
-  Beef
-} from '@bsv/sdk'
+import { Utils, PushDrop, SecurityLevel, Random, LockingScript, Transaction, Beef } from '@bsv/sdk'
 import { PeerPayClient } from '@bsv/message-box-client'
 import { WalletCore } from '../core/WalletCore'
 import {
@@ -20,7 +12,7 @@ import {
 
 const TOKEN_MESSAGE_BOX = 'simple_token_inbox'
 
-export function createTokenMethods (core: WalletCore): {
+export function createTokenMethods(core: WalletCore): {
   createToken: (options: TokenOptions) => Promise<TokenResult>
   listTokenDetails: (basket?: string) => Promise<TokenDetail[]>
   sendToken: (options: SendTokenOptions) => Promise<TransactionResult>
@@ -30,17 +22,19 @@ export function createTokenMethods (core: WalletCore): {
   acceptIncomingToken: (token: any, basket?: string) => Promise<any>
 } {
   return {
-    async createToken (options: TokenOptions): Promise<TokenResult> {
+    async createToken(options: TokenOptions): Promise<TokenResult> {
       try {
         const client = core.getClient()
         const basket = options.basket ?? core.defaults.tokenBasket
-        const protocolID = (options.protocolID ?? core.defaults.tokenProtocolID) as [SecurityLevel, string]
+        const protocolID = (options.protocolID ?? core.defaults.tokenProtocolID) as [
+          SecurityLevel,
+          string
+        ]
         const keyID = options.keyID ?? core.defaults.tokenKeyID
         const satoshis = options.satoshis ?? 1
 
-        const dataString = typeof options.data === 'object'
-          ? JSON.stringify(options.data)
-          : String(options.data)
+        const dataString =
+          typeof options.data === 'object' ? JSON.stringify(options.data) : String(options.data)
 
         const plaintext = Array.from(Utils.toArray(dataString, 'utf8'))
         const encryptResult = await client.encrypt({
@@ -64,14 +58,16 @@ export function createTokenMethods (core: WalletCore): {
 
         const result = await client.createAction({
           description: `Create token in ${basket} basket`,
-          outputs: [{
-            lockingScript: lockingScript.toHex(),
-            satoshis,
-            basket,
-            customInstructions: JSON.stringify({ protocolID, keyID, counterparty: 'self' }),
-            tags: ['token'],
-            outputDescription: `Token (${basket})`
-          }],
+          outputs: [
+            {
+              lockingScript: lockingScript.toHex(),
+              satoshis,
+              basket,
+              customInstructions: JSON.stringify({ protocolID, keyID, counterparty: 'self' }),
+              tags: ['token'],
+              outputDescription: `Token (${basket})`
+            }
+          ],
           options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         })
 
@@ -87,7 +83,7 @@ export function createTokenMethods (core: WalletCore): {
       }
     },
 
-    async listTokenDetails (basket?: string): Promise<TokenDetail[]> {
+    async listTokenDetails(basket?: string): Promise<TokenDetail[]> {
       const effectiveBasket = basket ?? core.defaults.tokenBasket
       const client = core.getClient()
       const result = await client.listOutputs({
@@ -110,7 +106,9 @@ export function createTokenMethods (core: WalletCore): {
 
           let ci: any = {}
           if ((output as any).customInstructions != null) {
-            try { ci = JSON.parse((output as any).customInstructions as string) } catch {}
+            try {
+              ci = JSON.parse((output as any).customInstructions as string)
+            } catch {}
           }
           const protocolID = ci.protocolID ?? defaultProtocolID
           const keyID = (ci.keyID as string | undefined) ?? defaultKeyID
@@ -126,7 +124,11 @@ export function createTokenMethods (core: WalletCore): {
                 counterparty
               } as any)
               const text = new TextDecoder().decode(new Uint8Array(plaintext))
-              try { data = JSON.parse(text) } catch { data = text }
+              try {
+                data = JSON.parse(text)
+              } catch {
+                data = text
+              }
             } catch {
               // Fallback: try 'anyone' for pre-fix tokens
               if (counterparty === 'self') {
@@ -138,7 +140,11 @@ export function createTokenMethods (core: WalletCore): {
                     counterparty: 'anyone'
                   } as any)
                   const text = new TextDecoder().decode(new Uint8Array(plaintext))
-                  try { data = JSON.parse(text) } catch { data = text }
+                  try {
+                    data = JSON.parse(text)
+                  } catch {
+                    data = text
+                  }
                 } catch {
                   data = null
                 }
@@ -164,7 +170,7 @@ export function createTokenMethods (core: WalletCore): {
       return details
     },
 
-    async sendToken (options: SendTokenOptions): Promise<TransactionResult> {
+    async sendToken(options: SendTokenOptions): Promise<TransactionResult> {
       try {
         const client = core.getClient()
         const { basket, outpoint, to } = options
@@ -185,11 +191,14 @@ export function createTokenMethods (core: WalletCore): {
 
         let ci: any = {}
         if ((targetOutput as any).customInstructions != null) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
+          try {
+            ci = JSON.parse((targetOutput as any).customInstructions as string)
+          } catch {}
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
-        const counterparty = ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
+        const counterparty =
+          ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -218,19 +227,27 @@ export function createTokenMethods (core: WalletCore): {
         const response = await client.createAction({
           description: `Send token from ${basket}`,
           inputBEEF,
-          inputs: [{
-            outpoint,
-            inputDescription: 'Token input',
-            unlockingScriptLength: 73
-          }],
-          outputs: [{
-            satoshis: 1,
-            lockingScript: newLockingScript.toHex(),
-            outputDescription: 'Token for recipient',
-            basket,
-            customInstructions: JSON.stringify({ protocolID, keyID: newKeyID, counterparty: newCounterparty }),
-            tags: ['token', 'sent']
-          }],
+          inputs: [
+            {
+              outpoint,
+              inputDescription: 'Token input',
+              unlockingScriptLength: 73
+            }
+          ],
+          outputs: [
+            {
+              satoshis: 1,
+              lockingScript: newLockingScript.toHex(),
+              outputDescription: 'Token for recipient',
+              basket,
+              customInstructions: JSON.stringify({
+                protocolID,
+                keyID: newKeyID,
+                counterparty: newCounterparty
+              }),
+              tags: ['token', 'sent']
+            }
+          ],
           options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         } as any)
 
@@ -248,7 +265,8 @@ export function createTokenMethods (core: WalletCore): {
         await txToSign.sign()
 
         const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-        if (unlockingScript == null || unlockingScript === '') throw new Error('Failed to generate unlocking script')
+        if (unlockingScript == null || unlockingScript === '')
+          throw new Error('Failed to generate unlocking script')
 
         const finalResult = await client.signAction({
           reference: signable.reference,
@@ -264,7 +282,7 @@ export function createTokenMethods (core: WalletCore): {
       }
     },
 
-    async redeemToken (options: RedeemTokenOptions): Promise<TransactionResult> {
+    async redeemToken(options: RedeemTokenOptions): Promise<TransactionResult> {
       try {
         const client = core.getClient()
         const { basket, outpoint } = options
@@ -285,11 +303,14 @@ export function createTokenMethods (core: WalletCore): {
 
         let ci: any = {}
         if ((targetOutput as any).customInstructions != null) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
+          try {
+            ci = JSON.parse((targetOutput as any).customInstructions as string)
+          } catch {}
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
-        const counterparty = ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
+        const counterparty =
+          ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -298,11 +319,13 @@ export function createTokenMethods (core: WalletCore): {
         const response = await client.createAction({
           description: `Redeem token from ${basket}`,
           inputBEEF,
-          inputs: [{
-            outpoint,
-            inputDescription: 'Token to redeem',
-            unlockingScriptLength: 73
-          }],
+          inputs: [
+            {
+              outpoint,
+              inputDescription: 'Token to redeem',
+              unlockingScriptLength: 73
+            }
+          ],
           outputs: [],
           options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         } as any)
@@ -321,7 +344,8 @@ export function createTokenMethods (core: WalletCore): {
         await txToSign.sign()
 
         const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-        if (unlockingScript == null || unlockingScript === '') throw new Error('Failed to generate unlocking script')
+        if (unlockingScript == null || unlockingScript === '')
+          throw new Error('Failed to generate unlocking script')
 
         const finalResult = await client.signAction({
           reference: signable.reference,
@@ -337,7 +361,7 @@ export function createTokenMethods (core: WalletCore): {
       }
     },
 
-    async sendTokenViaMessageBox (options: SendTokenOptions): Promise<TransactionResult> {
+    async sendTokenViaMessageBox(options: SendTokenOptions): Promise<TransactionResult> {
       try {
         const client = core.getClient()
         const { basket, outpoint, to } = options
@@ -358,11 +382,14 @@ export function createTokenMethods (core: WalletCore): {
 
         let ci: any = {}
         if ((targetOutput as any).customInstructions != null) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
+          try {
+            ci = JSON.parse((targetOutput as any).customInstructions as string)
+          } catch {}
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
-        const counterparty = ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
+        const counterparty =
+          ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -388,16 +415,20 @@ export function createTokenMethods (core: WalletCore): {
         const response = await client.createAction({
           description: 'Send token via MessageBox',
           inputBEEF,
-          inputs: [{
-            outpoint,
-            inputDescription: 'Token input',
-            unlockingScriptLength: 73
-          }],
-          outputs: [{
-            satoshis: 1,
-            lockingScript: newLockingScript.toHex(),
-            outputDescription: 'Token for recipient'
-          }],
+          inputs: [
+            {
+              outpoint,
+              inputDescription: 'Token input',
+              unlockingScriptLength: 73
+            }
+          ],
+          outputs: [
+            {
+              satoshis: 1,
+              lockingScript: newLockingScript.toHex(),
+              outputDescription: 'Token for recipient'
+            }
+          ],
           options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         } as any)
 
@@ -415,7 +446,8 @@ export function createTokenMethods (core: WalletCore): {
         await txToSign.sign()
 
         const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-        if (unlockingScript == null || unlockingScript === '') throw new Error('Failed to generate unlocking script')
+        if (unlockingScript == null || unlockingScript === '')
+          throw new Error('Failed to generate unlocking script')
 
         const finalResult = await client.signAction({
           reference: signable.reference,
@@ -449,7 +481,7 @@ export function createTokenMethods (core: WalletCore): {
       }
     },
 
-    async listIncomingTokens (): Promise<any[]> {
+    async listIncomingTokens(): Promise<any[]> {
       try {
         const client = core.getClient()
         const peerPay = new PeerPayClient({
@@ -464,7 +496,9 @@ export function createTokenMethods (core: WalletCore): {
         return messages.map((msg: any) => {
           let body = msg.body
           if (typeof body === 'string') {
-            try { body = JSON.parse(body) } catch {}
+            try {
+              body = JSON.parse(body)
+            } catch {}
           }
           return {
             messageId: msg.messageId,
@@ -481,26 +515,28 @@ export function createTokenMethods (core: WalletCore): {
       }
     },
 
-    async acceptIncomingToken (token: any, basket?: string): Promise<any> {
+    async acceptIncomingToken(token: any, basket?: string): Promise<any> {
       try {
         const client = core.getClient()
         const effectiveBasket = basket ?? core.defaults.tokenBasket
 
         await client.internalizeAction({
           tx: token.transaction,
-          outputs: [{
-            outputIndex: token.outputIndex ?? 0,
-            protocol: 'basket insertion',
-            insertionRemittance: {
-              basket: effectiveBasket,
-              customInstructions: JSON.stringify({
-                protocolID: token.protocolID,
-                keyID: token.keyID,
-                counterparty: token.sender
-              }),
-              tags: ['token', 'received']
+          outputs: [
+            {
+              outputIndex: token.outputIndex ?? 0,
+              protocol: 'basket insertion',
+              insertionRemittance: {
+                basket: effectiveBasket,
+                customInstructions: JSON.stringify({
+                  protocolID: token.protocolID,
+                  keyID: token.keyID,
+                  counterparty: token.sender
+                }),
+                tags: ['token', 'received']
+              }
             }
-          }],
+          ],
           description: `Receive token from ${String(token.sender).substring(0, 20)}...`
         } as any)
 

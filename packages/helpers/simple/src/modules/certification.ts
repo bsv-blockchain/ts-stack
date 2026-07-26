@@ -1,10 +1,4 @@
-import {
-  ProtoWallet,
-  PrivateKey,
-  MasterCertificate,
-  Utils,
-  Random
-} from '@bsv/sdk'
+import { ProtoWallet, PrivateKey, MasterCertificate, Utils, Random } from '@bsv/sdk'
 import { WalletCore } from '../core/WalletCore'
 import { CertificateData } from '../core/types'
 
@@ -19,7 +13,7 @@ export class Certifier {
   private readonly defaultFields: Record<string, string>
   private readonly includeTimestamp: boolean
 
-  private constructor (config: {
+  private constructor(config: {
     privateKey: PrivateKey
     certificateType: string
     defaultFields: Record<string, string>
@@ -32,7 +26,7 @@ export class Certifier {
     this.includeTimestamp = config.includeTimestamp
   }
 
-  static async create (config?: {
+  static async create(config?: {
     privateKey?: string
     certificateType?: string
     defaultFields?: Record<string, string>
@@ -49,20 +43,24 @@ export class Certifier {
 
     return new Certifier({
       privateKey: key,
-      certificateType: config?.certificateType ?? Utils.toBase64(Utils.toArray('certification', 'utf8')),
+      certificateType:
+        config?.certificateType ?? Utils.toBase64(Utils.toArray('certification', 'utf8')),
       defaultFields: config?.defaultFields ?? { certified: 'true' },
       includeTimestamp: config?.includeTimestamp !== false
     })
   }
 
-  getInfo (): { publicKey: string, certificateType: string } {
+  getInfo(): { publicKey: string; certificateType: string } {
     return {
       publicKey: this.pubKey,
       certificateType: this.certType
     }
   }
 
-  async certify (wallet: WalletCore, additionalFields?: Record<string, string>): Promise<CertificateData> {
+  async certify(
+    wallet: WalletCore,
+    additionalFields?: Record<string, string>
+  ): Promise<CertificateData> {
     try {
       const identityKey = wallet.getIdentityKey()
 
@@ -114,13 +112,20 @@ export class Certifier {
 // Certificate methods that attach to a wallet
 // ============================================================================
 
-export function createCertificationMethods (core: WalletCore): {
-  acquireCertificateFrom: (config: { serverUrl: string, replaceExisting?: boolean }) => Promise<CertificateData>
-  listCertificatesFrom: (config: { certifiers: string[], types: string[], limit?: number }) => Promise<{ totalCertificates: number, certificates: any[] }>
-  relinquishCert: (args: { type: string, serialNumber: string, certifier: string }) => Promise<void>
+export function createCertificationMethods(core: WalletCore): {
+  acquireCertificateFrom: (config: {
+    serverUrl: string
+    replaceExisting?: boolean
+  }) => Promise<CertificateData>
+  listCertificatesFrom: (config: {
+    certifiers: string[]
+    types: string[]
+    limit?: number
+  }) => Promise<{ totalCertificates: number; certificates: any[] }>
+  relinquishCert: (args: { type: string; serialNumber: string; certifier: string }) => Promise<void>
 } {
   return {
-    async acquireCertificateFrom (config: {
+    async acquireCertificateFrom(config: {
       serverUrl: string
       replaceExisting?: boolean
     }): Promise<any> {
@@ -129,7 +134,10 @@ export function createCertificationMethods (core: WalletCore): {
 
         const infoRes = await fetch(`${config.serverUrl}?action=info`)
         if (!infoRes.ok) throw new Error(`Server returned ${infoRes.status}`)
-        const info = await infoRes.json() as { certifierPublicKey: string, certificateType: string }
+        const info = (await infoRes.json()) as {
+          certifierPublicKey: string
+          certificateType: string
+        }
         const { certifierPublicKey, certificateType } = info
 
         if (config.replaceExisting !== false) {
@@ -157,10 +165,10 @@ export function createCertificationMethods (core: WalletCore): {
           body: JSON.stringify({ identityKey: core.getIdentityKey() })
         })
         if (!certRes.ok) {
-          const errData = await certRes.json().catch(() => ({})) as { error?: string }
+          const errData = (await certRes.json().catch(() => ({}))) as { error?: string }
           throw new Error(errData.error ?? `Server returned ${certRes.status}`)
         }
-        const certData = await certRes.json() as CertificateData
+        const certData = (await certRes.json()) as CertificateData
 
         await client.acquireCertificate({
           type: certData.type,
@@ -180,11 +188,11 @@ export function createCertificationMethods (core: WalletCore): {
       }
     },
 
-    async listCertificatesFrom (config: {
+    async listCertificatesFrom(config: {
       certifiers: string[]
       types: string[]
       limit?: number
-    }): Promise<{ totalCertificates: number, certificates: any[] }> {
+    }): Promise<{ totalCertificates: number; certificates: any[] }> {
       try {
         const result = await core.getClient().listCertificates({
           certifiers: config.certifiers,
@@ -200,7 +208,7 @@ export function createCertificationMethods (core: WalletCore): {
       }
     },
 
-    async relinquishCert (args: {
+    async relinquishCert(args: {
       type: string
       serialNumber: string
       certifier: string

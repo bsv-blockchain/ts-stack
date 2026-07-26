@@ -42,13 +42,13 @@ const OWNER_PUSH_OP = '14' // push 20 bytes
 // DSTAS scripts carry the ~2.9KB engine; anything smaller is not DSTAS.
 const MIN_HEX_LEN = 4000
 
-function isSinglePush (op: string): boolean {
+function isSinglePush(op: string): boolean {
   const code = Number.parseInt(op, 16)
   return code >= 0x01 && code <= 0x4b
 }
 
 export class DstasToken {
-  static isDstas (script: LockingScript): boolean {
+  static isDstas(script: LockingScript): boolean {
     try {
       DstasToken.decode(script)
       return true
@@ -61,10 +61,11 @@ export class DstasToken {
    * Decodes a DSTAS locking script's identity fields.
    * @throws if the script is not a recognisable DSTAS script.
    */
-  static decode (script: LockingScript): DstasTokenDecoded {
+  static decode(script: LockingScript): DstasTokenDecoded {
     const hex = script.toHex().toLowerCase()
     if (hex.length < MIN_HEX_LEN) throw new Error('not a DSTAS script: too short')
-    if (!hex.startsWith(OWNER_PUSH_OP)) throw new Error('not a DSTAS script: missing 20-byte owner push')
+    if (!hex.startsWith(OWNER_PUSH_OP))
+      throw new Error('not a DSTAS script: missing 20-byte owner push')
 
     const ownerHash160 = hex.substring(2, 42)
 
@@ -88,9 +89,7 @@ export class DstasToken {
     // Action-data marker sits right after the owner push:
     //   OP_0 (00) = neutral; OP_2 (52) = frozen; push prefixed 0x02 = frozen.
     const actionOp = hex.substring(42, 44)
-    const frozen =
-      actionOp === '52' ||
-      (isSinglePush(actionOp) && hex.substring(44, 46) === '02')
+    const frozen = actionOp === '52' || (isSinglePush(actionOp) && hex.substring(44, 46) === '02')
 
     return {
       assetId: tokenId,

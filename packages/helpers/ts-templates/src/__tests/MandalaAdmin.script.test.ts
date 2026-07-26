@@ -29,14 +29,29 @@ describe('MandalaAdmin lock/decode', () => {
   })
 
   it('embeds publicData as <push JSON> OP_DROP before the P2PKH', async () => {
-    const script = await MandalaAdmin.lock({ wallet: wallet as any, data, publicData: { label: 'Gold' } })
+    const script = await MandalaAdmin.lock({
+      wallet: wallet as any,
+      data,
+      publicData: { label: 'Gold' }
+    })
     const ops = script.chunks.map(c => c.op)
-    expect(ops.slice(1)).toEqual([OP.OP_DROP, OP.OP_DUP, OP.OP_HASH160, 20, OP.OP_EQUALVERIFY, OP.OP_CHECKSIG])
+    expect(ops.slice(1)).toEqual([
+      OP.OP_DROP,
+      OP.OP_DUP,
+      OP.OP_HASH160,
+      20,
+      OP.OP_EQUALVERIFY,
+      OP.OP_CHECKSIG
+    ])
     expect(JSON.parse(Utils.toUTF8(script.chunks[0].data as number[]))).toEqual({ label: 'Gold' })
   })
 
   it('decode round-trips publicData and pubKeyHash (7-chunk)', async () => {
-    const script = await MandalaAdmin.lock({ wallet: wallet as any, data, publicData: { label: 'Gold', ticker: 'GLD' } })
+    const script = await MandalaAdmin.lock({
+      wallet: wallet as any,
+      data,
+      publicData: { label: 'Gold', ticker: 'GLD' }
+    })
     const decoded = MandalaAdmin.decode(script)
     expect(decoded.pubKeyHash).toEqual(script.chunks[4].data)
     expect(decoded.publicData).toEqual({ label: 'Gold', ticker: 'GLD' })
@@ -50,8 +65,19 @@ describe('MandalaAdmin lock/decode', () => {
   })
 
   it('decode rejects a 7-chunk script whose second op is not OP_DROP', async () => {
-    const script = await MandalaAdmin.lock({ wallet: wallet as any, data, publicData: { label: 'X' } })
+    const script = await MandalaAdmin.lock({
+      wallet: wallet as any,
+      data,
+      publicData: { label: 'X' }
+    })
     script.chunks[1] = { op: OP.OP_DUP }
     expect(() => MandalaAdmin.decode(script)).toThrow()
+  })
+
+  it('decode rejects a malformed P2PKH shape', async () => {
+    const script = await MandalaAdmin.lock({ wallet: wallet as any, data })
+    script.chunks[0] = { op: OP.OP_0 }
+
+    expect(() => MandalaAdmin.decode(script)).toThrow('bad P2PKH shape')
   })
 })

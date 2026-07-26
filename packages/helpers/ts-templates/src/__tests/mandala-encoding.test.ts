@@ -1,11 +1,15 @@
 import {
-  createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
-  decodeScriptNumChunk, encodeAssetId, decodeAssetId
+  createMinimallyEncodedScriptChunk,
+  encodeScriptNum,
+  decodeScriptNum,
+  decodeScriptNumChunk,
+  encodeAssetId,
+  decodeAssetId
 } from '../mandala-encoding.js'
 
 describe('mandala-encoding', () => {
   it('round-trips small and large script numbers', () => {
-    for (const n of [0, 1, 16, 127, 128, 255, 256, 1000, 0x7fffffff]) {
+    for (const n of [-255, -128, -1, 0, 1, 16, 127, 128, 255, 256, 1000, 0x7fffffff]) {
       expect(decodeScriptNum(encodeScriptNum(n))).toBe(n)
     }
   })
@@ -43,5 +47,11 @@ describe('mandala-encoding', () => {
     expect(bytes[0]).toBe(0x22) // display last byte → first on-chain (reversed)
     expect(bytes[31]).toBe(0x11) // display first byte → last on-chain
     expect(bytes.slice(32)).toEqual([1, 0, 0, 0]) // vout little-endian
+  })
+
+  it.each(['not-a-number', '-1'])('rejects invalid assetId vout %s', vout => {
+    expect(() => encodeAssetId(`${'a'.repeat(64)}.${vout}`)).toThrow(
+      'assetId vout must be a non-negative integer'
+    )
   })
 })

@@ -6,15 +6,23 @@ import {
   SdJwtVcPresenter,
   SdJwtVcVerifier,
   applyDisclosures,
+  base64UrlEncodeJson,
   decodeJwt,
   generateQrCode,
+  parseDisclosure,
   parseSdJwt,
-  publicKeyToJwk
+  publicKeyToJwk,
+  serializeSdJwt,
+  signJwt
 } from '../src/index.js'
 
 describe('SD-JWT VC', () => {
-  const issuerPrivateKey = PrivateKey.fromHex('0000000000000000000000000000000000000000000000000000000000000001')
-  const holderPrivateKey = PrivateKey.fromHex('0000000000000000000000000000000000000000000000000000000000000002')
+  const issuerPrivateKey = PrivateKey.fromHex(
+    '0000000000000000000000000000000000000000000000000000000000000001'
+  )
+  const holderPrivateKey = PrivateKey.fromHex(
+    '0000000000000000000000000000000000000000000000000000000000000002'
+  )
   const issuerDid = BsvDid.fromPublicKey(issuerPrivateKey.toPublicKey().toDER() as number[])
 
   test('issues an SD-JWT VC with holder cnf key and salted disclosures', async () => {
@@ -143,19 +151,54 @@ describe('SD-JWT VC', () => {
     })
     const parsed = parseSdJwt(credential.sdJwt)
 
-    expect(() => applyDisclosures(decodeJwt(parsed.issuerSignedJwt).payload, ['bad-disclosure'])).toThrow()
+    expect(() =>
+      applyDisclosures(decodeJwt(parsed.issuerSignedJwt).payload, ['bad-disclosure'])
+    ).toThrow()
+  })
+
+  test('rejects structurally invalid object-property disclosures', () => {
+    expect(() => parseDisclosure(base64UrlEncodeJson({ salt: 'not-an-array' }))).toThrow(
+      'Invalid object-property Disclosure'
+    )
+    expect(() => parseDisclosure(base64UrlEncodeJson(['salt']))).toThrow(
+      'Invalid object-property Disclosure'
+    )
+  })
+
+  test('rejects key binding when the issuer did not bind a holder key', async () => {
+    const issuerSignedJwt = signJwt(
+      { typ: 'dc+sd-jwt' },
+      {
+        iss: issuerDid,
+        iat: 1770000000,
+        vct: 'https://credentials.example.com/identity_credential'
+      },
+      issuerPrivateKey
+    )
+    const result = await SdJwtVcVerifier.verify(
+      serializeSdJwt(issuerSignedJwt, [], 'invalid-key-binding')
+    )
+
+    expect(result).toMatchObject({
+      verified: false,
+      issuerSignedJwtVerified: true,
+      keyBindingVerified: null,
+      errors: ['SD-JWT VC has no cnf.jwk for Key Binding verification']
+    })
   })
 
   test('protects registered SD-JWT VC metadata and JOSE headers', async () => {
-    await expect(SdJwtVcIssuer.create({
-      issuer: issuerDid,
-      issuerPrivateKey,
-      holderPublicKey: holderPrivateKey.toPublicKey(),
-      vct: 'https://credentials.example.com/identity_credential',
-      claims: {
-        vct: 'https://attacker.example.com/other'
-      }
-    })).rejects.toThrow('managed by SD-JWT VC metadata')
+    await expect(
+      SdJwtVcIssuer.create({
+        issuer: issuerDid,
+        issuerPrivateKey,
+        holderPublicKey: holderPrivateKey.toPublicKey(),
+        vct: 'https://credentials.example.com/identity_credential',
+        claims: {
+          vct: 'https://attacker.example.com/other'
+        }
+      })
+    ).rejects.toThrow('managed by SD-JWT VC metadata')
 
     const credential = await SdJwtVcIssuer.create({
       issuer: issuerDid,
@@ -177,7 +220,9 @@ describe('SD-JWT VC', () => {
   })
 
   test('rejects unsupported SD-JWT hash algorithms', () => {
-    expect(() => applyDisclosures({ _sd_alg: 'sha-512' }, [])).toThrow('Unsupported SD-JWT hash algorithm')
+    expect(() => applyDisclosures({ _sd_alg: 'sha-512' }, [])).toThrow(
+      'Unsupported SD-JWT hash algorithm'
+    )
   })
 
   test('generates SVG QR codes for DID and VC display modes', async () => {

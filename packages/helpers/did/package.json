@@ -43,6 +43,7 @@
   "scripts": {
     "build": "tsdown mod.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --platform neutral --tsconfig tsconfig.base.json --unbundle",
     "dev": "pnpm build --watch",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/did/{src,tests}/**/*.ts\" \"packages/helpers/did/*.{js,json,ts}\"",
     "lint": "oxlint src tests --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports BsvDid,SdJwtVcHolder,SdJwtVcIssuer,SdJwtVcPresenter,SdJwtVcVerifier,applyDisclosures,base64UrlDecode,base64UrlDecodeJson,base64UrlEncode,base64UrlEncodeJson,createKeyBindingJwt,decodeDidKey,decodeJwt,disclosureDigest,encodeBase58Multibase,generateQrCode,jwkToPublicKey,parseDisclosure,parseSdJwt,privateKeyToJwk,publicKeyFromDid,publicKeyToDidKey,publicKeyToJwk,selectDisclosures,serializeSdJwt,signCompact,signJwt,verificationMethodForDid,verifyCompact,verifyJwt,verifyKeyBindingJwt",
     "prepublishOnly": "pnpm build",

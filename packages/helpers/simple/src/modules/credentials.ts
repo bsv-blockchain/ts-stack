@@ -36,10 +36,11 @@ const REVOCATION_TYPE = 'BSVHashLockRevocation2024'
 export class CredentialSchema {
   private readonly config: CredentialSchemaConfig
 
-  constructor (config: CredentialSchemaConfig) {
+  constructor(config: CredentialSchemaConfig) {
     this.config = {
       ...config,
-      certificateTypeBase64: config.certificateTypeBase64 ?? Utils.toBase64(Utils.toArray(config.id, 'utf8'))
+      certificateTypeBase64:
+        config.certificateTypeBase64 ?? Utils.toBase64(Utils.toArray(config.id, 'utf8'))
     }
   }
 
@@ -47,10 +48,13 @@ export class CredentialSchema {
    * Validate field values against schema requirements.
    * Returns null if valid, or an error message string.
    */
-  validate (values: Record<string, string>): string | null {
+  validate(values: Record<string, string>): string | null {
     // Check required fields
     for (const field of this.config.fields) {
-      if (field.required === true && (values[field.key]?.trim() === '' || values[field.key]?.trim() == null)) {
+      if (
+        field.required === true &&
+        (values[field.key]?.trim() === '' || values[field.key]?.trim() == null)
+      ) {
         return `${field.label} is required`
       }
     }
@@ -66,7 +70,7 @@ export class CredentialSchema {
   /**
    * Merge computed fields into values.
    */
-  computeFields (values: Record<string, string>): Record<string, string> {
+  computeFields(values: Record<string, string>): Record<string, string> {
     const computed = this.config.computedFields?.(values) ?? {}
     return { ...values, ...computed }
   }
@@ -74,7 +78,13 @@ export class CredentialSchema {
   /**
    * Get schema metadata.
    */
-  getInfo (): { id: string, name: string, description?: string, certificateTypeBase64: string, fieldCount: number } {
+  getInfo(): {
+    id: string
+    name: string
+    description?: string
+    certificateTypeBase64: string
+    fieldCount: number
+  } {
     return {
       id: this.config.id,
       name: this.config.name,
@@ -85,7 +95,7 @@ export class CredentialSchema {
   }
 
   /** Get the full config. */
-  getConfig (): CredentialSchemaConfig {
+  getConfig(): CredentialSchemaConfig {
     return this.config
   }
 }
@@ -97,23 +107,23 @@ export class CredentialSchema {
 export class MemoryRevocationStore implements RevocationStore {
   private readonly records = new Map<string, RevocationRecord>()
 
-  async save (serialNumber: string, record: RevocationRecord): Promise<void> {
+  async save(serialNumber: string, record: RevocationRecord): Promise<void> {
     this.records.set(serialNumber, record)
   }
 
-  async load (serialNumber: string): Promise<RevocationRecord | undefined> {
+  async load(serialNumber: string): Promise<RevocationRecord | undefined> {
     return this.records.get(serialNumber)
   }
 
-  async delete (serialNumber: string): Promise<void> {
+  async delete(serialNumber: string): Promise<void> {
     this.records.delete(serialNumber)
   }
 
-  async has (serialNumber: string): Promise<boolean> {
+  async has(serialNumber: string): Promise<boolean> {
     return this.records.has(serialNumber)
   }
 
-  async findByOutpoint (outpoint: string): Promise<boolean> {
+  async findByOutpoint(outpoint: string): Promise<boolean> {
     for (const record of this.records.values()) {
       if (record.outpoint === outpoint) return true
     }
@@ -134,7 +144,7 @@ export class CredentialIssuer {
   private readonly revocationWallet: any
   private readonly store: RevocationStore
 
-  private constructor (config: {
+  private constructor(config: {
     privateKey: PrivateKey
     schemas: Map<string, CredentialSchema>
     revocationEnabled: boolean
@@ -150,7 +160,7 @@ export class CredentialIssuer {
     this.store = config.store
   }
 
-  static async create (config: CredentialIssuerConfig): Promise<CredentialIssuer> {
+  static async create(config: CredentialIssuerConfig): Promise<CredentialIssuer> {
     const privateKey = new PrivateKey(config.privateKey, 'hex')
 
     const schemas = new Map<string, CredentialSchema>()
@@ -183,7 +193,7 @@ export class CredentialIssuer {
   /**
    * Issue a Verifiable Credential.
    */
-  async issue (
+  async issue(
     subjectIdentityKey: string,
     schemaId: string,
     fields: Record<string, string>
@@ -220,13 +230,15 @@ export class CredentialIssuer {
 
       const result = await this.revocationWallet.createAction({
         description: 'Certificate revocation UTXO',
-        outputs: [{
-          lockingScript: lockingScript.toHex(),
-          satoshis: 1,
-          outputDescription: 'Revocation hash-lock',
-          basket: 'revocation-utxos',
-          tags: ['revocation']
-        }],
+        outputs: [
+          {
+            lockingScript: lockingScript.toHex(),
+            satoshis: 1,
+            outputDescription: 'Revocation hash-lock',
+            basket: 'revocation-utxos',
+            tags: ['revocation']
+          }
+        ],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
 
@@ -277,12 +289,13 @@ export class CredentialIssuer {
   /**
    * Verify a Verifiable Credential.
    */
-  async verify (vc: VerifiableCredential): Promise<VerificationResult> {
+  async verify(vc: VerifiableCredential): Promise<VerificationResult> {
     const errors: string[] = []
 
     // Check W3C context
     const contexts = vc['@context']
-    const hasW3cContext = Array.isArray(contexts) &&
+    const hasW3cContext =
+      Array.isArray(contexts) &&
       contexts.some(context => typeof context === 'string' && context === VC_CONTEXT)
     if (!hasW3cContext) {
       errors.push('Missing W3C VC context')
@@ -332,7 +345,7 @@ export class CredentialIssuer {
   /**
    * Revoke a credential by spending its hash-locked UTXO.
    */
-  async revoke (serialNumber: string): Promise<{ txid: string }> {
+  async revoke(serialNumber: string): Promise<{ txid: string }> {
     if (!this.revocationEnabled || this.revocationWallet == null) {
       throw new CredentialError('Revocation is not enabled')
     }
@@ -348,11 +361,13 @@ export class CredentialIssuer {
     const result = await this.revocationWallet.createAction({
       description: 'Revoke certificate',
       inputBEEF: record.beef.length > 0 ? record.beef : undefined,
-      inputs: [{
-        outpoint: record.outpoint,
-        unlockingScript,
-        inputDescription: 'Spend revocation UTXO'
-      }],
+      inputs: [
+        {
+          outpoint: record.outpoint,
+          unlockingScript,
+          inputDescription: 'Spend revocation UTXO'
+        }
+      ],
       outputs: [],
       options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
     })
@@ -370,7 +385,7 @@ export class CredentialIssuer {
   /**
    * Check if a credential has been revoked.
    */
-  async isRevoked (serialNumber: string): Promise<boolean> {
+  async isRevoked(serialNumber: string): Promise<boolean> {
     const hasRecord = await this.store.has(serialNumber)
     return !hasRecord
   }
@@ -378,8 +393,8 @@ export class CredentialIssuer {
   /**
    * Get issuer info.
    */
-  getInfo (): { publicKey: string, did: string, schemas: Array<{ id: string, name: string }> } {
-    const schemaList: Array<{ id: string, name: string }> = []
+  getInfo(): { publicKey: string; did: string; schemas: Array<{ id: string; name: string }> } {
+    const schemaList: Array<{ id: string; name: string }> = []
     for (const [id, schema] of this.schemas) {
       const info = schema.getInfo()
       schemaList.push({ id, name: info.name })
@@ -400,7 +415,7 @@ export class CredentialIssuer {
 /**
  * Wrap a CertificateData into a W3C Verifiable Credential.
  */
-export function toVerifiableCredential (
+export function toVerifiableCredential(
   cert: CertificateData,
   issuerKey: string,
   options?: { credentialType?: string }
@@ -417,12 +432,13 @@ export function toVerifiableCredential (
       id: `did:bsv:${cert.subject}`,
       ...cert.fields
     },
-    credentialStatus: cert.revocationOutpoint === '00'.repeat(32) + '.0'
-      ? undefined
-      : {
-          id: `bsv:${cert.revocationOutpoint}`,
-          type: REVOCATION_TYPE
-        },
+    credentialStatus:
+      cert.revocationOutpoint === '00'.repeat(32) + '.0'
+        ? undefined
+        : {
+            id: `bsv:${cert.revocationOutpoint}`,
+            type: REVOCATION_TYPE
+          },
     proof: {
       type: PROOF_TYPE,
       created: now,
@@ -439,7 +455,7 @@ export function toVerifiableCredential (
 /**
  * Wrap an array of VCs into a W3C Verifiable Presentation.
  */
-export function toVerifiablePresentation (
+export function toVerifiablePresentation(
   credentials: VerifiableCredential[],
   holderKey: string
 ): VerifiablePresentation {
@@ -463,16 +479,25 @@ export function toVerifiablePresentation (
 // Wallet-integrated credential methods
 // ============================================================================
 
-export function createCredentialMethods (core: WalletCore): {
-  acquireCredential: (config: { serverUrl: string, schemaId?: string, fields?: Record<string, string>, replaceExisting?: boolean }) => Promise<VerifiableCredential>
-  listCredentials: (config: { certifiers: string[], types: string[], limit?: number }) => Promise<VerifiableCredential[]>
+export function createCredentialMethods(core: WalletCore): {
+  acquireCredential: (config: {
+    serverUrl: string
+    schemaId?: string
+    fields?: Record<string, string>
+    replaceExisting?: boolean
+  }) => Promise<VerifiableCredential>
+  listCredentials: (config: {
+    certifiers: string[]
+    types: string[]
+    limit?: number
+  }) => Promise<VerifiableCredential[]>
   createPresentation: (credentials: VerifiableCredential[]) => VerifiablePresentation
 } {
   return {
     /**
      * Acquire a Verifiable Credential from a remote issuer server.
      */
-    async acquireCredential (config: {
+    async acquireCredential(config: {
       serverUrl: string
       schemaId?: string
       fields?: Record<string, string>
@@ -484,7 +509,7 @@ export function createCredentialMethods (core: WalletCore): {
         // Fetch issuer info
         const infoRes = await fetch(`${config.serverUrl}?action=info`)
         if (!infoRes.ok) throw new Error(`Server returned ${infoRes.status}`)
-        const info = await infoRes.json() as {
+        const info = (await infoRes.json()) as {
           certifierPublicKey: string
           certificateType: string
         }
@@ -521,10 +546,10 @@ export function createCredentialMethods (core: WalletCore): {
           })
         })
         if (!certRes.ok) {
-          const errData = await certRes.json().catch(() => ({})) as { error?: string }
+          const errData = (await certRes.json().catch(() => ({}))) as { error?: string }
           throw new Error(errData.error ?? `Server returned ${certRes.status}`)
         }
-        const certData = await certRes.json() as CertificateData
+        const certData = (await certRes.json()) as CertificateData
 
         // Acquire into wallet
         await client.acquireCertificate({
@@ -549,7 +574,7 @@ export function createCredentialMethods (core: WalletCore): {
     /**
      * List wallet certificates wrapped as Verifiable Credentials.
      */
-    async listCredentials (config: {
+    async listCredentials(config: {
       certifiers: string[]
       types: string[]
       limit?: number
@@ -586,7 +611,7 @@ export function createCredentialMethods (core: WalletCore): {
     /**
      * Wrap Verifiable Credentials into a Verifiable Presentation.
      */
-    createPresentation (credentials: VerifiableCredential[]): VerifiablePresentation {
+    createPresentation(credentials: VerifiableCredential[]): VerifiablePresentation {
       return toVerifiablePresentation(credentials, core.getIdentityKey())
     }
   }

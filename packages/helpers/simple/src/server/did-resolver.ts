@@ -25,7 +25,7 @@ const BSVDID_MARKER = 'BSVDID'
 // OP_RETURN parser
 // ============================================================================
 
-function hexToBytes (hex: string): number[] {
+function hexToBytes(hex: string): number[] {
   const bytes: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
     bytes.push(Number.parseInt(hex.substring(i, i + 2), 16))
@@ -33,7 +33,7 @@ function hexToBytes (hex: string): number[] {
   return bytes
 }
 
-function parseOpReturnSegments (hexScript: string): string[] {
+function parseOpReturnSegments(hexScript: string): string[] {
   try {
     const bytes = hexToBytes(hexScript)
     const segments: string[] = []
@@ -41,7 +41,10 @@ function parseOpReturnSegments (hexScript: string): string[] {
 
     // Find OP_RETURN (0x6a)
     while (i < bytes.length) {
-      if (bytes[i] === 0x6a) { i++; break }
+      if (bytes[i] === 0x6a) {
+        i++
+        break
+      }
       i++
     }
     if (i >= bytes.length) return []
@@ -56,13 +59,16 @@ function parseOpReturnSegments (hexScript: string): string[] {
         len = op
       } else if (op === 0x4c) {
         if (i >= bytes.length) break
-        len = bytes[i]; i++
+        len = bytes[i]
+        i++
       } else if (op === 0x4d) {
         if (i + 1 >= bytes.length) break
-        len = bytes[i] | (bytes[i + 1] << 8); i += 2
+        len = bytes[i] | (bytes[i + 1] << 8)
+        i += 2
       } else if (op === 0x4e) {
         if (i + 3 >= bytes.length) break
-        len = bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24); i += 4
+        len = bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24)
+        i += 4
       } else {
         break
       }
@@ -89,14 +95,14 @@ export class DIDResolverService {
   private readonly resolverTimeout: number
   private readonly maxHops: number
 
-  constructor (config?: DIDResolverConfig) {
+  constructor(config?: DIDResolverConfig) {
     this.resolverUrl = config?.resolverUrl ?? DEFAULT_RESOLVER_URL
     this.wocBaseUrl = config?.wocBaseUrl ?? DEFAULT_WOC_BASE
     this.resolverTimeout = config?.resolverTimeout ?? 10_000
     this.maxHops = config?.maxHops ?? 100
   }
 
-  async resolve (did: string): Promise<DIDResolutionResult> {
+  async resolve(did: string): Promise<DIDResolutionResult> {
     const txidMatch = /^did:bsv:([0-9a-f]{64})$/i.exec(did)
 
     // Try nChain Universal Resolver
@@ -148,7 +154,7 @@ export class DIDResolverService {
     }
   }
 
-  private async resolveViaWoC (txid: string): Promise<DIDResolutionResult> {
+  private async resolveViaWoC(txid: string): Promise<DIDResolutionResult> {
     const notFound: DIDResolutionResult = {
       didDocument: null,
       didDocumentMetadata: {},
@@ -204,7 +210,7 @@ export class DIDResolverService {
           try {
             lastDocument = JSON.parse(payload)
             lastDocTxid = currentTxid
-            updated = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
+            updated = txData.time == null ? undefined : new Date(txData.time * 1000).toISOString()
           } catch {
             // Not valid JSON
           }
@@ -221,7 +227,9 @@ export class DIDResolverService {
           const spendData: any = await spendResp.json()
           nextTxid = spendData?.txid ?? null
         }
-      } catch { /* fall through */ }
+      } catch {
+        /* fall through */
+      }
 
       // Strategy 2: address history fallback
       if (nextTxid == null) {
@@ -230,7 +238,7 @@ export class DIDResolverService {
           try {
             const histResp = await fetch(`${this.wocBaseUrl}/address/${String(out0Addr)}/history`)
             if (histResp.ok) {
-              const history = (await histResp.json()) as Array<{ tx_hash: string, height: number }>
+              const history = (await histResp.json()) as Array<{ tx_hash: string; height: number }>
               const candidates = history
                 .filter(e => !visited.has(e.tx_hash))
                 .sort((a, b) => b.height - a.height)
@@ -238,7 +246,9 @@ export class DIDResolverService {
                 nextTxid = candidates[0].tx_hash
               }
             }
-          } catch { /* address history unavailable */ }
+          } catch {
+            /* address history unavailable */
+          }
         }
       }
 
@@ -260,7 +270,8 @@ export class DIDResolverService {
         didDocumentMetadata: { created },
         didResolutionMetadata: {
           error: 'notYetAvailable',
-          message: 'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
+          message:
+            'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
         }
       }
     }
@@ -273,11 +284,13 @@ export class DIDResolverService {
 // Next.js handler factory
 // ============================================================================
 
-export function createDIDResolverHandler (config?: DIDResolverConfig): ReturnType<typeof toNextHandlers> {
+export function createDIDResolverHandler(
+  config?: DIDResolverConfig
+): ReturnType<typeof toNextHandlers> {
   const resolver = new DIDResolverService(config)
 
   const coreHandlers = {
-    async GET (req: HandlerRequest): Promise<HandlerResponse> {
+    async GET(req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const did = params.get('did')
 
@@ -295,14 +308,17 @@ export function createDIDResolverHandler (config?: DIDResolverConfig): ReturnTyp
         }
         return jsonResponse(result, status)
       } catch (error) {
-        return jsonResponse({
-          didDocument: null,
-          didDocumentMetadata: {},
-          didResolutionMetadata: {
-            error: 'internalError',
-            message: `Resolution failed: ${(error as Error).message}`
-          }
-        }, 502)
+        return jsonResponse(
+          {
+            didDocument: null,
+            didDocumentMetadata: {},
+            didResolutionMetadata: {
+              error: 'internalError',
+              message: `Resolution failed: ${(error as Error).message}`
+            }
+          },
+          502
+        )
       }
     }
   }

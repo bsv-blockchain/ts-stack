@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-extraneous-class */
-import type { Jwk, JsonObject, SdJwtPresentation, SdJwtVcVerificationOptions, SdJwtVcVerificationResult } from '../types.js'
+import type {
+  Jwk,
+  JsonObject,
+  SdJwtPresentation,
+  SdJwtVcVerificationOptions,
+  SdJwtVcVerificationResult
+} from '../types.js'
 import { publicKeyFromDid } from '../utils/multibase.js'
 import { publicKeyToJwk } from '../utils/crypto.js'
 import { decodeJwt, verifyJwt } from '../utils/jwt.js'
@@ -10,7 +16,7 @@ import { verifyKeyBindingJwt } from './keyBinding.js'
 export class SdJwtVcVerifier {
   // Implements RFC 9901 section 7.3 Verification by the Verifier and
   // draft-ietf-oauth-sd-jwt-vc section 2.2.2 registered SD-JWT VC claims.
-  static async verify (
+  static async verify(
     presentation: SdJwtPresentation | string,
     options: SdJwtVcVerificationOptions = {}
   ): Promise<SdJwtVcVerificationResult> {
@@ -46,7 +52,8 @@ export class SdJwtVcVerifier {
       const kbJwt = parsed.kbJwt
 
       if (kbJwt != null) {
-        if (holderJwk == null) throw new Error('SD-JWT VC has no cnf.jwk for Key Binding verification')
+        if (holderJwk == null)
+          throw new Error('SD-JWT VC has no cnf.jwk for Key Binding verification')
         verifyKeyBindingJwt(serializeSdJwt(parsed.issuerSignedJwt, disclosures), kbJwt, holderJwk, {
           audience: options.expectedAudience,
           nonce: options.expectedNonce
@@ -71,7 +78,7 @@ export class SdJwtVcVerifier {
   }
 }
 
-function resolveIssuerPublicKey (
+function resolveIssuerPublicKey(
   payload: JsonObject,
   header: JsonObject,
   options: SdJwtVcVerificationOptions
@@ -88,15 +95,15 @@ function resolveIssuerPublicKey (
   throw new Error('Issuer public key is required unless iss is did:key or header.jwk is present')
 }
 
-function isJwk (value: unknown): value is Jwk {
+function isJwk(value: unknown): value is Jwk {
   return typeof value === 'object' && value != null && (value as Jwk).kty === 'EC'
 }
 
-function isCnfJwk (value: unknown): value is { jwk: Jwk } {
+function isCnfJwk(value: unknown): value is { jwk: Jwk } {
   return typeof value === 'object' && value != null && isJwk((value as { jwk?: unknown }).jwk)
 }
 
-function SdJwtVcPresenterString (presentation: SdJwtPresentation): string {
+function SdJwtVcPresenterString(presentation: SdJwtPresentation): string {
   const parsed = parseSdJwt(presentation.sdJwt)
   return serializeSdJwt(parsed.issuerSignedJwt, parsed.disclosures, presentation.kbJwt)
 }
