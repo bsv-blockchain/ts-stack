@@ -114,6 +114,9 @@ describe('BdkVerifier', () => {
     const script = (bytes: Uint8Array): Script => Script.fromBinaryView(bytes)
 
     expect(DEFAULT_VERIFAST_SCRIPT_BYTE_THRESHOLD).toBe(100)
+    expect(() => isVeriFastCandidateScript(script(Uint8Array.of(OP.OP_TRUE)), -1)).toThrow(
+      'scriptByteThreshold must be a non-negative safe integer'
+    )
     expect(isVeriFastCandidateScript(script(new Uint8Array(100).fill(OP.OP_TRUE)))).toBe(false)
     expect(isVeriFastCandidateScript(script(new Uint8Array(101).fill(OP.OP_TRUE)))).toBe(true)
     for (const opcode of [

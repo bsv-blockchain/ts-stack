@@ -1,6 +1,4 @@
-import LookupResolver, {
-  HTTPSOverlayLookupFacilitator
-} from '../LookupResolver'
+import LookupResolver, { HTTPSOverlayLookupFacilitator } from '../LookupResolver'
 import { getOverlayHostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../../overlay-tools/OverlayAdminTokenTemplate'
 import { CompletedProtoWallet } from '../../auth/certificates/__tests/CompletedProtoWallet'
@@ -48,11 +46,7 @@ describe('LookupResolver', () => {
     const slapHostKey = new PrivateKey(42)
     const slapWallet = new CompletedProtoWallet(slapHostKey)
     const slapLib = new OverlayAdminTokenTemplate(slapWallet)
-    const slapScript = await slapLib.lock(
-      'SLAP',
-      'https://slaphost.com',
-      'ls_foo'
-    )
+    const slapScript = await slapLib.lock('SLAP', 'https://slaphost.com', 'ls_foo')
     const slapTx = new Transaction(
       1,
       [],
@@ -130,11 +124,7 @@ describe('LookupResolver', () => {
     const slapHostKey = new PrivateKey(42)
     const slapWallet = new CompletedProtoWallet(slapHostKey)
     const slapLib = new OverlayAdminTokenTemplate(slapWallet)
-    const slapScript = await slapLib.lock(
-      'SLAP',
-      'https://slaphost.com',
-      'ls_foo'
-    )
+    const slapScript = await slapLib.lock('SLAP', 'https://slaphost.com', 'ls_foo')
     const slapTx = new Transaction(
       1,
       [],
@@ -371,11 +361,7 @@ describe('LookupResolver', () => {
     const slapHostKey1 = new PrivateKey(42)
     const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
     const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-    const slapScript1 = await slapLib1.lock(
-      'SLAP',
-      'https://slaphost1.com',
-      'ls_foo'
-    )
+    const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
     const slapTx1 = new Transaction(
       1,
       [],
@@ -391,11 +377,7 @@ describe('LookupResolver', () => {
     const slapHostKey2 = new PrivateKey(43)
     const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
     const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-    const slapScript2 = await slapLib2.lock(
-      'SLAP',
-      'https://slaphost2.com',
-      'ls_foo'
-    )
+    const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
     const slapTx2 = new Transaction(
       1,
       [],
@@ -430,16 +412,15 @@ describe('LookupResolver', () => {
       })
 
     // Only the first-resolved tracker's host gets queried
-    mockFacilitator.lookup
-      .mockReturnValueOnce({
-        type: 'output-list',
-        outputs: [
-          {
-            beef: sampleBeef3,
-            outputIndex: 0
-          }
-        ]
-      })
+    mockFacilitator.lookup.mockReturnValueOnce({
+      type: 'output-list',
+      outputs: [
+        {
+          beef: sampleBeef3,
+          outputIndex: 0
+        }
+      ]
+    })
 
     const r = new LookupResolver({
       facilitator: mockFacilitator,
@@ -454,9 +435,7 @@ describe('LookupResolver', () => {
     // Only the first tracker's host results are returned
     expect(res).toEqual({
       type: 'output-list',
-      outputs: [
-        { beef: sampleBeef3, outputIndex: 0 }
-      ]
+      outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
     })
 
     // Both SLAP trackers are queried, but only the first host is used for the actual query
@@ -497,11 +476,7 @@ describe('LookupResolver', () => {
     const slapHostKey1 = new PrivateKey(42)
     const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
     const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-    const slapScript1 = await slapLib1.lock(
-      'SLAP',
-      'https://slaphost1.com',
-      'ls_foo'
-    )
+    const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
     const slapTx1 = new Transaction(
       1,
       [],
@@ -517,11 +492,7 @@ describe('LookupResolver', () => {
     const slapHostKey2 = new PrivateKey(43)
     const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
     const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-    const slapScript2 = await slapLib2.lock(
-      'SLAP',
-      'https://slaphost2.com',
-      'ls_foo'
-    )
+    const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
     const slapTx2 = new Transaction(
       1,
       [],
@@ -608,11 +579,7 @@ describe('LookupResolver', () => {
     const slapHostKey1 = new PrivateKey(42)
     const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
     const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-    const slapScript1 = await slapLib1.lock(
-      'SLAP',
-      'https://slaphost1.com',
-      'ls_foo'
-    )
+    const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
     const slapTx1 = new Transaction(
       1,
       [],
@@ -628,11 +595,7 @@ describe('LookupResolver', () => {
     const slapHostKey2 = new PrivateKey(43)
     const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
     const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-    const slapScript2 = await slapLib2.lock(
-      'SLAP',
-      'https://slaphost2.com',
-      'ls_foo'
-    )
+    const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
     const slapTx2 = new Transaction(
       1,
       [],
@@ -754,11 +717,7 @@ describe('LookupResolver', () => {
     const slapHostKey1 = new PrivateKey(42)
     const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
     const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-    const slapScript1 = await slapLib1.lock(
-      'SLAP',
-      'https://slaphost1.com',
-      'ls_foo'
-    )
+    const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
     const slapTx1 = new Transaction(
       1,
       [],
@@ -774,11 +733,7 @@ describe('LookupResolver', () => {
     const slapHostKey2 = new PrivateKey(43)
     const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
     const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-    const slapScript2 = await slapLib2.lock(
-      'SLAP',
-      'https://slaphost2.com',
-      'ls_foo'
-    )
+    const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
     const slapTx2 = new Transaction(
       1,
       [],
@@ -947,9 +902,7 @@ describe('LookupResolver', () => {
     const facilitator = new HTTPSOverlayLookupFacilitator()
     await expect(
       facilitator.lookup('http://insecure.url', { service: 'test', query: {} })
-    ).rejects.toThrow(
-      'HTTPS facilitator can only use URLs that start with "https:"'
-    )
+    ).rejects.toThrow('HTTPS facilitator can only use URLs that start with "https:"')
   })
 
   describe('Host reputation tracking', () => {
@@ -961,12 +914,50 @@ describe('LookupResolver', () => {
       const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => fakeNow)
 
       try {
-        mockFacilitator.lookup.mockImplementation(async (url: string) => {
-          if (url === slowHost) {
-            fakeNow += 80
-          } else if (url === fastHost) {
-            fakeNow += 5
+        const answerFor = (url: string) => ({
+          type: 'output-list' as const,
+          outputs: [
+            {
+              beef: url === fastHost ? sampleBeef2 : sampleBeef1,
+              outputIndex: url === fastHost ? 2 : 1
+            }
+          ]
+        })
+        let resolveFast: () => void = () => {}
+        let resolveSlow: () => void = () => {}
+        mockFacilitator.lookup.mockImplementation(
+          (url: string) =>
+            new Promise(resolve => {
+              const complete = () => resolve(answerFor(url))
+              if (url === fastHost) resolveFast = complete
+              else resolveSlow = complete
+            })
+        )
+
+        const resolverA = new LookupResolver({
+          facilitator: mockFacilitator,
+          hostOverrides: {
+            ls_latency: hosts
           }
+        })
+        const firstQuery = resolverA.query({
+          service: 'ls_latency',
+          query: { attempt: 1 }
+        })
+
+        // Both lookups start together in production. Settle the fast response
+        // first so the mocked clock models per-host arrival latency rather than
+        // accumulating time inside two synchronously completed mocks.
+        await new Promise<void>(resolve => setImmediate(resolve))
+        fakeNow = 5
+        resolveFast()
+        await new Promise<void>(resolve => setImmediate(resolve))
+        fakeNow = 80
+        resolveSlow()
+        await firstQuery
+
+        mockFacilitator.lookup.mockClear()
+        mockFacilitator.lookup.mockImplementation((url: string) => {
           return {
             type: 'output-list',
             outputs: [
@@ -977,19 +968,6 @@ describe('LookupResolver', () => {
             ]
           }
         })
-
-        const resolverA = new LookupResolver({
-          facilitator: mockFacilitator,
-          hostOverrides: {
-            ls_latency: hosts
-          }
-        })
-        await resolverA.query({
-          service: 'ls_latency',
-          query: { attempt: 1 }
-        })
-
-        mockFacilitator.lookup.mockClear()
 
         const resolverB = new LookupResolver({
           facilitator: mockFacilitator,
@@ -1002,7 +980,7 @@ describe('LookupResolver', () => {
           query: { attempt: 2 }
         })
 
-        const orderedHosts = mockFacilitator.lookup.mock.calls.map((call) => call[0])
+        const orderedHosts = mockFacilitator.lookup.mock.calls.map(call => call[0])
         expect(orderedHosts).toEqual([fastHost, slowHost])
       } finally {
         nowSpy.mockRestore()
@@ -1077,11 +1055,7 @@ describe('LookupResolver', () => {
       const slapHostKey = new PrivateKey(42)
       const slapWallet = new CompletedProtoWallet(slapHostKey)
       const slapLib = new OverlayAdminTokenTemplate(slapWallet)
-      const slapScript = await slapLib.lock(
-        'SLAP',
-        'https://slaphost.com',
-        'ls_foo'
-      )
+      const slapScript = await slapLib.lock('SLAP', 'https://slaphost.com', 'ls_foo')
       const slapTx = new Transaction(
         1,
         [],
@@ -1179,11 +1153,7 @@ describe('LookupResolver', () => {
       const slapHostKey1 = new PrivateKey(42)
       const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
       const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-      const slapScript1 = await slapLib1.lock(
-        'SLAP',
-        'https://slaphost1.com',
-        'ls_foo'
-      )
+      const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
       const slapTx1 = new Transaction(
         1,
         [],
@@ -1199,11 +1169,7 @@ describe('LookupResolver', () => {
       const slapHostKey2 = new PrivateKey(43)
       const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
       const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-      const slapScript2 = await slapLib2.lock(
-        'SLAP',
-        'https://slaphost2.com',
-        'ls_foo'
-      )
+      const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
       const slapTx2 = new Transaction(
         1,
         [],
@@ -1310,11 +1276,7 @@ describe('LookupResolver', () => {
       const slapHostKey1 = new PrivateKey(42)
       const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
       const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-      const slapScript1 = await slapLib1.lock(
-        'SLAP',
-        'https://slaphost1.com',
-        'ls_foo'
-      )
+      const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
       const slapTx1 = new Transaction(
         1,
         [],
@@ -1330,11 +1292,7 @@ describe('LookupResolver', () => {
       const slapHostKey2 = new PrivateKey(43)
       const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
       const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-      const slapScript2 = await slapLib2.lock(
-        'SLAP',
-        'https://slaphost2.com',
-        'ls_foo'
-      )
+      const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
       const slapTx2 = new Transaction(
         1,
         [],
@@ -1421,11 +1379,7 @@ describe('LookupResolver', () => {
       const slapHostKey1 = new PrivateKey(42)
       const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
       const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-      const slapScript1 = await slapLib1.lock(
-        'SLAP',
-        'https://slaphost1.com',
-        'ls_foo'
-      )
+      const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
       const slapTx1 = new Transaction(
         1,
         [],
@@ -1441,11 +1395,7 @@ describe('LookupResolver', () => {
       const slapHostKey2 = new PrivateKey(43)
       const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
       const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-      const slapScript2 = await slapLib2.lock(
-        'SLAP',
-        'https://slaphost2.com',
-        'ls_foo'
-      )
+      const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
       const slapTx2 = new Transaction(
         1,
         [],
@@ -1531,11 +1481,7 @@ describe('LookupResolver', () => {
       const slapHostKey = new PrivateKey(42)
       const slapWallet = new CompletedProtoWallet(slapHostKey)
       const slapLib = new OverlayAdminTokenTemplate(slapWallet)
-      const slapScript = await slapLib.lock(
-        'SLAP',
-        'https://slaphost.com',
-        'ls_foo'
-      )
+      const slapScript = await slapLib.lock('SLAP', 'https://slaphost.com', 'ls_foo')
       const slapTx = new Transaction(
         1,
         [],
@@ -1627,11 +1573,7 @@ describe('LookupResolver', () => {
       const slapHostKey1 = new PrivateKey(42)
       const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
       const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-      const slapScript1 = await slapLib1.lock(
-        'SLAP',
-        'https://slaphost1.com',
-        'ls_foo'
-      )
+      const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
       const slapTx1 = new Transaction(
         1,
         [],
@@ -1647,11 +1589,7 @@ describe('LookupResolver', () => {
       const slapHostKey2 = new PrivateKey(43)
       const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
       const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-      const slapScript2 = await slapLib2.lock(
-        'SLAP',
-        'https://slaphost2.com',
-        'ls_foo'
-      )
+      const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
       const slapTx2 = new Transaction(
         1,
         [],
@@ -1707,11 +1645,7 @@ describe('LookupResolver', () => {
       const slapHostKey1 = new PrivateKey(42)
       const slapWallet1 = new CompletedProtoWallet(slapHostKey1)
       const slapLib1 = new OverlayAdminTokenTemplate(slapWallet1)
-      const slapScript1 = await slapLib1.lock(
-        'SLAP',
-        'https://slaphost1.com',
-        'ls_foo'
-      )
+      const slapScript1 = await slapLib1.lock('SLAP', 'https://slaphost1.com', 'ls_foo')
       const slapTx1 = new Transaction(
         1,
         [],
@@ -1727,11 +1661,7 @@ describe('LookupResolver', () => {
       const slapHostKey2 = new PrivateKey(43)
       const slapWallet2 = new CompletedProtoWallet(slapHostKey2)
       const slapLib2 = new OverlayAdminTokenTemplate(slapWallet2)
-      const slapScript2 = await slapLib2.lock(
-        'SLAP',
-        'https://slaphost2.com',
-        'ls_foo'
-      )
+      const slapScript2 = await slapLib2.lock('SLAP', 'https://slaphost2.com', 'ls_foo')
       const slapTx2 = new Transaction(
         1,
         [],

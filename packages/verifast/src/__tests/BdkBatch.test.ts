@@ -22,6 +22,14 @@ describe('BDK batch helpers', () => {
     expect(packed.offsets).toEqual(Uint32Array.of(0, 2, 2, 3))
   })
 
+  it('rejects packed batches that exceed the uint32 offset space', () => {
+    const maximumLength = { length: 0xffffffff } as unknown as Uint8Array
+
+    expect(() =>
+      packArrays([maximumLength, Uint8Array.of(1)], length => new Uint8Array(length))
+    ).toThrow('Packed BDK batch exceeds 4 GiB offset space')
+  })
+
   it('decodes flat result pairs and rejects malformed output', () => {
     expect(decodeResults(Int32Array.of(0, 0, 1, 7), 2)).toEqual([
       { domain: 0, code: 0 },

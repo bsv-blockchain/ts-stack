@@ -13,6 +13,10 @@ describe('mapVerifyFlags', () => {
     expect(mapVerifyFlags('P2SH,MINIMALDATA')).toBe(BDK_FLAG_BITS.P2SH | BDK_FLAG_BITS.MINIMALDATA)
   })
 
+  it('ignores empty comma-separated entries', () => {
+    expect(mapVerifyFlags(' , P2SH, ')).toBe(BDK_FLAG_BITS.P2SH)
+  })
+
   it('ORs an array of flags and trims whitespace', () => {
     expect(mapVerifyFlags([' P2SH ', 'LOW_S'])).toBe(BDK_FLAG_BITS.P2SH | BDK_FLAG_BITS.LOW_S)
   })
