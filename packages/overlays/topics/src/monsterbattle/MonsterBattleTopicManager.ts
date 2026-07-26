@@ -1,5 +1,6 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction, Utils, OP, Script } from '@bsv/sdk'
+import { Transaction, OP, Script } from '@bsv/sdk'
+import { assertValidBsv20Payload } from '../shared/assertValidBsv20Payload.js'
 
 export default class MonsterBattleTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -75,13 +76,7 @@ function checkScriptFormat (script: Script) {
     const formatStart = new Script(chunks.slice(0, 6)).toHex()
     if (formatStart !== TEMPLATES.formatStart) throw new Error('Malformed formatStart')
 
-    try {
-      const jsonPayload = chunks[6].data
-      if (jsonPayload === undefined) throw new Error('Missing JSON payload')
-      const formatJsonPayload = JSON.parse(Utils.toUTF8(jsonPayload))
-      const incorrectlyFormatted = (formatJsonPayload.p !== 'bsv-20') || !(formatJsonPayload.op === 'transfer' || formatJsonPayload.op === 'deploy+mint') || formatJsonPayload.amt === undefined || (formatJsonPayload.op === 'transfer' && !formatJsonPayload.id)
-      if (incorrectlyFormatted) throw new Error('Malformed JSON payload')
-    } catch (error) { throw new Error(`Invalid JSON payload: ${error instanceof Error ? error.message : String(error)}`) }
+    assertValidBsv20Payload(chunks[6].data)
 
     const formatMiddle = new Script(chunks.slice(7, 10)).toHex()
     if (formatMiddle !== TEMPLATES.formatMiddle) throw new Error('Malformed formatMiddle')

@@ -256,7 +256,7 @@ function packageSpecifier(packageName, subpath) {
   return subpath === '.' ? packageName : `${packageName}/${subpath.slice(2)}`
 }
 
-async function checkConsumer(
+async function checkConsumer({
   tarballPath,
   manifest,
   modes,
@@ -265,7 +265,7 @@ async function checkConsumer(
   binArguments,
   consumerDependencies,
   localConsumerDependencyTarballs
-) {
+}) {
   const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-consumer-'))
   try {
     await fs.writeFile(
@@ -365,16 +365,16 @@ export async function checkPackageArtifact({
     if (validateTypes) {
       await checkTypes(packed.tarballPath, modes, esmOnlyEntrypoints, untypedAssetEntrypoints)
     }
-    await checkConsumer(
-      packed.tarballPath,
+    await checkConsumer({
+      tarballPath: packed.tarballPath,
       manifest,
       modes,
       entryExports,
       binName,
       binArguments,
       consumerDependencies,
-      localDependencies.map(dependency => dependency.tarballPath)
-    )
+      localConsumerDependencyTarballs: localDependencies.map(dependency => dependency.tarballPath)
+    })
     return manifest
   } finally {
     await Promise.all(
