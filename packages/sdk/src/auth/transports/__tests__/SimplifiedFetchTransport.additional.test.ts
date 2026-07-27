@@ -804,6 +804,22 @@ describe('SimplifiedFetchTransport onDataError', () => {
     expect(reported[0]?.message).toBe('session gone')
   })
 
+  test('keeps a thrown non-string value as the reported error cause', async () => {
+    const transport = new SimplifiedFetchTransport('https://api.example.com', jest.fn() as any)
+    const thrown = { code: 'ERR_SESSION', detail: 'unknown nonce' }
+    const reported: Error[] = []
+
+    transport.onDataError((error) => { reported.push(error) })
+    await transport.onData(async () => { throw thrown })
+
+    ;(transport as any).onDataCallback(makeAuthMessage('general'))
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+    expect(reported).toHaveLength(1)
+    expect(reported[0]?.message).toBe('Failed to process an incoming message')
+    expect((reported[0] as any).cause).toBe(thrown)
+  })
+
   test('swallows the failure when no error listener is registered', async () => {
     const transport = new SimplifiedFetchTransport('https://api.example.com', jest.fn() as any)
     const unhandled = jest.fn()

@@ -249,10 +249,16 @@ export class SimplifiedFetchTransport implements Transport {
         // originating request by itself. Hand it to the error listener, which
         // can match it back to the caller waiting on that response — without
         // one, the failure is dropped and that caller never settles.
-        this.onDataErrorCallback?.(
-          error instanceof Error ? error : new Error(String(error)),
-          m
-        )
+        let failure: Error
+        if (error instanceof Error) {
+          failure = error
+        } else {
+          failure = new Error(
+            typeof error === 'string' ? error : 'Failed to process an incoming message'
+          )
+          ; (failure as any).cause = error
+        }
+        this.onDataErrorCallback?.(failure, m)
       })
     }
   }
