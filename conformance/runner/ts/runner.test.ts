@@ -14,10 +14,11 @@
  * are executed and their dispatcher runs; only metadata-declared gaps are skipped.
  */
 
-import { describe, expect, test } from '@jest/globals'
+import { describe, test } from '@jest/globals'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { join, extname, basename } from 'path'
 import { fileURLToPath } from 'url'
+import { registerGovernedSkip } from './governedSkip.js'
 import { routeForCategory } from './registry.js'
 
 // ── Locate the vectors directory ───────────────────────────────────────────────
@@ -62,17 +63,6 @@ function categoryFromFile(filePath: string): string {
 
 function isNotImplemented(err: unknown): err is Error {
   return err instanceof Error && err.message.startsWith('not implemented')
-}
-
-/**
- * Register an intentional, metadata-governed compatibility gap as a real Jest
- * skip. The policy validator requires a concrete reason and removal condition,
- * while the assertion prevents this registration callback from being vacuous.
- */
-function registerGovernedSkip(vectorId: string, reason: string): void {
-  test.skip(`${vectorId} — ${reason}`, () => {
-    expect(reason.length).toBeGreaterThanOrEqual(20)
-  })
 }
 
 // ── Main runner ───────────────────────────────────────────────────────────────
