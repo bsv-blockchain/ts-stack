@@ -193,6 +193,60 @@ function loadPropertyManifests(root, propertyTesting, errors) {
   return { manifestPaths, manifests }
 }
 
+function validatePropertyExclusion(
+  root,
+  propertyTesting,
+  propertyManifestSet,
+  policy,
+  errors,
+  today,
+  exclusion
+) {
+  const label = `property exclusion ${exclusion.manifest}`
+  validateDatedOwner({ ...propertyTesting, ...exclusion }, policy, label, errors, today)
+  if (propertyManifestSet.has(exclusion.manifest)) {
+    errors.push(`${exclusion.manifest} cannot be both a property manifest and an exclusion`)
+  }
+  if (exclusion.kind !== 'adapter-or-composition' && exclusion.kind !== 'example-or-platform') {
+    errors.push(`${label} must declare adapter-or-composition or example-or-platform`)
+  }
+  if (typeof exclusion.rationale !== 'string' || exclusion.rationale.trim().length < 40) {
+    errors.push(`${label} must declare a concrete rationale`)
+  }
+  if (
+    typeof exclusion.manifest !== 'string' ||
+    !exclusion.manifest.startsWith('packages/') ||
+    !fs.existsSync(path.join(root, exclusion.manifest))
+  ) {
+    errors.push(`${label} does not reference an existing package manifest`)
+    return
+  }
+  const manifest = readJson(root, exclusion.manifest)
+  if (typeof manifest.scripts?.['test:property'] === 'string') {
+    errors.push(`${label} has a test:property command and must be registered as a suite`)
+  }
+}
+
+function validatePropertyClassificationCoverage(
+  root,
+  propertyManifestPaths,
+  excludedManifestPaths,
+  errors
+) {
+  const discoveredManifestPaths = walkFiles(root, 'packages', name => name === 'package.json')
+  const classifications = new Set([...propertyManifestPaths, ...excludedManifestPaths])
+  for (const manifestPath of discoveredManifestPaths) {
+    if (!classifications.has(manifestPath)) {
+      errors.push(`${manifestPath} lacks a property suite or governed exclusion`)
+    }
+  }
+  for (const manifestPath of classifications) {
+    if (!discoveredManifestPaths.includes(manifestPath)) {
+      errors.push(`stale property classification references ${manifestPath}`)
+    }
+  }
+}
+
 function validatePropertyExclusions(
   root,
   propertyTesting,
@@ -206,46 +260,19 @@ function validatePropertyExclusions(
   if (new Set(excludedManifestPaths).size !== excludedManifestPaths.length) {
     errors.push('property testing policy contains duplicate exclusions')
   }
-
   const propertyManifestSet = new Set(propertyManifestPaths)
   for (const exclusion of exclusions) {
-    const label = `property exclusion ${exclusion.manifest}`
-    validateDatedOwner({ ...propertyTesting, ...exclusion }, policy, label, errors, today)
-    if (propertyManifestSet.has(exclusion.manifest)) {
-      errors.push(`${exclusion.manifest} cannot be both a property manifest and an exclusion`)
-    }
-    if (exclusion.kind !== 'adapter-or-composition' && exclusion.kind !== 'example-or-platform') {
-      errors.push(`${label} must declare adapter-or-composition or example-or-platform`)
-    }
-    if (typeof exclusion.rationale !== 'string' || exclusion.rationale.trim().length < 40) {
-      errors.push(`${label} must declare a concrete rationale`)
-    }
-    if (
-      typeof exclusion.manifest !== 'string' ||
-      !exclusion.manifest.startsWith('packages/') ||
-      !fs.existsSync(path.join(root, exclusion.manifest))
-    ) {
-      errors.push(`${label} does not reference an existing package manifest`)
-      continue
-    }
-    const manifest = readJson(root, exclusion.manifest)
-    if (typeof manifest.scripts?.['test:property'] === 'string') {
-      errors.push(`${label} has a test:property command and must be registered as a suite`)
-    }
+    validatePropertyExclusion(
+      root,
+      propertyTesting,
+      propertyManifestSet,
+      policy,
+      errors,
+      today,
+      exclusion
+    )
   }
-
-  const discoveredManifestPaths = walkFiles(root, 'packages', name => name === 'package.json')
-  const classifications = new Set([...propertyManifestPaths, ...excludedManifestPaths])
-  for (const manifestPath of discoveredManifestPaths) {
-    if (!classifications.has(manifestPath)) {
-      errors.push(`${manifestPath} lacks a property suite or governed exclusion`)
-    }
-  }
-  for (const manifestPath of classifications) {
-    if (!discoveredManifestPaths.includes(manifestPath)) {
-      errors.push(`stale property classification references ${manifestPath}`)
-    }
-  }
+  validatePropertyClassificationCoverage(root, propertyManifestPaths, excludedManifestPaths, errors)
 
   return excludedManifestPaths
 }

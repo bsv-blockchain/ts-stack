@@ -303,13 +303,13 @@ export class GASP implements GASPRemote {
 
   private validateTimestamp(timestamp: number): void {
     if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
-      throw new Error('Invalid timestamp format')
+      throw new TypeError('Invalid timestamp format')
     }
   }
 
   private validateLimit(limit: number | undefined): void {
     if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
-      throw new Error('Invalid limit format')
+      throw new TypeError('Invalid limit format')
     }
   }
 
@@ -496,7 +496,7 @@ export class GASP implements GASPRemote {
     this.infoLog(`Received initial response: ${JSON.stringify(response)}`)
     this.validateTimestamp(response.since)
     if (!Array.isArray(response.UTXOList)) {
-      throw new Error('Invalid UTXO list format')
+      throw new TypeError('Invalid UTXO list format')
     }
     const knownUTXOs = await this.storage.findKnownUTXOs(response.since)
     const filteredUTXOs = knownUTXOs.filter(

@@ -131,6 +131,21 @@ describe('GASP protocol properties', () => {
         }
       )
     )
+
+    await fc.assert(
+      fc.asyncProperty(
+        fc.jsonValue().filter(value => !Array.isArray(value)),
+        async invalidUTXOList => {
+          const { gasp } = harness()
+          await expect(
+            gasp.getInitialReply({
+              UTXOList: invalidUTXOList as unknown as GASPOutput[],
+              since: 0
+            })
+          ).rejects.toThrow(TypeError)
+        }
+      )
+    )
   })
 
   test('rejects every foreign protocol version with structured mismatch evidence', async () => {
