@@ -37,6 +37,7 @@
   },
   "scripts": {
     "test": "jest",
+    "test:property": "jest --runInBand tests/amountFormat.property.test.ts",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
     "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
@@ -57,6 +58,8 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.75.0",
     "ts-jest": "^29.4.12",

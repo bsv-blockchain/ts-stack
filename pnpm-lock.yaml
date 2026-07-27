@@ -164,6 +164,12 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -349,6 +355,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       oxlint:
         specifier: ^1.75.0
         version: 1.75.0
@@ -643,6 +652,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       oxlint:
         specifier: ^1.75.0
         version: 1.75.0
@@ -719,6 +731,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -762,6 +777,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))

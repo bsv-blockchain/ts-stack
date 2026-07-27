@@ -27,7 +27,12 @@
       "packages/overlays/overlay-discovery-services/package.json",
       "packages/overlays/overlay/package.json",
       "packages/verifast/package.json",
-      "packages/wallet/btms/package.json"
+      "packages/wallet/btms/package.json",
+      "packages/helpers/amountinator/package.json",
+      "packages/helpers/fund-wallet/package.json",
+      "packages/middleware/402-pay/package.json",
+      "packages/middleware/auth-express-middleware/package.json",
+      "packages/middleware/payment-express-middleware/package.json"
     ],
     "suites": [
       {
@@ -216,6 +221,66 @@
           "Valid derivation instructions round-trip with exact key material.",
           "Non-string derivation material is rejected with UTXO context.",
           "Arbitrary message text never escapes the tolerant parser."
+        ]
+      },
+      {
+        "path": "packages/helpers/amountinator/tests/amountFormat.property.test.ts",
+        "manifest": "packages/helpers/amountinator/package.json",
+        "risk": "high",
+        "boundary": "Wallet-facing currency conversion, decimal formatting, and safe-integer display",
+        "target": "Currency-pair round trips, safe-integer digit preservation, and finite formatting totality",
+        "invariants": [
+          "Grouping separators never alter arbitrary safe-integer digits.",
+          "Every supported currency pair round-trips bounded finite amounts.",
+          "Bounded finite amounts and decimal policies always produce non-NaN text."
+        ]
+      },
+      {
+        "path": "packages/helpers/fund-wallet/src/cli.property.test.ts",
+        "manifest": "packages/helpers/fund-wallet/package.json",
+        "risk": "critical",
+        "boundary": "Operator-supplied wallet keys, funding amounts, networks, and storage endpoints",
+        "target": "Valid CLI option preservation, secure endpoint rejection, and parser totality",
+        "invariants": [
+          "Valid network and safe-integer funding options retain their exact values.",
+          "Credential-bearing and non-HTTPS storage endpoints are rejected.",
+          "Arbitrary command-line argument vectors never make the parser throw."
+        ]
+      },
+      {
+        "path": "packages/middleware/402-pay/src/server.property.test.ts",
+        "manifest": "packages/middleware/402-pay/package.json",
+        "risk": "critical",
+        "boundary": "Public BRC-121 payment challenge identity and price headers",
+        "target": "Exact challenge serialization and fail-before-mutation validation of identity and price",
+        "invariants": [
+          "Every positive safe-integer price is serialized exactly into a completed HTTP 402 response.",
+          "Invalid prices are rejected before response state changes.",
+          "Invalid compressed identity keys are rejected before response state changes."
+        ]
+      },
+      {
+        "path": "packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts",
+        "manifest": "packages/middleware/auth-express-middleware/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated Express request and response canonical byte serialization",
+        "target": "Unicode field framing, typed-array slice fidelity, and deterministic JSON response bytes",
+        "invariants": [
+          "Arbitrary Unicode header pairs round-trip without framing ambiguity.",
+          "Typed-array views serialize only their selected bytes.",
+          "Arbitrary JSON response values serialize deterministically with canonical content type."
+        ]
+      },
+      {
+        "path": "packages/middleware/payment-express-middleware/src/__tests/PaymentReplayStore.property.test.ts",
+        "manifest": "packages/middleware/payment-express-middleware/package.json",
+        "risk": "critical",
+        "boundary": "Public payment replay admission and bounded in-memory capacity",
+        "target": "Exactly-once transaction admission, fail-closed capacity, and constructor validation",
+        "invariants": [
+          "Every arbitrary transaction identifier is accepted exactly once.",
+          "Capacity exhaustion fails closed without admitting another identifier.",
+          "Non-positive, fractional, and unsafe capacities are rejected."
         ]
       }
     ]

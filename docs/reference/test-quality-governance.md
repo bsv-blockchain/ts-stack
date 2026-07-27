@@ -71,7 +71,7 @@ pnpm --filter @bsv/sdk test:resource
 ## Property-based security tests
 
 Required CI uses `fast-check` to generate and shrink unexpected inputs across
-15 packages and the stack's highest-risk trust boundaries:
+20 packages and the stack's highest-risk trust boundaries:
 
 - binary and text codecs: SDK Base58Check, DID base64url/multibase/SD-JWT,
   Bitcoin script numbers, asset outpoints, wallet action packs, and native BDK
@@ -81,7 +81,10 @@ Required CI uses `fast-check` to generate and shrink unexpected inputs across
   pairing URIs;
 - authorization and integrity: signed authentication bodies, exact issuer
   allowlists, BASM/TAC hashes, valid relay keys, expiry/freshness windows, and
-  reserved-network rejection; and
+  reserved-network rejection;
+- HTTP and operator inputs: BRC-121 challenges, authenticated Express byte
+  framing, payment replay admission, fund-wallet CLI keys/endpoints/amounts,
+  and currency conversion/formatting; and
 - untrusted application data: Mandala linkage payloads, BTMS metadata and
   derivation instructions, and forge-resistant overlay log fields.
 
