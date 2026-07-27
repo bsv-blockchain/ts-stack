@@ -1,3 +1,15 @@
+---
+id: npm-package-supply-chain
+title: "npm Package Supply Chain"
+kind: reference
+version: "1.0.0"
+last_updated: "2026-07-27"
+last_verified: "2026-07-27"
+review_cadence_days: 30
+status: stable
+tags: [reference, packages, npm, security, releases]
+---
+
 # npm Package Supply Chain
 
 All 30 public packages are released from `.github/workflows/release.yaml`. The
