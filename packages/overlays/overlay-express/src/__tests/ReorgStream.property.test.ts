@@ -180,6 +180,17 @@ describe('reorg stream parser properties', () => {
     )
   })
 
+  test('is total for every JSON value, including structured malformed events', () => {
+    expect(parseReorgEvent('null')).toBeNull()
+
+    fc.assert(
+      fc.property(fc.jsonValue(), value => {
+        const frame = JSON.stringify(value)
+        expect(() => parseReorgEvent(frame)).not.toThrow()
+      })
+    )
+  })
+
   test('delivers every valid event once across arbitrary network chunk boundaries', async () => {
     await fc.assert(
       fc.asyncProperty(

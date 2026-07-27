@@ -143,6 +143,7 @@
           "A common ancestor cannot exceed the new chain tip.",
           "Depth fallback never produces a negative rebuild height.",
           "Non-safe heights are rejected.",
+          "Arbitrary structured JSON input is handled without throwing.",
           "Complete and partial SSE frames are separated without data loss.",
           "Every valid event is delivered exactly once across arbitrary network chunk boundaries."
         ]

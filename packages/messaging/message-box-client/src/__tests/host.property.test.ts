@@ -24,6 +24,13 @@ const routeSegment = fc.stringMatching(/^[a-zA-Z0-9._~-]{1,30}$/)
 const publicHost = fc
   .array(label, { minLength: 1, maxLength: 4 })
   .map(labels => `${labels.join('.')}.org`)
+  .filter(host => {
+    try {
+      return new URL(`https://${host}`).hostname === host
+    } catch {
+      return false
+    }
+  })
 
 const octet = fc.integer({ min: 0, max: 255 })
 const reservedIpv4 = fc

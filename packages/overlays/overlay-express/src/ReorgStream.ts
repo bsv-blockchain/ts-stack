@@ -50,8 +50,10 @@ export function parseReorgEvent(frame: string): ReorgHandlerInput | null {
         .map((hash: string) => hash.toLowerCase())
     : []
 
-  const ancestorHeight: unknown = event?.commonAncestor?.height
-  const depth: unknown = event?.depth
+  // Reaching this point proves `event` is object-like: it exposed a valid
+  // `newTip.height`, so only the nullable common ancestor needs optional access.
+  const ancestorHeight: unknown = event.commonAncestor?.height
+  const depth: unknown = event.depth
   let rebuildFromHeight: number
   if (isNonNegativeSafeInteger(ancestorHeight)) {
     if (ancestorHeight > newTipHeight) {

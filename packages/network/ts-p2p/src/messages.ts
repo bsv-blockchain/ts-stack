@@ -201,8 +201,8 @@ function base64ToBytes(b64: string): Uint8Array {
     throw new TypeError('Invalid canonical base64 payload')
   }
   if (
-    (b64.endsWith('==') && (B64[b64.at(-3) ?? ''] & 0x0f) !== 0) ||
-    (!b64.endsWith('==') && b64.endsWith('=') && (B64[b64.at(-2) ?? ''] & 0x03) !== 0)
+    (b64.endsWith('==') && (B64[b64.at(-3)!] & 0x0f) !== 0) ||
+    (!b64.endsWith('==') && b64.endsWith('=') && (B64[b64.at(-2)!] & 0x03) !== 0)
   ) {
     throw new TypeError('Invalid canonical base64 payload')
   }
@@ -216,8 +216,9 @@ function base64ToBytes(b64: string): Uint8Array {
   let pos = 0
 
   for (let i = 0; i < clean.length; i += 4) {
-    const a = B64[clean[i]] ?? 0
-    const b = B64[clean[i + 1]] ?? 0
+    // Canonical base64 always has at least two symbols in its final quantum.
+    const a = B64[clean[i]]
+    const b = B64[clean[i + 1]]
     const c = B64[clean[i + 2]] ?? 0
     const d = B64[clean[i + 3]] ?? 0
     const bits = (a << 18) | (b << 12) | (c << 6) | d
