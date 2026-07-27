@@ -68,6 +68,7 @@ let runtimeToolLeaks = 0
 
 const developmentOnlyPackages = new Set([
   '@jest/globals',
+  '@typescript/native',
   'jest',
   'oxlint',
   'supertest',

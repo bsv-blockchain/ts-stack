@@ -4,8 +4,7 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
-    "incremental": false,
-    "ignoreDeprecations": "6.0"
+    "incremental": false
   },
   "include": ["src/**/*.ts"]
 }
