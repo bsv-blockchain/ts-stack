@@ -805,6 +805,70 @@ describe('BSV Overlay Services Engine', () => {
             exampleTX.inputs[0].unlockingScript!.toHex()
           )
         })
+
+        it('preserves script-mode details when only the source transaction identifies the input', async () => {
+          const txWithSourceTransactionFallback = Transaction.fromBEEF(exampleBeef)
+          expect(txWithSourceTransactionFallback.inputs[0].sourceTransaction).toBeDefined()
+          txWithSourceTransactionFallback.inputs[0].sourceTXID = undefined
+          txWithSourceTransactionFallback.inputs.unshift({
+            sourceOutputIndex: 0
+          })
+          const transactionId = jest
+            .spyOn(txWithSourceTransactionFallback, 'id')
+            .mockReturnValue(exampleTXID)
+          const fromBEEF = jest
+            .spyOn(Transaction, 'fromBEEF')
+            .mockReturnValueOnce(txWithSourceTransactionFallback)
+          const spentOutput: Output = {
+            ...mockOutput,
+            txid: examplePreviousTXID
+          }
+          mockStorageEngine.findOutput = jest.fn(async () => spentOutput)
+          const outputSpent = jest.fn()
+          const engine = new Engine(
+            {
+              Hello: mockTopicManager
+            },
+            {
+              Hello: {
+                ...mockLookupService,
+                spendNotificationMode: 'script',
+                outputSpent
+              }
+            },
+            mockStorageEngine,
+            mockChainTracker
+          )
+
+          try {
+            await engine.submit(
+              {
+                beef: exampleBeef,
+                topics: ['Hello']
+              },
+              undefined,
+              'historical-tx-no-spv'
+            )
+          } finally {
+            fromBEEF.mockRestore()
+            transactionId.mockRestore()
+          }
+
+          expect(mockStorageEngine.findOutput).toHaveBeenCalledWith(
+            examplePreviousTXID,
+            0,
+            'Hello'
+          )
+          expect(outputSpent).toHaveBeenCalledWith(
+            expect.objectContaining({
+              mode: 'script',
+              inputIndex: 1,
+              txid: examplePreviousTXID,
+              outputIndex: 0,
+              topic: 'Hello'
+            })
+          )
+        })
       })
       describe('When previous UTXOs were not retained by the topic manager', () => {
         it('Marks the UTXO as stale, deleting all stale UTXOs by calling deleteUTXODeep', async () => {
