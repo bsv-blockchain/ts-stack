@@ -5,7 +5,7 @@ on:
     tags:
       - '**/v*' # e.g. packages/sdk/v1.2.3 — single-package release
       - 'release/v*' # e.g. release/v2026-05-17 — cascade release (multi-package)
-      - 'v*' # monorepo-wide tag (publishes everything changed since origin/main)
+      - 'v*' # legacy monorepo-wide cascade tag
       - '!infra/v*' # infra/v* tags drive infra-release.yaml (Docker images), not npm publish
   workflow_dispatch:
     inputs:
@@ -26,27 +26,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    environment: npm-production
+  # Build and package without write credentials, an npm production environment,
+  # or OIDC. Package lifecycle code therefore cannot mint a publisher token.
+  prepare:
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
-      contents: write
-      id-token: write # required for npm OIDC provenance
-      pull-requests: write
+      contents: read
+    outputs:
+      candidate: ${{ steps.artifacts.outputs.candidate }}
+      count: ${{ steps.artifacts.outputs.count }}
+      filter: ${{ steps.plan.outputs.filter }}
+      mode: ${{ steps.plan.outputs.mode }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
-          cache: pnpm
+          node-version: 24.18.0
 
       - name: Verify trusted release source
         env:
@@ -64,10 +67,8 @@ jobs:
           fi
 
       - name: Install dependencies
-        # Release builds do not need dependency lifecycle scripts. Package
-        # prepublish scripts still run explicitly during pnpm publish. Rebuild
-        # the one audited tool binary used by the workspace build instead of
-        # allowing arbitrary transitive lifecycle scripts.
+        # Release builds deny dependency lifecycle scripts. Rebuild only the
+        # audited build binary needed by this workspace.
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Rebuild the audited build tool
@@ -96,11 +97,9 @@ jobs:
       # Resolve release mode + filter. Three shapes:
       #
       #   1. Tag `packages/<path>/v*` → single-package publish, filter=./packages/<path>
-      #   2. Tag `release/v*`         → cascade publish across every workspace package
-      #                                 whose package.json version is ahead of npm. Topo
-      #                                 order via `pnpm -r publish` (built-in).
-      #   3. Tag `v*` or manual dispatch → same as cascade, but filter scoped to packages
-      #                                    changed since origin/main (legacy shape).
+      #   2. Tag `release/v*`         → cascade across every governed public package
+      #                                 whose package.json version is ahead of npm.
+      #   3. Tag `v*` or manual cascade → the same full governed-package selection.
       - name: Resolve release plan
         id: plan
         env:
@@ -118,14 +117,14 @@ jobs:
               echo "::error::single mode requires a filter input"
               exit 1
             fi
+            if [[ "$mode" == "cascade" && -n "$filter" ]]; then
+              echo "::error::cascade mode does not accept a package filter"
+              exit 1
+            fi
           else
             tag="${GITHUB_REF_NAME}"
-            if [[ "$tag" == release/v* ]]; then
+            if [[ "$tag" == release/v* || "$tag" == v* ]]; then
               mode="cascade"
-              filter=""
-            elif [[ "$tag" == v* ]]; then
-              mode="cascade"
-              filter="...[origin/main]"
             else
               package_path="${tag%/v*}"
               if [[ "$package_path" == "$tag" || ! -f "$package_path/package.json" ]]; then
@@ -137,110 +136,188 @@ jobs:
             fi
           fi
 
-          echo "mode=$mode"     >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "filter=$filter" >> "$GITHUB_OUTPUT"
-          echo "Resolved release plan: mode=$mode filter='${filter:-<all workspace packages>}'"
+          echo "Resolved release plan: mode=$mode filter='${filter:-<all governed packages>}'"
 
-      # Cascade publish: `pnpm -r publish` walks the workspace in topological order
-      # by default, so an upstream (e.g. @bsv/sdk) is on the registry before downstream
-      # packages (e.g. @bsv/wallet-toolbox) attempt to install it. `workspace:` protocol
-      # ranges are rewritten to plain semver by pnpm at publish time — downstream
-      # packages ship with concrete `^X.Y.Z` deps.
-      #
-      # pnpm publish does not accept `--workspace-concurrency`; topo ordering of the
-      # recursive publish is sequential by design.
-      # Publish rule: a package is published iff its package.json does NOT set
-      # `"private": true`. pnpm publish honors this by default — examples and other
-      # non-shipping workspaces just mark themselves private and pnpm skips them.
-      # No name-based allow/deny lists in this workflow.
-      #
-      # Visibility: list every package about to be published before doing it, so
-      # release logs make it obvious what landed (and surface a missing-private
-      # mistake before it 404s halfway through).
-      - name: List packages selected for publish
+      # Package artifacts cross a single immutable release boundary: pack once,
+      # inventory production licenses, create SBOMs, and upload immutable
+      # candidate bytes for the credentialed publish job.
+      - name: Stage exact npm release artifacts
+        id: artifacts
         env:
           PNPM_FILTER: ${{ steps.plan.outputs.filter }}
         run: |
+          args=(stage --output release-artifacts)
           if [[ -n "$PNPM_FILTER" ]]; then
-            pnpm -r --filter="$PNPM_FILTER" ls --depth=-1 --json \
-              | node -e 'JSON.parse(require("fs").readFileSync(0,"utf8")).filter(p=>!p.private).forEach(p=>console.log(`  publish: ${p.name}@${p.version}`))'
-          else
-            pnpm -r ls --depth=-1 --json \
-              | node -e 'JSON.parse(require("fs").readFileSync(0,"utf8")).filter(p=>!p.private).forEach(p=>console.log(`  publish: ${p.name}@${p.version}`))'
+            args+=(--filter "$PNPM_FILTER")
           fi
+          node scripts/package-release-artifacts.mjs "${args[@]}"
+          echo "candidate=npm-release-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
-      - name: Cascade publish
-        if: steps.plan.outputs.mode == 'cascade'
+      - name: Verify staged npm release artifacts
+        if: steps.artifacts.outputs.count != '0'
+        run: node scripts/package-release-artifacts.mjs verify release-artifacts/manifest.json
+
+      - name: Upload immutable npm release candidate
+        if: steps.artifacts.outputs.count != '0'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ steps.artifacts.outputs.candidate }}
+          path: release-artifacts
+          if-no-files-found: error
+          retention-days: 1
+
+  # This job receives the protected npm-production environment. It runs no
+  # package build or lifecycle code: it verifies, scans, attests, and publishes
+  # only the immutable bytes uploaded by prepare.
+  publish:
+    if: needs.prepare.outputs.count != '0'
+    needs: prepare
+    runs-on: ubuntu-24.04
+    environment: npm-production
+    timeout-minutes: 30
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Download immutable npm release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ needs.prepare.outputs.candidate }}
+          path: release-artifacts
+
+      - name: Verify downloaded npm release artifacts
+        run: node scripts/package-release-artifacts.mjs verify release-artifacts/manifest.json
+
+      - name: Reject high and critical package findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: sbom
+          scan-ref: release-artifacts/release.cdx.json
+          scanners: vuln,license
+          vuln-type: library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: '1'
+          format: table
+          timeout: 15m
+
+      - name: Attest npm package build provenance
+        id: provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: release-artifacts/packages/*.tgz
+
+      - name: Attest npm package CycloneDX SBOM
+        id: sbom-attestation
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: release-artifacts/packages/*.tgz
+          sbom-path: release-artifacts/release.cdx.json
+
+      - name: Verify npm package attestations
         env:
-          PNPM_FILTER: ${{ steps.plan.outputs.filter }}
+          SOURCE_DIGEST: ${{ github.sha }}
+          SOURCE_REF: ${{ github.ref }}
         run: |
-          if [[ -n "$PNPM_FILTER" ]]; then
-            pnpm -r --filter="$PNPM_FILTER" \
-              publish --access public --no-git-checks --provenance
-          else
-            pnpm -r \
-              publish --access public --no-git-checks --provenance
-          fi
+          for artifact in release-artifacts/packages/*.tgz; do
+            gh attestation verify "$artifact" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+              --source-digest "$SOURCE_DIGEST" \
+              --source-ref "$SOURCE_REF" \
+              --predicate-type https://slsa.dev/provenance/v1
+            gh attestation verify "$artifact" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+              --source-digest "$SOURCE_DIGEST" \
+              --source-ref "$SOURCE_REF" \
+              --predicate-type https://cyclonedx.org/bom
+          done
 
-      - name: Single-package publish
-        if: steps.plan.outputs.mode == 'single'
+      - name: Collect offline attestation bundles
         env:
-          PNPM_FILTER: ${{ steps.plan.outputs.filter }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom-attestation.outputs.bundle-path }}
         run: |
-          pnpm -r --filter="$PNPM_FILTER" \
-            publish --access public --no-git-checks --provenance
+          mkdir -p release-artifacts/attestations
+          cp "$PROVENANCE_BUNDLE" release-artifacts/attestations/provenance.json
+          cp "$SBOM_BUNDLE" release-artifacts/attestations/cyclonedx.json
 
-      # CDN propagation. With multiple new packages published in the same run, give
-      # the npm CDN time to make every just-published tarball available everywhere.
-      # 5 min is conservative; needed because the downstream `pnpm install --lockfile-only`
-      # below would otherwise miss a freshly published version on some mirrors.
+      - name: Retain npm release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-artifacts
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish the attested npm tarballs
+        run: node scripts/package-release-artifacts.mjs publish release-artifacts/manifest.json
+
+  # Publication credentials never coexist with source-controlled package build
+  # code. The separate sync job receives only repository/PR authority and
+  # exposes its GitHub credential solely during the push and PR steps.
+  sync-versions:
+    if: needs.publish.result == 'success' && needs.prepare.outputs.mode == 'cascade'
+    needs: [prepare, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
       - name: Wait for npm registry propagation
-        if: steps.plan.outputs.mode == 'cascade'
         run: sleep 300
 
-      # After publish, the workspace's `^X.Y.Z` cross-references for *downstream* packages
-      # that we didn't bump still point at old versions. sync-versions rewrites them to the
-      # newly-published versions and opens a PR with the diff + lockfile update. The PR is
-      # idempotent — re-running the workflow updates the existing branch in place. A
-      # single-package release must not run this global sync: other workspace versions on
-      # main may be ahead of npm, and rewriting consumers to those unpublished siblings
-      # makes the post-publish install fail even though the selected package was released.
-      - name: Sync published workspace versions
-        if: steps.plan.outputs.mode == 'cascade'
-        id: sync-versions
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: main
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+
+      # After a cascade release, update downstream workspace ranges and all
+      # standalone infra locks. A single-package release intentionally skips
+      # this global operation because other versions on main may be unpublished.
+      - name: Prepare published workspace version sync
+        id: sync
         env:
           SYNC_BRANCH: automation/sync-published-versions
         run: |
           git fetch origin main
+          git fetch origin "$SYNC_BRANCH:refs/remotes/origin/$SYNC_BRANCH" || true
           git switch --force-create "$SYNC_BRANCH" origin/main
-
-          # `git switch -C` does NOT discard uncommitted working-tree changes.
-          # The publish step above runs each package's publish lifecycle, and
-          # wallet-toolbox's `prepublish` (syncVersions.js) rewrites
-          # client/package.json + mobile/package.json to the parent version and
-          # leaves those edits uncommitted. Carried across the switch, they make
-          # `pnpm sync-versions` read a version that was never published and
-          # rewrite consumers to an unresolvable range (ERR_PNPM_NO_MATCHING_VERSION).
-          # Hard-reset + clean so sync-versions operates only on committed main.
-          git reset --hard origin/main
-          git clean -fd
 
           pnpm sync-versions
           pnpm install --lockfile-only --ignore-scripts
 
-          # Infra components are NOT in the pnpm workspace — each has its own
-          # npm package-lock.json that goes stale when sync-versions rewrites
-          # their @bsv/* ranges. Refresh each infra lockfile so the Dockerfile
-          # `npm ci` step won't fail with "lockfile doesn't match" on the next
-          # infra-release build. --package-lock-only skips node_modules I/O.
-          # Peer-aware (no --legacy-peer-deps): @bsv/* libraries declare @bsv/sdk
-          # as a peerDependency, so the lockfile MUST record that peer or the
-          # Dockerfile `npm ci` fails with "Missing: @bsv/sdk from lock file".
-          for d in infra/*/; do
-            [ -f "$d/package.json" ] || continue
-            [ -f "$d/package-lock.json" ] || continue
-            echo "Refreshing lockfile in $d"
-            (cd "$d" && npm install --package-lock-only --ignore-scripts)
+          # Infra components are not pnpm workspaces. Keep their npm locks
+          # peer-aware so Dockerfile npm ci remains reproducible.
+          for directory in infra/*/; do
+            [ -f "$directory/package.json" ] || continue
+            [ -f "$directory/package-lock.json" ] || continue
+            echo "Refreshing lockfile in $directory"
+            (cd "$directory" && npm install --package-lock-only --ignore-scripts)
           done
 
           if git diff --quiet; then
@@ -252,16 +329,24 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pnpm-lock.yaml 'packages/**/package.json' 'infra/**/package.json' 'infra/**/package-lock.json'
           git commit -m "chore: sync published workspace versions"
-          git push --force-with-lease origin "HEAD:$SYNC_BRANCH"
 
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "branch=$SYNC_BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Open version sync PR
-        if: steps.sync-versions.outputs.changed == 'true'
+      - name: Push version sync branch
+        if: steps.sync.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          SYNC_BRANCH: ${{ steps.sync-versions.outputs.branch }}
+          SYNC_BRANCH: ${{ steps.sync.outputs.branch }}
+        run: |
+          gh auth setup-git
+          git push --force-with-lease origin "HEAD:$SYNC_BRANCH"
+
+      - name: Open version sync PR
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: ${{ steps.sync.outputs.branch }}
         run: |
           existing_pr="$(gh pr list --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
 

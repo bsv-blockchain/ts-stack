@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "artifactSchemaVersion": 1,
+  "publicPackageCount": 30,
+  "releaseWorkflow": ".github/workflows/release.yaml",
+  "releaseEnvironment": "npm-production",
+  "buildRuntime": {
+    "runner": "ubuntu-24.04",
+    "node": "24.18.0",
+    "npmMinimum": "11.5.1",
+    "pnpm": "10.33.2"
+  },
+  "trustedPublisher": {
+    "provider": "github-actions",
+    "repository": "bsv-blockchain/ts-stack",
+    "workflow": "release.yaml",
+    "authentication": "npm-oidc",
+    "provenance": "required"
+  },
+  "artifacts": {
+    "tarballs": "packages/*.tgz",
+    "manifest": "manifest.json",
+    "checksums": "checksums.sha256",
+    "aggregateSbom": "release.cdx.json",
+    "packageSboms": "sbom/*.cdx.json",
+    "licenseInventory": "licenses.json",
+    "attestationBundles": "attestations/*.json"
+  },
+  "sbom": {
+    "format": "CycloneDX",
+    "specVersion": "1.5",
+    "scope": "production dependencies",
+    "packageManager": "npm"
+  },
+  "scanGate": {
+    "scanner": "Trivy",
+    "targets": ["vulnerabilities", "licenses"],
+    "packageTypes": ["library"],
+    "severities": ["HIGH", "CRITICAL"],
+    "ignoreUnfixed": false
+  },
+  "licensePolicy": {
+    "requireDeclaredLicense": true,
+    "internalLicense": "Open BSV License Version 6",
+    "denied": [
+      {
+        "pattern": "(^|[^A-Z])AGPL(?:-|$)",
+        "severity": "CRITICAL",
+        "reason": "network copyleft"
+      },
+      {
+        "pattern": "(^|[^A-Z])SSPL(?:-|$)",
+        "severity": "CRITICAL",
+        "reason": "service source requirements"
+      },
+      {
+        "pattern": "(^|[^A-Z])BUSL(?:-|$)",
+        "severity": "CRITICAL",
+        "reason": "source-available production restrictions"
+      },
+      {
+        "pattern": "Elastic License|Commons Clause",
+        "severity": "CRITICAL",
+        "reason": "source-available use restrictions"
+      },
+      {
+        "pattern": "(^|[^A-Z])GPL(?:-|$)",
+        "severity": "HIGH",
+        "reason": "strong copyleft"
+      },
+      {
+        "pattern": "(^|[^A-Z])LGPL(?:-|$)",
+        "severity": "HIGH",
+        "reason": "restricted copyleft review required"
+      },
+      {
+        "pattern": "UNLICENSED|Proprietary|SEE LICENSE IN",
+        "severity": "HIGH",
+        "reason": "non-standard external license declaration"
+      }
+    ]
+  },
+  "attestations": {
+    "provider": "GitHub artifact attestations",
+    "predicates": ["https://slsa.dev/provenance/v1", "https://cyclonedx.org/bom"],
+    "verifyBeforePublish": true
+  },
+  "publication": {
+    "source": "staged tarball only",
+    "lifecycleScripts": "disabled",
+    "access": "public",
+    "verifyRegistryDigest": true,
+    "immutableVersions": true
+  },
+  "evidenceRetentionDays": 90
+}
