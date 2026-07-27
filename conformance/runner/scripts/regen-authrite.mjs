@@ -269,25 +269,26 @@ console.log(`\nWrote ${vectorsPath}`)
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log('\n=== Regeneration Report ===')
+const statusPrefixes = {
+  UPDATED: '  [UPDATED]',
+  UNCHANGED: '[unchanged]',
+  ERROR: '   [ERROR!]',
+  VERIFY_FAILED: '  [VFAIL!]'
+}
+
+function reportPrefix(status) {
+  return statusPrefixes[status] ?? `[${status}]`
+}
+
+function reportDetail(entry) {
+  if (entry.error) return ` — ERROR: ${entry.error}`
+  if (entry.old) return ` old=${entry.old} new=${entry.new}`
+  if (entry.note) return ` — ${entry.note}`
+  return ''
+}
+
 for (const r of report) {
-  const prefix =
-    r.status === 'UPDATED'
-      ? '  [UPDATED]'
-      : r.status === 'UNCHANGED'
-        ? '[unchanged]'
-        : r.status === 'ERROR'
-          ? '   [ERROR!]'
-          : r.status === 'VERIFY_FAILED'
-            ? '  [VFAIL!]'
-            : `[${r.status}]`
-  const detail = r.error
-    ? ` — ERROR: ${r.error}`
-    : r.old
-      ? ` old=${r.old} new=${r.new}`
-      : r.note
-        ? ` — ${r.note}`
-        : ''
-  console.log(`  vec${r.vectorNum}: ${prefix}${detail}`)
+  console.log(`  vec${r.vectorNum}: ${reportPrefix(r.status)}${reportDetail(r)}`)
 }
 
 const errors = report.filter(r => r.status === 'ERROR' || r.status === 'VERIFY_FAILED')

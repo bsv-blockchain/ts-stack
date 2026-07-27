@@ -230,12 +230,10 @@ function hasAllPaymentHeaders(headers: Record<string, string>): boolean {
   return true
 }
 
-function dispatchBRC121(input: Record<string, unknown>, expected: Record<string, unknown>): void {
-  const expectedStatus = expected.status as number | undefined
-
-  // ── Schema-check / structural vectors ────────────────────────────────────
-
-  // Vector 13: invoice number derivation format
+function dispatchBRC121Schema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): boolean {
   if (
     input._schema_check === true &&
     'x_bsv_nonce' in input &&
@@ -251,10 +249,9 @@ function dispatchBRC121(input: Record<string, unknown>, expected: Record<string,
     expect(invoiceNumber).toBe(getString(expected, 'invoice_number'))
     expect(getString(expected, 'derivation_prefix')).toBe(nonce)
     expect(getString(expected, 'derivation_suffix')).toBe(derivationSuffix)
-    return
+    return true
   }
 
-  // Vector 14: x-bsv-time format validation
   if (input._schema_check === true && 'valid_examples' in input && 'invalid_examples' in input) {
     const validExamples = input.valid_examples as string[]
     const invalidExamples = input.invalid_examples as string[]
@@ -267,10 +264,9 @@ function dispatchBRC121(input: Record<string, unknown>, expected: Record<string,
     for (const ex of invalidExamples) {
       expect(re.test(ex)).toBe(false)
     }
-    return
+    return true
   }
 
-  // Vector 16: PaymentRemittance shape
   if (
     input._schema_check === true &&
     'x_bsv_nonce' in input &&
@@ -289,101 +285,72 @@ function dispatchBRC121(input: Record<string, unknown>, expected: Record<string,
       expect(remittanceShape.derivationSuffix).toBe(derivationSuffix)
       expect(remittanceShape.senderIdentityKey).toBe(sender)
     }
-    return
+    return true
   }
 
-  // Vector 17: 402 body must be empty
-  if (expectedStatus === 402 && getBool(expected, 'body_empty')) {
-    // This is a schema invariant — the response body of a 402 is always empty.
-    // We assert the invariant as documented.
+  if (expected.status === 402 && getBool(expected, 'body_empty')) {
     expect(getBool(expected, 'body_empty')).toBe(true)
-    return
+    return true
   }
 
-  // Vector 18: auto-retry safety / double-spend
   if ('auto_retry_safe' in expected) {
     expect(expected.auto_retry_safe).toBe(false)
     expect(getString(expected, 'double_spend_risk')).toBeTruthy()
-    return
+    return true
+  }
+  return false
+}
+
+function dispatchPaymentRequired(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const responseHeadersIncludes = expected.response_headers_includes as
+    Record<string, string> | undefined
+  if (responseHeadersIncludes !== undefined) {
+    expect(responseHeadersIncludes['access-control-expose-headers']).toMatch(/x-bsv-sats/)
+    expect(responseHeadersIncludes['access-control-expose-headers']).toMatch(/x-bsv-server/)
   }
 
-  // ── HTTP trip simulation vectors ──────────────────────────────────────────
-
-  // Trip 1: no payment headers present → expect 402
-  if (expectedStatus === 402) {
+  if (typeof input._scenario !== 'string' && responseHeadersIncludes === undefined) {
     const headers = (input.headers as Record<string, string> | undefined) ?? {}
+    expect(typeof headers).toBe('object')
+  }
+  expect(expected.status).toBe(402)
+}
 
-    // If _scenario is set, it's a simulation we can only check structurally
-    if (typeof input._scenario === 'string') {
-      // Scenarios: stale timestamp, future timestamp, replay (isMerge)
-      // These require a live wallet and network stack — validate structurally.
-      expect(expectedStatus).toBe(402)
-      return
-    }
+function dispatchPaymentResponseHeaders(expected: Record<string, unknown>): void {
+  const responseHeaders = expected.response_headers as Record<string, string>
+  expect(responseHeaders).toHaveProperty('x-bsv-sats')
+  expect(responseHeaders).toHaveProperty('x-bsv-server')
+  expect(Number(responseHeaders['x-bsv-sats'])).toBeGreaterThan(0)
+  expect(isCompressedPubKeyHex(responseHeaders['x-bsv-server'])).toBe(true)
+}
 
-    // CORS test (vector 3)
-    const responseHeadersIncludes = expected.response_headers_includes as
-      Record<string, string> | undefined
-    if (responseHeadersIncludes !== undefined) {
-      // Confirm the expected CORS header value is specified
-      expect(responseHeadersIncludes['access-control-expose-headers']).toMatch(/x-bsv-sats/)
-      expect(responseHeadersIncludes['access-control-expose-headers']).toMatch(/x-bsv-server/)
-      return
-    }
+function dispatchSuccessfulPayment(input: Record<string, unknown>): void {
+  const headers = (input.headers as Record<string, string> | undefined) ?? {}
+  expect(hasAllPaymentHeaders(headers)).toBe(true)
+  expect(isCompressedPubKeyHex(headers['x-bsv-sender'])).toBe(true)
+  expect(isBase64(headers['x-bsv-nonce'])).toBe(true)
+}
 
-    // Missing payment headers (vectors 5–9)
-    const hasBeef = typeof headers['x-bsv-beef'] === 'string' && headers['x-bsv-beef'] !== ''
-    const hasSender = typeof headers['x-bsv-sender'] === 'string' && headers['x-bsv-sender'] !== ''
-    const hasNonce = typeof headers['x-bsv-nonce'] === 'string' && headers['x-bsv-nonce'] !== ''
-    const hasTime = typeof headers['x-bsv-time'] === 'string' && headers['x-bsv-time'] !== ''
-    const hasVout = typeof headers['x-bsv-vout'] === 'string' && headers['x-bsv-vout'] !== ''
-    const allPresent = hasBeef && hasSender && hasNonce && hasTime && hasVout
+function dispatchBRC121(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  if (dispatchBRC121Schema(input, expected)) return
 
-    // If not all present, 402 is expected — validate
-    if (!allPresent) {
-      expect(expectedStatus).toBe(402)
-      return
-    }
-
-    // All headers present but 402 expected → must be structural issue
-    // (the vectors at this point have all headers but expect 402; this
-    // is the "no payment headers" trip-1 case where the client sends
-    // an empty headers object)
-    expect(expectedStatus).toBe(402)
+  if (expected.status === 402) {
+    dispatchPaymentRequired(input, expected)
     return
   }
-
-  // Trip 1: no payment headers → 402 with required response headers (vectors 1 & 2)
-  if (expectedStatus === undefined && 'response_headers' in expected) {
-    const respHeaders = expected.response_headers as Record<string, string>
-    // Confirm required headers are present in expected
-    expect(respHeaders).toHaveProperty('x-bsv-sats')
-    expect(respHeaders).toHaveProperty('x-bsv-server')
-    // sats must be a numeric string
-    expect(Number(respHeaders['x-bsv-sats'])).toBeGreaterThan(0)
-    // server must be a compressed pubkey
-    expect(isCompressedPubKeyHex(respHeaders['x-bsv-server'])).toBe(true)
+  if (expected.status === undefined && 'response_headers' in expected) {
+    dispatchPaymentResponseHeaders(expected)
     return
   }
-
-  // Trip 2: valid payment → 200 (vector 4)
-  if (expectedStatus === 200) {
-    const headers = (input.headers as Record<string, string> | undefined) ?? {}
-    // Verify all required payment headers are present in the input
-    expect(hasAllPaymentHeaders(headers)).toBe(true)
-    // Sender must be a compressed pubkey
-    expect(isCompressedPubKeyHex(headers['x-bsv-sender'])).toBe(true)
-    // nonce must be base64
-    expect(isBase64(headers['x-bsv-nonce'])).toBe(true)
+  if (expected.status === 200) {
+    dispatchSuccessfulPayment(input)
     return
   }
-
-  // Vector 15: server error → 500
-  if (expectedStatus === 500) {
-    const body = expected.body as Record<string, unknown> | undefined
-    if (body !== undefined) {
-      expect(body).toHaveProperty('error')
-    }
+  if (expected.status === 500 && expected.body !== undefined) {
+    expect(expected.body).toHaveProperty('error')
   }
 }
 
