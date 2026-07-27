@@ -32,7 +32,7 @@ export interface VectorExpected {
 
 // ── HTTP status helpers ───────────────────────────────────────────────────────
 
-export function assertHttpStatus (exp: VectorExpected): void {
+export function assertHttpStatus(exp: VectorExpected): void {
   if (exp.status !== undefined) {
     expect(typeof exp.status).toBe('number')
     expect(exp.status).toBeGreaterThanOrEqual(100)
@@ -49,7 +49,7 @@ export function assertHttpStatus (exp: VectorExpected): void {
 
 // ── Submit helpers ────────────────────────────────────────────────────────────
 
-export function assertSteakShape (body: Record<string, unknown>): void {
+export function assertSteakShape(body: Record<string, unknown>): void {
   expect(typeof body).toBe('object')
   expect(body).not.toBeNull()
 
@@ -60,14 +60,14 @@ export function assertSteakShape (body: Record<string, unknown>): void {
     expect(r).not.toBeNull()
 
     expect(Array.isArray(r.outputsToAdmit)).toBe(true)
-    for (const idx of (r.outputsToAdmit as unknown[])) {
+    for (const idx of r.outputsToAdmit as unknown[]) {
       expect(typeof idx).toBe('number')
       expect(idx as number).toBeGreaterThanOrEqual(0)
     }
 
     if ('coinstakeOutputsToRetain' in r) {
       expect(Array.isArray(r.coinstakeOutputsToRetain)).toBe(true)
-      for (const idx of (r.coinstakeOutputsToRetain as unknown[])) {
+      for (const idx of r.coinstakeOutputsToRetain as unknown[]) {
         expect(typeof idx).toBe('number')
         expect(idx as number).toBeGreaterThanOrEqual(0)
       }
@@ -75,14 +75,14 @@ export function assertSteakShape (body: Record<string, unknown>): void {
   }
 }
 
-export function assertErrorShape (body: Record<string, unknown>): void {
+export function assertErrorShape(body: Record<string, unknown>): void {
   expect(body.status).toBe('error')
   if (body.message_type === 'string') {
     expect(body.message_type).toBe('string')
   }
 }
 
-export function assertSubmitRequestShape (inp: VectorInput): void {
+export function assertSubmitRequestShape(inp: VectorInput): void {
   const headers = inp.headers ?? {}
   const method = (inp.method ?? 'POST').toUpperCase()
   const path = inp.path ?? '/submit'
@@ -102,7 +102,7 @@ export function assertSubmitRequestShape (inp: VectorInput): void {
 }
 
 /** Validate STEAK topic keys against the X-Topics header. */
-export function assertSteakTopicsMatch (
+export function assertSteakTopicsMatch(
   body: Record<string, unknown>,
   headers: Record<string, string>
 ): void {
@@ -118,13 +118,13 @@ export function assertSteakTopicsMatch (
 
   if (Array.isArray(parsedTopics) && parsedTopics.length > 0) {
     for (const topicKey of Object.keys(body)) {
-      expect((parsedTopics as string[])).toContain(topicKey)
+      expect(parsedTopics as string[]).toContain(topicKey)
     }
   }
 }
 
 /** Validate Content-Type is octet-stream for a happy-path submit. */
-export function assertSubmitContentType (headers: Record<string, string>): void {
+export function assertSubmitContentType(headers: Record<string, string>): void {
   const ctKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type')
   if (ctKey !== undefined) {
     expect(headers[ctKey].toLowerCase()).toContain('application/octet-stream')
@@ -133,7 +133,7 @@ export function assertSubmitContentType (headers: Record<string, string>): void 
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
 
-export function assertLookupRequestShape (inp: VectorInput): void {
+export function assertLookupRequestShape(inp: VectorInput): void {
   const method = (inp.method ?? 'POST').toUpperCase()
   if (method !== 'POST') return
 
@@ -152,17 +152,17 @@ export function assertLookupRequestShape (inp: VectorInput): void {
   }
 }
 
-export function assertLookupAnswerOutputList (body: Record<string, unknown>): void {
+export function assertLookupAnswerOutputList(body: Record<string, unknown>): void {
   expect(body.type).toBe('output-list')
   expect(Array.isArray(body.outputs)).toBe(true)
 
-  for (const out of (body.outputs as unknown[])) {
+  for (const out of body.outputs as unknown[]) {
     const o = out as Record<string, unknown>
     expect(typeof o).toBe('object')
     expect(o).not.toBeNull()
 
     expect(Array.isArray(o.beef)).toBe(true)
-    for (const b of (o.beef as unknown[])) {
+    for (const b of o.beef as unknown[]) {
       expect(typeof b).toBe('number')
       expect(b as number).toBeGreaterThanOrEqual(0)
       expect(b as number).toBeLessThanOrEqual(255)
@@ -173,7 +173,7 @@ export function assertLookupAnswerOutputList (body: Record<string, unknown>): vo
 
     if ('context' in o) {
       expect(Array.isArray(o.context)).toBe(true)
-      for (const c of (o.context as unknown[])) {
+      for (const c of o.context as unknown[]) {
         expect(typeof c).toBe('number')
         expect(c as number).toBeGreaterThanOrEqual(0)
         expect(c as number).toBeLessThanOrEqual(255)
@@ -182,7 +182,7 @@ export function assertLookupAnswerOutputList (body: Record<string, unknown>): vo
   }
 }
 
-export function assertLookupAnswerFreeform (body: Record<string, unknown>): void {
+export function assertLookupAnswerFreeform(body: Record<string, unknown>): void {
   expect(body.type).toBe('freeform')
   if ('outputs' in body) {
     expect(Array.isArray(body.outputs)).toBe(true)
@@ -192,7 +192,7 @@ export function assertLookupAnswerFreeform (body: Record<string, unknown>): void
   }
 }
 
-export function assertLookupAnswerShape (body: Record<string, unknown>): void {
+export function assertLookupAnswerShape(body: Record<string, unknown>): void {
   const answerType = body.type as string | undefined
   if (answerType === 'output-list') {
     assertLookupAnswerOutputList(body)
@@ -203,7 +203,7 @@ export function assertLookupAnswerShape (body: Record<string, unknown>): void {
   }
 }
 
-export function assertLookupBinaryResponse (exp: VectorExpected): void {
+export function assertLookupBinaryResponse(exp: VectorExpected): void {
   if (exp.content_type !== undefined) {
     expect(exp.content_type).toContain('application/octet-stream')
   }
@@ -212,7 +212,7 @@ export function assertLookupBinaryResponse (exp: VectorExpected): void {
   }
 }
 
-export function assertLookupErrorStatusRange (exp: VectorExpected): void {
+export function assertLookupErrorStatusRange(exp: VectorExpected): void {
   if (exp.status !== undefined) {
     expect(exp.status).toBeGreaterThanOrEqual(400)
     expect(exp.status).toBeLessThan(600)
@@ -226,11 +226,12 @@ export function assertLookupErrorStatusRange (exp: VectorExpected): void {
 
 // ── Discovery endpoint helpers ────────────────────────────────────────────────
 
-export function assertListEndpointBody (exp: VectorExpected): void {
+export function assertListEndpointBody(exp: VectorExpected): void {
   if (exp.body_schema !== undefined) {
     expect(typeof exp.body_schema).toBe('string')
   }
-  const exampleBody = (exp as Record<string, unknown>).example_body as Record<string, unknown> | undefined
+  const exampleBody = (exp as Record<string, unknown>).example_body as
+    Record<string, unknown> | undefined
   if (exampleBody !== undefined) {
     expect(typeof exampleBody).toBe('object')
     for (const [key, val] of Object.entries(exampleBody)) {
@@ -242,7 +243,7 @@ export function assertListEndpointBody (exp: VectorExpected): void {
   }
 }
 
-export function assertDocumentationEndpoint (status: number, exp: VectorExpected): void {
+export function assertDocumentationEndpoint(status: number, exp: VectorExpected): void {
   if (status === 200) {
     if (exp.content_type !== undefined) {
       expect(exp.content_type).toContain('text/markdown')
@@ -262,7 +263,7 @@ export function assertDocumentationEndpoint (status: number, exp: VectorExpected
 
 const HEALTH_STATUS_ALLOWED = ['ok', 'degraded', 'error']
 
-function assertHealthStatusField (body: Record<string, unknown>): void {
+function assertHealthStatusField(body: Record<string, unknown>): void {
   const statusOneof = body.status_oneof
   if (Array.isArray(statusOneof)) {
     for (const s of statusOneof) {
@@ -273,7 +274,7 @@ function assertHealthStatusField (body: Record<string, unknown>): void {
   }
 }
 
-function assertHealthServiceField (body: Record<string, unknown>): void {
+function assertHealthServiceField(body: Record<string, unknown>): void {
   if (!('service' in body) || body.service === null || typeof body.service !== 'object') return
   const svc = body.service as Record<string, unknown>
   if ('name' in svc) expect(typeof svc.name).toBe('string')
@@ -282,7 +283,7 @@ function assertHealthServiceField (body: Record<string, unknown>): void {
   if ('lookupServiceCount' in svc) expect(typeof svc.lookupServiceCount).toBe('number')
 }
 
-export function assertHealthReportShape (body: Record<string, unknown>): void {
+export function assertHealthReportShape(body: Record<string, unknown>): void {
   if ('live' in body) expect(typeof body.live).toBe('boolean')
   if ('ready' in body) expect(typeof body.ready).toBe('boolean')
   if ('status' in body) assertHealthStatusField(body)
@@ -291,7 +292,7 @@ export function assertHealthReportShape (body: Record<string, unknown>): void {
 
 // ── Admin helpers ─────────────────────────────────────────────────────────────
 
-export function assertAdminStatsShape (body: Record<string, unknown>): void {
+export function assertAdminStatsShape(body: Record<string, unknown>): void {
   expect(body.status).toBe('success')
   if (!('data' in body) || typeof body.data !== 'object' || body.data === null) return
   const data = body.data as Record<string, unknown>
@@ -301,20 +302,20 @@ export function assertAdminStatsShape (body: Record<string, unknown>): void {
   if ('lookupServices' in data) expect(Array.isArray(data.lookupServices)).toBe(true)
 }
 
-export function assertBanListShape (body: Record<string, unknown>): void {
+export function assertBanListShape(body: Record<string, unknown>): void {
   expect(body.status).toBe('success')
   if (!('data' in body) || typeof body.data !== 'object' || body.data === null) return
   const data = body.data as Record<string, unknown>
   if (!('bans' in data)) return
   expect(Array.isArray(data.bans)).toBe(true)
-  for (const ban of (data.bans as unknown[])) {
+  for (const ban of data.bans as unknown[]) {
     const b = ban as Record<string, unknown>
     if ('type' in b) expect(['domain', 'outpoint']).toContain(b.type)
     if ('value' in b) expect(typeof b.value).toBe('string')
   }
 }
 
-export function assertPaginatedRecordShape (body: Record<string, unknown>): void {
+export function assertPaginatedRecordShape(body: Record<string, unknown>): void {
   expect(body.status).toBe('success')
   if (!('data' in body) || typeof body.data !== 'object' || body.data === null) return
   const data = body.data as Record<string, unknown>
@@ -337,7 +338,7 @@ export function assertPaginatedRecordShape (body: Record<string, unknown>): void
   }
 }
 
-export function assertArcIngestRequestShape (inp: VectorInput): void {
+export function assertArcIngestRequestShape(inp: VectorInput): void {
   const body = inp.body as Record<string, unknown> | undefined
   if (body === undefined) return
 
@@ -354,13 +355,13 @@ export function assertArcIngestRequestShape (inp: VectorInput): void {
   }
 }
 
-export function assertBanRequestShape (body: Record<string, unknown>): void {
+export function assertBanRequestShape(body: Record<string, unknown>): void {
   if ('type' in body) expect(['domain', 'outpoint']).toContain(body.type)
   if ('value' in body) expect(typeof body.value).toBe('string')
   if ('reason' in body) expect(typeof body.reason).toBe('string')
 }
 
-export function assertEvictRequestShape (body: Record<string, unknown>): void {
+export function assertEvictRequestShape(body: Record<string, unknown>): void {
   if ('txid' in body) {
     expect(typeof body.txid).toBe('string')
     expect((body.txid as string).length).toBe(64)
@@ -377,7 +378,7 @@ export function assertEvictRequestShape (body: Record<string, unknown>): void {
 
 // ── Topic-management route handlers ──────────────────────────────────────────
 
-export function handleHealthEndpoint (
+export function handleHealthEndpoint(
   method: string,
   status: number,
   body: Record<string, unknown>
@@ -389,25 +390,17 @@ export function handleHealthEndpoint (
   }
 }
 
-export function handleAdminConfig (
-  status: number,
-  body: Record<string, unknown>
-): void {
+export function handleAdminConfig(status: number, body: Record<string, unknown>): void {
   expect(status).toBe(200)
   if ('adminIdentityKey' in body) {
-    expect(
-      body.adminIdentityKey === null || typeof body.adminIdentityKey === 'string'
-    ).toBe(true)
+    expect(body.adminIdentityKey === null || typeof body.adminIdentityKey === 'string').toBe(true)
   }
   if ('nodeName' in body) {
     expect(typeof body.nodeName).toBe('string')
   }
 }
 
-export function handleAdminStats (
-  status: number,
-  body: Record<string, unknown>
-): void {
+export function handleAdminStats(status: number, body: Record<string, unknown>): void {
   if (status === 200) {
     assertAdminStatsShape(body)
   } else {
@@ -415,11 +408,11 @@ export function handleAdminStats (
   }
 }
 
-export function handleAdminBanUnban (
+export function handleAdminBanUnban(
   status: number,
   body: Record<string, unknown>,
   reqBody: Record<string, unknown> | undefined,
-  exp: VectorExpected
+  _exp: VectorExpected
 ): void {
   if (reqBody !== undefined) {
     assertBanRequestShape(reqBody)
@@ -431,10 +424,7 @@ export function handleAdminBanUnban (
   }
 }
 
-export function handleAdminBans (
-  status: number,
-  body: Record<string, unknown>
-): void {
+export function handleAdminBans(status: number, body: Record<string, unknown>): void {
   if (status === 200) {
     assertBanListShape(body)
   } else {
@@ -442,7 +432,7 @@ export function handleAdminBans (
   }
 }
 
-export function handleAdminEvict (
+export function handleAdminEvict(
   status: number,
   body: Record<string, unknown>,
   reqBody: Record<string, unknown> | undefined
@@ -457,10 +447,7 @@ export function handleAdminEvict (
   }
 }
 
-export function handleAdminShipRecords (
-  status: number,
-  body: Record<string, unknown>
-): void {
+export function handleAdminShipRecords(status: number, body: Record<string, unknown>): void {
   if (status === 200) {
     assertPaginatedRecordShape(body)
   } else {
@@ -468,7 +455,7 @@ export function handleAdminShipRecords (
   }
 }
 
-export function handleArcIngest (
+export function handleArcIngest(
   status: number,
   body: Record<string, unknown>,
   inp: VectorInput

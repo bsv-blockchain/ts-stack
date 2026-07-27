@@ -36,8 +36,9 @@ function mdToRoute(relPath) {
 
 function walk(dir, base = DOCS_ROOT) {
   const entries = []
-  const children = readdirSync(dir, { withFileTypes: true })
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const children = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  )
   for (const child of children) {
     const full = join(dir, child.name)
     if (child.isDirectory()) {
@@ -57,7 +58,7 @@ function walk(dir, base = DOCS_ROOT) {
         npm: fm.npm ?? null,
         status: fm.status ?? 'stable',
         last_updated: fm.last_updated ?? null,
-        tags: [],
+        tags: []
       })
     }
   }

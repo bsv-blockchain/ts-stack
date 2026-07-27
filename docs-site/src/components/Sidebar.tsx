@@ -14,9 +14,7 @@ export default function Sidebar({ className }: Readonly<Props>) {
       <NavLink
         to="/"
         end
-        className={({ isActive }) =>
-          'sidebar-link' + (isActive ? ' active' : '')
-        }
+        className={({ isActive }) => 'sidebar-link' + (isActive ? ' active' : '')}
       >
         Home
       </NavLink>
@@ -35,17 +33,14 @@ export default function Sidebar({ className }: Readonly<Props>) {
 
 function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const hasChildren = item.items && item.items.length > 0
-  const isParentActive =
-    hasChildren && pathname.startsWith(item.href.replace(/\/$/, ''))
+  const isParentActive = hasChildren && pathname.startsWith(item.href.replace(/\/$/, ''))
 
   return (
     <>
       <NavLink
         to={item.href}
         end={!hasChildren}
-        className={({ isActive }) =>
-          'sidebar-link' + (isActive || isParentActive ? ' active' : '')
-        }
+        className={({ isActive }) => 'sidebar-link' + (isActive || isParentActive ? ' active' : '')}
       >
         {item.label}
       </NavLink>
@@ -56,9 +51,7 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
               key={child.href}
               to={child.href}
               end
-              className={({ isActive }) =>
-                'sidebar-link' + (isActive ? ' active' : '')
-              }
+              className={({ isActive }) => 'sidebar-link' + (isActive ? ' active' : '')}
             >
               {child.label}
             </NavLink>

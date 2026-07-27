@@ -40,5 +40,5 @@ export const mdxComponents = {
   pre: Pre,
   code: InlineCode,
   Callout,
-  AsyncApiEmbed,
+  AsyncApiEmbed
 }

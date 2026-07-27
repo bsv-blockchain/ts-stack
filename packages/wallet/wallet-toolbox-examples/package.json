@@ -19,12 +19,14 @@
     "BRC100"
   ],
   "scripts": {
-    "test": "npm run build && jest --passWithNoTests",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage --passWithNoTests",
-    "lint": "prettier --write 'src/**/*.ts' --log-level silent",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --runInBand",
+    "lint": "oxlint src test jest.config.ts --deny-warnings",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"*.{ts,json,md}\" \"docs/**/*.md\"",
+    "typecheck": "tsc -p tsconfig.typecheck.json --pretty false",
     "build": "tsc --build",
-    "prepublish": "npm run build && npm run doc",
+    "prepublish": "pnpm build && pnpm doc",
     "doc": "ts2md"
   },
   "bugs": {
@@ -42,6 +44,7 @@
     "fs-extra": "^11.4.0",
     "jest": "^30.4.2",
     "jest-diff": "^30.4.1",
+    "oxlint": "^1.75.0",
     "prettier": "^3.9.6",
     "sqlite3": "^6.0.1",
     "ts-jest": "^29.4.12",

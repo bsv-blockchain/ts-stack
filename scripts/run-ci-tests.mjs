@@ -39,9 +39,7 @@ const dedicatedSuites = new Set([
 const projects = JSON.parse(readFileSync(resolve(projectsJson), 'utf8'))
 const selected = projects
   .map(project => {
-    const manifest = JSON.parse(
-      readFileSync(resolve(project.path, 'package.json'), 'utf8')
-    )
+    const manifest = JSON.parse(readFileSync(resolve(project.path, 'package.json'), 'utf8'))
     return {
       name: manifest.name,
       path: project.path,

@@ -29,9 +29,7 @@ test('workspace discovery exactly matches the 37-project registry', () => {
   )
   assert.deepEqual(validateProjectRegistry(projects, discovered), [])
   assert.equal(projects.generatedArtifacts.length, 10)
-  assert.ok(
-    projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers')
-  )
+  assert.ok(projects.generatedArtifacts.every(item => item.owner === 'ts-stack-maintainers'))
   assert.deepEqual(projects.dependencyAutomation.firstParty, {
     pattern: '@bsv/*',
     owner: 'ts-stack-maintainers',
@@ -39,7 +37,8 @@ test('workspace discovery exactly matches the 37-project registry', () => {
     updateMechanism: 'scripts/sync-versions.mjs',
     releaseWorkflow: '.github/workflows/release.yaml',
     verification: 'scripts/check-versions.mjs',
-    rationale: 'First-party versions are updated as one release-aware graph after packages are published; generic Dependabot PRs cannot safely coordinate unpublished sibling versions.'
+    rationale:
+      'First-party versions are updated as one release-aware graph after packages are published; generic Dependabot PRs cannot safely coordinate unpublished sibling versions.'
   })
 })
 
@@ -49,12 +48,13 @@ test('current repository health controls and ratchet are internally consistent',
   assert.deepEqual(result.errors, [])
   assert.equal(result.projects.length, 37)
   assert.equal(result.publicPackages, 30)
-  assert.ok(result.findings.length > 0, 'known debt must remain visible until remediated')
+  assert.equal(result.findings.length, 0)
 })
 
-test('every public package declares the supported Node.js 22 runtime contract', () => {
-  const publicPackages = discoverWorkspaceProjects()
-    .filter(project => project.manifest.private !== true)
+test('every public package declares supported runtime and canonical support metadata', () => {
+  const publicPackages = discoverWorkspaceProjects().filter(
+    project => project.manifest.private !== true
+  )
 
   assert.equal(publicPackages.length, 30)
   for (const project of publicPackages) {
@@ -68,11 +68,39 @@ test('every public package declares the supported Node.js 22 runtime contract', 
       'public',
       `${project.path} must explicitly publish with public access`
     )
+    assert.deepEqual(
+      project.manifest.repository,
+      {
+        type: 'git',
+        url: 'git+https://github.com/bsv-blockchain/ts-stack.git',
+        directory: project.path
+      },
+      `${project.path} must point consumers to its canonical monorepo source`
+    )
+    assert.equal(
+      project.manifest.homepage,
+      `https://github.com/bsv-blockchain/ts-stack/tree/main/${project.path}#readme`,
+      `${project.path} must point consumers to its package README`
+    )
+    assert.deepEqual(
+      project.manifest.bugs,
+      { url: 'https://github.com/bsv-blockchain/ts-stack/issues' },
+      `${project.path} must point consumers to the shared support tracker`
+    )
+    assert.ok(
+      typeof project.manifest.author === 'string' && project.manifest.author.trim().length > 0,
+      `${project.path} must identify an author or organization`
+    )
+    assert.ok(
+      Array.isArray(project.manifest.keywords) &&
+        project.manifest.keywords.some(keyword => keyword.toLowerCase() === 'bsv'),
+      `${project.path} must expose searchable BSV package metadata`
+    )
     assert.ok(
       typeof project.manifest.sideEffects === 'boolean' ||
         (Array.isArray(project.manifest.sideEffects) &&
-          project.manifest.sideEffects.every(item =>
-            typeof item === 'string' && item.trim().length > 0
+          project.manifest.sideEffects.every(
+            item => typeof item === 'string' && item.trim().length > 0
           )),
       `${project.path} must declare its tree-shaking side-effect contract`
     )
@@ -85,10 +113,7 @@ test('contract findings are deterministic and match their recorded baseline', ()
   const baseline = readJson(path.join(healthDirectory, 'contract-baseline.json'))
 
   assert.deepEqual(compareContractBaseline(baseline, findings), [])
-  assert.deepEqual(
-    createContractBaseline(findings, '2026-07-26'),
-    baseline
-  )
+  assert.deepEqual(createContractBaseline(findings, '2026-07-26'), baseline)
 })
 
 test('contract ratchet detects both new and stale resolved findings', () => {
@@ -127,31 +152,34 @@ test('exception registry rejects expired, under-evidenced exceptions', () => {
     ]
   }
 
-  assert.deepEqual(
-    validateExceptionRegistry(registry, '2026-07-25'),
-    [
-      'exception temporary-hold reason must be at least 20 characters',
-      'exception temporary-hold must have one or more evidence references',
-      'exception temporary-hold expired on 2026-07-24'
-    ]
-  )
+  assert.deepEqual(validateExceptionRegistry(registry, '2026-07-25'), [
+    'exception temporary-hold reason must be at least 20 characters',
+    'exception temporary-hold must have one or more evidence references',
+    'exception temporary-hold expired on 2026-07-24'
+  ])
 })
 
 test('exception registry requires a current monthly review even when empty', () => {
   assert.deepEqual(
-    validateExceptionRegistry({
-      schemaVersion: 1,
-      lastReviewed: '2026-06-01',
-      exceptions: []
-    }, '2026-07-25'),
+    validateExceptionRegistry(
+      {
+        schemaVersion: 1,
+        lastReviewed: '2026-06-01',
+        exceptions: []
+      },
+      '2026-07-25'
+    ),
     ['exceptions.json monthly review is overdue: last reviewed 2026-06-01']
   )
   assert.deepEqual(
-    validateExceptionRegistry({
-      schemaVersion: 1,
-      lastReviewed: '2026-07-26',
-      exceptions: []
-    }, '2026-07-25'),
+    validateExceptionRegistry(
+      {
+        schemaVersion: 1,
+        lastReviewed: '2026-07-26',
+        exceptions: []
+      },
+      '2026-07-25'
+    ),
     ['exceptions.json lastReviewed is in the future: 2026-07-26']
   )
 })
@@ -166,23 +194,27 @@ test('generated-artifact and exception owners must resolve to the owner registry
     /generated artifact conformance\/generated\/\*\* references unknown owner/
   )
   assert.deepEqual(
-    validateExceptionRegistry({
-      schemaVersion: 1,
-      lastReviewed: '2026-07-25',
-      exceptions: [
-        {
-          id: 'owned-hold',
-          category: 'dependency-hold',
-          target: 'example',
-          owner: 'unknown-owner',
-          reason: 'A sufficiently detailed temporary compatibility hold.',
-          evidence: ['https://example.test/evidence'],
-          created: '2026-07-25',
-          reviewBy: '2026-08-01',
-          removeWhen: 'Compatibility is restored.'
-        }
-      ]
-    }, '2026-07-25', projects.ownerDefinitions),
+    validateExceptionRegistry(
+      {
+        schemaVersion: 1,
+        lastReviewed: '2026-07-25',
+        exceptions: [
+          {
+            id: 'owned-hold',
+            category: 'dependency-hold',
+            target: 'example',
+            owner: 'unknown-owner',
+            reason: 'A sufficiently detailed temporary compatibility hold.',
+            evidence: ['https://example.test/evidence'],
+            created: '2026-07-25',
+            reviewBy: '2026-08-01',
+            removeWhen: 'Compatibility is restored.'
+          }
+        ]
+      },
+      '2026-07-25',
+      projects.ownerDefinitions
+    ),
     ['exception owned-hold references unknown owner "unknown-owner"']
   )
 })
@@ -198,10 +230,7 @@ test('exception JSON schema is checked in and references the active schema versi
 })
 
 test('runtime, compiler, and database majors remain coordinated migrations', () => {
-  const dependabot = fs.readFileSync(
-    path.join(REPOSITORY_ROOT, '.github/dependabot.yml'),
-    'utf8'
-  )
+  const dependabot = fs.readFileSync(path.join(REPOSITORY_ROOT, '.github/dependabot.yml'), 'utf8')
   const exceptions = readJson(path.join(healthDirectory, 'exceptions.json'))
   const majorHolds = [
     ...dependabot.matchAll(
@@ -217,14 +246,13 @@ test('runtime, compiler, and database majors remain coordinated migrations', () 
   assert.ok(majorHolds.includes('node'), 'Node majors require an owned runtime migration')
   assert.ok(majorHolds.includes('mysql'), 'MySQL majors require an owned data migration')
   assert.ok(majorHolds.includes('mongo'), 'MongoDB majors require an owned data migration')
-  assert.ok(
-    exceptions.exceptions.some(item => item.id === 'typescript-7-coordinated-migration')
-  )
+  assert.ok(exceptions.exceptions.some(item => item.id === 'typescript-7-coordinated-migration'))
 })
 
 test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen read-only', () => {
   const workflowDirectory = path.join(REPOSITORY_ROOT, '.github/workflows')
-  const workflowFiles = fs.readdirSync(workflowDirectory)
+  const workflowFiles = fs
+    .readdirSync(workflowDirectory)
     .filter(file => /\.(?:yml|yaml)$/.test(file))
     .sort()
   assert.ok(workflowFiles.length > 0)
@@ -242,9 +270,7 @@ test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen r
       )
     }
 
-    const frozenInstalls = source.match(
-      /pnpm install --frozen-lockfile[^\n]*/g
-    ) ?? []
+    const frozenInstalls = source.match(/pnpm install --frozen-lockfile[^\n]*/g) ?? []
     for (const install of frozenInstalls) {
       assert.match(
         install,
@@ -255,10 +281,7 @@ test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen r
     assert.doesNotMatch(source, /(?:@latest|\bnpx\s+--yes\b|\bpip install\b|\bgo install\b)/)
   }
 
-  const codegen = fs.readFileSync(
-    path.join(workflowDirectory, 'codegen.yml'),
-    'utf8'
-  )
+  const codegen = fs.readFileSync(path.join(workflowDirectory, 'codegen.yml'), 'utf8')
   assert.match(codegen, /^permissions: \{\}$/m)
   assert.doesNotMatch(codegen, /contents:\s*write|git-auto-commit|git push/)
   for (const lockfile of [

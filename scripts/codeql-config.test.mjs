@@ -10,14 +10,14 @@ const CODEQL_WORKFLOW_PATH = join(REPOSITORY_ROOT, '.github/workflows/codeql.yml
 const PROJECTS_PATH = join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
 const CODEQL_ACTION_SHA = 'e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81'
 
-function matchesGeneratedBoundary (path, boundary) {
+function matchesGeneratedBoundary(path, boundary) {
   if (boundary.endsWith('/**')) {
     return path.startsWith(boundary.slice(0, -2))
   }
   return path === boundary
 }
 
-function readIndentedList (source, key, indentation = 0) {
+function readIndentedList(source, key, indentation = 0) {
   const lines = source.split('\n')
   const prefix = `${' '.repeat(indentation)}${key}:`
   const start = lines.findIndex(line => line === prefix)
@@ -54,20 +54,16 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
   const generatedBoundaries = registry.generatedArtifacts
     .filter(artifact => artifact.analysisPolicy === 'exclude-generated')
     .map(artifact => artifact.path)
-  const authoredPythonFiles = execFileSync(
-    'git',
-    ['ls-files', '--', '*.py'],
-    { cwd: REPOSITORY_ROOT, encoding: 'utf8' }
-  )
+  const authoredPythonFiles = execFileSync('git', ['ls-files', '--', '*.py'], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8'
+  })
     .trim()
     .split('\n')
     .filter(Boolean)
     .filter(path => !generatedBoundaries.some(boundary => matchesGeneratedBoundary(path, boundary)))
 
-  assert.deepEqual(readIndentedList(workflow, 'language', 8), [
-    'actions',
-    'javascript-typescript'
-  ])
+  assert.deepEqual(readIndentedList(workflow, 'language', 8), ['actions', 'javascript-typescript'])
   assert.deepEqual(
     authoredPythonFiles,
     [],

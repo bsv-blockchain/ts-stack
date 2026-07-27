@@ -50,6 +50,6 @@ if (checkOnly && drift) {
 } else if (checkOnly) {
   console.log(
     `Service edge policy is synchronized across ${synchronizedPaths.length + 1} contexts; ` +
-    `the contract test is synchronized across ${synchronizedTestPaths.length + 1} contexts.`
+      `the contract test is synchronized across ${synchronizedTestPaths.length + 1} contexts.`
   )
 }

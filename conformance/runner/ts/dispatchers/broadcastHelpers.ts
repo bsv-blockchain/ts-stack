@@ -13,12 +13,12 @@ import { getString } from './sdk.js'
 // Re-export sdk.ts getString so broadcast.ts callers get one shared implementation.
 export { getString }
 
-export function getNumber (m: Record<string, unknown>, key: string): number | undefined {
+export function getNumber(m: Record<string, unknown>, key: string): number | undefined {
   const v = m[key]
   return typeof v === 'number' ? v : undefined
 }
 
-export function normalizeHeaderKey (key: string): string {
+export function normalizeHeaderKey(key: string): string {
   return key.toLowerCase()
 }
 
@@ -27,18 +27,15 @@ export function normalizeHeaderKey (key: string): string {
 /**
  * Build a synthetic fetch mock that returns a pre-canned response body.
  */
-export function syntheticFetch (
-  httpStatus: number,
-  responseBody: unknown
-): typeof fetch {
-  return async (_url: string, _opts: RequestInit): Promise<Response> => {
+export function syntheticFetch(httpStatus: number, responseBody: unknown): typeof fetch {
+  return async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     const bodyStr = JSON.stringify(responseBody)
     return {
       ok: httpStatus >= 200 && httpStatus < 300,
       status: httpStatus,
       statusText: httpStatus === 200 ? 'OK' : 'Error',
       headers: {
-        get (key: string): string | null {
+        get(key: string): string | null {
           if (key.toLowerCase() === 'content-type') return 'application/json'
           return null
         }
@@ -52,17 +49,15 @@ export function syntheticFetch (
 /**
  * Build a minimal synthetic Transaction-like object for driving ARC.broadcast().
  */
-export function buildSyntheticTx (rawTxHex: string): {
+export function buildSyntheticTx(rawTxHex: string): {
   toHexEF: () => string
   toHex: () => string
 } {
   return {
-    toHexEF (): string {
-      throw new Error(
-        'All inputs must have source transactions when serializing to EF format'
-      )
+    toHexEF(): string {
+      throw new Error('All inputs must have source transactions when serializing to EF format')
     },
-    toHex (): string {
+    toHex(): string {
       return rawTxHex
     }
   }
@@ -78,7 +73,10 @@ const ARC_ERROR_STATUSES = new Set([
   'MINED_IN_STALE_BLOCK'
 ])
 
-export function isArcFailureStatus (txStatus: string | undefined, extraInfo: string | undefined): boolean {
+export function isArcFailureStatus(
+  txStatus: string | undefined,
+  extraInfo: string | undefined
+): boolean {
   if (txStatus !== undefined && ARC_ERROR_STATUSES.has(txStatus.toUpperCase())) return true
   const isOrphan =
     (extraInfo?.toUpperCase().includes('ORPHAN') ?? false) ||
@@ -88,7 +86,7 @@ export function isArcFailureStatus (txStatus: string | undefined, extraInfo: str
 
 // ── ARC submit response assertions ────────────────────────────────────────────
 
-export async function assertArcSuccess200 (
+export async function assertArcSuccess200(
   expBody: Record<string, unknown>,
   txStatus: string,
   extraInfo: string,
@@ -102,7 +100,7 @@ export async function assertArcSuccess200 (
   }
 }
 
-async function assertArcHttp200AsFailure (
+async function assertArcHttp200AsFailure(
   expBody: Record<string, unknown>,
   txStatus: string,
   txid: string,
@@ -126,7 +124,7 @@ async function assertArcHttp200AsFailure (
   }
 }
 
-async function assertArcHttp200AsSuccess (
+async function assertArcHttp200AsSuccess(
   expBody: Record<string, unknown>,
   txid: string,
   rawTx: string
@@ -144,7 +142,7 @@ async function assertArcHttp200AsSuccess (
   }
 }
 
-export async function assertArcNon200 (
+export async function assertArcNon200(
   expectedStatus: number,
   expBody: Record<string, unknown>,
   rawTx: string
@@ -172,14 +170,14 @@ export interface ValidationResult {
   reason: string
 }
 
-function validateTxid (txid: unknown): ValidationResult | null {
+function validateTxid(txid: unknown): ValidationResult | null {
   if (typeof txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(txid)) {
     return { valid: false, reason: 'invalid txid: must be 64 hex chars' }
   }
   return null
 }
 
-function validateMerklePath (merklePath: unknown, blockHeight: number): ValidationResult | null {
+function validateMerklePath(merklePath: unknown, blockHeight: number): ValidationResult | null {
   if (merklePath === undefined || merklePath === null) {
     return { valid: false, reason: 'merklePath is required' }
   }
@@ -197,7 +195,7 @@ function validateMerklePath (merklePath: unknown, blockHeight: number): Validati
   return null
 }
 
-function validateBlockHeight (blockHeight: unknown): ValidationResult | null {
+function validateBlockHeight(blockHeight: unknown): ValidationResult | null {
   if (blockHeight === undefined || blockHeight === null) {
     return { valid: false, reason: 'blockHeight is required' }
   }
@@ -220,7 +218,7 @@ function validateBlockHeight (blockHeight: unknown): ValidationResult | null {
  * genesis as a special case per the vector's stated intent. This is the minimum
  * change to make both vectors pass without changing vector data.
  */
-export function validateArcCallbackPayload (body: Record<string, unknown>): ValidationResult {
+export function validateArcCallbackPayload(body: Record<string, unknown>): ValidationResult {
   const txidResult = validateTxid(body.txid)
   if (txidResult !== null) return txidResult
 
@@ -235,7 +233,7 @@ export function validateArcCallbackPayload (body: Record<string, unknown>): Vali
 
 // ── Merkle-path SDK parsing ────────────────────────────────────────────────────
 
-export async function assertMerklePathParseable (
+export async function assertMerklePathParseable(
   merklePath: string,
   blockHeight: number,
   expBody: Record<string, unknown>
@@ -245,7 +243,7 @@ export async function assertMerklePathParseable (
     let mp: MerklePath | undefined
     try {
       mp = MerklePath.fromHex(merklePath)
-    } catch (_e) {
+    } catch {
       mp = undefined
     }
     if (mp !== undefined) {
@@ -259,11 +257,11 @@ export async function assertMerklePathParseable (
 
 const TXID_PATTERN = /^[0-9a-fA-F]{64}$/
 
-export function isValidTxid (txid: unknown): boolean {
+export function isValidTxid(txid: unknown): boolean {
   return typeof txid === 'string' && TXID_PATTERN.test(txid)
 }
 
-export function isValidHttpUrl (url: unknown): boolean {
+export function isValidHttpUrl(url: unknown): boolean {
   if (typeof url !== 'string') return false
   return url.startsWith('http://') || url.startsWith('https://')
 }
@@ -273,7 +271,7 @@ export interface SimulatedWatchResult {
   error?: string
 }
 
-export function simulateWatchRequest (
+export function simulateWatchRequest(
   input: Record<string, unknown>,
   body: Record<string, unknown>
 ): SimulatedWatchResult {
@@ -301,7 +299,7 @@ export function simulateWatchRequest (
   return { status: 200 }
 }
 
-export function assertWatchResponse (
+export function assertWatchResponse(
   sim: SimulatedWatchResult,
   expectedStatus: number | undefined,
   expBody: Record<string, unknown>
@@ -319,7 +317,7 @@ export function assertWatchResponse (
   }
 }
 
-export function assertSchemaCheckVector (
+export function assertSchemaCheckVector(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {

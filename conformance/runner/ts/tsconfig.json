@@ -1,16 +1,34 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
+    "lib": ["ES2023", "DOM"],
     "module": "NodeNext",
-    "target": "ES2020",
+    "target": "ES2022",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
-    "strict": false,
+    "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@bsv/sdk": ["../../../packages/sdk/dist/types/mod.d.ts"],
+      "@bsv/sdk/compat/*": ["../../../packages/sdk/dist/types/src/compat/*.d.ts"],
+      "@bsv/sdk/primitives/*": ["../../../packages/sdk/dist/types/src/primitives/*.d.ts"],
+      "@bsv/sdk/storage": ["../../../packages/sdk/dist/types/src/storage/index.d.ts"],
+      "@wallet-toolbox/Wallet": ["../../../packages/wallet/wallet-toolbox/out/src/Wallet.d.ts"],
+      "@wallet-toolbox/storage/WalletStorageManager": [
+        "../../../packages/wallet/wallet-toolbox/out/src/storage/WalletStorageManager.d.ts"
+      ],
+      "@wallet-toolbox/sdk/WalletStorage.interfaces": [
+        "../../../packages/wallet/wallet-toolbox/out/src/sdk/WalletStorage.interfaces.d.ts"
+      ],
+      "@wallet-toolbox/storage/schema/tables": [
+        "../../../packages/wallet/wallet-toolbox/out/src/storage/schema/tables/index.d.ts"
+      ]
+    }
   },
   "include": ["*.ts"],
   "exclude": []

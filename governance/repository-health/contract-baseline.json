@@ -1,55 +1,6 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-07-26",
-  "findingCount": 12,
-  "findings": [
-    {
-      "id": ".::missing-script::format:check",
-      "message": "Profile monorepo requires script format:check"
-    },
-    {
-      "id": "conformance/runner::missing-script::format:check",
-      "message": "Profile conformance-runner requires script format:check"
-    },
-    {
-      "id": "conformance/runner::missing-script::lint",
-      "message": "Profile conformance-runner requires script lint"
-    },
-    {
-      "id": "conformance/runner/ts::missing-script::format:check",
-      "message": "Profile conformance-runner-ts requires script format:check"
-    },
-    {
-      "id": "conformance/runner/ts::missing-script::lint",
-      "message": "Profile conformance-runner-ts requires script lint"
-    },
-    {
-      "id": "conformance/runner/ts::missing-script::typecheck",
-      "message": "Profile conformance-runner-ts requires script typecheck"
-    },
-    {
-      "id": "docs-site::missing-script::format:check",
-      "message": "Profile documentation-site requires script format:check"
-    },
-    {
-      "id": "docs-site::missing-script::lint",
-      "message": "Profile documentation-site requires script lint"
-    },
-    {
-      "id": "docs-site::missing-script::test",
-      "message": "Profile documentation-site requires script test"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox-examples::missing-script::format:check",
-      "message": "Profile examples requires script format:check"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox-examples::missing-script::typecheck",
-      "message": "Profile examples requires script typecheck"
-    },
-    {
-      "id": "packages/wallet/wallet-toolbox-examples::mutating-check-script::lint",
-      "message": "lint must not modify the working tree"
-    }
-  ]
+  "findingCount": 0,
+  "findings": []
 }

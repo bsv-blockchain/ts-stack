@@ -46,6 +46,8 @@ Useful root commands:
 | `pnpm build` | Builds every workspace package except the private root package |
 | `pnpm test` | Runs every workspace package test script |
 | `pnpm lint` | Runs every workspace package lint script |
+| `pnpm format:check` | Verifies repository and workspace formatting without changing files |
+| `pnpm health:check` | Enforces repository profiles, package metadata, licensing, and policy synchronization |
 | `pnpm check-versions` | Verifies cross-package dependency references |
 | `pnpm sync-versions` | Updates stale cross-package dependency references |
 | `pnpm conformance` | Runs the structural conformance vector runner |

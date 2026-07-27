@@ -12,10 +12,7 @@ import { ar } from './listChange'
  *
  * @publicbody
  */
-export async function janitorOnIdentity(
-  identityKey: string,
-  chain: sdk.Chain
-): Promise<void> {
+export async function janitorOnIdentity(identityKey: string, chain: sdk.Chain): Promise<void> {
   const env = Setup.getEnv(chain)
   const setup = await Setup.createWalletClient({
     env,
@@ -39,9 +36,7 @@ Janitor list invalid change outputs for:
     }
 
     console.log('  satoshis |  vout | txid')
-    console.log(
-      '-----------|-------|--------------------------------------------'
-    )
+    console.log('-----------|-------|--------------------------------------------')
     for (const o of change.outputs) {
       const { txid, vout } = sdk.Validation.parseWalletOutpoint(o.outpoint)
       console.log(`${ar(o.satoshis, 10)} | ${ar(vout, 5)} | ${txid}`)
@@ -67,10 +62,7 @@ export async function janitor(): Promise<void> {
   }
 }
 
-export async function releaseOnIdentity(
-  identityKey: string,
-  chain: sdk.Chain
-): Promise<void> {
+export async function releaseOnIdentity(identityKey: string, chain: sdk.Chain): Promise<void> {
   const env = Setup.getEnv(chain)
   const setup = await Setup.createWalletClient({
     env,

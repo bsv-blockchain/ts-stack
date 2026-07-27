@@ -25,7 +25,6 @@ import {
   normalizeHeaderKey,
   syntheticFetch,
   buildSyntheticTx,
-  isArcFailureStatus,
   assertArcSuccess200,
   assertArcNon200,
   validateArcCallbackPayload,
@@ -43,7 +42,7 @@ export const categories: ReadonlyArray<string> = [
 
 // ── ARC Submit Dispatcher ──────────────────────────────────────────────────────
 
-function assertArcRequestShape (
+function assertArcRequestShape(
   method: string,
   path: string,
   headers: Record<string, unknown>,
@@ -53,16 +52,14 @@ function assertArcRequestShape (
   expect(path.startsWith('/v1/') || path.startsWith('/arc-ingest')).toBe(true)
 
   if (method === 'POST' && input.body !== undefined) {
-    const ct = Object.entries(headers).find(
-      ([k]) => normalizeHeaderKey(k) === 'content-type'
-    )
+    const ct = Object.entries(headers).find(([k]) => normalizeHeaderKey(k) === 'content-type')
     if (ct !== undefined) {
       expect((ct[1] as string).toLowerCase()).toContain('application/json')
     }
   }
 }
 
-async function dispatchArcPostTx (
+async function dispatchArcPostTx(
   expectedStatus: number,
   expBody: Record<string, unknown>,
   input: Record<string, unknown>
@@ -80,7 +77,7 @@ async function dispatchArcPostTx (
   }
 }
 
-async function dispatchArcGetTx (
+async function dispatchArcGetTx(
   path: string,
   expectedStatus: number,
   expectedBody: unknown
@@ -101,7 +98,7 @@ async function dispatchArcGetTx (
   }
 }
 
-function dispatchArcBatchTx (expectedBody: unknown, inputBody: unknown): void {
+function dispatchArcBatchTx(expectedBody: unknown, inputBody: unknown): void {
   if (Array.isArray(expectedBody) && Array.isArray(inputBody)) {
     expect(expectedBody.length).toBe((inputBody as unknown[]).length)
     for (const item of expectedBody) {
@@ -114,7 +111,7 @@ function dispatchArcBatchTx (expectedBody: unknown, inputBody: unknown): void {
   }
 }
 
-async function dispatchArcSubmit (
+async function dispatchArcSubmit(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -135,7 +132,12 @@ async function dispatchArcSubmit (
     return
   }
 
-  if (method === 'POST' && path === '/v1/tx' && typeof expectedBody === 'object' && expectedBody !== null) {
+  if (
+    method === 'POST' &&
+    path === '/v1/tx' &&
+    typeof expectedBody === 'object' &&
+    expectedBody !== null
+  ) {
     await dispatchArcPostTx(expectedStatus, expectedBody as Record<string, unknown>, input)
     return
   }
@@ -161,7 +163,7 @@ async function dispatchArcSubmit (
 
 // ── Merkle-Path Validation Dispatcher ─────────────────────────────────────────
 
-async function dispatchMerklePathValidation (
+async function dispatchMerklePathValidation(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -192,7 +194,7 @@ async function dispatchMerklePathValidation (
   }
 }
 
-async function dispatchMerklePathValidationFull (
+async function dispatchMerklePathValidationFull(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -209,7 +211,7 @@ async function dispatchMerklePathValidationFull (
   await dispatchMerklePathValidation(input, expected)
 }
 
-async function dispatchMerklePathSdkFailure (
+async function dispatchMerklePathSdkFailure(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -246,7 +248,7 @@ async function dispatchMerklePathSdkFailure (
 
 // ── Merkle-Service Dispatcher ──────────────────────────────────────────────────
 
-async function dispatchMerkleService (
+async function dispatchMerkleService(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -272,7 +274,7 @@ async function dispatchMerkleService (
   }
 }
 
-function dispatchMerkleServiceHealth (
+function dispatchMerkleServiceHealth(
   expectedStatus: number | undefined,
   expBody: Record<string, unknown>
 ): void {
@@ -293,7 +295,7 @@ function dispatchMerkleServiceHealth (
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>

@@ -4,11 +4,7 @@
   "title": "TS Stack temporary exception registry",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schemaVersion",
-    "lastReviewed",
-    "exceptions"
-  ],
+  "required": ["schemaVersion", "lastReviewed", "exceptions"],
   "properties": {
     "schemaVersion": {
       "const": 1

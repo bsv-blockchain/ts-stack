@@ -1,7 +1,6 @@
 import { InternalizeActionArgs } from '@bsv/sdk'
 import { Services, Setup } from '@bsv/wallet-toolbox'
 
-
 /**
  * Example of internalizing a BRC29 wallet payment output into the receiving wallet.
  *
@@ -35,8 +34,7 @@ export async function internalizeWalletPayment() {
   })
   storage.setServices(new Services(env.chain))
 
-  const txid =
-    'e519f2e9a93477ad718cbea63528b458a0a056bdb462399e2ff094766bbc2a34'
+  const txid = 'e519f2e9a93477ad718cbea63528b458a0a056bdb462399e2ff094766bbc2a34'
   const beef = await storage.getBeefForTransaction(txid, {})
 
   const args: InternalizeActionArgs = {

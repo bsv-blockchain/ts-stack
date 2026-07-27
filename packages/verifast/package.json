@@ -10,8 +10,20 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "packages/verifast"
   },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
   "type": "module",
   "description": "Optional C++/WASM (BDK) transaction script-verification backend for @bsv/sdk",
+  "author": "BSV Blockchain Association",
+  "keywords": [
+    "bsv",
+    "bitcoin-script",
+    "verification",
+    "wasm",
+    "worker"
+  ],
   "license": "SEE LICENSE IN LICENSE.txt",
   "main": "dist/cjs/mod.cjs",
   "module": "dist/mod.js",

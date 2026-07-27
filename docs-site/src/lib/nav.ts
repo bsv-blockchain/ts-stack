@@ -16,8 +16,8 @@ export const NAV: NavSection[] = [
       { label: 'Overview', href: '/get-started/' },
       { label: 'Install', href: '/get-started/install/' },
       { label: 'Choose your stack', href: '/get-started/choose-your-stack/' },
-      { label: 'Key concepts', href: '/get-started/concepts/' },
-    ],
+      { label: 'Key concepts', href: '/get-started/concepts/' }
+    ]
   },
   {
     label: 'Architecture',
@@ -27,8 +27,8 @@ export const NAV: NavSection[] = [
       { label: 'BEEF (BRC-62)', href: '/architecture/beef/' },
       { label: 'BRC-100 Wallet Interface', href: '/architecture/brc-100/' },
       { label: 'Identity & Auth', href: '/architecture/identity/' },
-      { label: 'Conformance pipeline', href: '/architecture/conformance/' },
-    ],
+      { label: 'Conformance pipeline', href: '/architecture/conformance/' }
+    ]
   },
   {
     label: 'Packages',
@@ -37,7 +37,7 @@ export const NAV: NavSection[] = [
       {
         label: 'SDK',
         href: '/packages/sdk/',
-        items: [{ label: '@bsv/sdk', href: '/packages/sdk/bsv-sdk/' }],
+        items: [{ label: '@bsv/sdk', href: '/packages/sdk/bsv-sdk/' }]
       },
       {
         label: 'Wallet',
@@ -45,15 +45,21 @@ export const NAV: NavSection[] = [
         items: [
           { label: '@bsv/wallet-toolbox', href: '/packages/wallet/wallet-toolbox/' },
           { label: '@bsv/btms', href: '/packages/wallet/btms/' },
-          { label: '@bsv/btms-permission-module', href: '/packages/wallet/btms-permission-module/' },
+          {
+            label: '@bsv/btms-permission-module',
+            href: '/packages/wallet/btms-permission-module/'
+          },
           { label: '@bsv/wallet-relay', href: '/packages/wallet/wallet-relay/' },
-          { label: '@bsv/wallet-toolbox-examples', href: '/packages/wallet/wallet-toolbox-examples/' },
-        ],
+          {
+            label: '@bsv/wallet-toolbox-examples',
+            href: '/packages/wallet/wallet-toolbox-examples/'
+          }
+        ]
       },
       {
         label: 'Network',
         href: '/packages/network/',
-        items: [{ label: '@bsv/teranode-listener', href: '/packages/network/teranode-listener/' }],
+        items: [{ label: '@bsv/teranode-listener', href: '/packages/network/teranode-listener/' }]
       },
       {
         label: 'Overlays',
@@ -62,10 +68,13 @@ export const NAV: NavSection[] = [
           { label: '@bsv/overlay', href: '/packages/overlays/overlay/' },
           { label: '@bsv/overlay-express', href: '/packages/overlays/overlay-express/' },
           { label: '@bsv/overlay-topics', href: '/packages/overlays/overlay-topics/' },
-          { label: '@bsv/overlay-discovery-services', href: '/packages/overlays/overlay-discovery-services/' },
+          {
+            label: '@bsv/overlay-discovery-services',
+            href: '/packages/overlays/overlay-discovery-services/'
+          },
           { label: '@bsv/gasp', href: '/packages/overlays/gasp/' },
-          { label: '@bsv/btms-backend', href: '/packages/overlays/btms-backend/' },
-        ],
+          { label: '@bsv/btms-backend', href: '/packages/overlays/btms-backend/' }
+        ]
       },
       {
         label: 'Messaging',
@@ -74,17 +83,23 @@ export const NAV: NavSection[] = [
           { label: '@bsv/message-box-client', href: '/packages/messaging/message-box-client/' },
           { label: '@bsv/authsocket', href: '/packages/messaging/authsocket/' },
           { label: '@bsv/authsocket-client', href: '/packages/messaging/authsocket-client/' },
-          { label: '@bsv/paymail', href: '/packages/messaging/paymail/' },
-        ],
+          { label: '@bsv/paymail', href: '/packages/messaging/paymail/' }
+        ]
       },
       {
         label: 'Middleware',
         href: '/packages/middleware/',
         items: [
-          { label: '@bsv/auth-express-middleware', href: '/packages/middleware/auth-express-middleware/' },
-          { label: '@bsv/payment-express-middleware', href: '/packages/middleware/payment-express-middleware/' },
-          { label: '@bsv/402-pay', href: '/packages/middleware/402-pay/' },
-        ],
+          {
+            label: '@bsv/auth-express-middleware',
+            href: '/packages/middleware/auth-express-middleware/'
+          },
+          {
+            label: '@bsv/payment-express-middleware',
+            href: '/packages/middleware/payment-express-middleware/'
+          },
+          { label: '@bsv/402-pay', href: '/packages/middleware/402-pay/' }
+        ]
       },
       {
         label: 'Helpers',
@@ -96,10 +111,10 @@ export const NAV: NavSection[] = [
           { label: '@bsv/did-client', href: '/packages/helpers/did-client/' },
           { label: '@bsv/wallet-helper', href: '/packages/helpers/wallet-helper/' },
           { label: '@bsv/amountinator', href: '/packages/helpers/amountinator/' },
-          { label: '@bsv/fund-wallet', href: '/packages/helpers/fund-wallet/' },
-        ],
-      },
-    ],
+          { label: '@bsv/fund-wallet', href: '/packages/helpers/fund-wallet/' }
+        ]
+      }
+    ]
   },
   {
     label: 'Infrastructure',
@@ -111,8 +126,8 @@ export const NAV: NavSection[] = [
       { label: 'uhrp-server-cloud-bucket', href: '/infrastructure/uhrp-server-cloud-bucket/' },
       { label: 'wab', href: '/infrastructure/wab/' },
       { label: 'wallet-infra', href: '/infrastructure/wallet-infra/' },
-      { label: 'chaintracks-server', href: '/infrastructure/chaintracks-server/' },
-    ],
+      { label: 'chaintracks-server', href: '/infrastructure/chaintracks-server/' }
+    ]
   },
   {
     label: 'Specs',
@@ -129,8 +144,8 @@ export const NAV: NavSection[] = [
       { label: 'Merkle Service', href: '/specs/merkle-service/' },
       { label: 'Storage Adapter', href: '/specs/storage-adapter/' },
       { label: 'GASP Sync', href: '/specs/gasp-sync/' },
-      { label: 'UHRP', href: '/specs/uhrp/' },
-    ],
+      { label: 'UHRP', href: '/specs/uhrp/' }
+    ]
   },
   {
     label: 'Conformance',
@@ -138,8 +153,8 @@ export const NAV: NavSection[] = [
       { label: 'Overview', href: '/conformance/' },
       { label: 'Vector catalog', href: '/conformance/vectors/' },
       { label: 'TS runner', href: '/conformance/runner-ts/' },
-      { label: 'Contributing vectors', href: '/conformance/contributing-vectors/' },
-    ],
+      { label: 'Contributing vectors', href: '/conformance/contributing-vectors/' }
+    ]
   },
   {
     label: 'Guides',
@@ -148,16 +163,16 @@ export const NAV: NavSection[] = [
       { label: 'Build a wallet-aware app', href: '/guides/wallet-aware-app/' },
       { label: 'Run an overlay node', href: '/guides/run-overlay-node/' },
       { label: 'Peer-to-peer messaging', href: '/guides/peer-to-peer-messaging/' },
-      { label: 'HTTP 402 payments', href: '/guides/http-402-payments/' },
-    ],
+      { label: 'HTTP 402 payments', href: '/guides/http-402-payments/' }
+    ]
   },
   {
     label: 'Reference',
     items: [
       { label: 'Overview', href: '/reference/' },
       { label: 'BRC index', href: '/reference/brc-index/' },
-      { label: 'Repository health', href: '/reference/repository-health/' },
-    ],
+      { label: 'Repository health', href: '/reference/repository-health/' }
+    ]
   },
   {
     label: 'About',
@@ -165,9 +180,9 @@ export const NAV: NavSection[] = [
       { label: 'Versioning', href: '/about/versioning/' },
       { label: 'Contributing', href: '/about/contributing/' },
       { label: 'Doc agent', href: '/about/doc-agent/' },
-      { label: 'Documentation sources', href: '/about/sources/' },
-    ],
-  },
+      { label: 'Documentation sources', href: '/about/sources/' }
+    ]
+  }
 ]
 
 export function flattenNav(): NavItem[] {
@@ -184,8 +199,6 @@ export function flattenNav(): NavItem[] {
 export function findCurrentSection(pathname: string): string | null {
   const first = pathname.split('/').filter(Boolean)[0]
   if (!first) return null
-  const section = NAV.find(s =>
-    s.items.some(i => i.href.startsWith(`/${first}`))
-  )
+  const section = NAV.find(s => s.items.some(i => i.href.startsWith(`/${first}`)))
   return section?.label ?? null
 }

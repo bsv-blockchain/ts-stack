@@ -15,6 +15,9 @@ for (const folder of ['diagrams', 'images']) {
 
   cpSync(source, join(DIST_ASSETS, folder), {
     recursive: true,
-    filter: (path) => !relative(source, path).split(/[/\\]/).some((part) => part.startsWith('.')),
+    filter: path =>
+      !relative(source, path)
+        .split(/[/\\]/)
+        .some(part => part.startsWith('.'))
   })
 }

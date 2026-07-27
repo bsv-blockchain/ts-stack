@@ -1,11 +1,6 @@
 import { Beef, CreateActionOptions, Random, SendWithResult } from '@bsv/sdk'
 import { randomBytesBase64, Setup, SetupWallet } from '@bsv/wallet-toolbox'
-import {
-  mintPushDropToken,
-  PushDropArgs,
-  PushDropToken,
-  redeemPushDropToken
-} from './pushdrop'
+import { mintPushDropToken, PushDropArgs, PushDropToken, redeemPushDropToken } from './pushdrop'
 import { runArgv2Function } from './runArgv2Function'
 
 /**
@@ -45,10 +40,7 @@ export async function mintTokens(
 /**
  * @publicbody
  */
-export async function sendWith(
-  setup: SetupWallet,
-  txids: string[]
-): Promise<SendWithResult[]> {
+export async function sendWith(setup: SetupWallet, txids: string[]): Promise<SendWithResult[]> {
   /**
    * Transition a set of previously created 'nosend' actions to a sendable batch of actions.
    */

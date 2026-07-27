@@ -55,18 +55,18 @@ const ZERO_HASH = '0000000000000000000000000000000000000000000000000000000000000
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getNumber (m: Record<string, unknown>, key: string): number {
+function getNumber(m: Record<string, unknown>, key: string): number {
   const v = m[key]
   return typeof v === 'number' ? v : 0
 }
 
 /** Assert a GASPOutput object has correct field types and constraint values. */
-function assertGASPOutput (output: unknown, ctx: string): void {
+function assertGASPOutput(output: unknown, _ctx: string): void {
   expect(output).toBeDefined()
   expect(typeof output).toBe('object')
   const o = output as Record<string, unknown>
@@ -88,7 +88,7 @@ function assertGASPOutput (output: unknown, ctx: string): void {
  * gasp/initialRequest — GASPInitialRequest validation.
  * Shape: { version: number, since: integer >= 0, limit?: integer >= 1 }
  */
-function dispatchInitialRequest (
+function dispatchInitialRequest(
   msg: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -129,7 +129,7 @@ function dispatchInitialRequest (
  * gasp/initialResponse — GASPInitialResponse validation.
  * Shape: { UTXOList: GASPOutput[], since: integer >= 0 }
  */
-function dispatchInitialResponse (
+function dispatchInitialResponse(
   msg: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -150,7 +150,7 @@ function dispatchInitialResponse (
  * gasp/initialReply — GASPInitialReply validation.
  * Shape: { UTXOList: GASPOutput[] }
  */
-function dispatchInitialReply (
+function dispatchInitialReply(
   msg: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -167,7 +167,7 @@ function dispatchInitialReply (
  * gasp/requestNode — GASPNodeRequest validation.
  * Shape: { graphID: string, txid: /^[0-9a-fA-F]{64}$/, outputIndex: int >= 0, metadata: boolean }
  */
-function dispatchRequestNode (
+function dispatchRequestNode(
   msg: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -190,10 +190,7 @@ function dispatchRequestNode (
  * gasp/node — GASPNode validation.
  * Shape: { graphID, rawTx (hex string), outputIndex, proof?, txMetadata?, outputMetadata?, inputs? }
  */
-function dispatchNode (
-  msg: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchNode(msg: Record<string, unknown>, expected: Record<string, unknown>): void {
   expect(expected['valid']).toBe(true)
 
   // Required fields
@@ -241,7 +238,7 @@ function dispatchNode (
  * Shape: { requestedInputs: Record<string, { metadata: boolean }> | null }
  * null or {} both signal graph completion.
  */
-function dispatchNodeResponse (
+function dispatchNodeResponse(
   msg: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -269,10 +266,7 @@ function dispatchNodeResponse (
  * HTTP overlay vectors — /requestSyncResponse and /requestForeignGASPNode.
  * These describe the GASP sync over HTTP extension on the overlay server.
  */
-function dispatchHTTP (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchHTTP(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const method = getString(input, 'method')
   const path = getString(input, 'path')
   const headers = (input['headers'] ?? {}) as Record<string, string>
@@ -371,31 +365,52 @@ function dispatchHTTP (
 
 const BRC40_ENTITY_KEYS = [
   'user',
-  'provenTxs', 'provenTxReqs', 'outputBaskets', 'txLabels', 'outputTags',
-  'transactions', 'txLabelMaps', 'commissions', 'outputs', 'outputTagMaps',
-  'certificates', 'certificateFields'
+  'provenTxs',
+  'provenTxReqs',
+  'outputBaskets',
+  'txLabels',
+  'outputTags',
+  'transactions',
+  'txLabelMaps',
+  'commissions',
+  'outputs',
+  'outputTagMaps',
+  'certificates',
+  'certificateFields'
 ] as const
 
 const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 
-function isNonEmptyHexPubkey (v: unknown): boolean {
+function isNonEmptyHexPubkey(v: unknown): boolean {
   return typeof v === 'string' && /^[0-9a-fA-F]+$/.test(v) && v.length >= 2
 }
 
 /** Pure structural validation of RequestSyncChunkArgs. Returns true if request is well-formed. */
-function isValidBRC40Request (m: Record<string, unknown>): { ok: true } | { ok: false; field?: string; reason?: string } {
-  if (!isNonEmptyHexPubkey(m['fromStorageIdentityKey'])) return { ok: false, field: 'fromStorageIdentityKey' }
-  if (!isNonEmptyHexPubkey(m['toStorageIdentityKey'])) return { ok: false, field: 'toStorageIdentityKey' }
+function isValidBRC40Request(
+  m: Record<string, unknown>
+): { ok: true } | { ok: false; field?: string; reason?: string } {
+  if (!isNonEmptyHexPubkey(m['fromStorageIdentityKey']))
+    return { ok: false, field: 'fromStorageIdentityKey' }
+  if (!isNonEmptyHexPubkey(m['toStorageIdentityKey']))
+    return { ok: false, field: 'toStorageIdentityKey' }
   if (!isNonEmptyHexPubkey(m['identityKey'])) return { ok: false, field: 'identityKey' }
   if ('since' in m && m['since'] !== undefined) {
     if (typeof m['since'] !== 'string' || !ISO_8601_RE.test(m['since'])) {
       return { ok: false, field: 'since', reason: 'must be ISO-8601 string' }
     }
   }
-  if (typeof m['maxRoughSize'] !== 'number' || !Number.isInteger(m['maxRoughSize']) || (m['maxRoughSize'] as number) < 1) {
+  if (
+    typeof m['maxRoughSize'] !== 'number' ||
+    !Number.isInteger(m['maxRoughSize']) ||
+    (m['maxRoughSize'] as number) < 1
+  ) {
     return { ok: false, field: 'maxRoughSize', reason: 'integer >= 1' }
   }
-  if (typeof m['maxItems'] !== 'number' || !Number.isInteger(m['maxItems']) || (m['maxItems'] as number) < 1) {
+  if (
+    typeof m['maxItems'] !== 'number' ||
+    !Number.isInteger(m['maxItems']) ||
+    (m['maxItems'] as number) < 1
+  ) {
     return { ok: false, field: 'maxItems', reason: 'integer >= 1' }
   }
   if (!Array.isArray(m['offsets'])) return { ok: false, field: 'offsets' }
@@ -407,7 +422,11 @@ function isValidBRC40Request (m: Record<string, unknown>): { ok: true } | { ok: 
     if (typeof e['name'] !== 'string' || (e['name'] as string).length === 0) {
       return { ok: false, field: 'offsets', reason: 'offset.name required' }
     }
-    if (typeof e['offset'] !== 'number' || !Number.isInteger(e['offset']) || (e['offset'] as number) < 0) {
+    if (
+      typeof e['offset'] !== 'number' ||
+      !Number.isInteger(e['offset']) ||
+      (e['offset'] as number) < 0
+    ) {
       return { ok: false, field: 'offsets', reason: 'offset must be integer >= 0' }
     }
   }
@@ -415,12 +434,14 @@ function isValidBRC40Request (m: Record<string, unknown>): { ok: true } | { ok: 
 }
 
 /** Pure structural validation of a SyncChunk message. */
-function isValidBRC40SyncChunk (
+function isValidBRC40SyncChunk(
   m: Record<string, unknown>,
   request?: Record<string, unknown>
 ): { ok: true; allEmpty: boolean } | { ok: false; reason: string } {
-  if (!isNonEmptyHexPubkey(m['fromStorageIdentityKey'])) return { ok: false, reason: 'fromStorageIdentityKey' }
-  if (!isNonEmptyHexPubkey(m['toStorageIdentityKey'])) return { ok: false, reason: 'toStorageIdentityKey' }
+  if (!isNonEmptyHexPubkey(m['fromStorageIdentityKey']))
+    return { ok: false, reason: 'fromStorageIdentityKey' }
+  if (!isNonEmptyHexPubkey(m['toStorageIdentityKey']))
+    return { ok: false, reason: 'toStorageIdentityKey' }
   if (!isNonEmptyHexPubkey(m['userIdentityKey'])) return { ok: false, reason: 'userIdentityKey' }
 
   if (request !== undefined && typeof request['identityKey'] === 'string') {
@@ -462,15 +483,16 @@ function isValidBRC40SyncChunk (
 }
 
 /** Detect ID-mapping conflict / convergence across a sequence of SyncChunks. */
-function detectIdMappingResult (
+function detectIdMappingResult(
   messages: Array<Record<string, unknown>>
 ): { ok: true } | { ok: false; reason: string } {
   // Natural-key index per entity
   const naturalKeyForEntity: Record<string, (row: Record<string, unknown>) => string | null> = {
-    provenTxs: (r) => typeof r['txid'] === 'string' ? r['txid'] as string : null,
-    outputBaskets: (r) =>
+    provenTxs: r => (typeof r['txid'] === 'string' ? (r['txid'] as string) : null),
+    outputBaskets: r =>
       r['userId'] !== undefined && typeof r['name'] === 'string'
-        ? `${String(r['userId'])}::${r['name'] as string}` : null
+        ? `${String(r['userId'])}::${r['name'] as string}`
+        : null
   }
   // For each entity, track natural-key → producer-side surrogate ID seen
   const seen: Record<string, Map<string, unknown>> = {}
@@ -520,25 +542,32 @@ function detectIdMappingResult (
  * with older updated_at must not regress mutable fields (transaction.status,
  * transaction.provenTxId, output.spendable, output.spentBy).
  */
-function mergeAction (
+function mergeAction(
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>
 ): 'update' | 'skip' {
-  const e = typeof existing['updated_at'] === 'string' ? Date.parse(existing['updated_at'] as string) : Number.NaN
-  const i = typeof incoming['updated_at'] === 'string' ? Date.parse(incoming['updated_at'] as string) : Number.NaN
+  const e =
+    typeof existing['updated_at'] === 'string'
+      ? Date.parse(existing['updated_at'] as string)
+      : Number.NaN
+  const i =
+    typeof incoming['updated_at'] === 'string'
+      ? Date.parse(incoming['updated_at'] as string)
+      : Number.NaN
   if (Number.isNaN(e) || Number.isNaN(i)) return 'skip'
   return i > e ? 'update' : 'skip'
 }
 
 /** Replay an ordered chunk sequence and produce the post-merge state per natural key. */
-function replayChunks (
+function replayChunks(
   messages: Array<Record<string, unknown>>
 ): Record<string, Map<string, Record<string, unknown>>> {
   const state: Record<string, Map<string, Record<string, unknown>>> = {}
   const naturalKey: Record<string, (r: Record<string, unknown>) => string | null> = {
-    transactions: (r) => r['transactionId'] !== undefined ? `tx::${String(r['transactionId'])}` : null,
-    outputs: (r) => r['outputId'] !== undefined ? `out::${String(r['outputId'])}` : null,
-    provenTxs: (r) => typeof r['txid'] === 'string' ? `ptx::${r['txid'] as string}` : null
+    transactions: r =>
+      r['transactionId'] !== undefined ? `tx::${String(r['transactionId'])}` : null,
+    outputs: r => (r['outputId'] !== undefined ? `out::${String(r['outputId'])}` : null),
+    provenTxs: r => (typeof r['txid'] === 'string' ? `ptx::${r['txid'] as string}` : null)
   }
   for (const chunk of messages) {
     const sc = (chunk['syncChunk'] ?? chunk) as Record<string, unknown>
@@ -560,10 +589,7 @@ function replayChunks (
   return state
 }
 
-function dispatchBRC40 (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchBRC40(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const channel = getString(input, 'channel')
 
   if (channel === 'brc40/mergeExisting') {
@@ -649,11 +675,12 @@ function dispatchBRC40 (
           const stateMap = replayed[entity] ?? new Map<string, Record<string, unknown>>()
           for (const expRow of expectedRows as Array<Record<string, unknown>>) {
             // Locate the row in replayed state by transactionId / outputId / txid
-            const expRowKey = entity === 'transactions'
-              ? `tx::${String(expRow['transactionId'])}`
-              : entity === 'outputs'
-                ? `out::${String(expRow['outputId'])}`
-                : `ptx::${String(expRow['txid'])}`
+            const expRowKey =
+              entity === 'transactions'
+                ? `tx::${String(expRow['transactionId'])}`
+                : entity === 'outputs'
+                  ? `out::${String(expRow['outputId'])}`
+                  : `ptx::${String(expRow['txid'])}`
             const actual = stateMap.get(expRowKey)
             expect(actual).toBeDefined()
             if (actual === undefined) continue
@@ -688,7 +715,10 @@ function dispatchBRC40 (
           if (!Array.isArray(arr)) continue
           for (const row of arr) {
             const r2 = row as Record<string, unknown>
-            const u = typeof r2['updated_at'] === 'string' ? Date.parse(r2['updated_at'] as string) : Number.NaN
+            const u =
+              typeof r2['updated_at'] === 'string'
+                ? Date.parse(r2['updated_at'] as string)
+                : Number.NaN
             if (!Number.isNaN(u) && u >= sinceMs) {
               foundBoundary = true
               break
@@ -715,7 +745,8 @@ function dispatchBRC40 (
 // here we only assert that each vector's expected payload obeys the v2 envelope
 // rules so the corpus stays well-formed.
 
-const V2_PATH_RE = /^\/v2\/(network|tip(?:\.bin)?|header\/height\/.+|header\/hash\/.+|headers(?:\.bin)?)$/
+const V2_PATH_RE =
+  /^\/v2\/(network|tip(?:\.bin)?|header\/height\/.+|header\/hash\/.+|headers(?:\.bin)?)$/
 const V2_ERROR_CODES: ReadonlySet<string> = new Set([
   'ERR_INVALID_PARAMS',
   'ERR_NOT_FOUND',
@@ -723,12 +754,12 @@ const V2_ERROR_CODES: ReadonlySet<string> = new Set([
   'ERR_INTERNAL'
 ])
 
-function assertSuccessEnvelope (eb: Record<string, unknown>): void {
+function assertSuccessEnvelope(eb: Record<string, unknown>): void {
   expect(eb['status']).toBe('success')
   expect('value' in eb).toBe(true)
 }
 
-function assertErrorEnvelope (eb: Record<string, unknown>): void {
+function assertErrorEnvelope(eb: Record<string, unknown>): void {
   expect(eb['status']).toBe('error')
   const code = eb['code']
   expect(typeof code).toBe('string')
@@ -736,7 +767,7 @@ function assertErrorEnvelope (eb: Record<string, unknown>): void {
   expect(typeof eb['description']).toBe('string')
 }
 
-function assertBinaryShape (shape: Record<string, unknown>): void {
+function assertBinaryShape(shape: Record<string, unknown>): void {
   expect(shape['encoding']).toBe('binary')
   const len = shape['length_bytes']
   // length_bytes may be a fixed integer or a formula string for variable-length payloads.
@@ -751,7 +782,7 @@ function assertBinaryShape (shape: Record<string, unknown>): void {
   }
 }
 
-function dispatchChaintracksV2 (
+function dispatchChaintracksV2(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -822,14 +853,21 @@ function computeBasmRootForVector(txids: string[]): string {
 }
 
 function computeTacForVector(prevTac: string, blockHash: string, basmRoot: string): string {
-  return internalToDisplay(sha256d(Buffer.concat([
-    displayToInternal(prevTac),
-    displayToInternal(blockHash),
-    displayToInternal(basmRoot)
-  ])))
+  return internalToDisplay(
+    sha256d(
+      Buffer.concat([
+        displayToInternal(prevTac),
+        displayToInternal(blockHash),
+        displayToInternal(basmRoot)
+      ])
+    )
+  )
 }
 
-function dispatchBRC136HTTP(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+function dispatchBRC136HTTP(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
   const method = getString(input, 'method')
   const path = getString(input, 'path')
   const headers = (input['headers'] ?? {}) as Record<string, string>
@@ -870,7 +908,7 @@ function dispatchBRC136(input: Record<string, unknown>, expected: Record<string,
 
   const channel = getString(input, 'channel')
   if (channel === 'basm/root') {
-    const cases = input['cases'] as Array<{ name: string, txids: string[] }>
+    const cases = input['cases'] as Array<{ name: string; txids: string[] }>
     const roots = (expected['roots'] ?? {}) as Record<string, string>
     for (const testCase of cases) {
       expect(computeBasmRootForVector(testCase.txids)).toBe(roots[testCase.name])
@@ -879,11 +917,13 @@ function dispatchBRC136(input: Record<string, unknown>, expected: Record<string,
   }
 
   if (channel === 'basm/tac') {
-    expect(computeTacForVector(
-      getString(input, 'prevTac'),
-      getString(input, 'blockHash'),
-      getString(input, 'basmRoot')
-    )).toBe(expected['tac'])
+    expect(
+      computeTacForVector(
+        getString(input, 'prevTac'),
+        getString(input, 'blockHash'),
+        getString(input, 'basmRoot')
+      )
+    ).toBe(expected['tac'])
     return
   }
 
@@ -909,7 +949,7 @@ function dispatchBRC136(input: Record<string, unknown>, expected: Record<string,
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>

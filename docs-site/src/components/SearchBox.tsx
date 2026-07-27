@@ -20,7 +20,9 @@ let pagefindPromise: Promise<Pagefind> | null = null
 function loadPagefind(): Promise<Pagefind> {
   if (!pagefindPromise) {
     const base = import.meta.env.BASE_URL.replace(/\/$/, '')
-    pagefindPromise = import(/* @vite-ignore */ `${base}/_pagefind/pagefind.js`) as Promise<Pagefind>
+    pagefindPromise = import(
+      /* @vite-ignore */ `${base}/_pagefind/pagefind.js`
+    ) as Promise<Pagefind>
   }
   return pagefindPromise
 }
@@ -33,7 +35,10 @@ export default function SearchBox() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const search = useCallback(async (q: string) => {
-    if (!q.trim()) { setResults([]); return }
+    if (!q.trim()) {
+      setResults([])
+      return
+    }
     const pf = await loadPagefind()
     const { results: raw } = await pf.search(q)
     const top = raw.slice(0, 8)
@@ -82,8 +87,14 @@ export default function SearchBox() {
         type="search"
         placeholder="Search docs…"
         value={query}
-        onChange={e => { setQuery(e.target.value); setOpen(true) }}
-        onFocus={() => { setOpen(true); loadPagefind() }}
+        onChange={e => {
+          setQuery(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => {
+          setOpen(true)
+          loadPagefind()
+        }}
         aria-label="Search documentation"
       />
       <kbd className={styles.kbd}>⌘K</kbd>
@@ -91,11 +102,7 @@ export default function SearchBox() {
         <ul className={styles.dropdown} role="listbox">
           {results.map(r => (
             <li key={r.url} role="option" aria-selected={false}>
-              <a
-                className={styles.result}
-                href={r.url}
-                onClick={() => setOpen(false)}
-              >
+              <a className={styles.result} href={r.url} onClick={() => setOpen(false)}>
                 <span className={styles.resultTitle}>{r.meta.title ?? r.url}</span>
                 <span
                   className={styles.resultExcerpt}

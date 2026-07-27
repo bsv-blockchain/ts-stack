@@ -9,15 +9,15 @@ if (lcovPath == null || sourcePrefix == null) {
   process.exit(1)
 }
 
-const slashify = (value) => value.replaceAll('\\', '/')
+const slashify = value => value.replaceAll('\\', '/')
 
-const trimTrailingSlashes = (value) => {
+const trimTrailingSlashes = value => {
   let end = value.length
   while (end > 0 && value[end - 1] === '/') end -= 1
   return value.slice(0, end)
 }
 
-const trimLeadingSlashes = (value) => {
+const trimLeadingSlashes = value => {
   let start = 0
   while (start < value.length && value[start] === '/') start += 1
   return value.slice(start)
@@ -27,7 +27,7 @@ const prefix = trimTrailingSlashes(slashify(sourcePrefix))
 const content = readFileSync(lcovPath, 'utf8')
 const cwd = process.cwd()
 
-const normalizePath = (filePath) => {
+const normalizePath = filePath => {
   let normalized = slashify(filePath)
 
   if (isAbsolute(normalized)) {

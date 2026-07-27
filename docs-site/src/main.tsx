@@ -17,8 +17,8 @@ const routePath = window.location.pathname.startsWith(basePath)
   ? window.location.pathname.slice(basePath.length) || '/'
   : window.location.pathname
 const renderedRoute = container.dataset.route
-const canHydrate = container.hasChildNodes()
-  && (renderedRoute === '*' || renderedRoute === routePath)
+const canHydrate =
+  container.hasChildNodes() && (renderedRoute === '*' || renderedRoute === routePath)
 
 if (canHydrate) {
   hydrateRoot(container, app)

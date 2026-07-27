@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-| Package tier | Supported |
-|-------------|-----------|
-| Tier 0 (SDK primitives) | Latest release |
+| Package tier                                   | Supported      |
+| ---------------------------------------------- | -------------- |
+| Tier 0 (SDK primitives)                        | Latest release |
 | Tier 1 (Wallet, Overlay, Messaging, Broadcast) | Latest release |
-| Tier 2 (Apps, UI) | Latest release |
-| Tier 3 (Examples, helpers) | Best-effort |
+| Tier 2 (Apps, UI)                              | Latest release |
+| Tier 3 (Examples, helpers)                     | Best-effort    |
 
 ## Reporting a Vulnerability
 
@@ -19,6 +19,7 @@ Report via GitHub Security Advisories:
 Or email: **security@bsvblockchain.org**
 
 Include:
+
 - Affected package(s) and version(s)
 - Description of the vulnerability and its impact
 - Steps to reproduce or proof-of-concept (can be shared privately)
@@ -26,13 +27,13 @@ Include:
 
 ## Response SLA
 
-| Step | Target |
-|------|--------|
-| Acknowledge receipt | 3 business days |
-| Initial severity assessment | 5 business days |
-| Patch plan communicated | 14 calendar days |
-| Patch released (P0/P1) | As fast as possible, typically < 30 days |
-| Public disclosure | Coordinated — 90-day default window from acknowledgement |
+| Step                        | Target                                                   |
+| --------------------------- | -------------------------------------------------------- |
+| Acknowledge receipt         | 3 business days                                          |
+| Initial severity assessment | 5 business days                                          |
+| Patch plan communicated     | 14 calendar days                                         |
+| Patch released (P0/P1)      | As fast as possible, typically < 30 days                 |
+| Public disclosure           | Coordinated — 90-day default window from acknowledgement |
 
 Security fixes bypass the standard 60-day deprecation policy and are released out of band.
 
@@ -45,11 +46,13 @@ Reporters who follow this process responsibly will be credited in the security a
 ## Scope
 
 **In scope:**
+
 - All packages in `packages/` (Tier 0 and Tier 1 packages are highest priority)
 - Conformance runners and test infrastructure
 - CI/CD workflows that handle secrets or produce signed artifacts
 
 **High-risk paths requiring extra scrutiny (see MBGA.md §7.3):**
+
 - Key generation, handling, and derivation
 - ECDSA signing, verification, and sighash computation
 - Encryption, decryption, HMAC, ECIES
@@ -60,6 +63,7 @@ Reporters who follow this process responsibly will be credited in the security a
 - Any parser of untrusted network input
 
 **Out of scope:**
+
 - Third-party dependencies (report to the upstream maintainer)
 - Issues in `Tier 3` examples that have no production impact
 - Theoretical vulnerabilities with no practical exploitation path
@@ -67,6 +71,7 @@ Reporters who follow this process responsibly will be credited in the security a
 ## Security Hardening Targets
 
 This repository follows the MBGA reliability and security programme:
+
 - Tier 0 packages target RL5 (fuzz/property tests, threat model, signed artifacts, SBOM)
 - Tier 1 packages target RL4+ with security findings tracked to closure
 - Supply chain controls currently enforce frozen lockfiles, deny dependency

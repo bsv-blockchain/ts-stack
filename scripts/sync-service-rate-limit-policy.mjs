@@ -36,5 +36,7 @@ if (checkOnly && drift) {
   console.error('Run `pnpm sync:service-rate-limit-policy` and commit the synchronized files.')
   process.exitCode = 1
 } else if (checkOnly) {
-  console.log(`Service rate-limit policy is synchronized across ${synchronizedPaths.length + 1} deployable contexts.`)
+  console.log(
+    `Service rate-limit policy is synchronized across ${synchronizedPaths.length + 1} deployable contexts.`
+  )
 }

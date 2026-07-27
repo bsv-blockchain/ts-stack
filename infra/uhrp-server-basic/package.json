@@ -60,7 +60,7 @@
     "start:prod": "node --require ./out/src/telemetry.js out/src/index.js",
     "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register -r ./src/telemetry.ts src/index.ts\"",
     "build": "tsc",
-    "test": "jest --passWithNoTests",
+    "test": "jest",
     "test:watch": "jest --watch",
     "lint": "oxlint src --deny-warnings"
   },

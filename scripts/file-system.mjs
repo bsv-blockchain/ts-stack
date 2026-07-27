@@ -11,11 +11,11 @@ import {
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
-function hasErrorCode (error, code) {
+function hasErrorCode(error, code) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }
 
-export function readUtf8FileIfExists (file) {
+export function readUtf8FileIfExists(file) {
   try {
     return readFileSync(file, 'utf8')
   } catch (error) {
@@ -24,7 +24,7 @@ export function readUtf8FileIfExists (file) {
   }
 }
 
-export function writeUtf8FileAtomic (file, content) {
+export function writeUtf8FileAtomic(file, content) {
   const parent = dirname(file)
   const temporary = join(parent, `.${basename(file)}.${process.pid}.${randomUUID()}.tmp`)
   let descriptor

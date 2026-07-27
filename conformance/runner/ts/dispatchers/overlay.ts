@@ -69,13 +69,9 @@ import {
 
 // ── Exported contract ────────────────────────────────────────────────────────
 
-export const categories: ReadonlyArray<string> = [
-  'submit',
-  'lookup',
-  'topic-management'
-]
+export const categories: ReadonlyArray<string> = ['submit', 'lookup', 'topic-management']
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -97,7 +93,7 @@ export function dispatch (
 
 // ── Submit dispatcher ────────────────────────────────────────────────────────
 
-function dispatchSubmitSuccess (inp: VectorInput, body: Record<string, unknown>): void {
+function dispatchSubmitSuccess(inp: VectorInput, body: Record<string, unknown>): void {
   assertSteakShape(body)
 
   const headers = inp.headers ?? {}
@@ -109,17 +105,17 @@ function dispatchSubmitSuccess (inp: VectorInput, body: Record<string, unknown>)
   }
 }
 
-function dispatchSubmitError (body: Record<string, unknown>, status: number): void {
+function dispatchSubmitError(body: Record<string, unknown>, status: number): void {
   assertErrorShape(body)
   expect(status).toBeGreaterThanOrEqual(400)
   expect(status).toBeLessThan(600)
 }
 
-function dispatchSubmit (inp: VectorInput, exp: VectorExpected): void {
+function dispatchSubmit(inp: VectorInput, exp: VectorExpected): void {
   assertSubmitRequestShape(inp)
   assertHttpStatus(exp)
 
-  const status = exp.status ?? (exp.status_oneof?.[0] ?? 200)
+  const status = exp.status ?? exp.status_oneof?.[0] ?? 200
   const body = exp.body ?? {}
 
   if (status === 200) {
@@ -134,7 +130,7 @@ function dispatchSubmit (inp: VectorInput, exp: VectorExpected): void {
 /**
  * Handle GET discovery/metadata endpoints under the lookup category.
  */
-function dispatchLookupGet (path: string, status: number, exp: VectorExpected): void {
+function dispatchLookupGet(path: string, status: number, exp: VectorExpected): void {
   switch (path) {
     case '/listTopicManagers':
     case '/listLookupServiceProviders':
@@ -153,7 +149,7 @@ function dispatchLookupGet (path: string, status: number, exp: VectorExpected): 
   }
 }
 
-function dispatchLookupPostSuccess (inp: VectorInput, exp: VectorExpected): void {
+function dispatchLookupPostSuccess(inp: VectorInput, exp: VectorExpected): void {
   const headers = inp.headers ?? {}
   const aggKey = Object.keys(headers).find(k => k.toLowerCase() === 'x-aggregation')
   if (aggKey !== undefined && headers[aggKey].toLowerCase() === 'yes') {
@@ -167,17 +163,17 @@ function dispatchLookupPostSuccess (inp: VectorInput, exp: VectorExpected): void
   }
 }
 
-function dispatchLookupPostError (exp: VectorExpected): void {
+function dispatchLookupPostError(exp: VectorExpected): void {
   const body = exp.body ?? {}
   assertErrorShape(body)
   assertLookupErrorStatusRange(exp)
 }
 
-function dispatchLookupPost (inp: VectorInput, exp: VectorExpected): void {
+function dispatchLookupPost(inp: VectorInput, exp: VectorExpected): void {
   assertLookupRequestShape(inp)
   assertHttpStatus(exp)
 
-  const status = exp.status ?? (exp.status_oneof?.[0] ?? 200)
+  const status = exp.status ?? exp.status_oneof?.[0] ?? 200
 
   if (status === 200) {
     dispatchLookupPostSuccess(inp, exp)
@@ -186,7 +182,7 @@ function dispatchLookupPost (inp: VectorInput, exp: VectorExpected): void {
   }
 }
 
-function dispatchLookup (inp: VectorInput, exp: VectorExpected): void {
+function dispatchLookup(inp: VectorInput, exp: VectorExpected): void {
   const method = (inp.method ?? 'POST').toUpperCase()
   const path = inp.path ?? ''
 
@@ -211,13 +207,13 @@ function dispatchLookup (inp: VectorInput, exp: VectorExpected): void {
 const HEALTH_PATHS = new Set(['/health', '/health/live', '/health/ready'])
 const ADMIN_BAN_PATHS = new Set(['/admin/ban', '/admin/unban'])
 
-function dispatchTopicManagement (inp: VectorInput, exp: VectorExpected): void {
+function dispatchTopicManagement(inp: VectorInput, exp: VectorExpected): void {
   const method = (inp.method ?? 'GET').toUpperCase()
   const path = inp.path ?? ''
 
   assertHttpStatus(exp)
 
-  const status = exp.status ?? (exp.status_oneof?.[0] ?? 200)
+  const status = exp.status ?? exp.status_oneof?.[0] ?? 200
   const body = exp.body ?? {}
 
   if (HEALTH_PATHS.has(path)) {
@@ -264,4 +260,3 @@ function dispatchTopicManagement (inp: VectorInput, exp: VectorExpected): void {
   expect(status).toBeGreaterThanOrEqual(100)
   expect(status).toBeLessThan(600)
 }
-

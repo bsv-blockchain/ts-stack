@@ -19,7 +19,7 @@
  */
 
 import { expect } from '@jest/globals'
-import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet, type SecurityLevel, type WalletProtocol } from '@bsv/sdk'
 
 export const categories: ReadonlyArray<string> = [
   'authsocket',
@@ -29,7 +29,7 @@ export const categories: ReadonlyArray<string> = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function hexToBytes (hex: string): number[] {
+function hexToBytes(hex: string): number[] {
   if (hex === '') return []
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out: number[] = []
@@ -39,23 +39,37 @@ function hexToBytes (hex: string): number[] {
   return out
 }
 
-function bytesToHex (bytes: number[] | Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+function bytesToHex(bytes: number[] | Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getBool (m: Record<string, unknown>, key: string): boolean {
+function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
+}
+
+function getWalletProtocol(value: unknown): WalletProtocol {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 2 ||
+    (value[0] !== 0 && value[0] !== 1 && value[0] !== 2) ||
+    typeof value[1] !== 'string'
+  ) {
+    throw new Error('protocolID must be a [0|1|2, string] tuple')
+  }
+  return [value[0] as SecurityLevel, value[1]]
 }
 
 /**
  * Build a ProtoWallet from a 64-char hex private key scalar.
  */
-function walletFromRootKeyHex (rootKeyHex: string): ProtoWallet {
+function walletFromRootKeyHex(rootKeyHex: string): ProtoWallet {
   const privKey = PrivateKey.fromHex(rootKeyHex)
   return new ProtoWallet(privKey)
 }
@@ -64,7 +78,7 @@ function walletFromRootKeyHex (rootKeyHex: string): ProtoWallet {
 // These vectors describe the AsyncAPI / BRC-103 protocol shape — no live
 // WebSocket server is required. We validate structural assertions only.
 
-function dispatchAuthSocket (
+function dispatchAuthSocket(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -90,7 +104,9 @@ function dispatchAuthSocket (
       const validTypes = input.valid_types as string[]
       const expectedEnum = expected.enum as string[]
       if (Array.isArray(expectedEnum) && Array.isArray(validTypes)) {
-        expect(validTypes.toSorted((a, b) => a.localeCompare(b))).toEqual([...expectedEnum].toSorted((a, b) => a.localeCompare(b)))
+        expect(validTypes.toSorted((a, b) => a.localeCompare(b))).toEqual(
+          [...expectedEnum].toSorted((a, b) => a.localeCompare(b))
+        )
       }
       return
     }
@@ -173,7 +189,7 @@ function dispatchAuthSocket (
           const decoded = new TextDecoder().decode(new Uint8Array(payloadBytes))
           JSON.parse(decoded)
           // Successfully decoded — event envelope is present
-        } catch (_e) {
+        } catch {
           // Partial/stub payload in vector — shape check only
         }
       }
@@ -231,7 +247,7 @@ function dispatchAuthSocket (
 // strings). The data field is hex-encoded; createSignature hashes it via
 // SHA-256 internally (ProtoWallet.createSignature calls Hash.sha256(data)).
 
-async function dispatchAuthriteSignature (
+async function dispatchAuthriteSignature(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -249,7 +265,7 @@ async function dispatchAuthriteSignature (
   const dataHex = getString(args, 'data')
   const dataBytes: number[] = hexToBytes(dataHex)
 
-  const protocolID = args.protocolID as [number, string]
+  const protocolID = getWalletProtocol(args.protocolID)
   const keyID = getString(args, 'keyID')
   const counterparty = getString(args, 'counterparty')
 
@@ -297,7 +313,7 @@ async function dispatchAuthriteSignature (
 // Validates HTTP request/response shapes against the MessageBox API spec.
 // No real backend is contacted — vectors describe the expected shapes.
 
-function dispatchMessageBoxHTTP (
+function dispatchMessageBoxHTTP(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -309,9 +325,7 @@ function dispatchMessageBoxHTTP (
   // ── Request shape assertions ──────────────────────────────────────────
 
   // Validate Content-Type where present (case-insensitive header key)
-  const contentTypeKey = Object.keys(headers).find(
-    k => k.toLowerCase() === 'content-type'
-  )
+  const contentTypeKey = Object.keys(headers).find(k => k.toLowerCase() === 'content-type')
   const hasAuthHeader = Object.keys(headers).some(
     k => k.toLowerCase() === 'x-bsv-auth-identity-key'
   )
@@ -456,7 +470,7 @@ function dispatchMessageBoxHTTP (
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>

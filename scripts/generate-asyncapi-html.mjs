@@ -32,7 +32,7 @@ const SPECS = [
   }
 ]
 
-function escapeHtml (value) {
+function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -42,19 +42,19 @@ function escapeHtml (value) {
     .replaceAll('\n', '&#10;')
 }
 
-function identifier (value) {
+function identifier(value) {
   return String(value)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
 }
 
-function description (value) {
+function description(value) {
   if (value == null || value === '') return ''
   return `<div class="description">${escapeHtml(value)}</div>`
 }
 
-function scalar (value) {
+function scalar(value) {
   if (value === null) return '<span class="value null">null</span>'
   if (typeof value === 'string') {
     const className = value.startsWith('#/') ? 'ref' : 'string'
@@ -63,7 +63,7 @@ function scalar (value) {
   return `<code class="value">${escapeHtml(JSON.stringify(value))}</code>`
 }
 
-function collectionSummary (value) {
+function collectionSummary(value) {
   if (Array.isArray(value)) {
     const suffix = value.length === 1 ? '' : 's'
     return `${value.length} item${suffix}`
@@ -74,52 +74,54 @@ function collectionSummary (value) {
   return `${count} field${suffix}`
 }
 
-function renderValue (value, depth = 0) {
+function renderValue(value, depth = 0) {
   if (value == null || typeof value !== 'object') return scalar(value)
 
   if (Array.isArray(value)) {
     if (value.length === 0) return '<span class="muted">empty list</span>'
-    const items = value
-      .map(item => '<li>' + renderValue(item, depth + 1) + '</li>')
-      .join('')
+    const items = value.map(item => '<li>' + renderValue(item, depth + 1) + '</li>').join('')
     return `<ol class="tree-list">${items}</ol>`
   }
 
   const entries = Object.entries(value)
   if (entries.length === 0) return '<span class="muted">empty object</span>'
 
-  return `<dl class="tree">${entries.map(([key, child]) => {
-    const nested = child != null && typeof child === 'object'
-    if (!nested) {
-      return `<div class="tree-row"><dt>${escapeHtml(key)}</dt><dd>${scalar(child)}</dd></div>`
-    }
+  return `<dl class="tree">${entries
+    .map(([key, child]) => {
+      const nested = child != null && typeof child === 'object'
+      if (!nested) {
+        return `<div class="tree-row"><dt>${escapeHtml(key)}</dt><dd>${scalar(child)}</dd></div>`
+      }
 
-    const open = depth < 1 ? ' open' : ''
-    const summary = collectionSummary(child)
-    const renderedChild = renderValue(child, depth + 1)
-    return `<div class="tree-row nested"><dt>${escapeHtml(key)}</dt><dd><details${open}><summary>${summary}</summary>${renderedChild}</details></dd></div>`
-  }).join('')}</dl>`
+      const open = depth < 1 ? ' open' : ''
+      const summary = collectionSummary(child)
+      const renderedChild = renderValue(child, depth + 1)
+      return `<div class="tree-row nested"><dt>${escapeHtml(key)}</dt><dd><details${open}><summary>${summary}</summary>${renderedChild}</details></dd></div>`
+    })
+    .join('')}</dl>`
 }
 
-function renderEntries (title, sectionId, entries, renderSummary) {
+function renderEntries(title, sectionId, entries, renderSummary) {
   const values = Object.entries(entries ?? {})
   if (values.length === 0) return ''
 
   return `<section id="${sectionId}">
     <div class="section-heading"><h2>${escapeHtml(title)}</h2><span>${values.length}</span></div>
-    <div class="cards">${values.map(([name, value]) => {
-      const summary = renderSummary?.(value) ?? ''
-      return `<article class="card" id="${sectionId}-${identifier(name)}">
+    <div class="cards">${values
+      .map(([name, value]) => {
+        const summary = renderSummary?.(value) ?? ''
+        return `<article class="card" id="${sectionId}-${identifier(name)}">
         <h3>${escapeHtml(name)}</h3>
         ${summary}
         ${description(value?.description ?? value?.summary)}
         ${renderValue(value)}
       </article>`
-    }).join('')}</div>
+      })
+      .join('')}</div>
   </section>`
 }
 
-function renderSpec (document, source, specPath) {
+function renderSpec(document, source, specPath) {
   const info = document.info
   const components = document.components ?? {}
   const counts = [
@@ -138,13 +140,17 @@ function renderSpec (document, source, specPath) {
   const body = [
     renderEntries('Servers', 'servers', document.servers, server => {
       const endpoint = [server.protocol, server.host].filter(Boolean).join('://')
-      return endpoint === '' ? '' : `<p class="endpoint">${escapeHtml(endpoint)}${escapeHtml(server.pathname ?? '')}</p>`
+      return endpoint === ''
+        ? ''
+        : `<p class="endpoint">${escapeHtml(endpoint)}${escapeHtml(server.pathname ?? '')}</p>`
     }),
     renderEntries('Channels', 'channels', document.channels, channel => {
       return channel.address == null ? '' : `<p class="endpoint">${escapeHtml(channel.address)}</p>`
     }),
     renderEntries('Operations', 'operations', document.operations, operation => {
-      return operation.action == null ? '' : `<span class="badge">${escapeHtml(operation.action)}</span>`
+      return operation.action == null
+        ? ''
+        : `<span class="badge">${escapeHtml(operation.action)}</span>`
     }),
     renderEntries('Messages', 'messages', components.messages),
     renderEntries('Schemas', 'schemas', components.schemas)
@@ -194,10 +200,13 @@ function renderSpec (document, source, specPath) {
   <footer>Generated deterministically from the repository source. No remote scripts, styles, fonts, or runtime dependencies.</footer>
 </body>
 </html>
-`.split('\n').map(line => line.trim()).join('')
+`
+    .split('\n')
+    .map(line => line.trim())
+    .join('')
 }
 
-function validate (document, specPath) {
+function validate(document, specPath) {
   if (document == null || typeof document !== 'object') {
     throw new TypeError(`${specPath} must contain a YAML object`)
   }

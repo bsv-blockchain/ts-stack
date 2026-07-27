@@ -86,7 +86,7 @@
     "tokens",
     "certification"
   ],
-  "author": "",
+  "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@bsv/message-box-client": "workspace:^",

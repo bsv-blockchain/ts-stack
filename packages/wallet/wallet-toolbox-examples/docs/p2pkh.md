@@ -11,11 +11,11 @@ transactions that made a payment to "their" address.
 
 There are muliple drawbacks to this legacy method of exchange:
 
-  1. The receiver is insentivized to re-use addresses to simplify lookup, destroying privacy.
-  2. The address must be transmitted without corruption from the receiver to the sender before starting the transfer.
-  3. The receiver must poll the network to discover the payment transaction.
-  4. The receiver typically couldn't use the new output until some number of "confirmations",
-     blocks mined on top of the original transaction mining event.
+1. The receiver is insentivized to re-use addresses to simplify lookup, destroying privacy.
+2. The address must be transmitted without corruption from the receiver to the sender before starting the transfer.
+3. The receiver must poll the network to discover the payment transaction.
+4. The receiver typically couldn't use the new output until some number of "confirmations",
+   blocks mined on top of the original transaction mining event.
 
 A BRC-100 wallet replaces polling for transactions by payment address with SPV enabling BEEF packaging for all transactions and new outputs.
 
@@ -29,6 +29,7 @@ The "brc29" example extends this to demonstrate how to resolve drawbacks 1 and 2
 [Return To Top](./README.md)
 
 <!--#region ts2md-api-merged-here-->
+
 ### API
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
@@ -37,12 +38,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
 #### Functions
 
-| |
-| --- |
-| [inputP2PKH](#function-inputp2pkh) |
-| [outputP2PKH](#function-outputp2pkh) |
+|                                            |
+| ------------------------------------------ |
+| [inputP2PKH](#function-inputp2pkh)         |
+| [outputP2PKH](#function-outputp2pkh)       |
 | [p2pkhToAddress](#function-p2pkhtoaddress) |
-| [transferP2PKH](#function-transferp2pkh) |
+| [transferP2PKH](#function-transferp2pkh)   |
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
@@ -71,55 +72,58 @@ initialized unlock object and call the `Transaction` `sign` method.
 Once signed, capture the input's now valid `unlockingScript` value and convert it to a hex string.
 
 ```ts
-export async function inputP2PKH(setup: SetupWallet, outputP2PKH: {
-    beef: Beef;
-    outpoint: string;
-    toIdentityKey: string;
-    satoshis: number;
-}) {
-    const o = outputP2PKH;
-    const env = Setup.getEnv(setup.chain);
-    const privateKey: PrivateKey = PrivateKey.fromString(env.devKeys[o.toIdentityKey]);
-    const unlock = Setup.getUnlockP2PKH(privateKey, o.satoshis);
-    const label = "inputP2PKH";
-    const car = await setup.wallet.createAction({
-        inputBEEF: o.beef.toBinary(),
-        inputs: [
-            {
-                outpoint: o.outpoint,
-                unlockingScriptLength: 108,
-                inputDescription: label
-            }
-        ],
-        labels: [label],
-        description: label
-    });
-    const st = car.signableTransaction!;
-    const beef = Beef.fromBinary(st.tx);
-    const tx = beef.findAtomicTransaction(beef.txs.slice(-1)[0].txid)!;
-    tx.inputs[0].unlockingScriptTemplate = unlock;
-    await tx.sign();
-    const unlockingScript = tx.inputs[0].unlockingScript!.toHex();
-    const signArgs: SignActionArgs = {
-        reference: st.reference,
-        spends: { 0: { unlockingScript } },
-        options: {
-            acceptDelayedBroadcast: false
-        }
-    };
-    const sar = await setup.wallet.signAction(signArgs);
-    {
-        const beef = Beef.fromBinary(sar.tx!);
-        const txid = sar.txid!;
-        console.log(`
+export async function inputP2PKH(
+  setup: SetupWallet,
+  outputP2PKH: {
+    beef: Beef
+    outpoint: string
+    toIdentityKey: string
+    satoshis: number
+  }
+) {
+  const o = outputP2PKH
+  const env = Setup.getEnv(setup.chain)
+  const privateKey: PrivateKey = PrivateKey.fromString(env.devKeys[o.toIdentityKey])
+  const unlock = Setup.getUnlockP2PKH(privateKey, o.satoshis)
+  const label = 'inputP2PKH'
+  const car = await setup.wallet.createAction({
+    inputBEEF: o.beef.toBinary(),
+    inputs: [
+      {
+        outpoint: o.outpoint,
+        unlockingScriptLength: 108,
+        inputDescription: label
+      }
+    ],
+    labels: [label],
+    description: label
+  })
+  const st = car.signableTransaction!
+  const beef = Beef.fromBinary(st.tx)
+  const tx = beef.findAtomicTransaction(beef.txs.slice(-1)[0].txid)!
+  tx.inputs[0].unlockingScriptTemplate = unlock
+  await tx.sign()
+  const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
+  const signArgs: SignActionArgs = {
+    reference: st.reference,
+    spends: { 0: { unlockingScript } },
+    options: {
+      acceptDelayedBroadcast: false
+    }
+  }
+  const sar = await setup.wallet.signAction(signArgs)
+  {
+    const beef = Beef.fromBinary(sar.tx!)
+    const txid = sar.txid!
+    console.log(`
 inputP2PKH to ${setup.identityKey}
 input's outpoint ${o.outpoint}
 satoshis ${o.satoshis}
 BEEF
 ${beef.toHex()}
 ${beef.toLogString()}
-`);
-    }
+`)
+  }
 }
 ```
 
@@ -127,21 +131,22 @@ See also: [outputP2PKH](./p2pkh.md#function-outputp2pkh)
 
 Argument Details
 
-+ **setup**
-  + The setup context which will consume a P2PKH output as an input to a new transaction transfering
-the output's satoshis to the "change" managed by the context's wallet.
-+ **outputP2PKH.beef**
-  + An object proving the validity of the new output where the last transaction contains the new output.
-+ **outputP2PKH.outpoint**
-  + The txid and index of the outpoint in the format `${txid}.${index}`.
-+ **outputP2PKH.toIdentityKey**
-  + The public key able to unlock the output.
-+ **outputP2PKH.satoshis**
-  + The amount assigned to the output.
+- **setup**
+  - The setup context which will consume a P2PKH output as an input to a new transaction transfering
+    the output's satoshis to the "change" managed by the context's wallet.
+- **outputP2PKH.beef**
+  - An object proving the validity of the new output where the last transaction contains the new output.
+- **outputP2PKH.outpoint**
+  - The txid and index of the outpoint in the format `${txid}.${index}`.
+- **outputP2PKH.toIdentityKey**
+  - The public key able to unlock the output.
+- **outputP2PKH.satoshis**
+  - The amount assigned to the output.
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
 ---
+
 ##### Function: outputP2PKH
 
 Create a new P2PKH output.
@@ -155,42 +160,46 @@ Typically, at least one "change" input will be automatically added to fund the t
 and at least one output will be added to recapture excess funding.
 
 ```ts
-export async function outputP2PKH(setup: SetupWallet, toIdentityKey: string, satoshis: number): Promise<{
-    beef: Beef;
-    outpoint: string;
-    toIdentityKey: string;
-    satoshis: number;
+export async function outputP2PKH(
+  setup: SetupWallet,
+  toIdentityKey: string,
+  satoshis: number
+): Promise<{
+  beef: Beef
+  outpoint: string
+  toIdentityKey: string
+  satoshis: number
 }> {
-    const address = PublicKey.fromString(toIdentityKey).toAddress();
-    const lock = Setup.getLockP2PKH(address);
-    const label = "outputP2PKH";
-    const car = await setup.wallet.createAction({
-        outputs: [
-            {
-                lockingScript: lock.toHex(),
-                satoshis,
-                outputDescription: label,
-                tags: ["relinquish"]
-            }
-        ],
-        options: {
-            randomizeOutputs: false,
-            acceptDelayedBroadcast: false
-        },
-        labels: [label],
-        description: label
-    });
-    const beef = Beef.fromBinary(car.tx!);
-    const outpoint = `${car.txid!}.0`;
-    console.log(`
+  const address = PublicKey.fromString(toIdentityKey).toAddress()
+  const lock = Setup.getLockP2PKH(address)
+  const label = 'outputP2PKH'
+  const car = await setup.wallet.createAction({
+    outputs: [
+      {
+        lockingScript: lock.toHex(),
+        satoshis,
+        outputDescription: label,
+        tags: ['relinquish']
+      }
+    ],
+    options: {
+      randomizeOutputs: false,
+      acceptDelayedBroadcast: false
+    },
+    labels: [label],
+    description: label
+  })
+  const beef = Beef.fromBinary(car.tx!)
+  const outpoint = `${car.txid!}.0`
+  console.log(`
 outputP2PKH to ${toIdentityKey}
 outpoint ${outpoint}
 satoshis ${satoshis}
 BEEF
 ${beef.toHex()}
 ${beef.toLogString()}
-`);
-    return { beef, outpoint, toIdentityKey, satoshis };
+`)
+  return { beef, outpoint, toIdentityKey, satoshis }
 }
 ```
 
@@ -208,26 +217,28 @@ satoshis - The amount assigned to the output.
 
 Argument Details
 
-+ **setup**
-  + The setup context which will create the new transaction containing the new P2PKH output.
-+ **toIdentityKey**
-  + The public key which will be able to unlock the output.
-Note that the output uses the "address" associated with this public key: The HASH160 of the public key.
-+ **satoshis**
-  + How many satoshis to transfer to this new output.
+- **setup**
+  - The setup context which will create the new transaction containing the new P2PKH output.
+- **toIdentityKey**
+  - The public key which will be able to unlock the output.
+    Note that the output uses the "address" associated with this public key: The HASH160 of the public key.
+- **satoshis**
+  - How many satoshis to transfer to this new output.
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
 ---
+
 ##### Function: p2pkhToAddress
 
 ```ts
-export async function p2pkhToAddress() 
+export async function p2pkhToAddress()
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
 ---
+
 ##### Function: transferP2PKH
 
 Example of moving satoshis from one wallet to another using the P2PKH template
@@ -244,14 +255,14 @@ two wallets.
 
 ```ts
 export async function transferP2PKH() {
-    const env = Setup.getEnv("test");
-    const setup1 = await Setup.createWalletClient({ env });
-    const setup2 = await Setup.createWalletClient({
-        env,
-        rootKeyHex: env.devKeys[env.identityKey2]
-    });
-    const o = await outputP2PKH(setup1, setup2.identityKey, 42);
-    await inputP2PKH(setup2, o);
+  const env = Setup.getEnv('test')
+  const setup1 = await Setup.createWalletClient({ env })
+  const setup2 = await Setup.createWalletClient({
+    env,
+    rootKeyHex: env.devKeys[env.identityKey2]
+  })
+  const o = await outputP2PKH(setup1, setup2.identityKey, 42)
+  await inputP2PKH(setup2, o)
 }
 ```
 

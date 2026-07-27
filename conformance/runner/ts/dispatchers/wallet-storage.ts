@@ -26,28 +26,24 @@
 
 import { expect } from '@jest/globals'
 
-export const categories: ReadonlyArray<string> = [
-  'adapter-conformance'
-]
+export const categories: ReadonlyArray<string> = ['adapter-conformance']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getNumber (m: Record<string, unknown>, key: string): number {
+function getNumber(m: Record<string, unknown>, key: string): number {
   const v = m[key]
   return typeof v === 'number' ? v : 0
 }
 
 /** Assert that a Bearer token is present and has the correct BRC-103 format. */
-function assertBearerToken (headers: Record<string, string>): void {
+function assertBearerToken(headers: Record<string, string>): void {
   // Case-insensitive header lookup
-  const authValue = Object.entries(headers).find(
-    ([k]) => k.toLowerCase() === 'authorization'
-  )?.[1]
+  const authValue = Object.entries(headers).find(([k]) => k.toLowerCase() === 'authorization')?.[1]
 
   if (authValue === undefined) return // absence checked by caller
 
@@ -56,15 +52,13 @@ function assertBearerToken (headers: Record<string, string>): void {
 }
 
 /** Check whether a request carries an Authorization header. */
-function hasAuthHeader (headers: Record<string, string>): boolean {
+function hasAuthHeader(headers: Record<string, string>): boolean {
   return Object.keys(headers).some(k => k.toLowerCase() === 'authorization')
 }
 
 /** Assert Content-Type is application/json for POST requests with a body. */
-function assertJsonContentType (headers: Record<string, string>): void {
-  const ct = Object.entries(headers).find(
-    ([k]) => k.toLowerCase() === 'content-type'
-  )?.[1]
+function assertJsonContentType(headers: Record<string, string>): void {
+  const ct = Object.entries(headers).find(([k]) => k.toLowerCase() === 'content-type')?.[1]
   if (ct !== undefined) {
     expect(ct.toLowerCase()).toContain('application/json')
   }
@@ -83,7 +77,7 @@ const TABLE_SETTINGS_REQUIRED = [
   'updated_at'
 ] as const
 
-function assertTableSettings (body: Record<string, unknown>): void {
+function assertTableSettings(body: Record<string, unknown>): void {
   for (const field of TABLE_SETTINGS_REQUIRED) {
     expect(body).toHaveProperty(field)
   }
@@ -99,7 +93,7 @@ function assertTableSettings (body: Record<string, unknown>): void {
 
 // ── StorageCreateActionResult field validation ──────────────────────────────────
 
-function assertCreateActionResult (body: Record<string, unknown>): void {
+function assertCreateActionResult(body: Record<string, unknown>): void {
   // Required: inputs, outputs, derivationPrefix, version, lockTime, reference
   expect(Array.isArray(body['inputs'])).toBe(true)
   expect(Array.isArray(body['outputs'])).toBe(true)
@@ -112,10 +106,16 @@ function assertCreateActionResult (body: Record<string, unknown>): void {
 // ── SyncChunk field validation ──────────────────────────────────────────────────
 
 const SYNC_CHUNK_FIELDS = [
-  'users', 'transactions', 'outputs', 'outputBaskets', 'provenTxs', 'provenTxReqs', 'syncStates'
+  'users',
+  'transactions',
+  'outputs',
+  'outputBaskets',
+  'provenTxs',
+  'provenTxReqs',
+  'syncStates'
 ] as const
 
-function assertSyncChunk (body: Record<string, unknown>): void {
+function assertSyncChunk(body: Record<string, unknown>): void {
   for (const field of SYNC_CHUNK_FIELDS) {
     if (field in body) {
       expect(Array.isArray(body[field])).toBe(true)
@@ -126,10 +126,7 @@ function assertSyncChunk (body: Record<string, unknown>): void {
 // ── Route handler functions ────────────────────────────────────────────────────
 
 /** GET /storage/v1/settings */
-function handleSettings (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function handleSettings(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const headers = (input['headers'] ?? {}) as Record<string, string>
   const expectedStatus = getNumber(expected, 'status')
 
@@ -152,10 +149,7 @@ function handleSettings (
 }
 
 /** POST /storage/v1/migrate */
-function handleMigrate (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function handleMigrate(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const headers = (input['headers'] ?? {}) as Record<string, string>
   const body = input['body'] as Record<string, unknown> | undefined
   const expectedStatus = getNumber(expected, 'status')
@@ -175,7 +169,7 @@ function handleMigrate (
 }
 
 /** POST /storage/v1/actions */
-function handleCreateAction (
+function handleCreateAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -205,7 +199,7 @@ function handleCreateAction (
 }
 
 /** POST /storage/v1/actions/process */
-function handleProcessAction (
+function handleProcessAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -239,7 +233,7 @@ function handleProcessAction (
 }
 
 /** POST /storage/v1/actions/abort */
-function handleAbortAction (
+function handleAbortAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -262,7 +256,7 @@ function handleAbortAction (
 }
 
 /** POST /storage/v1/actions/internalize */
-function handleInternalizeAction (
+function handleInternalizeAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -300,7 +294,7 @@ function handleInternalizeAction (
 }
 
 /** POST /storage/v1/list/actions */
-function handleListActions (
+function handleListActions(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -327,7 +321,7 @@ function handleListActions (
 }
 
 /** POST /storage/v1/list/outputs */
-function handleListOutputs (
+function handleListOutputs(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -353,10 +347,7 @@ function handleListOutputs (
 }
 
 /** POST /storage/v1/sync/chunk */
-function handleSyncChunk (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function handleSyncChunk(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const headers = (input['headers'] ?? {}) as Record<string, string>
   const body = input['body'] as Record<string, unknown> | undefined
   const expectedStatus = getNumber(expected, 'status')
@@ -376,10 +367,7 @@ function handleSyncChunk (
 }
 
 /** POST /storage/v1/sync/state */
-function handleSyncState (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function handleSyncState(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const headers = (input['headers'] ?? {}) as Record<string, string>
   const body = input['body'] as Record<string, unknown> | undefined
   const expectedStatus = getNumber(expected, 'status')
@@ -407,10 +395,7 @@ function handleSyncState (
 }
 
 /** POST /storage/v1/sync/active */
-function handleSyncActive (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function handleSyncActive(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const headers = (input['headers'] ?? {}) as Record<string, string>
   const body = input['body'] as Record<string, unknown> | undefined
   const expectedStatus = getNumber(expected, 'status')
@@ -430,7 +415,7 @@ function handleSyncActive (
 }
 
 /** POST /storage/v1/certificates */
-function handleInsertCertificate (
+function handleInsertCertificate(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -456,7 +441,7 @@ function handleInsertCertificate (
 }
 
 /** POST /storage/v1/certificates/relinquish */
-function handleRelinquishCertificate (
+function handleRelinquishCertificate(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -482,7 +467,7 @@ function handleRelinquishCertificate (
 }
 
 /** POST /storage/v1/outputs/relinquish */
-function handleRelinquishOutput (
+function handleRelinquishOutput(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -530,25 +515,33 @@ const ROUTE_TABLE: Array<{
   pathPrefix?: string
   handler: RouteHandler
 }> = [
-  { method: 'GET',  pathExact: '/storage/v1/settings',               handler: handleSettings },
-  { method: 'POST', pathExact: '/storage/v1/migrate',                 handler: handleMigrate },
-  { method: 'POST', pathExact: '/storage/v1/actions',                 handler: handleCreateAction },
-  { method: 'POST', pathExact: '/storage/v1/actions/process',         handler: handleProcessAction },
-  { method: 'POST', pathExact: '/storage/v1/actions/abort',           handler: handleAbortAction },
-  { method: 'POST', pathExact: '/storage/v1/actions/internalize',     handler: handleInternalizeAction },
-  { method: 'POST', pathExact: '/storage/v1/list/actions',            handler: handleListActions },
-  { method: 'POST', pathExact: '/storage/v1/list/outputs',            handler: handleListOutputs },
-  { method: 'POST', pathExact: '/storage/v1/sync/chunk',              handler: handleSyncChunk },
-  { method: 'POST', pathExact: '/storage/v1/sync/state',              handler: handleSyncState },
-  { method: 'POST', pathExact: '/storage/v1/sync/active',             handler: handleSyncActive },
-  { method: 'POST', pathExact: '/storage/v1/certificates',            handler: handleInsertCertificate },
-  { method: 'POST', pathExact: '/storage/v1/certificates/relinquish', handler: handleRelinquishCertificate },
-  { method: 'POST', pathExact: '/storage/v1/outputs/relinquish',      handler: handleRelinquishOutput }
+  { method: 'GET', pathExact: '/storage/v1/settings', handler: handleSettings },
+  { method: 'POST', pathExact: '/storage/v1/migrate', handler: handleMigrate },
+  { method: 'POST', pathExact: '/storage/v1/actions', handler: handleCreateAction },
+  { method: 'POST', pathExact: '/storage/v1/actions/process', handler: handleProcessAction },
+  { method: 'POST', pathExact: '/storage/v1/actions/abort', handler: handleAbortAction },
+  {
+    method: 'POST',
+    pathExact: '/storage/v1/actions/internalize',
+    handler: handleInternalizeAction
+  },
+  { method: 'POST', pathExact: '/storage/v1/list/actions', handler: handleListActions },
+  { method: 'POST', pathExact: '/storage/v1/list/outputs', handler: handleListOutputs },
+  { method: 'POST', pathExact: '/storage/v1/sync/chunk', handler: handleSyncChunk },
+  { method: 'POST', pathExact: '/storage/v1/sync/state', handler: handleSyncState },
+  { method: 'POST', pathExact: '/storage/v1/sync/active', handler: handleSyncActive },
+  { method: 'POST', pathExact: '/storage/v1/certificates', handler: handleInsertCertificate },
+  {
+    method: 'POST',
+    pathExact: '/storage/v1/certificates/relinquish',
+    handler: handleRelinquishCertificate
+  },
+  { method: 'POST', pathExact: '/storage/v1/outputs/relinquish', handler: handleRelinquishOutput }
 ]
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>

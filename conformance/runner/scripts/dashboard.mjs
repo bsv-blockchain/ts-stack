@@ -12,72 +12,72 @@
  * Default reports-dir: <repo-root>/conformance/reports
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, "..", "..", "..");
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolve(__dirname, '..', '..', '..')
 
 // Parse --reports-dir argument.
-const args = process.argv.slice(2);
-let reportsDir = resolve(repoRoot, "conformance", "reports");
+const args = process.argv.slice(2)
+let reportsDir = resolve(repoRoot, 'conformance', 'reports')
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--reports-dir" && args[i + 1]) {
-    reportsDir = resolve(args[i + 1]);
-    i++;
+  if (args[i] === '--reports-dir' && args[i + 1]) {
+    reportsDir = resolve(args[i + 1])
+    i++
   }
 }
 
 /** Load a JSON report file; returns null if missing. */
 function loadReport(filename) {
-  const p = resolve(reportsDir, filename);
-  if (!existsSync(p)) return null;
+  const p = resolve(reportsDir, filename)
+  if (!existsSync(p)) return null
   try {
-    return JSON.parse(readFileSync(p, "utf8"));
+    return JSON.parse(readFileSync(p, 'utf8'))
   } catch (e) {
-    console.warn(`Warning: could not parse ${p}: ${e.message}`);
-    return null;
+    console.warn(`Warning: could not parse ${p}: ${e.message}`)
+    return null
   }
 }
 
-const goReport = loadReport("go-results.json");
-const tsReport = loadReport("ts-results.json");
+const goReport = loadReport('go-results.json')
+const tsReport = loadReport('ts-results.json')
 
 if (!goReport && !tsReport) {
   console.error(
     `No report files found in ${reportsDir}.\n` +
-      "Run the conformance runners first to generate go-results.json and/or ts-results.json."
-  );
-  process.exit(1);
+      'Run the conformance runners first to generate go-results.json and/or ts-results.json.'
+  )
+  process.exit(1)
 }
 
 /** Return a colour class based on pass rate (0–1). */
 function rateClass(rate) {
-  if (rate >= 0.9) return "good";
-  if (rate >= 0.8) return "warn";
-  return "bad";
+  if (rate >= 0.9) return 'good'
+  if (rate >= 0.8) return 'warn'
+  return 'bad'
 }
 
 /** Format a pass rate as a percentage string. */
 function pct(rate) {
-  if (rate == null) return "N/A";
-  return (rate * 100).toFixed(1) + "%";
+  if (rate == null) return 'N/A'
+  return (rate * 100).toFixed(1) + '%'
 }
 
 /** Build the SVG-based CSS gauge for a given pass rate. */
 function gauge(rate, label) {
   if (rate == null) {
-    return `<div class="gauge-wrap"><div class="gauge-label">${label}</div><div class="gauge-na">N/A</div></div>`;
+    return `<div class="gauge-wrap"><div class="gauge-label">${label}</div><div class="gauge-na">N/A</div></div>`
   }
-  const cls = rateClass(rate);
+  const cls = rateClass(rate)
   // SVG circle gauge: circumference = 2πr ≈ 2*π*40 ≈ 251.3
-  const r = 40;
-  const circ = 2 * Math.PI * r;
-  const fill = circ * rate;
-  const gap = circ - fill;
-  const colorMap = { good: "#22c55e", warn: "#eab308", bad: "#ef4444" };
-  const color = colorMap[cls];
+  const r = 40
+  const circ = 2 * Math.PI * r
+  const fill = circ * rate
+  const gap = circ - fill
+  const colorMap = { good: '#22c55e', warn: '#eab308', bad: '#ef4444' }
+  const color = colorMap[cls]
   return `
   <div class="gauge-wrap">
     <div class="gauge-label">${label}</div>
@@ -90,21 +90,19 @@ function gauge(rate, label) {
         transform="rotate(-90 50 50)"/>
       <text x="50" y="55" text-anchor="middle" font-size="16" font-weight="bold" fill="${color}">${pct(rate)}</text>
     </svg>
-  </div>`;
+  </div>`
 }
 
 /** Build the per-category table HTML for a report. */
 function categoryTable(report, title) {
   if (!report || !report.categories || report.categories.length === 0) {
-    return `<p class="missing">No category data for ${title}.</p>`;
+    return `<p class="missing">No category data for ${title}.</p>`
   }
-  const sorted = [...report.categories].sort((a, b) =>
-    a.category.localeCompare(b.category)
-  );
+  const sorted = [...report.categories].sort((a, b) => a.category.localeCompare(b.category))
   const rows = sorted
-    .map((cat) => {
-      const rate = cat.total > 0 ? cat.passed / cat.total : 0;
-      const cls = rateClass(rate);
+    .map(cat => {
+      const rate = cat.total > 0 ? cat.passed / cat.total : 0
+      const cls = rateClass(rate)
       return `
       <tr>
         <td>${htmlEscape(cat.category)}</td>
@@ -113,9 +111,9 @@ function categoryTable(report, title) {
         <td class="num fail">${cat.failed}</td>
         <td class="num skip">${cat.skipped}</td>
         <td class="num">${cat.total}</td>
-      </tr>`;
+      </tr>`
     })
-    .join("");
+    .join('')
   return `
   <h3>${htmlEscape(title)}</h3>
   <table>
@@ -130,20 +128,20 @@ function categoryTable(report, title) {
       </tr>
     </thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>`
 }
 
 function htmlEscape(str) {
   return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }
 
 function summaryRow(report, name) {
-  if (!report) return "";
-  const cls = rateClass(report.pass_rate);
+  if (!report) return ''
+  const cls = rateClass(report.pass_rate)
   return `
   <tr>
     <td>${htmlEscape(name)}</td>
@@ -152,11 +150,11 @@ function summaryRow(report, name) {
     <td class="num fail">${report.failed}</td>
     <td class="num skip">${report.skipped}</td>
     <td class="num">${report.total}</td>
-    <td>${htmlEscape(report.generated_at || "")}</td>
-  </tr>`;
+    <td>${htmlEscape(report.generated_at || '')}</td>
+  </tr>`
 }
 
-const generatedAt = new Date().toISOString();
+const generatedAt = new Date().toISOString()
 
 const html = `<!DOCTYPE html>
 <html lang="en">
@@ -204,8 +202,8 @@ const html = `<!DOCTYPE html>
   <div class="card">
     <h2>Pass Rate Overview</h2>
     <div class="gauges">
-      ${gauge(goReport?.pass_rate ?? null, "Go Runner")}
-      ${gauge(tsReport?.pass_rate ?? null, "TS Runner")}
+      ${gauge(goReport?.pass_rate ?? null, 'Go Runner')}
+      ${gauge(tsReport?.pass_rate ?? null, 'TS Runner')}
     </div>
 
     <h3>Summary</h3>
@@ -222,16 +220,16 @@ const html = `<!DOCTYPE html>
         </tr>
       </thead>
       <tbody>
-        ${summaryRow(goReport, "Go")}
-        ${summaryRow(tsReport, "TypeScript")}
+        ${summaryRow(goReport, 'Go')}
+        ${summaryRow(tsReport, 'TypeScript')}
       </tbody>
     </table>
   </div>
 
   <div class="card">
     <h2>Per-Category Results</h2>
-    ${categoryTable(goReport, "Go Runner")}
-    ${categoryTable(tsReport, "TypeScript Runner")}
+    ${categoryTable(goReport, 'Go Runner')}
+    ${categoryTable(tsReport, 'TypeScript Runner')}
   </div>
 
   <footer>
@@ -239,8 +237,8 @@ const html = `<!DOCTYPE html>
     <code>conformance/runner/scripts/dashboard.mjs</code>
   </footer>
 </body>
-</html>`;
+</html>`
 
-const outPath = resolve(reportsDir, "dashboard.html");
-writeFileSync(outPath, html, "utf8");
-console.log(`Dashboard written to ${outPath}`);
+const outPath = resolve(reportsDir, 'dashboard.html')
+writeFileSync(outPath, html, 'utf8')
+console.log(`Dashboard written to ${outPath}`)

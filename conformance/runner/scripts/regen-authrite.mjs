@@ -34,7 +34,7 @@ const { PrivateKey, ProtoWallet } = await import(sdkPath)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function hexToBytes (hex) {
+function hexToBytes(hex) {
   if (hex === '' || hex == null) return []
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out = []
@@ -44,11 +44,13 @@ function hexToBytes (hex) {
   return out
 }
 
-function bytesToHex (bytes) {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+function bytesToHex(bytes) {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
-function bumpPatch (version) {
+function bumpPatch(version) {
   const parts = version.split('.')
   parts[2] = String(Number.parseInt(parts[2], 10) + 1)
   return parts.join('.')
@@ -58,7 +60,11 @@ function bumpPatch (version) {
 
 const vectorsPath = resolve(
   repoRoot,
-  'conformance', 'vectors', 'messaging', 'brc31', 'authrite-signature.json'
+  'conformance',
+  'vectors',
+  'messaging',
+  'brc31',
+  'authrite-signature.json'
 )
 const corpus = JSON.parse(readFileSync(vectorsPath, 'utf8'))
 
@@ -87,7 +93,7 @@ const corpus = JSON.parse(readFileSync(vectorsPath, 'utf8'))
 const vectors = corpus.vectors
 
 // Build index by numeric suffix
-function vectorNum (v) {
+function vectorNum(v) {
   return Number.parseInt(v.id.split('.').pop(), 10)
 }
 
@@ -107,8 +113,10 @@ for (const v of vectors) {
   }
 }
 
-console.log('Pairs (createVec → verifyVec):',
-  [...pairsCreateToVerify.entries()].map(([c, v]) => `${c}→${v}`).join(', '))
+console.log(
+  'Pairs (createVec → verifyVec):',
+  [...pairsCreateToVerify.entries()].map(([c, v]) => `${c}→${v}`).join(', ')
+)
 
 // ── Regenerate ────────────────────────────────────────────────────────────────
 
@@ -179,7 +187,10 @@ for (const v of vectors) {
   // Find which create vector this verify corresponds to
   let createNum = null
   for (const [cn, vn] of pairsCreateToVerify.entries()) {
-    if (vn === num) { createNum = cn; break }
+    if (vn === num) {
+      createNum = cn
+      break
+    }
   }
 
   if (createNum === null) {
@@ -236,7 +247,9 @@ if (vec6) {
   if ('skip_reason' in vec6) {
     delete vec6.skip_reason
   }
-  console.log(`Vector 6: parity_class restored to "required"${hadBestEffort ? ' (was best-effort)' : ''}`)
+  console.log(
+    `Vector 6: parity_class restored to "required"${hadBestEffort ? ' (was best-effort)' : ''}`
+  )
 }
 
 // ── Bump version & reference_impl ────────────────────────────────────────────
@@ -257,13 +270,23 @@ console.log(`\nWrote ${vectorsPath}`)
 
 console.log('\n=== Regeneration Report ===')
 for (const r of report) {
-  const prefix = r.status === 'UPDATED' ? '  [UPDATED]' :
-                 r.status === 'UNCHANGED' ? '[unchanged]' :
-                 r.status === 'ERROR' ? '   [ERROR!]' :
-                 r.status === 'VERIFY_FAILED' ? '  [VFAIL!]' : `[${r.status}]`
-  const detail = r.error ? ` — ERROR: ${r.error}` :
-                 r.old ? ` old=${r.old} new=${r.new}` :
-                 r.note ? ` — ${r.note}` : ''
+  const prefix =
+    r.status === 'UPDATED'
+      ? '  [UPDATED]'
+      : r.status === 'UNCHANGED'
+        ? '[unchanged]'
+        : r.status === 'ERROR'
+          ? '   [ERROR!]'
+          : r.status === 'VERIFY_FAILED'
+            ? '  [VFAIL!]'
+            : `[${r.status}]`
+  const detail = r.error
+    ? ` — ERROR: ${r.error}`
+    : r.old
+      ? ` old=${r.old} new=${r.new}`
+      : r.note
+        ? ` — ${r.note}`
+        : ''
   console.log(`  vec${r.vectorNum}: ${prefix}${detail}`)
 }
 

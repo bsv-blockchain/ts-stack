@@ -7,11 +7,7 @@ import { runArgv2Function } from './runArgv2Function'
  */
 export async function swapActive(): Promise<void> {
   const env = Setup.getEnv('main')
-  await swapActiveWalletClient(
-    env,
-    env.identityKey,
-    'https://store.txs.systems'
-  )
+  await swapActiveWalletClient(env, env.identityKey, 'https://store.txs.systems')
 }
 
 /**
@@ -30,10 +26,7 @@ export async function swapActiveWalletClient(
 
   // Create a StorageClient to both the default and the additional endpointUrl.
   const client1 = new StorageClient(setup.wallet, endpointUrl)
-  const client2 = new StorageClient(
-    setup.wallet,
-    'https://storage.babbage.systems'
-  )
+  const client2 = new StorageClient(setup.wallet, 'https://storage.babbage.systems')
 
   // Get the settings, which includes the storageIdentityKey, for each storage provider.
   const settings1 = await client1.makeAvailable()
@@ -59,9 +52,7 @@ export async function swapActiveWalletClient(
     await setup.storage.setActive(settings1.storageIdentityKey)
   } else {
     // This should never happen as the getActiveStore() will have thrown above.
-    throw new Error(
-      `${activeStorageIdentity} is not an available storage identity`
-    )
+    throw new Error(`${activeStorageIdentity} is not an available storage identity`)
   }
   return setup
 }

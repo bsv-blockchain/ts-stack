@@ -11,7 +11,7 @@ export default function AsyncApiEmbed({ slug, title, height = 900 }: Readonly<Pr
     brc29: 'BRC-29 Peer Payment',
     brc31: 'BRC-31 Auth Handshake',
     authsocket: 'Authsocket (WebSocket)',
-    gasp: 'GASP Sync',
+    gasp: 'GASP Sync'
   }
 
   return (

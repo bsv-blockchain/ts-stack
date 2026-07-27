@@ -23,7 +23,7 @@ const assetMimeTypes: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
+  '.webp': 'image/webp'
 }
 
 function docsAssetPathFromUrl(url: string | undefined) {
@@ -56,7 +56,10 @@ function docsAssetsPlugin(): import('vite').Plugin {
         const file = resolveDocsAsset(assetPath)
         if (!file || !existsSync(file) || !statSync(file).isFile()) return next()
 
-        res.setHeader('Content-Type', assetMimeTypes[extname(file).toLowerCase()] ?? 'application/octet-stream')
+        res.setHeader(
+          'Content-Type',
+          assetMimeTypes[extname(file).toLowerCase()] ?? 'application/octet-stream'
+        )
         createReadStream(file).pipe(res)
       })
     },
@@ -66,10 +69,13 @@ function docsAssetsPlugin(): import('vite').Plugin {
         const sourceRoot = join(DOCS_ASSETS, folder)
         cpSync(sourceRoot, join(distAssets, folder), {
           recursive: true,
-          filter: (source) => !relative(sourceRoot, source).split(/[/\\]/).some((part) => part.startsWith('.')),
+          filter: source =>
+            !relative(sourceRoot, source)
+              .split(/[/\\]/)
+              .some(part => part.startsWith('.'))
         })
       }
-    },
+    }
   }
 }
 
@@ -82,7 +88,7 @@ function splitUrlSuffix(url: string) {
   if (suffixIndex === -1) return { pathname: url, suffix: '' }
   return {
     pathname: url.slice(0, suffixIndex),
-    suffix: url.slice(suffixIndex),
+    suffix: url.slice(suffixIndex)
   }
 }
 
@@ -94,7 +100,12 @@ function docsRouteFromMarkdownPath(relPath: string) {
 
 function routeForMarkdownFile(file: string, suffix: string) {
   const relPath = relative(DOCS_ROOT, file).replaceAll('\\', '/')
-  if (relPath.startsWith('../') || relPath === '..' || relPath.startsWith('/') || !relPath.endsWith('.md')) {
+  if (
+    relPath.startsWith('../') ||
+    relPath === '..' ||
+    relPath.startsWith('/') ||
+    !relPath.endsWith('.md')
+  ) {
     return null
   }
 
@@ -179,7 +190,8 @@ function rewriteDocsPaths(node: Record<string, unknown>, sourceFile: string) {
   const children = node.children
   if (Array.isArray(children)) {
     for (const child of children) {
-      if (child && typeof child === 'object') rewriteDocsPaths(child as Record<string, unknown>, sourceFile)
+      if (child && typeof child === 'object')
+        rewriteDocsPaths(child as Record<string, unknown>, sourceFile)
     }
   }
 }
@@ -223,7 +235,7 @@ const stripAudioComments: import('vite').Plugin = {
   transform(code, id) {
     if (!id.endsWith('.md') && !id.endsWith('.mdx')) return
     return { code: code.replace(/<!--\s*audio:[^>]*-->/g, ''), map: null }
-  },
+  }
 }
 
 export default defineConfig({
@@ -234,90 +246,119 @@ export default defineConfig({
     {
       enforce: 'pre',
       ...mdx({
-        remarkPlugins: [remarkGfm, remarkFrontmatter, remarkMdxFrontmatter, remarkLiftHtmlComponents],
+        remarkPlugins: [
+          remarkGfm,
+          remarkFrontmatter,
+          remarkMdxFrontmatter,
+          remarkLiftHtmlComponents
+        ],
         remarkRehypeOptions: {
           handlers: {
             homeHero: () => ({
               type: 'element',
               tagName: 'div',
               properties: { className: ['bsv-hero'] },
-              children: [{
-                type: 'element',
-                tagName: 'div',
-                properties: { className: ['bsv-hero__inner'] },
-                children: [
-                  {
-                    type: 'element',
-                    tagName: 'div',
-                    properties: { className: ['bsv-hero__title'] },
-                    children: [
-                      {
-                        type: 'element',
-                        tagName: 'span',
-                        properties: {},
-                        children: [{ type: 'text', value: 'BSV' }],
-                      },
-                      { type: 'text', value: ' application infrastructure in TypeScript' },
-                    ],
-                  },
-                  {
-                    type: 'element',
-                    tagName: 'p',
-                    properties: { className: ['bsv-hero__lede'] },
-                    children: [{
-                      type: 'text',
-                      value: 'Reference packages, protocol specs, infrastructure contracts, and conformance vectors for building wallet-aware BSV applications. Use it as an app developer, a wallet implementer, or the baseline another language implementation must match.',
-                    }],
-                  },
-                  {
-                    type: 'element',
-                    tagName: 'a',
-                    properties: { className: ['bsv-hero__cta'], href: `${BASE}get-started/` },
-                    children: [
-                      { type: 'text', value: 'Choose your entry point' },
-                      {
-                        type: 'element',
-                        tagName: 'span',
-                        properties: { className: ['bsv-hero__cta-arrow'], ariaHidden: 'true' },
-                        children: [{ type: 'text', value: '->' }],
-                      },
-                    ],
-                  },
-                ],
-              }],
+              children: [
+                {
+                  type: 'element',
+                  tagName: 'div',
+                  properties: { className: ['bsv-hero__inner'] },
+                  children: [
+                    {
+                      type: 'element',
+                      tagName: 'div',
+                      properties: { className: ['bsv-hero__title'] },
+                      children: [
+                        {
+                          type: 'element',
+                          tagName: 'span',
+                          properties: {},
+                          children: [{ type: 'text', value: 'BSV' }]
+                        },
+                        { type: 'text', value: ' application infrastructure in TypeScript' }
+                      ]
+                    },
+                    {
+                      type: 'element',
+                      tagName: 'p',
+                      properties: { className: ['bsv-hero__lede'] },
+                      children: [
+                        {
+                          type: 'text',
+                          value:
+                            'Reference packages, protocol specs, infrastructure contracts, and conformance vectors for building wallet-aware BSV applications. Use it as an app developer, a wallet implementer, or the baseline another language implementation must match.'
+                        }
+                      ]
+                    },
+                    {
+                      type: 'element',
+                      tagName: 'a',
+                      properties: { className: ['bsv-hero__cta'], href: `${BASE}get-started/` },
+                      children: [
+                        { type: 'text', value: 'Choose your entry point' },
+                        {
+                          type: 'element',
+                          tagName: 'span',
+                          properties: { className: ['bsv-hero__cta-arrow'], ariaHidden: 'true' },
+                          children: [{ type: 'text', value: '->' }]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             }),
             asyncApiEmbed: (_state: unknown, node: Record<string, unknown>) => ({
               type: 'element',
               tagName: 'iframe',
               properties: {
                 src: `${BASE}assets/asyncapi/${node.slug}/index.html`,
-                style: 'width: 100%; min-height: 900px; border: none; background: #011627; border-radius: 8px;',
+                style:
+                  'width: 100%; min-height: 900px; border: none; background: #011627; border-radius: 8px;',
                 title: `AsyncAPI Specification (${node.slug})`,
-                loading: 'lazy',
+                loading: 'lazy'
               },
-              children: [],
-            }),
-          },
+              children: []
+            })
+          }
         },
         rehypePlugins: [
           rehypeDocsPaths,
           rehypeSlug,
           [rehypeAutolinkHeadings, { behavior: 'wrap' }],
-          [rehypeShiki, {
-            theme: 'github-dark-dimmed',
-            langs: ['typescript', 'javascript', 'bash', 'json', 'yaml', 'markdown', 'html', 'css', 'sql', 'go', 'rust', 'python'],
-            transformers: [{
-              pre(node: { properties: Record<string, unknown> }) {
-                const lang = (this as { options?: { lang?: string } }).options?.lang
-                if (lang) node.properties['data-language'] = lang
-              },
-            }],
-          }],
+          [
+            rehypeShiki,
+            {
+              theme: 'github-dark-dimmed',
+              langs: [
+                'typescript',
+                'javascript',
+                'bash',
+                'json',
+                'yaml',
+                'markdown',
+                'html',
+                'css',
+                'sql',
+                'go',
+                'rust',
+                'python'
+              ],
+              transformers: [
+                {
+                  pre(node: { properties: Record<string, unknown> }) {
+                    const lang = (this as { options?: { lang?: string } }).options?.lang
+                    if (lang) node.properties['data-language'] = lang
+                  }
+                }
+              ]
+            }
+          ]
         ],
-        providerImportSource: '@mdx-js/react',
-      }),
+        providerImportSource: '@mdx-js/react'
+      })
     },
-    react({ include: /\.(mdx?|jsx?|tsx?)$/ }),
+    react({ include: /\.(mdx?|jsx?|tsx?)$/ })
   ],
   resolve: {
     alias: {
@@ -328,16 +369,16 @@ export default defineConfig({
       // Those files live outside docs-site's node_modules tree, so the bundler
       // cannot resolve the runtime relative to them. Pin it explicitly.
       'react/jsx-runtime': resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
-      'react/jsx-dev-runtime': resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js'),
-    },
+      'react/jsx-dev-runtime': resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js')
+    }
   },
   server: {
-    fs: { allow: ['..', resolve(__dirname, '../docs')] },
+    fs: { allow: ['..', resolve(__dirname, '../docs')] }
   },
   build: {
     outDir: 'dist',
     rollupOptions: {
-      external: [/^\/_pagefind\//],
-    },
-  },
+      external: [/^\/_pagefind\//]
+    }
+  }
 })

@@ -163,13 +163,27 @@ jobs:
           pnpm -r --if-present --filter '!@bsv/ts-stack' $EXTRA run pack:check
 
       - name: Lint changed packages
-        continue-on-error: true
         env:
           SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
         run: |
           EXTRA=""
           if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
-          pnpm -r --filter '!@bsv/ts-stack' $EXTRA run lint --if-present
+          pnpm exec oxlint scripts --deny-warnings
+          pnpm -r --if-present --filter '!@bsv/ts-stack' $EXTRA run lint
+
+      - name: Check repository and changed-package formatting
+        env:
+          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
+        run: |
+          EXTRA=""
+          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
+          pnpm format:root
+          pnpm -r --if-present \
+            --filter '!@bsv/ts-stack' \
+            --filter '!docs-site' \
+            --filter '!@bsv/conformance-runner' \
+            --filter '!@bsv/conformance-runner-ts' \
+            $EXTRA run format:check
 
       - name: Archive build outputs
         run: |
@@ -792,6 +806,13 @@ jobs:
       - name: Rebuild the audited docs build tool
         run: pnpm rebuild esbuild
 
+      - name: Check docs source quality
+        run: |
+          pnpm --filter docs-site format:check
+          pnpm --filter docs-site lint
+          pnpm --filter docs-site test
+          pnpm --filter docs-site typecheck
+
       - name: Validate frontmatter + links (docs site)
         run: pnpm --filter docs-site validate
 
@@ -816,6 +837,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Check structural conformance runner quality
+        run: |
+          pnpm --filter @bsv/conformance-runner format:check
+          pnpm --filter @bsv/conformance-runner lint
+          pnpm --filter @bsv/conformance-runner build
 
       - name: Validate conformance vectors (TS)
         run: cd conformance/runner && node src/runner.js --validate-only

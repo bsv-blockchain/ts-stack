@@ -16,7 +16,7 @@
  * are executed and their dispatcher runs; only 'intended' vectors are skipped.
  */
 
-import { describe, test, expect } from '@jest/globals'
+import { describe, test } from '@jest/globals'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { join, extname, basename } from 'path'
 import { fileURLToPath } from 'url'
@@ -43,7 +43,7 @@ interface VectorEntry {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function findJsonFiles (dir: string): string[] {
+function findJsonFiles(dir: string): string[] {
   const results: string[] = []
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry)
@@ -56,11 +56,11 @@ function findJsonFiles (dir: string): string[] {
   return results
 }
 
-function categoryFromFile (filePath: string): string {
+function categoryFromFile(filePath: string): string {
   return basename(filePath, '.json').toLowerCase()
 }
 
-function isNotImplemented (err: unknown): boolean {
+function isNotImplemented(err: unknown): boolean {
   return err instanceof Error && err.message.startsWith('not implemented')
 }
 
@@ -74,7 +74,9 @@ for (const filePath of vectorFiles) {
     vf = JSON.parse(readFileSync(filePath, 'utf-8')) as VectorFile
   } catch (e) {
     describe(filePath, () => {
-      test('parse JSON', () => { throw new Error(`Failed to parse: ${String(e)}`) })
+      test('parse JSON', () => {
+        throw new Error(`Failed to parse: ${String(e)}`)
+      })
     })
     continue
   }

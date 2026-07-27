@@ -6,6 +6,7 @@
     "access": "public"
   },
   "description": "An npm package to subscribe to Teranode P2P topics in a private DHT network and log messages",
+  "author": "BSV Blockchain Association",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

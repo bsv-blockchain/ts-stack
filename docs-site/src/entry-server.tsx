@@ -1,9 +1,5 @@
 import { prerender } from 'react-dom/static'
-import {
-  createStaticHandler,
-  createStaticRouter,
-  StaticRouterProvider,
-} from 'react-router'
+import { createStaticHandler, createStaticRouter, StaticRouterProvider } from 'react-router'
 import { routes } from './routes'
 import './styles/tokens.css'
 import './styles/reset.css'
@@ -24,7 +20,7 @@ export async function render(pathname: string): Promise<string> {
 
   const router = createStaticRouter(handler.dataRoutes, context)
   const { prelude } = await prerender(
-    <StaticRouterProvider router={router} context={context} hydrate={false} />,
+    <StaticRouterProvider router={router} context={context} hydrate={false} />
   )
 
   return new Response(prelude).text()

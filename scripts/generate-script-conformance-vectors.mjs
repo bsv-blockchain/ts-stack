@@ -36,20 +36,14 @@ const NODE_SOURCES = [
   }
 ]
 
-const GENERATED_PREFIXES = [
-  'node.script.',
-  'node.sighash.',
-  'node.tx-valid.',
-  'node.tx-invalid.'
-]
+const GENERATED_PREFIXES = ['node.script.', 'node.sighash.', 'node.tx-valid.', 'node.tx-invalid.']
 
 // These upstream tx_invalid entries are useful provenance, but the SDK's
 // script-level Spend runner does not reject them as standalone spends. Keep
 // them in the corpus as intended coverage until full transaction consensus
 // validation is represented in the conformance runner.
 const TX_INVALID_INTENDED_INDICES = new Set([
-  31, 34, 37, 39, 40,
-  68, 69, 71, 72, 74, 75, 77, 79, 80, 82, 85, 87, 89, 90, 91, 93, 95, 97, 99,
+  31, 34, 37, 39, 40, 68, 69, 71, 72, 74, 75, 77, 79, 80, 82, 85, 87, 89, 90, 91, 93, 95, 97, 99,
   101, 106, 107, 109, 110, 118, 119, 120, 121, 125, 127
 ])
 
@@ -59,19 +53,19 @@ for (const match of opSource.matchAll(/\b(OP_[A-Z0-9_]+):\s*0x([0-9a-f]+)/gi)) {
   OP[match[1]] = Number.parseInt(match[2], 16)
 }
 
-function readFixture (source, file) {
+function readFixture(source, file) {
   return JSON.parse(readFileSync(join(FIXTURE_ROOT, source.key, file), 'utf8'))
 }
 
-function amountFromJSON (amount) {
+function amountFromJSON(amount) {
   return Math.round(Number(amount) * 100000000)
 }
 
-function toHex (bytes) {
+function toHex(bytes) {
   return bytes.map(byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-function scriptNumBytes (value) {
+function scriptNumBytes(value) {
   if (value === 0n) return []
 
   const negative = value < 0n
@@ -91,7 +85,7 @@ function scriptNumBytes (value) {
   return bytes
 }
 
-function writePush (bytes, out) {
+function writePush(bytes, out) {
   if (bytes.length === 0) {
     out.push(OP.OP_0)
   } else if (bytes.length === 1 && bytes[0] >= 1 && bytes[0] <= 16) {
@@ -116,18 +110,18 @@ function writePush (bytes, out) {
   }
 }
 
-function tokenToOpcode (token) {
+function tokenToOpcode(token) {
   if (token === 'TRUE') return OP.OP_TRUE
   if (token === 'FALSE') return OP.OP_FALSE
   const opToken = token.startsWith('OP_') ? token : `OP_${token}`
   return OP[opToken]
 }
 
-function tokenizeAsm (asm) {
+function tokenizeAsm(asm) {
   return asm.match(/'[^']*'|\S+/g) ?? []
 }
 
-function parseNodeAsm (asm) {
+function parseNodeAsm(asm) {
   const out = []
   for (const token of tokenizeAsm(asm)) {
     if (token.startsWith('0x')) {
@@ -152,30 +146,32 @@ function parseNodeAsm (asm) {
   return out
 }
 
-function flagsFromCSV (flags) {
+function flagsFromCSV(flags) {
   if (flags === '') return []
   return flags.split(',').filter(Boolean)
 }
 
-function flagSets (raw) {
+function flagSets(raw) {
   const flags = Array.isArray(raw) ? raw.map(String) : [String(raw)]
   return flags.map(flagsFromCSV)
 }
 
-function compact (text) {
-  return String(text ?? '').replace(/\s+/g, ' ').trim()
+function compact(text) {
+  return String(text ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
-function describeWithComment (prefix, index, comment, fallback) {
+function describeWithComment(prefix, index, comment, fallback) {
   const suffix = compact(comment) || fallback
   return `${prefix} #${index}: ${suffix}`.slice(0, 240)
 }
 
-function padIndex (index) {
+function padIndex(index) {
   return String(index).padStart(4, '0')
 }
 
-function sourceGroupsFor (file) {
+function sourceGroupsFor(file) {
   const bySha = new Map()
   for (const source of NODE_SOURCES) {
     const sha = source.shas[file]
@@ -186,19 +182,19 @@ function sourceGroupsFor (file) {
   return [...bySha.values()]
 }
 
-function sourceId (sources) {
+function sourceId(sources) {
   return sources.length > 1 ? 'shared' : sources[0].key
 }
 
-function sourceKeys (sources) {
+function sourceKeys(sources) {
   return sources.map(source => source.key)
 }
 
-function sourceLabels (sources) {
+function sourceLabels(sources) {
   return sources.map(source => source.label).join(' and ')
 }
 
-function generatedTags (type, sources, valid) {
+function generatedTags(type, sources, valid) {
   return [
     'script',
     type,
@@ -209,7 +205,7 @@ function generatedTags (type, sources, valid) {
   ]
 }
 
-function generateScriptVectors () {
+function generateScriptVectors() {
   const vectors = []
 
   for (const source of NODE_SOURCES) {
@@ -252,7 +248,12 @@ function generateScriptVectors () {
       const valid = expectedResult === 'OK'
       vectors.push({
         id: `node.script.${source.key}.${padIndex(index)}`,
-        description: describeWithComment(`${source.label} script_tests.json`, index, comment, expectedResult),
+        description: describeWithComment(
+          `${source.label} script_tests.json`,
+          index,
+          comment,
+          expectedResult
+        ),
         input: {
           fixture_type: 'node-script',
           sources: [source.key],
@@ -279,7 +280,7 @@ function generateScriptVectors () {
   return vectors
 }
 
-function generateSighashVectors () {
+function generateSighashVectors() {
   const vectors = []
 
   for (const group of sourceGroupsFor('sighash.json')) {
@@ -313,7 +314,7 @@ function generateSighashVectors () {
   return vectors
 }
 
-function normalizePrevouts (prevouts) {
+function normalizePrevouts(prevouts) {
   return prevouts.map(([txid, vout, scriptAsm, amount]) => ({
     txid: String(txid),
     vout: Number(vout),
@@ -323,7 +324,7 @@ function normalizePrevouts (prevouts) {
   }))
 }
 
-function generateTransactionVectors (file, valid) {
+function generateTransactionVectors(file, valid) {
   const vectors = []
 
   for (const group of sourceGroupsFor(file)) {
@@ -354,7 +355,8 @@ function generateTransactionVectors (file, valid) {
 
       if (!valid && TX_INVALID_INTENDED_INDICES.has(index)) {
         vector.parity_class = 'intended'
-        vector.skip_reason = 'Preserved from upstream tx_invalid.json, but not required for script-interpreter conformance because the standalone script spend validates without full transaction consensus checks.'
+        vector.skip_reason =
+          'Preserved from upstream tx_invalid.json, but not required for script-interpreter conformance because the standalone script spend validates without full transaction consensus checks.'
         vector.tags.push('intended', 'full-transaction-consensus')
       }
 
@@ -365,21 +367,23 @@ function generateTransactionVectors (file, valid) {
   return vectors
 }
 
-function stripGeneratedVectors (vectors) {
+function stripGeneratedVectors(vectors) {
   return vectors.filter(vector => !GENERATED_PREFIXES.some(prefix => vector.id.startsWith(prefix)))
 }
 
-function buildSourcesMetadata () {
-  return Object.fromEntries(NODE_SOURCES.map(source => [
-    source.key,
-    {
-      label: source.label,
-      repository: source.repository,
-      commit: source.commit,
-      source_directory: source.source_directory,
-      sha256: source.shas
-    }
-  ]))
+function buildSourcesMetadata() {
+  return Object.fromEntries(
+    NODE_SOURCES.map(source => [
+      source.key,
+      {
+        label: source.label,
+        repository: source.repository,
+        commit: source.commit,
+        source_directory: source.source_directory,
+        sha256: source.shas
+      }
+    ])
+  )
 }
 
 const existing = JSON.parse(readFileSync(OUTPUT, 'utf8'))
@@ -398,11 +402,14 @@ const next = {
   name: 'Script parsing, encoding, sighash and evaluation parity with SV Node and Teranode',
   brc: ['BRC-14'],
   version: '3.0.0',
-  reference_impl: 'packages/sdk/src/script/Script.ts, packages/sdk/src/script/Spend.ts, packages/sdk/src/primitives/TransactionSignature.ts',
+  reference_impl:
+    'packages/sdk/src/script/Script.ts, packages/sdk/src/script/Spend.ts, packages/sdk/src/primitives/TransactionSignature.ts',
   parity_class: 'required',
   sources: buildSourcesMetadata(),
   vectors: [...baseVectors, ...generated]
 }
 
 writeFileSync(OUTPUT, `${JSON.stringify(next, null, 2)}\n`)
-console.log(`Wrote ${next.vectors.length} script conformance vectors (${generated.length} generated node vectors)`)
+console.log(
+  `Wrote ${next.vectors.length} script conformance vectors (${generated.length} generated node vectors)`
+)

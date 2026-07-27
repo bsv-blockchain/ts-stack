@@ -21,56 +21,35 @@ import { expect } from '@jest/globals'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getBool (m: Record<string, unknown>, key: string): boolean {
+function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
 }
 
 /** Returns true if a string is valid base64. */
-function isBase64 (s: string): boolean {
+function isBase64(s: string): boolean {
   return /^[A-Za-z0-9+/]*={0,2}$/.test(s) && s.length % 4 === 0
 }
 
 /** Returns true if string matches a compressed secp256k1 pubkey hex. */
-function isCompressedPubKeyHex (s: string): boolean {
+function isCompressedPubKeyHex(s: string): boolean {
   return /^(02|03)[0-9a-fA-F]{64}$/.test(s)
-}
-
-/** Returns true if string matches a 64-char hex txid. */
-function isTxidHex (s: string): boolean {
-  return /^[0-9a-fA-F]{64}$/.test(s)
-}
-
-/** Returns true if string matches a 13-digit Unix millisecond timestamp. */
-function isUnixMs (s: string): boolean {
-  return /^\d{13}$/.test(s)
 }
 
 // ── BRC-29 Payment Protocol ───────────────────────────────────────────────────
 
 /**
- * Validates a PaymentMessage object for required BRC-29 fields.
- * Only validates shape — the transaction content is not decoded here.
- */
-function assertPaymentMessageShape (msg: Record<string, unknown>): void {
-  expect(typeof msg.derivationPrefix).toBe('string')
-  expect(typeof msg.derivationSuffix === 'string' ||
-    (Array.isArray(msg.outputs) && msg.outputs.length > 0)).toBe(true)
-  expect(typeof msg.transaction).toBe('string')
-}
-
-/**
  * Validates a PaymentAck object for required BRC-29 fields.
  */
-function assertPaymentAckShape (msg: Record<string, unknown>): void {
+function assertPaymentAckShape(msg: Record<string, unknown>): void {
   expect(typeof msg.accepted).toBe('boolean')
 }
 
-function dispatchBRC29PaymentProtocol (
+function dispatchBRC29PaymentProtocol(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -92,7 +71,12 @@ function dispatchBRC29PaymentProtocol (
   }
 
   // Vector 6: BRC-42 invoice number format
-  if (input._schema_check === true && 'derivationPrefix' in input && 'derivationSuffix' in input && !('message' in input)) {
+  if (
+    input._schema_check === true &&
+    'derivationPrefix' in input &&
+    'derivationSuffix' in input &&
+    !('message' in input)
+  ) {
     const prefix = getString(input, 'derivationPrefix')
     const suffix = getString(input, 'derivationSuffix')
     const wantInvoice = getString(expected, 'invoice_number')
@@ -239,30 +223,25 @@ const BRC121_REQUIRED_PAYMENT_HEADERS = [
 ] as const
 
 /** Validates all required payment headers are present and well-formed. */
-function hasAllPaymentHeaders (headers: Record<string, string>): boolean {
+function hasAllPaymentHeaders(headers: Record<string, string>): boolean {
   for (const h of BRC121_REQUIRED_PAYMENT_HEADERS) {
     if (typeof headers[h] !== 'string' || headers[h] === '') return false
   }
   return true
 }
 
-/** Validates timestamp freshness (±30s window). */
-function isTimestampFresh (timeStr: string, windowMs = 30_000): boolean {
-  const ts = Number(timeStr)
-  if (Number.isNaN(ts)) return false
-  return Math.abs(Date.now() - ts) <= windowMs
-}
-
-function dispatchBRC121 (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchBRC121(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const expectedStatus = expected.status as number | undefined
 
   // ── Schema-check / structural vectors ────────────────────────────────────
 
   // Vector 13: invoice number derivation format
-  if (input._schema_check === true && 'x_bsv_nonce' in input && 'x_bsv_time' in input && !('x_bsv_sender' in input)) {
+  if (
+    input._schema_check === true &&
+    'x_bsv_nonce' in input &&
+    'x_bsv_time' in input &&
+    !('x_bsv_sender' in input)
+  ) {
     const nonce = getString(input, 'x_bsv_nonce')
     const timeStr = getString(input, 'x_bsv_time')
     // derivationSuffix = base64(time string)
@@ -292,7 +271,12 @@ function dispatchBRC121 (
   }
 
   // Vector 16: PaymentRemittance shape
-  if (input._schema_check === true && 'x_bsv_nonce' in input && 'x_bsv_time' in input && 'x_bsv_sender' in input) {
+  if (
+    input._schema_check === true &&
+    'x_bsv_nonce' in input &&
+    'x_bsv_time' in input &&
+    'x_bsv_sender' in input
+  ) {
     const nonce = getString(input, 'x_bsv_nonce')
     const timeStr = getString(input, 'x_bsv_time')
     const sender = getString(input, 'x_bsv_sender')
@@ -338,7 +322,8 @@ function dispatchBRC121 (
     }
 
     // CORS test (vector 3)
-    const responseHeadersIncludes = expected.response_headers_includes as Record<string, string> | undefined
+    const responseHeadersIncludes = expected.response_headers_includes as
+      Record<string, string> | undefined
     if (responseHeadersIncludes !== undefined) {
       // Confirm the expected CORS header value is specified
       expect(responseHeadersIncludes['access-control-expose-headers']).toMatch(/x-bsv-sats/)
@@ -404,12 +389,9 @@ function dispatchBRC121 (
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
-export const categories: ReadonlyArray<string> = [
-  'brc29-payment-protocol',
-  'brc121'
-]
+export const categories: ReadonlyArray<string> = ['brc29-payment-protocol', 'brc121']
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>

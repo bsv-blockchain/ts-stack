@@ -42,7 +42,8 @@
     "btms",
     "tokens",
     "permissions",
-    "wallet"
+    "wallet",
+    "BSV"
   ],
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",

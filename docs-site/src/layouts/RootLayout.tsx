@@ -33,7 +33,7 @@ export default function RootLayout() {
                 zIndex: 49,
                 background: 'rgba(0,0,0,0.5)',
                 border: 0,
-                padding: 0,
+                padding: 0
               }}
               onClick={() => setSidebarOpen(false)}
             />

@@ -25,8 +25,13 @@ jobs:
           cache: pnpm
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Build TS SDK
-        run: pnpm --filter @bsv/sdk run build
+      - name: Build TS runner dependencies
+        run: pnpm -r --filter '@bsv/wallet-toolbox...' run build
+      - name: Check TS conformance runner quality
+        run: |
+          pnpm --filter @bsv/conformance-runner-ts format:check
+          pnpm --filter @bsv/conformance-runner-ts lint
+          pnpm --filter @bsv/conformance-runner-ts typecheck
       - name: Create reports directory
         run: mkdir -p conformance/reports
       - name: Run TS conformance runner

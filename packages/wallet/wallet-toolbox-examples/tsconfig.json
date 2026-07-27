@@ -1,30 +1,23 @@
 {
-    "compilerOptions": {
-      "types": ["jest", "node"],
-      "rootDir": ".", // Include both src and test directories
-      "outDir": "./out",
-      "target": "es2022",
-      "lib": ["es2022"],
-      "module": "commonjs",
-      "sourceMap": true,
-      "allowJs": false,
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true,
-      "strict": true,
-      "skipLibCheck": true,
-      "noImplicitAny": false,
-      "declaration": true,
-      "declarationMap": true,
-      "composite": true,
-      "noImplicitOverride": true
-    },
-    "include": [
-      "src/**/*",
-      "test/**/*"
-    ],
-    "exclude": [
-      "node_modules",
-      "out",
-      "out-client"
-    ]
-  }
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "rootDir": ".", // Include both src and test directories
+    "outDir": "./out",
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "commonjs",
+    "sourceMap": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noImplicitAny": true,
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "noImplicitOverride": true
+  },
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "out", "out-client"]
+}
