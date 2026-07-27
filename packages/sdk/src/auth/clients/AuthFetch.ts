@@ -76,10 +76,7 @@ const PAYMENT_VERSION = '1.0'
 export class AuthFetch {
   private readonly sessionManager: SessionManager
   private readonly wallet: WalletInterface
-  private callbacks: Record<
-    string,
-    { resolve: Function; reject: Function; stopListening?: () => void }
-  > = {}
+  private callbacks: Record<string, { resolve: Function; reject: Function }> = {}
   private readonly certificatesReceived: VerifiableCertificate[] = []
   private readonly requestedCertificates?: RequestedCertificateSet
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
@@ -269,13 +266,6 @@ export class AuthFetch {
               delete this.callbacks[requestNonceAsBase64]
             }
           )
-          // Recorded so a response that fails to process can retire its
-          // listener as well as settle its caller.
-          if (this.callbacks[requestNonceAsBase64] !== undefined) {
-            this.callbacks[requestNonceAsBase64].stopListening = () => {
-              peerToUse.peer.stopListeningForGeneralMessages(listenerId)
-            }
-          }
 
           // Before sending general messages to the peer, ensure that no certificate requests are pending.
           // This way, the user would need to choose to either allow or reject the certificate request first.
@@ -409,18 +399,6 @@ export class AuthFetch {
   }
 
   /**
-   * Serializes the HTTP request to be sent over the Transport.
-   *
-   * @param method - The HTTP method (e.g., 'GET', 'POST') for the request.
-   * @param headers - A record of HTTP headers to include in the request.
-   * @param body - The body of the request, if applicable (e.g., for POST/PUT requests).
-   * @param parsedUrl - The parsed URL object containing the full request URL.
-   * @param requestNonce - A unique random nonce to ensure request integrity.
-   * @returns A promise that resolves to a `Writer` containing the serialized request.
-   *
-   * @throws Will throw an error if unsupported headers are used or serialization fails.
-   */
-  /**
    * Rejects the request a failed incoming message belongs to.
    *
    * The HTTP exchange has already completed by the time the peer processes a
@@ -446,10 +424,21 @@ export class AuthFetch {
       return
     }
     delete this.callbacks[requestNonceAsBase64]
-    callback.stopListening?.()
     callback.reject(error)
   }
 
+  /**
+   * Serializes the HTTP request to be sent over the Transport.
+   *
+   * @param method - The HTTP method (e.g., 'GET', 'POST') for the request.
+   * @param headers - A record of HTTP headers to include in the request.
+   * @param body - The body of the request, if applicable (e.g., for POST/PUT requests).
+   * @param parsedUrl - The parsed URL object containing the full request URL.
+   * @param requestNonce - A unique random nonce to ensure request integrity.
+   * @returns A promise that resolves to a `Writer` containing the serialized request.
+   *
+   * @throws Will throw an error if unsupported headers are used or serialization fails.
+   */
   private async serializeRequest(
     method: string,
     headers: Record<string, string>,

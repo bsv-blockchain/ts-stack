@@ -158,61 +158,6 @@ export class Peer {
 
     const peerSession = await this.getAuthenticatedSession(identityKey)
 
-    await this.sendGeneralMessage(peerSession, message)
-  }
-
-  /**
-   * Sends a general message on one specific existing session, identified by our
-   * own session nonce — the value the peer echoes back as `yourNonce`.
-   *
-   * Use this when replying to a message rather than initiating one. BRC-103
-   * defines `yourNonce` as an echo of the peer's nonce from the previous
-   * message, so a reply belongs to the session that carried the request.
-   * Resolving the session from an identity key, as `toPeer` does, returns the
-   * peer's most recently updated session; when a peer holds more than one
-   * concurrent session, that can be a different session than the one being
-   * answered, and the reply goes out stamped with the wrong `yourNonce`.
-   *
-   * Unlike `toPeer`, this never initiates a handshake. BRC-103 defines only
-   * `initialRequest` from the initiating party and `initialResponse` from the
-   * receiving party, so a responder cannot open a session — an unresolvable
-   * session nonce is an error rather than a reason to create one.
-   *
-   * @param {number[]} message - The message payload to send.
-   * @param {string} sessionNonce - Our own session nonce for the session to reply on.
-   * @returns {Promise<void>}
-   * @throws Will throw if the session is unknown, is not authenticated, or if the message fails to send.
-   */
-  async toSession (
-    message: number[],
-    sessionNonce: string
-  ): Promise<void> {
-    const peerSession = await this.sessionManager.getSession(sessionNonce)
-
-    // `getSession` also accepts an identity key, in which case it returns a
-    // session whose nonce is not the identifier asked for. Only an exact
-    // session-nonce match may be replied on.
-    if (peerSession?.sessionNonce !== sessionNonce) {
-      throw new Error(`Session not found for nonce: ${sessionNonce}`)
-    }
-
-    if (peerSession.isAuthenticated !== true) {
-      throw new Error(`Session is not authenticated for nonce: ${sessionNonce}`)
-    }
-
-    await this.sendGeneralMessage(peerSession, message)
-  }
-
-  /**
-   * Signs a general message against an already-resolved session and sends it.
-   *
-   * @param {PeerSession} peerSession - The session to send on.
-   * @param {number[]} message - The message payload to send.
-   */
-  private async sendGeneralMessage (
-    peerSession: PeerSession,
-    message: number[]
-  ): Promise<void> {
     if (peerSession.peerIdentityKey == null) {
       throw new Error('Peer identity is not established')
     }

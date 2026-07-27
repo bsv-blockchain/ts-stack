@@ -314,7 +314,6 @@ describe('AuthFetch authenticated peer lifecycle', () => {
 
   test('rejects the pending request when its response cannot be processed', async () => {
     let reportDataError: ((error: Error, message: any) => void) | undefined
-    const stopListeningForGeneralMessages = jest.fn()
 
     SimplifiedFetchTransportMock.mockImplementation(() => ({
       onDataError: (listener: (error: Error, message: any) => void) => {
@@ -327,7 +326,7 @@ describe('AuthFetch authenticated peer lifecycle', () => {
       listenForCertificatesReceived: jest.fn(),
       listenForCertificatesRequested: jest.fn(),
       listenForGeneralMessages: jest.fn(() => 23),
-      stopListeningForGeneralMessages,
+      stopListeningForGeneralMessages: jest.fn(),
       toPeer: jest.fn(async () => {
         // The HTTP exchange succeeded; the peer then failed to process the
         // response it carried — for instance because the server replied on a
@@ -347,7 +346,6 @@ describe('AuthFetch authenticated peer lifecycle', () => {
     await expect(authFetch.fetch('https://service.example/resource')).rejects.toThrow(
       'Session not found for nonce: other-session'
     )
-    expect(stopListeningForGeneralMessages).toHaveBeenCalledWith(23)
   })
 
   test('leaves other pending requests alone when one response fails', async () => {

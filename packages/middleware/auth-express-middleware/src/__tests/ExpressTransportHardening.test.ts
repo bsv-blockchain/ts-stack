@@ -74,7 +74,6 @@ function peerMock(overrides: Record<string, unknown> = {}): any {
     listenForCertificatesReceived: jest.fn().mockReturnValue(2),
     stopListeningForCertificatesReceived: jest.fn(),
     toPeer: jest.fn().mockResolvedValue(undefined),
-    toSession: jest.fn().mockResolvedValue(undefined),
     ...overrides
   }
 }
@@ -494,7 +493,7 @@ describe('ExpressTransport hardening', () => {
     res.status(201).set({ 'x-bsv-result': 7, 'x-bsv-auth-ignore': 'private' }).json({ ok: true })
     await flushPromises()
 
-    expect(peer.toSession).toHaveBeenCalledWith(expect.any(Array), 'Ag==')
+    expect(peer.toPeer).toHaveBeenCalledWith(expect.any(Array), 'Ag==')
     expect(transport.openGeneralHandles.has(REQUEST_ID)).toBe(true)
 
     await transport.send({
@@ -543,7 +542,7 @@ describe('ExpressTransport hardening', () => {
     res.text('authenticated response')
     await flushPromises()
 
-    expect(peer.toSession).toHaveBeenCalledWith(
+    expect(peer.toPeer).toHaveBeenCalledWith(
       responsePayload(200, {}, Utils.toArray('authenticated response', 'utf8')),
       'Ag=='
     )
@@ -599,7 +598,7 @@ describe('ExpressTransport hardening', () => {
   it('reports response-signing failures without exposing internal details', async () => {
     const transport = new ExpressTransport()
     const peer = peerMock({
-      toSession: jest.fn().mockRejectedValue(new Error('wallet signing secret'))
+      toPeer: jest.fn().mockRejectedValue(new Error('wallet signing secret'))
     })
     transport.peer = peer
     const res = responseMock()
