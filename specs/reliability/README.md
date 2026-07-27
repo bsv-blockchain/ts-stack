@@ -1,11 +1,17 @@
-# Reliability Registry
+# Reliability Registry — Historical Baselines
 
-Centralized reliability records for all Tier 0/1 repos tracked by the MBGA plan.
+These files preserve April 2026 MBGA point-in-time measurements. They are not
+the current ts-stack status, package versions, support matrix, or work backlog.
+Consolidation and later hardening invalidated many of their original gap
+statements.
 
-> **Why here, not in the source repos?**  
-> Phase 5 consolidates source repos into ts-stack. Keeping docs here avoids a double-touch (add now, move on consolidation). When a repo is consolidated, its reliability doc moves with it into `packages/<domain>/`.
->
-> Source repos get a short redirect in their README pointing here — see Phase 0 end-of-day task.
+Use [Generated Stack Facts](../../docs/reference/stack-facts.md) for current
+versions/runtime profiles, [Repository Health](../../docs/reference/repository-health.md)
+for enforced controls, [Security Policy](../../.github/SECURITY.md) for current
+security scope, and
+[tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324) for
+unfinished work. Keep the files below unchanged except for factual archival
+corrections; new findings belong in current governance or the tracker.
 
 ## Registry
 
@@ -29,9 +35,9 @@ Centralized reliability records for all Tier 0/1 repos tracked by the MBGA plan.
 | RL4 | healthz/readyz, structured logs, metrics, traces, runbook, SLOs, alerts |
 | RL5 | Fuzz/property tests, threat model, tracked security findings, green interop matrix |
 
-## Notable gaps (2026-04-27)
+## Notable gaps recorded on 2026-04-27
 
 - **message-box-server** is RL1: no CI test workflow on push/PR (only a manual Docker ECR publish). Most urgent gap.
-- No repo has a formal threat model or SBOM generation.
-- No repo has fuzz/property tests (RL5 requirement for Tier 0).
+- These statements describe the historical baseline and must not be quoted as
+  current status.
 - arc is the most mature at RL3: OTel tracing, Prometheus metrics, E2E Docker suite, OpenAPI + protobuf contracts.

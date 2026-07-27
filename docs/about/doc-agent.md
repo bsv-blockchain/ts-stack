@@ -1,10 +1,10 @@
 ---
 id: about-doc-agent
-title: "Documentation Maintenance"
+title: 'Documentation Maintenance'
 kind: meta
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: '2.0.0'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [about, documentation, maintenance, automation]
@@ -12,315 +12,146 @@ tags: [about, documentation, maintenance, automation]
 
 # Documentation Maintenance
 
-This documentation site is maintained with automated tools to keep docs synchronized with the codebase.
+Documentation is part of the supported package and service contract. A page is
+not current merely because it renders: its links, frontmatter, versions,
+generated facts, examples, and operational claims must agree with source.
 
-## Frontmatter Schema
+## Sources of truth
 
-Every doc page must have frontmatter following this schema:
+- Package name, version, engines, exports, and dependencies: the package's
+  `package.json`.
+- Governed projects, profiles, runtime targets, release routes, and ownership:
+  `governance/repository-health/projects.json`.
+- Public README requirements and support-language policy:
+  `governance/documentation-policy.json`.
+- Conformance totals: `conformance/META.json`; file-level parity:
+  `conformance/PARITY_MATRIX.json`; runner behavior: current CI reports.
+- Release behavior: `.github/workflows/release.yaml`,
+  `.github/workflows/infra-release.yaml`, and the machine-readable supply-chain
+  policies.
+- Program state and deferred work:
+  [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324).
+
+Do not copy source-manifest tables into prose. Run `pnpm docs:facts` and link to
+[Generated Stack Facts](../reference/stack-facts.md).
+
+## Required frontmatter
+
+Every rendered page uses:
 
 ```yaml
 ---
 id: unique-slug
-title: "Page Title"
-kind: spec|infra|conformance|guide|reference|meta
-version: "1.2.3"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+title: 'Page title'
+kind: spec
+version: '1.0.0'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: [tag1, tag2]
+tags: [protocol, reference]
 ---
 ```
 
-### Required Fields
+- `version` is the source package version verified by a package page, the
+  protocol/doc version for a spec, or the page's own revision for meta content.
+- `last_updated` changes when prose or structure changes.
+- `last_verified` changes only after checking the page against its current
+  source and applicable commands.
+- `review_cadence_days` is enforced. Use 30 days for active package, protocol,
+  operational, and security pages; use a longer cadence only for truly stable
+  conceptual material.
+- `status` describes the documented contract, not whether the page is finished.
 
-| Field | Type | Example | Purpose |
-|-------|------|---------|---------|
-| `id` | string | `spec-brc-100` | Unique slug for page |
-| `title` | string | `"BRC-100 Wallet"` | Page title |
-| `kind` | enum | `spec` | Page category |
-| `version` | string | `"1.2.3"` | Latest tested version |
-| `last_updated` | date | `2026-04-28` | When content was written |
-| `last_verified` | date | `2026-04-28` | When last tested |
-| `review_cadence_days` | number | `30` | Days until next review |
-| `status` | enum | `stable` | Stability status |
-| `tags` | array | `[wallet, brc-100]` | Keywords |
-
-### Kind Values
-
-- **spec** — Protocol specification
-- **infra** — Infrastructure service
-- **conformance** — Test vectors/runners
-- **guide** — How-to guide
-- **reference** — API reference
-- **meta** — About, versioning, etc.
-
-### Status Values
-
-- **stable** — Production ready
-- **beta** — Feature complete, testing
-- **deprecated** — Marked for removal
-- **experimental** — Unstable, may change
-
-## Version Management
-
-The `version` field tracks the latest tested version of what the page documents:
-
-```yaml
-# For package docs
-version: "1.2.3"  # Latest tested npm version
-
-# For spec docs
-version: "2.0"    # Spec version
-
-# For meta pages
-version: "1.0.0"  # Documentation version
-```
-
-### Version Checking
-
-Automated tools check if docs match the current npm version:
+## Blocking checks
 
 ```bash
-# Check workspace cross-package versions
-pnpm check-versions
+# Generate after package, runtime, release-route, or conformance changes
+pnpm docs:facts
 
-# Rewrite workspace dependency references to current package versions
-pnpm sync-versions
+# Verify generated facts, parity metadata, package README contracts,
+# package-doc versions, and review cadence
+pnpm docs:facts:check
 
-# Validate docs frontmatter and relative links
+# Validate frontmatter and source links
 pnpm --filter docs-site validate
-```
 
-## Review Cadence
-
-The `review_cadence_days` field indicates how often a page should be reviewed:
-
-```yaml
-review_cadence_days: 30  # Review monthly
-```
-
-Suggested cadences:
-
-- **7 days** — Actively maintained features, new packages
-- **14 days** — Frequently changed APIs
-- **30 days** — Stable packages, specs
-- **90 days** — Rarely changed (versioning, about pages)
-
-### Staleness Calculation
-
-A page becomes stale after:
-
-```
-stale_date = last_verified + review_cadence_days
-```
-
-Example:
-```
-last_verified: "2026-04-28"
-review_cadence_days: 30
-stale_date: "2026-05-28"
-```
-
-Automated agents flag stale pages and create issues/PRs to update them.
-
-## Maintenance Tasks
-
-### Update Package Version
-
-When a package releases a new version:
-
-```bash
-pnpm sync-versions
-pnpm check-versions
-```
-
-This updates workspace package references and verifies they match the current package versions.
-
-### Verify Documentation
-
-Check that examples work and links are correct:
-
-```bash
-pnpm --filter docs-site validate
-pnpm docs:build
-
-# Build only the documentation site
-pnpm --filter docs-site build
-```
-
-Checks:
-- All links are valid (HTTP 200)
-- Code examples syntactically correct
-- Version matches npm
-- Required frontmatter present
-
-### Extract API Docs
-
-For package documentation, extract TypeDoc:
-
-```bash
-pnpm --filter @bsv/sdk doc
-
-# Package API docs are then consumed by the docs site build
+# Render the complete site and check built links
 pnpm docs:build
 ```
 
-## Automated Maintenance
+The package README contract covers every public package and requires registry
+consumers to be able to identify, install, exercise, and license it. Package
+artifact checks separately prove that each README and `LICENSE.txt` ships in
+the exact tarball. Every public package also has one current page under
+`docs/packages`; the policy rejects missing or duplicate pages, stale versions,
+retired source repositories, point-in-time source commits presented as current
+authority, and npm links on private workspaces.
 
-### Scheduled Review
+`pnpm check-versions` validates first-party package ranges; it does not publish,
+query npm for documentation freshness, or replace `docs:facts:check`.
+`pnpm sync-versions` is a release-reconciliation mutation and must not be run
+as a casual documentation fix.
 
-Automated agents check stale docs daily:
+## Review procedure
 
-1. Find pages where `last_verified + review_cadence_days < today`
-2. Create issue requesting verification
-3. If version mismatch found, create PR with updates
-4. Update `last_verified` date after verification
+When changing or re-verifying a page:
 
-### GitHub Actions & Validation (Current State)
+1. Identify every factual authority used by the page.
+2. Compare package versions, exports, scripts, runtime requirements, service
+   configuration, and release behavior with those sources.
+3. Run or compile commands/examples that are meant to be executable. Label
+   placeholders, pseudocode, destructive commands, live-service requirements,
+   and platform assumptions honestly.
+4. Remove obsolete promises, versions, counts, copied lists, unsafe defaults,
+   and links to pre-consolidation repositories.
+5. Preserve historical audits as clearly labeled point-in-time evidence; do not
+   present them as the current backlog.
+6. Update `last_updated` and, only after verification, `last_verified`.
+7. Run all blocking checks above and review the rendered output.
 
-Frontmatter and link validation run automatically as part of the docs site build:
+For public services, document both the public-by-default cross-domain path and
+the optional operator allowlist. CORS, CSP, or origin filtering must not be
+described as authentication, and a hosting/fallback URL must not silently imply
+same-origin-only access.
 
-- Local author command: `pnpm --filter docs-site validate` (runs `validate-frontmatter.mjs` + `check-links.mjs`)
-- Full build (includes the above + built-link hygiene + pagefind): `pnpm docs:build`
-- Production deployment: `.github/workflows/docs-deploy.yml` runs `pnpm docs:build` on every push to `main` that touches `docs/**`, `docs-site/**`, `specs/**`, or the deploy workflow itself.
+For releases, distinguish source, registry, and deployed state. Never say a
+version or image is available until registry or deployment evidence proves it.
+See [Release and Operations Guide](../reference/release-operations.md).
 
-A dedicated scheduled "docs-check" workflow (staleness flagging + PR validation on docs changes) is planned but not yet present. Until then, contributors should run `pnpm --filter docs-site validate` locally before opening docs PRs (this is also what the build does).
+## Example quality
 
-See also:
-- `docs-site/scripts/validate-frontmatter.mjs` + `docs/_schemas/page.schema.json`
-- `docs-site/scripts/check-links.mjs` and `check-built-links.mjs`
-- `.github/workflows/docs-deploy.yml` (the actual deploy pipeline)
+Prefer examples exercised by package tests, clean consumers, generated clients,
+or an automated documentation-example check. A historical checklist that once
+marked a code block correct is not a current test.
 
-## Contributing Documentation
+Examples must:
 
-### Edit a Doc Page
+- import public entry points, not monorepo source paths;
+- match current TypeScript declarations and runtime profiles;
+- use synthetic keys, credentials, identities, and endpoints;
+- avoid public database/firewall defaults and mutable production image tags;
+- explain external services, wallets, databases, funded state, or live network
+  requirements; and
+- include error/security handling when omission would make the example unsafe.
 
-1. Find the file in `/docs`
-2. Edit the content (below frontmatter)
-3. Update `last_updated` to today
-4. If you verified the content, update `last_verified`
-5. Commit and create PR
+## Historical and generated content
 
-Example:
+Generated output must declare its source and check command and must never be
+hand-edited. Historical benchmark, audit, and migration records keep their
+original measurements but carry a prominent archive banner and point to current
+facts and tracker state.
 
-```markdown
----
-id: spec-brc-100
-title: "BRC-100 Wallet Interface"
-kind: spec
-version: "1.0"
-last_updated: "2026-04-28"  # ← Update to today
-last_verified: "2026-04-28" # ← Update if you tested
-review_cadence_days: 30
-status: stable
-tags: [wallet, brc-100]
----
+## Pull request evidence
 
-# BRC-100 Wallet Interface
+A documentation PR should state:
 
-[Your content here]
-```
+- pages and source authorities reviewed;
+- commands/examples actually executed;
+- generated files refreshed;
+- runtime, deployment, security, or migration claims changed; and
+- intentionally historical or deferred content left unchanged.
 
-### Create a New Page
-
-1. Create file in appropriate directory (`docs/specs/`, `docs/guides/`, etc.)
-2. Add required frontmatter
-3. Write content
-4. Run `pnpm --filter docs-site validate` (and `pnpm docs:build` for the full check) to validate
-5. Commit and create PR
-
-Template:
-
-```markdown
----
-id: unique-identifier
-title: "Page Title"
-kind: spec
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
-review_cadence_days: 30
-status: stable
-tags: [tag1, tag2]
----
-
-# Page Title
-
-[Content]
-```
-
-## Frontmatter Validation
-
-All pages are validated on commit:
-
-```bash
-# Validate frontmatter and relative links
-pnpm --filter docs-site validate
-
-# Build static docs and check built links
-pnpm docs:build
-```
-
-Checks:
-- Required fields present
-- Valid enum values (kind, status)
-- Date format (ISO 8601)
-- ID is unique
-- Version format is valid
-
-## Examples
-
-### Spec Page
-
-```yaml
----
-id: spec-brc-100
-title: "BRC-100 Wallet Interface"
-kind: spec
-version: "1.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
-review_cadence_days: 30
-status: stable
-tags: [wallet, brc-100, rpc]
----
-```
-
-### Package Page
-
-```yaml
----
-id: pkg-sdk
-title: "@bsv/sdk"
-kind: reference
-version: "1.2.3"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
-review_cadence_days: 14
-status: stable
-tags: [sdk, bitcoin, crypto]
----
-```
-
-### Guide Page
-
-```yaml
----
-id: guide-wallet-aware
-title: "Build a Wallet-Aware App"
-kind: guide
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
-review_cadence_days: 30
-status: stable
-tags: [guide, wallet, tutorial]
----
-```
-
-## Next Steps
-
-- [Contributing Guide](./contributing.md) — Source code contributions
-- [Versioning Policy](./versioning.md) — Version management
-- [GitHub Releases](https://github.com/bsv-blockchain/ts-stack/releases) — See all updates
+Update [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324)
+when the work completes or changes the remaining program, so the issue and
+repository do not diverge.

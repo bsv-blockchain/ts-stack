@@ -1,10 +1,10 @@
 ---
 id: conformance-runner-ts
-title: "TypeScript Runner"
+title: 'TypeScript Runner'
 kind: conformance
-version: "1.0.0"
-last_updated: "2026-05-14"
-last_verified: "2026-05-14"
+version: '1.0.0'
+last_updated: '2026-05-14'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [conformance, runner, typescript]
@@ -37,11 +37,11 @@ What it does:
 
 Supported flags:
 
-| Flag | Meaning |
-|---|---|
+| Flag              | Meaning                                                                |
+| ----------------- | ---------------------------------------------------------------------- |
 | `--validate-only` | Load and validate vector files without writing execution-style results |
-| `--vectors <dir>` | Use a vector root other than `conformance/vectors` |
-| `--report <path>` | Write JUnit XML to the supplied path |
+| `--vectors <dir>` | Use a vector root other than `conformance/vectors`                     |
+| `--report <path>` | Write JUnit XML to the supplied path                                   |
 
 Examples:
 

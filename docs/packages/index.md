@@ -2,12 +2,12 @@
 id: packages-index
 title: Packages
 kind: meta
-version: "n/a"
-last_updated: "2026-05-01"
-last_verified: "2026-05-01"
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["packages"]
+tags: ['packages']
 ---
 
 # Packages
@@ -21,12 +21,15 @@ ts-stack contains packages organized into 7 domains. Each domain serves a specif
 **Core cryptographic and transaction primitives.** Every application starts here.
 
 - [@bsv/sdk](./sdk/bsv-sdk.md) — Keys, signatures, transactions, BEEF, SPV
+- [@bsv/verifast](./sdk/verifast.md) — Optional WASM script verification
 
 ### Wallet
 
 **Key management, balance tracking, signing — local or via wallet service.**
 
 - [@bsv/wallet-toolbox](./wallet/wallet-toolbox.md) — BRC-100 wallet client library
+- [@bsv/wallet-toolbox-client](./wallet/wallet-toolbox-client.md) — Browser and IndexedDB distribution
+- [@bsv/wallet-toolbox-mobile](./wallet/wallet-toolbox-mobile.md) — React Native and mobile distribution
 - [@bsv/btms](./wallet/btms.md) — Basic Token Management System for token issuance, transfer, receiving, burning, and ownership proofs
 - [@bsv/btms-permission-module](./wallet/btms-permission-module.md) — Token permission checking
 - [@bsv/wallet-relay](./wallet/wallet-relay.md) — Mobile-to-desktop wallet pairing via QR codes + encrypted WebSocket relay
@@ -63,6 +66,7 @@ ts-stack contains packages organized into 7 domains. Each domain serves a specif
 
 Authenticated Express middleware stack:
 
+- [@bsv/auth](./middleware/auth.md) — Framework-neutral single-use wallet authentication proofs
 - [@bsv/auth-express-middleware](./middleware/auth-express-middleware.md) — Verify identity signatures in Express
 - [@bsv/payment-express-middleware](./middleware/payment-express-middleware.md) — Gate authenticated Express routes behind payment requirements; requires `@bsv/auth-express-middleware`
 
@@ -81,6 +85,7 @@ Independent HTTP 402 flow:
 - [@bsv/wallet-helper](./helpers/wallet-helper.md) — Wallet utility functions
 - [@bsv/amountinator](./helpers/amountinator.md) — Satoshi/BSV conversion and formatting
 - [@bsv/fund-wallet](./helpers/fund-wallet.md) — Faucet integration for testnet/devnet
+- [create-bsv-app](./helpers/create-bsv-app.md) — CLI and starter catalogue for new applications
 
 ## Package Relationships
 
@@ -108,7 +113,11 @@ For monorepo development, see [Install](../get-started/install.md#using-ts-stack
 
 ## Package Stability
 
-All packages in ts-stack are production-ready and versioned according to [Semantic Versioning](../about/versioning.md).
+Public packages are versioned according to
+[Semantic Versioning](../about/versioning.md), but their maturity and runtime
+profiles differ. Use each package page and
+[Generated Stack Facts](../reference/stack-facts.md) rather than assuming every
+workspace project is a production npm package.
 
 - **Stable** — API is locked, no breaking changes
 - **Beta** — API may change, breaking changes possible

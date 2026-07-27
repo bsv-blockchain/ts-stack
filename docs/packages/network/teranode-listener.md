@@ -1,14 +1,16 @@
 ---
 id: teranode-listener
-title: "@bsv/teranode-listener"
+title: '@bsv/teranode-listener'
 kind: package
 domain: network
-npm: "@bsv/teranode-listener"
-version: "1.1.1"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/teranode-listener'
+version: '1.1.1'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p'
 status: stable
-tags: ["network", "broadcast", "teranode", "p2p", "libp2p"]
+tags: ['network', 'broadcast', 'teranode', 'p2p', 'libp2p']
 ---
 
 # @bsv/teranode-listener
@@ -177,12 +179,12 @@ await listener.stop()
 ## Related packages
 
 - [@bsv/overlay](../overlays/overlay.md) — Can use TeranodeListener for transaction submission
-- [@bsv/sdk](https://github.com/bsv-blockchain/ts-sdk) — Transaction and block deserialization
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Transaction and block deserialization
 - [@bsv/overlay-express](../overlays/overlay-express.md) — Overlay services can integrate with network
 
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/ts-p2p/)
-- [Source on GitHub](https://github.com/bsv-blockchain/ts-p2p)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p)
 - [npm](https://www.npmjs.com/package/@bsv/teranode-listener)
 - [libp2p documentation](https://docs.libp2p.io/)

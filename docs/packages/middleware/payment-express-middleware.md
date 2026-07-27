@@ -3,11 +3,10 @@ id: pkg-payment-express-middleware
 title: '@bsv/payment-express-middleware'
 kind: package
 domain: middleware
-version: '2.1.1'
+version: '2.1.2'
 source_repo: 'bsv-blockchain/ts-stack'
-source_commit: 'unreleased'
-last_updated: '2026-07-26'
-last_verified: '2026-07-26'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/payment-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware'

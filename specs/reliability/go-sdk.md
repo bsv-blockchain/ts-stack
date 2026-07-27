@@ -1,6 +1,9 @@
 <!-- Centralized reliability record. Source repo: bsv-blockchain/go-sdk -->
 <!-- When go-sdk is consolidated into ts-stack (Phase 5), this file moves with it. -->
 
+> **Historical April 2026 external-repository baseline.** Revalidate against
+> the Go SDK repository before using any version, control, or gap statement.
+
 # Reliability Status
 
 ## Component

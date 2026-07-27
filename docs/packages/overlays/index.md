@@ -3,12 +3,12 @@ id: overlays-domain
 title: Overlays
 kind: meta
 domain: overlays
-version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: 'n/a'
+last_updated: '2026-04-28'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["domain", "overlays"]
+tags: ['domain', 'overlays']
 ---
 
 # Overlays
@@ -17,14 +17,14 @@ Build and operate overlay services that index, validate, and serve on-chain data
 
 ## Packages in this Domain
 
-| Package | Purpose |
-|---------|---------|
-| [@bsv/overlay](./overlay.md) | Core Engine orchestrating topic managers, lookup services, and storage with BEEF/STEAK encoding |
-| [@bsv/overlay-express](./overlay-express.md) | Opinionated Express.js HTTP server with configuration, health checks, and admin endpoints |
-| [@bsv/overlay-topics](./overlay-topics.md) | 20+ pre-built topic managers and lookup services (BTMS, DID, KVStore, UHRP, UMP, Supply Chain, etc.) |
-| [@bsv/overlay-discovery-services](./overlay-discovery-services.md) | SHIP/SLAP peer discovery and WalletAdvertiser for certificate-based advertisements |
-| [@bsv/gasp](./gasp.md) | Graph Aware Sync Protocol for incremental transaction graph synchronization with SPV validation |
-| [@bsv/btms-backend](./btms-backend.md) | BTMS token validation and indexing (legacy; core moved to @bsv/overlay-topics) |
+| Package                                                            | Purpose                                                                                              |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| [@bsv/overlay](./overlay.md)                                       | Core Engine orchestrating topic managers, lookup services, and storage with BEEF/STEAK encoding      |
+| [@bsv/overlay-express](./overlay-express.md)                       | Opinionated Express.js HTTP server with configuration, health checks, and admin endpoints            |
+| [@bsv/overlay-topics](./overlay-topics.md)                         | 20+ pre-built topic managers and lookup services (BTMS, DID, KVStore, UHRP, UMP, Supply Chain, etc.) |
+| [@bsv/overlay-discovery-services](./overlay-discovery-services.md) | SHIP/SLAP peer discovery and WalletAdvertiser for certificate-based advertisements                   |
+| [@bsv/gasp](./gasp.md)                                             | Graph Aware Sync Protocol for incremental transaction graph synchronization with SPV validation      |
+| [@bsv/btms-backend](./btms-backend.md)                             | BTMS token validation and indexing (legacy; core moved to @bsv/overlay-topics)                       |
 
 ## What You Can Do
 

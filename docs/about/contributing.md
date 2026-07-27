@@ -3,9 +3,9 @@ id: about-contributing
 title: 'Contributing'
 kind: meta
 version: '1.0.0'
-last_updated: '2026-04-28'
-last_verified: '2026-04-28'
-review_cadence_days: 90
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
 tags: [about, contributing, development, community]
 ---
@@ -44,7 +44,7 @@ The project uses **pnpm workspaces** for multi-package management.
 
 ```
 ts-stack/
-  packages/          # 27 npm packages
+  packages/          # 30 public npm packages plus private workspaces
   conformance/       # Test vectors and runners
   docs/              # Documentation source (Markdown)
   docs-site/         # Vite+React+MDX docs site
@@ -95,17 +95,15 @@ export function sign(message: string): string {
 ### Run Tests
 
 ```bash
-# Unit tests
+# Build declarations, then run all package tests
+pnpm build
 pnpm test
 
 # Specific package
-pnpm test --filter=@bsv/sdk
+pnpm --filter @bsv/sdk test
 
-# Watch mode
-pnpm test --watch
-
-# Coverage
-pnpm test --coverage
+# Package coverage
+pnpm --filter @bsv/sdk test:coverage
 ```
 
 Required tests must not be empty or anonymously skipped. Manual, live-network,
@@ -164,7 +162,9 @@ pnpm build --filter=@bsv/sdk
 
 ## Adding Conformance Vectors
 
-Required for all bug fixes. See [Contributing Vectors](../conformance/contributing-vectors/) for details.
+Add or update a conformance vector when a change fixes or modifies a portable
+protocol behavior. See
+[Contributing Vectors](../conformance/contributing-vectors.md) for details.
 
 Example:
 
@@ -286,11 +286,13 @@ if (!isValid(input)) {
 
 ## Testing Requirements
 
-All pull requests must include:
+Pull requests must include the evidence appropriate to their change:
 
-- **Unit tests** — Test the change in isolation
-- **Integration tests** — Test interaction with other parts
-- **Conformance vectors** — For protocol compliance
+- **Unit tests** for changed behavior
+- **Integration tests** for cross-component behavior
+- **Conformance vectors** for portable protocol behavior
+- **Consumer or browser/mobile checks** for package-boundary changes
+- **Migration and rollback notes** for breaking or deployed behavior
 
 Run before submitting:
 
@@ -325,9 +327,9 @@ Template:
 
 ### Environment
 
-- Node: v18.0.0
-- @bsv/sdk: 1.2.3
-- OS: macOS 13.0
+- Node: v24.18.0
+- @bsv/sdk: <installed version>
+- OS: macOS 15.6
 
 ### Reproduction
 
@@ -351,7 +353,10 @@ Help improve docs:
 1. Find unclear sections in `docs/`
 2. Edit the relevant `.md` file
 3. Preview locally: `pnpm docs:dev` → `http://localhost:5173`
-4. Submit a PR — the docs site build (`pnpm docs:build`) validates frontmatter + links on deploy (run `pnpm --filter docs-site validate` locally first for fast feedback)
+4. Run `pnpm docs:facts:check` when package, runtime, release, README, or
+   conformance facts changed.
+5. Submit a PR — the docs site build (`pnpm docs:build`) validates frontmatter
+   and links (run `pnpm --filter docs-site validate` locally first).
 
 **Do not delete the `gh-pages` branch** — it hosts the TypeDoc `/api/` tree that
 the deploy workflow merges into the artifact before publishing.
@@ -396,7 +401,7 @@ All PRs run through GitHub Actions:
 1. **Unit tests** — Must pass
 2. **Linting** — Must pass
 3. **Type checking** — Must pass
-4. **Conformance** — TS and Go must pass
+4. **Conformance** — structural and TypeScript behavior runners must pass
 5. **Build** — All packages must build
 
 If any check fails, fix the issue and push again.

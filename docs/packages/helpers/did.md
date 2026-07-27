@@ -1,16 +1,15 @@
 ---
 id: pkg-did
-title: "@bsv/did"
+title: '@bsv/did'
 kind: package
 domain: helpers
-version: "0.2.1"
-source_repo: "bsv-blockchain/ts-stack"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '0.2.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/did"
-repo: "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did"
+npm: 'https://www.npmjs.com/package/@bsv/did'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did'
 status: beta
 tags: [did, sd-jwt, credentials, identity, helpers]
 ---

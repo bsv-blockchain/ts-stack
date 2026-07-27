@@ -4,7 +4,7 @@ title: Stack Layers
 kind: meta
 version: 'n/a'
 last_updated: '2026-05-01'
-last_verified: '2026-05-01'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: ['architecture', 'layers']

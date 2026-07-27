@@ -1,16 +1,15 @@
 ---
 id: pkg-message-box-client
-title: "@bsv/message-box-client"
+title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: "2.2.2"
-source_repo: "bsv-blockchain/ts-stack"
-source_commit: "d4c98d06ca24d5e03722079b9e5b31df32ee9b68"
-last_updated: "2026-07-26"
-last_verified: "2026-07-26"
+version: '2.2.2'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/message-box-client"
-repo: "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client"
+npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
 status: stable
 tags: [messaging, message-box, brc-103, brc-29]
 ---

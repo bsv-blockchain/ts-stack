@@ -240,6 +240,9 @@ All notable changes to this project will be documented in this file. The format 
   compact-byte substrate avoids redundant response writers and aggregate
   copies while the legacy `number[]` transport and every BRC-100 shape remain
   unchanged.
+- Declare `WindowCWISubstrate` signing and certificate methods with the
+  canonical BRC-100 argument and result types, so strict packed-package
+  consumers receive the same contract that the implementation delegates to.
 - Remove arbitrary post-Genesis script element and default interpreter-memory
   caps; explicit caller budgets remain enforceable but are not reported as
   invalid scripts.

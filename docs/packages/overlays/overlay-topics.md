@@ -1,14 +1,16 @@
 ---
 id: overlay-topics
-title: "@bsv/overlay-topics"
+title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
-npm: "@bsv/overlay-topics"
-version: "1.6.1"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/overlay-topics'
+version: '1.6.1'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable
-tags: ["overlay", "topics", "uhrp"]
+tags: ['overlay', 'topics', 'uhrp']
 ---
 
 # @bsv/overlay-topics
@@ -55,10 +57,14 @@ const results = await btmsService.lookup({
 ```typescript
 import OverlayExpress from '@bsv/overlay-express'
 import {
-  HelloWorldTopicManager, createHelloWorldLookupService,
-  DIDTopicManager, createDIDLookupService,
-  KVStoreTopicManager, createKVStoreLookupService,
-  BTMSTopicManager, createBTMSLookupService
+  HelloWorldTopicManager,
+  createHelloWorldLookupService,
+  DIDTopicManager,
+  createDIDLookupService,
+  KVStoreTopicManager,
+  createKVStoreLookupService,
+  BTMSTopicManager,
+  createBTMSLookupService
 } from '@bsv/overlay-topics'
 
 const server = new OverlayExpress('mynode', privateKey, 'example.com')
@@ -68,7 +74,9 @@ server.configureTopicManager('tm_did', new DIDTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
 server.configureTopicManager('tm_btms', new BTMSTopicManager())
 
-await server.configureLookupServiceWithMongo('ls_helloworld', db => createHelloWorldLookupService(db))
+await server.configureLookupServiceWithMongo('ls_helloworld', db =>
+  createHelloWorldLookupService(db)
+)
 await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
 await server.configureLookupServiceWithMongo('ls_btms', db => createBTMSLookupService(db))
@@ -186,5 +194,5 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-topics/)
-- [Source on GitHub](https://github.com/bsv-blockchain/overlay-topics)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-topics)

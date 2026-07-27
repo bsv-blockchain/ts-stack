@@ -175,7 +175,7 @@ await new TransactionBuilder(buyerWallet, 'Purchase listing')
 
 📖 See the OrdLock section in **[TransactionBuilder documentation](./docs/Transaction-builder.md)** for the mechanics and required output ordering.
 
-**Note:** For wallet compatible multisig scripts see 'https://github.com/bsv-blockchain/ts-templates'.
+**Note:** For wallet-compatible multisig scripts, see [`@bsv/templates`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates).
 
 ### Types
 

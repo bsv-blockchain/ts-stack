@@ -36,13 +36,14 @@
     {
       "id": "scorecard-release-lockfile-refresh",
       "category": "toolchain",
-      "target": "OpenSSF Scorecard PinnedDependenciesID #200 for npm install --package-lock-only",
+      "target": "OpenSSF Scorecard PinnedDependenciesID #200 and re-fingerprinted duplicate #221 for npm install --package-lock-only",
       "owner": "ts-stack-maintainers",
       "reason": "The command installs no named or ad hoc package: it deterministically refreshes each committed infrastructure package-lock from that directory's committed package.json after first-party version synchronization, with lifecycle scripts disabled. Scorecard interprets the lockfile operation as an unpinned package invocation even though dependency resolution is committed and subsequently audited.",
       "evidence": [
         ".github/workflows/release.yaml",
         "infra/*/package-lock.json",
         "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/200",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/221",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",

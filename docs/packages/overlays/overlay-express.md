@@ -1,14 +1,16 @@
 ---
 id: overlay-express
-title: "@bsv/overlay-express"
+title: '@bsv/overlay-express'
 kind: package
 domain: overlays
-npm: "@bsv/overlay-express"
-version: "2.4.2"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/overlay-express'
+version: '2.4.3'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
-tags: ["overlay", "express", "http"]
+tags: ['overlay', 'express', 'http']
 ---
 
 # @bsv/overlay-express
@@ -26,11 +28,7 @@ npm install @bsv/overlay-express
 ```typescript
 import OverlayExpress from '@bsv/overlay-express'
 
-const server = new OverlayExpress(
-  'testnode',
-  process.env.SERVER_PRIVATE_KEY!,
-  'example.com'
-)
+const server = new OverlayExpress('testnode', process.env.SERVER_PRIVATE_KEY!, 'example.com')
 
 server.configurePort(8080)
 await server.configureKnex(process.env.KNEX_URL!)
@@ -63,11 +61,7 @@ await server.start()
 ### Basic server setup
 
 ```typescript
-const server = new OverlayExpress(
-  'mynode',
-  privateKey,
-  'mynode.example.com'
-)
+const server = new OverlayExpress('mynode', privateKey, 'mynode.example.com')
 
 server.configurePort(3000)
 await server.configureKnex('postgresql://user:pass@localhost/db')
@@ -80,7 +74,9 @@ server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
 server.configureTopicManager('tm_did', new DIDTopicManager())
 
-await server.configureLookupServiceWithMongo('ls_helloworld', db => createHelloWorldLookupService(db))
+await server.configureLookupServiceWithMongo('ls_helloworld', db =>
+  createHelloWorldLookupService(db)
+)
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
 await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
 
@@ -146,22 +142,26 @@ import { OverlayMonitor } from '@bsv/overlay-express'
 
 const monitor = new OverlayMonitor({
   intervalMs: 60 * 60 * 1000,
-  targets: [{
-    name: 'production-overlay',
-    baseUrl: 'https://overlay.example',
-    adminToken: process.env.ADMIN_TOKEN,
-    probes: [{
-      name: 'protomap',
-      service: 'ls_protomap',
-      query: { topic: 'tm_protomap' },
-      maxOutputs: 50
-    }],
-    maintenance: {
-      startBASMSync: true,
-      maintainUnproven: { thresholdBlocks: 144 },
-      janitor: true
+  targets: [
+    {
+      name: 'production-overlay',
+      baseUrl: 'https://overlay.example',
+      adminToken: process.env.ADMIN_TOKEN,
+      probes: [
+        {
+          name: 'protomap',
+          service: 'ls_protomap',
+          query: { topic: 'tm_protomap' },
+          maxOutputs: 50
+        }
+      ],
+      maintenance: {
+        startBASMSync: true,
+        maintainUnproven: { thresholdBlocks: 144 },
+        janitor: true
+      }
     }
-  }]
+  ]
 })
 
 monitor.start()
@@ -225,5 +225,5 @@ monitor.start()
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-express/)
-- [Source on GitHub](https://github.com/bsv-blockchain/overlay-express)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-express)

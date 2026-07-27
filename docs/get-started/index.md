@@ -2,12 +2,12 @@
 id: get-started
 title: Get Started
 kind: meta
-version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: 'n/a'
+last_updated: '2026-04-30'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["onboarding"]
+tags: ['onboarding']
 ---
 
 # Get Started
@@ -99,11 +99,11 @@ Do not generate and discard a production private key at runtime. Persist it in y
 
 ## What to Read Next
 
-| Need | Read |
-|------|------|
-| Pick packages by use case | [Choose Your Stack](./choose-your-stack.md) |
-| Build explicit transactions with a wallet | [@bsv/wallet-helper](../packages/helpers/wallet-helper.md) |
-| Understand BEEF, wallets, overlays, and BRC-100 | [Key Concepts](./concepts.md) |
-| See every BRC-100 method shape | [BRC-100 Wallet Interface](../specs/brc-100-wallet.md) |
-| Build a wallet or wallet-like implementation | [@bsv/wallet-toolbox](../packages/wallet/wallet-toolbox.md) |
-| Test another implementation against this repo | [Conformance](../conformance/index.md) |
+| Need                                            | Read                                                        |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| Pick packages by use case                       | [Choose Your Stack](./choose-your-stack.md)                 |
+| Build explicit transactions with a wallet       | [@bsv/wallet-helper](../packages/helpers/wallet-helper.md)  |
+| Understand BEEF, wallets, overlays, and BRC-100 | [Key Concepts](./concepts.md)                               |
+| See every BRC-100 method shape                  | [BRC-100 Wallet Interface](../specs/brc-100-wallet.md)      |
+| Build a wallet or wallet-like implementation    | [@bsv/wallet-toolbox](../packages/wallet/wallet-toolbox.md) |
+| Test another implementation against this repo   | [Conformance](../conformance/index.md)                      |

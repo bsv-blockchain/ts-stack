@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "owner": "ts-stack-maintainers",
+  "lastReviewed": "2026-07-27",
+  "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
+  "publicPackageReadme": {
+    "requiredSections": ["installation", "usage", "license"],
+    "requiredLicenseFile": "LICENSE.txt",
+    "licenseName": "Open BSV License Version 6",
+    "rationale": "Every published package must let a registry consumer identify, install, exercise, and license the exact tarball without relying on monorepo-only context."
+  },
+  "packageDocumentation": {
+    "requiredForEveryPublicPackage": true,
+    "repositoryAuthority": "https://github.com/bsv-blockchain/ts-stack/tree/main/<project-path>",
+    "forbidSourceCommitSnapshots": true,
+    "privateProjectsAdvertiseNpm": false,
+    "rationale": "Every public package needs a current, discoverable package page; consolidated source links and generated versions prevent retired repositories or point-in-time commits from becoming current authority."
+  },
+  "support": {
+    "contributors": "Use the root package.json engines and packageManager fields.",
+    "publicNodePackages": "Use each published package's engines.node field; the current common floor is Node.js 22.",
+    "browserAndMobile": "Node engines govern package tooling and Node consumers, not browser or device runtimes.",
+    "infrastructure": "Use each standalone service package.json and digest-pinned Dockerfile; the current service line is Node.js 24."
+  }
+}

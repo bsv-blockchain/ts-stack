@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -50,7 +50,7 @@
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay-express/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
     "lint:ci": "pnpm lint",
-    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --local-consumer-dependencies ../overlay,../overlay-discovery-services --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus",
+    "pack:check": "pnpm --filter @bsv/overlay build && pnpm --filter @bsv/overlay-discovery-services build && pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ArcadeProvider,BanAwareLookupWrapper,BanAwareSHIPStorage,BanAwareSLAPStorage,BanAwareTopicManager,BanService,ChaintracksProvider,JanitorService,OverlayMonitor,ProviderChainBroadcaster,analyzeOverlayAnchorTip,analyzeOverlayLookupResponse,default,isTerminalArcStatus",
     "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
@@ -80,7 +80,6 @@
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/body-parser": "^1.19.6",
-    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
     "fast-check": "^4.9.0",
@@ -97,6 +96,7 @@
     "@bsv/overlay": "workspace:^",
     "@bsv/overlay-discovery-services": "workspace:^",
     "@bsv/wallet-toolbox-client": "workspace:^",
+    "@types/express": "^5.0.6",
     "body-parser": "^2.3.0",
     "chalk": "^5.6.2",
     "express": "^5.2.1",

@@ -1,16 +1,15 @@
 ---
 id: pkg-authsocket-client
-title: "@bsv/authsocket-client"
+title: '@bsv/authsocket-client'
 kind: package
 domain: messaging
-version: "2.1.1"
-source_repo: "bsv-blockchain/authsocket-client"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.1.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/authsocket-client"
-repo: "https://github.com/bsv-blockchain/authsocket-client"
+npm: 'https://www.npmjs.com/package/@bsv/authsocket-client'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client'
 status: stable
 tags: [messaging, websocket, brc-31, auth]
 ---
@@ -31,7 +30,9 @@ npm install @bsv/authsocket-client
 import { AuthSocketClient } from '@bsv/authsocket-client'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
-const clientWallet = new ProtoWallet(PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'))
+const clientWallet = new ProtoWallet(
+  PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
+)
 const socket = AuthSocketClient('http://localhost:3000', { wallet: clientWallet })
 
 socket.on('connect', () => {
@@ -39,7 +40,7 @@ socket.on('connect', () => {
   socket.emit('chatMessage', { text: 'Hello from client!' })
 })
 
-socket.on('chatMessage', (msg) => {
+socket.on('chatMessage', msg => {
   console.log('Server says:', msg)
 })
 
@@ -66,7 +67,9 @@ socket.on('disconnect', () => {
 import { AuthSocketClient } from '@bsv/authsocket-client'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
-const wallet = new ProtoWallet(PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'))
+const wallet = new ProtoWallet(
+  PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
+)
 const socket = AuthSocketClient('http://localhost:3000', { wallet })
 
 socket.on('connect', () => {
@@ -74,7 +77,7 @@ socket.on('connect', () => {
   socket.emit('joinRoom', 'general')
 })
 
-socket.on('message', (data) => {
+socket.on('message', data => {
   console.log('Received:', data)
 })
 ```
@@ -140,5 +143,5 @@ const socket = AuthSocketClient('http://localhost:3000', {
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/authsocket-client/)
-- [Source on GitHub](https://github.com/bsv-blockchain/authsocket-client)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client)
 - [npm](https://www.npmjs.com/package/@bsv/authsocket-client)

@@ -1,16 +1,15 @@
 ---
 id: pkg-did-client
-title: "@bsv/did-client"
+title: '@bsv/did-client'
 kind: package
 domain: helpers
-version: "1.2.1"
-source_repo: "bsv-blockchain/did-client"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '1.2.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/did-client"
-repo: "https://github.com/bsv-blockchain/did-client"
+npm: 'https://www.npmjs.com/package/@bsv/did-client'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client'
 status: stable
 tags: [did, identity, helpers]
 ---
@@ -43,10 +42,7 @@ const didClient = new DIDClient({
 // Create a DID token
 const subjectPublicKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 const serialNumber = Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8'))
-const createResult = await didClient.createDID(
-  serialNumber,
-  subjectPublicKey
-)
+const createResult = await didClient.createDID(serialNumber, subjectPublicKey)
 
 if (createResult.status === 'success') {
   console.log(`DID created: ${createResult.txid}`)
@@ -66,6 +62,7 @@ if (createResult.status === 'success') {
 ## Common patterns
 
 ### Create a DID token
+
 ```typescript
 const createResult = await didClient.createDID(
   Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8')),
@@ -80,6 +77,7 @@ if (createResult.status === 'success') {
 ```
 
 ### Find DID tokens on overlay
+
 ```typescript
 const foundDIDs = await didClient.findDID(
   {
@@ -96,6 +94,7 @@ foundDIDs.forEach(did => {
 ```
 
 ### Query by outpoint
+
 ```typescript
 const byOutpoint = await didClient.findDID({
   outpoint: 'abc123def456.0'
@@ -103,6 +102,7 @@ const byOutpoint = await didClient.findDID({
 ```
 
 ### Revoke DID by serial number
+
 ```typescript
 const revokeResult = await didClient.revokeDID({
   serialNumber: Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8'))
@@ -114,6 +114,7 @@ if (revokeResult.status === 'success') {
 ```
 
 ### Pagination and filtering
+
 ```typescript
 const page1 = await didClient.findDID({
   limit: 50,
@@ -170,10 +171,10 @@ const page1 = await didClient.findDID({
 
 - [@bsv/simple](simple.md) — High-level wallet with DID support
 - [@bsv/templates](templates.md) — PushDrop script implementation
-- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction and wallet utilities
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Core transaction and wallet utilities
 
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/did-client/)
-- [Source on GitHub](https://github.com/bsv-blockchain/did-client)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client)
 - [npm](https://www.npmjs.com/package/@bsv/did-client)

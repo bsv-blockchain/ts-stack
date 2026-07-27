@@ -170,6 +170,36 @@ function validateDependencyAutomation(registry) {
   return errors
 }
 
+function isDeclarationDependency(value) {
+  if (typeof value !== 'string' || !value.startsWith('@types/')) return false
+  const parts = value.slice('@types/'.length).split('__')
+  return parts.length <= 2 && parts.every(part => part.length > 0 && /^[a-z0-9._-]+$/i.test(part))
+}
+
+function validateDeclarationDependencies(project, prefix) {
+  const errors = []
+  if (project.declarationDependencies === undefined) return errors
+  if (
+    !Array.isArray(project.declarationDependencies) ||
+    project.declarationDependencies.length === 0
+  ) {
+    errors.push(`${prefix} declarationDependencies must be a non-empty array`)
+  } else {
+    for (const dependency of project.declarationDependencies) {
+      if (!isDeclarationDependency(dependency)) {
+        errors.push(`${prefix} has invalid declaration dependency ${JSON.stringify(dependency)}`)
+      }
+    }
+    for (const duplicate of duplicateValues(project.declarationDependencies)) {
+      errors.push(`${prefix} repeats declaration dependency ${duplicate}`)
+    }
+  }
+  if (project.release !== 'npm-oidc') {
+    errors.push(`${prefix} declarationDependencies are only valid for public packages`)
+  }
+  return errors
+}
+
 function validateProjectMetadata(project, registry) {
   const errors = []
   const prefix = `projects.json entry ${project.path ?? '<missing path>'}`
@@ -195,7 +225,16 @@ function validateProjectMetadata(project, registry) {
   if (!RELEASES.has(project.release)) {
     errors.push(`${prefix} has invalid release ${JSON.stringify(project.release)}`)
   }
+  errors.push(...validateDeclarationDependencies(project, prefix))
   return errors
+}
+
+function runtimePackageForTypes(dependency) {
+  const name = dependency.slice('@types/'.length)
+  const scopedSeparator = name.indexOf('__')
+  return scopedSeparator === -1
+    ? name
+    : `@${name.slice(0, scopedSeparator)}/${name.slice(scopedSeparator + 2)}`
 }
 
 function validateProjectManifest(project, actual) {
@@ -215,6 +254,22 @@ function validateProjectManifest(project, actual) {
   }
   if (!isPrivate && project.release !== 'npm-oidc') {
     errors.push(`${prefix} is public but release is not npm-oidc`)
+  }
+  for (const dependency of project.declarationDependencies ?? []) {
+    if (!Object.hasOwn(actual.manifest.dependencies ?? {}, dependency)) {
+      errors.push(`${prefix} must publish declaration dependency ${dependency}`)
+    }
+    const runtimePackage = runtimePackageForTypes(dependency)
+    const runtimeSurface = {
+      ...actual.manifest.dependencies,
+      ...actual.manifest.optionalDependencies,
+      ...actual.manifest.peerDependencies
+    }
+    if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
+      errors.push(
+        `${prefix} declaration dependency ${dependency} requires runtime package ${runtimePackage}`
+      )
+    }
   }
   return errors
 }

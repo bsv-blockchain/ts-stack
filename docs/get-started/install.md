@@ -2,12 +2,12 @@
 id: install
 title: Install
 kind: meta
-version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: 'n/a'
+last_updated: '2026-04-29'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["installation", "setup"]
+tags: ['installation', 'setup']
 ---
 
 # Install
@@ -30,10 +30,10 @@ npm install @bsv/simple @bsv/sdk
 
 ## Entry Points
 
-| Import path | Environment | Use case |
-|-------------|-------------|----------|
-| `@bsv/simple/browser` | Browser | Connect to user's wallet extension |
-| `@bsv/simple/server` | Node.js | Self-custodial server wallet |
+| Import path           | Environment | Use case                           |
+| --------------------- | ----------- | ---------------------------------- |
+| `@bsv/simple/browser` | Browser     | Connect to user's wallet extension |
+| `@bsv/simple/server`  | Node.js     | Self-custodial server wallet       |
 
 ### Browser
 
@@ -71,7 +71,7 @@ Turbopack requires extra config to prevent server-only packages from being bundl
 
 ```typescript
 const nextConfig = {
-  serverExternalPackages: ['@bsv/wallet-toolbox', '@bsv/simple'],
+  serverExternalPackages: ['@bsv/wallet-toolbox', '@bsv/simple']
 }
 export default nextConfig
 ```

@@ -1,10 +1,10 @@
 ---
 id: conformance-overview
-title: "Conformance"
+title: 'Conformance'
 kind: meta
-version: "n/a"
-last_updated: "2026-05-14"
-last_verified: "2026-05-14"
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [conformance, testing, cross-language, vectors]
@@ -14,7 +14,9 @@ tags: [conformance, testing, cross-language, vectors]
 
 The TypeScript stack is the reference source for portable BSV behavior. The conformance corpus turns that behavior into language-neutral JSON fixtures that SDKs, wallets, and infrastructure clients can reuse.
 
-Current corpus: **6,625 vectors across 72 JSON files** (as of 2026-05-14). `conformance/META.json` is the authoritative index.
+The current corpus totals are generated from `conformance/META.json` and the
+parity matrix on the [Generated Stack Facts](../reference/stack-facts.md) page.
+CI rejects drift between those sources and the 74 JSON vector files.
 
 ## How It Works
 
@@ -26,28 +28,28 @@ Current corpus: **6,625 vectors across 72 JSON files** (as of 2026-05-14). `conf
 
 ## Runner Entry Points
 
-| Command | What It Does |
-|---|---|
-| `pnpm conformance` | Runs `conformance/runner/src/runner.js`; validates vector structure and writes reports |
-| `pnpm conformance --validate-only` | Validates vector JSON only |
-| `pnpm conformance --vectors conformance/vectors/wallet/brc100` | Runs the structural runner against a subset directory |
-| `pnpm --filter @bsv/conformance-runner-ts test` | Runs the TypeScript/Jest dispatcher for SDK categories it recognizes |
+| Command                                                        | What It Does                                                                           |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `pnpm conformance`                                             | Runs `conformance/runner/src/runner.js`; validates vector structure and writes reports |
+| `pnpm conformance --validate-only`                             | Validates vector JSON only                                                             |
+| `pnpm conformance --vectors conformance/vectors/wallet/brc100` | Runs the structural runner against a subset directory                                  |
+| `pnpm --filter @bsv/conformance-runner-ts test`                | Runs the TypeScript/Jest dispatcher for SDK categories it recognizes                   |
 
 Reports from the structural runner land in `conformance/runner/reports/`.
 
 ## Coverage
 
-| Domain | BRCs Covered | Vector Path |
-|---|---|---|
-| SDK keys + crypto | BRC-42 + general primitives (AES, ECDSA, ECIES, hashes, HMAC, signatures) | `conformance/vectors/sdk/{keys,crypto}/` (8 files) |
-| SDK transactions | BRC-74 MerklePath + BRC-62 serialization / BEEF / EF | `conformance/vectors/sdk/transactions/` |
-| SDK scripts | BRC-14 Script parsing, encoding, sighash, evaluation (SV Node + Teranode fixtures) | `conformance/vectors/sdk/scripts/evaluation.json` (5,116 vectors) |
-| SDK compat | BRC-77 BSM compatibility | `conformance/vectors/sdk/compat/bsm.json` |
-| Wallet BRC-100 | Full `WalletInterface` (27 method files, ~950 vectors) | `conformance/vectors/wallet/brc100/` |
-| Wallet BRC-29 | Payment key derivation | `conformance/vectors/wallet/brc29/payment-derivation.json` |
-| Messaging BRC-31 | Authrite signature format + authsocket | `conformance/vectors/messaging/{brc31,authsocket}.json` |
-| Auth / Overlay / Broadcast / Payments / Storage / Sync | BRC-31 handshake, BRC-62/20/22, BRC-29/121, BRC-26 UHRP, GASP, etc. | Multiple files under each domain |
-| Regressions | 12 historical cross-SDK bug reproductions (go-sdk#306, ts-sdk#31, etc.) | `conformance/vectors/regressions/` (36 vectors) |
+| Domain                                                 | BRCs Covered                                                                       | Vector Path                                                       |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| SDK keys + crypto                                      | BRC-42 + general primitives (AES, ECDSA, ECIES, hashes, HMAC, signatures)          | `conformance/vectors/sdk/{keys,crypto}/` (8 files)                |
+| SDK transactions                                       | BRC-74 MerklePath + BRC-62 serialization / BEEF / EF                               | `conformance/vectors/sdk/transactions/`                           |
+| SDK scripts                                            | BRC-14 Script parsing, encoding, sighash, evaluation (SV Node + Teranode fixtures) | `conformance/vectors/sdk/scripts/evaluation.json` (5,116 vectors) |
+| SDK compat                                             | BRC-77 BSM compatibility                                                           | `conformance/vectors/sdk/compat/bsm.json`                         |
+| Wallet BRC-100                                         | Full `WalletInterface` (27 method files, ~950 vectors)                             | `conformance/vectors/wallet/brc100/`                              |
+| Wallet BRC-29                                          | Payment key derivation                                                             | `conformance/vectors/wallet/brc29/payment-derivation.json`        |
+| Messaging BRC-31                                       | Authrite signature format + authsocket                                             | `conformance/vectors/messaging/{brc31,authsocket}.json`           |
+| Auth / Overlay / Broadcast / Payments / Storage / Sync | BRC-31 handshake, BRC-62/20/22, BRC-29/121, BRC-26 UHRP, GASP, etc.                | Multiple files under each domain                                  |
+| Regressions                                            | Historical cross-SDK bug reproductions (go-sdk#306, ts-sdk#31, etc.)               | `conformance/vectors/regressions/`                                |
 
 ## Vector Format
 
@@ -89,11 +91,16 @@ For a non-TypeScript SDK or wallet:
 4. Compare your actual output to each vector's `expected` object.
 5. Track unsupported categories explicitly rather than silently ignoring them.
 
-## Recent Improvements (May 2026)
+## Maintained contracts
 
-- All legacy-format vector files were normalized to the modern schema-compliant shape (`brc` as array, correct `parity_class` enum, relative `$schema`).
-- The structural runner (`conformance/runner/src/runner.js`) was updated to cleanly support the special regression vector format with no warning spam.
-- The corpus is now in a robust state for cross-language ports (Go, Rust, Python).
+- `pnpm conformance --validate-only` validates the complete structural corpus.
+- `pnpm docs:facts:check` verifies metadata, parity classifications, and
+  generated totals.
+- `pnpm test:governance` owns every intended or skipped behavior with a reason,
+  owner, review date, and removal condition.
+- The TypeScript/Jest behavior runner and package suites provide executable
+  implementation assertions; a structural pass must not be described as a
+  behavioral pass.
 
 ## Next Steps
 

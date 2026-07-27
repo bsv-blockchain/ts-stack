@@ -1,16 +1,15 @@
 ---
 id: pkg-fund-wallet
-title: "@bsv/fund-wallet"
+title: '@bsv/fund-wallet'
 kind: package
 domain: helpers
-version: "1.4.1"
-source_repo: "bsv-blockchain/fund-wallet"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '1.4.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/fund-wallet"
-repo: "https://github.com/bsv-blockchain/fund-wallet"
+npm: 'https://www.npmjs.com/package/@bsv/fund-wallet'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet'
 status: stable
 tags: [helpers, testing, faucet, development]
 ---
@@ -65,6 +64,7 @@ npx fund-metanet
 ## Common patterns
 
 ### Check balance only (no Metanet Desktop needed)
+
 ```bash
 npx fund-metanet \
   --chain main \
@@ -72,6 +72,7 @@ npx fund-metanet \
 ```
 
 ### Fund wallet (Metanet Desktop must be running)
+
 ```bash
 npx fund-metanet \
   --chain test \
@@ -80,6 +81,7 @@ npx fund-metanet \
 ```
 
 ### Using custom storage provider
+
 ```bash
 npx fund-metanet \
   --chain main \
@@ -89,6 +91,7 @@ npx fund-metanet \
 ```
 
 ### Interactive mode
+
 ```bash
 npx fund-metanet
 # Answer prompts for chain, key, satoshis, etc.
@@ -137,10 +140,10 @@ npx fund-metanet
 
 - [@bsv/amountinator](amountinator.md) — Could enhance output with currency conversion
 - [@bsv/simple](simple.md) — Wallet that may use funded address
-- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Private key and transaction utilities
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Private key and transaction utilities
 
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/fund-wallet/)
-- [Source on GitHub](https://github.com/bsv-blockchain/fund-wallet)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet)
 - [npm](https://www.npmjs.com/package/@bsv/fund-wallet)

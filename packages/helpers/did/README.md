@@ -113,3 +113,7 @@ If the issuer is a `did:key`, the verifier can derive the issuer public key from
 - `SdJwtVcVerifier`
 - `publicKeyToJwk`, `privateKeyToJwk`, `jwkToPublicKey`
 - `parseSdJwt`, `serializeSdJwt`, `parseDisclosure`, `disclosureDigest`
+
+## License
+
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).

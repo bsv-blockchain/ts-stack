@@ -1,10 +1,10 @@
 ---
 id: infra-overlay-server
-title: "Overlay Server"
+title: 'Overlay Server'
 kind: infra
-version: "2.1.6"
-last_updated: "2026-06-27"
-last_verified: "2026-06-27"
+version: '2.1.6'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [overlay, topic-manager, lookup-service, transaction-routing]
@@ -29,30 +29,30 @@ Clients submit transaction outputs via HTTP, the server routes valid outputs thr
 
 ## Dependencies
 
-| Type | Requirement |
-|------|-------------|
-| Database | MongoDB (lookup data), MySQL/Knex (overlay tracking) |
+| Type              | Requirement                                                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Database          | MongoDB (lookup data), MySQL/Knex (overlay tracking)                                                                                                |
 | External services | Wallet Storage (service advertisement), Arcade and/or Arc (transaction propagation), Chaintracks/go-chaintracks-compatible headers and reorg stream |
-| ts-stack packages | @bsv/sdk, @bsv/overlay-express, @bsv/auth-express-middleware |
+| ts-stack packages | @bsv/sdk, @bsv/overlay-express, @bsv/auth-express-middleware                                                                                        |
 
 ## HTTP endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | /submit | Submit a tagged BEEF transaction for topic admission and network propagation |
-| POST | /lookup | Query a lookup service |
-| POST | /arc-ingest | Receive Arc/Arcade provider callbacks and Merkle proofs |
-| GET | /health/live | Process liveness |
-| GET | /health/ready | Readiness for critical dependencies |
-| GET | /health | Full health report with provider/BASM context |
-| POST | /admin/syncAdvertisements | Refresh SHIP/SLAP advertisements |
-| POST | /admin/startGASPSync | Run GASP sync |
-| POST | /admin/startBASMSync | Run BASM sync |
-| POST | /admin/refreshUnprovenProofs | Try proof providers for old unproven transactions |
-| POST | /admin/evictUnproven | Evict old unproven transactions without proof refresh |
-| POST | /admin/maintainUnproven | Refresh proofs, then evict remaining old unproven transactions |
-| POST | /admin/evictOutpoint | Remove an outpoint from lookup service indexes |
-| POST | /admin/janitor | Run SHIP/SLAP host health checks and cleanup |
+| Method | Path                         | Purpose                                                                      |
+| ------ | ---------------------------- | ---------------------------------------------------------------------------- |
+| POST   | /submit                      | Submit a tagged BEEF transaction for topic admission and network propagation |
+| POST   | /lookup                      | Query a lookup service                                                       |
+| POST   | /arc-ingest                  | Receive Arc/Arcade provider callbacks and Merkle proofs                      |
+| GET    | /health/live                 | Process liveness                                                             |
+| GET    | /health/ready                | Readiness for critical dependencies                                          |
+| GET    | /health                      | Full health report with provider/BASM context                                |
+| POST   | /admin/syncAdvertisements    | Refresh SHIP/SLAP advertisements                                             |
+| POST   | /admin/startGASPSync         | Run GASP sync                                                                |
+| POST   | /admin/startBASMSync         | Run BASM sync                                                                |
+| POST   | /admin/refreshUnprovenProofs | Try proof providers for old unproven transactions                            |
+| POST   | /admin/evictUnproven         | Evict old unproven transactions without proof refresh                        |
+| POST   | /admin/maintainUnproven      | Refresh proofs, then evict remaining old unproven transactions               |
+| POST   | /admin/evictOutpoint         | Remove an outpoint from lookup service indexes                               |
+| POST   | /admin/janitor               | Run SHIP/SLAP host health checks and cleanup                                 |
 
 Additional endpoints exposed by configured topic managers and lookup services (see src/services/ for ProtoMap, CertMap, BasketMap, UHRP, Identity, MessageBox, UMP, etc.).
 
@@ -62,34 +62,34 @@ None (HTTP-only OverlayExpress endpoints).
 
 ## Configuration (env vars)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| NODE_NAME | Yes | One-word, lowercase overlay service node identifier |
-| SERVER_PRIVATE_KEY | Yes | 32-byte hex root private key for server wallet |
-| HOSTING_URL | Yes | Public URL where the node is reachable |
-| ADMIN_TOKEN | Yes | Token for admin API access |
-| WALLET_STORAGE_URL | Yes | BSV wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`) |
-| NETWORK | Yes | `main` or `test` (BSV blockchain network) |
-| ARC_API_KEY | Conditionally | Arc key for fallback transaction broadcasting. Required only when `ARCADE_URL` is unset. |
-| ARC_CALLBACK_TOKEN | No | Shared secret expected on `/arc-ingest` callbacks. Recommended for public deployments. |
-| ARCADE_URL | Conditionally | Arcade endpoint used as the first-choice broadcaster and proof lookup provider. Required only when `ARC_API_KEY` is unset. |
-| ARCADE_API_KEY | No | Arcade API key, when the deployment requires one. |
-| ARCADE_DEPLOYMENT_ID | No | Stable Arcade deployment identifier used for callback/proof routing. |
-| CHAINTRACKS_URL | No | Explicit go-chaintracks compatible endpoint for headers and reorg SSE. If unset, Arcade can be reused when `USE_ARCADE_CHAINTRACKS=true`. |
-| CHAINTRACKS_API_PREFIX | No | Chaintracks API prefix. Defaults to `/chaintracks/v2` for Arcade-mounted Chaintracks. |
-| USE_ARCADE_CHAINTRACKS | No | Reuse `ARCADE_URL` for Chaintracks when `CHAINTRACKS_URL` is unset. Defaults to true when `ARCADE_URL` is set. |
-| THROW_ON_BROADCAST_FAIL | No | Reject overlay admission if no broadcast provider accepts the transaction. Defaults to `true`. |
-| MONGO_URL | Yes | MongoDB connection string |
-| KNEX_URL | Yes | MySQL connection string for Knex |
-| GASP_ENABLED | No | `true` or `false` (Graph Aware Sync Protocol for overlay sync) |
-| BASM_ENABLED | No | Enable BRC-136 BASM synchronization. Defaults to `false`. |
-| BASM_REORG_STREAM_ENABLED | No | Subscribe to Chaintracks reorg SSE when Chaintracks is configured. Defaults to `true`. |
-| BASM_REORG_SCAN_DEPTH | No | Number of recent blocks to revalidate on reorg reconnect/poll. |
-| BASM_BLOCK_POLL_INTERVAL_MS | No | Interval for BASM anchor/header polling. Set to `0` to disable periodic polling. |
-| UNPROVEN_EVICTION_BLOCKS | No | Block-age threshold for unproven transaction eviction. |
-| UNPROVEN_MAINTENANCE_INTERVAL_MS | No | Periodic refresh-then-evict cadence for unproven transactions. `0` disables periodic maintenance. |
-| LOG_LEVEL | No | pino log level. Defaults to `info`. |
-| OTEL_* | No | OpenTelemetry exporter/resource configuration. See `infra/OBSERVABILITY.md`. |
+| Variable                         | Required      | Description                                                                                                                               |
+| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| NODE_NAME                        | Yes           | One-word, lowercase overlay service node identifier                                                                                       |
+| SERVER_PRIVATE_KEY               | Yes           | 32-byte hex root private key for server wallet                                                                                            |
+| HOSTING_URL                      | Yes           | Public URL where the node is reachable                                                                                                    |
+| ADMIN_TOKEN                      | Yes           | Token for admin API access                                                                                                                |
+| WALLET_STORAGE_URL               | Yes           | BSV wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`)                                                                        |
+| NETWORK                          | Yes           | `main` or `test` (BSV blockchain network)                                                                                                 |
+| ARC_API_KEY                      | Conditionally | Arc key for fallback transaction broadcasting. Required only when `ARCADE_URL` is unset.                                                  |
+| ARC_CALLBACK_TOKEN               | No            | Shared secret expected on `/arc-ingest` callbacks. Recommended for public deployments.                                                    |
+| ARCADE_URL                       | Conditionally | Arcade endpoint used as the first-choice broadcaster and proof lookup provider. Required only when `ARC_API_KEY` is unset.                |
+| ARCADE_API_KEY                   | No            | Arcade API key, when the deployment requires one.                                                                                         |
+| ARCADE_DEPLOYMENT_ID             | No            | Stable Arcade deployment identifier used for callback/proof routing.                                                                      |
+| CHAINTRACKS_URL                  | No            | Explicit go-chaintracks compatible endpoint for headers and reorg SSE. If unset, Arcade can be reused when `USE_ARCADE_CHAINTRACKS=true`. |
+| CHAINTRACKS_API_PREFIX           | No            | Chaintracks API prefix. Defaults to `/chaintracks/v2` for Arcade-mounted Chaintracks.                                                     |
+| USE_ARCADE_CHAINTRACKS           | No            | Reuse `ARCADE_URL` for Chaintracks when `CHAINTRACKS_URL` is unset. Defaults to true when `ARCADE_URL` is set.                            |
+| THROW_ON_BROADCAST_FAIL          | No            | Reject overlay admission if no broadcast provider accepts the transaction. Defaults to `true`.                                            |
+| MONGO_URL                        | Yes           | MongoDB connection string                                                                                                                 |
+| KNEX_URL                         | Yes           | MySQL connection string for Knex                                                                                                          |
+| GASP_ENABLED                     | No            | `true` or `false` (Graph Aware Sync Protocol for overlay sync)                                                                            |
+| BASM_ENABLED                     | No            | Enable BRC-136 BASM synchronization. Defaults to `false`.                                                                                 |
+| BASM_REORG_STREAM_ENABLED        | No            | Subscribe to Chaintracks reorg SSE when Chaintracks is configured. Defaults to `true`.                                                    |
+| BASM_REORG_SCAN_DEPTH            | No            | Number of recent blocks to revalidate on reorg reconnect/poll.                                                                            |
+| BASM_BLOCK_POLL_INTERVAL_MS      | No            | Interval for BASM anchor/header polling. Set to `0` to disable periodic polling.                                                          |
+| UNPROVEN_EVICTION_BLOCKS         | No            | Block-age threshold for unproven transaction eviction.                                                                                    |
+| UNPROVEN_MAINTENANCE_INTERVAL_MS | No            | Periodic refresh-then-evict cadence for unproven transactions. `0` disables periodic maintenance.                                         |
+| LOG_LEVEL                        | No            | pino log level. Defaults to `info`.                                                                                                       |
+| OTEL_*                           | No            | OpenTelemetry exporter/resource configuration. See `infra/OBSERVABILITY.md`.                                                              |
 
 At least one transaction propagation provider must be configured:
 `ARCADE_URL` or `ARC_API_KEY`. Production deployments should prefer
@@ -225,5 +225,5 @@ counts.
 
 ## Source
 
-- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/master/infra/overlay-server)
+- [GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server)
 - [npm package](https://npmjs.com/package/@bsv/overlay-express)

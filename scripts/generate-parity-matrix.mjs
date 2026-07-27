@@ -14,6 +14,12 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const ROOT = join(__dirname, '..')
 const VECTORS_DIR = join(ROOT, 'conformance/vectors')
 const OUTPUT = join(ROOT, 'conformance/PARITY_MATRIX.json')
+const META = join(ROOT, 'conformance/META.json')
+const CHECK_MODE = process.argv.includes('--check')
+
+if (process.argv.slice(2).some(arg => arg !== '--check')) {
+  throw new Error('Usage: node scripts/generate-parity-matrix.mjs [--check]')
+}
 
 const STATEFUL_TAG_KEYS = ['funded', 'live_overlay', 'state', 'harness']
 
@@ -89,6 +95,18 @@ function classifyReason(relPath, counts) {
       justification: `${counts.intended} tx_invalid / MINIMALDATA / OP_VER edge cases intentionally differ from reference test vectors`
     }
   }
+  if (counts.intended > 0) {
+    return {
+      reasonCategory: 'intended_parity_work',
+      justification: `${counts.intended} vector(s) are classified as intended rather than required`
+    }
+  }
+  if (counts.skipped > 0) {
+    return {
+      reasonCategory: 'governed_vector_skip',
+      justification: ''
+    }
+  }
   return { reasonCategory: 'fully_supported', justification: '' }
 }
 
@@ -146,6 +164,7 @@ function buildSummary(files) {
 }
 
 try {
+  const meta = JSON.parse(await readFile(META, 'utf8'))
   const jsonFiles = await walk(VECTORS_DIR)
   const files = []
   for (const fullPath of jsonFiles) {
@@ -154,9 +173,21 @@ try {
   files.sort((a, b) => a.path.localeCompare(b.path))
 
   const summary = buildSummary(files)
+  if (
+    meta.stats?.total_files !== summary.total_files ||
+    meta.stats?.total_vectors !== summary.total_vectors
+  ) {
+    throw new Error(
+      `conformance/META.json stats are stale: expected ${summary.total_files} files / ${summary.total_vectors} vectors`
+    )
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(meta.stats?.last_updated ?? '')) {
+    throw new Error('conformance/META.json stats.last_updated must be an ISO date')
+  }
+
   const matrix = {
     schema_version: '1.0',
-    generated_at: new Date().toISOString().split('T')[0],
+    generated_at: meta.stats.last_updated,
     source: 'ts-stack conformance corpus',
     description:
       'Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.',
@@ -164,8 +195,19 @@ try {
     files
   }
 
-  await writeFile(OUTPUT, JSON.stringify(matrix, null, 2) + '\n')
-  console.log(`Generated ${OUTPUT}`)
+  const generated = JSON.stringify(matrix, null, 2) + '\n'
+  if (CHECK_MODE) {
+    const committed = await readFile(OUTPUT, 'utf8')
+    if (committed !== generated) {
+      throw new Error(
+        'conformance/PARITY_MATRIX.json is stale; run `pnpm docs:facts` and commit the result'
+      )
+    }
+    console.log(`Verified ${OUTPUT}`)
+  } else {
+    await writeFile(OUTPUT, generated)
+    console.log(`Generated ${OUTPUT}`)
+  }
   console.log(`  Files: ${summary.total_files}`)
   console.log(`  Vectors: ${summary.total_vectors}`)
   console.log(`  Fully required files: ${summary.fully_required_files}`)

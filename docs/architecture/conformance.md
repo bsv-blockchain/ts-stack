@@ -2,12 +2,12 @@
 id: architecture-conformance
 title: Conformance Pipeline
 kind: meta
-version: "n/a"
-last_updated: "2026-05-14"
-last_verified: "2026-05-14"
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["architecture", "conformance", "cross-language"]
+tags: ['architecture', 'conformance', 'cross-language']
 ---
 
 # Conformance Pipeline
@@ -47,24 +47,30 @@ conformance/vectors/*.json
              consume the same JSON corpus and compare outputs
 ```
 
-The corpus metadata is in `conformance/META.json`: file count, vector count, BRC coverage, and regression index.
+Corpus totals and BRC metadata are in `conformance/META.json`; file-level
+classifications are generated in `conformance/PARITY_MATRIX.json`.
 
 ## Current Coverage
 
-The current corpus (as of 2026-05-14) contains **6,625 vectors across 72 JSON files**:
+Current totals and structural runner outcomes are generated on
+[Generated Stack Facts](../reference/stack-facts.md). The durable coverage
+shape is:
 
-| Area                        | Size                          | Notes |
-|-----------------------------|-------------------------------|-------|
-| `sdk/scripts/evaluation.json` | 5,116 vectors                | BRC-14 — Script parsing, encoding, sighash, and full evaluation parity with SV Node + Teranode (normalized hex fixtures) |
-| `wallet/brc100/`            | 27 files, ~950 vectors        | Full `WalletInterface` (getPublicKey, create/verify HMAC+Signature, encrypt/decrypt, key linkage, create/sign/abortAction, listActions/Outputs, certificates, discover*, state methods). Many stateful success paths are marked `intended` pending funded mock-chain harness. |
-| `sdk/crypto/`               | 8 files                       | AES-GCM, ECDSA, ECIES, HMAC, SHA-256, RIPEMD-160, Hash160, Signature |
-| `sdk/keys/`                 | 3 files                       | BRC-42 HD derivation, PrivateKey / PublicKey behavior |
-| `sdk/transactions/`         | 2 files                       | MerklePath (BRC-74) + Transaction serialization / BEEF / EF (BRC-62) |
-| `sdk/compat/`               | 1 file                        | BRC-77 BSM compatibility |
-| `regressions/`              | 12 files, 36 vectors          | Historical cross-SDK bugs (go-sdk#306, ts-sdk#31, etc.). Special regression format with `regression.issue` metadata. |
-| Protocol domains            | ~15 files                     | auth (BRC-31), broadcast (ARC + Merkle service), messaging (authsocket + message-box), overlay (submit/lookup/topic mgmt), payments (BRC-29/121), storage (UHRP), sync (GASP + BRC-40) |
+| Area                          | Size                                                         | Notes                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sdk/scripts/evaluation.json` | 5,116 vectors                                                | BRC-14 — Script parsing, encoding, sighash, and full evaluation parity with SV Node + Teranode (normalized hex fixtures)                                                            |
+| `wallet/brc100/`              | Method-level corpus                                          | `WalletInterface` crypto, action, output, certificate, discovery, authentication, chain, and network behavior. Stateful gaps are explicitly governed rather than counted as passes. |
+| `sdk/crypto/`                 | 8 files                                                      | AES-GCM, ECDSA, ECIES, HMAC, SHA-256, RIPEMD-160, Hash160, Signature                                                                                                                |
+| `sdk/keys/`                   | 3 files                                                      | BRC-42 HD derivation, PrivateKey / PublicKey behavior                                                                                                                               |
+| `sdk/transactions/`           | 2 files                                                      | MerklePath (BRC-74) + Transaction serialization / BEEF / EF (BRC-62)                                                                                                                |
+| `sdk/compat/`                 | 1 file                                                       | BRC-77 BSM compatibility                                                                                                                                                            |
+| `regressions/`                | Historical regressions                                       | Cross-SDK bugs with stable IDs and source-issue metadata.                                                                                                                           |
+| Protocol domains              | Auth, broadcast, messaging, Overlay, payments, storage, sync | Includes BRC-20/21/22/26/29/31/40/121/136 and related HTTP or message contracts.                                                                                                    |
 
-`conformance/META.json` is the single source of truth for exact file counts, vector counts, and the `brc_coverage` mapping. The corpus was recently cleaned up (legacy format files normalized, regression handling improved in the structural runner) to make it a reliable contract for new language implementations.
+`pnpm docs:facts:check` rejects drift among metadata, the generated parity
+matrix, and the corpus. `pnpm test:governance` separately owns all runner skips
+and intended behaviors. A structural vector count is never a claim that all
+vectors execute against every implementation.
 
 ## Running The Pipeline
 

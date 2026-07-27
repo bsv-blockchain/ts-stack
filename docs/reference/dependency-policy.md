@@ -22,10 +22,9 @@ images on one reviewed dependency baseline.
 - TypeScript 7.0.2 native compiler, with the official TypeScript 6 compatibility API for API-dependent tools
 - Oxlint for TypeScript linting
 
-CI, conformance, documentation, and release workflows run on Node.js 24. Package
-lint errors fail the build. Existing warnings remain visible and are reduced
-progressively; a package may opt into stricter warning enforcement once its
-warning baseline reaches zero.
+CI, conformance, documentation, and release workflows run on Node.js 24.
+Root and package lint are warning-free and use blocking warning denial. A new
+warning is a regression, not baseline debt to be accepted or ratcheted later.
 
 Every published package declares `engines.node: ">=22"`. Node.js 22 is the
 consumer runtime floor; Node.js 24.11 is the stricter contributor and release
@@ -72,6 +71,13 @@ tracker. GitHub Actions are pinned to immutable commit SHAs with accurate
 release-version comments; a generated action bump is still reviewed for
 permissions, runtime changes, and behavior before merge.
 
+Dependabot is a proposal mechanism, not a reviewer or release manager. A
+maintainer must establish why each change is needed, inspect changelogs and
+runtime/deployment effects, remove obsolete dependencies, and require the same
+tests, security analysis, and package checks as human-authored work. Bot noise,
+conflicting single-package bumps, and first-party version PRs are consolidated
+or closed rather than merged piecemeal.
+
 ## Supply-chain controls
 
 `pnpm-workspace.yaml` is the source of truth for installation controls:
@@ -90,12 +96,17 @@ then rebuild only the explicitly allowlisted `better-sqlite3` binding they need;
 the full build lane remains the single place that runs the workspace's approved
 installation scripts.
 
-The version-consistency gate also rejects public package manifests that place
-type declarations, test runners, test clients, linters, documentation
-generators, or TypeScript build tools in `dependencies`. This prevents
-development-only advisory trees from leaking into clean consumer installs.
+The version-consistency gate rejects public package manifests that place test
+runners, test clients, linters, documentation generators, or TypeScript build
+tools in `dependencies`. Type packages remain development-only unless the
+governed project inventory names one as a declaration dependency because the
+published `.d.ts` surface imports that external module. A governed declaration
+dependency must be shipped in `dependencies`, its corresponding runtime module
+must be a dependency or peer, and clean packed consumers must typecheck it.
+This keeps build-only advisory trees out of consumer installs without shipping
+unresolvable public declarations.
 
-The workspace carries two narrow audited dependency overrides:
+The root workspace carries two narrow audited dependency overrides:
 
 - Jest 30.4.2 still constrains its reporting and coverage graph to minimatch
   releases that require `brace-expansion` 1.x/2.x, while
@@ -111,6 +122,12 @@ have owners, evidence, review dates, and upstream removal conditions in the
 repository-health exception registry. Any future temporary override must meet
 the same standard.
 
+The independently locked OpenAPI generator also carries a narrow Redocly
+compatibility override. It is isolated from runtime packages, registered with
+the same owner/review/removal fields, and must regenerate identical checked-in
+output. These three exceptions are not permanent policy: their review dates
+are removal deadlines unless fresh evidence justifies an explicit extension.
+
 The former AsyncAPI generator override was eliminated by replacing that
 dependency with a deterministic
 renderer built on the maintained `yaml` parser. This removes the legacy parser,
@@ -119,9 +136,9 @@ transitive substitutions.
 
 ## Advisory disposition
 
-The verified 2026-07-25 frozen dependency graph has no known audit findings or
-accepted advisory holds after applying the single tracked Jest compatibility
-substitution. All other advisory paths were removed at their causes:
+The verified 2026-07-27 frozen root and infrastructure dependency graphs have
+no known audit findings after the registered compatibility substitutions. All
+other advisory paths were removed at their causes:
 
 - the unused message-box `webpack-dev-server` dependency and its vulnerable
   `uuid` path were deleted;
@@ -150,6 +167,17 @@ consumer and development graphs first.
 7. Merge the generated version-sync PR, then release any infra images whose
    first-party dependency ranges changed.
 
+The generated sync PR may refresh infrastructure lockfiles with
+`npm install --package-lock-only --ignore-scripts`. That command names no
+package, executes no lifecycle script, and only produces a reviewed committed
+lock for later `npm ci` and audit use. OpenSSF Scorecard alerts #200 and #221
+are the same governed false positive after workflow line movement; retain the
+check and the exception evidence rather than deleting the deterministic lock
+refresh.
+
 Breaking major upgrades are handled as focused migrations with an explicit
 compatibility and rollback plan. They are not forced into the workspace through
 transitive overrides.
+
+See [Release and Operations Guide](./release-operations.md) for the complete
+preflight, publication, reconciliation, image, failure, and rollback path.

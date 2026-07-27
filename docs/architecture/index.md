@@ -2,12 +2,12 @@
 id: architecture-overview
 title: Architecture
 kind: meta
-version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: 'n/a'
+last_updated: '2026-04-29'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["architecture"]
+tags: ['architecture']
 ---
 
 # Architecture
@@ -16,16 +16,16 @@ The BSV TypeScript stack is organized as a foundation-to-application hierarchy. 
 
 ## Layers
 
-| Layer | Package(s) | Who uses it |
-|-------|-----------|-------------|
-| Foundation | `@bsv/sdk` | Protocol engineers — direct access to cryptographic primitives and script engine |
-| Wallet Interface | BRC-100 boundary | All layers above communicate with wallets through this standard interface |
-| Application wrapper | `@bsv/simple` | App developers — high-level payments, tokens, inscriptions, credentials |
-| Wallet builder toolkit | `@bsv/wallet-toolbox` | Wallet developers — assemble BRC-100-compliant wallets from modular pieces |
-| Overlay network | `@bsv/overlay`, `@bsv/overlay-express` | Service operators — index and serve on-chain data |
-| Messaging | `@bsv/authsocket`, `@bsv/message-box-client` | Apps needing encrypted P2P communication |
-| Monetization | `@bsv/402-pay`, `@bsv/payment-express-middleware` | APIs requiring micropayment access control |
-| Identity | `@bsv/auth-express-middleware`, `@bsv/authsocket` | Apps requiring mutual authentication |
+| Layer                  | Package(s)                                        | Who uses it                                                                      |
+| ---------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Foundation             | `@bsv/sdk`                                        | Protocol engineers — direct access to cryptographic primitives and script engine |
+| Wallet Interface       | BRC-100 boundary                                  | All layers above communicate with wallets through this standard interface        |
+| Application wrapper    | `@bsv/simple`                                     | App developers — high-level payments, tokens, inscriptions, credentials          |
+| Wallet builder toolkit | `@bsv/wallet-toolbox`                             | Wallet developers — assemble BRC-100-compliant wallets from modular pieces       |
+| Overlay network        | `@bsv/overlay`, `@bsv/overlay-express`            | Service operators — index and serve on-chain data                                |
+| Messaging              | `@bsv/authsocket`, `@bsv/message-box-client`      | Apps needing encrypted P2P communication                                         |
+| Monetization           | `@bsv/402-pay`, `@bsv/payment-express-middleware` | APIs requiring micropayment access control                                       |
+| Identity               | `@bsv/auth-express-middleware`, `@bsv/authsocket` | Apps requiring mutual authentication                                             |
 
 ## Key Design Documents
 

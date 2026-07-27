@@ -4,12 +4,13 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
 
 const COMMAND_TIMEOUT_MS = 180_000
 const MAX_BUFFER_BYTES = 20 * 1024 * 1024
+const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 function optionValue(arguments_, name, fallback = '') {
   const index = arguments_.indexOf(name)
@@ -126,6 +127,50 @@ function identityErrors(packResult, manifest) {
     )
   }
   return errors
+}
+
+function workspaceRuntimeDependencies(manifest) {
+  const dependencies = []
+  for (const field of ['dependencies', 'optionalDependencies']) {
+    for (const [name, range] of Object.entries(manifest[field] ?? {})) {
+      if (typeof range === 'string' && range.startsWith('workspace:')) {
+        dependencies.push(name)
+      }
+    }
+  }
+  return dependencies
+}
+
+export function workspaceRuntimeClosure(rootManifest, manifestsByName) {
+  const selected = new Set()
+  const queue = workspaceRuntimeDependencies(rootManifest)
+  while (queue.length > 0) {
+    const name = queue.shift()
+    if (name === rootManifest.name || selected.has(name)) continue
+    const manifest = manifestsByName.get(name)
+    if (!manifest) {
+      throw new Error(`${rootManifest.name} references unknown workspace dependency ${name}`)
+    }
+    selected.add(name)
+    queue.push(...workspaceRuntimeDependencies(manifest))
+  }
+  return [...selected].sort((left, right) => left.localeCompare(right))
+}
+
+async function governedWorkspaceManifests() {
+  const registry = JSON.parse(
+    await fs.readFile(
+      path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json'),
+      'utf8'
+    )
+  )
+  const manifests = new Map()
+  for (const project of registry.projects) {
+    const directory = path.join(REPOSITORY_ROOT, project.path)
+    const manifest = JSON.parse(await fs.readFile(path.join(directory, 'package.json'), 'utf8'))
+    manifests.set(manifest.name, { directory, manifest })
+  }
+  return manifests
 }
 
 export function validatePackedFiles(packResult, manifest, allowedSourcePrefixes = []) {
@@ -334,13 +379,21 @@ export async function checkPackageArtifact({
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
   const packed = await packPackage(packageDirectory)
   const localDependencies = []
-  const localDependencyNames = new Set()
+  const explicitDependencyNames = new Set()
   const declaredDependencies = {
     ...manifest.dependencies,
     ...manifest.optionalDependencies,
     ...manifest.peerDependencies
   }
   try {
+    const workspaceManifests = await governedWorkspaceManifests()
+    const manifestsByName = new Map(
+      [...workspaceManifests].map(([name, project]) => [name, project.manifest])
+    )
+    const localDependencyDirectories = new Map()
+    for (const name of workspaceRuntimeClosure(manifest, manifestsByName)) {
+      localDependencyDirectories.set(name, workspaceManifests.get(name).directory)
+    }
     for (const dependencyDirectory of localConsumerDependencyDirectories) {
       const dependencyManifest = JSON.parse(
         await fs.readFile(path.join(dependencyDirectory, 'package.json'), 'utf8')
@@ -348,12 +401,17 @@ export async function checkPackageArtifact({
       if (
         typeof dependencyManifest.name !== 'string' ||
         dependencyManifest.name === manifest.name ||
-        localDependencyNames.has(dependencyManifest.name) ||
+        explicitDependencyNames.has(dependencyManifest.name) ||
         !(dependencyManifest.name in declaredDependencies)
       ) {
         throw new Error(`invalid local consumer dependency ${JSON.stringify(dependencyDirectory)}`)
       }
-      localDependencyNames.add(dependencyManifest.name)
+      explicitDependencyNames.add(dependencyManifest.name)
+      localDependencyDirectories.set(dependencyManifest.name, dependencyDirectory)
+    }
+    for (const [, dependencyDirectory] of [...localDependencyDirectories].sort(([left], [right]) =>
+      left.localeCompare(right)
+    )) {
       localDependencies.push(await packPackage(dependencyDirectory))
     }
     const payloadErrors = validatePackedFiles(packed.result, manifest, allowedSourcePrefixes)

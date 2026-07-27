@@ -1,6 +1,9 @@
 <!-- Centralized reliability record. Source repo: bsv-blockchain/arc -->
 <!-- When arc is consolidated into ts-stack (Phase 5), this file moves with it. -->
 
+> **Historical April 2026 external-repository baseline.** Revalidate against
+> the ARC repository before using any version, control, or gap statement.
+
 # Reliability Status
 
 ## Component

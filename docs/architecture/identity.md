@@ -2,12 +2,12 @@
 id: architecture-identity
 title: Identity & Mutual Authentication
 kind: meta
-version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: 'n/a'
+last_updated: '2026-04-29'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["architecture", "identity", "auth", "BRC-31", "BRC-103", "BRC-104"]
+tags: ['architecture', 'identity', 'auth', 'BRC-31', 'BRC-103', 'BRC-104']
 ---
 
 # Identity & Mutual Authentication
@@ -88,12 +88,12 @@ MessageBox is a higher-level messaging substrate built on BRC-103/104:
 
 ## BRC-31 vs BRC-103/104: When to Use Which
 
-| Use case | Use |
-|----------|-----|
-| HTTP API mutual auth (REST/Express) | BRC-31 via `@bsv/auth-express-middleware` |
-| Persistent WebSocket channel | BRC-103/104 via `@bsv/authsocket` |
-| Store-and-forward messaging | MessageBox via `@bsv/message-box-client` (uses BRC-103/104 internally) |
-| Payment + identity in one HTTP request | BRC-121 + BRC-31 together |
+| Use case                               | Use                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| HTTP API mutual auth (REST/Express)    | BRC-31 via `@bsv/auth-express-middleware`                              |
+| Persistent WebSocket channel           | BRC-103/104 via `@bsv/authsocket`                                      |
+| Store-and-forward messaging            | MessageBox via `@bsv/message-box-client` (uses BRC-103/104 internally) |
+| Payment + identity in one HTTP request | BRC-121 + BRC-31 together                                              |
 
 ## Certificate-Based Identity (BRC-103/104 Extension)
 

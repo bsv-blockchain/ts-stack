@@ -2,7 +2,11 @@
 
 **Wave 4 Final Verification (Historical Snapshot)** | Generated: 2026-05-07
 
-> **Note**: This document reflects the corpus state at the end of Wave 4. As of 2026-05-14 the corpus has grown to **72 files / 6,625 vectors** (see `conformance/META.json` for the authoritative current count). Several legacy-format vector files were normalized and the structural runner was improved to cleanly support the special regression format. For the latest numbers and coverage, run `node conformance/runner/src/runner.js --validate-only` or consult `META.json`.
+> **Historical evidence only.** The tables below are retained to explain the
+> Wave 4 decisions and must not be used as current status. Current totals are
+> generated in `docs/reference/stack-facts.md`; file-level classifications are
+> generated in `conformance/PARITY_MATRIX.json`; current runner behavior comes
+> from `pnpm conformance` and `pnpm test:governance`.
 
 ## Full-Suite Summary
 

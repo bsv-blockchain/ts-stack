@@ -3,12 +3,12 @@ id: network-domain
 title: Network
 kind: meta
 domain: network
-version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["domain", "network"]
+tags: ['domain', 'network']
 ---
 
 # Network
@@ -17,8 +17,8 @@ Connect to Teranode via private DHT and subscribe to real-time blockchain events
 
 ## Packages in this Domain
 
-| Package | Purpose |
-|---------|---------|
+| Package                                          | Purpose                                                                                  |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | [@bsv/teranode-listener](./teranode-listener.md) | Subscribe to Teranode P2P topics via libp2p private DHT with gossipsub pub/sub messaging |
 
 ## What You Can Do
@@ -65,18 +65,18 @@ Use network packages when you need to:
 
 ## Topics Available
 
-| Topic | Event |
-|-------|-------|
-| `bitcoin/mainnet-bestblock` | Best block message |
-| `bitcoin/mainnet-block` | Block solution found |
-| `bitcoin/mainnet-subtree` | Subtree created |
-| `bitcoin/mainnet-mining_on` | Mining enabled |
-| `bitcoin/mainnet-handshake` | Peer connects |
+| Topic                         | Event                |
+| ----------------------------- | -------------------- |
+| `bitcoin/mainnet-bestblock`   | Best block message   |
+| `bitcoin/mainnet-block`       | Block solution found |
+| `bitcoin/mainnet-subtree`     | Subtree created      |
+| `bitcoin/mainnet-mining_on`   | Mining enabled       |
+| `bitcoin/mainnet-handshake`   | Peer connects        |
 | `bitcoin/mainnet-rejected_tx` | Transaction rejected |
-| `bitcoin/testnet-*` | Testnet equivalents |
+| `bitcoin/testnet-*`           | Testnet equivalents  |
 
 ## Next Steps
 
 - **[@bsv/teranode-listener](./teranode-listener.md)** — Real-time blockchain event subscription
 - **[@bsv/overlay](../overlays/overlay.md)** — Indexing service integration
-- **[@bsv/sdk](https://github.com/bsv-blockchain/ts-sdk)** — Transaction/block deserialization
+- **[@bsv/sdk](../sdk/bsv-sdk.md)** — Transaction/block deserialization

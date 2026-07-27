@@ -1,6 +1,6 @@
 # BASELINE — @bsv/auth-express-middleware
 
-> Verified: 2026-07-26. This is the source baseline; npm remains at the version
+> Verified: 2026-07-27. This is the source baseline; npm remains at the version
 > shown until an explicit release is approved.
 
 ## Identity
@@ -9,23 +9,23 @@
 | -------------- | --------------------------------------------- |
 | Package        | `@bsv/auth-express-middleware`                |
 | Path           | `packages/middleware/auth-express-middleware` |
-| Source version | `2.1.2`                                       |
+| Source version | `2.1.3`                                       |
 | Criticality    | Tier 1 — service authentication boundary      |
 | Runtime        | Node.js 22+                                   |
 | Formats        | Native ESM + CommonJS + declarations          |
 
 ## Verified gates
 
-| Gate                | Result                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| Strict typecheck    | Passing                                                                              |
-| Oxlint              | Passing with zero warnings                                                           |
-| Prettier check      | Passing                                                                              |
-| Deterministic tests | 97 passing across 5 suites                                                           |
-| Production coverage | 93.39% lines, 89.31% branches, 88.88% functions, 92.60% statements                   |
-| Coverage floor      | 85% lines/statements/functions; 80% branches                                         |
-| Build               | `tsdown` passing                                                                     |
-| Artifact            | Exact tarball validated for ESM, CommonJS, declarations, exports, and file allowlist |
+| Gate                | Result                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Strict typecheck    | Passing                                                                                                            |
+| Oxlint              | Passing with zero warnings                                                                                         |
+| Prettier check      | Passing                                                                                                            |
+| Deterministic tests | 97 passing across 5 suites                                                                                         |
+| Production coverage | 93.39% lines, 89.31% branches, 88.88% functions, 92.60% statements                                                 |
+| Coverage floor      | 85% lines/statements/functions; 80% branches                                                                       |
+| Build               | `tsdown` passing                                                                                                   |
+| Artifact            | Exact tarball and workspace runtime closure validated for ESM, CommonJS, declarations, exports, and file allowlist |
 
 ## Reliability and security controls
 

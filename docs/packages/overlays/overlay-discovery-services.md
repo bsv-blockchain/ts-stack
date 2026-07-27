@@ -1,14 +1,16 @@
 ---
 id: overlay-discovery
-title: "@bsv/overlay-discovery-services"
+title: '@bsv/overlay-discovery-services'
 kind: package
 domain: overlays
-npm: "@bsv/overlay-discovery-services"
-version: "2.1.1"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/overlay-discovery-services'
+version: '2.1.1'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services'
 status: stable
-tags: ["overlay", "discovery"]
+tags: ['overlay', 'discovery']
 ---
 
 # @bsv/overlay-discovery-services
@@ -62,8 +64,8 @@ const engine = new Engine(
   storage,
   new WhatsOnChain('main'),
   'https://mynode.example.com',
-  ['https://ship.example.com'],  // SHIP trackers
-  ['https://slap.example.com']   // SLAP trackers
+  ['https://ship.example.com'], // SHIP trackers
+  ['https://slap.example.com'] // SLAP trackers
 )
 
 // Query SHIP for topic hosts
@@ -198,5 +200,5 @@ const serviceDiscovery = await engine.lookup({
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-discovery-services/)
-- [Source on GitHub](https://github.com/bsv-blockchain/overlay-discovery-services)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-discovery-services)

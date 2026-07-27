@@ -34,7 +34,9 @@ describe('makeUserInterface', () => {
     it('should include external links', () => {
       const html = makeUserInterface()
 
-      expect(html).toContain('https://github.com/bsv-blockchain/overlay-services')
+      expect(html).toContain(
+        'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays'
+      )
       expect(html).toContain('https://bsv.brc.dev/transactions/0076')
       expect(html).toContain('https://fast.brc.dev')
     })
@@ -60,7 +62,7 @@ describe('makeUserInterface', () => {
       const html = makeUserInterface(config)
 
       expect(html).toContain('https://example.com/favicon.ico')
-      expect(html).toContain('const faviconUrl = \'https://example.com/favicon.ico\'')
+      expect(html).toContain("const faviconUrl = 'https://example.com/favicon.ico'")
     })
 
     it('should use custom colors', () => {

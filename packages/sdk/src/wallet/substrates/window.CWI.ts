@@ -1,4 +1,5 @@
 import {
+  AcquireCertificateArgs,
   Base64String,
   BasketStringUnder300Bytes,
   BEEF,
@@ -22,10 +23,15 @@ import {
   PositiveIntegerOrZero,
   ProtocolString5To400Bytes,
   PubKeyHex,
+  ProveCertificateArgs,
+  ProveCertificateResult,
   SatoshiValue,
   SecurityLevel,
+  SignActionArgs,
+  SignActionResult,
   TXIDHexString,
   VersionString7To30Bytes,
+  WalletCertificate,
   WalletInterface
 } from '../Wallet.interfaces.js'
 
@@ -100,30 +106,9 @@ export default class WindowCWISubstrate implements WalletInterface {
   }
 
   async signAction(
-    args: {
-      spends: Record<
-        PositiveIntegerOrZero,
-        { unlockingScript: HexString, sequenceNumber?: PositiveIntegerOrZero }
-      >
-      reference: Base64String
-      options?: {
-        acceptDelayedBroadcast?: BooleanDefaultTrue
-        returnTXIDOnly?: BooleanDefaultFalse
-        noSend?: BooleanDefaultFalse
-        noSendChange?: OutpointString[]
-        sendWith: TXIDHexString[]
-      }
-    },
+    args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<{
-    txid?: TXIDHexString
-    tx?: BEEF
-    noSendChange?: OutpointString[]
-    sendWithResults?: Array<{
-      txid: TXIDHexString
-      status: 'unproven' | 'sending' | 'failed'
-    }>
-  }> {
+  ): Promise<SignActionResult> {
     return await this.CWI.signAction(args, originator)
   }
 
@@ -398,29 +383,9 @@ export default class WindowCWISubstrate implements WalletInterface {
   }
 
   async acquireCertificate(
-    args: {
-      type: Base64String
-      subject: PubKeyHex
-      serialNumber: Base64String
-      revocationOutpoint: OutpointString
-      signature: HexString
-      fields: Record<CertificateFieldNameUnder50Bytes, string>
-      certifier: PubKeyHex
-      keyringRevealer: PubKeyHex
-      keyringForSubject: Record<CertificateFieldNameUnder50Bytes, Base64String>
-      acquisitionProtocol: 'direct' | 'issuance'
-      certifierUrl?: string
-    },
+    args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<{
-    type: Base64String
-    subject: PubKeyHex
-    serialNumber: Base64String
-    certifier: PubKeyHex
-    revocationOutpoint: OutpointString
-    signature: HexString
-    fields: Record<CertificateFieldNameUnder50Bytes, string>
-  }> {
+  ): Promise<WalletCertificate> {
     return await this.CWI.acquireCertificate(args, originator)
   }
 
@@ -450,25 +415,9 @@ export default class WindowCWISubstrate implements WalletInterface {
   }
 
   async proveCertificate(
-    args: {
-      certificate: {
-        type: Base64String
-        subject: PubKeyHex
-        serialNumber: Base64String
-        certifier: PubKeyHex
-        revocationOutpoint: OutpointString
-        signature: HexString
-        fields: Record<CertificateFieldNameUnder50Bytes, string>
-      }
-      fieldsToReveal: CertificateFieldNameUnder50Bytes[]
-      verifier: PubKeyHex
-      privileged?: BooleanDefaultFalse
-      privilegedReason?: DescriptionString5to50Bytes
-    },
+    args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<{
-    keyringForVerifier: Record<CertificateFieldNameUnder50Bytes, Base64String>
-  }> {
+  ): Promise<ProveCertificateResult> {
     return await this.CWI.proveCertificate(args, originator)
   }
 

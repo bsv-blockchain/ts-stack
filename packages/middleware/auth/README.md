@@ -82,3 +82,7 @@ See [`docs/usage.md`](./docs/usage.md) for fuller examples.
   may only contain letters, numbers, and spaces.
 - Replay is bounded to the validity window by the expiry, and fully closed by
   `consumeNonce` — keep records only until `expiresAt`.
+
+## License
+
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).

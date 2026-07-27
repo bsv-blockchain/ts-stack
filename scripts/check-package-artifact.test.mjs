@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { typeProblemsForModes, validatePackedFiles } from './check-package-artifact.mjs'
+import {
+  typeProblemsForModes,
+  validatePackedFiles,
+  workspaceRuntimeClosure
+} from './check-package-artifact.mjs'
 
 const manifest = {
   name: '@bsv/example',
@@ -101,4 +105,43 @@ test('strict type policy ignores only the unsupported CommonJS mode for ESM-only
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs']), problems)
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs'], ['.']), problems.slice(2))
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs'], [], ['.']), [])
+})
+
+test('packed consumers use the exact transitive workspace runtime closure', () => {
+  const root = {
+    name: '@bsv/root',
+    dependencies: {
+      '@bsv/a': 'workspace:^',
+      '@bsv/registry-only': '^1.0.0'
+    },
+    peerDependencies: {
+      '@bsv/peer': '^1.0.0'
+    }
+  }
+  const manifests = new Map([
+    [
+      '@bsv/a',
+      {
+        name: '@bsv/a',
+        optionalDependencies: { '@bsv/b': 'workspace:*' }
+      }
+    ],
+    [
+      '@bsv/b',
+      {
+        name: '@bsv/b',
+        dependencies: { '@bsv/a': 'workspace:^' }
+      }
+    ]
+  ])
+
+  assert.deepEqual(workspaceRuntimeClosure(root, manifests), ['@bsv/a', '@bsv/b'])
+  assert.throws(
+    () =>
+      workspaceRuntimeClosure(
+        { name: '@bsv/root', dependencies: { '@bsv/missing': 'workspace:^' } },
+        manifests
+      ),
+    /unknown workspace dependency @bsv\/missing/
+  )
 })

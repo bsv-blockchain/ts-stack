@@ -18,26 +18,10 @@ For production or cloud usage, we recommend deploying the Docker container to Go
 
 ## 1. Prepare the Dockerfile
 
-This repository includes a sample Dockerfile:
-
-```dockerfile
-FROM node:20-alpine
-
-# Install nginx (optional)
-RUN apk add --no-cache --update nginx && \
-    chown -R nginx:www-data /var/lib/nginx
-
-COPY ./nginx.conf /etc/nginx/nginx.conf
-EXPOSE 8080
-
-WORKDIR /app
-COPY . .
-RUN npm i knex -g && \
-    npm run build
-
-# By default, node out/src/index.js. It will conditionally run Nginx if NODE_ENV != development
-CMD [ "node", "out/src/index.js"]
-```
+Use the repository's checked-in Dockerfile. It uses the governed digest-pinned
+Node 24 base, a committed lockfile, an unprivileged runtime user, and the same
+image contract scanned by CI. Do not replace it with an unpinned
+`node:<version>-alpine` example or install global build tools during a release.
 
 Note: If you prefer to skip Nginx in production, you can remove the `RUN apk add ...` line and any references to `nginx`. By default, `index.ts` spawns Nginx only if `NODE_ENV !== 'development'`.
 
@@ -54,11 +38,12 @@ Otherwise, create a new instance:
 gcloud sql instances create my-wallet-sql-instance \
   --database-version=MYSQL_8_0 \
   --tier=db-f1-micro \
-  --region=us-west1 \
-  --authorized-networks=0.0.0.0/0
+  --region=us-west1
 ```
 
-Configuring `authorized-networks` like this allows all traffic by default. (This may not be recommended for production, so adjust accordingly.)
+Use a private IP or the Cloud SQL connector from Cloud Run. If a public IP is
+unavoidable, authorize only the narrow, known egress range and require TLS;
+never expose the database to `0.0.0.0/0`.
 
 Adjust parameters (machine type, region) as needed. Then set a root password:
 

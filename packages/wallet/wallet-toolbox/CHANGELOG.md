@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Ship the Express declaration dependency required by the public storage
+  server, edge-policy, and rate-limit declarations. Validate authenticated
+  storage identities explicitly and normalize multi-value Express 5 headers
+  instead of relying on implicit request augmentation or scalar headers.
 - Add capability-negotiated action-batch manifest format 2 without changing
   BRC-100. It derives source/output scripts from the authenticated transaction
   graph, retains only the external proof frontier, bulk-loads shared storage

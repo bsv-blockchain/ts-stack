@@ -15,7 +15,8 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
-- (Detail modifications that are non-breaking but relevant to the end-users.)
+- Ship the Express declaration dependency needed by strict TypeScript
+  consumers of the Paymail router API.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)

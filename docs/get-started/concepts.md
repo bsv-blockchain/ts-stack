@@ -2,12 +2,12 @@
 id: concepts
 title: Key Concepts
 kind: meta
-version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: 'n/a'
+last_updated: '2026-04-30'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["concepts", "protocol"]
+tags: ['concepts', 'protocol']
 ---
 
 # Key Concepts

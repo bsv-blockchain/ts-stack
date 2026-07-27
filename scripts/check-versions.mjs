@@ -16,6 +16,10 @@ import { execSync } from 'node:child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
+const projectRegistry = JSON.parse(
+  readFileSync(resolve(ROOT, 'governance/repository-health/projects.json'), 'utf8')
+)
+const projectPolicies = new Map(projectRegistry.projects.map(project => [project.name, project]))
 
 const output = execSync('pnpm -r ls --json --depth 0', { cwd: ROOT }).toString()
 const pkgList = JSON.parse(output)
@@ -78,6 +82,14 @@ const developmentOnlyPackages = new Set([
   'typescript'
 ])
 
+function runtimePackageForTypes(dependency) {
+  const name = dependency.slice('@types/'.length)
+  const scopedSeparator = name.indexOf('__')
+  return scopedSeparator === -1
+    ? name
+    : `@${name.slice(0, scopedSeparator)}/${name.slice(scopedSeparator + 2)}`
+}
+
 for (const pkg of pkgList) {
   if (!pkg.path) continue
   const jsonPath = resolve(pkg.path, 'package.json')
@@ -89,9 +101,35 @@ for (const pkg of pkgList) {
   }
   const d = JSON.parse(raw)
   if (d.private !== true) {
+    const declarationDependencies = new Set(
+      projectPolicies.get(d.name)?.declarationDependencies ?? []
+    )
     for (const dependency of Object.keys(d.dependencies ?? {})) {
-      if (dependency.startsWith('@types/') || developmentOnlyPackages.has(dependency)) {
+      if (
+        developmentOnlyPackages.has(dependency) ||
+        (dependency.startsWith('@types/') && !declarationDependencies.has(dependency))
+      ) {
         console.log(`PUBLISH SURFACE  ${d.name} exposes development-only dependency ${dependency}`)
+        runtimeToolLeaks++
+      }
+    }
+    for (const dependency of declarationDependencies) {
+      if (!Object.hasOwn(d.dependencies ?? {}, dependency)) {
+        console.log(
+          `DECLARATION DEPENDENCY  ${d.name} must publish governed dependency ${dependency}`
+        )
+        runtimeToolLeaks++
+      }
+      const runtimePackage = runtimePackageForTypes(dependency)
+      const runtimeSurface = {
+        ...d.dependencies,
+        ...d.optionalDependencies,
+        ...d.peerDependencies
+      }
+      if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
+        console.log(
+          `DECLARATION DEPENDENCY  ${d.name} publishes ${dependency} without ${runtimePackage}`
+        )
         runtimeToolLeaks++
       }
     }
