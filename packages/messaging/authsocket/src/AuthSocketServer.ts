@@ -3,6 +3,40 @@ import { ServerOptions, Server as IoServer, Socket as IoSocket } from 'socket.io
 import { WalletInterface, Peer, SessionManager, AsyncSessionManager } from '@bsv/sdk'
 import { SocketServerTransport } from './SocketServerTransport.js'
 
+export interface AuthSocketEventPayload {
+  eventName: string
+  data: unknown
+}
+
+const UNKNOWN_EVENT: AuthSocketEventPayload = Object.freeze({
+  eventName: '_unknown',
+  data: null
+})
+
+const eventEncoder = new TextEncoder()
+const eventDecoder = new TextDecoder('utf-8', { fatal: true })
+
+export function isAuthSocketEventPayload(value: unknown): value is AuthSocketEventPayload {
+  return (
+    value != null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).eventName === 'string'
+  )
+}
+
+export function encodeAuthSocketEventPayload(eventName: string, data: unknown): number[] {
+  return Array.from(eventEncoder.encode(JSON.stringify({ eventName, data })))
+}
+
+export function decodeAuthSocketEventPayload(payload: readonly number[]): AuthSocketEventPayload {
+  try {
+    const value: unknown = JSON.parse(eventDecoder.decode(Uint8Array.from(payload)))
+    return isAuthSocketEventPayload(value) ? value : UNKNOWN_EVENT
+  } catch {
+    return UNKNOWN_EVENT
+  }
+}
+
 export interface AuthSocketServerOptions extends Partial<ServerOptions> {
   wallet: WalletInterface // The server's wallet for signing
   requestedCertificates?: any // e.g. RequestedCertificateSet
@@ -156,8 +190,7 @@ export class AuthSocketServer {
   }
 
   private encodeEventPayload(eventName: string, data: any): number[] {
-    const obj = { eventName, data }
-    return Array.from(Buffer.from(JSON.stringify(obj), 'utf8'))
+    return encodeAuthSocketEventPayload(eventName, data)
   }
 }
 
@@ -245,16 +278,10 @@ export class AuthSocket {
   /////////////////////////////
 
   private encodeEventPayload(eventName: string, data: any): number[] {
-    const json = JSON.stringify({ eventName, data })
-    return Array.from(Buffer.from(json, 'utf8'))
+    return encodeAuthSocketEventPayload(eventName, data)
   }
 
   private decodeEventPayload(payload: number[]): { eventName: string; data: any } {
-    try {
-      const str = Buffer.from(payload).toString('utf8')
-      return JSON.parse(str)
-    } catch {
-      return { eventName: '_unknown', data: null }
-    }
+    return decodeAuthSocketEventPayload(payload)
   }
 }

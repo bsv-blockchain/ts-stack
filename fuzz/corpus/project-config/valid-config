@@ -1,0 +1,1 @@
+{"mode":"add","name":"seed-app","bsvDir":"src/bsv","targets":{"client":"src/client","server":"src/server"}}

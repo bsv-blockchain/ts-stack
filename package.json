@@ -24,6 +24,7 @@
     "build:property": "pnpm -r --filter '!@bsv/ts-stack' --filter '!docs-site' --filter '!example-paymail' run build",
     "test:property": "pnpm build:property && pnpm -r --workspace-concurrency=4 --if-present run test:property",
     "test:mutation": "node scripts/mutation-testing.mjs",
+    "test:fuzz": "node scripts/fuzzing.mjs",
     "audit:security": "pnpm audit --audit-level=high",
     "codegen": "node scripts/generate-openapi-types.mjs",
     "codegen:check": "node scripts/generate-openapi-types.mjs --check",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",
+    "@jazzer.js/core": "4.0.0",
     "@stryker-mutator/core": "9.6.1",
     "@stryker-mutator/jest-runner": "9.6.1",
     "@stryker-mutator/vitest-runner": "9.6.1",

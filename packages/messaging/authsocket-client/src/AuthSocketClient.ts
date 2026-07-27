@@ -10,10 +10,43 @@ import {
   AsyncSessionManager,
   Peer,
   WalletInterface,
-  Utils,
   OriginatorDomainNameStringUnder250Bytes
 } from '@bsv/sdk'
 import { SocketClientTransport } from './SocketClientTransport.js'
+
+export interface AuthSocketEventPayload {
+  eventName: string
+  data: unknown
+}
+
+const UNKNOWN_EVENT: AuthSocketEventPayload = Object.freeze({
+  eventName: '_unknown',
+  data: null
+})
+
+const eventEncoder = new TextEncoder()
+const eventDecoder = new TextDecoder('utf-8', { fatal: true })
+
+export function isAuthSocketEventPayload(value: unknown): value is AuthSocketEventPayload {
+  return (
+    value != null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).eventName === 'string'
+  )
+}
+
+export function encodeAuthSocketEventPayload(eventName: string, data: unknown): number[] {
+  return Array.from(eventEncoder.encode(JSON.stringify({ eventName, data })))
+}
+
+export function decodeAuthSocketEventPayload(payload: readonly number[]): AuthSocketEventPayload {
+  try {
+    const value: unknown = JSON.parse(eventDecoder.decode(Uint8Array.from(payload)))
+    return isAuthSocketEventPayload(value) ? value : UNKNOWN_EVENT
+  } catch {
+    return UNKNOWN_EVENT
+  }
+}
 
 /**
  * Internal class that wraps a Socket.IO client connection with BRC-103 mutual authentication,
@@ -93,17 +126,11 @@ class AuthSocketClientImpl {
   }
 
   private encodeEventPayload(eventName: string, data: any): number[] {
-    const obj = { eventName, data }
-    return Utils.toArray(JSON.stringify(obj), 'utf8')
+    return encodeAuthSocketEventPayload(eventName, data)
   }
 
   private decodeEventPayload(payload: number[]): { eventName: string; data: any } {
-    try {
-      const str = Utils.toUTF8(payload)
-      return JSON.parse(str)
-    } catch {
-      return { eventName: '_unknown', data: undefined }
-    }
+    return decodeAuthSocketEventPayload(payload)
   }
 }
 

@@ -14,6 +14,9 @@ importers:
       '@arethetypeswrong/core':
         specifier: 0.18.5
         version: 0.18.5
+      '@jazzer.js/core':
+        specifier: 4.0.0
+        version: 4.0.0
       '@stryker-mutator/core':
         specifier: 9.6.1
         version: 9.6.1(@types/node@26.1.1)
@@ -327,6 +330,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -413,6 +419,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -477,6 +486,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -511,6 +523,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -2519,6 +2534,27 @@ packages:
     resolution: {integrity: sha512-+Sg6GCR/wy1oSmQDFq4LQDAhm3ETKnorxN+y5nbLULOR3P0c14f2Wurzj3/xqPXtasLFfHd5iRFQ7AJt4KH2cw==}
     engines: {node: '>=8'}
 
+  '@jazzer.js/bug-detectors@4.0.0':
+    resolution: {integrity: sha512-piWVM3/96pFqyRkld75C++qP1shlTKXW3WymPTyyxcnjwNmh+6Mqz37OiCZ+yfsgHzl65yrhdEsuRGf1p6a/eQ==}
+    engines: {node: '>= 14.0.0', npm: '>= 7.0.0'}
+
+  '@jazzer.js/core@4.0.0':
+    resolution: {integrity: sha512-w90xGs5qMOE9KA5AV7OrosTWIOvMaeH5YSSnMr14FNAg2n0kalkurZMwlboz9G3+SccMp4n6QkKExq3b7r1VAQ==}
+    engines: {node: '>= 14.0.0', npm: '>= 7.0.0'}
+    hasBin: true
+
+  '@jazzer.js/fuzzer@4.0.0':
+    resolution: {integrity: sha512-o79aZFwIGA2HLYlubdBiPKq1LHva/w+hT/M6W2qvhu20GACYn5EX19EGjf+D1+9orBov0Nnlpb5ullphGa0N/Q==}
+    engines: {node: '>= 14.0.0', npm: '>= 7.0.0'}
+
+  '@jazzer.js/hooking@4.0.0':
+    resolution: {integrity: sha512-Zq9aTNVwnbndSiYa60+gnoMgNNnR9ASHdUUDYKI4gu1VdFe5h+L2kqPdYtb3YPT4IgpCorYe7nxP+b7I4GOp9w==}
+    engines: {node: '>= 14.0.0', npm: '>= 7.0.0'}
+
+  '@jazzer.js/instrumentor@4.0.0':
+    resolution: {integrity: sha512-qyvKSg/24ZTZyD1rnIPOuwXAh2SuNH0f334ilfgJtEKswWZr0KX508L4nNzFzop9RD5CgsfBDd5C22BdQfwFCA==}
+    engines: {node: '>= 14.0.0', npm: '>= 7.0.0'}
+
   '@jest/console@30.4.1':
     resolution: {integrity: sha512-v3bhyxUh9Hgmo5p6hAOXe14/R3ZxZDOsvHleh4B07z3m/x4/ngPUXEm9XwK4sF4u+f+P2ORb0Ge+MgpaqRMVDA==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
@@ -4254,6 +4290,10 @@ packages:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
 
+  append-transform@2.0.0:
+    resolution: {integrity: sha512-7yeyCEurROLQJFv5Xj4lEGTy0borxepjFv1g22oAdqFu//SrAlDl1O1Nxx15SH1RoliUml6p8dwJW9jvZughhg==}
+    engines: {node: '>=8'}
+
   arg@4.1.3:
     resolution: {integrity: sha512-58S9QDqG0Xx27YwPSt9fJxivjYl432YCwfDMfZ+71RAqUrZef7LrKQZ3LHLOwCS4FLNBplP533Zx895SeOCHvA==}
 
@@ -4566,6 +4606,11 @@ packages:
   clone-deep@4.0.1:
     resolution: {integrity: sha512-neHB9xuzh/wk0dIHweyAXv2aPGZIVk3pLMe+/RNzINf17fe0OG96QroktYAUm7SM1PBnzTabaLboqqxDyMU+SQ==}
     engines: {node: '>=6'}
+
+  cmake-js@8.0.0:
+    resolution: {integrity: sha512-YbUP88RDwCvoQkZhRtGURYm9RIpWdtvZuhT87fKNoLjk8kIFIFeARpKfuZQGdwfH99GZpUmqSfcDrK62X7lTgg==}
+    engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
 
   co@4.6.0:
     resolution: {integrity: sha512-QVb0dM5HvG+uaxitm8wONl7jltx8dqhfU33DcqtOZcLSVIKSDDLDi7+0LbAKiyI8hD9u42m2YxXSkMGWThaecQ==}
@@ -4906,6 +4951,10 @@ packages:
   deepmerge@4.3.1:
     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
     engines: {node: '>=0.10.0'}
+
+  default-require-extensions@3.0.1:
+    resolution: {integrity: sha512-eXTJmRbm2TIt9MgWTsOH1wEuhew6XGZcMeGKCtLedIg/NCsg1iBePXkceTdK4Fii7pzmN9tGsZhKzZ4h7O/fxw==}
+    engines: {node: '>=8'}
 
   defu@6.1.7:
     resolution: {integrity: sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==}
@@ -5708,6 +5757,10 @@ packages:
 
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
+    engines: {node: '>=8'}
+
+  istanbul-lib-hook@3.0.0:
+    resolution: {integrity: sha512-Pt/uge1Q9s+5VAZ+pCo16TYMWPBIl+oaNIjgLQxcX0itS6ueeaA+pEfThZpH8WxhFgCiEb8sAJY6MdUKgiIWaQ==}
     engines: {node: '>=8'}
 
   istanbul-lib-instrument@6.0.3:
@@ -6719,6 +6772,9 @@ packages:
     resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
     engines: {node: ^18 || ^20 || >= 21}
 
+  node-api-headers@1.9.0:
+    resolution: {integrity: sha512-2oNILP4jXwRB4ywnYKjVk1YyJ96n2D4EOVJO6S3oYZ5PtbJrw3Yt9TpAuX3nBLMuzn74rnfGQrv13pS9vC+YiA==}
+
   node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
     engines: {node: 4.x || >=6.0.0}
@@ -6998,6 +7054,9 @@ packages:
     resolution: {integrity: sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==}
     engines: {node: '>=0.4.0'}
 
+  proper-lockfile@4.1.2:
+    resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
+
   property-information@7.2.0:
     resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
 
@@ -7037,6 +7096,10 @@ packages:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
     engines: {node: '>=10.13.0'}
     hasBin: true
+
+  qs@6.15.1:
+    resolution: {integrity: sha512-6YHEFRL9mfgcAvql/XhwTvf5jKcOiiupt2FiJxHkiX1z4j7WL8J/jRHYLluORvc1XxB5rV20KoeK00gVJamspg==}
+    engines: {node: '>=0.6'}
 
   qs@6.15.3:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
@@ -7220,6 +7283,10 @@ packages:
     resolution: {integrity: sha512-TyeJ1zif53BPfHootBGwPRYT1RUt6oGWsaQr8UyZW/eAm9bKoijtvruSDEmZHm92CwS9nj7/fWttqPCgzep8CA==}
     engines: {node: '>= 0.4'}
     hasBin: true
+
+  retry@0.12.0:
+    resolution: {integrity: sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow==}
+    engines: {node: '>= 4'}
 
   rimraf@6.1.3:
     resolution: {integrity: sha512-LKg+Cr2ZF61fkcaK1UdkH2yEBBKnYjTyWzTJT6KNPcSPaiT7HSdhtMXQuN5wkTX0Xu72KQ1l8S42rlmexS2hSA==}
@@ -7633,6 +7700,10 @@ packages:
     resolution: {integrity: sha512-WMi/OQ2axVTf/ykqCQgXiIct+mSQDFdH2fkwhPwgEwvJ1kSzZRiinb0zF2Xb8u4+OqPChmyI6MEu4EezNJz+FQ==}
     hasBin: true
 
+  tmp@0.2.7:
+    resolution: {integrity: sha512-e0votIpp4Uo2AJYSzVHV6xCcawuiez3DzqDAbrTc3YxBkplN6e+dM13ZeIcZnDg/QpSuU2zfZ3rzwY8ukEnaXw==}
+    engines: {node: '>=14.14'}
+
   tmpl@1.0.5:
     resolution: {integrity: sha512-3f0uOEAQwIqGuWW2MVzYg8fV/QNnc/IpuJNG837rLuczAaLVHslWHZQj4IGiEl5Hs3kkbhwL9Ab7Hrsmuj+Smw==}
 
@@ -7929,6 +8000,9 @@ packages:
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
+
+  url-join@4.0.1:
+    resolution: {integrity: sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==}
 
   utf8-codec@1.0.0:
     resolution: {integrity: sha512-S/QSLezp3qvG4ld5PUfXiH7mCFxLKjSVZRFkB3DOjgwHuJPFDkInAXc/anf7BAbHt/D38ozDzL+QMZ6/7gsI6w==}
@@ -9219,6 +9293,50 @@ snapshots:
       resolve-from: 5.0.0
 
   '@istanbuljs/schema@0.1.6': {}
+
+  '@jazzer.js/bug-detectors@4.0.0':
+    dependencies:
+      '@jazzer.js/core': 4.0.0
+      '@jazzer.js/hooking': 4.0.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@jazzer.js/core@4.0.0':
+    dependencies:
+      '@jazzer.js/bug-detectors': 4.0.0
+      '@jazzer.js/fuzzer': 4.0.0
+      '@jazzer.js/hooking': 4.0.0
+      '@jazzer.js/instrumentor': 4.0.0
+      istanbul-lib-coverage: 3.2.2
+      istanbul-lib-report: 3.0.1
+      istanbul-reports: 3.2.0
+      tmp: 0.2.7
+      yargs: 17.7.3
+    transitivePeerDependencies:
+      - supports-color
+
+  '@jazzer.js/fuzzer@4.0.0':
+    dependencies:
+      bindings: 1.5.0
+      cmake-js: 8.0.0
+      node-addon-api: 8.9.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@jazzer.js/hooking@4.0.0': {}
+
+  '@jazzer.js/instrumentor@4.0.0':
+    dependencies:
+      '@babel/core': 7.29.7
+      '@babel/generator': 7.29.7
+      '@jazzer.js/fuzzer': 4.0.0
+      '@jazzer.js/hooking': 4.0.0
+      istanbul-lib-hook: 3.0.0
+      istanbul-lib-instrument: 6.0.3
+      proper-lockfile: 4.1.2
+      source-map-support: 0.5.21
+    transitivePeerDependencies:
+      - supports-color
 
   '@jest/console@30.4.1':
     dependencies:
@@ -11187,6 +11305,10 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.2
 
+  append-transform@2.0.0:
+    dependencies:
+      default-require-extensions: 3.0.1
+
   arg@4.1.3: {}
 
   argparse@1.0.10:
@@ -11501,6 +11623,20 @@ snapshots:
       is-plain-object: 2.0.4
       kind-of: 6.0.3
       shallow-clone: 3.0.1
+
+  cmake-js@8.0.0:
+    dependencies:
+      debug: 4.4.3
+      fs-extra: 11.4.0
+      node-api-headers: 1.9.0
+      rc: 1.2.8
+      semver: 7.8.5
+      tar: 7.5.22
+      url-join: 4.0.1
+      which: 6.0.1
+      yargs: 17.7.3
+    transitivePeerDependencies:
+      - supports-color
 
   co@4.6.0: {}
 
@@ -11835,6 +11971,10 @@ snapshots:
   deep-extend@0.6.0: {}
 
   deepmerge@4.3.1: {}
+
+  default-require-extensions@3.0.1:
+    dependencies:
+      strip-bom: 4.0.0
 
   defu@6.1.7: {}
 
@@ -12693,12 +12833,15 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  isexe@4.0.0:
-    optional: true
+  isexe@4.0.0: {}
 
   isobject@3.0.1: {}
 
   istanbul-lib-coverage@3.2.2: {}
+
+  istanbul-lib-hook@3.0.0:
+    dependencies:
+      append-transform: 2.0.0
 
   istanbul-lib-instrument@6.0.3:
     dependencies:
@@ -14393,6 +14536,8 @@ snapshots:
 
   node-addon-api@8.9.0: {}
 
+  node-api-headers@1.9.0: {}
+
   node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
@@ -14672,6 +14817,12 @@ snapshots:
 
   progress@2.0.3: {}
 
+  proper-lockfile@4.1.2:
+    dependencies:
+      graceful-fs: 4.2.11
+      retry: 0.12.0
+      signal-exit: 3.0.7
+
   property-information@7.2.0: {}
 
   protons-runtime@5.6.0:
@@ -14728,6 +14879,10 @@ snapshots:
       dijkstrajs: 1.0.3
       pngjs: 5.0.0
       yargs: 15.4.1
+
+  qs@6.15.1:
+    dependencies:
+      side-channel: 1.1.1
 
   qs@6.15.3:
     dependencies:
@@ -14971,6 +15126,8 @@ snapshots:
       is-core-module: 2.16.2
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
+
+  retry@0.12.0: {}
 
   rimraf@6.1.3:
     dependencies:
@@ -15513,6 +15670,8 @@ snapshots:
     dependencies:
       tldts-core: 6.1.86
 
+  tmp@0.2.7: {}
+
   tmpl@1.0.5: {}
 
   to-regex-range@5.0.1:
@@ -15700,7 +15859,7 @@ snapshots:
     dependencies:
       des.js: 1.1.0
       js-md4: 0.3.2
-      qs: 6.15.3
+      qs: 6.15.1
       tunnel: 0.0.6
       underscore: 1.13.8
 
@@ -15851,6 +16010,8 @@ snapshots:
       browserslist: 4.28.7
       escalade: 3.2.0
       picocolors: 1.1.1
+
+  url-join@4.0.1: {}
 
   utf8-codec@1.0.0: {}
 
@@ -16092,7 +16253,6 @@ snapshots:
   which@6.0.1:
     dependencies:
       isexe: 4.0.0
-    optional: true
 
   why-is-node-running@2.3.0:
     dependencies:

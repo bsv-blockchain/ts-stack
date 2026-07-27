@@ -22,13 +22,13 @@ function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelat
   }
 }
 
-function vitestTarget(configFile) {
+function vitestTarget(configFile, { related = true } = {}) {
   return {
     testRunner: 'vitest',
     runnerOptions: {
       vitest: {
         configFile,
-        related: true
+        related
       }
     }
   }
@@ -303,6 +303,64 @@ export function buildMutationTargets(repositoryRoot) {
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/BasicTokenModule*.test.ts'], {
         esm: true
       })
+    },
+    'did-client-instructions': {
+      packageDirectory: 'packages/helpers/did-client',
+      manifest: 'packages/helpers/did-client/package.json',
+      propertyTest: 'packages/helpers/did-client/src/__tests__/DIDClient.property.test.ts',
+      mutate: ['src/index.ts:40-67'],
+      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests__/DIDClient.property.test.ts'], {
+        esm: true
+      })
+    },
+    'simple-did': {
+      packageDirectory: 'packages/helpers/simple',
+      manifest: 'packages/helpers/simple/package.json',
+      propertyTest: 'packages/helpers/simple/src/modules/__tests__/did.property.test.ts',
+      mutate: ['src/modules/did.ts:52-58', 'src/modules/did.ts:460-499', 'src/modules/did.ts:542-545'],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/modules/__tests__/did*.test.ts'])
+    },
+    'authsocket-server-events': {
+      packageDirectory: 'packages/messaging/authsocket',
+      manifest: 'packages/messaging/authsocket/package.json',
+      propertyTest: 'packages/messaging/authsocket/src/__tests__/eventPayload.property.test.ts',
+      mutate: ['src/AuthSocketServer.ts:11-14', 'src/AuthSocketServer.ts:19-38'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests__/eventPayload.property.test.ts',
+        '<rootDir>/src/__tests__/AuthSocket.test.ts'
+      ])
+    },
+    'authsocket-client-events': {
+      packageDirectory: 'packages/messaging/authsocket-client',
+      manifest: 'packages/messaging/authsocket-client/package.json',
+      propertyTest:
+        'packages/messaging/authsocket-client/src/__tests__/eventPayload.property.test.ts',
+      mutate: ['src/AuthSocketClient.ts:22-25', 'src/AuthSocketClient.ts:30-49'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests__/eventPayload.property.test.ts',
+        '<rootDir>/src/__tests__/AuthSocketClient.test.ts'
+      ])
+    },
+    'wallet-header-guards': {
+      packageDirectory: 'packages/wallet/wallet-toolbox',
+      manifest: 'packages/wallet/wallet-toolbox/package.json',
+      propertyTest:
+        'packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/__tests__/BlockHeaderApi.property.test.ts',
+      mutate: ['src/services/chaintracker/chaintracks/Api/BlockHeaderApi.ts:46-82'],
+      ...jestTarget(
+        'jest.config.ts',
+        [
+          '<rootDir>/src/services/chaintracker/chaintracks/Api/__tests__/BlockHeaderApi.property.test.ts'
+        ],
+        {
+          config: {
+            moduleNameMapper: {
+              '^@bsv/sdk$': resolve(repositoryRoot, 'packages/sdk/mod.ts'),
+              '^(\\.{1,2}/.*)\\.js$': '$1'
+            }
+          }
+        }
+      )
     }
   }
 }

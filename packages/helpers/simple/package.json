@@ -73,6 +73,7 @@
     "test": "jest",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",
+    "test:property": "jest --runTestsByPath src/modules/__tests__/did.property.test.ts",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
@@ -98,6 +99,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "tsdown": "0.22.14",

@@ -24,7 +24,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "build": "tsdown src/index.ts src/cli.ts --format esm --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/fund-wallet/src/**/*.ts\" \"packages/helpers/fund-wallet/*.{json,ts}\"",
     "lint": "oxlint src --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes cli --skip-types --bin fund-metanet --bin-args --help",

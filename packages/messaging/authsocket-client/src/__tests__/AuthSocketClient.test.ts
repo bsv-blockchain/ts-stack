@@ -161,7 +161,7 @@ describe('AuthSocketClient', () => {
     client.on('_unknown', unknown)
 
     generalMessageListener?.('server-key', Array.from(Buffer.from('{not-json')))
-    expect(unknown).toHaveBeenCalledWith(undefined)
+    expect(unknown).toHaveBeenCalledWith(null)
     expect(client.serverIdentityKey).toBe('server-key')
 
     client.disconnect()

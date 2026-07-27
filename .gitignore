@@ -9,6 +9,8 @@ coverage/
 .nyc_output/
 .stryker-tmp/
 artifacts/mutation/
+artifacts/fuzz/
+.fuzz-corpus/
 *.log
 .DS_Store
 .venv/

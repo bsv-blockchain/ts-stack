@@ -53,7 +53,7 @@
     "test": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --watchman=false",
     "test:watch": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|client/test|mobile/test' --watch",
     "test:coverage": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts --testPathIgnorePatterns=man.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts src/services/chaintracker/chaintracks/Api/__tests__/BlockHeaderApi.property.test.ts --testPathIgnorePatterns=man.test.ts",
     "test:manual": "pnpm build && node ../../../scripts/run-governed-test.mjs manual",
     "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live",
     "bench:action-batch": "pnpm build && jest --runInBand --runTestsByPath benchmarks/action-batch.bench.test.ts --testPathIgnorePatterns=man.test.ts",

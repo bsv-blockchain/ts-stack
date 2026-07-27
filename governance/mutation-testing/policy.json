@@ -266,6 +266,56 @@
       "minimumScore": 82,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "did-client-instructions",
+      "manifest": "packages/helpers/did-client/package.json",
+      "propertyTest": "packages/helpers/did-client/src/__tests__/DIDClient.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet-stored DID revocation derivation instructions controlled by persisted or synchronized data",
+      "minimumScore": 92,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "simple-did",
+      "manifest": "packages/helpers/simple/package.json",
+      "propertyTest": "packages/helpers/simple/src/modules/__tests__/did.property.test.ts",
+      "risk": "critical",
+      "boundary": "Public did:bsv identifiers and compressed secp256k1 identity keys",
+      "minimumScore": 96,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "authsocket-server-events",
+      "manifest": "packages/messaging/authsocket/package.json",
+      "propertyTest": "packages/messaging/authsocket/src/__tests__/eventPayload.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated but untrusted AuthSocket server event payload bytes",
+      "minimumScore": 100,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "authsocket-client-events",
+      "manifest": "packages/messaging/authsocket-client/package.json",
+      "propertyTest": "packages/messaging/authsocket-client/src/__tests__/eventPayload.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated but untrusted AuthSocket client event payload bytes",
+      "minimumScore": 100,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-header-guards",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/__tests__/BlockHeaderApi.property.test.ts",
+      "risk": "high",
+      "boundary": "Arbitrary browser and React Native chain-provider block-header response values",
+      "minimumScore": 95,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }

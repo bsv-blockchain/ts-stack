@@ -43,8 +43,12 @@ export interface LiveBlockHeader extends BlockHeader {
  * Type guard function.
  * @publicbody
  */
-export function isLive(header: BlockHeader | LiveBlockHeader): header is LiveBlockHeader {
-  return (header as LiveBlockHeader).headerId !== undefined
+function isHeaderLike(header: unknown): header is Record<string, unknown> {
+  return header !== null && typeof header === 'object'
+}
+
+export function isLive(header: unknown): header is LiveBlockHeader {
+  return isHeaderLike(header) && header.headerId !== undefined
 }
 
 /** Union of all block header variants */
@@ -54,22 +58,26 @@ export type AnyBlockHeader = BaseBlockHeader | BlockHeader | LiveBlockHeader
  * Type guard function.
  * @publicbody
  */
-export function isBaseBlockHeader(header: AnyBlockHeader): header is BaseBlockHeader {
-  return typeof header.previousHash === 'string'
+export function isBaseBlockHeader(header: unknown): header is BaseBlockHeader {
+  return isHeaderLike(header) && typeof header.previousHash === 'string'
 }
 
 /**
  * Type guard function.
  * @publicbody
  */
-export function isBlockHeader(header: AnyBlockHeader): header is BlockHeader {
-  return 'height' in header && typeof header.previousHash === 'string'
+export function isBlockHeader(header: unknown): header is BlockHeader {
+  return (
+    isHeaderLike(header) && 'height' in header && typeof header.previousHash === 'string'
+  )
 }
 
 /**
  * Type guard function.
  * @publicbody
  */
-export function isLiveBlockHeader(header: AnyBlockHeader): header is LiveBlockHeader {
-  return 'chainWork' in header && typeof header.previousHash === 'string'
+export function isLiveBlockHeader(header: unknown): header is LiveBlockHeader {
+  return (
+    isHeaderLike(header) && 'chainWork' in header && typeof header.previousHash === 'string'
+  )
 }

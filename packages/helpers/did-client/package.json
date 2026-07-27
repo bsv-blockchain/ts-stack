@@ -54,6 +54,7 @@
     "test": "jest",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",
+    "test:property": "jest --runTestsByPath src/__tests__/DIDClient.property.test.ts",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
@@ -64,6 +65,7 @@
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "ts-jest": "^29.4.12",

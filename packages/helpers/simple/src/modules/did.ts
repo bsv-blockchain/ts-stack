@@ -47,6 +47,16 @@ function base64url(bytes: number[]): string {
   return encoded
 }
 
+export function isCompressedPublicKey(value: string): boolean {
+  if (!/^0[23][0-9a-fA-F]{64}$/.test(value)) return false
+  try {
+    PublicKey.fromString(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function pubKeyToJwk(compressedHex: string): { kty: string; crv: string; x: string; y: string } {
   const pubKey = PublicKey.fromString(compressedHex)
   const xBytes = pubKey.getX().toArray('be', 32)
@@ -457,7 +467,7 @@ export class DID {
     if (/^[0-9a-f]{64}$/.test(identifier)) {
       return { method: 'bsv', identifier }
     }
-    if (/^[0-9a-fA-F]{66}$/.test(identifier)) {
+    if (isCompressedPublicKey(identifier)) {
       // Legacy pubkey-based DID
       return { method: 'bsv', identifier }
     }
@@ -530,8 +540,8 @@ export class DID {
    * Generate a legacy DID Document from an identity key (compressed public key hex).
    */
   static fromIdentityKey(identityKey: string): DIDDocument {
-    if (identityKey === '' || !/^[0-9a-fA-F]{66}$/.test(identityKey)) {
-      throw new DIDError('Invalid identity key: must be a 66-character hex compressed public key')
+    if (!isCompressedPublicKey(identityKey)) {
+      throw new DIDError('Invalid identity key: must be a valid compressed secp256k1 public key')
     }
 
     const did = `${DID_PREFIX}${identityKey}`

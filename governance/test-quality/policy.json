@@ -17,7 +17,11 @@
       "packages/wallet/wallet-toolbox/package.json",
       "packages/overlays/topics/package.json",
       "packages/helpers/did/package.json",
+      "packages/helpers/did-client/package.json",
+      "packages/helpers/simple/package.json",
       "packages/helpers/ts-templates/package.json",
+      "packages/messaging/authsocket/package.json",
+      "packages/messaging/authsocket-client/package.json",
       "packages/messaging/ts-paymail/package.json",
       "packages/network/ts-p2p/package.json",
       "packages/middleware/auth/package.json",
@@ -355,37 +359,68 @@
           "Session approval is cached independently for each arbitrary originator.",
           "Array-shaped request arguments are rejected at the authorization boundary."
         ]
+      },
+      {
+        "path": "packages/helpers/did-client/src/__tests__/DIDClient.property.test.ts",
+        "manifest": "packages/helpers/did-client/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-stored DID revocation derivation instructions controlled by persisted or synchronized data",
+        "target": "Canonical base64 derivation material, malformed-shape rejection, and arbitrary-input parser totality",
+        "invariants": [
+          "Every non-empty byte pair round-trips through canonical base64 derivation instructions.",
+          "Arbitrary untrusted instruction text never escapes the tolerant parser.",
+          "Parsed instructions always contain two non-empty canonical base64 strings."
+        ]
+      },
+      {
+        "path": "packages/helpers/simple/src/modules/__tests__/did.property.test.ts",
+        "manifest": "packages/helpers/simple/package.json",
+        "risk": "critical",
+        "boundary": "Public did:bsv identifiers and compressed secp256k1 identity keys",
+        "target": "DID transaction identifier round trips, real curve-point validation, and arbitrary-input totality",
+        "invariants": [
+          "Every lowercase 32-byte transaction identifier round-trips through did:bsv serialization.",
+          "Only valid compressed secp256k1 points are accepted as legacy identity identifiers.",
+          "Arbitrary text produces a validation result consistent with the throwing parser."
+        ]
+      },
+      {
+        "path": "packages/messaging/authsocket/src/__tests__/eventPayload.property.test.ts",
+        "manifest": "packages/messaging/authsocket/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated but untrusted AuthSocket server event payload bytes",
+        "target": "JSON event round trips, malformed-envelope fail-closed behavior, and arbitrary-byte decoder totality",
+        "invariants": [
+          "Every JSON-compatible event payload round-trips with canonical JSON semantics.",
+          "Arbitrary authenticated bytes always decode to a string-named event without throwing.",
+          "Valid JSON values without a string event name map to the explicit unknown event."
+        ]
+      },
+      {
+        "path": "packages/messaging/authsocket-client/src/__tests__/eventPayload.property.test.ts",
+        "manifest": "packages/messaging/authsocket-client/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated but untrusted AuthSocket client event payload bytes",
+        "target": "JSON event round trips, malformed-envelope fail-closed behavior, and arbitrary-byte decoder totality",
+        "invariants": [
+          "Every JSON-compatible event payload round-trips with canonical JSON semantics.",
+          "Arbitrary authenticated bytes always decode to a string-named event without throwing.",
+          "Valid JSON values without a string event name map to the explicit unknown event."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Api/__tests__/BlockHeaderApi.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "high",
+        "boundary": "Arbitrary browser and React Native chain-provider block-header response values",
+        "target": "Total type-guard execution and exact block-header discriminator requirements",
+        "invariants": [
+          "Every guard returns a boolean without throwing for arbitrary provider values.",
+          "Successful classifications require their declared previous-hash, height, header, or chain-work discriminator."
+        ]
       }
     ],
     "exclusions": [
-      {
-        "manifest": "packages/helpers/did-client/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "This package orchestrates wallet, PushDrop, DID, and overlay APIs; its independent codecs and advertisement boundaries are governed in @bsv/did and the overlay suites.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
-      },
-      {
-        "manifest": "packages/helpers/simple/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "This convenience facade composes wallet, DID, Message Box, overlay, and token clients without owning an independent wire codec or authorization parser.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
-      },
-      {
-        "manifest": "packages/messaging/authsocket/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "The server package is a Socket.IO transport for SDK BRC-103 AuthMessage values; authentication byte binding is governed by @bsv/auth and the SDK.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
-      },
-      {
-        "manifest": "packages/messaging/authsocket-client/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "The client package forwards SDK AuthMessage values through Socket.IO and owns no independent parser, canonicalizer, or authorization decision.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
-      },
       {
         "manifest": "packages/messaging/ts-paymail/docs/examples/package.json",
         "kind": "example-or-platform",
@@ -403,14 +438,14 @@
       {
         "manifest": "packages/wallet/wallet-toolbox/client/package.json",
         "kind": "adapter-or-composition",
-        "rationale": "This client surface exposes wallet-toolbox behavior whose authenticated binary framing and storage invariants are governed in the parent package.",
+        "rationale": "This browser package is a build entrypoint over the parent wallet-toolbox sources; its block-header boundary is fuzzed in the parent suite and its shipped exports retain direct browser contract tests.",
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-08-26"
       },
       {
         "manifest": "packages/wallet/wallet-toolbox/mobile/package.json",
-        "kind": "example-or-platform",
-        "rationale": "This React Native platform harness exercises the governed wallet and relay packages but does not own an independent arbitrary-input boundary.",
+        "kind": "adapter-or-composition",
+        "rationale": "This React Native package is a build entrypoint over the parent wallet-toolbox sources; its block-header boundary is fuzzed in the parent suite and its shipped exports retain direct mobile contract tests.",
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-08-26"
       }

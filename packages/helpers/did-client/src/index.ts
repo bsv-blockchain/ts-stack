@@ -32,6 +32,43 @@ export interface DIDClientOptions {
   acceptDelayedBroadcast?: boolean
 }
 
+export interface DIDDerivationInstructions {
+  derivationPrefix: Base64String
+  derivationSuffix: Base64String
+}
+
+export function isCanonicalBase64(value: unknown): value is Base64String {
+  if (
+    typeof value !== 'string' ||
+    value === '' ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
+  ) {
+    return false
+  }
+  return Utils.toBase64(Utils.toArray(value, 'base64')) === value
+}
+
+export function parseDIDDerivationInstructions(
+  encoded: string
+): DIDDerivationInstructions | undefined {
+  try {
+    const value: unknown = JSON.parse(encoded)
+    const record = value as Record<string, unknown> | null
+    if (
+      !isCanonicalBase64(record?.derivationPrefix) ||
+      !isCanonicalBase64(record?.derivationSuffix)
+    ) {
+      return undefined
+    }
+    return {
+      derivationPrefix: record.derivationPrefix,
+      derivationSuffix: record.derivationSuffix
+    }
+  } catch {
+    return undefined
+  }
+}
+
 /* ────────────────────────────────────────────────────────────
  * DIDClient
  * ────────────────────────────────────────────────────────── */
@@ -195,20 +232,15 @@ export class DIDClient {
     }
 
     // 2. Extract derivation parameters
-    let derivationPrefix: Base64String
-    let derivationSuffix: Base64String
-    try {
-      const instructions = JSON.parse(output.customInstructions)
-      derivationPrefix = instructions.derivationPrefix
-      derivationSuffix = instructions.derivationSuffix
-    } catch {
-      // customInstructions is not valid JSON — return a structured error rather than throwing.
+    const instructions = parseDIDDerivationInstructions(output.customInstructions)
+    if (instructions === undefined) {
       return {
         status: 'error',
         code: 'ERR_INVALID_INSTRUCTIONS',
-        description: 'Unable to parse DID derivation parameters'
+        description: 'Unable to parse canonical DID derivation parameters'
       }
     }
+    const { derivationPrefix, derivationSuffix } = instructions
 
     const subjectTag = output.tags?.find((tag: string) => tag.startsWith('did-token-subject-'))
     const subject = subjectTag?.substring('did-token-subject-'.length)

@@ -86,8 +86,8 @@ describe('DIDClient', () => {
             outpoint: `${'0'.repeat(64)}.0`,
             satoshis: 1,
             customInstructions: JSON.stringify({
-              derivationPrefix: 'prefix',
-              derivationSuffix: 'suffix'
+              derivationPrefix: 'cHJlZml4',
+              derivationSuffix: 'c3VmZml4'
             }),
             tags
           }
