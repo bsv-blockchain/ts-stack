@@ -33,12 +33,34 @@ import {
   SecurityLevel,
   SignActionArgs,
   SignActionResult,
-  VersionString7To30Bytes,
+  VersionString7To30Bytes
 } from '../Wallet.interfaces.js'
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
 import { toOriginHeader } from './utils/toOriginHeader.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
+
+function deserializeWalletError(data: any): Error | undefined {
+  switch (data.code) {
+    case 5:
+      return new WERR_REVIEW_ACTIONS(
+        data.reviewActionResults,
+        data.sendWithResults,
+        data.txid,
+        data.tx,
+        data.noSendChange
+      )
+    case 6: {
+      const error = new WERR_INVALID_PARAMETER(data.parameter)
+      error.message = data.message
+      return error
+    }
+    case 7:
+      return new WERR_INSUFFICIENT_FUNDS(data.totalSatoshisNeeded, data.moreSatoshisNeeded)
+    default:
+      return undefined
+  }
+}
 
 export default class HTTPWalletJSON implements WalletInterface {
   baseUrl: string
@@ -56,19 +78,21 @@ export default class HTTPWalletJSON implements WalletInterface {
     this.httpClient = httpClient
 
     // Detect if we're in a browser environment
-    const isBrowser = typeof globalThis.window !== 'undefined' && typeof document !== 'undefined' && globalThis.window?.origin !== 'file://'
+    const isBrowser =
+      globalThis.window !== undefined &&
+      typeof document !== 'undefined' &&
+      globalThis.window?.origin !== 'file://'
 
     this.api = async (call: string, args: object) => {
       // In browser environments, let the browser handle Origin header automatically
       // In Node.js environments, we need to set it manually if originator is provided
-      const origin = !isBrowser && this.originator
-        ? toOriginHeader(this.originator, 'http')
-        : undefined
+      const origin =
+        !isBrowser && this.originator ? toOriginHeader(this.originator, 'http') : undefined
 
       if (!isBrowser && origin === undefined) {
         throw new Error(
           'HTTPWalletJSON: originator is required when using the HTTP substrate in Node.js. ' +
-          'Pass an originator (e.g. "example.com") to the constructor.'
+            'Pass an originator (e.g. "example.com") to the constructor.'
         )
       }
 
@@ -78,7 +102,7 @@ export default class HTTPWalletJSON implements WalletInterface {
           Accept: 'application/json',
           'Content-Type': 'application/json',
           ...(origin ? { Origin: origin } : {}),
-          ...(origin ? { Originator: origin } : {}),
+          ...(origin ? { Originator: origin } : {})
         },
         body: JSON.stringify(args)
       })
@@ -88,17 +112,8 @@ export default class HTTPWalletJSON implements WalletInterface {
       // Check the HTTP status on the original response
       if (!res.ok) {
         if (res.status === 400 && data.isError) {
-          let err: any
-          switch (data.code) {
-            case 5:
-              err = new WERR_REVIEW_ACTIONS(data.reviewActionResults, data.sendWithResults, data.txid, data.tx, data.noSendChange); break;
-            case 6:
-              err = new WERR_INVALID_PARAMETER(data.parameter); err.message = data.message; break;
-            case 7:
-              err = new WERR_INSUFFICIENT_FUNDS(data.totalSatoshisNeeded, data.moreSatoshisNeeded); break;
-            default: break;
-          }
-          if (err) throw err
+          const walletError = deserializeWalletError(data)
+          if (walletError !== undefined) throw walletError
         }
         const err = {
           call,
@@ -112,38 +127,34 @@ export default class HTTPWalletJSON implements WalletInterface {
   }
 
   async createAction(args: CreateActionArgs): Promise<CreateActionResult> {
-    return await this.api('createAction', args) as CreateActionResult
+    return (await this.api('createAction', args)) as CreateActionResult
   }
 
   async signAction(args: SignActionArgs): Promise<SignActionResult> {
-    return await this.api('signAction', args) as SignActionResult
+    return (await this.api('signAction', args)) as SignActionResult
   }
 
-  async abortAction(args: {
-    reference: Base64String
-  }): Promise<{ aborted: true }> {
-    return await this.api('abortAction', args) as { aborted: true }
+  async abortAction(args: { reference: Base64String }): Promise<{ aborted: true }> {
+    return (await this.api('abortAction', args)) as { aborted: true }
   }
 
   async listActions(args: ListActionsArgs): Promise<ListActionsResult> {
-    return await this.api('listActions', args) as ListActionsResult
+    return (await this.api('listActions', args)) as ListActionsResult
   }
 
-  async internalizeAction(
-    args: InternalizeActionArgs
-  ): Promise<{ accepted: true }> {
-    return await this.api('internalizeAction', args) as { accepted: true }
+  async internalizeAction(args: InternalizeActionArgs): Promise<{ accepted: true }> {
+    return (await this.api('internalizeAction', args)) as { accepted: true }
   }
 
   async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult> {
-    return await this.api('listOutputs', args) as ListOutputsResult
+    return (await this.api('listOutputs', args)) as ListOutputsResult
   }
 
   async relinquishOutput(args: {
     basket: BasketStringUnder300Bytes
     output: OutpointString
   }): Promise<{ relinquished: true }> {
-    return await this.api('relinquishOutput', args) as { relinquished: true }
+    return (await this.api('relinquishOutput', args)) as { relinquished: true }
   }
 
   async getPublicKey(args: {
@@ -156,7 +167,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     counterparty?: PubKeyHex
     forSelf?: BooleanDefaultFalse
   }): Promise<{ publicKey: PubKeyHex }> {
-    return await this.api('getPublicKey', args) as { publicKey: PubKeyHex }
+    return (await this.api('getPublicKey', args)) as { publicKey: PubKeyHex }
   }
 
   async revealCounterpartyKeyLinkage(args: {
@@ -172,7 +183,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     encryptedLinkage: Byte[]
     encryptedLinkageProof: number[]
   }> {
-    return await this.api('revealCounterpartyKeyLinkage', args) as {
+    return (await this.api('revealCounterpartyKeyLinkage', args)) as {
       prover: PubKeyHex
       verifier: PubKeyHex
       counterparty: PubKeyHex
@@ -199,7 +210,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     encryptedLinkageProof: Byte[]
     proofType: Byte
   }> {
-    return await this.api('revealSpecificKeyLinkage', args) as {
+    return (await this.api('revealSpecificKeyLinkage', args)) as {
       prover: PubKeyHex
       verifier: PubKeyHex
       counterparty: PubKeyHex
@@ -220,7 +231,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ ciphertext: Byte[] }> {
-    return await this.api('encrypt', args) as { ciphertext: Byte[] }
+    return (await this.api('encrypt', args)) as { ciphertext: Byte[] }
   }
 
   async decrypt(args: {
@@ -232,7 +243,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ plaintext: Byte[] }> {
-    return await this.api('decrypt', args) as { plaintext: Byte[] }
+    return (await this.api('decrypt', args)) as { plaintext: Byte[] }
   }
 
   async createHmac(args: {
@@ -244,7 +255,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ hmac: Byte[] }> {
-    return await this.api('createHmac', args) as { hmac: Byte[] }
+    return (await this.api('createHmac', args)) as { hmac: Byte[] }
   }
 
   async verifyHmac(args: {
@@ -257,7 +268,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {
-    return await this.api('verifyHmac', args) as { valid: true }
+    return (await this.api('verifyHmac', args)) as { valid: true }
   }
 
   async createSignature(args: {
@@ -270,7 +281,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ signature: Byte[] }> {
-    return await this.api('createSignature', args) as { signature: Byte[] }
+    return (await this.api('createSignature', args)) as { signature: Byte[] }
   }
 
   async verifySignature(args: {
@@ -285,13 +296,11 @@ export default class HTTPWalletJSON implements WalletInterface {
     forSelf?: BooleanDefaultFalse
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {
-    return await this.api('verifySignature', args) as { valid: true }
+    return (await this.api('verifySignature', args)) as { valid: true }
   }
 
-  async acquireCertificate(
-    args: AcquireCertificateArgs
-  ): Promise<AcquireCertificateResult> {
-    return await this.api('acquireCertificate', args) as AcquireCertificateResult
+  async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult> {
+    return (await this.api('acquireCertificate', args)) as AcquireCertificateResult
   }
 
   async listCertificates(args: {
@@ -302,13 +311,11 @@ export default class HTTPWalletJSON implements WalletInterface {
     privileged?: BooleanDefaultFalse
     privilegedReason?: DescriptionString5to50Bytes
   }): Promise<ListCertificatesResult> {
-    return await this.api('listCertificates', args) as ListCertificatesResult
+    return (await this.api('listCertificates', args)) as ListCertificatesResult
   }
 
-  async proveCertificate(
-    args: ProveCertificateArgs
-  ): Promise<ProveCertificateResult> {
-    return await this.api('proveCertificate', args) as ProveCertificateResult
+  async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult> {
+    return (await this.api('proveCertificate', args)) as ProveCertificateResult
   }
 
   async relinquishCertificate(args: {
@@ -316,7 +323,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     serialNumber: Base64String
     certifier: PubKeyHex
   }): Promise<{ relinquished: true }> {
-    return await this.api('relinquishCertificate', args) as { relinquished: true }
+    return (await this.api('relinquishCertificate', args)) as { relinquished: true }
   }
 
   async discoverByIdentityKey(args: {
@@ -325,7 +332,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     limit?: PositiveIntegerDefault10Max10000
     offset?: PositiveIntegerOrZero
   }): Promise<DiscoverCertificatesResult> {
-    return await this.api('discoverByIdentityKey', args) as DiscoverCertificatesResult
+    return (await this.api('discoverByIdentityKey', args)) as DiscoverCertificatesResult
   }
 
   async discoverByAttributes(args: {
@@ -334,32 +341,30 @@ export default class HTTPWalletJSON implements WalletInterface {
     limit?: PositiveIntegerDefault10Max10000
     offset?: PositiveIntegerOrZero
   }): Promise<DiscoverCertificatesResult> {
-    return await this.api('discoverByAttributes', args) as DiscoverCertificatesResult
+    return (await this.api('discoverByAttributes', args)) as DiscoverCertificatesResult
   }
 
   async isAuthenticated(args: object): Promise<{ authenticated: true }> {
-    return await this.api('isAuthenticated', args) as { authenticated: true }
+    return (await this.api('isAuthenticated', args)) as { authenticated: true }
   }
 
   async waitForAuthentication(args: object): Promise<{ authenticated: true }> {
-    return await this.api('waitForAuthentication', args) as { authenticated: true }
+    return (await this.api('waitForAuthentication', args)) as { authenticated: true }
   }
 
   async getHeight(args: object): Promise<{ height: PositiveInteger }> {
-    return await this.api('getHeight', args) as { height: PositiveInteger }
+    return (await this.api('getHeight', args)) as { height: PositiveInteger }
   }
 
-  async getHeaderForHeight(args: {
-    height: PositiveInteger
-  }): Promise<{ header: HexString }> {
-    return await this.api('getHeaderForHeight', args) as { header: HexString }
+  async getHeaderForHeight(args: { height: PositiveInteger }): Promise<{ header: HexString }> {
+    return (await this.api('getHeaderForHeight', args)) as { header: HexString }
   }
 
   async getNetwork(args: object): Promise<{ network: 'mainnet' | 'testnet' }> {
-    return await this.api('getNetwork', args) as { network: 'mainnet' | 'testnet' }
+    return (await this.api('getNetwork', args)) as { network: 'mainnet' | 'testnet' }
   }
 
   async getVersion(args: object): Promise<{ version: VersionString7To30Bytes }> {
-    return await this.api('getVersion', args) as { version: VersionString7To30Bytes }
+    return (await this.api('getVersion', args)) as { version: VersionString7To30Bytes }
   }
 }

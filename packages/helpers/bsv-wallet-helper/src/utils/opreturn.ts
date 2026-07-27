@@ -34,6 +34,48 @@ const toHexField = (field: string | number[]): string => {
   return Utils.toHex(Utils.toArray(field))
 }
 
+const validateScript = (script: LockingScript): void => {
+  if (script == null || typeof script.toASM !== 'function') {
+    throw new Error('Invalid script parameter: must be a LockingScript instance')
+  }
+  if (script.toASM().includes('OP_RETURN')) {
+    throw new Error(
+      'Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.'
+    )
+  }
+}
+
+const validateField = (field: unknown, index: number): void => {
+  if (typeof field === 'string') return
+  if (!Array.isArray(field)) {
+    throw new TypeError(
+      `Invalid field at index ${index}: must be a string or number array, got ${typeof field}`
+    )
+  }
+
+  const sampleSize = Math.min(field.length, 100)
+  for (let sampleIndex = 0; sampleIndex < sampleSize; sampleIndex++) {
+    const fieldIndex = Math.floor((sampleIndex / sampleSize) * field.length)
+    if (typeof field[fieldIndex] !== 'number') {
+      throw new TypeError(
+        `Invalid field at index ${index}: array contains non-number at position ${fieldIndex}`
+      )
+    }
+  }
+}
+
+const validateFields = (fields: Array<string | number[]>): void => {
+  if (!Array.isArray(fields)) {
+    throw new TypeError('Invalid fields parameter: must be an array of strings or number arrays')
+  }
+  if (fields.length === 0) {
+    throw new Error('At least one data field is required for OP_RETURN')
+  }
+  for (let index = 0; index < fields.length; index++) {
+    validateField(fields[index], index)
+  }
+}
+
 /**
  * Appends OP_RETURN data fields to a locking script for adding metadata.
  *
@@ -52,52 +94,8 @@ export const addOpReturnData = (
   script: LockingScript,
   fields: Array<string | number[]>
 ): LockingScript => {
-  // Validate script parameter
-  if (script == null || typeof script.toASM !== 'function') {
-    throw new Error('Invalid script parameter: must be a LockingScript instance')
-  }
-
-  // Check if script already contains OP_RETURN
-  const scriptAsm = script.toASM()
-  if (scriptAsm.includes('OP_RETURN')) {
-    throw new Error(
-      'Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.'
-    )
-  }
-
-  // Validate fields parameter
-  if (!Array.isArray(fields)) {
-    throw new TypeError('Invalid fields parameter: must be an array of strings or number arrays')
-  }
-
-  if (fields.length === 0) {
-    throw new Error('At least one data field is required for OP_RETURN')
-  }
-
-  // Validate each field type
-  for (let i = 0; i < fields.length; i++) {
-    const field = fields[i]
-    const isString = typeof field === 'string'
-
-    if (!isString) {
-      if (!Array.isArray(field)) {
-        throw new TypeError(
-          `Invalid field at index ${i}: must be a string or number array, got ${typeof field}`
-        )
-      }
-
-      // For number arrays, validate only first 100 elements
-      const sampleSize = Math.min(field.length, 100)
-      for (let j = 0; j < sampleSize; j++) {
-        const idx = Math.floor((j / sampleSize) * field.length)
-        if (typeof field[idx] !== 'number') {
-          throw new TypeError(
-            `Invalid field at index ${i}: array contains non-number at position ${idx}`
-          )
-        }
-      }
-    }
-  }
+  validateScript(script)
+  validateFields(fields)
 
   // Convert all fields to hex
   const hexFields = fields.map(toHexField)

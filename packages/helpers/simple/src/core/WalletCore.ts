@@ -7,7 +7,8 @@ import {
   PushDrop,
   SecurityLevel,
   Random,
-  WalletInterface
+  WalletInterface,
+  CreateActionOutput
 } from '@bsv/sdk'
 import { PeerPayClient } from '@bsv/message-box-client'
 import { mergeDefaults } from './defaults'
@@ -19,6 +20,7 @@ import {
   PaymentOptions,
   SendOptions,
   SendResult,
+  SendOutputSpec,
   SendOutputDetail,
   TransactionResult,
   PaymentRequest,
@@ -148,6 +150,90 @@ export abstract class WalletCore {
     return Array.from(Utils.toArray(String(element), 'utf8'))
   }
 
+  private buildDataOnlyOutput(
+    spec: SendOutputSpec,
+    index: number,
+    description: string
+  ): { actionOutput: CreateActionOutput; detail: SendOutputDetail } {
+    const script = new Script().writeOpCode(OP.OP_FALSE).writeOpCode(OP.OP_RETURN)
+    for (const element of spec.data ?? []) {
+      script.writeBin(this.convertDataElement(element))
+    }
+    return {
+      actionOutput: {
+        lockingScript: script.toHex(),
+        satoshis: 0,
+        outputDescription: description,
+        ...(spec.basket == null ? {} : { basket: spec.basket })
+      },
+      detail: { index, type: 'op_return', satoshis: 0, description }
+    }
+  }
+
+  private async buildSendOutput(
+    client: WalletInterface,
+    spec: SendOutputSpec,
+    index: number
+  ): Promise<{ actionOutput: CreateActionOutput; detail: SendOutputDetail }> {
+    const description = spec.description ?? this.defaults.outputDescription
+
+    if (spec.data != null && spec.to == null) {
+      return this.buildDataOnlyOutput(spec, index, description)
+    }
+
+    if (spec.to != null && spec.data != null) {
+      const satoshis = spec.satoshis ?? 1
+      if (satoshis < 1) throw new Error(`PushDrop output #${index} needs satoshis >= 1`)
+      const protocolID = (spec.protocolID ?? this.defaults.tokenProtocolID) as [
+        SecurityLevel,
+        string
+      ]
+      const keyID = spec.keyID ?? Utils.toBase64(Random(8))
+      const basket = spec.basket ?? this.defaults.tokenBasket
+      const fields = spec.data.map(element => this.convertDataElement(element))
+      const lockingScript = await new PushDrop(client).lock(
+        fields,
+        protocolID,
+        keyID,
+        'self',
+        true,
+        false
+      )
+
+      return {
+        actionOutput: {
+          lockingScript: lockingScript.toHex(),
+          satoshis,
+          outputDescription: description,
+          basket,
+          customInstructions: JSON.stringify({ protocolID, keyID, counterparty: 'self' }),
+          tags: ['token']
+        },
+        detail: { index, type: 'pushdrop', satoshis, description }
+      }
+    }
+
+    if (spec.to != null && spec.data == null) {
+      const satoshis = spec.satoshis ?? 0
+      if (satoshis <= 0) throw new Error(`P2PKH output #${index} needs satoshis > 0`)
+      const lockingScript = new P2PKH().lock(PublicKey.fromString(spec.to).toAddress()).toHex()
+
+      return {
+        actionOutput: {
+          lockingScript,
+          satoshis,
+          outputDescription: description,
+          ...(spec.basket == null ? {} : { basket: spec.basket })
+        },
+        detail: { index, type: 'p2pkh', satoshis, description }
+      }
+    }
+
+    throw new Error(
+      `Output #${index}: must have 'to' (P2PKH), 'data' (OP_RETURN), or both (PushDrop)`
+    )
+  }
+
   async send(options: SendOptions): Promise<SendResult> {
     try {
       if (options.outputs == null || options.outputs.length === 0) {
@@ -159,65 +245,9 @@ export abstract class WalletCore {
       const outputDetails: SendOutputDetail[] = []
 
       for (let i = 0; i < options.outputs.length; i++) {
-        const spec = options.outputs[i]
-        const desc = spec.description ?? this.defaults.outputDescription
-
-        if (spec.data != null && spec.to == null) {
-          // OP_RETURN: data fields, no recipient
-          const script = new Script().writeOpCode(OP.OP_FALSE).writeOpCode(OP.OP_RETURN)
-          for (const element of spec.data) {
-            script.writeBin(this.convertDataElement(element))
-          }
-          actionOutputs.push({
-            lockingScript: script.toHex(),
-            satoshis: 0,
-            outputDescription: desc,
-            ...(spec.basket == null ? {} : { basket: spec.basket })
-          })
-          outputDetails.push({ index: i, type: 'op_return', satoshis: 0, description: desc })
-        } else if (spec.to != null && spec.data != null) {
-          // PushDrop: data fields locked to recipient
-          const sats = spec.satoshis ?? 1
-          if (sats < 1) throw new Error(`PushDrop output #${i} needs satoshis >= 1`)
-          const protocolID = (spec.protocolID ?? this.defaults.tokenProtocolID) as [
-            SecurityLevel,
-            string
-          ]
-          const keyID = spec.keyID ?? Utils.toBase64(Random(8))
-          const basket = spec.basket ?? this.defaults.tokenBasket
-
-          const fields = spec.data.map(el => this.convertDataElement(el))
-          const pushdrop = new PushDrop(client)
-          const lockingScript = await pushdrop.lock(fields, protocolID, keyID, 'self', true, false)
-
-          actionOutputs.push({
-            lockingScript: lockingScript.toHex(),
-            satoshis: sats,
-            outputDescription: desc,
-            basket,
-            customInstructions: JSON.stringify({ protocolID, keyID, counterparty: 'self' }),
-            tags: ['token']
-          })
-          outputDetails.push({ index: i, type: 'pushdrop', satoshis: sats, description: desc })
-        } else if (spec.to != null && spec.data == null) {
-          // P2PKH: simple payment
-          const sats = spec.satoshis ?? 0
-          if (sats <= 0) throw new Error(`P2PKH output #${i} needs satoshis > 0`)
-
-          const lockingScript = new P2PKH().lock(PublicKey.fromString(spec.to).toAddress()).toHex()
-
-          actionOutputs.push({
-            lockingScript,
-            satoshis: sats,
-            outputDescription: desc,
-            ...(spec.basket == null ? {} : { basket: spec.basket })
-          })
-          outputDetails.push({ index: i, type: 'p2pkh', satoshis: sats, description: desc })
-        } else {
-          throw new Error(
-            `Output #${i}: must have 'to' (P2PKH), 'data' (OP_RETURN), or both (PushDrop)`
-          )
-        }
+        const { actionOutput, detail } = await this.buildSendOutput(client, options.outputs[i], i)
+        actionOutputs.push(actionOutput)
+        outputDetails.push(detail)
       }
 
       const result = await client.createAction({

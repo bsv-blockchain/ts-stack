@@ -3,7 +3,7 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.2.3'
+version: '2.2.4'
 npm: '@bsv/sdk'
 last_updated: '2026-07-27'
 last_verified: '2026-07-27'

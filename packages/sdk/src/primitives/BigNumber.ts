@@ -570,11 +570,7 @@ export default class BigNumber {
 
   private toBaseString(base: number, padding: number): string {
     if (this._magnitude === 0n) {
-      let out = '0'
-      if (padding > 1) {
-        while (out.length < padding) out = '0' + out
-      }
-      return out
+      return BigNumber._paddedZero(padding)
     }
 
     let groupSize = BigNumber.groupSizes[base]
@@ -599,6 +595,14 @@ export default class BigNumber {
       while (out.length < padding) out = '0' + out
     }
     return (this._sign === 1 ? '-' : '') + out
+  }
+
+  private static _paddedZero(padding: number): string {
+    let out = '0'
+    if (padding > 1) {
+      while (out.length < padding) out = '0' + out
+    }
+    return out
   }
 
   /** Returns a chunk string zero-padded to groupSize (used by toBaseString for interior chunks). */
