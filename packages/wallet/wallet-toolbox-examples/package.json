@@ -50,7 +50,8 @@
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
     "ts2md": "^0.2.8",
-    "typescript": "^6.0.3"
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
     "@bsv/sdk": "workspace:^",

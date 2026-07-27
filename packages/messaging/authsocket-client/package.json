@@ -77,7 +77,8 @@
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsdown": "0.22.14",
-    "typescript": "^6.0.3",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "webpack": "^5.109.0",
     "webpack-cli": "^7.2.1"
   },

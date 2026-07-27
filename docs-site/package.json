@@ -38,7 +38,8 @@
     "remark-gfm": "^4.0.1",
     "remark-mdx-frontmatter": "^5.2.0",
     "rollup": "^4.62.2",
-    "typescript": "^6.0.3",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "^8.1.5"
   },
   "license": "SEE LICENSE IN LICENSE.txt"

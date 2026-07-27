@@ -50,19 +50,21 @@
       "removeWhen": "Remove when the release-sync design no longer regenerates infrastructure locks or OpenSSF Scorecard correctly distinguishes lockfile-only refreshes from unpinned package installation."
     },
     {
-      "id": "typescript-7-coordinated-migration",
-      "category": "dependency-hold",
-      "target": "Dependabot semver-major updates for typescript",
+      "id": "typescript-7-compiler-api-compatibility",
+      "category": "toolchain",
+      "target": "TypeScript 6 compatibility API used by ts-jest, ts-node, tsdown, and other compiler-API consumers",
       "owner": "ts-stack-maintainers",
-      "reason": "Dependabot PR #332 attempted a workspace-wide TypeScript 6.0.3 to 7.0.2 update and failed the build, reproducible codegen, conformance, aggregate gate, and three infrastructure lanes before becoming unrefreshable and conflicted. TypeScript 7 requires the planned strict-profile and toolchain compatibility migration rather than an automated monthly merge.",
+      "reason": "TypeScript 7.0.2 is the authoritative native CLI compiler but deliberately ships without a stable JavaScript API. The official @typescript/typescript6 compatibility package therefore supplies a peer-compatible API to ts-jest, ts-node, tsdown, and related tools while every direct tsc build and workspace typecheck runs TypeScript 7. This uses the TypeScript team's supported side-by-side layout and no peer override.",
       "evidence": [
-        "https://github.com/bsv-blockchain/ts-stack/pull/332",
+        "https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6-0",
+        "docs/reference/typescript-toolchain.md",
+        "scripts/typescript-toolchain.mjs",
         "https://github.com/bsv-blockchain/ts-stack/issues/324",
         ".github/dependabot.yml"
       ],
-      "created": "2026-07-25",
-      "reviewBy": "2026-08-24",
-      "removeWhen": "Remove in Wave 11 when TypeScript 7 passes every package profile, declaration and packed-consumer check, reproducible codegen, conformance, all infrastructure builds, and the full merge gate."
+      "created": "2026-07-27",
+      "reviewBy": "2026-08-27",
+      "removeWhen": "Remove after TypeScript exposes a stable native API, every compiler-API consumer supports it without an override, and the full build, typecheck, declaration, packed-consumer, Jest, conformance, browser/mobile, and infrastructure matrix passes without @typescript/typescript6."
     },
     {
       "id": "verifast-required-wasm-binaries",
@@ -96,6 +98,22 @@
       "created": "2026-07-25",
       "reviewBy": "2026-08-25",
       "removeWhen": "Remove after the supported Jest dependency graph adopts minimatch 10.2.5 or newer and natively resolves brace-expansion 5.0.8 or newer."
+    },
+    {
+      "id": "typed-rest-client-qs-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override typed-rest-client@2.3.1>qs",
+      "owner": "ts-stack-maintainers",
+      "reason": "Stryker 9.6.1 is current but its current typed-rest-client 2.3.1 dependency pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 is the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
+        "https://www.npmjs.com/package/typed-rest-client/v/2.3.1?activeTab=dependencies",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-27",
+      "reviewBy": "2026-08-27",
+      "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
     },
     {
       "id": "openapi-typescript-redocly-overrides",
