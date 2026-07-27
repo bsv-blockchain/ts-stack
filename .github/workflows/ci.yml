@@ -157,6 +157,12 @@ jobs:
             --filter '!example-paymail' \
             run build
 
+      - name: Typecheck workspace
+        # Build outputs exist before this step, so package declarations resolve
+        # exactly as they do for downstream consumers. The recursive contract
+        # catches cross-package nominal-type drift that isolated builds can miss.
+        run: pnpm typecheck
+
       - name: Verify changed package artifacts
         env:
           SCOPE_FILTER: ${{ steps.scope.outputs.filter }}

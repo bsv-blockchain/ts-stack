@@ -286,6 +286,7 @@ pnpm conformance
 pnpm lint
 pnpm format:check
 pnpm health:check
+pnpm typecheck
 ```
 
 ## Reporting Issues

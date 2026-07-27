@@ -4,6 +4,7 @@
   "description": "BSV TypeScript monorepo — SDK, Wallet, Network, Overlay, Messaging, Middleware, Helpers",
   "scripts": {
     "build": "pnpm -r --filter '!@bsv/ts-stack' run build",
+    "typecheck": "pnpm -r --workspace-concurrency=4 --filter '!@bsv/ts-stack' --if-present run typecheck",
     "test": "pnpm -r --filter '!@bsv/ts-stack' run test",
     "lint": "oxlint scripts --deny-warnings && pnpm -r --filter '!@bsv/ts-stack' run lint",
     "format:root": "prettier --check \"package.json\" \"pnpm-workspace.yaml\" \"tsconfig.base.json\" \".prettierrc.json\" \"scripts/**/*.{mjs,json}\" \"governance/**/*.{json,md}\" \".github/**/*.{md,yml,yaml}\"",
