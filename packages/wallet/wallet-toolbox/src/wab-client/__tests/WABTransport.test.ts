@@ -9,10 +9,14 @@ import { WABClientError } from '../WABTransport'
 import { DevConsoleInteractor } from '../auth-method-interactors/DevConsoleInteractor'
 import { TwilioPhoneInteractor } from '../auth-method-interactors/TwilioPhoneInteractor'
 
-function jsonResponse (value: unknown, status: number = 200): Response {
+function jsonResponse (
+  value: unknown,
+  status: number = 200,
+  headers: Record<string, string> = {}
+): Response {
   return new Response(JSON.stringify(value), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...headers }
   })
 }
 
@@ -89,6 +93,54 @@ describe('WAB transport hardening', () => {
       retryable: false
     })
     expect(fetchClient).not.toHaveBeenCalled()
+  })
+
+  it('sends correlation IDs without telemetry and preserves request context on errors', async () => {
+    const fetchClient = jest.fn(async () => jsonResponse({ message: 'not found' }, 404)) as typeof fetch
+    const client = new WABClient('https://wab.example/customer', { fetch: fetchClient })
+
+    await expect(client.getInfo()).rejects.toMatchObject({
+      code: 'WAB_ENDPOINT_MISMATCH',
+      status: 404,
+      retryable: false,
+      operation: 'get-info',
+      route: '/info',
+      endpointMarkerPresent: false,
+      responseCorrelationMatched: false,
+      correlationId: expect.stringMatching(/^[a-f0-9]{32}$/)
+    })
+
+    const headers = fetchClient.mock.calls[0][1]?.headers as Record<string, string>
+    expect(headers['X-Correlation-ID']).toMatch(/^[a-f0-9]{32}$/)
+  })
+
+  it('distinguishes a WAB application 404 from an incompatible endpoint', async () => {
+    let requestCorrelationId = ''
+    const fetchClient = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string>
+      requestCorrelationId = headers['X-Correlation-ID']
+      return jsonResponse(
+        { error: { code: 'WAB_ROUTE_NOT_FOUND' } },
+        404,
+        {
+          'X-WAB-Service': 'wab-server',
+          'X-Correlation-ID': requestCorrelationId
+        }
+      )
+    }) as typeof fetch
+    const client = new WABClient('https://wab.example', { fetch: fetchClient })
+
+    const request = client.getInfo()
+    await expect(request).rejects.toMatchObject({
+      code: 'WAB_HTTP_ERROR',
+      status: 404,
+      operation: 'get-info',
+      endpointMarkerPresent: true,
+      responseCorrelationMatched: true
+    })
+    await request.catch((error: WABClientError) => {
+      expect(error.correlationId).toBe(requestCorrelationId)
+    })
   })
 
   it('never includes request secrets in WAB or account-continuity telemetry', async () => {

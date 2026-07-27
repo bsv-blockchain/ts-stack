@@ -18,9 +18,19 @@ export type WABClientErrorCode =
   | 'WAB_NETWORK_ERROR'
   | 'WAB_TIMEOUT'
   | 'WAB_HTTP_ERROR'
+  | 'WAB_ENDPOINT_MISMATCH'
   | 'WAB_REQUEST_TOO_LARGE'
   | 'WAB_RESPONSE_TOO_LARGE'
   | 'WAB_INVALID_RESPONSE'
+
+export interface WABClientErrorOptions {
+  cause?: unknown
+  correlationId?: string
+  operation?: string
+  route?: string
+  endpointMarkerPresent?: boolean
+  responseCorrelationMatched?: boolean
+}
 
 /**
  * A privacy-safe WAB transport failure. Response bodies and request payloads
@@ -32,11 +42,22 @@ export class WABClientError extends Error {
     message: string,
     public readonly retryable: boolean,
     public readonly status?: number,
-    options?: { cause?: unknown }
+    options: WABClientErrorOptions = {}
   ) {
     super(message, options)
     this.name = 'WABClientError'
+    this.correlationId = options.correlationId
+    this.operation = options.operation
+    this.route = options.route
+    this.endpointMarkerPresent = options.endpointMarkerPresent
+    this.responseCorrelationMatched = options.responseCorrelationMatched
   }
+
+  public readonly correlationId?: string
+  public readonly operation?: string
+  public readonly route?: string
+  public readonly endpointMarkerPresent?: boolean
+  public readonly responseCorrelationMatched?: boolean
 }
 
 export interface WABTransportOptions {
@@ -125,6 +146,14 @@ function isRetryableStatus (status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500
 }
 
+function isSafeCorrelationId (value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)
+}
+
+function isWabResponse (response: Response): boolean {
+  return response.headers.get('X-WAB-Service')?.toLowerCase() === 'wab-server'
+}
+
 /**
  * Centralized, bounded transport used by every WAB client operation.
  *
@@ -175,14 +204,22 @@ export class WABTransport {
     this.telemetry = new Telemetry(options.telemetry)
   }
 
-  createCorrelationId (): string | undefined {
-    return this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined
+  createCorrelationId (): string {
+    return this.telemetry.createCorrelationId()
   }
 
   async request<T>(path: string, options: WABRequestOptions): Promise<T> {
     assertSafePath(path)
     const method = options.method ?? 'POST'
-    const correlationId = options.correlationId ?? this.createCorrelationId()
+    const correlationId = options.correlationId != null &&
+      isSafeCorrelationId(options.correlationId)
+      ? options.correlationId
+      : this.createCorrelationId()
+    const requestContext: WABClientErrorOptions = {
+      correlationId,
+      operation: options.operation,
+      route: path
+    }
     const startedAt = Date.now()
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -210,7 +247,7 @@ export class WABTransport {
         'WAB request payload could not be encoded.',
         false,
         undefined,
-        { cause: error }
+        { ...requestContext, cause: error }
       )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
       throw normalized
@@ -219,7 +256,9 @@ export class WABTransport {
       const error = new WABClientError(
         'WAB_INVALID_REQUEST',
         'WAB request payload must be JSON-serializable.',
-        false
+        false,
+        undefined,
+        requestContext
       )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
       throw error
@@ -228,7 +267,9 @@ export class WABTransport {
       const error = new WABClientError(
         'WAB_REQUEST_TOO_LARGE',
         'WAB request exceeded the configured size limit.',
-        false
+        false,
+        undefined,
+        requestContext
       )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
       throw error
@@ -240,7 +281,7 @@ export class WABTransport {
         headers: {
           Accept: 'application/json',
           ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-          ...(correlationId !== undefined ? { 'X-Correlation-ID': correlationId } : {})
+          'X-Correlation-ID': correlationId
         },
         ...(body !== undefined ? { body } : {}),
         signal: controller.signal,
@@ -255,7 +296,13 @@ export class WABTransport {
       timer = setTimeout(() => {
         timedOut = true
         controller.abort()
-        reject(new WABClientError('WAB_TIMEOUT', 'WAB request timed out.', true))
+        reject(new WABClientError(
+          'WAB_TIMEOUT',
+          'WAB request timed out.',
+          true,
+          undefined,
+          requestContext
+        ))
       }, this.timeoutMs)
     })
 
@@ -271,19 +318,32 @@ export class WABTransport {
           timedOut ? 'WAB request timed out.' : 'WAB request failed before receiving a response.',
           true,
           undefined,
-          { cause: error }
+          { ...requestContext, cause: error }
         )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
       throw normalized
     }
 
+    const endpointMarkerPresent = isWabResponse(response)
+    const responseCorrelationMatched =
+      response.headers.get('X-Correlation-ID') === correlationId
+    const responseContext: WABClientErrorOptions = {
+      ...requestContext,
+      endpointMarkerPresent,
+      responseCorrelationMatched
+    }
+
     if (!response.ok) {
       if (timer !== undefined) clearTimeout(timer)
+      const endpointMismatch = response.status === 404 && !endpointMarkerPresent
       const error = new WABClientError(
-        'WAB_HTTP_ERROR',
-        `WAB request failed with HTTP status ${response.status}.`,
+        endpointMismatch ? 'WAB_ENDPOINT_MISMATCH' : 'WAB_HTTP_ERROR',
+        endpointMismatch
+          ? 'Configured WAB endpoint did not return a compatible WAB response.'
+          : `WAB request failed with HTTP status ${response.status}.`,
         isRetryableStatus(response.status),
-        response.status
+        response.status,
+        responseContext
       )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
       void response.body?.cancel().catch(() => { /* best effort only */ })
@@ -293,7 +353,7 @@ export class WABTransport {
     let responseText: string
     try {
       responseText = await Promise.race([
-        this.readBoundedResponse(response),
+        this.readBoundedResponse(response, responseContext),
         timeoutPromise
       ])
     } catch (error) {
@@ -304,7 +364,7 @@ export class WABTransport {
           timedOut ? 'WAB request timed out.' : 'WAB response could not be read.',
           true,
           response.status,
-          { cause: error }
+          { ...responseContext, cause: error }
         )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
       throw normalized
@@ -321,7 +381,7 @@ export class WABTransport {
         'WAB response was not valid JSON.',
         true,
         response.status,
-        { cause: error }
+        { ...responseContext, cause: error }
       )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
       throw normalized
@@ -331,7 +391,8 @@ export class WABTransport {
         'WAB_INVALID_RESPONSE',
         'WAB response must be a JSON object.',
         true,
-        response.status
+        response.status,
+        responseContext
       )
       this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
       throw error
@@ -348,6 +409,8 @@ export class WABTransport {
         route: path,
         serverOrigin: this.serverOrigin,
         status: response.status,
+        endpointMarkerPresent,
+        responseCorrelationMatched,
         responseBytes: new TextEncoder().encode(responseText).byteLength,
         durationMs: Date.now() - startedAt
       }
@@ -355,7 +418,10 @@ export class WABTransport {
     return parsed as T
   }
 
-  private async readBoundedResponse (response: Response): Promise<string> {
+  private async readBoundedResponse (
+    response: Response,
+    responseContext: WABClientErrorOptions
+  ): Promise<string> {
     const contentLength = Number(response.headers.get('content-length'))
     if (Number.isFinite(contentLength) && contentLength > this.maxResponseBytes) {
       try {
@@ -367,7 +433,8 @@ export class WABTransport {
         'WAB_RESPONSE_TOO_LARGE',
         'WAB response exceeded the configured size limit.',
         false,
-        response.status
+        response.status,
+        responseContext
       )
     }
 
@@ -379,7 +446,8 @@ export class WABTransport {
           'WAB_RESPONSE_TOO_LARGE',
           'WAB response exceeded the configured size limit.',
           false,
-          response.status
+          response.status,
+          responseContext
         )
       }
       return new TextDecoder().decode(bytes)
@@ -402,7 +470,8 @@ export class WABTransport {
           'WAB_RESPONSE_TOO_LARGE',
           'WAB response exceeded the configured size limit.',
           false,
-          response.status
+          response.status,
+          responseContext
         )
       }
       chunks.push(value)
@@ -421,7 +490,7 @@ export class WABTransport {
     operation: string,
     method: 'GET' | 'POST',
     path: string,
-    correlationId: string | undefined,
+    correlationId: string,
     startedAt: number,
     error: WABClientError
   ): void {
@@ -437,6 +506,12 @@ export class WABTransport {
         serverOrigin: this.serverOrigin,
         retryable: error.retryable,
         ...(error.status !== undefined ? { status: error.status } : {}),
+        ...(error.endpointMarkerPresent !== undefined
+          ? { endpointMarkerPresent: error.endpointMarkerPresent }
+          : {}),
+        ...(error.responseCorrelationMatched !== undefined
+          ? { responseCorrelationMatched: error.responseCorrelationMatched }
+          : {}),
         durationMs: Date.now() - startedAt
       },
       error
