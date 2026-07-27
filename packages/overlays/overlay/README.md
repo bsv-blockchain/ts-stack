@@ -1,308 +1,141 @@
-# BSV Overlay Services Engine
+# @bsv/overlay
 
-BSV BLOCKCHAIN | Overlay Services Engine
+The core engine and storage contracts for BSV Overlay Services. The engine admits
+transactions through topic managers, maintains UTXO state, serves lookup
+services, and supports SHIP, SLAP, GASP, and BASM synchronization.
 
-The Overlay Services Engine enables dynamic tracking and management of UTXO-based systems that work on top of the BSV blockchain.
+Use [`@bsv/overlay-express`](../overlay-express/README.md) when you want the
+standard HTTP server, operational endpoints, edge policy, and health checks.
+Use this package directly when you are embedding the engine in another runtime
+or implementing a custom transport.
 
-## Table of Contents
+## Requirements
 
-1. [Objective](#objective)
-2. [Getting Started](#getting-started)
-3. [Features & Deliverables](#features--deliverables)
-4. [Documentation](#documentation)
-5. [Contribution Guidelines](#contribution-guidelines)
-6. [Support & Contacts](#support--contacts)
+- Node.js 22 or newer
+- `@bsv/sdk` installed as a peer dependency
+- A `Storage` implementation
+- A `ChainTracker`, or the explicit `'scripts only'` validation mode
 
-## Objective
+## Install
 
-- Enable a general-purpose system for tracking UTXOs
-- Let each service decide what UTXOs get into the system
-- Provide an efficient global storage engine for UTXO data
-- Let each lookup service dynamically respond to different types of queries
-- Let each lookup service have its own, specialized storage engine for its unique needs
-
-## Getting Started
-
-### Installation
-
-You'll usually want to wrap the Engine within an HTTP server. To get set up with Express, create a new project and install everything you'll need:
-
-```
-npm i express body-parser @bsv/sdk @bsv/overlay hello-services knex
+```bash
+npm install @bsv/overlay @bsv/sdk
 ```
 
-### Basic Usage
+## Create an engine
 
-In your server's main file, you can set everything up. Create a new Engine to run the overlay services you want, then expose some routes over HTTP. For example:
+```ts
+import { Engine, KnexStorage } from '@bsv/overlay'
+import type { LookupService, TopicManager } from '@bsv/overlay'
+import knex from 'knex'
 
-```js
-const express = require('express')
-const bodyparser = require('body-parser')
-const { Engine, KnexStorage, HelloTopicManager, HelloLookupService, HelloStorageEngine } = require('@bsv/overlay')
-import { WhatsOnChain, NodejsHttpClient, ARC, ArcConfig, MerklePath } from '@bsv/sdk'
-// Populate a Knexfile with your database credentials
-const knex = require('knex')(require('../knexfile.js'))
-const app = express()
-app.use(bodyparser.json({ limit: '1gb', type: 'application/json' }))
+const database = knex({
+  client: 'pg',
+  connection: process.env.DATABASE_URL
+})
+
+const topicManagers: Record<string, TopicManager> = {
+  tm_example: exampleTopicManager
+}
+
+const lookupServices: Record<string, LookupService> = {
+  ls_example: exampleLookupService
+}
 
 const engine = new Engine(
-    {
-      hello: new HelloTopicManager(),
-    },
-    {
-      hello: new HelloLookupService({
-        storageEngine: new HelloStorageEngine({
-          knex
-        })
-      }),
-    },
-    new KnexStorageEngine({
-      knex
-    }),
-    new CombinatorialChainTracker([
-      new WhatsOnChain(
-        NODE_ENV === 'production' ? 'main' : 'test',
-        {
-          httpClient: new NodejsHttpClient(https)
-        })
-    ]),
-    HOSTING_DOMAIN as string,
-    SHIP_TRACKERS,
-    SLAP_TRACKERS,
-    new ARC('https://arc.taal.com', arcConfig)
-  )
+  topicManagers,
+  lookupServices,
+  new KnexStorage(database),
+  chainTracker,
+  'https://overlay.example'
+)
 
-// This allows the API to be used everywhere when CORS is enforced
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', '*')
-  res.header('Access-Control-Allow-Methods', '*')
-  res.header('Access-Control-Expose-Headers', '*')
-  res.header('Access-Control-Allow-Private-Network', 'true')
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200)
-  } else {
-    next()
-  }
+await engine.submit({
+  beef: transaction.toBEEF(),
+  topics: ['tm_example']
 })
 
-// Serve a static documentstion site, if you have one.
-app.use(express.static('public'))
-
-// List hosted topic managers and lookup services
-app.get(`/listTopicManagers`, async (req, res) => {
-  try {
-    const result = await engine.listTopicManagers()
-    return res.status(200).json(result)
-  } catch (error) {
-    return res.status(400).json({
-      status: 'error',
-      code: error.code,
-      description: error.message
-    })
-  }
+const answer = await engine.lookup({
+  service: 'ls_example',
+  query: { txid }
 })
-app.get(`/listLookupServiceProviders`, async (req, res) => {
-  try {
-    const result = await engine.listLookupServiceProviders()
-    return res.status(200).json(result)
-  } catch (error) {
-    return res.status(400).json({
-      status: 'error',
-      code: error.code,
-      description: error.message
-    })
-  }
-})
-
-// Host documentation for the services
-app.get(`/getDocumentationForTopicManager`, async (req, res) => {
-  try {
-    const result = await engine.getDocumentationForTopicManger(req.query.manager)
-    return res.status(200).json(result)
-  } catch (error) {
-    return res.status(400).json({
-      status: 'error',
-      code: error.code,
-      description: error.message
-    })
-  }
-})
-app.get(`/getDocumentationForLookupServiceProvider`, async (req, res) => {
-  try {
-    const result = await engine.getDocumentationForLookupServiceProvider(req.query.lookupServices)
-    return res.status(200).json(result)
-  } catch (error) {
-    return res.status(400).json({
-      status: 'error',
-      code: error.code,
-      description: error.message
-    })
-  }
-})
-
-// Submit transactions and facilitate lookup requests
-app.post(`/submit`, async (req, res) => {
-  try {
-    // Parse out the topics and construct the tagged BEEF
-    const topicsHeader = req.headers['x-topics'] as string
-    const topics = topicsHeader.trim().startsWith('[')
-      ? JSON.parse(topicsHeader)
-      : topicsHeader.split(',').map(topic => topic.trim())
-    const taggedBEEF: TaggedBEEF = {
-      beef: Array.from(req.body as number[]),
-      topics
-    }
-
-    // Using a callback function, we can just return once our steak is ready
-    // instead of having to wait for all the broadcasts to occur.
-    await engine.submit(taggedBEEF, (steak: STEAK) => {
-      return res.status(200).json(steak)
-    })
-  } catch (error) {
-    return res.status(400).json({
-      status: 'error',
-      code: error.code,
-      description: error.message
-    })
-  }
-})
-app.post(`/lookup`, async (req, res) => {
-  try {
-    const result = await engine.lookup(req.body)
-    return res.status(200).json(result)
-  } catch (error) {
-    return res.status(400).json({
-      status: 'error',
-      code: error.code,
-      description: error.message
-    })
-  }
-})
-
-app.post('/arc-ingest', (req, res) => {
-  (async () => {
-    try {
-      const merklePath = MerklePath.fromHex(req.body.merklePath)
-      await engine.handleNewMerkleProof(req.body.txid, merklePath, req.body.blockHeight)
-      return res.status(200).json({ status: 'success', message: 'transaction status updated' })
-    } catch (error) {
-      console.error(error)
-      return res.status(400).json({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'An unknown error occurred'
-      })
-    }
-  })().catch(() => {
-    res.status(500).json({
-      status: 'error',
-      message: 'Unexpected error'
-    })
-  })
-})
-
-app.post('/requestSyncResponse', (req, res) => {
-  (async () => {
-    try {
-      const topic = req.headers['x-bsv-topic'] as string
-      const response = await engine.provideForeignSyncResponse(req.body, topic)
-      return res.status(200).json(response)
-    } catch (error) {
-      console.error(error)
-      return res.status(400).json({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'An unknown error occurred'
-      })
-    }
-  })().catch(() => {
-    res.status(500).json({
-      status: 'error',
-      message: 'Unexpected error'
-    })
-  })
-})
-
-app.post('/requestForeignGASPNode', (req, res) => {
-  (async () => {
-    try {
-      console.log(req.body)
-      const { graphID, txid, outputIndex, metadata } = req.body
-      const response = await engine.provideForeignGASPNode(graphID, txid, outputIndex)
-      return res.status(200).json(response)
-    } catch (error) {
-      console.error(error)
-      return res.status(400).json({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'An unknown error occurred'
-      })
-    }
-  })().catch(() => {
-    res.status(500).json({
-      status: 'error',
-      message: 'Unexpected error'
-    })
-  })
-})
-
-// 404, all other routes are not found.
-app.use((req, res) => {
-  console.log('404', req.url)
-  res.status(404).json({
-    status: 'error',
-    code: 'ERR_ROUTE_NOT_FOUND',
-    description: 'Route not found.'
-  })
-})
-
-// Start your Engines!
-  app.listen(8080, () => {
-    console.log('BSV Overlay Services Engine is listening on port', 8080)
-  })
 ```
 
-For more detailed tutorials and examples, check out the [full documentation](#documentation).
+The constructor also accepts SHIP/SLAP trackers, broadcasters, an advertiser,
+sync configuration, a logger, a topic-anchor header resolver, and BASM/unproven
+state controls. Type declarations document the complete configuration surface.
 
-The Overlay Services Engine is also richly documented with code-level annotations. This should show up well within editors like VSCode. 
+## Public API
 
-<!-- ## Documentation
+The root entry point exports:
 
-[links to conceptsexamples and internals] -->
+- `Engine`
+- `KnexStorage` and `KnexStorageMigrations`
+- the topic-manager, lookup-service, storage, advertisement, and sync contracts
+- BASM utilities and types
+- safe structured-log serializers
 
-## Features & Deliverables
+`@bsv/overlay/storage` exports the `Storage` contract. Existing supported deep
+imports remain available through the documented package export map, but new
+applications should prefer the root entry point wherever possible.
 
-- UTXO Tracking
-- History management and state tracking
-- Lookup Services
-- Storage engine abstractions
-- [WIP] Examples, HTTP wrapper and Docs
-- [WIP] Arc Proof Acquisition
-- [WIP] Distributed Overlay Availability Advertisements
-- [WIP] Federated Transaction Synchronization
+## Runtime and package formats
 
-## Contribution Guidelines
+The package supports both module systems:
 
-We're always looking for contributors to help us improve the Engine. Whether it's bug reports, feature requests, or pull requests - all contributions are welcome.
+```ts
+import { Engine } from '@bsv/overlay'
+```
 
-1. **Fork & Clone**: Fork this repository and clone it to your local machine.
-2. **Set Up**: Run `npm i` to install all dependencies.
-3. **Make Changes**: Create a new branch and make your changes.
-4. **Test**: Ensure all tests pass by running `npm test`.
-5. **Commit**: Commit your changes and push to your fork.
-6. **Pull Request**: Open a pull request from your fork to this repository.
-For more details, check the [contribution guidelines](./CONTRIBUTING.md).
+```js
+const { Engine } = require('@bsv/overlay')
+```
 
-For information on past releases, check out the [changelog](./CHANGELOG.md). For future plans, check the [roadmap](./ROADMAP.md)!
+ES modules load from `dist/esm`; CommonJS loads from `dist/cjs`. Each condition
+has matching declarations. Published artifacts contain compiled output, the
+README, and the license only—tests, compiler caches, workspace source, and lock
+files are excluded.
 
-## Support & Contacts
+## Security and operations
 
-Project Owners: Thomas Giacomo, Darren Kellenschwiler, Jake Jones
+The engine is transport-neutral. Authentication, CORS, CSP, body limits,
+timeouts, rate or concurrency controls, and administrative authorization belong
+at the HTTP or application boundary.
 
-Development Team Lead: Ty Everett
+Overlay endpoints are commonly public protocol services used by browsers,
+mobile wallets, WUI, and applications on previously unknown origins. A wrapper
+should therefore remain public-by-default unless an operator deliberately
+configures an exact-origin allowlist. CORS is not an authentication mechanism,
+and CSP for a hosted UI should be configured independently.
 
-For questions, bug reports, or feature requests, please open an issue on GitHub or contact us directly.
+For production deployments:
+
+- validate all untrusted request data before invoking the engine;
+- use a durable storage implementation and tested database migrations;
+- configure transaction broadcast and proof providers;
+- protect administrative and callback routes with explicit credentials;
+- avoid logging raw secrets, authorization headers, or unbounded payloads;
+- monitor readiness, proof acquisition, synchronization, and unproven state.
+
+`@bsv/overlay-express` supplies these standard HTTP controls while preserving
+public protocol access by default.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm --filter @bsv/overlay format:check
+pnpm --filter @bsv/overlay lint
+pnpm --filter @bsv/overlay typecheck
+pnpm --filter @bsv/overlay test
+pnpm --filter @bsv/overlay test:coverage
+pnpm --filter @bsv/overlay pack:check
+```
+
+`pack:check` verifies the actual npm tarball with publint, strict type
+resolution, and clean ESM/CommonJS consumer projects.
 
 ## License
 
-The license for the code in this repository is the Open BSV License. Refer to [LICENSE.txt](./LICENSE.txt) for the license text.
-
-Thank you for being a part of the BSV Blockchain Overlay Services Project. Let's build the future of BSV Blockchain together!
+Open BSV License. See [LICENSE.txt](./LICENSE.txt).

@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": "./",
     "outDir": "./dist/esm",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "tsBuildInfoFile": "./node_modules/.cache/overlay-express-esm.tsbuildinfo"
   }
 }

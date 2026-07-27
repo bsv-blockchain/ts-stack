@@ -55,7 +55,7 @@ export class FractionalizeLookupService implements LookupService {
 
     if (txid) {
       const result = await this.storage.findByTxid(txid)
-      return [result]
+      return result === null ? [] : [result]
     }
 
     return await this.storage.findAll(limit, skip, from, to, sortOrder || 'desc')

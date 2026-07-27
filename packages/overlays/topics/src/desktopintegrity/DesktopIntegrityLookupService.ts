@@ -34,7 +34,7 @@ export class DesktopIntegrityLookupService implements LookupService {
 
     try {
       const fileHash = lockingScript.chunks[1].data
-      if (fileHash[0] !== 32 || fileHash.length !== 33) throw new Error('Invalid DesktopIntegrity token: file hash must be exactly 32 bytes')
+      if (fileHash === undefined || fileHash[0] !== 32 || fileHash.length !== 33) throw new Error('Invalid DesktopIntegrity token: file hash must be exactly 32 bytes')
       const fileHashString = Utils.toHex(fileHash.slice(1))
       await this.storage.storeRecord(txid, outputIndex, fileHashString)
     } catch (err) {

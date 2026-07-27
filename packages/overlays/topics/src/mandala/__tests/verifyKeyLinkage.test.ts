@@ -31,6 +31,6 @@ describe('verifyKeyLinkage', () => {
     const expectedHash = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
     expect(result.pubKeyHash).toEqual(expectedHash)
     expect(await linkageControlsPubKeyHash(linkage as any, verifier.wallet as any, expectedHash)).toBe(true)
-    expect(await linkageControlsPubKeyHash(linkage as any, verifier.wallet as any, new Array(20).fill(0))).toBe(false)
+    expect(await linkageControlsPubKeyHash(linkage as any, verifier.wallet as any, Array.from({ length: 20 }, () => 0))).toBe(false)
   })
 })

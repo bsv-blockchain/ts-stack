@@ -1,7 +1,6 @@
 import { WalletAdvertiser } from '../WalletAdvertiser'
 import { isTokenSignatureCorrectlyLinked } from '../utils/isTokenSignatureCorrectlyLinked'
-import { PrivateKey, Transaction, PushDrop, Utils, PublicKey, ProtoWallet, WalletInterface, LockingScript } from '@bsv/sdk'
-import { Engine } from '@bsv/overlay'
+import { PrivateKey, Transaction, PushDrop, ProtoWallet, WalletInterface, LockingScript } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
 const mockWallet: WalletInterface = new ProtoWallet(new PrivateKey(42)) as any as WalletInterface
@@ -94,7 +93,7 @@ describe('WalletAdvertiser', () => {
       // We'll create a single advertisement for 'SHIP'.
       const adsData = [
         {
-          protocol: 'SHIP' as 'SHIP',
+          protocol: 'SHIP' as const,
           topicOrServiceName: 'tm_meter'
         }
       ]
@@ -127,7 +126,7 @@ describe('WalletAdvertiser', () => {
       // For example, a topic name with special characters might fail.
       const adsData = [
         {
-          protocol: 'SHIP' as 'SHIP',
+          protocol: 'SHIP' as const,
           topicOrServiceName: '!@#$invalid-topic'
         }
       ]
@@ -141,7 +140,7 @@ describe('WalletAdvertiser', () => {
     it('Properly parses an advertisement script', async () => {
       const adsData = [
         {
-          protocol: 'SHIP' as 'SHIP',
+          protocol: 'SHIP' as const,
           topicOrServiceName: 'tm_meter'
         }
       ]

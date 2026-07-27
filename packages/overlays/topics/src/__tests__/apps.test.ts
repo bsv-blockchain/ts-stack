@@ -152,7 +152,6 @@ describe('AppsTopicManager', () => {
   })
 
   it('rejects an output with a P2PKH script (not a PushDrop)', async () => {
-    const key = PrivateKey.fromRandom()
     // Use a trivially invalid script that PushDrop.decode will fail on
     const badScript = new LockingScript([{ op: 0x76 }, { op: 0xa9 }, { op: 0x88 }, { op: 0xac }])
     const tx = buildTxWithInput([badScript])

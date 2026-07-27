@@ -99,7 +99,11 @@ export { default as TokenDemoTopicManager } from './utility-tokens/TokenDemoTopi
 export { default as createTokenDemoLookupService } from './utility-tokens/TokenDemoLookupService.js'
 
 // walletconfig
-export type { WalletConfigRegistration, WalletConfigRecord, WalletConfigQuery } from './walletconfig/WalletConfigTypes.js'
+export type {
+  WalletConfigRegistration,
+  WalletConfigRecord,
+  WalletConfigQuery
+} from './walletconfig/WalletConfigTypes.js'
 export { default as WalletConfigTopicManager } from './walletconfig/WalletConfigTopicManager.js'
 export { default as createWalletConfigLookupService } from './walletconfig/WalletConfigLookupService.js'
 
@@ -111,19 +115,31 @@ export { allowlistIssuerPolicy } from './admission/issuerPolicy.js'
 export { StasTopicManager } from './stas/StasTopicManager.js'
 export { StasLookupService, createStasLookupService } from './stas/StasLookupService.js'
 export { StasStorageManager } from './stas/StasStorageManager.js'
-export type { StasTokenRecord, StasQuery, UTXOReference as StasUTXOReference } from './stas/types.js'
+export type {
+  StasTokenRecord,
+  StasQuery,
+  UTXOReference as StasUTXOReference
+} from './stas/types.js'
 
 // bsv21 (1Sat fungible tokens)
 export { Bsv21TopicManager } from './bsv21/Bsv21TopicManager.js'
 export { Bsv21LookupService, createBsv21LookupService } from './bsv21/Bsv21LookupService.js'
 export { Bsv21StorageManager } from './bsv21/Bsv21StorageManager.js'
-export type { Bsv21TokenRecord, Bsv21Query, UTXOReference as Bsv21UTXOReference } from './bsv21/types.js'
+export type {
+  Bsv21TokenRecord,
+  Bsv21Query,
+  UTXOReference as Bsv21UTXOReference
+} from './bsv21/types.js'
 
 // dstas (Divisible STAS / STAS 3.0)
 export { DstasTopicManager } from './dstas/DstasTopicManager.js'
 export { DstasLookupService, createDstasLookupService } from './dstas/DstasLookupService.js'
 export { DstasStorageManager } from './dstas/DstasStorageManager.js'
-export type { DstasTokenRecord, DstasQuery, UTXOReference as DstasUTXOReference } from './dstas/types.js'
+export type {
+  DstasTokenRecord,
+  DstasQuery,
+  UTXOReference as DstasUTXOReference
+} from './dstas/types.js'
 
 // mandala
 export { MandalaTopicManager } from './mandala/MandalaTopicManager.js'
@@ -132,6 +148,9 @@ export { MandalaStorageManager } from './mandala/MandalaStorageManager.js'
 export { InMemoryScreeningProvider } from './mandala/types.js'
 export { verifyKeyLinkage } from './mandala/verifyKeyLinkage.js'
 export type {
-  ScreeningProvider, SpecificLinkage, MandalaLinkagePayload,
-  MandalaTokenRecord, MandalaLinkageRecord
+  ScreeningProvider,
+  SpecificLinkage,
+  MandalaLinkagePayload,
+  MandalaTokenRecord,
+  MandalaLinkageRecord
 } from './mandala/types.js'

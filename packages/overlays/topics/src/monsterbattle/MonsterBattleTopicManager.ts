@@ -1,5 +1,7 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction, Utils, OP, Script } from '@bsv/sdk'
+import { Transaction, OP, Script } from '@bsv/sdk'
+import { assertValidBsv20Payload } from '../shared/assertValidBsv20Payload.js'
+import { errorMessage } from '../shared/errorMessage.js'
 
 export default class MonsterBattleTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -75,11 +77,7 @@ function checkScriptFormat (script: Script) {
     const formatStart = new Script(chunks.slice(0, 6)).toHex()
     if (formatStart !== TEMPLATES.formatStart) throw new Error('Malformed formatStart')
 
-    try {
-      const formatJsonPayload = JSON.parse(Utils.toUTF8(chunks[6].data))
-      const incorrectlyFormatted = (formatJsonPayload.p !== 'bsv-20') || !(formatJsonPayload.op === 'transfer' || formatJsonPayload.op === 'deploy+mint') || formatJsonPayload.amt === undefined || (formatJsonPayload.op === 'transfer' && !formatJsonPayload.id)
-      if (incorrectlyFormatted) throw new Error('Malformed JSON payload')
-    } catch (error) { throw new Error(`Invalid JSON payload: ${error.message}`) }
+    assertValidBsv20Payload(chunks[6].data)
 
     const formatMiddle = new Script(chunks.slice(7, 10)).toHex()
     if (formatMiddle !== TEMPLATES.formatMiddle) throw new Error('Malformed formatMiddle')
@@ -92,7 +90,7 @@ function checkScriptFormat (script: Script) {
 
     return { valid: true, message: 'Script is valid' }
   } catch (error) {
-    return { valid: false, message: error?.message || 'Invalid script format' }
+    return { valid: false, message: errorMessage(error, 'Invalid script format') }
   }
 }
 

@@ -112,7 +112,7 @@ describe('SlackThreadsTopicManager', () => {
 
   it('rejects a script where hash is not 32 bytes (chunks[1].op !== 32)', async () => {
     // Use a 20-byte hash instead of 32 bytes — op will be 20, not 32
-    const hash20 = new Array(20).fill(0xab)
+    const hash20 = Array.from({ length: 20 }, () => 0xab)
     const badScript = new LockingScript([
       { op: 0xa8 },                     // OP_SHA256 ✓
       { op: 20, data: hash20 },         // op === 20 (wrong — should be 32)

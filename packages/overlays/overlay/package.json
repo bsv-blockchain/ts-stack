@@ -15,42 +15,64 @@
   "types": "dist/types/mod.d.ts",
   "files": [
     "dist",
-    "src",
-    "docs",
-    "mod.ts",
+    "!dist/**/*.tsbuildinfo",
+    "README.md",
     "LICENSE.txt"
   ],
   "exports": {
     ".": {
-      "types": "./dist/types/mod.d.ts",
-      "import": "./dist/esm/mod.js",
-      "require": "./dist/cjs/mod.js"
+      "import": {
+        "types": "./dist/types/mod.d.ts",
+        "default": "./dist/esm/mod.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mod.d.ts",
+        "default": "./dist/cjs/mod.js"
+      }
     },
     "./*.ts": {
-      "types": "./dist/types/src/*.d.ts",
-      "import": "./dist/esm/src/*.js",
-      "require": "./dist/cjs/src/*.js"
+      "import": {
+        "types": "./dist/types/src/*.d.ts",
+        "default": "./dist/esm/src/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/*.d.ts",
+        "default": "./dist/cjs/src/*.js"
+      }
     },
     "./storage": {
-      "import": "./dist/esm/src/storage/index.js",
-      "require": "./dist/cjs/src/storage/index.js",
-      "types": "./dist/types/src/storage/index.d.ts"
+      "import": {
+        "types": "./dist/types/src/storage/Storage.d.ts",
+        "default": "./dist/esm/src/storage/Storage.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/storage/Storage.d.ts",
+        "default": "./dist/cjs/src/storage/Storage.js"
+      }
     },
     "./storage/*": {
-      "import": "./dist/esm/src/storage/*.js",
-      "require": "./dist/cjs/src/storage/*.js",
-      "types": "./dist/types/src/storage/*.d.ts"
+      "import": {
+        "types": "./dist/types/src/storage/*.d.ts",
+        "default": "./dist/esm/src/storage/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/storage/*.d.ts",
+        "default": "./dist/cjs/src/storage/*.js"
+      }
     }
   },
   "scripts": {
-    "test": "npm run build && jest",
-    "test:watch": "npm run build && jest --watch",
-    "test:coverage": "npm run build && jest --coverage",
-    "lint": "oxlint src",
-    "lint:ci": "oxlint src",
+    "test": "pnpm build && jest --runInBand --watchman=false",
+    "test:watch": "pnpm build && jest --watch",
+    "test:coverage": "pnpm build && jest --coverage --runInBand --watchman=false",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
+    "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
+    "lint:ci": "pnpm lint",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports BASM_ZERO_HASH,Engine,KnexStorage,KnexStorageMigrations,computeBasmRoot,computeTac,extractMerkleProofMetadata,serializeErrorForLog,serializeLogValue --entry-exports \"./storage=;./storage/knex/KnexStorage=KnexStorage\"",
+    "typecheck": "tsc --project tsconfig.base.json --noEmit --incremental false",
     "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
     "dev": "tsc -b -w",
-    "prepublish": "npm run build",
+    "prepublishOnly": "pnpm build",
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=docs/API.md --filenameSubstring=API --firstHeadingLevel=1"
   },
   "repository": {
@@ -92,6 +114,22 @@
   "peerDependenciesMeta": {
     "@bsv/sdk": {
       "optional": false
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "storage": [
+        "dist/types/src/storage/Storage.d.ts"
+      ],
+      "storage/*": [
+        "dist/types/src/storage/*"
+      ],
+      "*.ts": [
+        "dist/types/src/*.d.ts"
+      ],
+      "*": [
+        "dist/types/mod.d.ts"
+      ]
     }
   }
 }

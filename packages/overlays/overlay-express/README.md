@@ -3,6 +3,7 @@
 BSV BLOCKCHAIN | Overlay Express
 
 An opinionated but configurable Overlay Services deployment system:
+
 - Uses express for HTTP on a given local port
 - Easy setup with just a private key and a hosting URL
 - Import and configure your topic managers the way you want
@@ -15,6 +16,26 @@ An opinionated but configurable Overlay Services deployment system:
   Chaintracks header validation, BASM reorg streaming, and active
   monitor-driven maintenance
 
+## Requirements and installation
+
+Overlay Express requires Node.js 22 or newer and a separately installed
+`@bsv/sdk` peer dependency.
+
+```bash
+npm install @bsv/overlay-express @bsv/sdk
+```
+
+The package provides matching ESM and CommonJS entry points with
+condition-specific declarations:
+
+```ts
+import OverlayExpress, { OverlayMonitor } from '@bsv/overlay-express'
+```
+
+```js
+const { default: OverlayExpress, OverlayMonitor } = require('@bsv/overlay-express')
+```
+
 ## Example Usage
 
 Here's a quick example:
@@ -26,76 +47,74 @@ dotenv.config()
 
 // Hi there! Let's configure Overlay Express!
 const main = async () => {
+  // We'll make a new server for our overlay node.
+  const server = new OverlayExpress(
+    // Name your overlay node with a one-word lowercase string
+    `testnode`,
 
-    // We'll make a new server for our overlay node.
-    const server = new OverlayExpress(
+    // Provide the private key that gives your node its identity
+    process.env.SERVER_PRIVATE_KEY!,
 
-        // Name your overlay node with a one-word lowercase string
-        `testnode`,
+    // Provide the public FQDN without a scheme (for example, overlay.example)
+    process.env.HOSTING_FQDN!
+  )
 
-        // Provide the private key that gives your node its identity
-        process.env.SERVER_PRIVATE_KEY!,
+  // Decide what port you want the server to listen on.
+  server.configurePort(8080)
 
-        // Provide the HTTPS URL where your node is available on the internet
-        process.env.HOSTING_URL!
-    )
-
-    // Decide what port you want the server to listen on.
-    server.configurePort(8080)
-
-    // Public CORS is the default so wallet UIs and mobile-backed web apps can
-    // call the protocol from previously unknown domains. Deployments with a
-    // closed caller set can opt into exact origins and customize the UI CSP.
-    server.configureEdgePolicy({
-      allowedOrigins: process.env.OVERLAY_CORS_ALLOWED_ORIGINS?.split(','),
-      securityHeaders: {
-        contentSecurityPolicy: process.env.OVERLAY_CONTENT_SECURITY_POLICY
-      }
-    })
-
-    // Connect to your SQL database with Knex
-    await server.configureKnex(process.env.KNEX_URL!)
-
-    // Also, be sure to connect to MongoDB
-    await server.configureMongo(process.env.MONGO_URL!)
-
-    // Here, you will configure the overlay topic managers and lookup services you want.
-    // - Topic managers decide what outputs can go in your overlay
-    // - Lookup services help people find things in your overlay
-    // - Make use of functions like `configureTopicManager` and `configureLookupServiceWithMongo`
-    // ADD YOUR OVERLAY SERVICES HERE
-
-    // For simple local deployments, sync can be disabled.
-    server.configureEnableGASPSync(false)
-
-    // Production deployments should configure at least one transaction
-    // propagation provider. Arcade can be used as the primary provider with Arc
-    // as a fallback. The callback token is optional, but recommended when
-    // exposing /arc-ingest publicly.
-    server.configureArcade(process.env.ARCADE_URL!, {
-      apiKey: process.env.ARCADE_API_KEY,
-      deploymentId: process.env.ARCADE_DEPLOYMENT_ID,
-      chaintracksApiPrefix: '/chaintracks/v2'
-    })
-    if (process.env.ARC_API_KEY) {
-      server.configureArcApiKey(process.env.ARC_API_KEY)
+  // Public CORS is the default so wallet UIs and mobile-backed web apps can
+  // call the protocol from previously unknown domains. Deployments with a
+  // closed caller set can opt into exact origins and customize the UI CSP.
+  server.configureEdgePolicy({
+    allowedOrigins: process.env.OVERLAY_CORS_ALLOWED_ORIGINS?.split(','),
+    securityHeaders: {
+      contentSecurityPolicy: process.env.OVERLAY_CONTENT_SECURITY_POLICY
     }
-    if (process.env.ARC_CALLBACK_TOKEN) {
-      server.configureArcCallbackToken(process.env.ARC_CALLBACK_TOKEN)
-    }
+  })
 
-    // Chaintracks-compatible services provide block headers for BASM and can
-    // stream reorg notifications. Arcade exposes go-chaintracks under
-    // /chaintracks/v2.
-    server.configureChaintracks(process.env.CHAINTRACKS_URL ?? process.env.ARCADE_URL!, {
-      apiPrefix: '/chaintracks/v2',
-      reorgStream: true,
-      scanDepth: 3
-    })
+  // Connect to your SQL database with Knex
+  await server.configureKnex(process.env.KNEX_URL!)
 
-    // Lastly, configure the engine and start the server!
-    await server.configureEngine()
-    await server.start()
+  // Also, be sure to connect to MongoDB
+  await server.configureMongo(process.env.MONGO_URL!)
+
+  // Here, you will configure the overlay topic managers and lookup services you want.
+  // - Topic managers decide what outputs can go in your overlay
+  // - Lookup services help people find things in your overlay
+  // - Make use of functions like `configureTopicManager` and `configureLookupServiceWithMongo`
+  // ADD YOUR OVERLAY SERVICES HERE
+
+  // For simple local deployments, sync can be disabled.
+  server.configureEnableGASPSync(false)
+
+  // Production deployments should configure at least one transaction
+  // propagation provider. Arcade can be used as the primary provider with Arc
+  // as a fallback. The callback token is optional, but recommended when
+  // exposing /arc-ingest publicly.
+  server.configureArcade(process.env.ARCADE_URL!, {
+    apiKey: process.env.ARCADE_API_KEY,
+    deploymentId: process.env.ARCADE_DEPLOYMENT_ID,
+    chaintracksApiPrefix: '/chaintracks/v2'
+  })
+  if (process.env.ARC_API_KEY) {
+    server.configureArcApiKey(process.env.ARC_API_KEY)
+  }
+  if (process.env.ARC_CALLBACK_TOKEN) {
+    server.configureArcCallbackToken(process.env.ARC_CALLBACK_TOKEN)
+  }
+
+  // Chaintracks-compatible services provide block headers for BASM and can
+  // stream reorg notifications. Arcade exposes go-chaintracks under
+  // /chaintracks/v2.
+  server.configureChaintracks(process.env.CHAINTRACKS_URL ?? process.env.ARCADE_URL!, {
+    apiPrefix: '/chaintracks/v2',
+    reorgStream: true,
+    scanDepth: 3
+  })
+
+  // Lastly, configure the engine and start the server!
+  await server.configureEngine()
+  await server.start()
 }
 
 // Happy hacking :)
@@ -122,6 +141,11 @@ concurrency, Node HTTP timeouts, CSP, and other security headers. Environment
 overrides are listed in `.env.example`. Protocol authentication, admin
 authentication, callback tokens, and input validation remain required
 regardless of CORS mode.
+
+CSP applies to documents served by this process; it does not grant or deny API
+callers. Configure UI CSP and API CORS independently. Credentialed cross-origin
+requests require exact allowed origins and must never be combined with a
+wildcard origin.
 
 Janitor outbound checks accept only public HTTPS targets on the standard port
 and do not follow redirects by default. `allowPrivateHosts: true` exists only
@@ -296,6 +320,23 @@ monitor.start()
 
 Maintenance requests are reported alongside lookup probes so operators can alert
 on failed maintenance separately from lookup/proof-shape warnings.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm --filter @bsv/overlay-express format:check
+pnpm --filter @bsv/overlay-express lint
+pnpm --filter @bsv/overlay-express typecheck
+pnpm --filter @bsv/overlay-express test
+pnpm --filter @bsv/overlay-express test:coverage
+pnpm --filter @bsv/overlay-express pack:check
+```
+
+The package check builds locally packed release candidates for Overlay Express
+and its workspace Overlay dependencies, then verifies the npm tarball with
+publint, strict type resolution, and clean ESM/CommonJS consumer projects.
 
 ## License
 

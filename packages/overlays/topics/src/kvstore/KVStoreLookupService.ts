@@ -40,7 +40,7 @@ class KVStoreLookupService implements LookupService {
       if (hasTagsField && decoded.fields[kvProtocol.tags]) {
         try {
           tags = JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.tags]))
-        } catch (_e) {
+        } catch {
           // Tags field is not valid JSON; treat as absent rather than failing admission
           tags = undefined
         }
@@ -102,7 +102,7 @@ class KVStoreLookupService implements LookupService {
         txid: results[i].txid,
         outputIndex: results[i].outputIndex,
         history: query.history
-          ? async (beef: number[], outputIndex: number, currentDepth: number) => {
+          ? async (beef: number[], outputIndex: number, _currentDepth: number) => {
             return await this.historySelector(beef, outputIndex, results[i].key, results[i].protocolID)
           }
           : undefined
@@ -139,7 +139,7 @@ class KVStoreLookupService implements LookupService {
       if (protocolID !== undefined && outputProtocolID !== protocolID) return false
 
       return true
-    } catch (_e) {
+    } catch {
       // Malformed BEEF or script — output is not a valid KVStore token; exclude from history
       return false
     }

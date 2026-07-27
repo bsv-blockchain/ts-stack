@@ -5,6 +5,7 @@
     "outDir": "./dist/types",
     "emitDeclarationOnly": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "tsBuildInfoFile": "./node_modules/.cache/overlay-express-types.tsbuildinfo"
   }
 }

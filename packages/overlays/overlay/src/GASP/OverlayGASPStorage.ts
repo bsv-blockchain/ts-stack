@@ -82,7 +82,7 @@ export class OverlayGASPStorage implements GASPStorage {
    * @param metadata
    * @returns
    */
-  async hydrateGASPNode (graphID: string, txid: string, outputIndex: number, metadata: boolean): Promise<GASPNode> {
+  async hydrateGASPNode (graphID: string, txid: string, outputIndex: number, _metadata: boolean): Promise<GASPNode> {
     const output = await this.engine.storage.findOutput(txid, outputIndex, undefined, undefined, true)
 
     if (output?.beef === undefined) {

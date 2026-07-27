@@ -228,7 +228,7 @@ export default class BTMSTopicManager implements TopicManager {
               }
               const outputAssetId = this.canonicalAssetId(decodedCurrent.assetIdField, txid, i)
               return outputAssetId === assetId
-            } catch (_e) {
+            } catch {
               // Output script is not a valid BTMS token; exclude from matching
               return false
             }

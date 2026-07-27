@@ -53,7 +53,6 @@ function buildPushDropScript(pubKey: PublicKey, fields: number[][]): LockingScri
  */
 function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
   const sourceTx = new Transaction()
-  const key = PrivateKey.fromRandom()
   sourceTx.addOutput({
     lockingScript: new LockingScript([]),
     satoshis: 10000

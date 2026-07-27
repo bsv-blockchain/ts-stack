@@ -1,7 +1,7 @@
 export interface TokenDemoDetails {
   amount: string
   tokenId: string
-  customFields?: Object
+  customFields?: object
 }
 
 export interface UTXOReference {

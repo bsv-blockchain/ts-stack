@@ -48,8 +48,8 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
  *   - chunks[4]: OP_CHECKSIG (0xac)
  */
 function buildSupplyChainScript(privKey: PrivateKey): LockingScript {
-  const hash1 = new Array(32).fill(0xaa)  // 32-byte placeholder
-  const hash2 = new Array(32).fill(0xbb)  // 32-byte placeholder
+  const hash1 = Array.from({ length: 32 }, () => 0xaa)  // 32-byte placeholder
+  const hash2 = Array.from({ length: 32 }, () => 0xbb)  // 32-byte placeholder
   const pubKeyBytes = Utils.toArray(privKey.toPublicKey().toString(), 'hex') // 33 bytes compressed
 
   return new LockingScript([
@@ -96,8 +96,8 @@ describe('SupplyChainTopicManager', () => {
 
   it('rejects a script with only 4 chunks (missing OP_CHECKSIG)', async () => {
     const privKey = PrivateKey.fromRandom()
-    const hash1 = new Array(32).fill(0xaa)
-    const hash2 = new Array(32).fill(0xbb)
+    const hash1 = Array.from({ length: 32 }, () => 0xaa)
+    const hash2 = Array.from({ length: 32 }, () => 0xbb)
     const pubKeyBytes = Utils.toArray(privKey.toPublicKey().toString(), 'hex')
 
     const badScript = new LockingScript([
@@ -115,8 +115,8 @@ describe('SupplyChainTopicManager', () => {
 
   it('rejects a script where chunks[2] is not OP_2DROP', async () => {
     const privKey = PrivateKey.fromRandom()
-    const hash1 = new Array(32).fill(0xaa)
-    const hash2 = new Array(32).fill(0xbb)
+    const hash1 = Array.from({ length: 32 }, () => 0xaa)
+    const hash2 = Array.from({ length: 32 }, () => 0xbb)
     const pubKeyBytes = Utils.toArray(privKey.toPublicKey().toString(), 'hex')
 
     const badScript = new LockingScript([
@@ -133,9 +133,9 @@ describe('SupplyChainTopicManager', () => {
   })
 
   it('rejects a script where chunks[3] is not a 33-byte push', async () => {
-    const hash1 = new Array(32).fill(0xaa)
-    const hash2 = new Array(32).fill(0xbb)
-    const shortPubkey = new Array(20).fill(0xcc)  // only 20 bytes (wrong)
+    const hash1 = Array.from({ length: 32 }, () => 0xaa)
+    const hash2 = Array.from({ length: 32 }, () => 0xbb)
+    const shortPubkey = Array.from({ length: 20 }, () => 0xcc)  // only 20 bytes (wrong)
 
     const badScript = new LockingScript([
       { op: hash1.length, data: hash1 },
