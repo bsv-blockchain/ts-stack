@@ -1,3 +1,4 @@
+// Operator-only integration coverage; excluded from the required deterministic suite.
 import { Beef, Utils } from '@bsv/sdk'
 import { sdk, Services, sha256Hash, wait } from '../../src/index.all'
 import { _tu, TestSetup1Wallet } from '../utils/TestUtilsWalletStorage'
@@ -11,7 +12,7 @@ const utxoTxid = 'e4154d8ab6993addc9b8705318cc8e971dfc0780e233038ecf44c601229d93
 const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
-    const url = typeof input === 'string' ? input : input?.url ?? ''
+    const url = typeof input === 'string' ? input : (input?.url ?? '')
     if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
       return { ok: true, status: 200, json: async () => ({ status: 'success', value: 950000 }) } as any
     }
@@ -19,14 +20,16 @@ beforeAll(() => {
       return new Response(
         JSON.stringify({
           script: utxoScriptHash,
-          result: [{
-            height: 800000,
-            tx_pos: 0,
-            tx_hash: utxoTxid,
-            value: 1,
-            isSpentInMempoolTx: false,
-            status: 'confirmed'
-          }]
+          result: [
+            {
+              height: 800000,
+              tx_pos: 0,
+              tx_hash: utxoTxid,
+              value: 1,
+              isSpentInMempoolTx: false,
+              status: 'confirmed'
+            }
+          ]
         }),
         { status: 200, statusText: 'OK', headers: { 'Content-Type': 'application/json' } }
       )

@@ -1,3 +1,4 @@
+// Operator-only long-running IndexedDB chain synchronization coverage.
 import { _tu } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { wait } from '../../../../utility/utilityHelpers'
 import { createIdbChaintracks } from '../createIdbChaintracks'
@@ -58,7 +59,7 @@ describe('createIdbChaintracks tests', () => {
   })
 })
 
-function countDatas (manager: BulkFileDataManager): number {
+function countDatas(manager: BulkFileDataManager): number {
   let count = 0
   for (const file of manager['bfds'] as BulkHeaderFileInfo[]) {
     if (file.data != null) count += 1

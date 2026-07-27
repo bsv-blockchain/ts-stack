@@ -122,7 +122,12 @@ pnpm --filter @bsv/sdk typecheck
 pnpm --filter @bsv/sdk test:coverage
 pnpm --filter @bsv/sdk pack:check
 pnpm --filter @bsv/sdk test:browser
+pnpm --filter @bsv/sdk test:resource
 ```
+
+`test:resource` is not part of the PR suite: it allocates more than 500 MiB to
+verify the AES-GCM 2^32-bit length boundary. Run it only on a suitable isolated
+machine and record release evidence when AES-GCM length handling changes.
 
 `pack:check` installs the exact generated tarball into ESM and CommonJS
 consumer projects and verifies public exports and conditional type resolution.

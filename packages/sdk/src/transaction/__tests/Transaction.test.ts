@@ -1,4 +1,3 @@
-
 import BigNumber from '../../primitives/BigNumber'
 import TransactionSignature from '../../primitives/TransactionSignature'
 import { toHex, toArray, Writer, Reader } from '../../primitives/utils'
@@ -23,8 +22,10 @@ jest.mock('../../transaction/fee-models/LivePolicy', () => {
   const SPKB = require('../../transaction/fee-models/SatoshisPerKilobyte').default
   class MockLivePolicy extends SPKB {
     static instance: MockLivePolicy | null = null
-    constructor () { super(100) }
-    static getInstance (): MockLivePolicy {
+    constructor() {
+      super(100)
+    }
+    static getInstance(): MockLivePolicy {
       if (!MockLivePolicy.instance) MockLivePolicy.instance = new MockLivePolicy()
       return MockLivePolicy.instance
     }
@@ -37,14 +38,17 @@ import invalidTransactions from './tx.invalid.vectors'
 import validTransactions from './tx.valid.vectors'
 import bigTX from './bigtx.vectors'
 import { BroadcastResponse } from '../../transaction/Broadcaster'
-import { WalletInterface, CreateActionArgs, CreateActionResult } from '../../wallet/Wallet.interfaces'
+import {
+  WalletInterface,
+  CreateActionArgs,
+  CreateActionResult
+} from '../../wallet/Wallet.interfaces'
 import ScriptChunk from '../../script/ScriptChunk'
 import OP from '../../script/OP'
 
 const BRC62Hex =
   '0100beef01fe636d0c0007021400fe507c0c7aa754cef1f7889d5fd395cf1f785dd7de98eed895dbedfe4e5bc70d1502ac4e164f5bc16746bb0868404292ac8318bbac3800e4aad13a014da427adce3e010b00bc4ff395efd11719b277694cface5aa50d085a0bb81f613f70313acd28cf4557010400574b2d9142b8d28b61d88e3b2c3f44d858411356b49a28a4643b6d1a6a092a5201030051a05fc84d531b5d250c23f4f886f6812f9fe3f402d61607f977b4ecd2701c19010000fd781529d58fc2523cf396a7f25440b409857e7e221766c57214b1d38c7b481f01010062f542f45ea3660f86c013ced80534cb5fd4c19d66c56e7e8c5d4bf2d40acc5e010100b121e91836fd7cd5102b654e9f72f3cf6fdbfd0b161c53a9c54b12c841126331020100000001cd4e4cac3c7b56920d1e7655e7e260d31f29d9a388d04910f1bbd72304a79029010000006b483045022100e75279a205a547c445719420aa3138bf14743e3f42618e5f86a19bde14bb95f7022064777d34776b05d816daf1699493fcdf2ef5a5ab1ad710d9c97bfb5b8f7cef3641210263e2dee22b1ddc5e11f6fab8bcd2378bdd19580d640501ea956ec0e786f93e76ffffffff013e660000000000001976a9146bfd5c7fbe21529d45803dbcf0c87dd3c71efbc288ac0000000001000100000001ac4e164f5bc16746bb0868404292ac8318bbac3800e4aad13a014da427adce3e000000006a47304402203a61a2e931612b4bda08d541cfb980885173b8dcf64a3471238ae7abcd368d6402204cbf24f04b9aa2256d8901f0ed97866603d2be8324c2bfb7a37bf8fc90edd5b441210263e2dee22b1ddc5e11f6fab8bcd2378bdd19580d640501ea956ec0e786f93e76ffffffff013c660000000000001976a9146bfd5c7fbe21529d45803dbcf0c87dd3c71efbc288ac0000000000'
-const MerkleRootFromBEEF =
-  'bb6f640cc4ee56bf38eb5a1969ac0c16caa2d3d202b22bf3735d10eec0ca6e00'
+const MerkleRootFromBEEF = 'bb6f640cc4ee56bf38eb5a1969ac0c16caa2d3d202b22bf3735d10eec0ca6e00'
 
 const testPrivateKey = new PrivateKey(11)
 const testP2PKHScript = new P2PKH().lock(testPrivateKey.toPublicKey().toHash())
@@ -54,8 +58,7 @@ describe('Transaction', () => {
     '000000000100000000000000000000000000000000000000000000000000000000000000000000000001ae0000000001050000000000000001ae00000000'
   const txbuf = toArray(txhex, 'hex')
 
-  const tx2idhex =
-    '8c9aa966d35bfeaf031409e0001b90ccdafd8d859799eb945a3c515b8260bcf2'
+  const tx2idhex = '8c9aa966d35bfeaf031409e0001b90ccdafd8d859799eb945a3c515b8260bcf2'
   const tx2hex =
     '01000000029e8d016a7b0dc49a325922d05da1f916d1e4d4f0cb840c9727f3d22ce8d1363f000000008c493046022100e9318720bee5425378b4763b0427158b1051eec8b08442ce3fbfbf7b30202a44022100d4172239ebd701dae2fbaaccd9f038e7ca166707333427e3fb2a2865b19a7f27014104510c67f46d2cbb29476d1f0b794be4cb549ea59ab9cc1e731969a7bf5be95f7ad5e7f904e5ccf50a9dc1714df00fbeb794aa27aaff33260c1032d931a75c56f2ffffffffa3195e7a1ab665473ff717814f6881485dc8759bebe97e31c301ffe7933a656f020000008b48304502201c282f35f3e02a1f32d2089265ad4b561f07ea3c288169dedcf2f785e6065efa022100e8db18aadacb382eed13ee04708f00ba0a9c40e3b21cf91da8859d0f7d99e0c50141042b409e1ebbb43875be5edde9c452c82c01e3903d38fa4fd89f3887a52cb8aea9dc8aec7e2c9d5b3609c03eb16259a2537135a1bf0f9c5fbbcbdbaf83ba402442ffffffff02206b1000000000001976a91420bb5c3bfaef0231dc05190e7f1c8e22e098991e88acf0ca0100000000001976a9149e3e2d23973a04ec1b02be97c30ab9f2f27c3b2c88ac00000000'
   const tx2buf = toArray(tx2hex, 'hex')
@@ -141,9 +144,7 @@ describe('Transaction', () => {
     it('should correctly calculate the hash of this known transaction', () => {
       const tx = Transaction.fromBinary(tx2buf)
       const hash = tx.hash()
-      const reversedHash = Array.isArray(hash)
-        ? hash.reverse()
-        : toArray(hash, 'hex').reverse()
+      const reversedHash = Array.isArray(hash) ? hash.reverse() : toArray(hash, 'hex').reverse()
       expect(toHex(reversedHash)).toEqual(tx2idhex)
     })
   })
@@ -158,8 +159,7 @@ describe('Transaction', () => {
   describe('#addInput', () => {
     it('should add an input', () => {
       const txIn = {
-        sourceTXID:
-          '0000000000000000000000000000000000000000000000000000000000000000',
+        sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
         sourceOutputIndex: 0,
         unlockingScript: new UnlockingScript(),
         sequence: 0xffffffff
@@ -288,10 +288,7 @@ describe('Transaction', () => {
     it('Throws an Error if signing before the fee is computed', async () => {
       const privateKey = new PrivateKey(1)
       const publicKey = new Curve().g.mul(privateKey)
-      const publicKeyHash = hash160(
-        publicKey.encode(true),
-        'hex'
-      ) as unknown as number[]
+      const publicKeyHash = hash160(publicKey.encode(true), 'hex') as unknown as number[]
       const p2pkh = new P2PKH()
       const sourceTx = new Transaction(
         1,
@@ -703,12 +700,10 @@ describe('Transaction', () => {
             sequence: 0xffffffff
           }
         ],
-        new Array(21)
-          .fill(null)
-          .map(() => ({
-            lockingScript: p2pkh.lock(publicKeyHash),
-            change: true
-          })),
+        new Array(21).fill(null).map(() => ({
+          lockingScript: p2pkh.lock(publicKeyHash),
+          change: true
+        })),
         0
       )
       await spendTx.fee(
@@ -725,15 +720,13 @@ describe('Transaction', () => {
         {
           height: 1600000,
           tx_pos: 0,
-          tx_hash:
-            '672dd6a93fa5d7ba6794e0bdf8b479440b95a55ec10ad3d9e03585ecb5628d8d',
+          tx_hash: '672dd6a93fa5d7ba6794e0bdf8b479440b95a55ec10ad3d9e03585ecb5628d8d',
           value: 10000
         },
         {
           height: 1600000,
           tx_pos: 0,
-          tx_hash:
-            'f33505acf37a7726cc37d391bc6f889b8684ac2a2d581c4be2a4b1c8b46609bc',
+          tx_hash: 'f33505acf37a7726cc37d391bc6f889b8684ac2a2d581c4be2a4b1c8b46609bc',
           value: 10000
         }
       ]
@@ -777,7 +770,7 @@ describe('Transaction', () => {
         })
       })
 
-        ; (global as any).window = { fetch: mockedFetch } as any
+      ;(global as any).window = { fetch: mockedFetch } as any
 
       const tx = new Transaction()
       const rv = await tx.broadcast()
@@ -820,9 +813,7 @@ describe('Transaction', () => {
     describe('BEEF', () => {
       it('Serialization and deserialization', async () => {
         const tx = Transaction.fromBEEF(toArray(BRC62Hex, 'hex'))
-        expect(tx.inputs[0].sourceTransaction?.merklePath?.blockHeight).toEqual(
-          814435
-        )
+        expect(tx.inputs[0].sourceTransaction?.merklePath?.blockHeight).toEqual(814435)
         const beef = toHex(tx.toBEEF())
         expect(beef).toEqual(BRC62Hex)
       })
@@ -875,7 +866,7 @@ describe('Transaction', () => {
           merkleroot: MerkleRootFromBEEF
         })
       })
-        ; (global as any).window = { fetch: mockFetch }
+      ;(global as any).window = { fetch: mockFetch }
 
       const tx = Transaction.fromHexBEEF(BRC62Hex)
 
@@ -904,9 +895,7 @@ describe('Transaction', () => {
       )
 
       // Create a mock MerklePath
-      const mockMerklePath = new MerklePath(0, [
-        [{ offset: 0, hash: 'dummyHash' }]
-      ])
+      const mockMerklePath = new MerklePath(0, [[{ offset: 0, hash: 'dummyHash' }]])
       sourceTransaction.merklePath = mockMerklePath
 
       tx.inputs[0].sourceTransaction = sourceTransaction
@@ -1251,9 +1240,7 @@ describe('Transaction', () => {
         expect(tx.outputs.length).toEqual(2)
         expect(tx.outputs[0].satoshis).toEqual(10000)
         expect(tx.outputs[1].satoshis).toEqual(10000)
-        expect(
-          tx.outputs[0].lockingScript.toHex() === testP2PKHScript.toHex()
-        ).toBeTruthy()
+        expect(tx.outputs[0].lockingScript.toHex() === testP2PKHScript.toHex()).toBeTruthy()
         expect(
           tx.outputs[0].lockingScript.toHex() === tx.outputs[1].lockingScript.toHex()
         ).toBeTruthy()
@@ -1269,20 +1256,36 @@ describe('Transaction', () => {
       const p2pkh = new P2PKH()
 
       // Create a simple transaction
-      const sourceTx = new Transaction(1, [], [{
-        lockingScript: p2pkh.lock(publicKeyHash),
-        satoshis: 10000
-      }], 0)
+      const sourceTx = new Transaction(
+        1,
+        [],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
+        0
+      )
 
-      const spendTx = new Transaction(1, [{
-        sourceTransaction: sourceTx,
-        sourceOutputIndex: 0,
-        unlockingScriptTemplate: p2pkh.unlock(privateKey),
-        sequence: 0xffffffff
-      }], [{
-        satoshis: 9000,
-        lockingScript: p2pkh.lock(publicKeyHash)
-      }], 0)
+      const spendTx = new Transaction(
+        1,
+        [
+          {
+            sourceTransaction: sourceTx,
+            sourceOutputIndex: 0,
+            unlockingScriptTemplate: p2pkh.unlock(privateKey),
+            sequence: 0xffffffff
+          }
+        ],
+        [
+          {
+            satoshis: 9000,
+            lockingScript: p2pkh.lock(publicKeyHash)
+          }
+        ],
+        0
+      )
 
       // Sign the transaction
       await spendTx.fee()
@@ -1339,20 +1342,36 @@ describe('Transaction', () => {
       const publicKeyHash = hash160(publicKey.encode(true)) as number[]
       const p2pkh = new P2PKH()
 
-      const sourceTx = new Transaction(1, [], [{
-        lockingScript: p2pkh.lock(publicKeyHash),
-        satoshis: 10000
-      }], 0)
+      const sourceTx = new Transaction(
+        1,
+        [],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
+        0
+      )
 
-      const spendTx = new Transaction(1, [{
-        sourceTransaction: sourceTx,
-        sourceOutputIndex: 0,
-        unlockingScriptTemplate: p2pkh.unlock(privateKey),
-        sequence: 0xffffffff
-      }], [{
-        satoshis: 9000,
-        lockingScript: p2pkh.lock(publicKeyHash)
-      }], 0)
+      const spendTx = new Transaction(
+        1,
+        [
+          {
+            sourceTransaction: sourceTx,
+            sourceOutputIndex: 0,
+            unlockingScriptTemplate: p2pkh.unlock(privateKey),
+            sequence: 0xffffffff
+          }
+        ],
+        [
+          {
+            satoshis: 9000,
+            lockingScript: p2pkh.lock(publicKeyHash)
+          }
+        ],
+        0
+      )
 
       // Sign transactions
       await spendTx.fee()
@@ -1383,7 +1402,9 @@ describe('Transaction', () => {
       // Attempt to deserialize a non-existent transaction
       expect(() => {
         Transaction.fromBEEF(beefData, '00'.repeat(32))
-      }).toThrow('Transaction with TXID 0000000000000000000000000000000000000000000000000000000000000000 not found in BEEF data.')
+      }).toThrow(
+        'Transaction with TXID 0000000000000000000000000000000000000000000000000000000000000000 not found in BEEF data.'
+      )
     })
   })
 
@@ -1393,22 +1414,22 @@ describe('Transaction', () => {
       tx.addInput({
         sourceTXID: '00'.repeat(32),
         sourceOutputIndex: 0,
-        unlockingScriptTemplate: new P2PKH().unlock(testPrivateKey),
+        unlockingScriptTemplate: new P2PKH().unlock(testPrivateKey)
       })
     })
   })
 
   describe('preventResourceExhaustion', () => {
-    it.skip('should run script evaluation but error out as soon as the memory usage exceeds the limit', async () => {
+    it('should run script evaluation but error out as soon as the memory usage exceeds the limit', async () => {
       const sourceTransaction = new Transaction()
       sourceTransaction.addInput({
         sourceTXID: '00'.repeat(32),
         sourceOutputIndex: 0,
-        unlockingScript: Script.fromASM('OP_TRUE'),
+        unlockingScript: Script.fromASM('OP_TRUE')
       })
       sourceTransaction.addOutput({
         satoshis: 2,
-        lockingScript: Script.fromASM('OP_2 OP_MUL ' + 'OP_DUP OP_MUL '.repeat(22) + 'OP_DROP'),
+        lockingScript: Script.fromASM('OP_2 OP_MUL ' + 'OP_DUP OP_MUL '.repeat(22) + 'OP_DROP')
       })
       await sourceTransaction.sign()
 
@@ -1427,14 +1448,16 @@ describe('Transaction', () => {
       })
       tx.addOutput({
         satoshis: 1,
-        lockingScript: Script.fromASM('OP_NOP'),
+        lockingScript: Script.fromASM('OP_NOP')
       })
       await tx.fee()
       await tx.sign()
 
       // An explicit local budget remains enforceable without becoming a
       // consensus invalidity rule.
-      await expect(tx.verify('scripts only', new SatoshisPerKilobyte(1), 32_000_000)).rejects.toThrow('Stack memory usage has exceeded 32000000 bytes')
+      await expect(
+        tx.verify('scripts only', new SatoshisPerKilobyte(1), 32_000_000)
+      ).rejects.toThrow('Stack memory usage has exceeded 32000000 bytes')
     })
   })
 
@@ -1445,11 +1468,11 @@ describe('Transaction', () => {
       sourceTransaction.addInput({
         sourceTXID: '00'.repeat(32),
         sourceOutputIndex: 0,
-        unlockingScript: Script.fromASM('OP_TRUE'),
+        unlockingScript: Script.fromASM('OP_TRUE')
       })
       sourceTransaction.addOutput({
         satoshis: 2,
-        lockingScript: new P2PKH().lock(key.toAddress()),
+        lockingScript: new P2PKH().lock(key.toAddress())
       })
       await sourceTransaction.sign()
 
@@ -1468,7 +1491,7 @@ describe('Transaction', () => {
       })
       tx.addOutput({
         satoshis: 1,
-        lockingScript: Script.fromASM('OP_NOP'),
+        lockingScript: Script.fromASM('OP_NOP')
       })
       await tx.fee()
       await tx.sign()
@@ -1505,7 +1528,9 @@ describe('Transaction', () => {
             // These will be replaced by the actual scripts in signAction
             const unlockingScript = hasTemplate
               ? Script.fromASM('OP_0') // Placeholder for template inputs
-              : (input.unlockingScript ? Script.fromHex(input.unlockingScript) : Script.fromASM('OP_1'))
+              : input.unlockingScript
+                ? Script.fromHex(input.unlockingScript)
+                : Script.fromASM('OP_1')
 
             tx.addInput({
               sourceTXID: txid,
@@ -1578,10 +1603,12 @@ describe('Transaction', () => {
       const sourceTx = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 10000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
         0
       )
 
@@ -1598,10 +1625,12 @@ describe('Transaction', () => {
       const sourceTx2 = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 5000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 5000
+          }
+        ],
         0
       )
 
@@ -1626,10 +1655,12 @@ describe('Transaction', () => {
             unlockingScript: unlockingScript2
           }
         ],
-        [{
-          satoshis: 14000,
-          lockingScript: p2pkh.lock(publicKeyHash)
-        }],
+        [
+          {
+            satoshis: 14000,
+            lockingScript: p2pkh.lock(publicKeyHash)
+          }
+        ],
         0
       )
 
@@ -1642,7 +1673,10 @@ describe('Transaction', () => {
       const mockWallet = new MockWallet()
 
       // Complete the transaction with the wallet
-      await tx.completeWithWallet(mockWallet as unknown as WalletInterface,'Test transaction completion')
+      await tx.completeWithWallet(
+        mockWallet as unknown as WalletInterface,
+        'Test transaction completion'
+      )
 
       // Verify that the wallet's createAction was called with correct arguments
       expect(mockWallet.lastCreateActionArgs).not.toBeNull()
@@ -1672,10 +1706,12 @@ describe('Transaction', () => {
             sequence: 0xffffffff
           }
         ],
-        [{
-          satoshis: 5000,
-          lockingScript: Script.fromASM('OP_DUP OP_HASH160 OP_EQUALVERIFY OP_CHECKSIG')
-        }],
+        [
+          {
+            satoshis: 5000,
+            lockingScript: Script.fromASM('OP_DUP OP_HASH160 OP_EQUALVERIFY OP_CHECKSIG')
+          }
+        ],
         0
       )
 
@@ -1683,9 +1719,9 @@ describe('Transaction', () => {
       const mockWallet = new MockWallet()
 
       // Expect completeWithWallet to throw an error
-      await expect(tx.completeWithWallet(mockWallet as unknown as WalletInterface))
-        .rejects
-        .toThrow('All inputs must have a sourceTransaction when using completeWithWallet')
+      await expect(tx.completeWithWallet(mockWallet as unknown as WalletInterface)).rejects.toThrow(
+        'All inputs must have a sourceTransaction when using completeWithWallet'
+      )
     })
 
     it('should throw an error when inputs do not have unlocking scripts', async () => {
@@ -1699,10 +1735,12 @@ describe('Transaction', () => {
       const sourceTx = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 10000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
         0
       )
 
@@ -1717,10 +1755,12 @@ describe('Transaction', () => {
             // Note: no unlockingScript property
           }
         ],
-        [{
-          satoshis: 5000,
-          lockingScript: Script.fromASM('OP_DUP OP_HASH160 OP_EQUALVERIFY OP_CHECKSIG')
-        }],
+        [
+          {
+            satoshis: 5000,
+            lockingScript: Script.fromASM('OP_DUP OP_HASH160 OP_EQUALVERIFY OP_CHECKSIG')
+          }
+        ],
         0
       )
 
@@ -1728,9 +1768,9 @@ describe('Transaction', () => {
       const mockWallet = new MockWallet()
 
       // Expect completeWithWallet to throw an error
-      await expect(tx.completeWithWallet(mockWallet as unknown as WalletInterface))
-        .rejects
-        .toThrow('All inputs must have an unlockingScript when using completeWithWallet')
+      await expect(tx.completeWithWallet(mockWallet as unknown as WalletInterface)).rejects.toThrow(
+        'All inputs must have an unlockingScript when using completeWithWallet'
+      )
     })
 
     it('should use signAction flow when inputs have unlockingScriptTemplate', async () => {
@@ -1744,10 +1784,12 @@ describe('Transaction', () => {
       const sourceTx = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 10000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
         0
       )
 
@@ -1773,10 +1815,12 @@ describe('Transaction', () => {
             unlockingScriptTemplate: mockTemplate
           }
         ],
-        [{
-          satoshis: 9000,
-          lockingScript: p2pkh.lock(publicKeyHash)
-        }],
+        [
+          {
+            satoshis: 9000,
+            lockingScript: p2pkh.lock(publicKeyHash)
+          }
+        ],
         0
       )
 
@@ -1784,14 +1828,16 @@ describe('Transaction', () => {
       const mockWallet = new MockWallet()
 
       // Complete the transaction with the wallet
-      await tx.completeWithWallet(mockWallet as unknown as WalletInterface,'Test with template')
+      await tx.completeWithWallet(mockWallet as unknown as WalletInterface, 'Test with template')
 
       // Verify that signAction was called
       expect(mockWallet.signActionCalled).toBe(true)
       expect(mockWallet.lastSignActionArgs).not.toBeNull()
       expect(mockWallet.lastSignActionArgs.reference).toBe('test-reference-123')
       expect(mockWallet.lastSignActionArgs.spends).toHaveProperty('0')
-      expect(mockWallet.lastSignActionArgs.spends[0].unlockingScript).toBe(Script.fromASM('OP_1 OP_2').toHex())
+      expect(mockWallet.lastSignActionArgs.spends[0].unlockingScript).toBe(
+        Script.fromASM('OP_1 OP_2').toHex()
+      )
 
       // Verify that createAction was called with signAndProcess: false
       expect(mockWallet.lastCreateActionArgs).not.toBeNull()
@@ -1813,20 +1859,24 @@ describe('Transaction', () => {
       const sourceTx1 = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 10000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
         0
       )
 
       const sourceTx2 = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 5000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 5000
+          }
+        ],
         0
       )
 
@@ -1857,10 +1907,12 @@ describe('Transaction', () => {
             unlockingScript: Script.fromASM('OP_3 OP_4') // Second input has script already
           }
         ],
-        [{
-          satoshis: 14000,
-          lockingScript: p2pkh.lock(publicKeyHash)
-        }],
+        [
+          {
+            satoshis: 14000,
+            lockingScript: p2pkh.lock(publicKeyHash)
+          }
+        ],
         0
       )
 
@@ -1868,7 +1920,10 @@ describe('Transaction', () => {
       const mockWallet = new MockWallet()
 
       // Complete the transaction with the wallet
-      await tx.completeWithWallet(mockWallet as unknown as WalletInterface,'Test with mixed inputs')
+      await tx.completeWithWallet(
+        mockWallet as unknown as WalletInterface,
+        'Test with mixed inputs'
+      )
 
       // Verify that signAction was called (because at least one template exists)
       expect(mockWallet.signActionCalled).toBe(true)
@@ -1878,10 +1933,14 @@ describe('Transaction', () => {
       expect(mockWallet.lastSignActionArgs.spends).toHaveProperty('1')
 
       // First input should have template-generated script
-      expect(mockWallet.lastSignActionArgs.spends[0].unlockingScript).toBe(Script.fromASM('OP_1 OP_2').toHex())
+      expect(mockWallet.lastSignActionArgs.spends[0].unlockingScript).toBe(
+        Script.fromASM('OP_1 OP_2').toHex()
+      )
 
       // Second input should have pre-existing script
-      expect(mockWallet.lastSignActionArgs.spends[1].unlockingScript).toBe(Script.fromASM('OP_3 OP_4').toHex())
+      expect(mockWallet.lastSignActionArgs.spends[1].unlockingScript).toBe(
+        Script.fromASM('OP_3 OP_4').toHex()
+      )
 
       // Verify createAction args
       const firstInputArg = mockWallet.lastCreateActionArgs!.inputs![0]
@@ -1901,20 +1960,24 @@ describe('Transaction', () => {
       const sourceTx1 = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 10000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 10000
+          }
+        ],
         0
       )
 
       const sourceTx2 = new Transaction(
         1,
         [],
-        [{
-          lockingScript: p2pkh.lock(publicKeyHash),
-          satoshis: 5000
-        }],
+        [
+          {
+            lockingScript: p2pkh.lock(publicKeyHash),
+            satoshis: 5000
+          }
+        ],
         0
       )
 
@@ -1945,32 +2008,41 @@ describe('Transaction', () => {
             // No unlockingScript or unlockingScriptTemplate
           }
         ],
-        [{
-          satoshis: 14000,
-          lockingScript: p2pkh.lock(publicKeyHash)
-        }],
+        [
+          {
+            satoshis: 14000,
+            lockingScript: p2pkh.lock(publicKeyHash)
+          }
+        ],
         0
       )
 
       const mockWallet = new MockWallet()
 
       // Should throw error about missing script/template on input 1
-      await expect(tx.completeWithWallet(mockWallet as unknown as WalletInterface))
-        .rejects
-        .toThrow('Input 1 must have either an unlockingScript or unlockingScriptTemplate')
+      await expect(tx.completeWithWallet(mockWallet as unknown as WalletInterface)).rejects.toThrow(
+        'Input 1 must have either an unlockingScript or unlockingScriptTemplate'
+      )
     })
 
     it('should pass options to createAction for standard flow', async () => {
       // Create a simple transaction
-      const sourceTx = new Transaction(1, [], [{ lockingScript: testP2PKHScript, satoshis: 10000 }], 0)
+      const sourceTx = new Transaction(
+        1,
+        [],
+        [{ lockingScript: testP2PKHScript, satoshis: 10000 }],
+        0
+      )
       const tx = new Transaction(
         1,
-        [{
-          sourceTransaction: sourceTx,
-          sourceOutputIndex: 0,
-          sequence: 0xffffffff,
-          unlockingScript: Script.fromASM('OP_0 OP_0')
-        }],
+        [
+          {
+            sourceTransaction: sourceTx,
+            sourceOutputIndex: 0,
+            sequence: 0xffffffff,
+            unlockingScript: Script.fromASM('OP_0 OP_0')
+          }
+        ],
         [{ satoshis: 9000, lockingScript: testP2PKHScript }],
         0
       )
@@ -1982,7 +2054,12 @@ describe('Transaction', () => {
         returnTXIDOnly: true
       }
 
-      await tx.completeWithWallet(mockWallet as unknown as WalletInterface,'Test with options', undefined, options)
+      await tx.completeWithWallet(
+        mockWallet as unknown as WalletInterface,
+        'Test with options',
+        undefined,
+        options
+      )
 
       // Verify options were passed to createAction
       expect(mockWallet.lastCreateActionArgs?.options).toEqual(options)
@@ -1990,18 +2067,25 @@ describe('Transaction', () => {
 
     it('should pass options to both createAction and signAction for template flow', async () => {
       // Create transaction with template
-      const sourceTx = new Transaction(1, [], [{ lockingScript: testP2PKHScript, satoshis: 10000 }], 0)
+      const sourceTx = new Transaction(
+        1,
+        [],
+        [{ lockingScript: testP2PKHScript, satoshis: 10000 }],
+        0
+      )
       const tx = new Transaction(
         1,
-        [{
-          sourceTransaction: sourceTx,
-          sourceOutputIndex: 0,
-          sequence: 0xffffffff,
-          unlockingScriptTemplate: {
-            sign: async (tx, inputIndex) => Script.fromASM('OP_0 OP_0'),
-            estimateLength: async (tx, inputIndex) => 100
+        [
+          {
+            sourceTransaction: sourceTx,
+            sourceOutputIndex: 0,
+            sequence: 0xffffffff,
+            unlockingScriptTemplate: {
+              sign: async (tx, inputIndex) => Script.fromASM('OP_0 OP_0'),
+              estimateLength: async (tx, inputIndex) => 100
+            }
           }
-        }],
+        ],
         [{ satoshis: 9000, lockingScript: testP2PKHScript }],
         0
       )
@@ -2015,7 +2099,12 @@ describe('Transaction', () => {
         randomizeOutputs: false
       }
 
-      await tx.completeWithWallet(mockWallet as unknown as WalletInterface,'Test template with options', undefined, options)
+      await tx.completeWithWallet(
+        mockWallet as unknown as WalletInterface,
+        'Test template with options',
+        undefined,
+        options
+      )
 
       // Verify signAndProcess: false was set for createAction (required for template flow)
       expect(mockWallet.lastCreateActionArgs?.options?.signAndProcess).toBe(false)
@@ -2041,11 +2130,11 @@ describe('Transaction', () => {
       sourceTransaction.addInput({
         sourceTXID: '00'.repeat(32),
         sourceOutputIndex: 0,
-        unlockingScript: Script.fromASM('OP_TRUE'),
+        unlockingScript: Script.fromASM('OP_TRUE')
       })
       sourceTransaction.addOutput({
         satoshis: 2,
-        lockingScript: Script.fromASM('OP_2 OP_MUL OP_DUP OP_MUL OP_DUP OP_MUL OP_DROP'),
+        lockingScript: Script.fromASM('OP_2 OP_MUL OP_DUP OP_MUL OP_DUP OP_MUL OP_DROP')
       })
       await sourceTransaction.sign()
 
@@ -2064,7 +2153,7 @@ describe('Transaction', () => {
       })
       tx.addOutput({
         satoshis: 1,
-        lockingScript: Script.fromASM('OP_NOP'),
+        lockingScript: Script.fromASM('OP_NOP')
       })
       await tx.fee()
       await tx.sign()
@@ -2157,15 +2246,16 @@ describe('Transaction', () => {
 
     it('should generate preimage with custom signatureScope', () => {
       const defaultPreimage = spendTx.preimage()
-      const customPreimage = spendTx.preimage(0, TransactionSignature.SIGHASH_FORKID | TransactionSignature.SIGHASH_NONE)
+      const customPreimage = spendTx.preimage(
+        0,
+        TransactionSignature.SIGHASH_FORKID | TransactionSignature.SIGHASH_NONE
+      )
       expect(Array.isArray(customPreimage)).toBe(true)
       expect(customPreimage).not.toEqual(defaultPreimage)
     })
 
     it('should generate preimage with custom subscript', () => {
-      const customScript = LockingScript.fromASM(
-        'OP_CHECKSIG'
-      )
+      const customScript = LockingScript.fromASM('OP_CHECKSIG')
       const preimage = spendTx.preimage(0, undefined, customScript)
       expect(Array.isArray(preimage)).toBe(true)
     })
@@ -2227,7 +2317,7 @@ describe('Transaction', () => {
       )
       expect(() => {
         tx.preimage()
-      }).toThrow('Source transaction\'s output at index 0 is required')
+      }).toThrow("Source transaction's output at index 0 is required")
     })
 
     it('should throw error when FORKID is not set in signatureScope', () => {

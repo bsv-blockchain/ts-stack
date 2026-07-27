@@ -35,7 +35,14 @@ export function parseCustomInstructions(
   }
   try {
     const instructions = JSON.parse(customInstructions)
-    if (instructions.derivationPrefix && instructions.derivationSuffix) {
+    if (
+      typeof instructions.derivationPrefix === 'string' &&
+      instructions.derivationPrefix.length > 0 &&
+      typeof instructions.derivationSuffix === 'string' &&
+      instructions.derivationSuffix.length > 0 &&
+      (instructions.senderIdentityKey === undefined ||
+        typeof instructions.senderIdentityKey === 'string')
+    ) {
       return {
         keyID: `${instructions.derivationPrefix} ${instructions.derivationSuffix}`,
         senderIdentityKey: instructions.senderIdentityKey

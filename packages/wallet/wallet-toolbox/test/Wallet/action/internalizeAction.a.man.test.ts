@@ -6,7 +6,7 @@ import { getBeefForTransaction } from '../../../src/storage/methods/getBeefForTr
 /**
  * NOT PASSING YET
  */
-describe.skip('internalizeAction tests', () => {
+describe('internalizeAction tests', () => {
   jest.setTimeout(99999999)
 
   const env = _tu.getEnvFlags('test')

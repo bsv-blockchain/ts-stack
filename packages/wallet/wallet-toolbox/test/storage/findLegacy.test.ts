@@ -17,29 +17,7 @@ describe('find tests', () => {
     }
   })
 
-  test('0 find ProvenTx', async () => {
-    for (const { storage } of ctxs) {
-    }
-  })
-
-  test('1 find ProvenTxReq', async () => {
-    for (const { storage } of ctxs) {
-    }
-  })
-
-  test('2 find User', async () => {})
-
-  test('3 find Certificate', async () => {})
-
-  test('4 find CertificateField', async () => {})
-
-  test('5 find OutputBasket', async () => {})
-
-  test('6 find Transaction', async () => {})
-
-  test('7 find Commission', async () => {})
-
-  test('8 find Output', async () => {
+  test('finds a sending output in the legacy fixture', async () => {
     for (const { storage } of ctxs) {
       {
         const r = await storage.findOutputs({
@@ -52,16 +30,4 @@ describe('find tests', () => {
       }
     }
   })
-
-  test('9 find OutputTag', async () => {})
-
-  test('10 find OutputTagMap', async () => {})
-
-  test('11 find TxLabel', async () => {})
-
-  test('12 find TxLabelMap', async () => {})
-
-  test('13 find MonitorEvent', async () => {})
-
-  test('14 find SyncState', async () => {})
 })

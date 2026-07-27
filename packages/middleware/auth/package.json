@@ -36,6 +36,7 @@
   "scripts": {
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests__/core.property.test.ts",
     "test:watch": "jest --watch",
     "test:perf": "jest --config jest.perf.config.js --runInBand",
     "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
@@ -59,6 +60,7 @@
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "tslib": "^2.8.1",

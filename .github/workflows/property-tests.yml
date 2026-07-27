@@ -1,0 +1,102 @@
+name: Property fuzzing
+
+on:
+  schedule:
+    - cron: '31 7 * * 6'
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Generated cases per property (300-100000)
+        required: false
+        default: 5000
+        type: number
+      seed:
+        description: Optional signed 32-bit fast-check seed
+        required: false
+        type: string
+      path:
+        description: Optional fast-check shrink path from a prior failure
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: property-fuzzing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  property-tests:
+    name: Property fuzzing / 15 packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+
+      - name: Validate and configure the reproducible campaign
+        env:
+          REQUESTED_RUNS: ${{ inputs.runs || 5000 }}
+          REQUESTED_SEED: ${{ inputs.seed || github.run_number }}
+          REQUESTED_PATH: ${{ inputs.path || '' }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const runs = Number(process.env.REQUESTED_RUNS)
+          const seed = Number(process.env.REQUESTED_SEED)
+          const path = process.env.REQUESTED_PATH ?? ''
+          if (!Number.isSafeInteger(runs) || runs < 300 || runs > 100000) {
+            throw new Error('runs must be a safe integer from 300 through 100000')
+          }
+          if (!Number.isInteger(seed) || seed < -2147483648 || seed > 2147483647) {
+            throw new Error('seed must be a signed 32-bit integer')
+          }
+          if (path !== '' && !/^\d+(?::\d+)*$/.test(path)) {
+            throw new Error('path must be a colon-delimited fast-check shrink path')
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            `FAST_CHECK_NUM_RUNS=${runs}\nFAST_CHECK_SEED=${seed}\nFAST_CHECK_PATH=${path}\n`
+          )
+          NODE
+
+      - name: Build and run the full property campaign
+        run: |
+          set -o pipefail
+          pnpm test:property 2>&1 | tee property-tests.log
+
+      - name: Record campaign replay details
+        if: always()
+        run: |
+          {
+            echo "## Property fuzzing campaign"
+            echo
+            echo "- Cases per property: \`$FAST_CHECK_NUM_RUNS\`"
+            echo "- Seed: \`$FAST_CHECK_SEED\`"
+            echo "- Shrink path: \`${FAST_CHECK_PATH:-<none>}\`"
+            echo "- Replay: \`FAST_CHECK_NUM_RUNS=$FAST_CHECK_NUM_RUNS FAST_CHECK_SEED=$FAST_CHECK_SEED FAST_CHECK_PATH='$FAST_CHECK_PATH' pnpm test:property\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve the failing seed, shrink path, and counterexample log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: property-fuzzing-failure-${{ github.run_id }}
+          path: property-tests.log
+          if-no-files-found: error
+          retention-days: 30

@@ -15,6 +15,10 @@ export interface ReorgHandlerInput {
   newTipHeight: number
 }
 
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
 /**
  * Parses a single SSE data frame (a go-chaintracks `ReorgEvent` JSON document)
  * into `handleReorg` input. Returns `null` for malformed frames.
@@ -24,7 +28,7 @@ export interface ReorgHandlerInput {
  * values marshaled as reversed (display) hex; they are lower-cased here to match
  * the overlay's stored block hashes.
  */
-export function parseReorgEvent (frame: string): ReorgHandlerInput | null {
+export function parseReorgEvent(frame: string): ReorgHandlerInput | null {
   let event: any
   try {
     event = JSON.parse(frame)
@@ -33,22 +37,28 @@ export function parseReorgEvent (frame: string): ReorgHandlerInput | null {
   }
 
   const newTipHeight = event?.newTip?.height
-  if (typeof newTipHeight !== 'number') {
+  if (!isNonNegativeSafeInteger(newTipHeight)) {
     return null
   }
 
   const orphanedBlockHashes: string[] = Array.isArray(event.orphanedHashes)
     ? event.orphanedHashes
-      .filter((hash: unknown): hash is string => typeof hash === 'string')
-      .map((hash: string) => hash.toLowerCase())
+        .filter(
+          (hash: unknown): hash is string =>
+            typeof hash === 'string' && /^[0-9a-fA-F]{64}$/.test(hash)
+        )
+        .map((hash: string) => hash.toLowerCase())
     : []
 
   const ancestorHeight: unknown = event?.commonAncestor?.height
   const depth: unknown = event?.depth
   let rebuildFromHeight: number
-  if (typeof ancestorHeight === 'number') {
+  if (isNonNegativeSafeInteger(ancestorHeight)) {
+    if (ancestorHeight > newTipHeight) {
+      return null
+    }
     rebuildFromHeight = ancestorHeight + 1
-  } else if (typeof depth === 'number') {
+  } else if (isNonNegativeSafeInteger(depth)) {
     // No common ancestor (e.g. reorg deeper than retained history): fall back to
     // the reported depth from the new tip.
     rebuildFromHeight = Math.max(0, newTipHeight - depth + 1)
@@ -65,7 +75,7 @@ export function parseReorgEvent (frame: string): ReorgHandlerInput | null {
  * comment lines (starting with `:`) are ignored. Any trailing partial frame is
  * returned in `rest` for the next read.
  */
-export function extractSseFrames (buffer: string): { events: string[], rest: string } {
+export function extractSseFrames(buffer: string): { events: string[]; rest: string } {
   const events: string[] = []
   let working = buffer
   let boundary = working.indexOf('\n\n')
@@ -117,7 +127,7 @@ export class ReorgSseAdapter {
   private controller?: AbortController
   private stopped = false
 
-  constructor (options: ReorgSseAdapterOptions) {
+  constructor(options: ReorgSseAdapterOptions) {
     this.url = options.url
     this.onReorg = options.onReorg
     this.onConnect = options.onConnect
@@ -127,7 +137,7 @@ export class ReorgSseAdapter {
   }
 
   /** Begins consuming the stream in the background. */
-  start (): void {
+  start(): void {
     if (this.stopped) {
       return
     }
@@ -135,18 +145,20 @@ export class ReorgSseAdapter {
   }
 
   /** Stops consuming and aborts any in-flight connection. */
-  stop (): void {
+  stop(): void {
     this.stopped = true
     this.controller?.abort()
   }
 
-  private async runLoop (): Promise<void> {
+  private async runLoop(): Promise<void> {
     while (!this.stopped) {
       try {
         await this.connectOnce()
       } catch (error) {
         if (!this.stopped) {
-          this.logger.warn(`[BASM] reorg stream error: ${error instanceof Error ? error.message : String(error)}`)
+          this.logger.warn(
+            `[BASM] reorg stream error: ${error instanceof Error ? error.message : String(error)}`
+          )
         }
       }
       if (this.stopped) {
@@ -156,7 +168,7 @@ export class ReorgSseAdapter {
     }
   }
 
-  private async connectOnce (): Promise<void> {
+  private async connectOnce(): Promise<void> {
     this.controller = new AbortController()
     const response = await this.fetchImpl(this.url, {
       headers: { Accept: 'text/event-stream' },
@@ -171,18 +183,20 @@ export class ReorgSseAdapter {
     await this.pumpEvents(response.body.getReader())
   }
 
-  private async runCatchUp (): Promise<void> {
+  private async runCatchUp(): Promise<void> {
     if (this.onConnect === undefined) {
       return
     }
     try {
       await this.onConnect()
     } catch (error) {
-      this.logger.warn(`[BASM] reorg catch-up failed: ${error instanceof Error ? error.message : String(error)}`)
+      this.logger.warn(
+        `[BASM] reorg catch-up failed: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
-  private async pumpEvents (reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
+  private async pumpEvents(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
     const decoder = new TextDecoder()
     let buffer = ''
     while (!this.stopped) {
@@ -199,7 +213,7 @@ export class ReorgSseAdapter {
     }
   }
 
-  private async processReorgFrame (frame: string): Promise<void> {
+  private async processReorgFrame(frame: string): Promise<void> {
     const input = parseReorgEvent(frame)
     if (input === null) {
       this.logger.warn('[BASM] skipping malformed reorg frame')
@@ -208,11 +222,13 @@ export class ReorgSseAdapter {
     try {
       await this.onReorg(input)
     } catch (error) {
-      this.logger.error(`[BASM] handleReorg failed: ${error instanceof Error ? error.message : String(error)}`)
+      this.logger.error(
+        `[BASM] handleReorg failed: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
-  private async delay (ms: number): Promise<void> {
+  private async delay(ms: number): Promise<void> {
     await new Promise<void>(resolve => {
       const timer = setTimeout(resolve, ms)
       timer.unref?.()

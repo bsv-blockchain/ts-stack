@@ -6,7 +6,7 @@
     "declarationMap": false,
     "incremental": false,
     "noEmit": true,
-    "types": ["jest"]
+    "types": ["jest", "node"]
   },
   "files": [],
   "include": ["src/**/*.ts"]

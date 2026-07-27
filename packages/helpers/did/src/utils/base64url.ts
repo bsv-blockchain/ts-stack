@@ -7,6 +7,19 @@ export function base64UrlEncode(bytes: Uint8Array | number[] | string): string {
 }
 
 export function base64UrlDecode(value: string): number[] {
+  if (!/^[A-Za-z0-9_-]*$/.test(value) || value.length % 4 === 1) {
+    throw new TypeError('Invalid base64url encoding')
+  }
+  const remainder = value.length % 4
+  const lastSextet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'.indexOf(
+    value.at(-1) ?? 'A'
+  )
+  if (
+    (remainder === 2 && (lastSextet & 0x0f) !== 0) ||
+    (remainder === 3 && (lastSextet & 0x03) !== 0)
+  ) {
+    throw new TypeError('Invalid base64url encoding')
+  }
   const base64 = value
     .replaceAll('-', '+')
     .replaceAll('_', '/')

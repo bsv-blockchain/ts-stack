@@ -31,6 +31,7 @@
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports TeranodeListener,decodeMessage,startSubscriber,tryDecodeMessage",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath test/messages.property.test.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build"
   },
@@ -56,6 +57,7 @@
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "tsx": "^4.23.1",

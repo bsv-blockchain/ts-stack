@@ -50,9 +50,12 @@
     "BRC100"
   ],
   "scripts": {
-    "test": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|bench.test.ts|client/test|mobile/test' --watchman=false",
-    "test:watch": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|client/test|mobile/test' --watch",
-    "test:coverage": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|bench.test.ts|client/test|mobile/test' --coverage --watchman=false",
+    "test": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --watchman=false",
+    "test:watch": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|client/test|mobile/test' --watch",
+    "test:coverage": "pnpm build && jest --testPathIgnorePatterns='man.test.ts|live.test.ts|bench.test.ts|client/test|mobile/test' --coverage --watchman=false",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/utility/__tests/actionBatchPack.property.test.ts --testPathIgnorePatterns=man.test.ts",
+    "test:manual": "pnpm build && node ../../../scripts/run-governed-test.mjs manual",
+    "test:live": "pnpm build && node ../../../scripts/run-governed-test.mjs live",
     "bench:action-batch": "pnpm build && jest --runInBand --runTestsByPath benchmarks/action-batch.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/{README.md,jest.config.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint src benchmarks --ignore-pattern 'src/**/__test/**' --ignore-pattern 'src/**/__tests/**' --ignore-pattern 'src/**/*.test.ts' --ignore-pattern 'benchmarks/**/*.test.ts' --deny-warnings",
@@ -92,6 +95,7 @@
     "@types/node": "^26.1.1",
     "cors": "^2.8.6",
     "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.9.0",
     "fs-extra": "^11.4.0",
     "jest": "^30.4.2",
     "picocolors": "^1.1.1",

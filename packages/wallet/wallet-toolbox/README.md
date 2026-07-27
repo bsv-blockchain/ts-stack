@@ -168,7 +168,11 @@ pnpm --filter @bsv/wallet-toolbox-mobile test:mobile
 Tests use Jest. The default and coverage suites are deterministic and must not
 depend on live third-party services. Files named `*.man.test.ts` are explicit
 manual/integration tests excluded from CI because they require credentials,
-network access, or long runtimes. CI merges four Wallet Toolbox coverage shards
+network access, or long runtimes. Files named `*.live.test.ts` are public-network
+checks, also excluded from deterministic PR coverage. Run exactly one governed
+suite with `test:manual -- <path>` or `test:live -- <path>` after reviewing
+`governance/test-quality/policy.json`; never batch-run operator suites. CI
+merges four Wallet Toolbox coverage shards
 for reporting; the complete local `test:coverage` run currently measures
 69.12% statements, 59.09% branches, 72.83% functions, and 71.06% lines.
 

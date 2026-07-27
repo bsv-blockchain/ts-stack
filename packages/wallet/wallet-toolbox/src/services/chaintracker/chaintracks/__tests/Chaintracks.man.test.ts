@@ -1,3 +1,4 @@
+// Operator-only long-running chain synchronization coverage.
 import { createDefaultKnexChaintracksOptions } from '../createDefaultKnexChaintracksOptions'
 import { Chaintracks } from '../Chaintracks'
 import { wait } from '../../../../utility/utilityHelpers'
@@ -63,7 +64,7 @@ describe('Chaintracks tests', () => {
     await server.stop()
   })
 
-  async function NoDbBody (chain: Chain, exportHeaders?: boolean) {
+  async function NoDbBody(chain: Chain, exportHeaders?: boolean) {
     const o = createDefaultNoDbChaintracksOptions(chain)
     const c = new Chaintracks(o)
     await c.makeAvailable()

@@ -1,3 +1,4 @@
+// Operator-only live-provider coverage; excluded from the required deterministic suite.
 import { _tu } from '../../../../test/utils/TestUtilsWalletStorage'
 import { WhatsOnChain } from '../WhatsOnChain'
 import { Services } from '../../Services'

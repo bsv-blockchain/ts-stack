@@ -5,7 +5,6 @@
  * AnyLookupService stores admitted outputs in MongoDB and serves queries.
  */
 
-import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
 import { P2PKH, PrivateKey, Transaction } from '@bsv/sdk'
@@ -88,13 +87,12 @@ describe('AnyLookupService (MongoDB)', () => {
   let service: AnyLookupService
 
   beforeAll(async () => {
-    jest.setTimeout(60000)
     mongod = await MongoMemoryServer.create(mongoMemoryServerOptions)
     client = new MongoClient(mongod.getUri())
     await client.connect()
     db = client.db('test_any')
     service = new AnyLookupService(new AnyStorage(db))
-  })
+  }, 60_000)
 
   afterAll(async () => {
     if (client !== undefined) {
@@ -103,7 +101,7 @@ describe('AnyLookupService (MongoDB)', () => {
     if (mongod !== undefined) {
       await mongod.stop()
     }
-  })
+  }, 60_000)
 
   afterEach(async () => {
     if (db !== undefined) {
@@ -150,10 +148,10 @@ describe('AnyLookupService (MongoDB)', () => {
 
     await service.outputAdmittedByTopic(payload)
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_anytx',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result).toHaveLength(0)
   })
@@ -170,20 +168,20 @@ describe('AnyLookupService (MongoDB)', () => {
     } as OutputAdmittedByTopic)
 
     // Verify it's there
-    const before = await service.lookup({
+    const before = (await service.lookup({
       service: 'ls_anytx',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(before.length).toBeGreaterThan(0)
 
     // Evict it
     await service.outputEvicted('evict001', 0)
 
     // Verify it's gone
-    const after = await service.lookup({
+    const after = (await service.lookup({
       service: 'ls_anytx',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(after).toHaveLength(0)
   })
 
@@ -199,19 +197,21 @@ describe('AnyLookupService (MongoDB)', () => {
       } as OutputAdmittedByTopic)
     }
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_anytx',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result.length).toBe(3)
   })
 
   it('lookup throws for unsupported service', async () => {
-    await expect(service.lookup({
-      service: 'ls_unknown',
-      query: {}
-    } as LookupQuestion)).rejects.toThrow('Lookup service not supported!')
+    await expect(
+      service.lookup({
+        service: 'ls_unknown',
+        query: {}
+      } as LookupQuestion)
+    ).rejects.toThrow('Lookup service not supported!')
   })
 
   it('lookup throws for missing question', async () => {

@@ -1,3 +1,4 @@
+// Requires an external generic-certifier backend and explicit operator configuration.
 import {
   AcquireCertificateArgs,
   Certificate,
@@ -12,14 +13,9 @@ import { sdk, Wallet } from '../../../src/index.all'
 describe('acquireCertificate tests', () => {
   jest.setTimeout(99999999)
 
-  test('00', () => {})
   if (_tu.noEnv('test')) return
 
   const env = _tu.getEnv('test')
-
-  beforeAll(async () => {})
-
-  afterAll(async () => {})
 
   test('1 invalid params', async () => {
     const { wallet, storage } = await _tu.createLegacyWalletSQLiteCopy('acquireCertificate1')

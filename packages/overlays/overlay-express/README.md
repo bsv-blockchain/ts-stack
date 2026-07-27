@@ -331,12 +331,16 @@ pnpm --filter @bsv/overlay-express lint
 pnpm --filter @bsv/overlay-express typecheck
 pnpm --filter @bsv/overlay-express test
 pnpm --filter @bsv/overlay-express test:coverage
+pnpm --filter @bsv/overlay-express test:live
 pnpm --filter @bsv/overlay-express pack:check
 ```
 
 The package check builds locally packed release candidates for Overlay Express
 and its workspace Overlay dependencies, then verifies the npm tarball with
 publint, strict type resolution, and clean ESM/CommonJS consumer projects.
+`test:live` separately verifies public Arcade/Chaintracks endpoints without a
+private credential; it is scheduled/release evidence, not deterministic PR
+coverage.
 
 ## License
 

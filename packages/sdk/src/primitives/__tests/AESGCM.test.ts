@@ -36,10 +36,7 @@ describe('AES', () => {
     expect(toArray('8ea2b7ca516745bfeafc49904b496089', 'hex')).toEqual(
       AES(
         toArray('00112233445566778899aabbccddeeff', 'hex'),
-        toArray(
-          '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
-          'hex'
-        )
+        toArray('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f', 'hex')
       )
     )
   })
@@ -75,26 +72,18 @@ describe('ghash', () => {
         'hex'
       )
     )
-    const h = new Uint8Array(
-      toArray('66e94bd4ef8a2c3b884cfa59ca342b2e', 'hex')
-    )
+    const h = new Uint8Array(toArray('66e94bd4ef8a2c3b884cfa59ca342b2e', 'hex'))
     const out = ghash(input, h)
 
-    expect(toArray('f38cbb1ad69223dcc3457ae5b6b0f885', 'hex')).toEqual(
-      Array.from(out)
-    )
+    expect(toArray('f38cbb1ad69223dcc3457ae5b6b0f885', 'hex')).toEqual(Array.from(out))
   })
 })
 
 describe('AESGCM', () => {
   it('should encrypt: Test Case 1', () => {
     const plainText = new Uint8Array(0)
-    const iv = new Uint8Array(
-      toArray('000000000000000000000000', 'hex')
-    )
-    const key = new Uint8Array(
-      toArray('00000000000000000000000000000000', 'hex')
-    )
+    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
+    const key = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
 
     const output = AESGCM(plainText, iv, key)
 
@@ -105,21 +94,13 @@ describe('AESGCM', () => {
   })
 
   it('should encrypt: Test Case 2', () => {
-    const plainText = new Uint8Array(
-      toArray('00000000000000000000000000000000', 'hex')
-    )
-    const iv = new Uint8Array(
-      toArray('000000000000000000000000', 'hex')
-    )
-    const key = new Uint8Array(
-      toArray('00000000000000000000000000000000', 'hex')
-    )
+    const plainText = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
+    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
+    const key = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
 
     const output = AESGCM(plainText, iv, key)
 
-    expect(toArray('0388dace60b6a392f328c2b971b2fe78', 'hex')).toEqual(
-      Array.from(output.result)
-    )
+    expect(toArray('0388dace60b6a392f328c2b971b2fe78', 'hex')).toEqual(Array.from(output.result))
     expect(toArray('ab6e47d42cec13bdf53a67b21257bddf', 'hex')).toEqual(
       Array.from(output.authenticationTag)
     )
@@ -133,12 +114,8 @@ describe('AESGCM', () => {
         'hex'
       )
     )
-    const iv = new Uint8Array(
-      toArray('cafebabefacedbaddecaf888', 'hex')
-    )
-    const key = new Uint8Array(
-      toArray('feffe9928665731c6d6a8f9467308308', 'hex')
-    )
+    const iv = new Uint8Array(toArray('cafebabefacedbaddecaf888', 'hex'))
+    const key = new Uint8Array(toArray('feffe9928665731c6d6a8f9467308308', 'hex'))
 
     const output = AESGCM(plainText, iv, key)
 
@@ -156,12 +133,8 @@ describe('AESGCM', () => {
 
   it('should encrypt: Test Case 7', () => {
     const plainText = new Uint8Array(0)
-    const iv = new Uint8Array(
-      toArray('000000000000000000000000', 'hex')
-    )
-    const key = new Uint8Array(
-      toArray('000000000000000000000000000000000000000000000000', 'hex')
-    )
+    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
+    const key = new Uint8Array(toArray('000000000000000000000000000000000000000000000000', 'hex'))
 
     const output = AESGCM(plainText, iv, key)
 
@@ -172,21 +145,13 @@ describe('AESGCM', () => {
   })
 
   it('should encrypt: Test Case 8', () => {
-    const plainText = new Uint8Array(
-      toArray('00000000000000000000000000000000', 'hex')
-    )
-    const iv = new Uint8Array(
-      toArray('000000000000000000000000', 'hex')
-    )
-    const key = new Uint8Array(
-      toArray('000000000000000000000000000000000000000000000000', 'hex')
-    )
+    const plainText = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
+    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
+    const key = new Uint8Array(toArray('000000000000000000000000000000000000000000000000', 'hex'))
 
     const output = AESGCM(plainText, iv, key)
 
-    expect(toArray('98e7247c07f0fe411c267e4384b0f600', 'hex')).toEqual(
-      Array.from(output.result)
-    )
+    expect(toArray('98e7247c07f0fe411c267e4384b0f600', 'hex')).toEqual(Array.from(output.result))
     expect(toArray('2ff58d80033927ab8ef4d4587514f0fb', 'hex')).toEqual(
       Array.from(output.authenticationTag)
     )
@@ -200,12 +165,8 @@ describe('AESGCM', () => {
         'hex'
       )
     )
-    const iv = new Uint8Array(
-      toArray('cafebabefacedbaddecaf888', 'hex')
-    )
-    const key = new Uint8Array(
-      toArray('feffe9928665731c6d6a8f9467308308feffe9928665731c', 'hex')
-    )
+    const iv = new Uint8Array(toArray('cafebabefacedbaddecaf888', 'hex'))
+    const key = new Uint8Array(toArray('feffe9928665731c6d6a8f9467308308feffe9928665731c', 'hex'))
 
     const output = AESGCM(plainText, iv, key)
 
@@ -223,14 +184,9 @@ describe('AESGCM', () => {
 
   it('should encrypt: Test Case 13', () => {
     const plainText = new Uint8Array(0)
-    const iv = new Uint8Array(
-      toArray('000000000000000000000000', 'hex')
-    )
+    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
     const key = new Uint8Array(
-      toArray(
-        '0000000000000000000000000000000000000000000000000000000000000000',
-        'hex'
-      )
+      toArray('0000000000000000000000000000000000000000000000000000000000000000', 'hex')
     )
 
     const output = AESGCM(plainText, iv, key)
@@ -242,24 +198,15 @@ describe('AESGCM', () => {
   })
 
   it('should encrypt: Test Case 14', () => {
-    const plainText = new Uint8Array(
-      toArray('00000000000000000000000000000000', 'hex')
-    )
-    const iv = new Uint8Array(
-      toArray('000000000000000000000000', 'hex')
-    )
+    const plainText = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
+    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
     const key = new Uint8Array(
-      toArray(
-        '0000000000000000000000000000000000000000000000000000000000000000',
-        'hex'
-      )
+      toArray('0000000000000000000000000000000000000000000000000000000000000000', 'hex')
     )
 
     const output = AESGCM(plainText, iv, key)
 
-    expect(toArray('cea7403d4d606b6e074ec5d3baf39d18', 'hex')).toEqual(
-      Array.from(output.result)
-    )
+    expect(toArray('cea7403d4d606b6e074ec5d3baf39d18', 'hex')).toEqual(Array.from(output.result))
     expect(toArray('d0d1c8a799996bf0265b98b5d48ab919', 'hex')).toEqual(
       Array.from(output.authenticationTag)
     )
@@ -273,14 +220,9 @@ describe('AESGCM', () => {
         'hex'
       )
     )
-    const iv = new Uint8Array(
-      toArray('cafebabefacedbaddecaf888', 'hex')
-    )
+    const iv = new Uint8Array(toArray('cafebabefacedbaddecaf888', 'hex'))
     const key = new Uint8Array(
-      toArray(
-        'feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308',
-        'hex'
-      )
+      toArray('feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308', 'hex')
     )
 
     const output = AESGCM(plainText, iv, key)
@@ -302,15 +244,14 @@ describe('exclusiveOR', () => {
   it('should exclusiveOR', () => {
     const out1 = exclusiveOR(
       new Uint8Array([
-        0xf0, 0xf8, 0x7f, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00
+        0xf0, 0xf8, 0x7f, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00
       ]),
       new Uint8Array([0x0f, 0x0f, 0x00, 0xf0])
     )
 
     expect([
-      0xff, 0xf7, 0x7f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00
+      0xff, 0xf7, 0x7f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     ]).toEqual(Array.from(out1))
 
     const out2 = exclusiveOR(
@@ -324,39 +265,25 @@ describe('exclusiveOR', () => {
 
 describe('rightShift', () => {
   it('should rightShift', () => {
-    const input = new Uint8Array(
-      toArray('7b5b54657374566563746f725d53475d', 'hex')
-    )
+    const input = new Uint8Array(toArray('7b5b54657374566563746f725d53475d', 'hex'))
     const out = rightShift(input)
 
-    expect(toArray('3dadaa32b9ba2b32b1ba37b92ea9a3ae', 'hex')).toEqual(
-      Array.from(out)
-    )
+    expect(toArray('3dadaa32b9ba2b32b1ba37b92ea9a3ae', 'hex')).toEqual(Array.from(out))
   })
 })
 
 describe('multiply', () => {
   it('should multiply', () => {
-    const a = new Uint8Array(
-      toArray('952b2a56a5604ac0b32b6656a05b40b6', 'hex')
-    )
-    const b = new Uint8Array(
-      toArray('dfa6bf4ded81db03ffcaff95f830f061', 'hex')
-    )
+    const a = new Uint8Array(toArray('952b2a56a5604ac0b32b6656a05b40b6', 'hex'))
+    const b = new Uint8Array(toArray('dfa6bf4ded81db03ffcaff95f830f061', 'hex'))
     const out = multiply(a, b)
 
-    expect(toArray('da53eb0ad2c55bb64fc4802cc3feda60', 'hex')).toEqual(
-      Array.from(out)
-    )
+    expect(toArray('da53eb0ad2c55bb64fc4802cc3feda60', 'hex')).toEqual(Array.from(out))
   })
 
   it('should commutatively multiply', () => {
-    const x = new Uint8Array(
-      toArray('48692853686179295b477565726f6e5d', 'hex')
-    )
-    const y = new Uint8Array(
-      toArray('7b5b54657374566563746f725d53475d', 'hex')
-    )
+    const x = new Uint8Array(toArray('48692853686179295b477565726f6e5d', 'hex'))
+    const y = new Uint8Array(toArray('7b5b54657374566563746f725d53475d', 'hex'))
 
     const out1 = multiply(x, y)
     const out2 = multiply(y, x)
@@ -367,37 +294,21 @@ describe('multiply', () => {
 
 describe('incrementLeastSignificantThirtyTwoBits', () => {
   it('should incrementLeastSignificantThirtyTwoBits', () => {
-    const in1 = new Uint8Array(
-      toArray('00000000000000000000000000000000', 'hex')
-    )
+    const in1 = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
     const out1 = incrementLeastSignificantThirtyTwoBits(in1)
-    expect(toArray('00000000000000000000000000000001', 'hex')).toEqual(
-      Array.from(out1)
-    )
+    expect(toArray('00000000000000000000000000000001', 'hex')).toEqual(Array.from(out1))
 
-    const in2 = new Uint8Array(
-      toArray('000000000000000000000000000000ff', 'hex')
-    )
+    const in2 = new Uint8Array(toArray('000000000000000000000000000000ff', 'hex'))
     const out2 = incrementLeastSignificantThirtyTwoBits(in2)
-    expect(toArray('00000000000000000000000000000100', 'hex')).toEqual(
-      Array.from(out2)
-    )
+    expect(toArray('00000000000000000000000000000100', 'hex')).toEqual(Array.from(out2))
 
-    const in3 = new Uint8Array(
-      toArray('00000000000000000000000000ffffff', 'hex')
-    )
+    const in3 = new Uint8Array(toArray('00000000000000000000000000ffffff', 'hex'))
     const out3 = incrementLeastSignificantThirtyTwoBits(in3)
-    expect(toArray('00000000000000000000000001000000', 'hex')).toEqual(
-      Array.from(out3)
-    )
+    expect(toArray('00000000000000000000000001000000', 'hex')).toEqual(Array.from(out3))
 
-    const in4 = new Uint8Array(
-      toArray('000000000000000000000000ffffffff', 'hex')
-    )
+    const in4 = new Uint8Array(toArray('000000000000000000000000ffffffff', 'hex'))
     const out4 = incrementLeastSignificantThirtyTwoBits(in4)
-    expect(toArray('00000000000000000000000000000000', 'hex')).toEqual(
-      Array.from(out4)
-    )
+    expect(toArray('00000000000000000000000000000000', 'hex')).toEqual(Array.from(out4))
   })
 })
 
@@ -406,16 +317,13 @@ describe('checkBit', () => {
     let i
     let j
     let k = 0
-    let block = new Uint8Array(
-      toArray('7b5b54657374566563746f725d53475d', 'hex')
-    ) as any
+    let block = new Uint8Array(toArray('7b5b54657374566563746f725d53475d', 'hex')) as any
     const expected = [
-      0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0,
-      1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1,
-      0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1,
-      1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1,
-      1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1,
-      1, 0, 1
+      0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0,
+      1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1,
+      0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0,
+      0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1,
+      1, 1, 0, 1
     ]
     const expectedLSB = expected.slice().reverse()
 
@@ -490,11 +398,7 @@ describe('AESGCM IV validation', () => {
 
   it('AESGCMDecrypt throws when IV is empty', () => {
     const iv = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-    const { result: ciphertext, authenticationTag } = AESGCM(
-      plaintext,
-      iv,
-      key
-    )
+    const { result: ciphertext, authenticationTag } = AESGCM(plaintext, iv, key)
 
     // Now call decrypt but with an empty IV – this should be rejected
     expect(() => {
@@ -512,19 +416,10 @@ describe('AESGCM IV validation', () => {
 
   it('AESGCMDecrypt throws when key is empty', () => {
     const iv = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-    const { result: ciphertext, authenticationTag } = AESGCM(
-      plaintext,
-      iv,
-      key
-    )
+    const { result: ciphertext, authenticationTag } = AESGCM(plaintext, iv, key)
 
     expect(() => {
-      AESGCMDecrypt(
-        ciphertext,
-        iv,
-        authenticationTag,
-        new Uint8Array()
-      )
+      AESGCMDecrypt(ciphertext, iv, authenticationTag, new Uint8Array())
     }).toThrow(new Error('Key must not be empty'))
   })
 
@@ -538,64 +433,10 @@ describe('AESGCM IV validation', () => {
 
   it('AESGCM still work with a valid IV', () => {
     const iv = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-    const { result: ciphertext, authenticationTag } = AESGCM(
-      plaintext,
-      iv,
-      key
-    )
-    const decrypted = AESGCMDecrypt(
-      ciphertext,
-      iv,
-      authenticationTag,
-      key
-    ) as Uint8Array
+    const { result: ciphertext, authenticationTag } = AESGCM(plaintext, iv, key)
+    const decrypted = AESGCMDecrypt(ciphertext, iv, authenticationTag, key) as Uint8Array
 
     expect(Array.from(decrypted)).toEqual(Array.from(plaintext))
-  })
-})
-
-function expectUint8ArrayEqual (a: Uint8Array, b: Uint8Array) {
-  expect(a.length).toBe(b.length)
-
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) {
-      throw new Error(`mismatch at index ${i}: ${a[i]} !== ${b[i]}`)
-    }
-  }
-}
-
-describe('AESGCM large input (non-mocked)', () => {
-  // NOTE: This test is intentionally skipped by default because it allocates
-  // ~500MB+ and will be very slow / memory-heavy.
-  // Un-skip locally when you want to manually verify behavior for lengths
-  // larger than 2^32 bits.
-  it.skip('handles ciphertext longer than 2^32 bits', () => {
-    const key = new Uint8Array(new Array(16).fill(0x01))
-    const iv = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-
-    // 2^32 bits = 2^29 bytes. Go just beyond that boundary.
-    const bigSizeBytes = (1 << 29) + 16 // 2^29 + 16 bytes (> 2^32 bits)
-
-    // Use a typed array instead of a giant sparse JS array.
-    const plaintext = new Uint8Array(bigSizeBytes) // already zero-initialized
-
-    const { result: ciphertext, authenticationTag } = AESGCM(
-      plaintext,
-      iv,
-      key
-    )
-
-    const decrypted = AESGCMDecrypt(
-      ciphertext,
-      iv,
-      authenticationTag,
-      key
-    ) as Uint8Array | null
-
-    expect(decrypted).not.toBeNull()
-    const decryptedBytes = decrypted as Uint8Array
-    expect(decryptedBytes.length).toBe(bigSizeBytes)
-    expectUint8ArrayEqual(decryptedBytes, plaintext)
   })
 })
 
@@ -627,5 +468,3 @@ describe('multiply reduction edge cases', () => {
     expect(out.some(v => v !== 0)).toBe(false)
   })
 })
-
-

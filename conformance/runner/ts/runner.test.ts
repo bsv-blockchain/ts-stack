@@ -7,13 +7,11 @@
  * Skip rules:
  *   • parity_class === 'intended'  → test.skip (documented gap)
  *   • v.skip === true              → test.skip (explicitly marked)
- *   • parity_class === 'required' AND dispatcher throws 'not implemented'
- *                                  → test FAILS (structural marker for Wave 1)
- *   • parity_class !== 'required' AND dispatcher throws 'not implemented'
- *                                  → test passes vacuously (best-effort)
+ *   • any dispatcher throws 'not implemented'
+ *                                  → test FAILS; gaps must be declared before execution
  *
  * Note: parity_class === 'best-effort' is NOT skipped — best-effort vectors
- * are executed and their dispatcher runs; only 'intended' vectors are skipped.
+ * are executed and their dispatcher runs; only metadata-declared gaps are skipped.
  */
 
 import { describe, test } from '@jest/globals'
@@ -30,6 +28,7 @@ const VECTORS_DIR = join(__dirname, '..', '..', 'vectors')
 interface VectorFile {
   id: string
   parity_class?: string
+  skip_reason?: string
   vectors: VectorEntry[]
 }
 
@@ -37,6 +36,7 @@ interface VectorEntry {
   id: string
   parity_class?: string
   skip?: boolean
+  skip_reason?: string
   input: Record<string, unknown>
   expected: Record<string, unknown>
 }
@@ -60,7 +60,7 @@ function categoryFromFile(filePath: string): string {
   return basename(filePath, '.json').toLowerCase()
 }
 
-function isNotImplemented(err: unknown): boolean {
+function isNotImplemented(err: unknown): err is Error {
   return err instanceof Error && err.message.startsWith('not implemented')
 }
 
@@ -91,15 +91,16 @@ for (const filePath of vectorFiles) {
     for (const v of vf.vectors) {
       const vectorId = v.id ?? 'unknown'
       const parityClass = v.parity_class ?? fileParityClass
+      const skipReason = v.skip_reason ?? vf.skip_reason
 
       // Always-skip rules
       if (parityClass === 'intended') {
-        test.skip(vectorId, () => {})
+        test.skip(`${vectorId} — ${skipReason ?? 'missing governed skip reason'}`, () => {})
         continue
       }
 
       if (v.skip === true) {
-        test.skip(vectorId, () => {})
+        test.skip(`${vectorId} — ${skipReason ?? 'missing governed skip reason'}`, () => {})
         continue
       }
 
@@ -113,7 +114,7 @@ for (const filePath of vectorFiles) {
             throw new Error(`no dispatcher registered for category '${cat}' (${vf.id ?? filePath})`)
           })
         } else {
-          test.skip(vectorId, () => {})
+          test.skip(`${vectorId} — ${skipReason ?? `no dispatcher for non-required ${parityClass} capability`}`, () => {})
         }
         continue
       }
@@ -124,17 +125,12 @@ for (const filePath of vectorFiles) {
           await route.dispatch(cat, input, expected)
         } catch (err) {
           if (isNotImplemented(err)) {
-            if (parityClass === 'required') {
-              // Re-throw so the test fails with a clear 'not implemented' message
-              throw err
-            } else {
-              // Non-required: treat as a skip by returning without asserting.
-              // Jest does not support dynamic skip inside a test body, so we
-              // simply return — the test will pass vacuously for non-required
-              // parity. This is acceptable because required is the only class
-              // that MUST run assertions.
-              return
-            }
+            // A dispatcher cannot discover a skip after Jest has started the
+            // test. Non-required gaps must be declared in vector metadata so
+            // they are reported as skips rather than false-positive passes.
+            throw new Error(
+              `${vectorId} reached an unregistered not-implemented path (${parityClass}): ${err.message}`
+            )
           }
           throw err
         }

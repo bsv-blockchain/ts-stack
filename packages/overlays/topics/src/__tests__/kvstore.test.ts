@@ -21,10 +21,17 @@
  * kvProtocol indices: { protocolID:0, key:1, value:2, controller:3, tags:4, signature:5 }
  */
 
-import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
-import { LockingScript, PrivateKey, PublicKey, Transaction, Utils, ProtoWallet, WalletProtocol } from '@bsv/sdk'
+import {
+  LockingScript,
+  PrivateKey,
+  PublicKey,
+  Transaction,
+  Utils,
+  ProtoWallet,
+  WalletProtocol
+} from '@bsv/sdk'
 import KVStoreTopicManager from '../kvstore/KVStoreTopicManager.js'
 import KVStoreLookupServiceFactory from '../kvstore/KVStoreLookupService.js'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
@@ -184,7 +191,11 @@ describe('KVStoreTopicManager', () => {
     const keyBytes = Utils.toArray('k', 'utf8')
     const valueBytes = Utils.toArray('v', 'utf8')
     // Only 3 fields — neither 4 nor 5 (the expected field counts)
-    const lockingScript = buildPushDropScript(key.toPublicKey(), [protocolIDBytes, keyBytes, valueBytes])
+    const lockingScript = buildPushDropScript(key.toPublicKey(), [
+      protocolIDBytes,
+      keyBytes,
+      valueBytes
+    ])
     const tx = buildTxWithInput([lockingScript])
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
@@ -197,7 +208,12 @@ describe('KVStoreTopicManager', () => {
     const emptyKey: number[] = [] // empty key — should fail
     const valueBytes = Utils.toArray('v', 'utf8')
     const controllerBytes = Utils.toArray(key.toPublicKey().toString(), 'hex')
-    const lockingScript = buildPushDropScript(key.toPublicKey(), [protocolIDBytes, emptyKey, valueBytes, controllerBytes])
+    const lockingScript = buildPushDropScript(key.toPublicKey(), [
+      protocolIDBytes,
+      emptyKey,
+      valueBytes,
+      controllerBytes
+    ])
     const tx = buildTxWithInput([lockingScript])
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
@@ -209,7 +225,7 @@ describe('KVStoreTopicManager', () => {
       { op: 0x76 }, // OP_DUP
       { op: 0xa9 }, // OP_HASH160
       { op: 0x88 }, // OP_EQUALVERIFY
-      { op: 0xac }  // OP_CHECKSIG
+      { op: 0xac } // OP_CHECKSIG
     ])
     const tx = buildTxWithInput([badScript])
 
@@ -264,13 +280,12 @@ describe('KVStoreLookupService (MongoDB)', () => {
   let service: ReturnType<typeof KVStoreLookupServiceFactory>
 
   beforeAll(async () => {
-    jest.setTimeout(60000)
     mongod = await MongoMemoryServer.create(mongoMemoryServerOptions)
     client = new MongoClient(mongod.getUri())
     await client.connect()
     db = client.db('test_kvstore')
     service = KVStoreLookupServiceFactory(db)
-  })
+  }, 60_000)
 
   afterAll(async () => {
     if (client !== undefined) {
@@ -279,7 +294,7 @@ describe('KVStoreLookupService (MongoDB)', () => {
     if (mongod !== undefined) {
       await mongod.stop()
     }
-  })
+  }, 60_000)
 
   afterEach(async () => {
     if (db !== undefined) {
@@ -329,10 +344,10 @@ describe('KVStoreLookupService (MongoDB)', () => {
       value: 'myvalue'
     })
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_kvstore',
       query: { key: 'mykey' }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result.length).toBe(1)
     expect(result[0].txid).toBe('kv0001')
@@ -347,10 +362,10 @@ describe('KVStoreLookupService (MongoDB)', () => {
       value: 'filteredvalue'
     })
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_kvstore',
       query: { protocolID: [1, 'kvstore filter'] }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result.length).toBeGreaterThan(0)
     expect(result.some((r: any) => r.txid === 'kv0002')).toBe(true)
@@ -366,10 +381,10 @@ describe('KVStoreLookupService (MongoDB)', () => {
       tags: ['env prod', 'type config']
     })
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_kvstore',
       query: { tags: ['env prod'] }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result.length).toBeGreaterThan(0)
     expect(result.some((r: any) => r.txid === 'kv0003')).toBe(true)
@@ -393,10 +408,10 @@ describe('KVStoreLookupService (MongoDB)', () => {
       lockingScript
     } as OutputAdmittedByTopic)
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_kvstore',
       query: { key: 'key' }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result).toHaveLength(0)
   })
@@ -410,39 +425,45 @@ describe('KVStoreLookupService (MongoDB)', () => {
       value: 'evictedvalue'
     })
 
-    const before = await service.lookup({
+    const before = (await service.lookup({
       service: 'ls_kvstore',
       query: { key: 'evictedkey' }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(before.length).toBe(1)
 
     await service.outputEvicted('kv0004', 0)
 
-    const after = await service.lookup({
+    const after = (await service.lookup({
       service: 'ls_kvstore',
       query: { key: 'evictedkey' }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(after).toHaveLength(0)
   })
 
   it('throws when query has no selector', async () => {
-    await expect(service.lookup({
-      service: 'ls_kvstore',
-      query: {}
-    } as LookupQuestion)).rejects.toThrow('Must specify at least one selector')
+    await expect(
+      service.lookup({
+        service: 'ls_kvstore',
+        query: {}
+      } as LookupQuestion)
+    ).rejects.toThrow('Must specify at least one selector')
   })
 
   it('throws when query is null', async () => {
-    await expect(service.lookup({
-      service: 'ls_kvstore',
-      query: null
-    } as any)).rejects.toThrow('A valid query must be provided')
+    await expect(
+      service.lookup({
+        service: 'ls_kvstore',
+        query: null
+      } as any)
+    ).rejects.toThrow('A valid query must be provided')
   })
 
   it('throws for unsupported service', async () => {
-    await expect(service.lookup({
-      service: 'ls_unknown',
-      query: { key: 'k' }
-    } as LookupQuestion)).rejects.toThrow('Lookup service not supported')
+    await expect(
+      service.lookup({
+        service: 'ls_unknown',
+        query: { key: 'k' }
+      } as LookupQuestion)
+    ).rejects.toThrow('Lookup service not supported')
   })
 })
