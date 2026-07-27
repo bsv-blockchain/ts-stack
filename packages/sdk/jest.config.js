@@ -7,7 +7,7 @@ export default {
   testEnvironment: 'node',
 
   // Ignore compiled output
-  testPathIgnorePatterns: ['dist/'],
+  testPathIgnorePatterns: ['dist/', String.raw`\.man\.test\.ts$`],
   modulePathIgnorePatterns: ['<rootDir>/dist'],
   collectCoverageFrom: [
     'src/**/*.ts',

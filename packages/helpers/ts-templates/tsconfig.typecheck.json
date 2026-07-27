@@ -3,7 +3,7 @@
   "compilerOptions": {
     "incremental": false,
     "noEmit": true,
-    "types": ["jest"]
+    "types": ["jest", "node"]
   },
   "files": [],
   "include": ["mod.ts", "src/**/*.ts", "__tests/**/*.ts"],

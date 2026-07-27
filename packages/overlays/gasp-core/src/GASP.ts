@@ -302,13 +302,14 @@ export class GASP implements GASPRemote {
   }
 
   private validateTimestamp(timestamp: number): void {
-    if (
-      typeof timestamp !== 'number' ||
-      Number.isNaN(timestamp) ||
-      timestamp < 0 ||
-      !Number.isInteger(timestamp)
-    ) {
-      throw new Error('Invalid timestamp format')
+    if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+      throw new TypeError('Invalid timestamp format')
+    }
+  }
+
+  private validateLimit(limit: number | undefined): void {
+    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
+      throw new TypeError('Invalid limit format')
     }
   }
 
@@ -449,6 +450,8 @@ export class GASP implements GASPRemote {
    * @returns A promise for the initial request object.
    */
   async buildInitialRequest(since: number, limit?: number): Promise<GASPInitialRequest> {
+    this.validateTimestamp(since)
+    this.validateLimit(limit)
     const request: GASPInitialRequest = {
       version: this.version,
       since,
@@ -475,6 +478,7 @@ export class GASP implements GASPRemote {
       throw error
     }
     this.validateTimestamp(request.since)
+    this.validateLimit(request.limit)
     const response = {
       since: this.lastInteraction,
       UTXOList: await this.storage.findKnownUTXOs(request.since, request.limit)
@@ -490,6 +494,10 @@ export class GASP implements GASPRemote {
    */
   async getInitialReply(response: GASPInitialResponse): Promise<GASPInitialReply> {
     this.infoLog(`Received initial response: ${JSON.stringify(response)}`)
+    this.validateTimestamp(response.since)
+    if (!Array.isArray(response.UTXOList)) {
+      throw new TypeError('Invalid UTXO list format')
+    }
     const knownUTXOs = await this.storage.findKnownUTXOs(response.since)
     const filteredUTXOs = knownUTXOs.filter(
       x => !response.UTXOList.some(y => y.txid === x.txid && y.outputIndex === x.outputIndex)

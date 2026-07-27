@@ -50,25 +50,6 @@ describe('ProvenTxReq class method tests', () => {
     expect(provenTxReq.notify.transactionIds).toEqual([1, 2, 3])
   })
 
-  // Test: getHistorySummary method
-  test('1_getHistorySummary', () => {})
-
-  // Test: parseHistoryNote method
-  test('2_parseHistoryNote', () => {
-    const provenTxReq = new EntityProvenTxReq({
-      provenTxReqId: 0,
-      created_at: new Date(),
-      updated_at: new Date(),
-      txid: '',
-      rawTx: [],
-      history: '{}',
-      notify: '{}',
-      attempts: 0,
-      status: 'unknown',
-      notified: false
-    })
-  })
-
   test('2b_wasBroadcast_derives_from_status_and_history', () => {
     const fromStatus = new EntityProvenTxReq({
       provenTxReqId: 0,
@@ -345,12 +326,6 @@ describe('ProvenTxReq class method tests', () => {
     expect(provenTxReq.api.batch).toBe('new-batch')
   })
 
-  // Test: parseHistoryNote method
-  test('9_parseHistoryNote', () => {})
-
-  // Test: mergeHistory method
-  test('10_mergeHistory', () => {})
-
   test('12_isTerminalStatus_with_real_data', async () => {
     // Assuming `ctxs[0]` contains the necessary setup and `sdk.ProvenTxReqTerminalStatus` is already defined
     const ctx = ctxs[0]
@@ -359,7 +334,7 @@ describe('ProvenTxReq class method tests', () => {
     const terminalStatuses: sdk.ProvenTxReqStatus[] = sdk.ProvenTxReqTerminalStatus
 
     // Test cases for valid and invalid statuses
-    const testCases: Array<{ status: sdk.ProvenTxReqStatus, expected: boolean }> = [
+    const testCases: Array<{ status: sdk.ProvenTxReqStatus; expected: boolean }> = [
       { status: terminalStatuses[0] || 'completed', expected: true }, // Use the first valid terminal status
       { status: terminalStatuses[1] || 'doubleSpend', expected: true }, // Use another valid terminal status
       { status: 'nonExistentStatus' as sdk.ProvenTxReqStatus, expected: false } // A status that is not in the terminal statuses
@@ -369,6 +344,4 @@ describe('ProvenTxReq class method tests', () => {
       expect(EntityProvenTxReq.isTerminalStatus(status)).toBe(expected)
     }
   })
-
-  test('13_mergeExisting_real_data', async () => {})
 })

@@ -58,9 +58,10 @@ export const encodeAssetId = (assetId: string): number[] => {
   if (dot === -1) throw new Error('assetId must be "<txid>.<vout>"')
   const txid = assetId.slice(0, dot)
   const vout = Number(assetId.slice(dot + 1))
-  if (txid.length !== 64) throw new Error('assetId txid must be 32 bytes (64 hex chars)')
-  if (!Number.isInteger(vout) || vout < 0)
-    throw new Error('assetId vout must be a non-negative integer')
+  if (!/^[0-9a-fA-F]{64}$/.test(txid))
+    throw new Error('assetId txid must be 32 bytes (64 hex chars)')
+  if (!Number.isSafeInteger(vout) || vout < 0 || vout > 0xffffffff)
+    throw new Error('assetId vout must be an unsigned 32-bit integer')
   // On-chain assetId bytes use outpoint format: the txid in internal (hash) byte
   // order — i.e. the display hex reversed (tx.hash() vs tx.id('hex')) — followed by
   // the 4-byte little-endian vout. This lets a contract compare the embedded assetId

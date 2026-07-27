@@ -34,6 +34,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/BTMSHelpers.property.test.ts",
     "lint": "oxlint src --deny-warnings",
     "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/btms/src/**/*.ts\" \"packages/wallet/btms/README.md\" \"packages/wallet/btms/*.{cjs,json,ts}\"",
@@ -60,6 +61,8 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",

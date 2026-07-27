@@ -1,5 +1,5 @@
 import type { PairingParams, ParseResult } from '../types.js'
-import { ProtoWallet, PrivateKey } from '@bsv/sdk'
+import { ProtoWallet, PrivateKey, PublicKey } from '@bsv/sdk'
 import { base64urlToBytes } from './encoding.js'
 
 /** Default accepted URI schemes for parsePairingUri. */
@@ -60,6 +60,9 @@ export function parsePairingUri(
       return { params: null, error: 'QR code is missing required fields' }
     }
 
+    if (!/^(0|[1-9]\d*)$/.test(expiry) || !Number.isSafeInteger(Number(expiry))) {
+      return { params: null, error: 'QR code expiry is not a valid Unix timestamp' }
+    }
     if (Date.now() / 1000 > Number(expiry)) {
       return {
         params: null,
@@ -76,8 +79,22 @@ export function parsePairingUri(
     if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
       return { params: null, error: 'Origin must use http:// or https://' }
     }
+    if (
+      originUrl.username !== '' ||
+      originUrl.password !== '' ||
+      originUrl.search !== '' ||
+      originUrl.hash !== '' ||
+      originUrl.pathname !== '/'
+    ) {
+      return { params: null, error: 'Origin must be a canonical HTTP(S) origin without a path' }
+    }
 
     if (!/^0[23][0-9a-fA-F]{64}$/.test(backendIdentityKey)) {
+      return { params: null, error: 'Backend identity key is not a valid compressed public key' }
+    }
+    try {
+      PublicKey.fromString(backendIdentityKey)
+    } catch {
       return { params: null, error: 'Backend identity key is not a valid compressed public key' }
     }
 

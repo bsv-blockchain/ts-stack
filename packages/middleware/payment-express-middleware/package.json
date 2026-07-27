@@ -32,6 +32,7 @@
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports InMemoryPaymentReplayStore,createPaymentMiddleware",
     "prepublishOnly": "pnpm build",
     "test": "jest --runInBand",
+    "test:property": "jest --runInBand src/__tests/PaymentReplayStore.property.test.ts",
     "test:coverage": "jest --coverage --runInBand",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
@@ -65,6 +66,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.75.0",
     "ts-jest": "^29.4.12",

@@ -108,6 +108,14 @@ pnpm test --watch
 pnpm test --coverage
 ```
 
+Required tests must not be empty or anonymously skipped. Manual, live-network,
+resource-intensive, and intended conformance gaps follow the
+[test-quality governance contract](../reference/test-quality-governance/).
+Run `pnpm test:governance` before submitting test-classification changes. New
+untrusted parsers, codecs, serializers, signature framing, or network
+destination logic should include a registered property suite; use
+`pnpm test:property` to run the complete reproducible campaign.
+
 ### Lint Code
 
 ```bash

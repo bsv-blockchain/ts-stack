@@ -1,0 +1,713 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-26",
+  "ownerDefinitions": ["ts-stack-maintainers"],
+  "propertyTesting": {
+    "library": "fast-check",
+    "version": "^4.9.0",
+    "minimumRuns": 300,
+    "scheduledRuns": 5000,
+    "rootCommand": "pnpm test:property",
+    "workflow": ".github/workflows/property-tests.yml",
+    "replayEnvironment": ["FAST_CHECK_NUM_RUNS", "FAST_CHECK_SEED", "FAST_CHECK_PATH"],
+    "owner": "ts-stack-maintainers",
+    "reviewBy": "2026-08-26",
+    "manifests": [
+      "packages/sdk/package.json",
+      "packages/wallet/wallet-toolbox/package.json",
+      "packages/overlays/topics/package.json",
+      "packages/helpers/did/package.json",
+      "packages/helpers/ts-templates/package.json",
+      "packages/messaging/ts-paymail/package.json",
+      "packages/network/ts-p2p/package.json",
+      "packages/middleware/auth/package.json",
+      "packages/overlays/overlay-express/package.json",
+      "packages/messaging/message-box-client/package.json",
+      "packages/wallet/ts-wallet-relay/package.json",
+      "packages/overlays/overlay-discovery-services/package.json",
+      "packages/overlays/overlay/package.json",
+      "packages/verifast/package.json",
+      "packages/wallet/btms/package.json",
+      "packages/helpers/amountinator/package.json",
+      "packages/helpers/fund-wallet/package.json",
+      "packages/middleware/402-pay/package.json",
+      "packages/middleware/auth-express-middleware/package.json",
+      "packages/middleware/payment-express-middleware/package.json",
+      "packages/helpers/bsv-wallet-helper/package.json",
+      "packages/helpers/create-bsv-app/package.json",
+      "packages/overlays/gasp-core/package.json",
+      "packages/overlays/btms-backend/package.json",
+      "packages/wallet/btms-permission-module/package.json"
+    ],
+    "suites": [
+      {
+        "path": "packages/sdk/src/primitives/__tests/utils.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "SDK binary-to-text codecs used by keys, addresses, and protocol payloads",
+        "target": "Base58 and Base58Check arbitrary-byte round trips plus checksum tamper rejection",
+        "invariants": [
+          "Every non-empty byte sequence round-trips through Base58.",
+          "Every prefix and payload round-trips through Base58Check.",
+          "A deterministic checksum mutation is rejected."
+        ]
+      },
+      {
+        "path": "packages/wallet/wallet-toolbox/src/utility/__tests/actionBatchPack.property.test.ts",
+        "manifest": "packages/wallet/wallet-toolbox/package.json",
+        "risk": "critical",
+        "boundary": "Wallet authenticated action-batch binary framing",
+        "target": "Authenticated action-batch pack framing, zero-copy decode, and trailing-data rejection",
+        "invariants": [
+          "Arbitrary bounded blob sets retain exact digests and bytes.",
+          "Decoded payloads remain zero-copy views into the authenticated pack.",
+          "Trailing bytes are rejected."
+        ]
+      },
+      {
+        "path": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
+        "manifest": "packages/overlays/topics/package.json",
+        "risk": "critical",
+        "boundary": "Overlay Mandala linkage payloads and issuer authorization",
+        "target": "Overlay linkage serialization and exact issuer-allowlist membership",
+        "invariants": [
+          "Arbitrary structured linkage payloads retain exact UTF-8 JSON content.",
+          "Issuer admission matches exact allowlist membership."
+        ]
+      },
+      {
+        "path": "packages/helpers/did/tests/codec.property.test.ts",
+        "manifest": "packages/helpers/did/package.json",
+        "risk": "critical",
+        "boundary": "DID, multibase, base64url, JSON, and SD-JWT compact encodings",
+        "target": "Identity codec round trips, canonical alphabets, malformed-input rejection, and SD-JWT framing",
+        "invariants": [
+          "Arbitrary bytes round-trip through base64url and non-empty bytes round-trip through base58-btc multibase.",
+          "Arbitrary JSON retains its canonical JSON semantics through base64url encoding.",
+          "Malformed base64url encodings are rejected.",
+          "SD-JWT fields round-trip with and without key binding."
+        ]
+      },
+      {
+        "path": "packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts",
+        "manifest": "packages/helpers/ts-templates/package.json",
+        "risk": "critical",
+        "boundary": "Bitcoin script-number and on-chain asset outpoint encodings",
+        "target": "Safe-integer script numbers, minimal chunks, uint32 outpoints, and truncation rejection",
+        "invariants": [
+          "Every safe integer round-trips through script-number bytes and minimal chunks.",
+          "Every 32-byte transaction ID and uint32 output index round-trips.",
+          "Non-hex IDs and overflowing output indexes are rejected."
+        ]
+      },
+      {
+        "path": "packages/messaging/ts-paymail/src/__tests/paymailAddress.property.test.ts",
+        "manifest": "packages/messaging/ts-paymail/package.json",
+        "risk": "high",
+        "boundary": "Public Paymail alias and DNS-name parser",
+        "target": "Valid address separation, separator ambiguity, DNS label boundaries, and parser totality",
+        "invariants": [
+          "Valid aliases and domains are separated without normalization loss.",
+          "Multiple separators and invalid DNS label boundaries are rejected.",
+          "Arbitrary untrusted strings never make the parser throw."
+        ]
+      },
+      {
+        "path": "packages/network/ts-p2p/test/messages.property.test.ts",
+        "manifest": "packages/network/ts-p2p/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted Teranode GossipSub UTF-8, JSON, and base64 envelopes",
+        "target": "Nested payload round trips, tolerant-decoder totality, canonical base64, and runtime envelope shape",
+        "invariants": [
+          "Independent UTF-8 and base64 encoders round-trip arbitrary structured payloads.",
+          "The tolerant decoder never throws for arbitrary wire bytes.",
+          "Malformed base64 and non-object topic payloads are rejected."
+        ]
+      },
+      {
+        "path": "packages/middleware/auth/src/__tests__/core.property.test.ts",
+        "manifest": "packages/middleware/auth/package.json",
+        "risk": "critical",
+        "boundary": "Authentication signature canonicalization, body binding, and freshness validation",
+        "target": "Typed-array slice fidelity, deterministic body binding, freshness windows, and malformed-shape totality",
+        "invariants": [
+          "Typed-array views bind only their selected bytes.",
+          "JSON request bodies have deterministic signed bytes.",
+          "Bodyless and empty-body proofs remain domain-separated.",
+          "Freshness checks accept exactly well-formed in-window data without throwing."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-express/src/__tests/ReorgStream.property.test.ts",
+        "manifest": "packages/overlays/overlay-express/package.json",
+        "risk": "critical",
+        "boundary": "Public chain-reorg SSE framing and height/hash normalization",
+        "target": "Reorg normalization, bounded depth fallback, numeric validation, chunked SSE delivery, and parser totality",
+        "invariants": [
+          "Valid reorg hashes are canonicalized and common-ancestor heights are honored.",
+          "A common ancestor cannot exceed the new chain tip.",
+          "Depth fallback never produces a negative rebuild height.",
+          "Non-safe heights are rejected.",
+          "Arbitrary structured JSON input is handled without throwing.",
+          "Complete and partial SSE frames are separated without data loss.",
+          "Every valid event is delivered exactly once across arbitrary network chunk boundaries."
+        ]
+      },
+      {
+        "path": "packages/messaging/message-box-client/src/__tests/host.property.test.ts",
+        "manifest": "packages/messaging/message-box-client/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted overlay-advertised Message Box network destinations",
+        "target": "HTTPS canonicalization, endpoint composition, reserved-address rejection, idempotence, and totality",
+        "invariants": [
+          "Public HTTPS destinations canonicalize idempotently.",
+          "Endpoint paths cannot replace the chosen authority.",
+          "Reserved IPv4 and IPv6 destinations are rejected.",
+          "Arbitrary advertisements never throw at the tolerant boundary."
+        ]
+      },
+      {
+        "path": "packages/wallet/ts-wallet-relay/tests/pairingUri.property.test.ts",
+        "manifest": "packages/wallet/ts-wallet-relay/package.json",
+        "risk": "critical",
+        "boundary": "Mobile/deep-link wallet pairing URI trust bootstrap",
+        "target": "Encoded-field round trips, explicit scheme allowlists, canonical expiry/origin checks, key validation, and totality",
+        "invariants": [
+          "Arbitrary valid pairing fields round-trip exactly.",
+          "Custom URI schemes require explicit allowlisting.",
+          "Non-canonical expiry values and invalid curve points are rejected.",
+          "Arbitrary scanned text never throws."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay-discovery-services/src/utils/__tests/isAdvertisableURI.property.test.ts",
+        "manifest": "packages/overlays/overlay-discovery-services/package.json",
+        "risk": "critical",
+        "boundary": "BRC-87 names and BRC-101 public service advertisements",
+        "target": "Name grammar, transport schemes, JS8 geographic/measurement bounds, and parser totality",
+        "invariants": [
+          "Generated BRC-87 names match the exact lowercase grammar.",
+          "Every supported public transport scheme accepts canonical destinations.",
+          "JS8 measurements are complete positive values within geographic bounds.",
+          "Arbitrary advertisement strings never throw."
+        ]
+      },
+      {
+        "path": "packages/overlays/overlay/src/__tests/BASM.property.test.ts",
+        "manifest": "packages/overlays/overlay/package.json",
+        "risk": "critical",
+        "boundary": "Overlay BASM/TAC integrity hashing and untrusted log serialization",
+        "target": "Block-index ordering, case normalization, deterministic integrity hashes, malformed hashes, and log-forgery resistance",
+        "invariants": [
+          "BASM roots depend on block index rather than input record order.",
+          "BASM and TAC hashing is case-insensitive and deterministic.",
+          "Malformed hashes are rejected.",
+          "Arbitrary JSON serializes into one forge-resistant log field."
+        ]
+      },
+      {
+        "path": "packages/verifast/src/__tests/BdkBatch.property.test.ts",
+        "manifest": "packages/verifast/package.json",
+        "risk": "critical",
+        "boundary": "Native BDK batch memory framing, offsets, flags, and result decoding",
+        "target": "Typed-array packing, offset boundaries, result-pair decoding, malformed lengths, and flag counts",
+        "invariants": [
+          "Arbitrary typed-array batches retain exact bytes and monotonic boundaries.",
+          "Arbitrary signed result pairs round-trip exactly.",
+          "Wrong flat-result lengths and mismatched flag counts are rejected."
+        ]
+      },
+      {
+        "path": "packages/wallet/btms/src/__tests/BTMSHelpers.property.test.ts",
+        "manifest": "packages/wallet/btms/package.json",
+        "risk": "critical",
+        "boundary": "BTMS wallet metadata, message bodies, labels, and key-derivation instructions",
+        "target": "JSON metadata, message totality, exact label stripping, typed derivation fields, and context-preserving rejection",
+        "invariants": [
+          "Arbitrary JSON metadata retains its canonical JSON semantics.",
+          "Valid derivation instructions round-trip with exact key material.",
+          "Non-string derivation material is rejected with UTXO context.",
+          "Arbitrary message text never escapes the tolerant parser."
+        ]
+      },
+      {
+        "path": "packages/helpers/amountinator/tests/amountFormat.property.test.ts",
+        "manifest": "packages/helpers/amountinator/package.json",
+        "risk": "high",
+        "boundary": "Wallet-facing currency conversion, decimal formatting, and safe-integer display",
+        "target": "Currency-pair round trips, safe-integer digit preservation, and finite formatting totality",
+        "invariants": [
+          "Grouping separators never alter arbitrary safe-integer digits.",
+          "Every supported currency pair round-trips bounded finite amounts.",
+          "Bounded finite amounts and decimal policies always produce non-NaN text."
+        ]
+      },
+      {
+        "path": "packages/helpers/fund-wallet/src/cli.property.test.ts",
+        "manifest": "packages/helpers/fund-wallet/package.json",
+        "risk": "critical",
+        "boundary": "Operator-supplied wallet keys, funding amounts, networks, and storage endpoints",
+        "target": "Valid CLI option preservation, secure endpoint rejection, and parser totality",
+        "invariants": [
+          "Valid network and safe-integer funding options retain their exact values.",
+          "Credential-bearing and non-HTTPS storage endpoints are rejected.",
+          "Arbitrary command-line argument vectors never make the parser throw."
+        ]
+      },
+      {
+        "path": "packages/middleware/402-pay/src/server.property.test.ts",
+        "manifest": "packages/middleware/402-pay/package.json",
+        "risk": "critical",
+        "boundary": "Public BRC-121 payment challenge identity and price headers",
+        "target": "Exact challenge serialization and fail-before-mutation validation of identity and price",
+        "invariants": [
+          "Every positive safe-integer price is serialized exactly into a completed HTTP 402 response.",
+          "Invalid prices are rejected before response state changes.",
+          "Invalid compressed identity keys are rejected before response state changes."
+        ]
+      },
+      {
+        "path": "packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts",
+        "manifest": "packages/middleware/auth-express-middleware/package.json",
+        "risk": "critical",
+        "boundary": "Authenticated Express request and response canonical byte serialization",
+        "target": "Unicode field framing, typed-array slice fidelity, and deterministic JSON response bytes",
+        "invariants": [
+          "Arbitrary Unicode header pairs round-trip without framing ambiguity.",
+          "Typed-array views serialize only their selected bytes.",
+          "Arbitrary JSON response values serialize deterministically with canonical content type."
+        ]
+      },
+      {
+        "path": "packages/middleware/payment-express-middleware/src/__tests/PaymentReplayStore.property.test.ts",
+        "manifest": "packages/middleware/payment-express-middleware/package.json",
+        "risk": "critical",
+        "boundary": "Public payment replay admission and bounded in-memory capacity",
+        "target": "Exactly-once transaction admission, fail-closed capacity, and constructor validation",
+        "invariants": [
+          "Every arbitrary transaction identifier is accepted exactly once.",
+          "Capacity exhaustion fails closed without admitting another identifier.",
+          "Non-positive, fractional, and unsafe capacities are rejected."
+        ]
+      },
+      {
+        "path": "packages/helpers/bsv-wallet-helper/src/utils/__tests__/scriptEncoding.property.test.ts",
+        "manifest": "packages/helpers/bsv-wallet-helper/package.json",
+        "risk": "critical",
+        "boundary": "Wallet transaction script classification and arbitrary OP_RETURN binary payload framing",
+        "target": "Exact P2PKH recognition, binary field round trips, base-script immutability, and malformed-script totality",
+        "invariants": [
+          "Every bounded non-empty binary field round-trips through OP_RETURN without changing the base locking script.",
+          "Only the canonical P2PKH opcode and 20-byte hash shape is recognized.",
+          "Arbitrary even-length script bytes never make the P2PKH classifier throw."
+        ]
+      },
+      {
+        "path": "packages/helpers/create-bsv-app/src/config/__tests__/validate.property.test.ts",
+        "manifest": "packages/helpers/create-bsv-app/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted project-scaffolder configuration and filesystem-relative output destinations",
+        "target": "Safe path preservation, traversal rejection, structured-input totality, and governed validation errors",
+        "invariants": [
+          "Arbitrary safe relative BSV and target paths retain their exact destination.",
+          "Absolute and traversal-bearing BSV paths are rejected before filesystem use.",
+          "Arbitrary structured configuration either resolves safely or raises the dedicated configuration error."
+        ]
+      },
+      {
+        "path": "packages/overlays/gasp-core/src/__tests/GASP.property.test.ts",
+        "manifest": "packages/overlays/gasp-core/package.json",
+        "risk": "critical",
+        "boundary": "Public Graph Aware Sync Protocol request, response, pagination, and UTXO-set reconciliation",
+        "target": "Safe timestamp and limit bounds, exact outpoint-set difference, and structured version rejection",
+        "invariants": [
+          "Only non-negative safe timestamps and positive safe pagination limits cross the protocol boundary.",
+          "Initial replies contain exactly local outpoints absent from the remote response.",
+          "Every unsupported protocol version yields structured current and foreign version evidence."
+        ]
+      },
+      {
+        "path": "packages/overlays/btms-backend/src/topic-managers/__tests/BTMSTopicManager.property.test.ts",
+        "manifest": "packages/overlays/btms-backend/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted BTMS overlay token amount and asset identifier fields",
+        "target": "Canonical positive safe-integer token amounts and deterministic issuance asset identifiers",
+        "invariants": [
+          "Only canonical positive decimal safe integers are admitted as token amounts.",
+          "Issuance identifiers bind to the exact transaction outpoint while existing asset identifiers remain unchanged."
+        ]
+      },
+      {
+        "path": "packages/wallet/btms-permission-module/src/__tests__/BasicTokenModule.property.test.ts",
+        "manifest": "packages/wallet/btms-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "BTMS wallet authorization sessions, request shapes, and Bitcoin varint framing",
+        "target": "Unsigned uint32 varints, canonical token quantities, per-origin authorization isolation, and request-shape rejection",
+        "invariants": [
+          "Every unsigned 32-bit Bitcoin varint decodes without signed overflow.",
+          "Only canonical positive decimal safe integers are admitted as permissioned token amounts.",
+          "Session approval is cached independently for each arbitrary originator.",
+          "Array-shaped request arguments are rejected at the authorization boundary."
+        ]
+      }
+    ],
+    "exclusions": [
+      {
+        "manifest": "packages/helpers/did-client/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "This package orchestrates wallet, PushDrop, DID, and overlay APIs; its independent codecs and advertisement boundaries are governed in @bsv/did and the overlay suites.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/helpers/simple/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "This convenience facade composes wallet, DID, Message Box, overlay, and token clients without owning an independent wire codec or authorization parser.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/messaging/authsocket/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "The server package is a Socket.IO transport for SDK BRC-103 AuthMessage values; authentication byte binding is governed by @bsv/auth and the SDK.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/messaging/authsocket-client/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "The client package forwards SDK AuthMessage values through Socket.IO and owns no independent parser, canonicalizer, or authorization decision.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/messaging/ts-paymail/docs/examples/package.json",
+        "kind": "example-or-platform",
+        "rationale": "This private documentation example has no reusable runtime boundary; the Paymail address and protocol parser is governed in the parent package.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/wallet/wallet-toolbox-examples/package.json",
+        "kind": "example-or-platform",
+        "rationale": "This private examples workspace demonstrates governed wallet-toolbox APIs and does not define an independent parser or security decision.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/wallet/wallet-toolbox/client/package.json",
+        "kind": "adapter-or-composition",
+        "rationale": "This client surface exposes wallet-toolbox behavior whose authenticated binary framing and storage invariants are governed in the parent package.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      },
+      {
+        "manifest": "packages/wallet/wallet-toolbox/mobile/package.json",
+        "kind": "example-or-platform",
+        "rationale": "This React Native platform harness exercises the governed wallet and relay packages but does not own an independent arbitrary-input boundary.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-26"
+      }
+    ]
+  },
+  "manualPolicies": [
+    {
+      "id": "wallet-operator",
+      "classification": "operator-only",
+      "owner": "ts-stack-maintainers",
+      "prerequisites": [
+        "Select one exact suite and inspect it before execution.",
+        "Provide only the explicitly documented wallet environment, database, network, and credentials.",
+        "Use isolated test identities and disposable data unless the suite explicitly documents a production diagnostic."
+      ],
+      "expectedResult": "The selected suite completes its assertions without an unhandled error; diagnostic-only or destructive cases require an operator to record the observed result.",
+      "cleanup": "Destroy created wallets and storage handles, remove disposable databases/files, and verify no funded or production identity was mutated unexpectedly.",
+      "cadence": "Run the relevant suite before a release that changes its boundary and during an operator investigation; do not batch-run all operator suites.",
+      "invocation": "pnpm --filter @bsv/wallet-toolbox test:manual -- <path>",
+      "lastRunEvidence": null,
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "id": "wallet-public-live",
+      "classification": "scheduled-live",
+      "owner": "ts-stack-maintainers",
+      "prerequisites": [
+        "Public Arcade endpoints are reachable.",
+        "No private credential is required.",
+        "The caller accepts external-network timing and availability variance."
+      ],
+      "expectedResult": "Both network tips and headers are internally consistent and the SSE subscription returns a valid header.",
+      "cleanup": "Unsubscribe the SSE listener and clear its timeout.",
+      "cadence": "Weekly and before a release that changes the Go Chaintracks client.",
+      "invocation": "pnpm --filter @bsv/wallet-toolbox test:live -- <path>",
+      "lastRunEvidence": null,
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "id": "overlay-public-live",
+      "classification": "scheduled-live",
+      "owner": "ts-stack-maintainers",
+      "prerequisites": [
+        "Public Arcade mainnet and teratestnet endpoints are reachable.",
+        "No cookie credential or private API key is configured."
+      ],
+      "expectedResult": "Current headers and the known mined proof are returned and validate against the public Chaintracks provider.",
+      "cleanup": "No persistent resource is created.",
+      "cadence": "Weekly and before a release that changes Overlay provider integration.",
+      "invocation": "pnpm --filter @bsv/overlay-express test:live",
+      "lastRunEvidence": null,
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "id": "sdk-resource",
+      "classification": "resource-intensive",
+      "owner": "ts-stack-maintainers",
+      "prerequisites": [
+        "At least 2 GiB of free memory is available.",
+        "The run is isolated from the normal PR suite."
+      ],
+      "expectedResult": "AES-GCM encrypts and decrypts a payload larger than the 2^32-bit boundary without truncation.",
+      "cleanup": "Allow the process to release the allocated typed arrays; no persistent resource is created.",
+      "cadence": "Before an SDK release that changes AES-GCM length handling and on a monthly resource-test run.",
+      "invocation": "pnpm --filter @bsv/sdk test:resource",
+      "lastRunEvidence": null,
+      "reviewBy": "2026-08-26"
+    }
+  ],
+  "manualRules": [
+    {
+      "policy": "wallet-operator",
+      "pathPrefix": "packages/wallet/wallet-toolbox/",
+      "suffix": ".man.test.ts",
+      "expectedFiles": 37
+    },
+    {
+      "policy": "wallet-public-live",
+      "pathPrefix": "packages/wallet/wallet-toolbox/",
+      "suffix": ".live.test.ts",
+      "expectedFiles": 1
+    },
+    {
+      "policy": "overlay-public-live",
+      "pathPrefix": "packages/overlays/overlay-express/",
+      "suffix": ".live.test.ts",
+      "expectedFiles": 1
+    },
+    {
+      "policy": "sdk-resource",
+      "pathPrefix": "packages/sdk/",
+      "suffix": ".man.test.ts",
+      "expectedFiles": 1
+    }
+  ],
+  "requiredSkips": [
+    {
+      "path": "packages/overlays/topics/src/__tests__/identity.test.ts",
+      "title": "admits a valid IdentityTopicManager output with real VerifiableCertificate",
+      "classification": "not-yet-implemented",
+      "owner": "ts-stack-maintainers",
+      "reason": "A valid case requires deterministic certificate and PushDrop signatures from subject and certifier wallets; the current helpers only construct invalid boundary fixtures.",
+      "removeWhen": "Add deterministic certificate-construction helpers and assert admission plus decrypted public attributes.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/methods/__test/offsetKey.test.ts",
+      "title": "4_redeemServiceCharges",
+      "classification": "environment-dependent",
+      "owner": "ts-stack-maintainers",
+      "reason": "The redemption scenario depends on a funded mainnet commission identity, live proof services, and operator-controlled storage state.",
+      "removeWhen": "Replace the live funded context with deterministic commission, proof, and redemption fixtures.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/methods/__test/offsetKey.test.ts",
+      "title": "4a_redeemServiceCharges optimized",
+      "classification": "environment-dependent",
+      "owner": "ts-stack-maintainers",
+      "reason": "The optimized redemption comparison uses a funded mainnet commission identity and database records that are not available in deterministic CI.",
+      "removeWhen": "Build an isolated database fixture that exercises both redemption queries against the same deterministic commission set.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/__test/StorageIdb.test.ts",
+      "title": "1",
+      "classification": "known-defect",
+      "owner": "ts-stack-maintainers",
+      "reason": "The IndexedDB wallet scenario passes alone but leaves a handle open when run with the complete Jest suite.",
+      "removeWhen": "Identify and close the leaked handle, give the scenario a behavioral name, and enable it in the required suite.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/__test/getBeefForTransaction.test.ts",
+      "title": "1 obtain atomic beef hex for txid",
+      "classification": "environment-dependent",
+      "owner": "ts-stack-maintainers",
+      "reason": "The diagnostic fetches one hard-coded mainnet transaction through live chain and storage providers and prints the resulting atomic BEEF.",
+      "removeWhen": "Commit a deterministic transaction/proof fixture and assert the exact atomic BEEF rather than consulting the live network.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/__test/WalletStorageManager.test.ts",
+      "title": "2_TODOTONE - AtomicBEEF error",
+      "classification": "known-defect",
+      "owner": "ts-stack-maintainers",
+      "reason": "The seven-writer concurrency scenario still exposes an AtomicBEEF merge error and has not been reduced to a deterministic minimal fixture.",
+      "removeWhen": "Fix the AtomicBEEF merge race, replace the TODO title, and enable the concurrent storage regression.",
+      "reviewBy": "2026-08-26"
+    }
+  ],
+  "conformanceSkipGroups": [
+    {
+      "path": "conformance/vectors/messaging/brc31/authrite-signature.json",
+      "classification": "superseded-vector",
+      "expectedSkips": 4,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "Delete the four obsolete signature vectors after cross-language consumers confirm the replacement deterministic vectors.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/regressions/beef-v2-txid-panic.json",
+      "classification": "upstream-parity",
+      "expectedSkips": 1,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The Go SDK handles empty BEEF consistently and the vector can become required.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/regressions/bip276-hex-decode.json",
+      "classification": "language-specific",
+      "expectedSkips": 3,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The TypeScript stack exposes an equivalent BIP276 contract or the vectors are formally marked unsupported for TypeScript.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/regressions/privatekey-modular-reduction.json",
+      "classification": "upstream-parity",
+      "expectedSkips": 2,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The Go SDK validates and reduces private-key scalars consistently with the TypeScript SDK.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/sdk/crypto/ecies.json",
+      "classification": "runner-gap",
+      "expectedSkips": 1,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The ECIES dispatcher validates the wrong-key error shape directly or the obsolete duplicate vector is removed.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/sdk/scripts/evaluation.json",
+      "classification": "runtime-parity",
+      "expectedSkips": 37,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "Each node-context, consensus, or flag-sensitive script case is implemented or formally classified as outside the standalone evaluator contract.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/sync/brc40-user-state.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 24,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "A seeded producer/consumer sync harness validates BRC-40 state, merge, and offset behavior.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/abortaction.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 6,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness creates deterministic in-flight actions before abort vectors execute.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/acquirecertificate.json",
+      "classification": "fixture-gap",
+      "expectedSkips": 5,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "Vectors use valid deterministic signatures and an ephemeral issuance endpoint.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/createaction.json",
+      "classification": "funded-harness",
+      "expectedSkips": 90,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "A deterministic funded mock-chain wallet supplies change UTXOs for createAction vectors.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/discoverbyattributes.json",
+      "classification": "overlay-harness",
+      "expectedSkips": 1,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "A deterministic overlay lookup fixture returns matching certifier attributes.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/discoverbyidentitykey.json",
+      "classification": "overlay-harness",
+      "expectedSkips": 2,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "A deterministic overlay lookup fixture returns certifier identity records.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/internalizeaction.json",
+      "classification": "fixture-gap",
+      "expectedSkips": 8,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "Placeholder byte arrays are replaced with valid deterministic BEEF fixtures.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/listactions.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 1,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness seeds the expected action before the list request.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/listcertificates.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 1,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness seeds the expected certificate before the list request.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/provecertificate.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 7,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness seeds deterministic certificates and proof keys.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/relinquishcertificate.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 4,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness seeds deterministic certificates before relinquishment.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/relinquishoutput.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 6,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness seeds deterministic outputs before relinquishment.",
+      "reviewBy": "2026-08-26"
+    },
+    {
+      "path": "conformance/vectors/wallet/brc100/signaction.json",
+      "classification": "stateful-harness",
+      "expectedSkips": 8,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "The wallet harness creates and retains deterministic in-flight actions for signing.",
+      "reviewBy": "2026-08-26"
+    }
+  ]
+}

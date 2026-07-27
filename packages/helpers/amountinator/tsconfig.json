@@ -17,7 +17,7 @@
     "rootDir": ".",
     "composite": true,
     "noImplicitOverride": true,
-    "types": ["jest"]
+    "types": ["jest", "node"]
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "jest.config.ts"],

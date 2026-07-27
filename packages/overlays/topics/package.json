@@ -32,6 +32,7 @@
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --exports AnyTopicManager,AppsTopicManager,BTMSTopicManager,BasketMapTopicManager,Bsv21LookupService,Bsv21StorageManager,Bsv21TopicManager,CertMapTopicManager,DIDTopicManager,DesktopIntegrityTopicManager,DstasLookupService,DstasStorageManager,DstasTopicManager,FractionalizeTopicManager,HelloWorldTopicManager,IdentityTopicManager,InMemoryScreeningProvider,KVStoreTopicManager,MandalaLookupService,MandalaStorageManager,MandalaTopicManager,MessageBoxTopicManager,MonsterBattleTopicManager,ProtoMapTopicManager,SlackThreadsTopicManager,StasLookupService,StasStorageManager,StasTopicManager,SupplyChainTopicManager,TokenDemoTopicManager,UHRPTopicManager,UMPTopicManager,WalletConfigTopicManager,allowlistIssuerPolicy,btmsProtocol,createAnyLookupService,createAppsLookupService,createBTMSLookupService,createBasketMapLookupService,createBsv21LookupService,createCertMapLookupService,createDIDLookupService,createDesktopIntegrityLookupService,createDstasLookupService,createFractionalizeLookupService,createHelloWorldLookupService,createIdentityLookupService,createKVStoreLookupService,createMandalaLookupService,createMessageBoxLookupService,createMonsterBattleLookupService,createProtoMapLookupService,createSlackThreadsLookupService,createStasLookupService,createSupplyChainLookupService,createTokenDemoLookupService,createUHRPLookupService,createUMPLookupService,createWalletConfigLookupService,deserializeWalletProtocol,kvProtocol,verifyKeyLinkage",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath src/mandala/__tests/types.property.test.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build"
   },
@@ -45,6 +46,7 @@
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "ts-jest": "^29.4.12",

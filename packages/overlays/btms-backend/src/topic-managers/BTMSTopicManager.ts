@@ -73,8 +73,11 @@ export default class BTMSTopicManager implements TopicManager {
   }
 
   private parseTokenAmount(raw: string): number | undefined {
+    if (!/^[1-9]\d*$/.test(raw)) {
+      return undefined
+    }
     const amount = Number(raw)
-    if (!Number.isInteger(amount) || amount < 1) {
+    if (!Number.isSafeInteger(amount)) {
       return undefined
     }
     return amount

@@ -18,6 +18,13 @@
 export const isAdvertisableURI = (uri: string): boolean => {
   if (typeof uri !== 'string' || uri.trim() === '') return false
 
+  const parsePositiveMeasurement = (value: string): number | undefined => {
+    const match = /^(\d+(?:\.\d+)?)(?:[a-zA-Z][a-zA-Z0-9/_-]*)?$/.exec(value.trim())
+    if (match === null) return undefined
+    const parsed = Number(match[1])
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+  }
+
   // Helper function: validate a URL by substituting its scheme if needed.
   const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
     try {
@@ -87,17 +94,14 @@ export const isAdvertisableURI = (uri: string): boolean => {
     if (Number.isNaN(lat) || lat < -90 || lat > 90) return false
     if (Number.isNaN(lon) || lon < -180 || lon > 180) return false
 
-    // Validate frequency: extract the first number from the freq string.
-    const freqMatch = freqStr.match(/(\d+(\.\d+)?)/)
-    if (!freqMatch) return false
-    const freqVal = Number.parseFloat(freqMatch[1])
-    if (Number.isNaN(freqVal) || freqVal <= 0) return false
-
-    // Validate radius: extract the first number from the radius string.
-    const radiusMatch = radiusStr.match(/(\d+(\.\d+)?)/)
-    if (!radiusMatch) return false
-    const radiusVal = Number.parseFloat(radiusMatch[1])
-    if (Number.isNaN(radiusVal) || radiusVal <= 0) return false
+    // Require a complete positive measurement, optionally followed by a unit.
+    // Substring extraction would otherwise turn "-7" or "junk7" into a valid 7.
+    if (
+      parsePositiveMeasurement(freqStr) === undefined ||
+      parsePositiveMeasurement(radiusStr) === undefined
+    ) {
+      return false
+    }
 
     // JS8 is more of a "demo" / "example". We include it to demonstrate that
     // overlays can be advertised in many, many ways.

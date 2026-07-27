@@ -133,7 +133,7 @@ export interface DecodedMessage<T = TeranodeMessage> {
 // Decoder
 // ---------------------------------------------------------------------------
 
-const decoder = new TextDecoder()
+const decoder = new TextDecoder('utf-8', { fatal: true })
 
 /**
  * Decode a raw GossipSub message (Uint8Array) into a typed object.
@@ -148,14 +148,26 @@ const decoder = new TextDecoder()
  */
 export function decodeMessage<T = TeranodeMessage>(data: Uint8Array): DecodedMessage<T> {
   const text = decoder.decode(data)
-  const envelope: MessageEnvelope = JSON.parse(text)
+  const envelope: unknown = JSON.parse(text)
+  if (
+    envelope === null ||
+    typeof envelope !== 'object' ||
+    Array.isArray(envelope) ||
+    typeof (envelope as Record<string, unknown>).name !== 'string' ||
+    typeof (envelope as Record<string, unknown>).data !== 'string'
+  ) {
+    throw new TypeError('Invalid message envelope')
+  }
 
   // Decode the base64 inner payload
-  const innerBytes = base64ToBytes(envelope.data)
+  const innerBytes = base64ToBytes((envelope as MessageEnvelope).data)
   const innerText = decoder.decode(innerBytes)
-  const payload: T = JSON.parse(innerText)
+  const payload: unknown = JSON.parse(innerText)
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new TypeError('Invalid message payload')
+  }
 
-  return { sender: envelope.name, payload }
+  return { sender: (envelope as MessageEnvelope).name, payload: payload as T }
 }
 
 /**
@@ -182,6 +194,19 @@ for (let i = 0; i < alphabet.length; i++) B64[alphabet[i]] = i
 
 /** Decode a base64 string to Uint8Array without depending on Buffer or atob. */
 function base64ToBytes(b64: string): Uint8Array {
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b64) ||
+    b64.length === 0
+  ) {
+    throw new TypeError('Invalid canonical base64 payload')
+  }
+  if (
+    (b64.endsWith('==') && (B64[b64.at(-3)!] & 0x0f) !== 0) ||
+    (!b64.endsWith('==') && b64.endsWith('=') && (B64[b64.at(-2)!] & 0x03) !== 0)
+  ) {
+    throw new TypeError('Invalid canonical base64 payload')
+  }
+
   // Strip trailing '=' padding (plain scan, no backtracking-prone regex)
   let end = b64.length
   while (end > 0 && b64[end - 1] === '=') end--
@@ -191,8 +216,9 @@ function base64ToBytes(b64: string): Uint8Array {
   let pos = 0
 
   for (let i = 0; i < clean.length; i += 4) {
-    const a = B64[clean[i]] ?? 0
-    const b = B64[clean[i + 1]] ?? 0
+    // Canonical base64 always has at least two symbols in its final quantum.
+    const a = B64[clean[i]]
+    const b = B64[clean[i + 1]]
     const c = B64[clean[i + 2]] ?? 0
     const d = B64[clean[i + 3]] ?? 0
     const bits = (a << 18) | (b << 12) | (c << 6) | d

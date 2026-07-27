@@ -1,3 +1,4 @@
+// Requires an external generic-certifier backend and explicit operator configuration.
 import {
   AcquireCertificateArgs,
   Certificate,
@@ -12,14 +13,9 @@ import { sdk, Wallet } from '../../../src/index.all'
 describe('acquireCertificate tests', () => {
   jest.setTimeout(99999999)
 
-  test('00', () => {})
   if (_tu.noEnv('test')) return
 
   const env = _tu.getEnv('test')
-
-  beforeAll(async () => {})
-
-  afterAll(async () => {})
 
   test('1 invalid params', async () => {
     const { wallet, storage } = await _tu.createLegacyWalletSQLiteCopy('acquireCertificate1')
@@ -101,7 +97,7 @@ describe('acquireCertificate tests', () => {
       certifiers: [cert.certifier],
       types: []
     })
-    expect(lcs.certificates.length).toBe(1)
+    expect(lcs.certificates).toHaveLength(1)
     const lc = lcs.certificates[0]
     // the result should be encrypted.
     expect(lc.fields['name']).not.toBe('Alice')
@@ -204,7 +200,7 @@ describe('acquireCertificate tests', () => {
       certifiers: [cert.certifier],
       types: []
     })
-    expect(lcs.certificates.length).toBe(1)
+    expect(lcs.certificates).toHaveLength(1)
     const lc = lcs.certificates[0]
     // the result should be encrypted.
     expect(lc.fields['name']).not.toBe('Alice')
@@ -279,7 +275,7 @@ describe('acquireCertificate tests', () => {
       certifiers: [args.certifier],
       types: []
     })
-    expect(certificatesFound.certificates.length).toBe(1)
+    expect(certificatesFound.certificates).toHaveLength(1)
     const lc = certificatesFound.certificates[0]
     // the result should be encrypted.
     expect(lc.fields['name']).not.toBe('Alice')

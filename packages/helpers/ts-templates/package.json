@@ -49,6 +49,7 @@
     "prepublishOnly": "pnpm build",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/mandala-encoding.property.test.ts",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
@@ -75,6 +76,8 @@
     "@bsv/sdk": "workspace:^",
     "@bsv/wallet-toolbox": "workspace:^",
     "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "tsdown": "0.22.14",

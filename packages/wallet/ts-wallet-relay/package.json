@@ -74,6 +74,7 @@
     "test": "jest --config jest.config.cjs --watchman=false",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --config jest.config.cjs --coverage --watchman=false",
+    "test:property": "jest --config jest.config.cjs --selectProjects node --runInBand --watchman=false --runTestsByPath tests/pairingUri.property.test.ts",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
@@ -108,6 +109,7 @@
     "@types/react": "^19.2.17",
     "@types/ws": "^8.18.1",
     "express": "^5.2.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "qrcode": "^1.5.4",

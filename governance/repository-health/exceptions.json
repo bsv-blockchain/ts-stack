@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-25",
+  "lastReviewed": "2026-07-26",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -117,33 +117,36 @@
     {
       "id": "conformance-intended-skips",
       "category": "skipped-test",
-      "target": "211 conformance cases reported skipped at baseline",
+      "target": "211 individually reasoned conformance cases across 19 governed vector files",
       "owner": "ts-stack-maintainers",
-      "reason": "The consolidated conformance runner contains intended parity gaps and explicitly skipped vectors that require language-by-language disposition before enforcement can require zero skips.",
+      "reason": "Every current non-run vector has a stable ID and inherited or local reason, and every affected file has an exact count, classification, owner, review date, and removal condition. The remaining gaps require stateful/funded/overlay fixtures, upstream parity decisions, or runner work before enforcement can require zero skips.",
       "evidence": [
         "governance/repository-health/baselines.json#conformance",
+        "governance/test-quality/policy.json#conformanceSkipGroups",
+        "scripts/test-governance.mjs",
         "conformance/runner/ts/runner.test.ts",
         "conformance/vectors/**",
-        "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-24",
+      "reviewBy": "2026-08-26",
       "removeWhen": "Every conformance skip is implemented or documented as deliberately unsupported with a permanent compatibility decision."
     },
     {
       "id": "explicit-jest-skips",
       "category": "skipped-test",
-      "target": "60 direct test/it/describe.skip declarations in package tests",
+      "target": "6 governed direct skips in required package tests",
       "owner": "ts-stack-maintainers",
-      "reason": "Package suites contain historical, manual, network-dependent, large-resource, and incomplete cases that need individual review before they can safely be enabled, rewritten, or removed.",
+      "reason": "Manual, live, and resource suites are now classified outside deterministic PR discovery. Six required-suite gaps remain individually registered with owner, reason, review date, and removal condition; CI rejects new anonymous skips, stale registrations, and empty test bodies.",
       "evidence": [
         "governance/repository-health/baselines.json#testExceptions",
-        "packages/**/{test,tests,__test__,__tests__}/**",
+        "governance/test-quality/policy.json#requiredSkips",
+        "scripts/test-governance.mjs",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-24",
-      "reviewBy": "2026-08-24",
-      "removeWhen": "The manual coverage review assigns and resolves every explicit skip or replaces it with a narrowly documented, continuously reviewed environment-gated test."
+      "reviewBy": "2026-08-26",
+      "removeWhen": "All six required-suite gaps are enabled, moved to a correctly governed non-PR suite, or removed with evidence that the scenario is obsolete."
     },
     {
       "id": "legacy-sonar-analysis-suppressions",

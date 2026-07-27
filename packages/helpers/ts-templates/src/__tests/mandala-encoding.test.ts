@@ -49,9 +49,9 @@ describe('mandala-encoding', () => {
     expect(bytes.slice(32)).toEqual([1, 0, 0, 0]) // vout little-endian
   })
 
-  it.each(['not-a-number', '-1'])('rejects invalid assetId vout %s', vout => {
+  it.each(['not-a-number', '-1', '4294967296'])('rejects invalid assetId vout %s', vout => {
     expect(() => encodeAssetId(`${'a'.repeat(64)}.${vout}`)).toThrow(
-      'assetId vout must be a non-negative integer'
+      'assetId vout must be an unsigned 32-bit integer'
     )
   })
 })

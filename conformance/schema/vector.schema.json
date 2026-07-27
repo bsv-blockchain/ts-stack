@@ -27,6 +27,11 @@
       "type": "string",
       "enum": ["required", "intended", "best-effort", "unsupported"]
     },
+    "skip_reason": {
+      "type": "string",
+      "minLength": 20,
+      "description": "Inherited reason for every non-required vector in this file"
+    },
     "vectors": {
       "type": "array",
       "minItems": 1,
@@ -38,12 +43,16 @@
           "description": { "type": "string" },
           "input": { "type": "object" },
           "expected": { "type": "object" },
+          "parity_class": {
+            "type": "string",
+            "enum": ["required", "intended", "best-effort", "unsupported"]
+          },
           "tags": {
             "type": "array",
             "items": { "type": "string" }
           },
           "skip": { "type": "boolean", "description": "If true, skip in CI" },
-          "skip_reason": { "type": "string" }
+          "skip_reason": { "type": "string", "minLength": 20 }
         }
       }
     }

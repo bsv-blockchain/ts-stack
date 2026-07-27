@@ -164,6 +164,12 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -201,6 +207,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -235,6 +244,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -266,6 +278,9 @@ importers:
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -346,6 +361,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       oxlint:
         specifier: ^1.75.0
         version: 1.75.0
@@ -410,6 +428,12 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -515,6 +539,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -570,6 +597,9 @@ importers:
       '@types/supertest':
         specifier: ^7.2.1
         version: 7.2.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -628,6 +658,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       oxlint:
         specifier: ^1.75.0
         version: 1.75.0
@@ -655,6 +688,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -701,6 +737,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -744,6 +783,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -823,6 +865,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -857,6 +902,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -890,6 +938,9 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -927,6 +978,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -967,6 +1021,12 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1040,6 +1100,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1083,6 +1146,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1116,6 +1182,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1161,6 +1230,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1194,6 +1266,12 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1230,6 +1308,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1288,6 +1369,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
@@ -1379,6 +1463,9 @@ importers:
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
       fs-extra:
         specifier: ^11.4.0
         version: 11.4.0
@@ -4900,6 +4987,10 @@ packages:
     resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
     engines: {node: '>=18'}
 
+  fast-check@4.9.0:
+    resolution: {integrity: sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg==}
+    engines: {node: '>=12.17.0'}
+
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
 
@@ -6630,6 +6721,9 @@ packages:
 
   pure-rand@7.0.1:
     resolution: {integrity: sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ==}
+
+  pure-rand@8.4.2:
+    resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
 
   qrcode@1.5.4:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
@@ -8628,7 +8722,7 @@ snapshots:
   '@jest/console@30.4.1':
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       chalk: 4.1.2
       jest-message-util: 30.4.1
       jest-util: 30.4.1
@@ -8642,7 +8736,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       ci-info: 4.4.0
@@ -8650,7 +8744,7 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       graceful-fs: 4.2.11
       jest-changed-files: 30.4.1
-      jest-config: 30.4.2(@types/node@24.13.3)(ts-node@10.9.2(@types/node@24.13.3)(typescript@6.0.3))
+      jest-config: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@24.13.3)(typescript@6.0.3))
       jest-haste-map: 30.4.1
       jest-message-util: 30.4.1
       jest-regex-util: 30.4.0
@@ -8678,7 +8772,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       ci-info: 4.4.0
@@ -8686,7 +8780,7 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       graceful-fs: 4.2.11
       jest-changed-files: 30.4.1
-      jest-config: 30.4.2(@types/node@24.13.3)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
+      jest-config: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3))
       jest-haste-map: 30.4.1
       jest-message-util: 30.4.1
       jest-regex-util: 30.4.0
@@ -8723,7 +8817,7 @@ snapshots:
     dependencies:
       '@jest/fake-timers': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       jest-mock: 30.4.1
 
   '@jest/expect-utils@30.4.1':
@@ -8741,7 +8835,7 @@ snapshots:
     dependencies:
       '@jest/types': 30.4.1
       '@sinonjs/fake-timers': 15.4.0
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       jest-message-util: 30.4.1
       jest-mock: 30.4.1
       jest-util: 30.4.1
@@ -8759,7 +8853,7 @@ snapshots:
 
   '@jest/pattern@30.4.0':
     dependencies:
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       jest-regex-util: 30.4.0
 
   '@jest/reporters@30.4.1':
@@ -8770,7 +8864,7 @@ snapshots:
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
       '@jridgewell/trace-mapping': 0.3.31
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
@@ -8859,7 +8953,7 @@ snapshots:
       '@jest/schemas': 30.4.1
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -11498,6 +11592,10 @@ snapshots:
 
   fake-indexeddb@6.2.5: {}
 
+  fast-check@4.9.0:
+    dependencies:
+      pure-rand: 8.4.2
+
   fast-deep-equal@3.1.3: {}
 
   fast-fifo@1.3.2: {}
@@ -12113,7 +12211,7 @@ snapshots:
       '@jest/expect': 30.4.1
       '@jest/test-result': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       chalk: 4.1.2
       co: 4.6.0
       dedent: 1.7.2
@@ -12203,7 +12301,7 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
-  jest-config@30.4.2(@types/node@24.13.3)(ts-node@10.9.2(@types/node@26.1.1)(typescript@6.0.3)):
+  jest-config@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@24.13.3)(typescript@6.0.3)):
     dependencies:
       '@babel/core': 7.29.7
       '@jest/get-type': 30.1.0
@@ -12229,8 +12327,8 @@ snapshots:
       slash: 3.0.0
       strip-json-comments: 3.1.1
     optionalDependencies:
-      '@types/node': 24.13.3
-      ts-node: 10.9.2(@types/node@26.1.1)(typescript@6.0.3)
+      '@types/node': 26.1.1
+      ts-node: 10.9.2(@types/node@24.13.3)(typescript@6.0.3)
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color
@@ -12301,7 +12399,7 @@ snapshots:
       '@jest/environment': 30.4.1
       '@jest/fake-timers': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       jest-mock: 30.4.1
       jest-util: 30.4.1
       jest-validate: 30.4.1
@@ -12311,7 +12409,7 @@ snapshots:
   jest-haste-map@30.4.1:
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       graceful-fs: 4.2.11
@@ -12351,7 +12449,7 @@ snapshots:
   jest-mock@30.4.1:
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       jest-util: 30.4.1
 
   jest-pnp-resolver@1.2.3(jest-resolve@30.4.1):
@@ -12385,7 +12483,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       chalk: 4.1.2
       emittery: 0.13.1
       exit-x: 0.2.2
@@ -12414,7 +12512,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       chalk: 4.1.2
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
@@ -12470,7 +12568,7 @@ snapshots:
   jest-util@30.4.1:
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
@@ -12498,7 +12596,7 @@ snapshots:
     dependencies:
       '@jest/test-result': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       emittery: 0.13.1
@@ -12520,7 +12618,7 @@ snapshots:
 
   jest-worker@30.4.1:
     dependencies:
-      '@types/node': 24.13.3
+      '@types/node': 26.1.1
       '@ungap/structured-clone': 1.3.3
       jest-util: 30.4.1
       merge-stream: 2.0.0
@@ -13955,6 +14053,8 @@ snapshots:
       - yauzl
 
   pure-rand@7.0.1: {}
+
+  pure-rand@8.4.2: {}
 
   qrcode@1.5.4:
     dependencies:

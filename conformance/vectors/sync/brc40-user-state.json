@@ -6,6 +6,7 @@
   "version": "0.1.0",
   "reference_impl": "packages/wallet/wallet-toolbox/src/storage/methods/getSyncChunk.ts@2.1.25",
   "parity_class": "intended",
+  "skip_reason": "Requires a stateful producer with seeded user, transaction, output, proof, and sync-offset tables; the current shape-only dispatcher cannot validate runtime merge state.",
   "vectors": [
     {
       "id": "sync.brc40.request.1",
@@ -144,8 +145,7 @@
         "schema_note": "Producer has no records for the requested identityKey."
       },
       "tags": ["brc40", "sync", "error-case", "request", "unknown-user"],
-      "skip": true,
-      "skip_reason": "Runtime-state assertion; requires producer with seeded user table. Cannot be validated by shape-only dispatcher."
+      "notes": "Runtime-state assertion is governed by the file-level intended classification."
     },
     {
       "id": "sync.brc40.request.error.4",
@@ -484,7 +484,14 @@
         "action": "skip",
         "schema_note": "incoming.updated_at < existing.updated_at — SKIP. Direct regression case from go-wallet-toolbox#853: status MUST NOT regress; provenTxId MUST NOT be cleared."
       },
-      "tags": ["brc40", "sync", "regression-case", "merge", "monotonic-updated-at", "go-wallet-toolbox-853"]
+      "tags": [
+        "brc40",
+        "sync",
+        "regression-case",
+        "merge",
+        "monotonic-updated-at",
+        "go-wallet-toolbox-853"
+      ]
     },
     {
       "id": "sync.brc40.merge.tx.error.regression.2",
@@ -550,7 +557,15 @@
         "action": "skip",
         "schema_note": "go-wallet-toolbox#853: output.spendable false→true via stale chunk = double-spend hazard. MUST be rejected by upsert."
       },
-      "tags": ["brc40", "sync", "regression-case", "merge", "monotonic-updated-at", "double-spend-hazard", "go-wallet-toolbox-853"]
+      "tags": [
+        "brc40",
+        "sync",
+        "regression-case",
+        "merge",
+        "monotonic-updated-at",
+        "double-spend-hazard",
+        "go-wallet-toolbox-853"
+      ]
     },
     {
       "id": "sync.brc40.merge.output.error.regression.2",
@@ -586,7 +601,14 @@
         "action": "skip",
         "schema_note": "Stale incoming has spentBy=null but existing has spentBy=43. Skip preserves attribution."
       },
-      "tags": ["brc40", "sync", "regression-case", "merge", "monotonic-updated-at", "go-wallet-toolbox-853"]
+      "tags": [
+        "brc40",
+        "sync",
+        "regression-case",
+        "merge",
+        "monotonic-updated-at",
+        "go-wallet-toolbox-853"
+      ]
     },
     {
       "id": "sync.brc40.merge.proventx.error.regression.1",
@@ -616,7 +638,14 @@
         "action": "skip",
         "schema_note": "Older incoming for an already-proven tx must be ignored."
       },
-      "tags": ["brc40", "sync", "regression-case", "merge", "monotonic-updated-at", "go-wallet-toolbox-853"]
+      "tags": [
+        "brc40",
+        "sync",
+        "regression-case",
+        "merge",
+        "monotonic-updated-at",
+        "go-wallet-toolbox-853"
+      ]
     },
     {
       "id": "sync.brc40.flow.regression.1",
@@ -674,7 +703,14 @@
         },
         "schema_note": "Post-merge consumer state must equal the chunk with the greatest updated_at per natural key, regardless of arrival order."
       },
-      "tags": ["brc40", "sync", "regression-case", "flow", "monotonic-updated-at", "go-wallet-toolbox-853"]
+      "tags": [
+        "brc40",
+        "sync",
+        "regression-case",
+        "flow",
+        "monotonic-updated-at",
+        "go-wallet-toolbox-853"
+      ]
     },
     {
       "id": "sync.brc40.flow.since.inclusive.1",

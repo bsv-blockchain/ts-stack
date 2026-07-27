@@ -14,7 +14,6 @@
  * helpers (and verified by reading the PushDrop.decode implementation).
  */
 
-import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
 import {
@@ -187,13 +186,12 @@ describe('HelloWorldLookupService (MongoDB)', () => {
   let service: HelloWorldLookupService
 
   beforeAll(async () => {
-    jest.setTimeout(60000)
     mongod = await MongoMemoryServer.create(mongoMemoryServerOptions)
     client = new MongoClient(mongod.getUri())
     await client.connect()
     db = client.db('test_hello')
     service = new HelloWorldLookupService(new HelloWorldStorage(db))
-  })
+  }, 60_000)
 
   afterAll(async () => {
     if (client !== undefined) {
@@ -202,7 +200,7 @@ describe('HelloWorldLookupService (MongoDB)', () => {
     if (mongod !== undefined) {
       await mongod.stop()
     }
-  })
+  }, 60_000)
 
   afterEach(async () => {
     if (db !== undefined) {
@@ -223,10 +221,10 @@ describe('HelloWorldLookupService (MongoDB)', () => {
       lockingScript
     } as OutputAdmittedByTopic)
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_helloworld',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result.length).toBe(1)
     expect(result[0].txid).toBe('hwtx0001')
@@ -245,10 +243,10 @@ describe('HelloWorldLookupService (MongoDB)', () => {
       lockingScript
     } as OutputAdmittedByTopic)
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_helloworld',
       query: { message: 'hello' }
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
 
     expect(result.length).toBeGreaterThan(0)
     expect(result[0].txid).toBe('hwtx0002')
@@ -268,18 +266,18 @@ describe('HelloWorldLookupService (MongoDB)', () => {
     } as OutputAdmittedByTopic)
 
     // Confirm stored
-    const before = await service.lookup({
+    const before = (await service.lookup({
       service: 'ls_helloworld',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(before.length).toBe(1)
 
     await service.outputEvicted('hwtx0003', 0)
 
-    const after = await service.lookup({
+    const after = (await service.lookup({
       service: 'ls_helloworld',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(after).toHaveLength(0)
   })
 
@@ -296,17 +294,19 @@ describe('HelloWorldLookupService (MongoDB)', () => {
       lockingScript
     } as OutputAdmittedByTopic)
 
-    const result = await service.lookup({
+    const result = (await service.lookup({
       service: 'ls_helloworld',
       query: {}
-    } as LookupQuestion) as any[]
+    } as LookupQuestion)) as any[]
     expect(result).toHaveLength(0)
   })
 
   it('throws on unsupported service', async () => {
-    await expect(service.lookup({
-      service: 'ls_unknown',
-      query: {}
-    } as LookupQuestion)).rejects.toThrow('Lookup service not supported!')
+    await expect(
+      service.lookup({
+        service: 'ls_unknown',
+        query: {}
+      } as LookupQuestion)
+    ).rejects.toThrow('Lookup service not supported!')
   })
 })

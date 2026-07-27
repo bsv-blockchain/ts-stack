@@ -1,10 +1,10 @@
 ---
 id: repository-health
-title: "Repository Health Controls"
+title: 'Repository Health Controls'
 kind: reference
-version: "1.2.0"
-last_updated: "2026-07-26"
-last_verified: "2026-07-26"
+version: '1.2.0'
+last_updated: '2026-07-26'
+last_verified: '2026-07-26'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -73,12 +73,21 @@ workspace inventory. Expired entries fail CI. An empty registry is preferred,
 but existing overrides, skipped tests, and analysis suppressions must be
 recorded until they are removed.
 
+Test-specific ownership is normalized in
+`governance/test-quality/policy.json`. The blocking `pnpm test:governance`
+contract inventories required skips, classifies every manual/live/resource
+suite, rejects empty tests, ratchets all conformance skip groups, and requires
+every property-fuzz suite to declare its package, trust boundary, concrete
+invariants, minimum PR budget, and reproducible long-run campaign.
+
 ## Commands
 
 Run the blocking control and its unit tests:
 
 ```sh
 pnpm health:check
+pnpm test:governance
+pnpm test:property
 ```
 
 Render the complete current report:

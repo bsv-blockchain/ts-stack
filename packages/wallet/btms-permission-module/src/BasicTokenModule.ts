@@ -153,7 +153,7 @@ export class BasicTokenModule implements PermissionsModule {
     if (!originator || typeof originator !== 'string') {
       throw new Error('Invalid originator')
     }
-    if (!args || typeof args !== 'object') {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
       throw new Error('Invalid args')
     }
 
@@ -799,10 +799,11 @@ export class BasicTokenModule implements PermissionsModule {
       }
       return {
         value:
-          data[offset + 1] |
-          (data[offset + 2] << 8) |
-          (data[offset + 3] << 16) |
-          (data[offset + 4] << 24),
+          (data[offset + 1] |
+            (data[offset + 2] << 8) |
+            (data[offset + 3] << 16) |
+            (data[offset + 4] << 24)) >>>
+          0,
         nextOffset: offset + 5
       }
     }
@@ -1098,7 +1099,7 @@ export class BasicTokenModule implements PermissionsModule {
       const amount = Number(amountStr)
 
       // Validate amount
-      if (Number.isNaN(amount) || amount <= 0 || !Number.isFinite(amount)) {
+      if (!/^[1-9]\d*$/.test(amountStr) || !Number.isSafeInteger(amount)) {
         return null
       }
 

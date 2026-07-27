@@ -2,7 +2,7 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testPathIgnorePatterns: ['dist/', 'node_modules/'],
+  testPathIgnorePatterns: ['dist/', 'node_modules/', String.raw`\.live\.test\.ts$`],
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],

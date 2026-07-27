@@ -29,6 +29,9 @@ jobs:
       - name: Test repository health controls
         run: node --test scripts/*.test.mjs
 
+      - name: Enforce test, manual-suite, and conformance skip governance
+        run: node scripts/test-governance.mjs
+
       - name: Verify synchronized service security policies
         run: |
           node scripts/sync-service-rate-limit-policy.mjs --check
@@ -100,7 +103,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/ci\.yml|governance/repository-health/|scripts/(check-package-artifact|check-wallet-toolbox-platform|repository-health|run-ci-tests|normalize-lcov-paths|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests)\.yml|governance/(repository-health|test-quality)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|test-governance|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"

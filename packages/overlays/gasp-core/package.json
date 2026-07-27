@@ -52,6 +52,7 @@
   },
   "scripts": {
     "test": "pnpm build && jest --watchman=false",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/GASP.property.test.ts",
     "test:watch": "pnpm build && jest --watch",
     "test:coverage": "pnpm build && jest --coverage --watchman=false",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/gasp-core/**/*.{js,json,md,ts}\"",
@@ -76,6 +77,7 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@types/jest": "^30.0.0",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
