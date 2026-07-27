@@ -105,5 +105,33 @@ describe('wallet pairing URI properties', () => {
       expiry: FUTURE_EXPIRY
     })
     expect(parsePairingUri(invalidKeyUri).params).toBeNull()
+
+    for (const invalidOrigin of [
+      'not a URL',
+      'https://wallet.example.org/path',
+      'https://wallet.example.org?query=value',
+      'https://wallet.example.org#fragment',
+      'https://user:password@wallet.example.org'
+    ]) {
+      const uri = buildPairingUri({
+        sessionId: 'session',
+        backendIdentityKey: BACKEND_KEY,
+        protocolID: '[0,"pairing"]',
+        origin: invalidOrigin,
+        expiry: FUTURE_EXPIRY
+      })
+      expect(parsePairingUri(uri).params).toBeNull()
+    }
+
+    for (const invalidProtocol of ['not JSON', '{}']) {
+      const uri = buildPairingUri({
+        sessionId: 'session',
+        backendIdentityKey: BACKEND_KEY,
+        protocolID: invalidProtocol,
+        origin: 'https://wallet.example.org',
+        expiry: FUTURE_EXPIRY
+      })
+      expect(parsePairingUri(uri).params).toBeNull()
+    }
   })
 })

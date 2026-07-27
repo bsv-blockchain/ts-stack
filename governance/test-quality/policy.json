@@ -137,13 +137,14 @@
         "manifest": "packages/overlays/overlay-express/package.json",
         "risk": "critical",
         "boundary": "Public chain-reorg SSE framing and height/hash normalization",
-        "target": "Reorg normalization, bounded depth fallback, numeric validation, SSE framing, and parser totality",
+        "target": "Reorg normalization, bounded depth fallback, numeric validation, chunked SSE delivery, and parser totality",
         "invariants": [
           "Valid reorg hashes are canonicalized and common-ancestor heights are honored.",
           "A common ancestor cannot exceed the new chain tip.",
           "Depth fallback never produces a negative rebuild height.",
           "Non-safe heights are rejected.",
-          "Complete and partial SSE frames are separated without data loss."
+          "Complete and partial SSE frames are separated without data loss.",
+          "Every valid event is delivered exactly once across arbitrary network chunk boundaries."
         ]
       },
       {
