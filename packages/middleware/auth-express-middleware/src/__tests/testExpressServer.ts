@@ -14,6 +14,29 @@ import { Server, createServer } from 'node:http'
 // import * as crypto from 'crypto'
 // global.self = { crypto }
 
+interface DelayedResponseControl {
+  markStarted: () => void
+  released: Promise<void>
+}
+
+let nextDelayedResponse: DelayedResponseControl | undefined
+
+export function holdNextDelayedResponse(): {
+  started: Promise<void>
+  release: () => void
+} {
+  let markStarted!: () => void
+  let release!: () => void
+  const started = new Promise<void>(resolve => {
+    markStarted = resolve
+  })
+  const released = new Promise<void>(resolve => {
+    release = resolve
+  })
+  nextDelayedResponse = { markStarted, released }
+  return { started, release }
+}
+
 // Create Express app instance
 // Export a function to start the server programmatically
 export const startServer = (_port = 3000): Server => {
@@ -153,6 +176,14 @@ export const startServer = (_port = 3000): Server => {
 
   app.get('/custom-headers', (req: Request, res: Response) => {
     res.send({ status: 'headers received', headers: req.headers })
+  })
+
+  app.get('/delayed-response', async (_req: Request, res: Response) => {
+    const control = nextDelayedResponse
+    nextDelayedResponse = undefined
+    control?.markStarted()
+    await control?.released
+    res.send({ status: 'delayed response' })
   })
 
   // Fallback for 404 errors

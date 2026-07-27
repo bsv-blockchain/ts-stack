@@ -927,6 +927,7 @@ export class ExpressTransport implements Transport {
   ): void {
     this.log('debug', 'General message from the correct identity key')
     req.auth = { identityKey: senderPublicKey }
+    const sessionNonce = singleHeader(req, 'x-bsv-auth-your-nonce') as string
 
     const wrapper = new ResponseWriterWrapper()
     let responseSent = false
@@ -956,7 +957,11 @@ export class ExpressTransport implements Transport {
           responseBodyLength: wrapper.getBody().length
         })
         if (this.peer === undefined) throw new Error('Authentication peer is unavailable.')
-        await this.peer.toPeer(responsePayload, senderPublicKey)
+        // Resolve the session by the nonce the client echoed, not by identity
+        // key: `getSession` returns a peer's most recently updated session for
+        // an identity key, which need not be the session this request arrived
+        // on.
+        await this.peer.toPeer(responsePayload, sessionNonce)
       } catch (err) {
         this.clearOpenGeneralHandle(requestId)
         this.log('error', 'Failed to build and send authenticated response', safeErrorDetails(err))
