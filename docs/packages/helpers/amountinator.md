@@ -1,16 +1,15 @@
 ---
 id: pkg-amountinator
-title: "@bsv/amountinator"
+title: '@bsv/amountinator'
 kind: package
 domain: helpers
-version: "2.1.1"
-source_repo: "bsv-blockchain/ts-stack"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.1.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/amountinator"
-repo: "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator"
+npm: 'https://www.npmjs.com/package/@bsv/amountinator'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator'
 status: stable
 tags: [helpers, amounts, satoshis]
 ---
@@ -30,13 +29,13 @@ npm install @bsv/amountinator
 ```typescript
 import { CurrencyConverter } from '@bsv/amountinator'
 
-const converter = new CurrencyConverter()  // 5-min auto-refresh
+const converter = new CurrencyConverter() // 5-min auto-refresh
 await converter.initialize()
 
 // Auto-detect input currency, convert to user's preference
 const formatted = await converter.convertAmount('5000')
 console.log(formatted.formattedAmount) // e.g. "5,000 satoshis"
-console.log(formatted.hoverText)       // present for very small displayed values
+console.log(formatted.hoverText) // present for very small displayed values
 
 // Cleanup (stop auto-refresh)
 converter.dispose()
@@ -63,37 +62,43 @@ require both public exports. Node.js 22 or newer is supported.
 ## Common patterns
 
 ### Initialize with auto-refresh
+
 ```typescript
-const converter = new CurrencyConverter()  // 5-min interval
+const converter = new CurrencyConverter() // 5-min interval
 await converter.initialize()
 ```
 
 ### Convert with auto-detection
+
 ```typescript
-const formatted = await converter.convertAmount('5000')  // "5000" or "0.1" or "10 USD"
+const formatted = await converter.convertAmount('5000') // "5000" or "0.1" or "10 USD"
 console.log(formatted.formattedAmount) // formatted for display
-console.log(formatted.hoverText)       // optional full value for tiny amounts
+console.log(formatted.hoverText) // optional full value for tiny amounts
 ```
 
 ### Convert between specific currencies
+
 ```typescript
-const usdAmount = converter.convertCurrency(0.1, 'BSV', 'USD')  // 6.2 (if rate = 62)
+const usdAmount = converter.convertCurrency(0.1, 'BSV', 'USD') // 6.2 (if rate = 62)
 ```
 
 ### Get preferred currency symbol
+
 ```typescript
-const symbol = converter.getCurrencySymbol()  // "$" if USD, "€" if EUR
+const symbol = converter.getCurrencySymbol() // "$" if USD, "€" if EUR
 ```
 
 ### Convert user currency to satoshis
+
 ```typescript
-const sats = await converter.convertToSatoshis(10)  // If preferred = 'USD', USD→SATS
-console.log(sats)  // e.g. 1610000 (rounded up)
+const sats = await converter.convertToSatoshis(10) // If preferred = 'USD', USD→SATS
+console.log(sats) // e.g. 1610000 (rounded up)
 ```
 
 ### Static converter (no auto-refresh)
+
 ```typescript
-const staticConverter = new CurrencyConverter(0)  // refreshInterval = 0
+const staticConverter = new CurrencyConverter(0) // refreshInterval = 0
 await staticConverter.initialize()
 const amount = await staticConverter.convertAmount('100')
 // Rates will not auto-update
@@ -142,7 +147,7 @@ const amount = await staticConverter.convertAmount('100')
 
 - [@bsv/simple](simple.md) — Wallet with payment operations
 - [@bsv/fund-wallet](fund-wallet.md) — Faucet that may display amounts
-- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Transaction building with satoshis
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Transaction building with satoshis
 
 ## Reference
 

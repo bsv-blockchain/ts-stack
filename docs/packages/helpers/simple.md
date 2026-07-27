@@ -1,16 +1,15 @@
 ---
 id: pkg-simple
-title: "@bsv/simple"
+title: '@bsv/simple'
 kind: package
 domain: helpers
-version: "0.4.1"
-source_repo: "bsv-blockchain/simple"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '0.4.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/simple"
-repo: "https://github.com/bsv-blockchain/simple"
+npm: 'https://www.npmjs.com/package/@bsv/simple'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple'
 status: stable
 tags: [helpers, simple, payments]
 ---
@@ -57,6 +56,7 @@ console.log('Paid:', result.txid)
 ## Common patterns
 
 ### Check wallet balance
+
 ```typescript
 const balance = await wallet.getBalance()
 console.log(`Balance: ${balance.totalSatoshis} satoshis`)
@@ -67,6 +67,7 @@ console.log(`Spendable: ${tokenBalance.spendableSatoshis}`)
 ```
 
 ### Register for MessageBox and send payment
+
 ```typescript
 // Register identity handle
 await wallet.certifyForMessageBox('@alice', '/api/identity-registry')
@@ -77,6 +78,7 @@ await wallet.sendMessageBoxPayment(results[0].identityKey, 1000)
 ```
 
 ### Create and transfer tokens
+
 ```typescript
 const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 
@@ -98,6 +100,7 @@ await wallet.sendToken({
 ```
 
 ### Direct payments (BRC-29 derivation)
+
 ```typescript
 // Server generates payment request
 const request = serverWallet.createPaymentRequest({ satoshis: 2000 })
@@ -158,10 +161,10 @@ await serverWallet.receiveDirectPayment({
 
 - [@bsv/wallet-helper](wallet-helper.md) — Fluent transaction builder
 - [@bsv/templates](templates.md) — Low-level script templates
-- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction building
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Core transaction building
 
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/simple/)
-- [Source on GitHub](https://github.com/bsv-blockchain/simple)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple)
 - [npm](https://www.npmjs.com/package/@bsv/simple)

@@ -3,12 +3,12 @@ id: wallet-domain
 title: Wallet
 kind: meta
 domain: wallet
-version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["domain", "wallet"]
+tags: ['domain', 'wallet']
 ---
 
 # Wallet Domain
@@ -19,31 +19,39 @@ The wallet domain builds on top of [@bsv/sdk](../sdk/bsv-sdk.md). If you only ne
 
 ## Packages in this Domain
 
-| Package | Purpose |
-|---------|---------|
-| [@bsv/wallet-toolbox](./wallet-toolbox.md) | Reference BRC-100 wallet implementation with SQLite/MySQL/IndexedDB storage, background monitoring, Shamir key sharing, and permission management |
-| [@bsv/btms](./btms.md) | UTXO-based token issuance, transfer, burning, and ownership proof validation |
-| [@bsv/btms-permission-module](./btms-permission-module.md) | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback |
-| [@bsv/wallet-relay](./wallet-relay.md) | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components |
+| Package                                                    | Purpose                                                                                                                            |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [@bsv/wallet-toolbox](./wallet-toolbox.md)                 | Node BRC-100 wallet implementation with SQLite/MySQL storage, background monitoring, Shamir key sharing, and permission management |
+| [@bsv/wallet-toolbox-client](./wallet-toolbox-client.md)   | Browser-safe wallet, IndexedDB, and remote storage distribution                                                                    |
+| [@bsv/wallet-toolbox-mobile](./wallet-toolbox-mobile.md)   | React Native/mobile-safe wallet and remote storage distribution                                                                    |
+| [@bsv/btms](./btms.md)                                     | UTXO-based token issuance, transfer, burning, and ownership proof validation                                                       |
+| [@bsv/btms-permission-module](./btms-permission-module.md) | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback                                      |
+| [@bsv/wallet-relay](./wallet-relay.md)                     | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
 
 ## Common Use Cases
 
 ### I'm building an app and need user signatures
+
 Use [@bsv/wallet-toolbox](./wallet-toolbox.md) to create a full wallet with persistent storage and signing, or integrate with user-installed wallets via the BRC-100 interface.
 
 ### I'm building a web app that integrates with user wallets
+
 Use [@bsv/wallet-toolbox](./wallet-toolbox.md) for local wallet, or [@bsv/wallet-relay](./wallet-relay.md) for mobile wallet pairing via QR code.
 
 ### I need to issue and manage tokens
+
 Use [@bsv/btms](./btms.md) for token operations (issue, send, accept, burn). Integrate with [@bsv/wallet-toolbox](./wallet-toolbox.md) for wallet signing and [@bsv/btms-permission-module](./btms-permission-module.md) for permission control.
 
 ### I'm building a wallet application myself
+
 Use [@bsv/wallet-toolbox](./wallet-toolbox.md) as reference implementation. It demonstrates BRC-100 compliance, storage abstraction, key management, and background monitoring patterns.
 
 ### I need mobile-to-desktop signing without downloading wallet software
+
 Use [@bsv/wallet-relay](./wallet-relay.md) for QR pairing. Desktop shows QR, mobile scans, then mobile wallet signs and relays responses back encrypted.
 
 ### I want fine-grained permission control over token operations
+
 Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom permission handler (modal, alert, web component, etc.).
 
 ## Key Concepts
@@ -65,16 +73,19 @@ Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom 
 
 ## Storage & Platform Support
 
-| Package | Node.js | Browser | Mobile |
-|---------|---------|---------|--------|
-| **wallet-toolbox** | SQLite, MySQL | IndexedDB, Remote | IndexedDB, Remote |
-| **btms** | ✓ | ✓ | ✓ |
-| **btms-permission-module** | ✓ | ✓ | ✓ |
-| **wallet-relay** | Server | React components | Supported via relay |
+| Package                    | Node.js       | Browser           | Mobile                   |
+| -------------------------- | ------------- | ----------------- | ------------------------ |
+| **wallet-toolbox**         | SQLite, MySQL | —                 | —                        |
+| **wallet-toolbox-client**  | Build tooling | IndexedDB, Remote | Hybrid/WebView dependent |
+| **wallet-toolbox-mobile**  | Build tooling | —                 | Remote                   |
+| **btms**                   | ✓             | ✓                 | ✓                        |
+| **btms-permission-module** | ✓             | ✓                 | ✓                        |
+| **wallet-relay**           | Server        | React components  | Supported via relay      |
 
 ## When to Use Each Package
 
 ### Wallet Toolbox
+
 - You're building a wallet application
 - You need persistent transaction history and UTXO state
 - You want BRC-100 compliance
@@ -83,30 +94,36 @@ Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom 
 - You need different storage for different platforms
 
 ### BTMS
+
 - You're building token issuance/transfer system
 - You need UTXO-based tokens with on-chain metadata
 - You want automated PushDrop encoding/decoding
 - You need ownership proofs for collateral/escrow
 
 ### BTMS Permission Module
+
 - You want user approval for token operations
 - You need framework-agnostic permission callbacks
 - You're building a wallet with permission control
 - You want custom UI for permission prompts
 
 ### Wallet Relay
+
 - You're building a web app needing mobile signatures
 - You want QR-based pairing (no software download)
 - You need encrypted communication over untrusted networks
 - You want stateless session management
 
 ### NOT for these
+
 - Don't use wallet packages if you only need transaction building — use [@bsv/sdk](../sdk/bsv-sdk.md) directly
 - Don't use wallet-toolbox if you only need BRC-100 interface types — import from SDK instead
 
 ## Next Steps
 
 - **[@bsv/wallet-toolbox](./wallet-toolbox.md)** — Full wallet implementation
+- **[@bsv/wallet-toolbox-client](./wallet-toolbox-client.md)** — Browser distribution
+- **[@bsv/wallet-toolbox-mobile](./wallet-toolbox-mobile.md)** — Mobile distribution
 - **[@bsv/btms](./btms.md)** — Token protocol
 - **[@bsv/wallet-relay](./wallet-relay.md)** — Mobile pairing
 - **[@bsv/btms-permission-module](./btms-permission-module.md)** — Token permissions

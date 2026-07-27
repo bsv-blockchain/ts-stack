@@ -1191,7 +1191,7 @@ export default (config: UIConfig = {}): string => {
       <div>
         <h3>External Links</h3>
         <ul id="external_list">
-          <li class="list-item"><a href="https://github.com/bsv-blockchain/overlay-services" target="_blank">Overlay Services GitHub</a></li>
+          <li class="list-item"><a href="https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays" target="_blank">Overlay packages on GitHub</a></li>
           <li class="list-item"><a href="https://bsv.brc.dev/transactions/0076" target="_blank">BRC-76 GASP</a></li>
           <li class="list-item"><a href="https://fast.brc.dev" target="_blank">Quick Start for App Developers</a></li>
         </ul>

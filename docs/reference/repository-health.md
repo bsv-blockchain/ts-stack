@@ -3,8 +3,8 @@ id: repository-health
 title: 'Repository Health Controls'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-07-26'
-last_verified: '2026-07-26'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -34,6 +34,14 @@ observable contract without requiring every package to use the same build tool.
 For every public package, the control also enforces the exact supported
 Node.js 22 runtime floor, explicit public npm access, and an explicit
 tree-shaking side-effect declaration.
+
+`governance/documentation-policy.json` owns the public package README and
+runtime-support documentation contract. `pnpm docs:facts` generates the exact
+package/version/runtime/release and conformance facts, while
+`pnpm docs:facts:check` rejects stale generated output, stale parity metadata,
+package READMEs that do not identify, install, demonstrate, and license the
+registry artifact, and missing, duplicated, version-drifted, or
+pre-consolidation public package pages.
 
 `governance/repository-health/baselines.json` records the dated starting
 measurements for CI, conformance, lint, TypeScript, coverage, security,
@@ -89,6 +97,7 @@ Run the blocking control and its unit tests:
 
 ```sh
 pnpm health:check
+pnpm docs:facts:check
 pnpm test:governance
 pnpm test:property
 pnpm test:mutation --all
@@ -125,7 +134,9 @@ than its source tree. The shared checker:
 4. runs the `@arethetypeswrong/core` analyzer across every strict Node and
    bundler resolution mode; and
 5. installs the tarball into a clean temporary consumer and exercises every
-   declared runtime module format.
+   declared runtime module format. The consumer installs exact tarballs for the
+   package's transitive `workspace:` runtime dependency closure, so coordinated
+   unpublished version bumps cannot pass by resolving older registry releases.
 
 Build before checking an individual package:
 
@@ -159,7 +170,10 @@ checks:
 4. published package versions match the recorded baseline;
 5. exception records are owned, structurally valid, and unexpired;
 6. current package-contract findings exactly match the ratcheted snapshot; and
-7. the health implementation’s unit tests pass.
+7. generated stack/conformance facts, all 30 public package README contracts,
+   and one current consolidated package page per public package are current;
+   and
+8. the health implementation’s unit tests pass.
 
 Affected package changes also select their matching mutation targets. The
 parallel mutation lane restores the shared workspace build, executes only the

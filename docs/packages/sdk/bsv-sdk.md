@@ -1,16 +1,16 @@
 ---
 id: bsv-sdk
-title: "@bsv/sdk"
+title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: "2.2.0"
-npm: "@bsv/sdk"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.2.1'
+npm: '@bsv/sdk'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["sdk", "crypto", "transactions"]
-github_repo: "https://github.com/bsv-blockchain/ts-stack"
+tags: ['sdk', 'crypto', 'transactions']
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 ---
 
 # @bsv/sdk
@@ -31,25 +31,29 @@ npm install @bsv/sdk
 import { PrivateKey, P2PKH, Transaction } from '@bsv/sdk'
 
 const privKey = PrivateKey.fromWif('L5EY1SbTvvPNSdCYQe1EJHfXCBBT4PmnF6CDbzCm9iifZptUvDGB')
-const sourceTransaction = Transaction.fromHex('0200000001...')  // Previous tx hex
+const sourceTransaction = Transaction.fromHex('0200000001...') // Previous tx hex
 const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
-const tx = new Transaction(1, [
-  {
-    sourceTransaction,
-    sourceOutputIndex: 0,
-    unlockingScriptTemplate: new P2PKH().unlock(privKey)
-  }
-], [
-  {
-    lockingScript: new P2PKH().lock(recipientAddress),
-    satoshis: 5000
-  },
-  {
-    lockingScript: new P2PKH().lock(privKey.toAddress()),
-    change: true
-  }
-])
+const tx = new Transaction(
+  1,
+  [
+    {
+      sourceTransaction,
+      sourceOutputIndex: 0,
+      unlockingScriptTemplate: new P2PKH().unlock(privKey)
+    }
+  ],
+  [
+    {
+      lockingScript: new P2PKH().lock(recipientAddress),
+      satoshis: 5000
+    },
+    {
+      lockingScript: new P2PKH().lock(privKey.toAddress()),
+      change: true
+    }
+  ]
+)
 
 await tx.fee()
 await tx.sign()
@@ -84,22 +88,26 @@ const privKey = PrivateKey.fromWif('L5EY1SbTvvPNSdCYQe1EJHfXCBBT4PmnF6CDbzCm9iif
 const sourceTransaction = Transaction.fromHex('0200000001...')
 const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
-const tx = new Transaction(1, [
-  {
-    sourceTransaction,
-    sourceOutputIndex: 0,
-    unlockingScriptTemplate: new P2PKH().unlock(privKey)
-  }
-], [
-  {
-    lockingScript: new P2PKH().lock(recipientAddress),
-    satoshis: 5000,
-  },
-  {
-    lockingScript: new P2PKH().lock(privKey.toAddress()),
-    change: true
-  }
-])
+const tx = new Transaction(
+  1,
+  [
+    {
+      sourceTransaction,
+      sourceOutputIndex: 0,
+      unlockingScriptTemplate: new P2PKH().unlock(privKey)
+    }
+  ],
+  [
+    {
+      lockingScript: new P2PKH().lock(recipientAddress),
+      satoshis: 5000
+    },
+    {
+      lockingScript: new P2PKH().lock(privKey.toAddress()),
+      change: true
+    }
+  ]
+)
 
 await tx.fee()
 await tx.sign()
@@ -112,9 +120,7 @@ import { P2PKH, WalletClient } from '@bsv/sdk'
 
 const wallet = new WalletClient('auto', 'example.com')
 const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
-const lockingScript = new P2PKH()
-  .lock(recipientAddress)
-  .toHex()
+const lockingScript = new P2PKH().lock(recipientAddress).toHex()
 
 const { publicKey } = await wallet.getPublicKey({
   identityKey: true
@@ -122,11 +128,13 @@ const { publicKey } = await wallet.getPublicKey({
 
 const action = await wallet.createAction({
   description: 'Create payment',
-  outputs: [{
-    lockingScript,
-    satoshis: 1000,
-    outputDescription: 'Payment output'
-  }]
+  outputs: [
+    {
+      lockingScript,
+      satoshis: 1000,
+      outputDescription: 'Payment output'
+    }
+  ]
 })
 
 console.log(publicKey, action.txid)

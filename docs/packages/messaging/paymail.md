@@ -1,16 +1,15 @@
 ---
 id: pkg-paymail
-title: "@bsv/paymail"
+title: '@bsv/paymail'
 kind: package
 domain: messaging
-version: "2.4.2"
-source_repo: "bsv-blockchain/paymail"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.4.3'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/paymail"
-repo: "https://github.com/bsv-blockchain/paymail"
+npm: 'https://www.npmjs.com/package/@bsv/paymail'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail'
 status: stable
 tags: [paymail, messaging, brc-29, identity]
 ---
@@ -68,7 +67,7 @@ const app = express()
 const baseUrl = 'https://myDomain.com'
 
 const publicProfileRoute = new PublicProfileRoute({
-  domainLogicHandler: async (params) => {
+  domainLogicHandler: async params => {
     const { name, domain } = PublicProfileRoute.getNameAndDomain(params)
     const user = await fetchUser(name, domain)
     return {
@@ -80,7 +79,7 @@ const publicProfileRoute = new PublicProfileRoute({
 })
 
 const pkiRoute = new PublicKeyInfrastructureRoute({
-  domainLogicHandler: async (params) => {
+  domainLogicHandler: async params => {
     const { name, domain } = PublicKeyInfrastructureRoute.getNameAndDomain(params)
     const user = await fetchUser(name, domain)
     return {
@@ -173,5 +172,5 @@ const p2pDest = await client.getP2pPaymentDestination('alice@example.com', 10000
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/paymail/)
-- [Source on GitHub](https://github.com/bsv-blockchain/paymail)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail)
 - [npm](https://www.npmjs.com/package/@bsv/paymail)

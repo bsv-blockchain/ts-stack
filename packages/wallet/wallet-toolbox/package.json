@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.4.4",
+  "version": "2.4.5",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -74,6 +74,7 @@
   "dependencies": {
     "@bsv/auth-express-middleware": "workspace:^",
     "@bsv/payment-express-middleware": "workspace:^",
+    "@types/express": "^5.0.6",
     "better-sqlite3": "^13.0.1",
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",

@@ -1,6 +1,10 @@
 <!-- Centralized reliability record. Source repo: bsv-blockchain/wallet-toolbox -->
 <!-- When wallet-toolbox is consolidated into ts-stack (Phase 5), this file moves with it. -->
 
+> **Historical April 2026 baseline.** Current Wallet Toolbox version, controls,
+> and remaining work are generated or tracked in the references linked from
+> [the reliability registry](./README.md).
+
 # Reliability Status
 
 ## Component

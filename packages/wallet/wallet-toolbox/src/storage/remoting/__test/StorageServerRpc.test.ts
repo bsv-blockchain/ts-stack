@@ -42,7 +42,7 @@ function makeResponse (): CapturedResponse {
 
 function makeRequest (
   body: unknown,
-  headers: Record<string, string> = {},
+  headers: Record<string, string | string[]> = {},
   identityKey: string = 'alice'
 ): Request {
   const normalizedHeaders = Object.fromEntries(
@@ -201,6 +201,64 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
+  test('rejects an RPC request without a valid authenticated identity', async () => {
+    const server = makeServer()
+    const body = {
+      jsonrpc: '2.0',
+      method: 'getSettings',
+      params: [],
+      id: 6
+    }
+    const requests = [
+      makeRequest(body, {}, 'unknown'),
+      makeRequest(body, {}, '   '),
+      makeRequest(body)
+    ]
+    Reflect.set(requests[2], 'auth', { identityKey: null })
+    const missingAuth = makeRequest(body)
+    Reflect.deleteProperty(missingAuth, 'auth')
+    requests.push(missingAuth)
+
+    for (const request of requests) {
+      await expect(invoke(
+        server,
+        'handleRpcRequest',
+        request,
+        makeResponse().response
+      )).rejects.toThrow('authenticated request identity is required')
+    }
+  })
+
+  test('normalizes a multi-value trace header in short-request logging', async () => {
+    const server = makeServer()
+    const app = Reflect.get(server, 'app')
+    const use = jest.spyOn(app, 'use')
+    await invoke(server, 'setupShortReqLogging')
+    const middleware = use.mock.calls.at(-1)?.[0]
+    expect(typeof middleware).toBe('function')
+
+    const next = jest.fn()
+    middleware(
+      makeRequest({
+        jsonrpc: '2.0',
+        method: 'getSettings',
+        params: [],
+        id: 7
+      }, {
+        'content-length': '42',
+        'content-type': 'application/json',
+        'X-Cloud-Trace-Context': ['first-trace/123', 'second-trace/456']
+      }),
+      makeResponse().response,
+      next
+    )
+
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('first-trace'))
+    expect(consoleLog).not.toHaveBeenCalledWith(expect.stringContaining('second-trace'))
+    use.mockRestore()
+  })
+
   test('enforces method-specific authorization and validates sync chunks', async () => {
     const request = makeRequest({}, {}, 'alice')
     const server = makeServer({}, { adminIdentityKeys: ['alice'] })
@@ -247,6 +305,24 @@ describe('StorageServer JSON-RPC boundary', () => {
       request
     )).resolves.toBe(true)
     expect(syncParams[0].reqAuthUserId).toBe(7)
+
+    const syncParamsWithoutClaim: any[] = [{}, { ...emptyChunk }]
+    await expect(invoke(
+      server,
+      'authorizeRpcCall',
+      'processSyncChunk',
+      syncParamsWithoutClaim,
+      request
+    )).resolves.toBe(true)
+    expect(syncParamsWithoutClaim[0].reqAuthUserId).toBe(7)
+
+    await expect(invoke(
+      server,
+      'authorizeRpcCall',
+      'processSyncChunk',
+      [{ identityKey: 'mallory' }, { ...emptyChunk }],
+      request
+    )).rejects.toThrow('identityKey does not match authentication')
   })
 
   test('propagates authenticated identity and nested logger output', async () => {
@@ -274,5 +350,22 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(logger.logs?.some(entry => entry.log.includes('userId: 7'))).toBe(true)
     expect(logger.logs?.some(entry => entry.log.includes('identityKey: alice'))).toBe(true)
     expect(result.log).toEqual({ logs: logger.logs })
+
+    const paramsWithoutClaim: any[] = [{}, {}]
+    await invoke(server, 'authorizeStandardRpcCall', 'abortAction', paramsWithoutClaim, request)
+    expect(paramsWithoutClaim[0]).toMatchObject({
+      identityKey: 'alice',
+      userId: 7,
+      reqAuthUserId: 7,
+      isActive: true
+    })
+
+    await expect(invoke(
+      server,
+      'authorizeStandardRpcCall',
+      'abortAction',
+      [{ identityKey: 'mallory' }, {}],
+      request
+    )).rejects.toThrow('identityKey does not match authentication')
   })
 })

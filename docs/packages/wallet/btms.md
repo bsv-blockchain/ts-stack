@@ -1,15 +1,16 @@
 ---
 id: btms
-title: "@bsv/btms"
+title: '@bsv/btms'
 kind: package
 domain: wallet
-npm: "@bsv/btms"
-version: "1.1.1"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/btms'
+version: '1.1.1'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
-tags: ["tokens", "protocol"]
-github_repo: "https://github.com/bsv-blockchain/ts-stack"
+tags: ['tokens', 'protocol']
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms'
 ---
 
 # @bsv/btms
@@ -54,7 +55,7 @@ const result = await btms.issue(1000000, {
   iconURL: 'https://example.com/gold.png'
 })
 
-console.log('Asset ID:', result.assetId)  // 'abc123...def.0'
+console.log('Asset ID:', result.assetId) // 'abc123...def.0'
 
 // Check balance
 const balance = await btms.getBalance(result.assetId)
@@ -83,9 +84,9 @@ for (const asset of assets) {
 ```typescript
 const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 const sendResult = await btms.send(
-  'abc123...def.0',  // Asset ID from issuance
+  'abc123...def.0', // Asset ID from issuance
   recipientIdentityKey,
-  100  // Amount
+  100 // Amount
 )
 
 console.log('Txid:', sendResult.txid)
@@ -120,7 +121,7 @@ const resultAll = await btms.burn('abc123...def.0')
 const verifierKey = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 const proofResult = await btms.proveOwnership(
   'abc123...def.0',
-  500,  // Amount to prove
+  500, // Amount to prove
   verifierKey
 )
 if (!proofResult.success || !proofResult.proof) {

@@ -1,10 +1,10 @@
 ---
 id: conformance-contributing
-title: "Contributing Vectors"
+title: 'Contributing Vectors'
 kind: conformance
-version: "1.0.0"
-last_updated: "2026-05-14"
-last_verified: "2026-05-14"
+version: '1.0.0'
+last_updated: '2026-05-14'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [conformance, contributing, vectors]

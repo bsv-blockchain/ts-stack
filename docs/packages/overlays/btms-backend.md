@@ -1,16 +1,14 @@
 ---
 id: pkg-btms-backend
-title: "@bsv/btms-backend"
+title: '@bsv/btms-backend'
 kind: package
 domain: overlays
-version: "0.1.0"
-source_repo: "bsv-blockchain/btms-backend"
-source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: '0.1.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/btms-backend"
-repo: "https://github.com/bsv-blockchain/btms-backend"
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/btms-backend'
 status: experimental
 tags: [tokens, btms, backend, mongodb]
 ---
@@ -74,9 +72,7 @@ import { BTMSTopicManager, BTMSLookupServiceFactory } from '@bsv/btms-backend'
 const server = new OverlayExpress('mynode', privateKey, 'example.com')
 
 server.configureTopicManager('tm_btms', new BTMSTopicManager())
-await server.configureLookupServiceWithMongo('ls_btms', db => 
-  BTMSLookupServiceFactory(db)
-)
+await server.configureLookupServiceWithMongo('ls_btms', db => BTMSLookupServiceFactory(db))
 
 await server.configureEngine()
 await server.start()
@@ -150,5 +146,5 @@ const metadata = await manager.getMetaData()
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/btms-backend/)
-- [Source on GitHub](https://github.com/bsv-blockchain/btms-backend)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/btms-backend)
 - [npm](https://www.npmjs.com/package/@bsv/btms-backend)

@@ -1,15 +1,16 @@
 ---
 id: wallet-relay
-title: "@bsv/wallet-relay"
+title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
-npm: "@bsv/wallet-relay"
-version: "0.2.2"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/wallet-relay'
+version: '0.2.3'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
-tags: ["wallet", "relay"]
-github_repo: "https://github.com/bsv-blockchain/ts-stack"
+tags: ['wallet', 'relay']
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay'
 ---
 
 # @bsv/wallet-relay
@@ -34,18 +35,20 @@ import { WalletRelayService } from '@bsv/wallet-relay'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 
 const app = express()
-app.use(cors({
-  origin: process.env.ORIGIN,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
-}))
+app.use(
+  cors({
+    origin: process.env.ORIGIN,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
+  })
+)
 app.use(express.json())
 
 const server = createServer(app)
 const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))
 
-new WalletRelayService({ 
-  app, 
-  server, 
+new WalletRelayService({
+  app,
+  server,
   wallet,
   relayUrl: process.env.RELAY_URL,
   origin: process.env.ORIGIN
@@ -72,7 +75,7 @@ function WalletConnection() {
     const setup = async () => {
       const session = await createSession()
       setSessionId(session.sessionId)
-      setQrData(session.qrDataUrl)  // Base64 PNG
+      setQrData(session.qrDataUrl) // Base64 PNG
     }
     setup()
   }, [])
@@ -128,8 +131,8 @@ function App() {
 
   return (
     <>
-      <WalletConnectionModal 
-        onLocalWallet={(wallet) => {
+      <WalletConnectionModal
+        onLocalWallet={wallet => {
           console.log('Local wallet connected')
           // Use WalletClient directly.
         }}
@@ -148,19 +151,19 @@ import { WalletRelayClient } from '@bsv/wallet-relay/client'
 import { P2PKH } from '@bsv/sdk'
 
 async function sendPayment(client: WalletRelayClient) {
-  const lockingScript = new P2PKH()
-    .lock('1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX')
-    .toHex()
+  const lockingScript = new P2PKH().lock('1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX').toHex()
 
   const response = await client.sendRequest('createAction', {
     description: 'Send payment',
-    outputs: [{
-      satoshis: 5000,
-      lockingScript,
-      outputDescription: 'payment output'
-    }]
+    outputs: [
+      {
+        satoshis: 5000,
+        lockingScript,
+        outputDescription: 'payment output'
+      }
+    ]
   })
-  
+
   if (response.error) {
     console.error('Mobile rejected:', response.error)
   } else {

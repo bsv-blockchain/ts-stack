@@ -2,12 +2,12 @@
 id: architecture-beef
 title: BEEF — Background Evaluation Extended Format (BRC-62)
 kind: meta
-version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: 'n/a'
+last_updated: '2026-04-29'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["architecture", "BEEF", "BRC-62", "SPV"]
+tags: ['architecture', 'BEEF', 'BRC-62', 'SPV']
 ---
 
 # BEEF — Background Evaluation Extended Format (BRC-62)
@@ -17,6 +17,7 @@ BEEF is the standardized binary format for peer-to-peer transaction exchange on 
 ## Why BEEF?
 
 Traditional transaction relay requires a recipient to either:
+
 - Trust the sender ("this transaction is valid"), or
 - Query a full node to verify inputs
 
@@ -49,6 +50,7 @@ The `MerklePath` class in `@bsv/sdk` implements BRC-74 encoding, decoding, and c
 ## Ancestor Transactions
 
 BEEF includes the minimal set of parent transactions required to reach a mined anchor on the longest chain. Each included ancestor either:
+
 - Has a BUMP (is confirmed), or
 - Has its own ancestors included in the package
 

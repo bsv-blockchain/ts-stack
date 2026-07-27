@@ -1,14 +1,16 @@
 ---
 id: overlay
-title: "@bsv/overlay"
+title: '@bsv/overlay'
 kind: package
 domain: overlays
-npm: "@bsv/overlay"
-version: "2.2.1"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/overlay'
+version: '2.2.1'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay'
 status: stable
-tags: ["overlay", "framework"]
+tags: ['overlay', 'framework']
 ---
 
 # @bsv/overlay
@@ -33,7 +35,7 @@ import type { Db } from 'mongodb'
 
 declare const knex: Knex
 declare const mongoDb: Db
-declare const req: { headers: { 'x-topics'?: string }, body: number[] }
+declare const req: { headers: { 'x-topics'?: string }; body: number[] }
 declare const res: { status: (code: number) => { json: (body: unknown) => void } }
 
 const lookupService = await createHelloWorldLookupService(mongoDb)
@@ -53,7 +55,7 @@ const topics = topicsHeader.trim().startsWith('[')
   ? JSON.parse(topicsHeader)
   : topicsHeader.split(',').map(topic => topic.trim())
 const taggedBEEF = { beef: Array.from(req.body), topics }
-await engine.submit(taggedBEEF, (steak) => res.status(200).json(steak))
+await engine.submit(taggedBEEF, steak => res.status(200).json(steak))
 
 // Perform lookups
 const result = await engine.lookup({
@@ -87,16 +89,16 @@ class CustomTopicManager implements TopicManager {
     const tx = Transaction.fromBEEF(beef)
     return { outputsToAdmit: [0], coinsToRetain: [] }
   }
-  
-  async getDocumentation() { 
-    return 'Custom topic documentation' 
+
+  async getDocumentation() {
+    return 'Custom topic documentation'
   }
-  
-  async getMetaData() { 
-    return { 
-      name: 'custom', 
-      shortDescription: 'A custom topic' 
-    } 
+
+  async getMetaData() {
+    return {
+      name: 'custom',
+      shortDescription: 'A custom topic'
+    }
   }
 }
 ```
@@ -109,13 +111,13 @@ import type { LookupService } from '@bsv/overlay'
 class CustomLookupService implements LookupService {
   readonly admissionMode = 'locking-script' as const
   readonly spendNotificationMode = 'none' as const
-  
+
   async outputAdmittedByTopic(payload) {
     if (payload.mode === 'locking-script') {
       // Index the output
     }
   }
-  
+
   async lookup(question) {
     // Return a LookupFormula: outpoints that the Engine should hydrate.
     return []
@@ -225,5 +227,5 @@ invalid transactions stop appearing in lookup results immediately.
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay/)
-- [Source on GitHub](https://github.com/bsv-blockchain/overlay)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay)
 - [npm](https://www.npmjs.com/package/@bsv/overlay)

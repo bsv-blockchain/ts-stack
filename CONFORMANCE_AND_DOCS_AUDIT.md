@@ -1,5 +1,11 @@
 # Conformance Vectors & Documentation Audit
 
+> **Archived point-in-time evidence (2026-05-14).** Findings and counts in this
+> report are not the current backlog. Use
+> `docs/reference/stack-facts.md`, `conformance/PARITY_MATRIX.json`, and
+> [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324) for the
+> enforced current state. This report remains committed only for provenance.
+
 **Date**: 2026-05-14  
 **Purpose**: Pre-port audit for Golang, Python, and Rust SDK/wallet implementations.  
 **Auditor**: Full analysis + concrete fixes performed in this session.  

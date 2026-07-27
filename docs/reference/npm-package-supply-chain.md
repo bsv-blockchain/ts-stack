@@ -79,14 +79,15 @@ Download the registry tarball without installing it, then verify its GitHub
 attestations:
 
 ```bash
-npm pack @bsv/sdk@2.2.0
+SDK_VERSION="$(npm view @bsv/sdk version)"
+npm pack "@bsv/sdk@$SDK_VERSION"
 
-gh attestation verify bsv-sdk-2.2.0.tgz \
+gh attestation verify "bsv-sdk-$SDK_VERSION.tgz" \
   --repo bsv-blockchain/ts-stack \
   --signer-workflow bsv-blockchain/ts-stack/.github/workflows/release.yaml \
   --predicate-type https://slsa.dev/provenance/v1
 
-gh attestation verify bsv-sdk-2.2.0.tgz \
+gh attestation verify "bsv-sdk-$SDK_VERSION.tgz" \
   --repo bsv-blockchain/ts-stack \
   --signer-workflow bsv-blockchain/ts-stack/.github/workflows/release.yaml \
   --predicate-type https://cyclonedx.org/bom

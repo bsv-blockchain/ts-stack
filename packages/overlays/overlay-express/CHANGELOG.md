@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file. The format 
   Origin-bearing calls.
 - Verbose request logging records redacted headers and body size/type metadata
   instead of request bodies.
+- Ship the Express declaration dependency required to typecheck the packed
+  server API in a clean TypeScript consumer.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)

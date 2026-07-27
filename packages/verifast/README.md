@@ -3,6 +3,15 @@
 Real BSV BDK script verification in WebAssembly for `@bsv/sdk`. One package
 supports Node ESM, CommonJS, browser/worker ESM, and classic-script/UMD clients.
 
+## Install
+
+```bash
+npm install @bsv/verifast @bsv/sdk
+```
+
+The package includes its validated WASM assets. No native compiler or
+post-install build is required for consumers.
+
 ## Transaction verification
 
 The validated WASM module is bundled and loaded lazily. Keep one verifier for a
@@ -245,3 +254,7 @@ to 12.1 ms in one WASM instance and 3.34 ms across four warm workers. A real
 250-transaction dependent graph verified 3.61x faster across four workers.
 Typed and cached serialization materially improves large-EF workloads. See
 `bench/results/` for commands, environment, hashes, and full measurements.
+
+## License
+
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).

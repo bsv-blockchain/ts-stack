@@ -1,16 +1,15 @@
 ---
 id: pkg-wallet-helper
-title: "@bsv/wallet-helper"
+title: '@bsv/wallet-helper'
 kind: package
 domain: helpers
-version: "0.1.1"
-source_repo: "bsv-blockchain/wallet-helper"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '0.1.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/wallet-helper"
-repo: "https://github.com/bsv-blockchain/wallet-helper"
+npm: 'https://www.npmjs.com/package/@bsv/wallet-helper'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper'
 status: beta
 tags: [helpers, wallet, transaction-builder]
 ---
@@ -36,14 +35,14 @@ import { TransactionBuilder } from '@bsv/wallet-helper'
 
 const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
-const result = await new TransactionBuilder(wallet, "Payment with metadata")
+const result = await new TransactionBuilder(wallet, 'Payment with metadata')
   .addP2PKHOutput({
     address: recipientAddress,
     satoshis: 5000,
-    description: "Payment to Bob"
+    description: 'Payment to Bob'
   })
-    // Appends data to this output's locking script; it is not a separate output.
-    .addOpReturn(['APP_ID', JSON.stringify({ memo: 'Thanks!' })])
+  // Appends data to this output's locking script; it is not a separate output.
+  .addOpReturn(['APP_ID', JSON.stringify({ memo: 'Thanks!' })])
   .build()
 
 console.log(`Sent: ${result.txid}`)
@@ -64,11 +63,12 @@ console.log(`Sent: ${result.txid}`)
 ## Common patterns
 
 ### Multi-output payment with wallet-managed change
+
 ```typescript
 const aliceAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 const bobAddress = '1BoatSLRHtKNngkdXEeobR76b53LETtpyT'
 
-await new TransactionBuilder(wallet, "Multi-output payment")
+await new TransactionBuilder(wallet, 'Multi-output payment')
   .addP2PKHOutput({ address: aliceAddress, satoshis: 1000 })
   .addP2PKHOutput({ address: bobAddress, satoshis: 2000 })
   .build()
@@ -77,29 +77,32 @@ await new TransactionBuilder(wallet, "Multi-output payment")
 The wallet still calculates funding and normal change through `createAction` / `signAction`. Use `addChangeOutput` only when you need to specify the change locking script yourself.
 
 ### Self-controlled output with BRC-29 automatic derivation
+
 Omitting `address`, `publicKey`, and `walletParams` derives with counterparty `self`. Use this for outputs the same wallet should unlock later, not for sending to another user.
 
 ```typescript
-await new TransactionBuilder(wallet, "Self-controlled output")
-  .addP2PKHOutput({ satoshis: 1000, description: "Output for this wallet" })
-    .basket("my-basket")
-    .customInstructions("app-data")
+await new TransactionBuilder(wallet, 'Self-controlled output')
+  .addP2PKHOutput({ satoshis: 1000, description: 'Output for this wallet' })
+  .basket('my-basket')
+  .customInstructions('app-data')
   .build()
 ```
 
 ### Spend UTXOs and send to recipient
+
 ```typescript
 const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
-await new TransactionBuilder(wallet, "Spend UTXO")
-  .addP2PKHInput({ sourceTransaction, sourceOutputIndex: 0, description: "UTXO" })
+await new TransactionBuilder(wallet, 'Spend UTXO')
+  .addP2PKHInput({ sourceTransaction, sourceOutputIndex: 0, description: 'UTXO' })
   .addP2PKHOutput({ address: recipientAddress, satoshis: 500 })
   .build()
 ```
 
 ### Create 1-sat ordinal with inscription and metadata
+
 ```typescript
-const ordResult = await new TransactionBuilder(wallet, "Mint ordinal")
+const ordResult = await new TransactionBuilder(wallet, 'Mint ordinal')
   .addOrdinalP2PKHOutput({
     walletParams: { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'self' },
     satoshis: 1,
@@ -167,5 +170,5 @@ const ordResult = await new TransactionBuilder(wallet, "Mint ordinal")
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/wallet-helper/)
-- [Source on GitHub](https://github.com/bsv-blockchain/wallet-helper)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper)
 - [npm](https://www.npmjs.com/package/@bsv/wallet-helper)

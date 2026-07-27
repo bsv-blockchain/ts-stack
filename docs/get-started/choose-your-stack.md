@@ -2,12 +2,12 @@
 id: choose-your-stack
 title: Choose Your Stack
 kind: meta
-version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: 'n/a'
+last_updated: '2026-04-30'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["decision-guide"]
+tags: ['decision-guide']
 ---
 
 # Choose Your Stack
@@ -120,28 +120,28 @@ The SDK provides secp256k1/r1 cryptography, hashing, scripts, transactions, BEEF
 
 Use the infrastructure docs when you need shared services rather than npm packages.
 
-| Service | First page |
-|---------|------------|
-| Wallet state and UTXO storage | [Wallet Infra](../infrastructure/wallet-infra.md) |
+| Service                              | First page                                                    |
+| ------------------------------------ | ------------------------------------------------------------- |
+| Wallet state and UTXO storage        | [Wallet Infra](../infrastructure/wallet-infra.md)             |
 | Store-and-forward encrypted messages | [Message Box Server](../infrastructure/message-box-server.md) |
-| Shared on-chain topic lookup | [Overlay Server](../infrastructure/overlay-server.md) |
-| Content-addressed files | [UHRP servers](../infrastructure/uhrp-server-basic.md) |
-| Wallet authentication backend | [WAB](../infrastructure/wab.md) |
-| Block headers and Merkle roots | [Chaintracks Server](../infrastructure/chaintracks-server.md) |
+| Shared on-chain topic lookup         | [Overlay Server](../infrastructure/overlay-server.md)         |
+| Content-addressed files              | [UHRP servers](../infrastructure/uhrp-server-basic.md)        |
+| Wallet authentication backend        | [WAB](../infrastructure/wab.md)                               |
+| Block headers and Merkle roots       | [Chaintracks Server](../infrastructure/chaintracks-server.md) |
 
 ## Decision Matrix
 
-| What you're building | Start with | Usually adds |
-|----------------------|------------|--------------|
-| Browser app | `@bsv/simple/browser` | `@bsv/message-box-client`, overlays |
-| Transaction-building app | `@bsv/wallet-helper` | `@bsv/templates`, BRC-100 method reference |
-| Server agent | `@bsv/simple/server` | `@bsv/402-pay`, Message Box |
-| BRC-100 wallet | `@bsv/wallet-toolbox` | Wallet Infra, WAB, Chaintracks |
-| Protocol library | `@bsv/sdk` | Conformance vectors |
-| Overlay node | `@bsv/overlay`, `@bsv/overlay-express` | `@bsv/overlay-topics`, GASP |
-| Token system | `@bsv/btms`, `@bsv/btms-permission-module` | Overlay topics, wallet permissions |
-| Authenticated API | `@bsv/auth-express-middleware` | BRC-100 wallet |
-| Payment-gated API | `@bsv/402-pay` | `@bsv/payment-express-middleware` |
-| File storage | `@bsv/overlay-topics` | UHRP server |
+| What you're building     | Start with                                 | Usually adds                               |
+| ------------------------ | ------------------------------------------ | ------------------------------------------ |
+| Browser app              | `@bsv/simple/browser`                      | `@bsv/message-box-client`, overlays        |
+| Transaction-building app | `@bsv/wallet-helper`                       | `@bsv/templates`, BRC-100 method reference |
+| Server agent             | `@bsv/simple/server`                       | `@bsv/402-pay`, Message Box                |
+| BRC-100 wallet           | `@bsv/wallet-toolbox`                      | Wallet Infra, WAB, Chaintracks             |
+| Protocol library         | `@bsv/sdk`                                 | Conformance vectors                        |
+| Overlay node             | `@bsv/overlay`, `@bsv/overlay-express`     | `@bsv/overlay-topics`, GASP                |
+| Token system             | `@bsv/btms`, `@bsv/btms-permission-module` | Overlay topics, wallet permissions         |
+| Authenticated API        | `@bsv/auth-express-middleware`             | BRC-100 wallet                             |
+| Payment-gated API        | `@bsv/402-pay`                             | `@bsv/payment-express-middleware`          |
+| File storage             | `@bsv/overlay-topics`                      | UHRP server                                |
 
 See [Packages](../packages/index.md) for the complete package list.

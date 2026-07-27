@@ -83,6 +83,9 @@ jobs:
       - name: Typecheck workspace
         run: pnpm typecheck
 
+      - name: Compile documentation examples against exact package tarballs
+        run: pnpm docs:examples
+
       - name: Verify package license payloads
         run: pnpm license:pack-check
 

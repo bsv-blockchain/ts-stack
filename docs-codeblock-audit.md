@@ -1,5 +1,11 @@
 # Docs Code Block Audit
 
+> **Archived manual evidence.** This 312-block snapshot is not a current
+> compiler or freshness guarantee. Current documentation is gated by
+> frontmatter/link/render checks, generated fact checks, package artifact
+> consumers, and the package README contract. New executable example checks
+> must be automated rather than marked complete in this file.
+
 Generated from fenced code blocks under `docs/`. Total blocks: 312.
 
 Status key: ✅ = checked against local source/package docs/tests and patched if needed.

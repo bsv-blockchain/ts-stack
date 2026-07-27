@@ -624,6 +624,9 @@ importers:
 
   packages/messaging/ts-paymail:
     dependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       cross-fetch:
         specifier: ^4.1.0
         version: 4.1.0
@@ -640,9 +643,6 @@ importers:
       '@jest/globals':
         specifier: ^30.4.1
         version: 30.4.1
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -779,6 +779,9 @@ importers:
 
   packages/middleware/auth-express-middleware:
     dependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -792,9 +795,6 @@ importers:
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -831,6 +831,9 @@ importers:
 
   packages/middleware/payment-express-middleware:
     dependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -844,9 +847,6 @@ importers:
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -1154,6 +1154,9 @@ importers:
       '@bsv/wallet-toolbox-client':
         specifier: workspace:^
         version: link:../../wallet/wallet-toolbox/client
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       body-parser:
         specifier: ^2.3.0
         version: 2.3.0
@@ -1182,9 +1185,6 @@ importers:
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -1444,6 +1444,9 @@ importers:
 
   packages/wallet/ts-wallet-relay:
     dependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -1460,9 +1463,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -1523,6 +1523,9 @@ importers:
       '@bsv/payment-express-middleware':
         specifier: workspace:^
         version: link:../../middleware/payment-express-middleware
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       better-sqlite3:
         specifier: ^13.0.1
         version: 13.0.1

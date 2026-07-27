@@ -2,9 +2,9 @@
 id: domain-middleware
 title: Middleware
 kind: reference
-last_updated: "2026-04-30"
-version: "n/a"
-last_verified: "2026-04-28"
+last_updated: '2026-07-27'
+version: 'n/a'
+last_verified: '2026-07-27'
 review_cadence_days: 90
 status: stable
 tags: [packages, middleware]
@@ -16,8 +16,9 @@ Express.js middleware and client utilities for adding cryptographic authenticati
 
 ## Packages
 
-| Package | Purpose |
-|---------|---------|
-| **@bsv/auth-express-middleware** | Express middleware implementing BRC-103 peer-to-peer mutual authentication via BRC-104 HTTP transport. Verify request signatures, attach verified identity to req.auth, and optionally exchange verifiable certificates. |
-| **@bsv/payment-express-middleware** | Express middleware for HTTP 402 Payment Required micropayment gating. Requires `@bsv/auth-express-middleware` first, then derives payment requirements from the authenticated identity context. |
-| **@bsv/402-pay** | Independent client-side and server-side HTTP 402 payment handler. Auto-pay 402 responses on the client; validate and accept payments on the server with caching and replay protection, without requiring auth middleware. |
+| Package                                                          | Purpose                                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [@bsv/auth](auth.md)                                             | Framework-neutral signed, expiry-bound, single-use wallet proofs with an injected replay store.        |
+| [@bsv/auth-express-middleware](auth-express-middleware.md)       | Express middleware implementing BRC-103 peer-to-peer mutual authentication via BRC-104 HTTP transport. |
+| [@bsv/payment-express-middleware](payment-express-middleware.md) | Authenticated legacy `x-bsv-payment` middleware with replay-safe payment acceptance.                   |
+| [@bsv/402-pay](402-pay.md)                                       | Independent BRC-121 client and server HTTP 402 flow that does not require auth middleware.             |

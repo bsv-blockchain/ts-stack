@@ -2,6 +2,16 @@
 
 A high-level TypeScript library that makes BSV blockchain development simple. Build wallets, send payments, create tokens, issue credentials, and more — in just a few lines of code.
 
+## Install
+
+```bash
+npm install @bsv/simple @bsv/sdk
+```
+
+Use the browser-safe default entry point in frontend applications and
+`@bsv/simple/server` only in Node.js server code. See the
+[installation guide](docs/installation.md) for framework-specific setup.
+
 ## What is @bsv/simple?
 
 `@bsv/simple` wraps the low-level `@bsv/sdk` into a clean, modular API. Instead of manually constructing locking scripts, managing key derivation, and handling transaction internalization, you call methods like `wallet.pay()`, `wallet.createToken()`, and `wallet.inscribeText()`.
@@ -57,3 +67,7 @@ const did = wallet.getDID()
 - [Quick Start](docs/quick-start.md) — Get running in 5 minutes
 - [Installation](docs/installation.md) — Detailed setup instructions
 - [Architecture](docs/architecture.md) — How the library is built
+
+## License
+
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).

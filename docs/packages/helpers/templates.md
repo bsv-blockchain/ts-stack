@@ -1,16 +1,15 @@
 ---
 id: pkg-templates
-title: "@bsv/templates"
+title: '@bsv/templates'
 kind: package
 domain: helpers
-version: "1.9.1"
-source_repo: "bsv-blockchain/templates"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '1.9.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/templates"
-repo: "https://github.com/bsv-blockchain/templates"
+npm: 'https://www.npmjs.com/package/@bsv/templates'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
 status: stable
 tags: [templates, scripts, locking, unlocking]
 ---
@@ -36,7 +35,7 @@ const lockingScript = opReturn.lock(['APP', JSON.stringify({ action: 'vote' })])
 console.log(lockingScript.toHex())
 
 const decodedData = OpReturn.decode(lockingScript)
-console.log(decodedData)  // ['APP', '{"action":"vote"}']
+console.log(decodedData) // ['APP', '{"action":"vote"}']
 ```
 
 ## What it provides
@@ -50,6 +49,7 @@ console.log(decodedData)  // ['APP', '{"action":"vote"}']
 ## Common patterns
 
 ### Create and decode an OP_RETURN script
+
 ```typescript
 import { OpReturn } from '@bsv/templates'
 
@@ -60,6 +60,7 @@ console.log(fields) // ['my-app', 'invoice-paid']
 ```
 
 ### Create MultiPushDrop token with 2 trusted owners
+
 ```typescript
 import { SecurityLevel, Utils, type WalletInterface } from '@bsv/sdk'
 import { MultiPushDrop } from '@bsv/templates'
@@ -87,14 +88,11 @@ console.log(decoded.lockingPublicKeys.length) // 2
 
 // The first owner can build the unlock template for a spending transaction.
 const { publicKey: creatorIdentityKey } = await creatorWallet.getPublicKey({ identityKey: true })
-const unlocker = new MultiPushDrop(ownerWallet).unlock(
-  protocolID,
-  keyID,
-  creatorIdentityKey
-)
+const unlocker = new MultiPushDrop(ownerWallet).unlock(protocolID, keyID, creatorIdentityKey)
 ```
 
 ### Create 2-of-3 multisig
+
 ```typescript
 import { PublicKey, type WalletInterface } from '@bsv/sdk'
 import { P2MSKH } from '@bsv/templates'
@@ -169,10 +167,10 @@ const unlocker = new P2MSKH().unlock(wallet, customInstructions)
 
 - [@bsv/wallet-helper](wallet-helper.md) — Higher-level abstraction over these templates
 - [@bsv/simple](simple.md) — Wallet-level operations
-- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction building and script execution
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Core transaction building and script execution
 
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/templates/)
-- [Source on GitHub](https://github.com/bsv-blockchain/templates)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates)
 - [npm](https://www.npmjs.com/package/@bsv/templates)

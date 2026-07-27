@@ -8,7 +8,7 @@ This guide explains how to run the UTXO Management Server **locally** using **Do
 ### Requirements
 
 - **Docker** installed (v20+ recommended)
-- **Node.js** installed if you plan to run `npm install` locally (v18+ recommended)
+- **Node.js 24.11 or newer** if you plan to run `npm ci` locally
 - **Git** for code management (optional but typical)
 
 ### Steps
@@ -21,7 +21,7 @@ This guide explains how to run the UTXO Management Server **locally** using **Do
 
 2. **Install and build local dependencies** (optional but helpful if you intend to run build steps outside Docker):
    ```bash
-   npm install
+   npm ci
    npm run build
    ```
 

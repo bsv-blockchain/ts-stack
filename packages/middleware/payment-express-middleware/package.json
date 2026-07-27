@@ -1,6 +1,6 @@
 {
   "name": "@bsv/payment-express-middleware",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -63,7 +63,6 @@
     "@bsv/auth-express-middleware": "workspace:^",
     "@bsv/sdk": "workspace:^",
     "@types/body-parser": "^1.19.6",
-    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
     "fast-check": "^4.9.0",
@@ -76,6 +75,7 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
+    "@types/express": "^5.0.6",
     "express": "^5.2.1"
   },
   "bugs": {

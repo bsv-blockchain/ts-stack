@@ -1,16 +1,15 @@
 ---
 id: pkg-gasp
-title: "@bsv/gasp"
+title: '@bsv/gasp'
 kind: package
 domain: overlays
-version: "1.3.1"
-source_repo: "bsv-blockchain/gasp"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '1.3.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/gasp"
-repo: "https://github.com/bsv-blockchain/gasp"
+npm: 'https://www.npmjs.com/package/@bsv/gasp'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core'
 status: stable
 tags: [overlay, sync, gasp, graph]
 ---
@@ -86,16 +85,7 @@ class MyStorage implements GASPStorage {
 declare const remote: GASPRemote
 
 // Initialize and sync
-const gasp = new GASP(
-  new MyStorage(),
-  remote,
-  0,
-  '[GASP] ',
-  false,
-  false,
-  LogLevel.INFO,
-  false
-)
+const gasp = new GASP(new MyStorage(), remote, 0, '[GASP] ', false, false, LogLevel.INFO, false)
 
 await gasp.sync('https://peer.example.com')
 ```
@@ -172,7 +162,7 @@ const gaspPullOnly = new GASP(
   0,
   '[GASP-Pull] ',
   false,
-  true,  // unidirectional = true
+  true, // unidirectional = true
   LogLevel.DEBUG,
   false
 )
@@ -192,7 +182,7 @@ const gaspSequential = new GASP(
   false,
   false,
   LogLevel.WARN,
-  true   // sequential = true
+  true // sequential = true
 )
 
 await gaspSequential.sync('https://peer.example.com')
@@ -248,10 +238,10 @@ await gaspSequential.sync('https://peer.example.com')
 - [@bsv/overlay](./overlay.md) — Uses OverlayGASPStorage and OverlayGASPRemote adapters for GASP integration
 - [@bsv/overlay-express](./overlay-express.md) — Configure GASP sync via `configureEnableGASPSync()`
 - [@bsv/overlay-discovery-services](./overlay-discovery-services.md) — Can discover remote GASP peers via SHIP/SLAP
-- [@bsv/sdk](https://github.com/bsv-blockchain/ts-sdk) — Transaction encoding/decoding
+- [@bsv/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) — Transaction encoding/decoding
 
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/gasp/)
-- [Source on GitHub](https://github.com/bsv-blockchain/gasp)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core)
 - [npm](https://www.npmjs.com/package/@bsv/gasp)

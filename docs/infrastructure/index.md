@@ -1,10 +1,10 @@
 ---
 id: infra-overview
-title: "Infrastructure"
+title: 'Infrastructure'
 kind: meta
-version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: '1.0.0'
+last_updated: '2026-04-30'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [infrastructure, deployment, reference-implementations, ts-stack]
@@ -16,36 +16,41 @@ Infrastructure components are deployed services — not npm packages, but applic
 
 ## Components Overview
 
-| Component | Purpose | Database | Status | Deploy target |
-|-----------|---------|----------|--------|----------------|
-| [Chaintracks Server](chaintracks-server.md) | Block header chain + Merkle root validation (SPV) over REST (v1 + v2) | In-memory / CDN bulk files | stable | Docker / Kubernetes |
-| [Message Box Server](message-box-server.md) | Secure peer-to-peer messaging with real-time WebSocket delivery | MySQL 8.0 | stable | Docker / Kubernetes |
-| [Overlay Server](overlay-server.md) | Topic managers and lookup services for overlay network | MongoDB + MySQL/Knex | stable | Docker / Kubernetes |
-| [UHRP Server (Basic)](uhrp-server-basic.md) | Lightweight file storage via local filesystem (dev/test) | None (filesystem) | beta | Local Docker |
-| [UHRP Server (Cloud Bucket)](uhrp-server-cloud-bucket.md) | Production UHRP storage via Google Cloud Storage | Optional Cloud SQL | stable | Google Cloud Run |
-| [Wallet Abstraction Backend (WAB)](wab.md) | Multi-factor user authentication (SMS, ID verification, OTP) | SQLite (dev) / MySQL (prod) | stable | Docker / Kubernetes / Cloud Run |
-| [Wallet Infrastructure](wallet-infra.md) | JSON-RPC wallet UTXO storage and management | MySQL 8.0 | stable | Docker / Kubernetes |
+| Component                                                 | Purpose                                                               | Database                    | Status | Deploy target                   |
+| --------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------- | ------ | ------------------------------- |
+| [Chaintracks Server](chaintracks-server.md)               | Block header chain + Merkle root validation (SPV) over REST (v1 + v2) | In-memory / CDN bulk files  | stable | Docker / Kubernetes             |
+| [Message Box Server](message-box-server.md)               | Secure peer-to-peer messaging with real-time WebSocket delivery       | MySQL 8.0                   | stable | Docker / Kubernetes             |
+| [Overlay Server](overlay-server.md)                       | Topic managers and lookup services for overlay network                | MongoDB + MySQL/Knex        | stable | Docker / Kubernetes             |
+| [UHRP Server (Basic)](uhrp-server-basic.md)               | Lightweight file storage via local filesystem (dev/test)              | None (filesystem)           | beta   | Local Docker                    |
+| [UHRP Server (Cloud Bucket)](uhrp-server-cloud-bucket.md) | Production UHRP storage via Google Cloud Storage                      | Optional Cloud SQL          | stable | Google Cloud Run                |
+| [Wallet Abstraction Backend (WAB)](wab.md)                | Multi-factor user authentication (SMS, ID verification, OTP)          | SQLite (dev) / MySQL (prod) | stable | Docker / Kubernetes / Cloud Run |
+| [Wallet Infrastructure](wallet-infra.md)                  | JSON-RPC wallet UTXO storage and management                           | MySQL 8.0                   | stable | Docker / Kubernetes             |
 
 ## Decision Matrix: Which Services to Deploy
 
 **Building a messaging app?**
+
 - Deploy Message Box Server (MySQL backend, WebSocket support)
 - Pair with Wallet Infrastructure for UTXO management if handling payments
 
 **Building an overlay node?**
+
 - Deploy Overlay Server (MongoDB + MySQL/Knex)
 - Implement custom topic managers and lookup services, or use reference implementations (ProtoMap, CertMap, UHRP, Identity, etc.)
 
 **Hosting UHRP files?**
+
 - Development: UHRP Server (Basic) with local filesystem storage
 - Production: UHRP Server (Cloud Bucket) on Google Cloud Run with Cloud Storage
 
 **Providing wallet services?**
+
 - Deploy WAB for user authentication and key recovery (presentation keys via SMS/ID verification)
 - Deploy Wallet Infrastructure for UTXO storage (JSON-RPC endpoint)
 - Combined, these enable wallet-aware applications with key backup/recovery
 
 **Building BSV applications?**
+
 - Deploy Message Box Server + Wallet Infrastructure for messaging + wallet capabilities
 - Deploy WAB if you need multi-factor user authentication
 - Deploy Overlay Server if you want to operate overlay services or coordinate with other overlay nodes
@@ -53,18 +58,21 @@ Infrastructure components are deployed services — not npm packages, but applic
 ## Deployment Models
 
 ### Local Development
+
 - Docker Compose with single-instance services
 - SQLite or in-memory stores
 - All services on localhost
 - See each service's docker-compose.yml for example
 
 ### Docker/Kubernetes Production
+
 - Digest-pinned Alpine-based container images with Node 24
 - Persistent volumes for databases
 - Health checks and readiness probes configured
 - Horizontal scaling via stateless design (except local in-memory state, e.g., WebSocket rooms)
 
 ### Cloud-Native (Google Cloud Run)
+
 - UHRP Server (Cloud Bucket) designed for Cloud Run
 - Stateless HTTP service with cloud bucket storage
 - Optional Cloud SQL for metadata
@@ -74,17 +82,17 @@ Infrastructure components are deployed services — not npm packages, but applic
 
 The public BSVA deployment names are driven by the cluster `app_suffix`. For the `us-1` cluster, use these examples in docs, demos, and test configuration:
 
-| Component | Pattern | `us-1` Endpoint |
-|---|---|---|
-| Wallet Infrastructure | `store-${app_suffix}.bsvb.tech` | `https://store-us-1.bsvb.tech` |
-| Message Box | `message-box-${app_suffix}.bsvb.tech` | `https://message-box-us-1.bsvb.tech` |
-| Overlay | `overlay-${app_suffix}.bsvb.tech` | `https://overlay-us-1.bsvb.tech` |
-| UHRP | `uhrp-${app_suffix}.bsvb.tech` | `https://uhrp-us-1.bsvb.tech` |
-| WAB | `wab-${app_suffix}.bsvb.tech` | `https://wab-us-1.bsvb.tech` |
-| Chaintracks | `chaintracks-${app_suffix}.bsvb.tech` | `https://chaintracks-us-1.bsvb.tech` |
-| Chaintracks CDN | `chaintracks-cdn-${app_suffix}.bsvb.tech` | `https://chaintracks-cdn-us-1.bsvb.tech` |
-| Merkle Service | `merkle-service-${app_suffix}.bsvb.tech` | `https://merkle-service-us-1.bsvb.tech` |
-| Arcade | `arcade-${app_suffix}.bsvb.tech` | `https://arcade-us-1.bsvb.tech` |
+| Component             | Pattern                                   | `us-1` Endpoint                          |
+| --------------------- | ----------------------------------------- | ---------------------------------------- |
+| Wallet Infrastructure | `store-${app_suffix}.bsvb.tech`           | `https://store-us-1.bsvb.tech`           |
+| Message Box           | `message-box-${app_suffix}.bsvb.tech`     | `https://message-box-us-1.bsvb.tech`     |
+| Overlay               | `overlay-${app_suffix}.bsvb.tech`         | `https://overlay-us-1.bsvb.tech`         |
+| UHRP                  | `uhrp-${app_suffix}.bsvb.tech`            | `https://uhrp-us-1.bsvb.tech`            |
+| WAB                   | `wab-${app_suffix}.bsvb.tech`             | `https://wab-us-1.bsvb.tech`             |
+| Chaintracks           | `chaintracks-${app_suffix}.bsvb.tech`     | `https://chaintracks-us-1.bsvb.tech`     |
+| Chaintracks CDN       | `chaintracks-cdn-${app_suffix}.bsvb.tech` | `https://chaintracks-cdn-us-1.bsvb.tech` |
+| Merkle Service        | `merkle-service-${app_suffix}.bsvb.tech`  | `https://merkle-service-us-1.bsvb.tech`  |
+| Arcade                | `arcade-${app_suffix}.bsvb.tech`          | `https://arcade-us-1.bsvb.tech`          |
 
 ## Common Requirements
 
@@ -93,6 +101,7 @@ controls, threat model, and release retest checklist are maintained in
 [Public Service Edge Security](service-edge-security.md).
 
 All infrastructure services:
+
 - **Node.js 24** – Runtime environment (`>=24 <25` for every image component)
 - **Docker & docker-compose** – Local development and containerization
 - **Environment variables** – Configuration (see each service's Configuration section)

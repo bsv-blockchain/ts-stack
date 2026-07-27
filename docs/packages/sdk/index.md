@@ -3,41 +3,50 @@ id: sdk-domain
 title: SDK
 kind: meta
 domain: sdk
-version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
-tags: ["domain", "sdk"]
+tags: ['domain', 'sdk']
 ---
 
 # SDK Domain
 
 The foundation of ts-stack. Contains core cryptographic primitives, Bitcoin Script execution, transaction building and signing, network broadcasting, and lightweight SPV verification. This is the base layer that all other ts-stack packages build on top of.
 
-The SDK is intentionally standalone with zero runtime dependencies — it works in both Node.js and modern browsers using native crypto APIs. It provides both low-level primitives (for fine-grained control) and high-level helpers (for common workflows).
+The core SDK is intentionally standalone with zero runtime dependencies — it
+works in both Node.js and modern browsers. The optional VeriFast package adds a
+validated WebAssembly verification backend without changing the SDK's default
+interpreter.
 
 ## Packages in this Domain
 
-| Package | Purpose |
-|---------|---------|
-| [@bsv/sdk](./bsv-sdk.md) | Cryptographic primitives, script building, transactions, BEEF, SPV, wallet interface types, broadcasting, and overlay tools |
+| Package                        | Purpose                                                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| [@bsv/sdk](./bsv-sdk.md)       | Cryptographic primitives, script building, transactions, BEEF, SPV, wallet interface types, broadcasting, and overlay tools |
+| [@bsv/verifast](./verifast.md) | Optional BSV BDK WebAssembly script-verification backend for Node, browser, workers, and classic scripts                    |
 
 ## Common Use Cases
 
 ### I'm building an application that needs to handle Bitcoin transactions
+
 Start with [@bsv/sdk](./bsv-sdk.md) for transaction building, signing, and broadcasting. If you need persistent state and balance tracking, layer [@bsv/wallet-toolbox](../wallet/wallet-toolbox.md) on top.
 
 ### I'm building a wallet application
+
 Use [@bsv/sdk](./bsv-sdk.md) for cryptographic operations and [@bsv/wallet-toolbox](../wallet/wallet-toolbox.md) for the full BRC-100 wallet implementation with storage and signing.
 
 ### I'm working with tokens
+
 Use [@bsv/sdk](./bsv-sdk.md) for low-level script control, or [@bsv/btms](../wallet/btms.md) for higher-level token abstraction.
 
 ### I need to verify a transaction (SPV)
+
 [@bsv/sdk](./bsv-sdk.md) provides full SPV support with `MerklePath` for merkle proof verification without downloading full blocks.
 
 ### I need to encode data on-chain
+
 [@bsv/sdk](./bsv-sdk.md)'s `PushDrop` class encodes multi-field data in locking scripts, used by overlay protocols like BTMS.
 
 ## Key Concepts
@@ -63,22 +72,26 @@ const key = PrivateKey.fromRandom()
 const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
 // Build and sign a transaction
-const tx = new Transaction(1, [
-  {
-    sourceTransaction: Transaction.fromHex('...'),
-    sourceOutputIndex: 0,
-    unlockingScriptTemplate: new P2PKH().unlock(key)
-  }
-], [
-  {
-    lockingScript: new P2PKH().lock(recipientAddress),
-    satoshis: 5000
-  },
-  {
-    lockingScript: new P2PKH().lock(key.toAddress()),
-    change: true
-  }
-])
+const tx = new Transaction(
+  1,
+  [
+    {
+      sourceTransaction: Transaction.fromHex('...'),
+      sourceOutputIndex: 0,
+      unlockingScriptTemplate: new P2PKH().unlock(key)
+    }
+  ],
+  [
+    {
+      lockingScript: new P2PKH().lock(recipientAddress),
+      satoshis: 5000
+    },
+    {
+      lockingScript: new P2PKH().lock(key.toAddress()),
+      change: true
+    }
+  ]
+)
 
 // Sign and broadcast
 await tx.fee()
@@ -90,6 +103,7 @@ console.log('Broadcasted:', response.txid)
 ## What Each Package Provides
 
 ### @bsv/sdk
+
 - Elliptic curve cryptography (secp256k1), ECDSA signatures, key derivation (BRC-42/43)
 - 20+ script templates and Bitcoin Script interpreter
 - Transaction builder with fee estimation and broadcasting
@@ -110,5 +124,6 @@ console.log('Broadcasted:', response.txid)
 ## Next Steps
 
 - **[@bsv/sdk](./bsv-sdk.md)** — Full API reference and code examples
+- **[@bsv/verifast](./verifast.md)** — Optional WASM verification backend
 - **[Wallet Domain](../wallet/index.md)** — Higher-layer packages for persistence and key management
-- **Guides** — Hands-on examples (coming soon)
+- **[Guides](../../guides/index.md)** — Hands-on application and package-boundary examples

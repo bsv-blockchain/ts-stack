@@ -51,6 +51,45 @@ test('current repository health controls and ratchet are internally consistent',
   assert.equal(result.findings.length, 0)
 })
 
+test('published declaration dependencies are explicit and backed by runtime modules', () => {
+  const governed = projects.projects.filter(project => project.declarationDependencies)
+  assert.deepEqual(
+    governed.map(project => project.name),
+    [
+      '@bsv/paymail',
+      '@bsv/auth-express-middleware',
+      '@bsv/payment-express-middleware',
+      '@bsv/overlay-express',
+      '@bsv/wallet-relay',
+      '@bsv/wallet-toolbox'
+    ]
+  )
+  assert.ok(
+    governed.every(
+      project =>
+        project.declarationDependencies.length === 1 &&
+        project.declarationDependencies[0] === '@types/express'
+    )
+  )
+
+  const invalidProjects = structuredClone(projects)
+  invalidProjects.projects.find(
+    project => project.name === '@bsv/paymail'
+  ).declarationDependencies = ['express']
+  assert.match(
+    validateProjectRegistry(invalidProjects, discoverWorkspaceProjects()).join('\n'),
+    /invalid declaration dependency "express"/
+  )
+
+  const invalidDiscovered = structuredClone(discoverWorkspaceProjects())
+  delete invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail').manifest
+    .dependencies['@types/express']
+  assert.match(
+    validateProjectRegistry(projects, invalidDiscovered).join('\n'),
+    /must publish declaration dependency @types\/express/
+  )
+})
+
 test('every public package declares supported runtime and canonical support metadata', () => {
   const publicPackages = discoverWorkspaceProjects().filter(
     project => project.manifest.private !== true

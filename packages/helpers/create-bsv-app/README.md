@@ -247,3 +247,7 @@ pnpm --filter create-bsv-app build
 ```
 
 The package is maintained in the [`bsv-blockchain/ts-stack`](https://github.com/bsv-blockchain/ts-stack) monorepo. The former `@bsv/app` package exists only as a deprecation redirect to this CLI.
+
+## License
+
+Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).

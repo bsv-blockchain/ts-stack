@@ -1,16 +1,15 @@
 ---
 id: pkg-authsocket
-title: "@bsv/authsocket"
+title: '@bsv/authsocket'
 kind: package
 domain: messaging
-version: "2.1.1"
-source_repo: "bsv-blockchain/authsocket"
-source_commit: "unknown"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+version: '2.1.1'
+source_repo: 'bsv-blockchain/ts-stack'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
-npm: "https://www.npmjs.com/package/@bsv/authsocket"
-repo: "https://github.com/bsv-blockchain/authsocket"
+npm: 'https://www.npmjs.com/package/@bsv/authsocket'
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket'
 status: stable
 tags: [messaging, websocket, brc-31, auth]
 ---
@@ -33,13 +32,15 @@ import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import http from 'http'
 
 const server = http.createServer()
-const serverWallet = new ProtoWallet(PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'))
+const serverWallet = new ProtoWallet(
+  PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
+)
 const io = new AuthSocketServer(server, { wallet: serverWallet, cors: { origin: '*' } })
 
-io.on('connection', async (socket) => {
+io.on('connection', async socket => {
   console.log('Authenticated socket:', socket.id)
 
-  socket.on('chatMessage', (msg) => {
+  socket.on('chatMessage', msg => {
     console.log('Verified message:', msg)
   })
 
@@ -79,8 +80,8 @@ const io = new AuthSocketServer(server, {
   }
 })
 
-io.on('connection', async (socket) => {
-  socket.on('message', (data) => {
+io.on('connection', async socket => {
+  socket.on('message', data => {
     // All messages already verified
   })
   await socket.emit('response', { authenticated: true })
@@ -90,9 +91,9 @@ io.on('connection', async (socket) => {
 ### Receiving authenticated messages
 
 ```typescript
-io.on('connection', async (socket) => {
+io.on('connection', async socket => {
   // Messages are automatically verified before reaching here
-  socket.on('userAction', (action) => {
+  socket.on('userAction', action => {
     console.log('Verified action from', socket.id, ':', action)
   })
 
@@ -147,5 +148,5 @@ io.on('connection', async (socket) => {
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/authsocket/)
-- [Source on GitHub](https://github.com/bsv-blockchain/authsocket)
+- [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket)
 - [npm](https://www.npmjs.com/package/@bsv/authsocket)

@@ -1,15 +1,15 @@
 ---
 id: pkg-wallet-toolbox-examples
-title: "@bsv/wallet-toolbox-examples"
+title: '@bsv/wallet-toolbox-examples'
 kind: package
 domain: wallet
-npm: "@bsv/wallet-toolbox-examples"
-version: "1.1.156"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: '1.1.157'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples'
 status: stable
-tags: ["wallet", "examples", "reference"]
+tags: ['wallet', 'examples', 'reference']
 ---
 
 # @bsv/wallet-toolbox-examples

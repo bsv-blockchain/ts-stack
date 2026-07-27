@@ -7,7 +7,11 @@
 
 import { MakeWalletLogger, WalletInterface, WalletLoggerInterface } from '@bsv/sdk'
 import express, { Request, Response } from 'express'
-import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-middleware'
+import {
+  AuthMiddlewareOptions,
+  AuthRequest,
+  createAuthMiddleware
+} from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
@@ -124,6 +128,23 @@ interface RpcDispatchResult {
   result?: unknown
 }
 
+function requiredAuthenticatedIdentityKey (req: Request): string {
+  const identityKey = (req as AuthRequest).auth?.identityKey
+  if (
+    typeof identityKey !== 'string' ||
+    identityKey.trim() === '' ||
+    identityKey === 'unknown'
+  ) {
+    throw new WERR_UNAUTHORIZED('authenticated request identity is required')
+  }
+  return identityKey
+}
+
+function firstRequestHeader (req: Request, name: string): string | undefined {
+  const value = req.headers[name.toLowerCase()]
+  return Array.isArray(value) ? value[0] : value
+}
+
 export interface WalletStorageServerOptions {
   port: number
   wallet: Wallet
@@ -231,9 +252,7 @@ export class StorageServer {
           ip: req.ip || req.socket.remoteAddress,
           ua: req.headers['user-agent'] || '-'
         }
-        const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split(
-          '/'
-        )[0]
+        const traceContext = firstRequestHeader(req, 'X-Cloud-Trace-Context')?.split('/')[0]
         if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
 
         // Request bodies and BSV auth/payment headers can contain sensitive
@@ -443,10 +462,10 @@ export class StorageServer {
       source: 'StorageServer POST handler',
       method,
       id,
-      user: req.auth.identityKey,
+      user: requiredAuthenticatedIdentityKey(req),
       params: JSON.stringify(params || '').slice(0, 256)
     }
-    const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
+    const traceContext = firstRequestHeader(req, 'X-Cloud-Trace-Context')?.split('/')[0]
     if (traceContext) {
       logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
     }
@@ -496,7 +515,7 @@ export class StorageServer {
       case 'getSettings':
         return true
       case 'findOrInsertUser':
-        if (params[0] !== req.auth.identityKey) {
+        if (params[0] !== requiredAuthenticatedIdentityKey(req)) {
           throw new WERR_UNAUTHORIZED('function may only access authenticated user.')
         }
         return true
@@ -521,10 +540,11 @@ export class StorageServer {
   }
 
   private authorizeAdminStats (params: any[], req: Request): void {
-    if (params[0] !== req.auth.identityKey) {
+    const identityKey = requiredAuthenticatedIdentityKey(req)
+    if (params[0] !== identityKey) {
       throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.')
     }
-    if (!this.adminIdentityKeys?.includes(req.auth.identityKey)) {
+    if (!this.adminIdentityKeys?.includes(identityKey)) {
       throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.')
     }
   }
@@ -562,13 +582,14 @@ export class StorageServer {
   }
 
   private async authenticatedAuth (req: Request, requireActive: boolean): Promise<AuthId> {
-    const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
+    const identityKey = requiredAuthenticatedIdentityKey(req)
+    const { user } = await this.storage.findOrInsertUser(identityKey)
     const isActive = user.activeStorage === this.storage.getSettings().storageIdentityKey
     if (requireActive && !isActive) {
       throw new WERR_NOT_ACTIVE('action batch methods require the authenticated user\'s active storage provider')
     }
     return {
-      identityKey: req.auth.identityKey,
+      identityKey,
       userId: user.userId,
       isActive
     }
@@ -577,7 +598,8 @@ export class StorageServer {
   private async bindAuthenticatedAuth (params: any[], req: Request, requireActive: boolean): Promise<void> {
     if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
     const claimed = typeof params[0] === 'object' && params[0] != null ? params[0] : {}
-    if (claimed.identityKey != null && claimed.identityKey !== req.auth.identityKey) {
+    const identityKey = requiredAuthenticatedIdentityKey(req)
+    if (claimed.identityKey != null && claimed.identityKey !== identityKey) {
       throw new WERR_UNAUTHORIZED('identityKey does not match authentication')
     }
     const auth = await this.authenticatedAuth(req, requireActive)
@@ -593,9 +615,10 @@ export class StorageServer {
     if (typeof params[0] !== 'object' || !params[0]) {
       params[0] = {}
     }
-    if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentication') }
-    // console.log('looking up user with identityKey:', req.auth.identityKey)
-    const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
+    const identityKey = requiredAuthenticatedIdentityKey(req)
+    if (params[0].identityKey && params[0].identityKey !== identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentication') }
+    // console.log('looking up user with identityKey:', identityKey)
+    const { user } = await this.storage.findOrInsertUser(identityKey)
     params[0].reqAuthUserId = user.userId
     if (params[0].identityKey || params[0].userId != null) params[0].userId = user.userId
   }

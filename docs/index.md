@@ -2,10 +2,10 @@
 id: home
 title: ts-stack
 kind: meta
-version: "n/a"
-last_updated: "2026-05-01"
-last_verified: "2026-05-01"
-review_cadence_days: 7
+version: 'n/a'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
 tags: []
 ---
@@ -25,14 +25,14 @@ This repository is the TypeScript reference stack for BSV application developmen
 
 ## Start Here
 
-| You are | Use first | Why |
-|---------|-----------|-----|
-| Web application developer | [`@bsv/simple/browser`](./get-started/index.md) | Connects to a local BRC-100 wallet without putting keys in app code. |
-| Developer coming from another chain | [`@bsv/wallet-helper`](./packages/helpers/wallet-helper.md) | Builds explicit transactions with a fluent builder while the wallet keeps keys and signing. |
-| Backend or automation developer | [`@bsv/simple/server`](./get-started/choose-your-stack.md#server-agent-automated-self-custodial) | Runs a self-custodial server wallet from a private key and storage endpoint. |
-| Wallet developer | [`@bsv/wallet-toolbox`](./packages/wallet/wallet-toolbox.md) | Reference components for building a BRC-100 wallet. |
-| Protocol engineer | [`@bsv/sdk`](./packages/sdk/bsv-sdk.md) | Core crypto, scripts, transactions, BEEF, BUMP, and wallet interface types. |
-| Technical evaluator | [Architecture](./architecture/index.md) and [Conformance](./conformance/index.md) | Shows boundaries, current coverage, and what other implementations must match. |
+| You are                             | Use first                                                                                        | Why                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Web application developer           | [`@bsv/simple/browser`](./get-started/index.md)                                                  | Connects to a local BRC-100 wallet without putting keys in app code.                        |
+| Developer coming from another chain | [`@bsv/wallet-helper`](./packages/helpers/wallet-helper.md)                                      | Builds explicit transactions with a fluent builder while the wallet keeps keys and signing. |
+| Backend or automation developer     | [`@bsv/simple/server`](./get-started/choose-your-stack.md#server-agent-automated-self-custodial) | Runs a self-custodial server wallet from a private key and storage endpoint.                |
+| Wallet developer                    | [`@bsv/wallet-toolbox`](./packages/wallet/wallet-toolbox.md)                                     | Reference components for building a BRC-100 wallet.                                         |
+| Protocol engineer                   | [`@bsv/sdk`](./packages/sdk/bsv-sdk.md)                                                          | Core crypto, scripts, transactions, BEEF, BUMP, and wallet interface types.                 |
+| Technical evaluator                 | [Architecture](./architecture/index.md) and [Conformance](./conformance/index.md)                | Shows boundaries, current coverage, and what other implementations must match.              |
 
 ## Minimal App Example
 
@@ -53,14 +53,14 @@ For raw BRC-100 work, use `WalletClient` from `@bsv/sdk` and call methods such a
 
 ## Package Domains
 
-| Domain | Packages | What they cover |
-|--------|----------|-----------------|
-| SDK | `@bsv/sdk` | Crypto, scripts, transactions, BEEF/BUMP, BRC-100 types, wallet substrates. |
-| Wallet | `@bsv/wallet-toolbox`, BTMS, permission module, wallet relay | Wallet implementation, storage, signing, permissions, token flows, mobile pairing. |
-| Overlays | `@bsv/overlay`, `@bsv/overlay-express`, topics, discovery, GASP | Shared on-chain context, topic validation, lookup services, sync. |
-| Messaging | Message Box, Authsocket, Paymail | Store-and-forward messages, live authenticated channels, identity-based addressing. |
-| Middleware | Auth, HTTP 402, payment express | Express middleware for identity and payment-gated APIs. |
-| Helpers | `@bsv/simple`, `@bsv/wallet-helper`, templates, DID, amount utilities | Higher-level developer ergonomics, including wallet-aware app helpers and fluent transaction building. |
+| Domain     | Packages                                                              | What they cover                                                                                        |
+| ---------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| SDK        | `@bsv/sdk`                                                            | Crypto, scripts, transactions, BEEF/BUMP, BRC-100 types, wallet substrates.                            |
+| Wallet     | `@bsv/wallet-toolbox`, BTMS, permission module, wallet relay          | Wallet implementation, storage, signing, permissions, token flows, mobile pairing.                     |
+| Overlays   | `@bsv/overlay`, `@bsv/overlay-express`, topics, discovery, GASP       | Shared on-chain context, topic validation, lookup services, sync.                                      |
+| Messaging  | Message Box, Authsocket, Paymail                                      | Store-and-forward messages, live authenticated channels, identity-based addressing.                    |
+| Middleware | Auth, HTTP 402, payment express                                       | Express middleware for identity and payment-gated APIs.                                                |
+| Helpers    | `@bsv/simple`, `@bsv/wallet-helper`, templates, DID, amount utilities | Higher-level developer ergonomics, including wallet-aware app helpers and fluent transaction building. |
 
 ## Important References
 
@@ -69,6 +69,8 @@ For raw BRC-100 work, use `WalletClient` from `@bsv/sdk` and call methods such a
 - [Stack Layers](./architecture/layers.md) - how packages and infrastructure fit together.
 - [Infrastructure](./infrastructure/index.md) - service status and deployed endpoint names.
 - [Vector Catalog](./conformance/vectors.md) - current conformance coverage and file paths.
+- [Generated Stack Facts](./reference/stack-facts.md) - source versions, runtime profiles, release routes, infrastructure manifests, and conformance totals.
+- [Release and Operations Guide](./reference/release-operations.md) - reviewed publication, deployment, failure handling, and rollback.
 
 ## Source Discipline
 

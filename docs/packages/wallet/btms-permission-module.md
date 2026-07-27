@@ -1,15 +1,16 @@
 ---
 id: btms-permission-module
-title: "@bsv/btms-permission-module"
+title: '@bsv/btms-permission-module'
 kind: package
 domain: wallet
-npm: "@bsv/btms-permission-module"
-version: "1.1.1"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/btms-permission-module'
+version: '1.1.1'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
-tags: ["tokens", "permissions"]
-github_repo: "https://github.com/bsv-blockchain/ts-stack"
+tags: ['tokens', 'permissions']
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module'
 ---
 
 # @bsv/btms-permission-module
@@ -36,11 +37,11 @@ const wallet = await createWallet()
 
 const requestTokenAccess = async (app: string, message: string): Promise<boolean> => {
   const details = JSON.parse(message)
-  
+
   const approved = confirm(
     `${app} wants to ${details.operation} ${details.sendAmount || details.burnAmount} of "${details.tokenName}"`
   )
-  
+
   return approved
 }
 
@@ -70,11 +71,11 @@ const wallet = await createWallet()
 
 const requestTokenAccess = async (app: string, message: string): Promise<boolean> => {
   const details = JSON.parse(message)
-  
+
   const approved = confirm(
     `${app} wants to ${details.operation} ${details.sendAmount || details.burnAmount} of "${details.tokenName}"`
   )
-  
+
   return approved
 }
 
@@ -91,7 +92,7 @@ import { createBtmsModule } from '@bsv/btms-permission-module'
 
 // Create module with no prompt handler — all requests denied
 const module = createBtmsModule({
-  wallet,
+  wallet
   // No promptHandler → defaults to deny all
 })
 
@@ -111,7 +112,7 @@ const tokenModule = createBtmsModule({
 
 const permissionsManager = new WalletPermissionsManager(wallet, appOrigin, {
   permissionModules: {
-    btms: tokenModule  // Register under 'btms' key
+    btms: tokenModule // Register under 'btms' key
   }
 })
 

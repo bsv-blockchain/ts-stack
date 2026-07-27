@@ -1,187 +1,118 @@
 ---
 id: about-versioning
-title: "Versioning Policy"
+title: 'Versioning Policy'
 kind: meta
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
-review_cadence_days: 90
+version: '2.0.0'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
 tags: [about, versioning, semver, releases]
 ---
 
 # Versioning Policy
 
-ts-stack follows Semantic Versioning (MAJOR.MINOR.PATCH) for all packages.
+Each public package in ts-stack has its own Semantic Versioning version. A
+source version and a published registry version are separate facts: merging a
+version change does not publish it, and publication occurs only through the
+protected npm OIDC workflow.
 
-## Version Format
+The exact source versions, runtime profiles, and release routes are generated
+on [Generated Stack Facts](../reference/stack-facts.md). Do not copy that table
+into hand-maintained pages.
 
-```
-MAJOR.MINOR.PATCH
-  ↓     ↓     ↓
-  1     2     3
-```
+## Semantic Versioning
 
-- **MAJOR** — Breaking changes (incompatible API changes)
-- **MINOR** — New features (backward compatible)
-- **PATCH** — Bug fixes (backward compatible)
+- **PATCH** fixes a defect without changing the supported public contract.
+- **MINOR** adds backward-compatible behavior or public API.
+- **MAJOR** removes, renames, or incompatibly changes supported behavior,
+  types, entry points, wire formats, persistence, or runtime requirements.
 
-## Release Cadence
+For a package below 1.0, an incompatible public change may use a minor bump,
+but it still requires explicit migration notes and cannot be hidden in a patch.
+Changing an internal implementation without changing its packed or runtime
+contract does not automatically require bumping unrelated packages.
 
-Different stability levels have different release schedules:
+## Affected-package decisions
 
-### Stable Packages (status: stable)
-```
-@bsv/sdk@1.2.3
-@bsv/wallet-toolbox@1.0.0
-@bsv/authsocket@2.1.6
-```
+Version every public package whose published bytes or manifest will change.
+Then inspect its first-party dependents:
 
-- Monthly or as-needed for critical bugs
-- Extensive testing before release
-- OIDC npm provenance verification
-- Breaking changes only in major versions
+1. A dependent package needs a bump when its packed manifest range changes, its
+   generated declarations or bundles change, or consumers must receive the new
+   dependency to obtain correct behavior.
+2. A dependent package does not need a bump merely because a compatible
+   workspace implementation changed while its own packed bytes and declared
+   contract remain identical.
+3. Breaking first-party changes require one coordinated migration across all
+   affected dependents before publication.
+4. Infrastructure manifests and locks are reconciled after a successful
+   cascade release; they are deployed separately as immutable images.
 
-### Beta Packages (status: beta)
-```
-@bsv/wab-server@0.2.1
-@bsv/uhrp-lite@0.1.0
-```
+Workspace runtime and development references use `workspace:^`; public peer
+dependencies use reviewed public ranges. `scripts/check-versions.mjs` rejects
+incoherent first-party references before release.
 
-- More frequent releases (weekly possible)
-- May have breaking changes in minor versions
-- Should not be used in production
+## Support policy
 
-### Experimental Packages (status: experimental)
-- Expect significant changes
-- Not ready for general use
-- API may change without notice
+The latest published release of each package is the supported default. Older
+versions remain available from npm but do not receive a blanket maintenance or
+security-backport promise. When a serious vulnerability affects a previous
+major, maintainers decide whether a safe backport is practical based on
+exploitability, dependency constraints, and deployment exposure, and record
+that decision in the private advisory.
 
-## Support Windows
+Browser, React Native, Node consumer, contributor, and infrastructure support
+are different profiles. The generated facts page and package manifests are
+authoritative; contributor CI currently uses the stricter root toolchain.
 
-Only the latest major version receives bug fixes:
+## Breaking changes and deprecation
 
-```
-@bsv/sdk@1.x.x — Supported (bug fixes)
-@bsv/sdk@2.x.x — Supported (full support)
+A breaking release must include:
 
-Older versions — Unsupported
-```
+- an explicit compatibility and deployment-impact review;
+- migration instructions with before/after examples;
+- updates to package READMEs, API docs, examples, and conformance contracts;
+- a rollback or forward-fix plan for persisted or remotely deployed behavior;
+  and
+- coordinated versions for affected first-party dependents.
 
-Critical security fixes (CVE/CWE) are backported to the previous major version for 6 months after new major release.
+Prefer a deprecation period when it can be implemented without creating a
+security or correctness hazard. There is no universal 60-day window. Do not
+unpublish or move an immutable version to simulate rollback; deprecate a bad
+version and publish a corrected version.
 
-## Documentation Versioning
+## Documentation and release notes
 
-Doc pages track versions via frontmatter:
+Package documentation frontmatter versions describe the package version
+verified by that page. Cross-stack version and support facts come from the
+generated page. A package change updates:
 
-```yaml
----
-version: "1.2.3"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
-review_cadence_days: 30
----
-```
+- its README and API/reference docs when the consumer contract changes;
+- a migration note for any incompatible behavior;
+- a changelog when that package already maintains one; and
+- the pull request and release evidence needed to explain the change when it
+  does not maintain a standalone changelog.
 
-### Fields
+Do not promise a GitHub Release, npm dist-tag, changelog format, cadence, or
+support window that the workflow does not actually enforce.
 
-- **version** — Latest tested version of package/spec
-- **last_updated** — When documentation was last written
-- **last_verified** — When documentation was last tested
-- **review_cadence_days** — How often to re-verify
+## Publication
 
-### Staleness
+Publication is an explicit operator action after reviewed source versions are
+on `main`. The supported paths are:
 
-Docs are considered stale after `review_cadence_days` without verification:
+- `packages/<path>/vX.Y.Z` for a single governed package;
+- `release/vYYYY-MM-DD` for a cascade of every source version absent from npm;
+- a legacy `vX.Y.Z` cascade; or
+- a manual protected workflow dispatch from `main`.
 
-```
-last_verified: "2026-04-28"
-review_cadence_days: 30
+The workflow packs once, produces and scans SBOMs, verifies licenses,
+attestations, provenance, and registry integrity, then opens a reviewed
+post-publication version-sync PR when a cascade changes first-party ranges.
+Nothing should be published from a maintainer workstation.
 
-Stale after: 2026-05-28
-```
-
-Automated agents check stale docs and update them against current npm versions.
-
-## Breaking Changes
-
-When a breaking change occurs, all affected users are notified:
-
-1. Major version bump (e.g., 1.x.x → 2.0.0)
-2. Migration guide published
-3. GitHub releases page annotated
-4. NPM deprecation message on old version
-
-### Deprecation Path
-
-Features may be deprecated before removal:
-
-1. **v1.x** — Feature works, deprecation warning logged
-2. **v2.0** — Feature removed, migration guide updated
-
-## Dependencies
-
-ts-stack declares compatible public semver ranges and keeps internal workspace
-links canonical:
-
-```json
-{
-  "dependencies": {
-    "express": "^4.18.0",
-    "postgres": "^14.0.0"
-  }
-}
-```
-
-This allows compatible minor and patch updates while reserving major upgrades
-for explicit migrations. Runtime, development, and optional references to other
-workspace packages use `workspace:^`; published peer dependencies use a broad
-public range such as `^2`.
-
-See [Dependency and Release Policy](../reference/dependency-policy.md) for the
-audit gate, supply-chain controls, residual advisory policy, and release flow.
-
-## Publishing
-
-All packages are published via:
-
-1. **NPM Registry** — npm.js.org
-2. **OIDC Provenance** — Proves packages came from CI/CD
-3. **Checksums** — Verify package integrity
-4. **Tags** — `latest`, `beta`, `experimental`
-
-Example:
-
-```bash
-npm install @bsv/sdk@latest     # Stable
-npm install @bsv/wab-server@beta # Beta
-```
-
-## Changelog
-
-See the [GitHub Releases](https://github.com/bsv-blockchain/ts-stack/releases) page for:
-- Each package's release notes
-- Breaking changes
-- New features
-- Bug fixes
-
-Format per [Keep a Changelog](https://keepachangelog.com/):
-
-```
-## [1.2.0] - 2026-04-28
-
-### Added
-- New feature X
-
-### Changed
-- Breaking change Y
-
-### Fixed
-- Bug Z
-```
-
-## Next Steps
-
-- [Contributing Guide](contributing.md) — How to contribute
-- [Doc Agent Guide](doc-agent.md) — Maintaining docs
-- Package Updates — Syncing with releases
+See [Dependency and Release Policy](../reference/dependency-policy.md),
+[npm Package Supply Chain](../reference/npm-package-supply-chain.md), and
+[Release and Operations Guide](../reference/release-operations.md) for the
+complete gates, failure handling, and rollback path.

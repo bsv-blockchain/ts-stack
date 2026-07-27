@@ -1,6 +1,6 @@
 # BASELINE — @bsv/payment-express-middleware
 
-> Verified: 2026-07-26. This is the source baseline; npm remains at the version
+> Verified: 2026-07-27. This is the source baseline; npm remains at the version
 > shown until an explicit release is approved.
 
 ## Identity
@@ -9,7 +9,7 @@
 | -------------- | ------------------------------------------------------------------------------------ |
 | Package        | `@bsv/payment-express-middleware`                                                    |
 | Path           | `packages/middleware/payment-express-middleware`                                     |
-| Source version | `2.1.1`                                                                              |
+| Source version | `2.1.2`                                                                              |
 | Criticality    | Tier 1 — payment authorization boundary                                              |
 | Runtime        | Node.js 22+                                                                          |
 | Formats        | Native ESM + CommonJS + declarations                                                 |
@@ -17,16 +17,16 @@
 
 ## Verified gates
 
-| Gate                | Result                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| Strict typecheck    | Passing                                                                              |
-| Oxlint              | Passing with zero warnings                                                           |
-| Prettier check      | Passing                                                                              |
-| Deterministic tests | 37 passing in 1 suite; no public-network calls                                       |
-| Production coverage | 98.50% lines, 98.13% branches, 100% functions, 97.90% statements                     |
-| Coverage floor      | 85% lines/statements/functions; 80% branches                                         |
-| Build               | `tsdown` passing                                                                     |
-| Artifact            | Exact tarball validated for ESM, CommonJS, declarations, exports, and file allowlist |
+| Gate                | Result                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Strict typecheck    | Passing                                                                                                            |
+| Oxlint              | Passing with zero warnings                                                                                         |
+| Prettier check      | Passing                                                                                                            |
+| Deterministic tests | 37 passing in 1 suite; no public-network calls                                                                     |
+| Production coverage | 98.50% lines, 98.13% branches, 100% functions, 97.90% statements                                                   |
+| Coverage floor      | 85% lines/statements/functions; 80% branches                                                                       |
+| Build               | `tsdown` passing                                                                                                   |
+| Artifact            | Exact tarball and workspace runtime closure validated for ESM, CommonJS, declarations, exports, and file allowlist |
 
 ## Reliability and security controls
 

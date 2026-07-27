@@ -1,15 +1,16 @@
 ---
 id: wallet-toolbox
-title: "@bsv/wallet-toolbox"
+title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
-npm: "@bsv/wallet-toolbox"
-version: "2.4.4"
-last_updated: "2026-07-24"
-last_verified: "2026-07-24"
+npm: '@bsv/wallet-toolbox'
+version: '2.4.5'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
+review_cadence_days: 30
 status: stable
-tags: ["wallet", "brc100"]
-github_repo: "https://github.com/bsv-blockchain/ts-stack"
+tags: ['wallet', 'brc100']
+repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox'
 ---
 
 # @bsv/wallet-toolbox
@@ -33,17 +34,17 @@ npm install @bsv/wallet-toolbox-mobile
 
 ## What It Provides
 
-| Component | Purpose |
-|-----------|---------|
-| `Wallet` | Main BRC-100 implementation. |
-| `WalletStorageManager` | Coordinates active and backup storage providers. |
-| Storage providers | SQL/Knex, IndexedDB, and remote storage over HTTP. |
-| `WalletSigner` | Bridges wallet-controlled keys into SDK transaction signing flows. |
-| `Services` | Network service container for broadcast, chain tracking, and proof services. |
-| `Monitor` | Background wallet maintenance tasks. |
-| Key managers | BRC-42/43 derivation, privileged key management, Shamir-based recovery flows. |
-| `WalletPermissionsManager` | Permission gating around wallet methods and reserved protocols/baskets. |
-| `MockChain` | Test chain utilities for wallet behavior without a live network. |
+| Component                  | Purpose                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `Wallet`                   | Main BRC-100 implementation.                                                  |
+| `WalletStorageManager`     | Coordinates active and backup storage providers.                              |
+| Storage providers          | SQL/Knex, IndexedDB, and remote storage over HTTP.                            |
+| `WalletSigner`             | Bridges wallet-controlled keys into SDK transaction signing flows.            |
+| `Services`                 | Network service container for broadcast, chain tracking, and proof services.  |
+| `Monitor`                  | Background wallet maintenance tasks.                                          |
+| Key managers               | BRC-42/43 derivation, privileged key management, Shamir-based recovery flows. |
+| `WalletPermissionsManager` | Permission gating around wallet methods and reserved protocols/baskets.       |
+| `MockChain`                | Test chain utilities for wallet behavior without a live network.              |
 
 ## Source-Backed Setup Pattern
 
@@ -73,18 +74,18 @@ When every input can be signed by the wallet, `createAction` can return a comple
 
 ```typescript
 export async function createP2pkhOutput(recipientAddress: string) {
-  const lockingScript = Setup
-    .getLockP2PKH(recipientAddress)
-    .toHex()
+  const lockingScript = Setup.getLockP2PKH(recipientAddress).toHex()
 
   const result = await setup.wallet.createAction({
     description: 'Create payment',
     labels: ['payment'],
-    outputs: [{
-      lockingScript,
-      satoshis: 1000,
-      outputDescription: 'Payment output'
-    }],
+    outputs: [
+      {
+        lockingScript,
+        satoshis: 1000,
+        outputDescription: 'Payment output'
+      }
+    ],
     options: {
       randomizeOutputs: false,
       acceptDelayedBroadcast: false
@@ -109,16 +110,20 @@ export async function finishCustomSpend(args: {
   const created = await setup.wallet.createAction({
     description: 'Spend custom input',
     inputBEEF: args.inputBEEF,
-    inputs: [{
-      outpoint: args.outpoint,
-      unlockingScriptLength: 108,
-      inputDescription: 'Custom input'
-    }],
-    outputs: [{
-      lockingScript: args.lockingScript,
-      satoshis: 1000,
-      outputDescription: 'Payment output'
-    }]
+    inputs: [
+      {
+        outpoint: args.outpoint,
+        unlockingScriptLength: 108,
+        inputDescription: 'Custom input'
+      }
+    ],
+    outputs: [
+      {
+        lockingScript: args.lockingScript,
+        satoshis: 1000,
+        outputDescription: 'Payment output'
+      }
+    ]
   })
 
   await setup.wallet.signAction({
@@ -135,10 +140,10 @@ See `packages/wallet/wallet-toolbox-examples/src/p2pkh.ts`, `brc29.ts`, `pushdro
 
 ## Storage Models
 
-| Model | Use |
-|-------|-----|
-| SQL/Knex | Node.js wallets and servers with SQLite, MySQL, or another Knex-supported database. |
-| IndexedDB | Browser and mobile wallets that keep state on-device. |
+| Model          | Use                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| SQL/Knex       | Node.js wallets and servers with SQLite, MySQL, or another Knex-supported database.                     |
+| IndexedDB      | Browser and mobile wallets that keep state on-device.                                                   |
 | Remote storage | Wallet clients that delegate storage to a Wallet Infra endpoint such as `https://store-us-1.bsvb.tech`. |
 
 ## When to Use This

@@ -2,7 +2,7 @@
 
 [![BSV License](https://img.shields.io/badge/license-Open%20BSV-blue)](#license)
 
-A set of ready-to-run configuration examples for stand-alone Overlay nodes built with [`@bsv/overlay-express`](https://github.com/bsv-blockchain/overlay-express). Use these examples to spin-up your own overlay infrastructure for distributed applications on Bitcoin SV.
+A set of ready-to-run configuration examples for stand-alone Overlay nodes built with [`@bsv/overlay-express`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express). Use these examples to spin-up your own overlay infrastructure for distributed applications on Bitcoin SV.
 
 ---
 
