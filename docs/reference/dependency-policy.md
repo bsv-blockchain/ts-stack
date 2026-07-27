@@ -1,10 +1,10 @@
 ---
 id: dependency-release-policy
-title: "Dependency and Release Policy"
+title: 'Dependency and Release Policy'
 kind: reference
-version: "1.1.0"
-last_updated: "2026-07-26"
-last_verified: "2026-07-26"
+version: '1.2.0'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -19,7 +19,7 @@ images on one reviewed dependency baseline.
 
 - Node.js 24.11 or newer for repository development, CI, and releases
 - pnpm 10
-- TypeScript 6
+- TypeScript 7.0.2 native compiler, with the official TypeScript 6 compatibility API for API-dependent tools
 - Oxlint for TypeScript linting
 
 CI, conformance, documentation, and release workflows run on Node.js 24. Package
@@ -35,12 +35,16 @@ Native entry points retain their declared non-Node runtime targets; the Node
 engine field describes supported Node consumers and package tooling, not a
 requirement that browsers provide Node APIs.
 
-TypeScript 7 is not yet the supported compiler because the current `ts-jest`
-29.4 line explicitly accepts TypeScript versions below 7. TypeScript 6.0.3 is
-therefore the sole intentional direct-major hold. The test-harness
-standardization wave must remove or upgrade that peer constraint, run the
-workspace-wide TypeScript 7 migration, and only then change this baseline;
-forcing the compiler through an incompatible peer range is not permitted.
+TypeScript 7.0.2 is the authoritative compiler for every direct `tsc` build and
+workspace typecheck. TypeScript 7.0 deliberately ships without a stable
+JavaScript compiler API, so the repository follows the TypeScript team's
+supported side-by-side migration: `@typescript/native` provides `tsc`, while
+the `typescript` dependency aliases `@typescript/typescript6` for `ts-jest`,
+`ts-node`, `tsdown`, and other API consumers. The peer range remains valid
+without an override, and native TypeScript 7—not the test transformer—owns the
+type-correctness gate. The exact contract, removal condition, and verification
+commands are documented in
+[TypeScript Compiler and Tooling Boundary](./typescript-toolchain.md).
 
 ## Automation boundaries
 
@@ -52,8 +56,9 @@ Actions. First-party `@bsv/*` versions remain owned by the release graph.
 Major changes that alter a runtime, compiler, or persisted-data contract are
 held from the routine monthly PR until their focused migration is ready:
 
-- TypeScript majors are held in both root and standalone infrastructure npm
-  scopes.
+- Future TypeScript compiler majors are held in both root and standalone
+  infrastructure npm scopes; TypeScript 7 patch and minor maintenance remains
+  eligible for the monthly update.
 - Node majors are held in the governed container-base manifest so CI, release,
   and every runtime image move together.
 - MySQL and MongoDB majors are held until backup/restore, supported upgrade
@@ -90,14 +95,21 @@ type declarations, test runners, test clients, linters, documentation
 generators, or TypeScript build tools in `dependencies`. This prevents
 development-only advisory trees from leaking into clean consumer installs.
 
-The workspace carries one audited dependency override. Jest 30.4.2 still
-constrains its reporting and coverage graph to minimatch releases that require
-`brace-expansion` 1.x/2.x, while GHSA-mh99-v99m-4gvg is fixed only in
-`brace-expansion` 5.0.8. The workspace therefore substitutes 5.0.8, verifies
-that substitution across the full Jest suite, and tracks removal when Jest
-adopts minimatch 10.2.5 or newer. Any future temporary override must likewise
-name an owner, evidence, review date, and upstream removal condition in the
-repository-health exception registry, and must verify the affected path.
+The workspace carries two narrow audited dependency overrides:
+
+- Jest 30.4.2 still constrains its reporting and coverage graph to minimatch
+  releases that require `brace-expansion` 1.x/2.x, while
+  GHSA-mh99-v99m-4gvg is fixed only in `brace-expansion` 5.0.8. The workspace
+  substitutes 5.0.8 until Jest adopts minimatch 10.2.5 or newer.
+- Stryker 9.6.1's current `typed-rest-client@2.3.1` dependency pins vulnerable
+  `qs@6.15.1` exactly. A parent-scoped substitution selects 6.15.3 until
+  upstream accepts 6.15.2 or newer. This replaces a fragile lock-only
+  substitution that an unrelated graph refresh could silently undo.
+
+Both substitutions are verified through the affected Jest/mutation paths and
+have owners, evidence, review dates, and upstream removal conditions in the
+repository-health exception registry. Any future temporary override must meet
+the same standard.
 
 The former AsyncAPI generator override was eliminated by replacing that
 dependency with a deterministic

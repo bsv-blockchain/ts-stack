@@ -37,3 +37,7 @@ trustPolicyIgnoreAfter: 525600
 # this narrow, tested substitution until Jest adopts minimatch 10.2.5 or newer.
 overrides:
   brace-expansion@<=5.0.7: 5.0.8
+  # Stryker's latest typed-rest-client 2.3.1 pins vulnerable qs 6.15.1
+  # exactly. Keep this parent-scoped substitution until upstream publishes a
+  # release that depends on qs 6.15.2 or newer.
+  'typed-rest-client@2.3.1>qs': 6.15.3

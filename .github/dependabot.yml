@@ -31,9 +31,11 @@ updates:
       # scripts/sync-versions.mjs and the release workflow. Ownership and
       # enforcement are recorded in projects.json#dependencyAutomation.
       - dependency-name: '@bsv/*'
-      # TypeScript 7 currently fails the workspace build, codegen, conformance,
-      # and multiple infrastructure lanes. It is a coordinated Wave 11
-      # migration, not a routine monthly update; see the owned exception.
+      # The native TypeScript 7 compiler is current. Future compiler majors
+      # remain coordinated migrations; patch/minor maintenance stays enabled.
+      - dependency-name: '@typescript/native'
+        update-types:
+          - version-update:semver-major
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
@@ -67,8 +69,10 @@ updates:
       # governance/repository-health/projects.json#dependencyAutomation.
       - dependency-name: '@bsv/*'
       # Keep every standalone service on the same coordinated compiler major
-      # as the root workspace. TypeScript 7 currently conflicts with ts-jest
-      # and is tracked as an explicit migration in issue #324.
+      # as the root workspace while allowing TypeScript 7 patch/minor updates.
+      - dependency-name: '@typescript/native'
+        update-types:
+          - version-update:semver-major
       - dependency-name: typescript
         update-types:
           - version-update:semver-major

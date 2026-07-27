@@ -29,6 +29,9 @@ jobs:
       - name: Test repository health controls
         run: node --test scripts/*.test.mjs
 
+      - name: Enforce the TypeScript compiler and tooling-API boundary
+        run: node scripts/typescript-toolchain.mjs
+
       - name: Enforce test, manual-suite, and conformance skip governance
         run: node scripts/test-governance.mjs
 
@@ -104,7 +107,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests)\.yml|governance/(repository-health|test-quality|mutation-testing)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|test-governance|mutation-testing|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|package-release-artifacts|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"
@@ -183,6 +186,18 @@ jobs:
           EXTRA=""
           if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
           pnpm -r --if-present --filter '!@bsv/ts-stack' $EXTRA run pack:check
+
+      - name: Dry-run the npm artifact supply-chain boundary
+        run: |
+          output="$RUNNER_TEMP/npm-release-artifacts"
+          node scripts/package-release-artifacts.mjs stage \
+            --output "$output" \
+            --package @bsv/sdk \
+            --include-published
+          node scripts/package-release-artifacts.mjs verify "$output/manifest.json"
+          node scripts/package-release-artifacts.mjs publish \
+            "$output/manifest.json" \
+            --dry-run
 
       - name: Lint changed packages
         env:

@@ -241,12 +241,19 @@ test('runtime, compiler, and database majors remain coordinated migrations', () 
   assert.equal(
     majorHolds.filter(dependency => dependency === 'typescript').length,
     2,
-    'TypeScript majors must be held in both root and standalone infra npm scopes'
+    'TypeScript compatibility-package majors must be held in root and infra npm scopes'
+  )
+  assert.equal(
+    majorHolds.filter(dependency => dependency === '@typescript/native').length,
+    2,
+    'Native TypeScript compiler majors must be held in root and infra npm scopes'
   )
   assert.ok(majorHolds.includes('node'), 'Node majors require an owned runtime migration')
   assert.ok(majorHolds.includes('mysql'), 'MySQL majors require an owned data migration')
   assert.ok(majorHolds.includes('mongo'), 'MongoDB majors require an owned data migration')
-  assert.ok(exceptions.exceptions.some(item => item.id === 'typescript-7-coordinated-migration'))
+  assert.ok(
+    exceptions.exceptions.some(item => item.id === 'typescript-7-compiler-api-compatibility')
+  )
 })
 
 test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen read-only', () => {

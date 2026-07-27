@@ -21,6 +21,7 @@ Quick reference material for API details and protocol indices.
 - **[Dependency and release policy](./dependency-policy.md)** — Runtime baseline, supply-chain controls, advisory handling, and release rules
 - **[Licensing policy](./licensing.md)** — Uniform Open BSV License Version 6 declarations, package files, and drift controls
 - **[July 2026 modernization release](./release-2026-07-25.md)** — Package versions, compatibility notes, and verification scope
+- **[TypeScript compiler and tooling boundary](./typescript-toolchain.md)** — Native TypeScript 7 CLI, compatibility API, enforcement, and upgrade policy
 - **TypeDoc API docs** — Per-package generated reference (see links below)
 
 ## Packages by Domain
