@@ -114,6 +114,21 @@ describe('WAB transport hardening', () => {
     expect(headers['X-Correlation-ID']).toMatch(/^[a-f0-9]{32}$/)
   })
 
+  it('replaces an unsafe correlation ID produced by a custom factory', async () => {
+    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const client = new WABClient('https://wab.example', {
+      fetch: fetchClient,
+      telemetry: {
+        correlationIdFactory: () => ' unsafe correlation '
+      }
+    })
+
+    await client.getInfo()
+
+    const headers = fetchClient.mock.calls[0][1]?.headers as Record<string, string>
+    expect(headers['X-Correlation-ID']).toMatch(/^[a-f0-9]{32}$/)
+  })
+
   it('distinguishes a WAB application 404 from an incompatible endpoint', async () => {
     let requestCorrelationId = ''
     const fetchClient = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {

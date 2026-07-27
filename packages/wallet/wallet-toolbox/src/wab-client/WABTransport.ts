@@ -205,7 +205,10 @@ export class WABTransport {
   }
 
   createCorrelationId (): string {
-    return this.telemetry.createCorrelationId()
+    const correlationId = this.telemetry.createCorrelationId()
+    return isSafeCorrelationId(correlationId)
+      ? correlationId
+      : new Telemetry().createCorrelationId()
   }
 
   async request<T>(path: string, options: WABRequestOptions): Promise<T> {
@@ -422,37 +425,43 @@ export class WABTransport {
     response: Response,
     responseContext: WABClientErrorOptions
   ): Promise<string> {
-    const contentLength = Number(response.headers.get('content-length'))
-    if (Number.isFinite(contentLength) && contentLength > this.maxResponseBytes) {
-      try {
-        await response.body?.cancel()
-      } catch {
-        // Best effort only.
-      }
-      throw new WABClientError(
-        'WAB_RESPONSE_TOO_LARGE',
-        'WAB response exceeded the configured size limit.',
-        false,
-        response.status,
-        responseContext
-      )
-    }
+    await this.rejectOversizedDeclaredResponse(response, responseContext)
 
     const reader = response.body?.getReader()
     if (reader == null) {
-      const bytes = new Uint8Array(await response.arrayBuffer())
-      if (bytes.byteLength > this.maxResponseBytes) {
-        throw new WABClientError(
-          'WAB_RESPONSE_TOO_LARGE',
-          'WAB response exceeded the configured size limit.',
-          false,
-          response.status,
-          responseContext
-        )
-      }
-      return new TextDecoder().decode(bytes)
+      return await this.readBoundedArrayBuffer(response, responseContext)
     }
 
+    return await this.readBoundedStream(reader, response, responseContext)
+  }
+
+  private async rejectOversizedDeclaredResponse (
+    response: Response,
+    responseContext: WABClientErrorOptions
+  ): Promise<void> {
+    const contentLength = Number(response.headers.get('content-length'))
+    if (!Number.isFinite(contentLength) || contentLength <= this.maxResponseBytes) return
+
+    await this.cancelResponseBody(response)
+    throw this.responseTooLargeError(response, responseContext)
+  }
+
+  private async readBoundedArrayBuffer (
+    response: Response,
+    responseContext: WABClientErrorOptions
+  ): Promise<string> {
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength > this.maxResponseBytes) {
+      throw this.responseTooLargeError(response, responseContext)
+    }
+    return new TextDecoder().decode(bytes)
+  }
+
+  private async readBoundedStream (
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    response: Response,
+    responseContext: WABClientErrorOptions
+  ): Promise<string> {
     const chunks: Uint8Array[] = []
     let total = 0
     while (true) {
@@ -461,22 +470,16 @@ export class WABTransport {
       if (value == null) continue
       total += value.byteLength
       if (total > this.maxResponseBytes) {
-        try {
-          await reader.cancel()
-        } catch {
-          // Best effort only.
-        }
-        throw new WABClientError(
-          'WAB_RESPONSE_TOO_LARGE',
-          'WAB response exceeded the configured size limit.',
-          false,
-          response.status,
-          responseContext
-        )
+        await this.cancelResponseReader(reader)
+        throw this.responseTooLargeError(response, responseContext)
       }
       chunks.push(value)
     }
 
+    return this.decodeChunks(chunks, total)
+  }
+
+  private decodeChunks (chunks: Uint8Array[], total: number): string {
     const bytes = new Uint8Array(total)
     let offset = 0
     for (const chunk of chunks) {
@@ -484,6 +487,37 @@ export class WABTransport {
       offset += chunk.byteLength
     }
     return new TextDecoder().decode(bytes)
+  }
+
+  private responseTooLargeError (
+    response: Response,
+    responseContext: WABClientErrorOptions
+  ): WABClientError {
+    return new WABClientError(
+      'WAB_RESPONSE_TOO_LARGE',
+      'WAB response exceeded the configured size limit.',
+      false,
+      response.status,
+      responseContext
+    )
+  }
+
+  private async cancelResponseBody (response: Response): Promise<void> {
+    try {
+      await response.body?.cancel()
+    } catch {
+      // Best effort only.
+    }
+  }
+
+  private async cancelResponseReader (
+    reader: ReadableStreamDefaultReader<Uint8Array>
+  ): Promise<void> {
+    try {
+      await reader.cancel()
+    } catch {
+      // Best effort only.
+    }
   }
 
   private captureFailure (
