@@ -437,17 +437,16 @@ function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, e
   return { excludedManifestPaths, manifestPaths }
 }
 
-function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, errors, today) {
-  validateDatedOwner(mutationPolicy, policy, 'mutation testing policy', errors, today)
-  const tool = mutationPolicy.tool ?? {}
-  const expectedTool = '@stryker-mutator/core'
+function validateMutationToolIdentity(tool, expectedTool, errors) {
   if (tool.package !== expectedTool || typeof tool.version !== 'string') {
     errors.push(`mutation testing policy must declare ${expectedTool} and its exact version`)
   }
   if (tool.rootCommand !== 'pnpm test:mutation --all') {
     errors.push('mutation testing policy rootCommand must be "pnpm test:mutation --all"')
   }
+}
 
+function validateMutationToolManifest(root, tool, expectedTool, errors) {
   const rootManifest = readJson(root, 'package.json')
   if (rootManifest.scripts?.['test:mutation'] !== 'node scripts/mutation-testing.mjs') {
     errors.push('root package.json must declare the governed test:mutation runner')
@@ -461,12 +460,17 @@ function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, 
       errors.push(`root package.json must pin ${dependency}@${tool.version}`)
     }
   }
+}
 
+function validateMutationToolFiles(root, tool, errors) {
   for (const field of ['config', 'targets', 'runner', 'ciWorkflow', 'scheduledWorkflow']) {
     if (typeof tool[field] !== 'string' || !fs.existsSync(path.join(root, tool[field]))) {
       errors.push(`mutation testing policy ${field} is missing`)
     }
   }
+}
+
+function validateMutationToolBudget(tool, propertyTesting, errors) {
   if (!Number.isSafeInteger(tool.reportRetentionDays) || tool.reportRetentionDays < 30) {
     errors.push('mutation testing reports must be retained for at least 30 days')
   }
@@ -480,87 +484,112 @@ function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, 
   ) {
     errors.push('mutation testing propertySeed must be a signed 32-bit integer')
   }
+}
 
-  const requiredWorkflowFragments = new Map([
+function validateMutationTool(root, tool, propertyTesting, errors) {
+  const expectedTool = '@stryker-mutator/core'
+  validateMutationToolIdentity(tool, expectedTool, errors)
+  validateMutationToolManifest(root, tool, expectedTool, errors)
+  validateMutationToolFiles(root, tool, errors)
+  validateMutationToolBudget(tool, propertyTesting, errors)
+}
+
+function validateMutationWorkflow(root, workflowPath, fragments, errors) {
+  if (typeof workflowPath !== 'string' || !fs.existsSync(path.join(root, workflowPath))) return
+  const workflow = fs.readFileSync(path.join(root, workflowPath), 'utf8')
+  for (const fragment of fragments) {
+    if (!workflow.includes(fragment)) {
+      errors.push(`mutation testing workflow ${workflowPath} lacks ${fragment}`)
+    }
+  }
+}
+
+function validateMutationWorkflows(root, tool, errors) {
+  const workflows = new Map([
     [tool.ciWorkflow, ['mutation-tests:', 'mutation-quality:', 'scripts/mutation-testing.mjs']],
     [
       tool.scheduledWorkflow,
       ['schedule:', 'workflow_dispatch:', 'matrix:', 'scripts/mutation-testing.mjs']
     ]
   ])
-  for (const [workflowPath, fragments] of requiredWorkflowFragments) {
-    if (typeof workflowPath !== 'string' || !fs.existsSync(path.join(root, workflowPath))) continue
-    const workflow = fs.readFileSync(path.join(root, workflowPath), 'utf8')
-    for (const fragment of fragments) {
-      if (!workflow.includes(fragment)) {
-        errors.push(`mutation testing workflow ${workflowPath} lacks ${fragment}`)
-      }
+  for (const [workflowPath, fragments] of workflows) {
+    validateMutationWorkflow(root, workflowPath, fragments, errors)
+  }
+}
+
+function validateMutationSuite(target, suite, label, errors) {
+  if (suite === undefined) {
+    errors.push(`${label} references an unregistered property suite ${target.propertyTest}`)
+    return
+  }
+  for (const field of ['manifest', 'risk', 'boundary']) {
+    if (target[field] !== suite[field]) {
+      errors.push(`${label} ${field} must match its property suite`)
     }
   }
+}
 
-  const definitions = buildMutationTargets(root)
-  const suites = new Map(propertyTesting.suites.map(suite => [suite.path, suite]))
-  const registeredIds = new Set()
-  const registeredSuites = new Set()
-  for (const target of mutationPolicy.targets ?? []) {
-    const label = `mutation target ${target.id}`
-    if (registeredIds.has(target.id)) errors.push(`duplicate ${label}`)
-    registeredIds.add(target.id)
-    if (registeredSuites.has(target.propertyTest)) {
-      errors.push(`duplicate mutation property suite ${target.propertyTest}`)
-    }
-    registeredSuites.add(target.propertyTest)
+function validateMutationThresholds(target, label, errors) {
+  if (
+    !Number.isFinite(target.minimumScore) ||
+    target.minimumScore < 60 ||
+    target.minimumScore > 100
+  ) {
+    errors.push(`${label} minimumScore must be between 60 and 100`)
+  }
+  if (target.maximumNoCoverage !== 0 || target.maximumInvalid !== 0) {
+    errors.push(`${label} must reject every no-coverage and invalid mutant`)
+  }
+}
 
-    const definition = definitions[target.id]
-    if (definition === undefined) {
-      errors.push(`${label} has no executable target definition`)
-      continue
-    }
-    const suite = suites.get(target.propertyTest)
-    if (suite === undefined) {
-      errors.push(`${label} references an unregistered property suite ${target.propertyTest}`)
-    } else {
-      for (const field of ['manifest', 'risk', 'boundary']) {
-        if (target[field] !== suite[field]) {
-          errors.push(`${label} ${field} must match its property suite`)
-        }
-      }
-    }
-    if (
-      definition.manifest !== target.manifest ||
-      definition.propertyTest !== target.propertyTest
-    ) {
-      errors.push(`${label} executable definition does not match its policy registration`)
-    }
-    if (
-      !Number.isFinite(target.minimumScore) ||
-      target.minimumScore < 60 ||
-      target.minimumScore > 100
-    ) {
-      errors.push(`${label} minimumScore must be between 60 and 100`)
-    }
-    if (target.maximumNoCoverage !== 0 || target.maximumInvalid !== 0) {
-      errors.push(`${label} must reject every no-coverage and invalid mutant`)
-    }
-    if (!Array.isArray(definition.mutate) || definition.mutate.length === 0) {
-      errors.push(`${label} must declare at least one mutation scope`)
-    }
-    for (const mutationScope of definition.mutate ?? []) {
-      const sourcePath = mutationScope.replace(/:\d+(?:-\d+)?$/, '')
-      if (!fs.existsSync(path.join(root, definition.packageDirectory, sourcePath))) {
-        errors.push(`${label} mutation scope is missing ${mutationScope}`)
-      }
-    }
-    const configFile =
-      definition.runnerOptions?.jest?.configFile ?? definition.runnerOptions?.vitest?.configFile
-    if (
-      typeof configFile !== 'string' ||
-      !fs.existsSync(path.join(root, definition.packageDirectory, configFile))
-    ) {
-      errors.push(`${label} test-runner config is missing`)
+function validateMutationScope(root, definition, label, errors) {
+  if (!Array.isArray(definition.mutate) || definition.mutate.length === 0) {
+    errors.push(`${label} must declare at least one mutation scope`)
+  }
+  for (const mutationScope of definition.mutate ?? []) {
+    const sourcePath = mutationScope.replace(/:\d+(?:-\d+)?$/, '')
+    if (!fs.existsSync(path.join(root, definition.packageDirectory, sourcePath))) {
+      errors.push(`${label} mutation scope is missing ${mutationScope}`)
     }
   }
+}
 
+function validateMutationDefinition(root, target, definition, label, errors) {
+  if (definition.manifest !== target.manifest || definition.propertyTest !== target.propertyTest) {
+    errors.push(`${label} executable definition does not match its policy registration`)
+  }
+  validateMutationThresholds(target, label, errors)
+  validateMutationScope(root, definition, label, errors)
+  const configFile =
+    definition.runnerOptions?.jest?.configFile ?? definition.runnerOptions?.vitest?.configFile
+  if (
+    typeof configFile !== 'string' ||
+    !fs.existsSync(path.join(root, definition.packageDirectory, configFile))
+  ) {
+    errors.push(`${label} test-runner config is missing`)
+  }
+}
+
+function validateMutationTarget(root, target, context, errors) {
+  const label = `mutation target ${target.id}`
+  if (context.registeredIds.has(target.id)) errors.push(`duplicate ${label}`)
+  context.registeredIds.add(target.id)
+  if (context.registeredSuites.has(target.propertyTest)) {
+    errors.push(`duplicate mutation property suite ${target.propertyTest}`)
+  }
+  context.registeredSuites.add(target.propertyTest)
+
+  const definition = context.definitions[target.id]
+  if (definition === undefined) {
+    errors.push(`${label} has no executable target definition`)
+    return
+  }
+  validateMutationSuite(target, context.suites.get(target.propertyTest), label, errors)
+  validateMutationDefinition(root, target, definition, label, errors)
+}
+
+function validateMutationCompleteness(propertyTesting, context, errors) {
+  const { definitions, registeredIds, registeredSuites } = context
   for (const id of Object.keys(definitions)) {
     if (!registeredIds.has(id)) errors.push(`executable mutation target ${id} is unregistered`)
   }
@@ -569,6 +598,25 @@ function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, 
       errors.push(`property suite ${suite.path} lacks mutation validation`)
     }
   }
+}
+
+function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, errors, today) {
+  validateDatedOwner(mutationPolicy, policy, 'mutation testing policy', errors, today)
+  const tool = mutationPolicy.tool ?? {}
+  validateMutationTool(root, tool, propertyTesting, errors)
+  validateMutationWorkflows(root, tool, errors)
+
+  const context = {
+    definitions: buildMutationTargets(root),
+    registeredIds: new Set(),
+    registeredSuites: new Set(),
+    suites: new Map(propertyTesting.suites.map(suite => [suite.path, suite]))
+  }
+  for (const target of mutationPolicy.targets ?? []) {
+    validateMutationTarget(root, target, context, errors)
+  }
+  validateMutationCompleteness(propertyTesting, context, errors)
+  const { registeredIds } = context
   return registeredIds.size
 }
 
