@@ -5,21 +5,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import {
-  LICENSE_FILE,
-  REPOSITORY_ROOT
-} from './package-license-policy.mjs'
+import { LICENSE_FILE, REPOSITORY_ROOT } from './package-license-policy.mjs'
 
 const registry = JSON.parse(
-  fs.readFileSync(
-    path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json'),
-    'utf8'
-  )
+  fs.readFileSync(path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json'), 'utf8')
 )
 const packages = registry.projects.filter(project => project.release === 'npm-oidc')
-const expectedLicenseSize = fs.statSync(
-  path.join(REPOSITORY_ROOT, LICENSE_FILE)
-).size
+const expectedLicenseSize = fs.statSync(path.join(REPOSITORY_ROOT, LICENSE_FILE)).size
 const execFileAsync = promisify(execFile)
 
 async function verifyPackage(project) {
@@ -36,13 +28,11 @@ async function verifyPackage(project) {
         timeout: 120_000
       }
     )
-    result = JSON.parse(
-      stdout
-    )
+    result = JSON.parse(stdout)
   } catch (error) {
     return [
       `${project.path} could not be dry-packed: ` +
-      `${error.stderr?.toString().trim() || error.message}`
+        `${error.stderr?.toString().trim() || error.message}`
     ]
   }
 
@@ -54,25 +44,23 @@ async function verifyPackage(project) {
   if (packed.name !== project.name) {
     errors.push(
       `${project.path} packed as ${JSON.stringify(packed.name)}, expected ` +
-      JSON.stringify(project.name)
+        JSON.stringify(project.name)
     )
   }
   const licenses = packed.files?.filter(file => file.path === LICENSE_FILE) ?? []
   if (licenses.length !== 1) {
-    errors.push(
-      `${project.path} tarball must contain exactly one root ${LICENSE_FILE}`
-    )
+    errors.push(`${project.path} tarball must contain exactly one root ${LICENSE_FILE}`)
   } else if (licenses[0].size !== expectedLicenseSize) {
     errors.push(
       `${project.path} tarball ${LICENSE_FILE} has size ${licenses[0].size}, ` +
-      `expected ${expectedLicenseSize}`
+        `expected ${expectedLicenseSize}`
     )
   }
   return errors
 }
 
 async function mapWithConcurrency(items, concurrency, operation) {
-  const results = new Array(items.length)
+  const results = Array.from({ length: items.length })
   let next = 0
   async function worker() {
     while (next < items.length) {
@@ -81,18 +69,11 @@ async function mapWithConcurrency(items, concurrency, operation) {
       results[index] = await operation(items[index])
     }
   }
-  await Promise.all(
-    Array.from(
-      { length: Math.min(concurrency, items.length) },
-      () => worker()
-    )
-  )
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()))
   return results
 }
 
-const errors = (
-  await mapWithConcurrency(packages, 8, verifyPackage)
-).flat()
+const errors = (await mapWithConcurrency(packages, 8, verifyPackage)).flat()
 if (packages.length !== 30) {
   errors.push(`Expected 30 public npm packages, found ${packages.length}`)
 }
@@ -103,6 +84,6 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Verified ${packages.length} public package tarballs include the canonical ` +
-    `${LICENSE_FILE}.`
+      `${LICENSE_FILE}.`
   )
 }

@@ -7,12 +7,7 @@ import {
   CreateActionOptions,
   WalletCounterparty
 } from '@bsv/sdk'
-import {
-  randomBytesBase64,
-  Setup,
-  SetupWallet,
-  wait
-} from '@bsv/wallet-toolbox'
+import { randomBytesBase64, Setup, SetupWallet, wait } from '@bsv/wallet-toolbox'
 
 /**
  * @param {WalletProtocol} protocolID - The protocol ID to use.
@@ -234,14 +229,7 @@ export async function redeemPushDropToken(
 
   const t = new PushDrop(setup.wallet)
 
-  const unlock = t.unlock(
-    args.protocolID,
-    args.keyID,
-    fromIdentityKey,
-    'all',
-    false,
-    satoshis
-  )
+  const unlock = t.unlock(args.protocolID, args.keyID, fromIdentityKey, 'all', false, satoshis)
 
   const label = 'redeemPushDropToken'
 

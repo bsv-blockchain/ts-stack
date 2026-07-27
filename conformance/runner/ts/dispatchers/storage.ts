@@ -30,18 +30,16 @@ import { StorageUtils } from '@bsv/sdk/storage'
 
 const { getURLForHash, getHashFromURL, isValidURL } = StorageUtils
 
-export const categories: ReadonlyArray<string> = [
-  'uhrp-http'
-]
+export const categories: ReadonlyArray<string> = ['uhrp-http']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getBool (m: Record<string, unknown>, key: string): boolean {
+function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
 }
 
@@ -49,7 +47,7 @@ function getBool (m: Record<string, unknown>, key: string): boolean {
  * Validates an HTTP-shaped vector's method, path, and expected status code
  * against the UHRP HTTP spec.
  */
-function validateHttpShape (
+function validateHttpShape(
   input: Record<string, unknown>,
   expected: Record<string, unknown>,
   expectedMethod: string,
@@ -72,7 +70,7 @@ function validateHttpShape (
  * storage.uhrp-http.1
  * POST /upload: initiate file upload — shape check.
  */
-function dispatchUploadRequest (
+function dispatchUploadRequest(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -93,7 +91,7 @@ function dispatchUploadRequest (
  * storage.uhrp-http.2
  * POST /upload: unauthenticated — 401.
  */
-function dispatchUploadUnauthenticated (
+function dispatchUploadUnauthenticated(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -105,7 +103,7 @@ function dispatchUploadUnauthenticated (
  * storage.uhrp-http.3
  * POST /upload: missing fileSize — 400.
  */
-function dispatchUploadMissingField (
+function dispatchUploadMissingField(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -121,7 +119,7 @@ function dispatchUploadMissingField (
  * storage.uhrp-http.4
  * GET /find: resolve UHRP URL — 200 with body shape.
  */
-function dispatchFindRequest (
+function dispatchFindRequest(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -139,7 +137,7 @@ function dispatchFindRequest (
  * storage.uhrp-http.5
  * GET /find: bare UHRP URL accepted — 200.
  */
-function dispatchFindBareUrl (
+function dispatchFindBareUrl(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -151,7 +149,7 @@ function dispatchFindBareUrl (
  * storage.uhrp-http.6
  * GET /find: unknown UHRP URL — 404.
  */
-function dispatchFindNotFound (
+function dispatchFindNotFound(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -163,7 +161,7 @@ function dispatchFindNotFound (
  * storage.uhrp-http.7
  * GET /find: missing uhrpUrl param — 400.
  */
-function dispatchFindMissingParam (
+function dispatchFindMissingParam(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -178,7 +176,7 @@ function dispatchFindMissingParam (
  * storage.uhrp-http.8
  * GET /list: list hosted files — 200 with pagination body shape.
  */
-function dispatchListRequest (
+function dispatchListRequest(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -195,7 +193,7 @@ function dispatchListRequest (
  * storage.uhrp-http.9
  * GET /list: unauthenticated — 401.
  */
-function dispatchListUnauthenticated (
+function dispatchListUnauthenticated(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -208,7 +206,7 @@ function dispatchListUnauthenticated (
  * GET /list: pagination constants — pure schema/structural check.
  * Fully exercisable without a server.
  */
-function dispatchListPaginationSchema (
+function dispatchListPaginationSchema(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -238,7 +236,7 @@ function dispatchListPaginationSchema (
  * storage.uhrp-http.11
  * POST /renew: renew advertisement — 200 with body shape.
  */
-function dispatchRenewRequest (
+function dispatchRenewRequest(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -257,7 +255,7 @@ function dispatchRenewRequest (
  * storage.uhrp-http.12
  * POST /renew: unauthenticated — 401.
  */
-function dispatchRenewUnauthenticated (
+function dispatchRenewUnauthenticated(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -269,7 +267,7 @@ function dispatchRenewUnauthenticated (
  * storage.uhrp-http.13
  * POST /renew: unknown UHRP URL — 404.
  */
-function dispatchRenewNotFound (
+function dispatchRenewNotFound(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -282,7 +280,7 @@ function dispatchRenewNotFound (
  * UHRP URL format: Base58Check with prefix ce00.
  * Fully exercisable client-side using StorageUtils.
  */
-function dispatchUhrpUrlFormat (
+function dispatchUhrpUrlFormat(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -317,7 +315,7 @@ function dispatchUhrpUrlFormat (
  * Upload PUT to uploadURL — structural/schema check only.
  * This describes a two-step client workflow (POST /upload → PUT to uploadURL).
  */
-function dispatchUploadPutSchema (
+function dispatchUploadPutSchema(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -337,7 +335,7 @@ function dispatchUploadPutSchema (
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -348,116 +346,96 @@ export function dispatch (
   throw new Error(`storage dispatcher: unknown category '${category}'`)
 }
 
-function dispatchUhrpHttp (
+function hasAuthorizationHeader(input: Record<string, unknown>): boolean {
+  const headers = (input['headers'] ?? {}) as Record<string, unknown>
+  return Object.keys(headers).some(key => key.toLowerCase() === 'authorization')
+}
+
+function dispatchUploadPath(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
+  if (!hasAuthorizationHeader(input)) {
+    dispatchUploadUnauthenticated(input, expected)
+    return
+  }
+  const body = (input['body'] ?? {}) as Record<string, unknown>
+  if (body['fileSize'] === undefined) {
+    dispatchUploadMissingField(input, expected)
+    return
+  }
+  dispatchUploadRequest(input, expected)
+}
+
+function dispatchFindPath(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const queryParams = (input['queryParams'] ?? {}) as Record<string, unknown>
+  if (queryParams['uhrpUrl'] === undefined) {
+    dispatchFindMissingParam(input, expected)
+  } else if (expected['status'] === 404) {
+    dispatchFindNotFound(input, expected)
+  } else if ('body_shape' in expected) {
+    dispatchFindRequest(input, expected)
+  } else {
+    dispatchFindBareUrl(input, expected)
+  }
+}
+
+function dispatchListPath(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  if (hasAuthorizationHeader(input)) {
+    dispatchListRequest(input, expected)
+  } else {
+    dispatchListUnauthenticated(input, expected)
+  }
+}
+
+function dispatchRenewPath(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  if (!hasAuthorizationHeader(input)) {
+    dispatchRenewUnauthenticated(input, expected)
+  } else if (expected['status'] === 404) {
+    dispatchRenewNotFound(input, expected)
+  } else {
+    dispatchRenewRequest(input, expected)
+  }
+}
+
+function dispatchUhrpHttp(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const method = getString(input, 'method')
   const path = getString(input, 'path')
   const schemaCheck = getBool(input, '_schema_check')
 
-  // ── schema / structural-only vectors ─────────────────────────────────────────
-
-  // storage.uhrp-http.10: pagination constants
   if ('limit_default' in input || 'limit_max' in input) {
     dispatchListPaginationSchema(input, expected)
     return
   }
-
-  // storage.uhrp-http.14: UHRP URL format
   if (schemaCheck && 'examples' in input && 'encoding' in expected) {
     dispatchUhrpUrlFormat(input, expected)
     return
   }
-
-  // storage.uhrp-http.15: upload PUT schema
   if (schemaCheck && method === 'PUT') {
     dispatchUploadPutSchema(input, expected)
     return
   }
 
-  // ── HTTP-shaped vectors (all best-effort, server-only) ────────────────────────
-
   if (path === '/upload' && method === 'POST') {
-    const headers = (input['headers'] ?? {}) as Record<string, unknown>
-    const lowerHeaders: Record<string, string> = {}
-    for (const [k, v] of Object.entries(headers)) {
-      lowerHeaders[k.toLowerCase()] = `${v}`
-    }
-    const hasAuth = lowerHeaders['authorization'] !== undefined
-
-    if (hasAuth) {
-      const body = (input['body'] ?? {}) as Record<string, unknown>
-      if (body['fileSize'] === undefined) {
-        // missing fileSize
-        dispatchUploadMissingField(input, expected)
-      } else {
-        // happy path
-        dispatchUploadRequest(input, expected)
-      }
-    } else {
-      // unauthenticated
-      dispatchUploadUnauthenticated(input, expected)
-    }
+    dispatchUploadPath(input, expected)
     return
   }
-
   if (path === '/find' && method === 'GET') {
-    const queryParams = (input['queryParams'] ?? {}) as Record<string, unknown>
-    const status = expected['status'] as number | undefined
-
-    if (queryParams['uhrpUrl'] === undefined) {
-      dispatchFindMissingParam(input, expected)
-    } else if (status === 404) {
-      dispatchFindNotFound(input, expected)
-    } else if ('body_shape' in expected) {
-      // Vector 4 (happy path with body_shape)
-      dispatchFindRequest(input, expected)
-    } else {
-      // Vector 5 (bare URL)
-      dispatchFindBareUrl(input, expected)
-    }
+    dispatchFindPath(input, expected)
     return
   }
-
   if (path === '/list' && method === 'GET') {
-    const headers = (input['headers'] ?? {}) as Record<string, unknown>
-    const lowerHeaders: Record<string, string> = {}
-    for (const [k, v] of Object.entries(headers)) {
-      lowerHeaders[k.toLowerCase()] = `${v}`
-    }
-    const hasAuth = lowerHeaders['authorization'] !== undefined
-
-    if (hasAuth) {
-      dispatchListRequest(input, expected)
-    } else {
-      dispatchListUnauthenticated(input, expected)
-    }
+    dispatchListPath(input, expected)
     return
   }
-
   if (path === '/renew' && method === 'POST') {
-    const headers = (input['headers'] ?? {}) as Record<string, unknown>
-    const lowerHeaders: Record<string, string> = {}
-    for (const [k, v] of Object.entries(headers)) {
-      lowerHeaders[k.toLowerCase()] = `${v}`
-    }
-    const hasAuth = lowerHeaders['authorization'] !== undefined
-    const status = expected['status'] as number | undefined
-
-    if (!hasAuth) {
-      dispatchRenewUnauthenticated(input, expected)
-    } else if (status === 404) {
-      dispatchRenewNotFound(input, expected)
-    } else {
-      dispatchRenewRequest(input, expected)
-    }
+    dispatchRenewPath(input, expected)
     return
   }
 
-  // Fallback: unrecognised vector shape — make a minimal assertion
-  // All storage vectors are best-effort so this path should never be reached
-  // from a required vector.
   expect(input).toBeDefined()
   expect(expected).toBeDefined()
 }

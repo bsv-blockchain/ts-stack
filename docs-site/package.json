@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "node scripts/build-manifest.mjs && vite build && vite build --ssr src/entry-server.tsx --outDir .ssr && node scripts/prerender.mjs && node scripts/copy-docs-assets.mjs && test -f dist/index.html && pagefind --site dist --output-path dist/_pagefind && node scripts/check-built-links.mjs",
     "preview": "vite preview",
-    "validate": "node scripts/validate-frontmatter.mjs && node scripts/check-links.mjs"
+    "validate": "node scripts/validate-frontmatter.mjs && node scripts/check-links.mjs",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"scripts/**/*.mjs\" \"vite.config.ts\" \"tsconfig.json\" \"package.json\" \"README.md\"",
+    "lint": "oxlint src scripts vite.config.ts --deny-warnings",
+    "test": "node --test scripts/*.test.mjs",
+    "typecheck": "node scripts/build-manifest.mjs && tsc --noEmit --pretty false"
   },
   "dependencies": {
     "@mdx-js/react": "^3.1.1",
@@ -25,7 +29,9 @@
     "ajv-formats": "^3.0.1",
     "gray-matter": "^4.0.3",
     "mermaid": "^11.16.0",
+    "oxlint": "^1.75.0",
     "pagefind": "^1.5.2",
+    "prettier": "^3.9.6",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-slug": "^6.0.0",
     "remark-frontmatter": "^5.0.0",

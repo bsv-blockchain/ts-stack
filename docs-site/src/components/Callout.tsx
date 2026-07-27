@@ -11,7 +11,7 @@ const LABELS: Record<Kind, string> = {
   warning: 'Warning',
   danger: 'Danger',
   error: 'Error',
-  example: 'Example',
+  example: 'Example'
 }
 
 interface Props {

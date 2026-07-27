@@ -5,7 +5,9 @@ import RootLayout from './layouts/RootLayout'
 function page(factory: () => Promise<{ default: ComponentType }>) {
   const Comp = lazy(factory)
   return (
-    <Suspense fallback={<div style={{ padding: '2rem', color: 'var(--dev-fg-muted)' }}>Loading…</div>}>
+    <Suspense
+      fallback={<div style={{ padding: '2rem', color: 'var(--dev-fg-muted)' }}>Loading…</div>}
+    >
       <Comp />
     </Suspense>
   )
@@ -46,8 +48,8 @@ export const routes: RouteObject[] = [
       ...docRoutes,
       {
         path: '*',
-        element: page(() => import('./pages/404')),
-      },
-    ],
-  },
+        element: page(() => import('./pages/404'))
+      }
+    ]
+  }
 ]

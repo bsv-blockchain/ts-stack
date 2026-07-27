@@ -20,18 +20,16 @@
 
 import { expect } from '@jest/globals'
 
-export const categories: ReadonlyArray<string> = [
-  'brc31-handshake'
-]
+export const categories: ReadonlyArray<string> = ['brc31-handshake']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getBool (m: Record<string, unknown>, key: string): boolean {
+function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
 }
 
@@ -47,7 +45,7 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
  *   messageType, version, identityKey (as required fields)
  * Optional: nonce, initialNonce, payload (array), signature (array)
  */
-function dispatchInitialRequest (
+function dispatchInitialRequest(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -96,7 +94,7 @@ function dispatchInitialRequest (
  * Phase 1 step 2: server initialResponse — required headers list check.
  * This is a structural check of the *expected* header list from the spec.
  */
-function dispatchInitialResponseHeaders (
+function dispatchInitialResponseHeaders(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -128,7 +126,7 @@ function dispatchInitialResponseHeaders (
  * Server-only behaviour, demoted to best-effort.
  * This function is called only if the vector was NOT demoted (shouldn't happen).
  */
-function dispatchMissingHeaderError (
+function dispatchMissingHeaderError(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -145,7 +143,7 @@ function dispatchMissingHeaderError (
  * Phase 2: general request — response headers shape check.
  * Server-only, demoted to best-effort.
  */
-function dispatchGeneralRequestHeaders (
+function dispatchGeneralRequestHeaders(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -159,7 +157,7 @@ function dispatchGeneralRequestHeaders (
  * auth.brc31-handshake.7
  * Missing signature → 401.  Server-only, demoted to best-effort.
  */
-function dispatchMissingSignatureError (
+function dispatchMissingSignatureError(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -172,7 +170,7 @@ function dispatchMissingSignatureError (
  * auth.brc31-handshake.8
  * Bad signature → 401.  Server-only, demoted to best-effort.
  */
-function dispatchBadSignatureError (
+function dispatchBadSignatureError(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -186,7 +184,7 @@ function dispatchBadSignatureError (
  * auth.brc31-handshake.9
  * allowUnauthenticated pass-through.  Server-only, demoted to best-effort.
  */
-function dispatchAllowUnauthenticated (
+function dispatchAllowUnauthenticated(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -197,7 +195,7 @@ function dispatchAllowUnauthenticated (
  * auth.brc31-handshake.10
  * Certificate timeout → 408.  Server-only, demoted to best-effort.
  */
-function dispatchCertificateTimeout (
+function dispatchCertificateTimeout(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -210,7 +208,7 @@ function dispatchCertificateTimeout (
  * auth.brc31-handshake.11
  * requestedCertificates header present.  Server-only, demoted to best-effort.
  */
-function dispatchRequestedCertificatesHeader (
+function dispatchRequestedCertificatesHeader(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -223,7 +221,7 @@ function dispatchRequestedCertificatesHeader (
  * AuthMessage schema check — pure structural check that can be done client-side.
  * Validates the AuthMessage field names against the SDK types and spec.
  */
-function dispatchAuthMessageSchema (
+function dispatchAuthMessageSchema(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -270,7 +268,7 @@ function dispatchAuthMessageSchema (
  * Do NOT change expected.requestId_base64_length — it is correct.
  * The example string should be updated to encode exactly 32 bytes.
  */
-function dispatchRequestIdFormat (
+function dispatchRequestIdFormat(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -301,7 +299,7 @@ function dispatchRequestIdFormat (
  * auth.brc31-handshake.14
  * Replay prevention: reused nonce rejected.  Server-only, demoted to best-effort.
  */
-function dispatchReplayPrevention (
+function dispatchReplayPrevention(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -315,7 +313,7 @@ function dispatchReplayPrevention (
  * PubKeyHex format: 66 hex chars, prefix 02 or 03.
  * Pure string/regex check — fully exercisable client-side.
  */
-function dispatchPubKeyHexFormat (
+function dispatchPubKeyHexFormat(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -342,7 +340,7 @@ function dispatchPubKeyHexFormat (
  * auth.brc31-handshake.16
  * Response signing failure → 500.  Server-only, demoted to best-effort.
  */
-function dispatchResponseSigningFailure (
+function dispatchResponseSigningFailure(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -353,7 +351,7 @@ function dispatchResponseSigningFailure (
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -364,7 +362,7 @@ export function dispatch (
   throw new Error(`auth dispatcher: unknown category '${category}'`)
 }
 
-function dispatchBRC31Handshake (
+function dispatchBRC31Handshake(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -439,7 +437,12 @@ function dispatchBRC31Handshake (
     }
   }
 
-  if (path === '/api/resource' || path === '/api/public-resource' || path === '/sendMessage' || (method !== '' && path !== '' && path !== '/.well-known/auth')) {
+  if (
+    path === '/api/resource' ||
+    path === '/api/public-resource' ||
+    path === '/sendMessage' ||
+    (method !== '' && path !== '' && path !== '/.well-known/auth')
+  ) {
     const expectedStatus = expected['status'] as number | undefined
 
     // allowUnauthenticated (vector 9)
@@ -449,7 +452,10 @@ function dispatchBRC31Handshake (
     }
 
     // Missing signature → 401 (vector 7)
-    if (expectedStatus === 401 && !('x-bsv-auth-signature' in ((input['headers'] as Record<string, unknown>) ?? {}))) {
+    if (
+      expectedStatus === 401 &&
+      !('x-bsv-auth-signature' in ((input['headers'] as Record<string, unknown>) ?? {}))
+    ) {
       dispatchMissingSignatureError(input, expected)
       return
     }

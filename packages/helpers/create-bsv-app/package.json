@@ -58,6 +58,10 @@
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
     "directory": "packages/helpers/create-bsv-app"
   },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
   "keywords": [
     "bsv",
     "bitcoin",

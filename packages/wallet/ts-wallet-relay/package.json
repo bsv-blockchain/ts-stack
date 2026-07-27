@@ -9,6 +9,14 @@
     "access": "public"
   },
   "description": "BSV mobile wallet relay — relay server and pairing client",
+  "author": "BSV Blockchain Association",
+  "keywords": [
+    "bsv",
+    "wallet",
+    "relay",
+    "mobile",
+    "pairing"
+  ],
   "type": "module",
   "exports": {
     ".": {

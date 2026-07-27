@@ -7,14 +7,20 @@ From the repository root:
 
 ```sh
 pnpm --filter docs-site dev
+pnpm --filter docs-site format:check
+pnpm --filter docs-site lint
+pnpm --filter docs-site test
+pnpm --filter docs-site typecheck
 pnpm --filter docs-site validate
 pnpm --filter docs-site build
 ```
 
-`validate` checks frontmatter and source links. `build` generates the manifest,
-builds the browser and server-rendered applications, prerenders every route,
-copies owned documentation assets, builds search data, and checks the final
-site's links.
+`test` covers the path and URL policy used by prerendering and built-link
+validation. `typecheck` regenerates the content manifest before checking the
+application. `validate` checks frontmatter and source links. `build` generates
+the manifest, builds the browser and server-rendered applications, prerenders
+every route, copies owned documentation assets, builds search data, and checks
+the final site's links.
 
 Package versions, runtime support, conformance facts, and release instructions
 should come from repository-owned manifests and generated data rather than

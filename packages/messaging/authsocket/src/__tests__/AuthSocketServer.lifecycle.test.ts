@@ -86,8 +86,7 @@ describe('AuthSocketServer lifecycle', () => {
 
     await connectionListener(rawSocket)
     rawListeners.get('disconnect')?.()
-    const disconnectedGeneralMessageListener =
-      mockPeer.listenForGeneralMessages.mock.calls[1][0]
+    const disconnectedGeneralMessageListener = mockPeer.listenForGeneralMessages.mock.calls[1][0]
 
     expect(() => {
       disconnectedGeneralMessageListener(

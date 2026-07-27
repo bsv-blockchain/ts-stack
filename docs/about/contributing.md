@@ -118,8 +118,17 @@ pnpm lint
 pnpm --filter @bsv/sdk exec oxlint --fix src
 ```
 
-Uses **Oxlint** for fast, consistent TypeScript checks. Errors fail CI; warnings
-remain visible while the inherited warning backlog is reduced.
+Uses **Oxlint** for fast, consistent TypeScript checks. Errors and warnings fail
+CI for every affected package.
+
+### Check Formatting
+
+```bash
+pnpm format:check
+```
+
+The formatting check is read-only. Run the relevant package's Prettier command
+with `--write` before submitting when it reports a mismatch.
 
 ### Build Packages
 
@@ -267,6 +276,8 @@ Run before submitting:
 pnpm test
 pnpm conformance
 pnpm lint
+pnpm format:check
+pnpm health:check
 ```
 
 ## Reporting Issues

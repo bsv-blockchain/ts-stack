@@ -37,24 +37,25 @@ cat .env
 [Return To Top](./README.md)
 
 <!--#region ts2md-api-merged-here-->
+
 ### API
 
 Links: [API](#api), [Functions](#functions)
 
 #### Functions
 
-| |
-| --- |
-| [backup](#function-backup) |
-| [backupToSQLite](#function-backuptosqlite) |
-| [backupWalletClient](#function-backupwalletclient) |
-| [balanceSpecOp](#function-balancespecop) |
-| [balances](#function-balances) |
-| [makeEnv](#function-makeenv) |
-| [runArgv2Function](#function-runargv2function) |
-| [swapActive](#function-swapactive) |
+|                                                            |
+| ---------------------------------------------------------- |
+| [backup](#function-backup)                                 |
+| [backupToSQLite](#function-backuptosqlite)                 |
+| [backupWalletClient](#function-backupwalletclient)         |
+| [balanceSpecOp](#function-balancespecop)                   |
+| [balances](#function-balances)                             |
+| [makeEnv](#function-makeenv)                               |
+| [runArgv2Function](#function-runargv2function)             |
+| [swapActive](#function-swapactive)                         |
 | [swapActiveWalletClient](#function-swapactivewalletclient) |
-| [walletBalance](#function-walletbalance) |
+| [walletBalance](#function-walletbalance)                   |
 
 Links: [API](#api), [Functions](#functions)
 
@@ -64,8 +65,8 @@ Links: [API](#api), [Functions](#functions)
 
 ```ts
 export async function backup(): Promise<void> {
-    const env = Setup.getEnv("test");
-    await backupWalletClient(env, env.identityKey);
+  const env = Setup.getEnv('test')
+  await backupWalletClient(env, env.identityKey)
 }
 ```
 
@@ -74,21 +75,26 @@ See also: [backupWalletClient](./README.md#function-backupwalletclient)
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: backupToSQLite
 
 ```ts
-export async function backupToSQLite(setup: SetupWallet, filePath?: string, databaseName?: string): Promise<void> {
-    const env = Setup.getEnv(setup.chain);
-    filePath ||= `backup_${setup.identityKey}.sqlite`;
-    databaseName ||= `${setup.identityKey} backup`;
-    const backup = await Setup.createStorageKnex({
-        env,
-        knex: Setup.createSQLiteKnex(filePath),
-        databaseName,
-        rootKeyHex: setup.keyDeriver.rootKey.toHex()
-    });
-    await setup.storage.addWalletStorageProvider(backup);
-    await setup.storage.updateBackups();
+export async function backupToSQLite(
+  setup: SetupWallet,
+  filePath?: string,
+  databaseName?: string
+): Promise<void> {
+  const env = Setup.getEnv(setup.chain)
+  filePath ||= `backup_${setup.identityKey}.sqlite`
+  databaseName ||= `${setup.identityKey} backup`
+  const backup = await Setup.createStorageKnex({
+    env,
+    knex: Setup.createSQLiteKnex(filePath),
+    databaseName,
+    rootKeyHex: setup.keyDeriver.rootKey.toHex()
+  })
+  await setup.storage.addWalletStorageProvider(backup)
+  await setup.storage.updateBackups()
 }
 ```
 
@@ -97,16 +103,17 @@ See also: [backup](./README.md#function-backup)
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: backupWalletClient
 
 ```ts
 export async function backupWalletClient(env: SetupEnv, identityKey: string): Promise<void> {
-    const setup = await Setup.createWalletClient({
-        env,
-        rootKeyHex: env.devKeys[identityKey]
-    });
-    await backupToSQLite(setup);
-    await setup.wallet.destroy();
+  const setup = await Setup.createWalletClient({
+    env,
+    rootKeyHex: env.devKeys[identityKey]
+  })
+  await backupToSQLite(setup)
+  await setup.wallet.destroy()
 }
 ```
 
@@ -115,6 +122,7 @@ See also: [backupToSQLite](./README.md#function-backuptosqlite)
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: balanceSpecOp
 
 Special Operations (specOps) are extensions to the base BRC-100 Wallet
@@ -138,12 +146,13 @@ npx txs balances balanceSpecOp
 ```
 
 ```ts
-export async function balanceSpecOp(): Promise<void> 
+export async function balanceSpecOp(): Promise<void>
 ```
 
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: balances
 
 The `balance` function demonstrates creating a `ServerClient` based wallet and
@@ -160,33 +169,33 @@ npx tsx balances
 
 ```ts
 export async function balances(): Promise<void> {
-    const env = Setup.getEnv("test");
-    for (const identityKey of [env.identityKey, env.identityKey2]) {
-        const setup = await Setup.createWalletClient({
-            env,
-            rootKeyHex: env.devKeys[identityKey]
-        });
-        let balance = 0;
-        let offset = 0;
-        for (;;) {
-            const change = await setup.wallet.listOutputs({
-                basket: "default",
-                limit: 10,
-                offset
-            });
-            balance += change.outputs.reduce((b, o) => (b += o.satoshis), 0);
-            offset += change.outputs.length;
-            if (change.outputs.length === 0 || offset >= change.totalOutputs)
-                break;
-        }
-        console.log(`balance for ${identityKey} = ${balance}`);
+  const env = Setup.getEnv('test')
+  for (const identityKey of [env.identityKey, env.identityKey2]) {
+    const setup = await Setup.createWalletClient({
+      env,
+      rootKeyHex: env.devKeys[identityKey]
+    })
+    let balance = 0
+    let offset = 0
+    for (;;) {
+      const change = await setup.wallet.listOutputs({
+        basket: 'default',
+        limit: 10,
+        offset
+      })
+      balance += change.outputs.reduce((b, o) => (b += o.satoshis), 0)
+      offset += change.outputs.length
+      if (change.outputs.length === 0 || offset >= change.totalOutputs) break
     }
+    console.log(`balance for ${identityKey} = ${balance}`)
+  }
 }
 ```
 
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: makeEnv
 
 Running the `makeEnv` function generates several new private keys
@@ -208,13 +217,14 @@ npx tsx makeEnv > .env; cat .env
 
 ```ts
 export function makeEnv() {
-    Setup.makeEnv();
+  Setup.makeEnv()
 }
 ```
 
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: runArgv2Function
 
 Used to run a named function from a command line of the form:
@@ -229,23 +239,24 @@ Optionally, if there is a functionName in `module_exports` that matches the file
 then 'functionName' can be ommitted.
 
 ```ts
-export function runArgv2Function(module_exports: object): void 
+export function runArgv2Function(module_exports: object): void
 ```
 
 Argument Details
 
-+ **module_exports**
-  + pass in `module.exports` to resolve functionName
+- **module_exports**
+  - pass in `module.exports` to resolve functionName
 
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: swapActive
 
 ```ts
 export async function swapActive(): Promise<void> {
-    const env = Setup.getEnv("main");
-    await swapActiveWalletClient(env, env.identityKey, "https://store.txs.systems");
+  const env = Setup.getEnv('main')
+  await swapActiveWalletClient(env, env.identityKey, 'https://store.txs.systems')
 }
 ```
 
@@ -254,37 +265,41 @@ See also: [swapActiveWalletClient](./README.md#function-swapactivewalletclient)
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: swapActiveWalletClient
 
 ```ts
-export async function swapActiveWalletClient(env: SetupEnv, identityKey: string, endpointUrl: string): Promise<SetupWallet> {
-    const setup = await Setup.createWallet({
-        env,
-        rootKeyHex: env.devKeys[identityKey]
-    });
-    const client1 = new StorageClient(setup.wallet, endpointUrl);
-    const client2 = new StorageClient(setup.wallet, "https://storage.babbage.systems");
-    const settings1 = await client1.makeAvailable();
-    const settings2 = await client2.makeAvailable();
-    await setup.storage.addWalletStorageProvider(client1);
-    await setup.storage.addWalletStorageProvider(client2);
-    const activeStorageIdentity = setup.storage.getActiveStore();
-    if (activeStorageIdentity === settings1.storageIdentityKey) {
-        await setup.storage.setActive(settings2.storageIdentityKey);
-    }
-    else if (activeStorageIdentity === settings2.storageIdentityKey) {
-        await setup.storage.setActive(settings1.storageIdentityKey);
-    }
-    else {
-        throw new Error(`${activeStorageIdentity} is not an available storage identity`);
-    }
-    return setup;
+export async function swapActiveWalletClient(
+  env: SetupEnv,
+  identityKey: string,
+  endpointUrl: string
+): Promise<SetupWallet> {
+  const setup = await Setup.createWallet({
+    env,
+    rootKeyHex: env.devKeys[identityKey]
+  })
+  const client1 = new StorageClient(setup.wallet, endpointUrl)
+  const client2 = new StorageClient(setup.wallet, 'https://storage.babbage.systems')
+  const settings1 = await client1.makeAvailable()
+  const settings2 = await client2.makeAvailable()
+  await setup.storage.addWalletStorageProvider(client1)
+  await setup.storage.addWalletStorageProvider(client2)
+  const activeStorageIdentity = setup.storage.getActiveStore()
+  if (activeStorageIdentity === settings1.storageIdentityKey) {
+    await setup.storage.setActive(settings2.storageIdentityKey)
+  } else if (activeStorageIdentity === settings2.storageIdentityKey) {
+    await setup.storage.setActive(settings1.storageIdentityKey)
+  } else {
+    throw new Error(`${activeStorageIdentity} is not an available storage identity`)
+  }
+  return setup
 }
 ```
 
 Links: [API](#api), [Functions](#functions)
 
 ---
+
 ##### Function: walletBalance
 
 And if your BRC-100 wallet supports the `balance` extension method
@@ -297,7 +312,7 @@ npx txs balances walletBalance
 ```
 
 ```ts
-export async function walletBalance(): Promise<void> 
+export async function walletBalance(): Promise<void>
 ```
 
 Links: [API](#api), [Functions](#functions)

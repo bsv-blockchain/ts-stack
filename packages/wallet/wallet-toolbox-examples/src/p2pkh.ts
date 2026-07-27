@@ -182,9 +182,7 @@ export async function inputP2PKH(
 
   // Lookup the private key corresponding to the "toIdentityKey" associated with the new output.
   // This is a public key value whose associated address was used to lock the output.
-  const privateKey: PrivateKey = PrivateKey.fromString(
-    env.devKeys[o.toIdentityKey]
-  )
+  const privateKey: PrivateKey = PrivateKey.fromString(env.devKeys[o.toIdentityKey])
   // Construct an "unlock" object which is then associated with the input to be signed
   // such that when the "sign" method is called, a signed "unlockingScript" is computed for that input.
   const unlock = Setup.getUnlockP2PKH(privateKey, o.satoshis)
@@ -274,7 +272,7 @@ ${beef.toLogString()}
   }
 }
 
-async function p2pkh(): Promise<void> {
+export async function p2pkh(): Promise<void> {
   await transferP2PKH()
 }
 

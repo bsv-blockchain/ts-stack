@@ -7,7 +7,7 @@ const TOP_NAV = [
   { label: 'Architecture', href: '/architecture/' },
   { label: 'Packages', href: '/packages/' },
   { label: 'Specs', href: '/specs/' },
-  { label: 'Guides', href: '/guides/' },
+  { label: 'Guides', href: '/guides/' }
 ]
 
 interface Props {
@@ -21,11 +21,7 @@ export default function Header({ onMenuClick }: Readonly<Props>) {
     <header className="site-header">
       <div className={styles.inner}>
         <div className={styles.left}>
-          <button
-            className={styles.menuBtn}
-            onClick={onMenuClick}
-            aria-label="Toggle navigation"
-          >
+          <button className={styles.menuBtn} onClick={onMenuClick} aria-label="Toggle navigation">
             <span className={styles.menuIcon} />
           </button>
           <Link to="/" className={styles.logo}>
@@ -39,10 +35,7 @@ export default function Header({ onMenuClick }: Readonly<Props>) {
             <Link
               key={href}
               to={href}
-              className={
-                styles.navLink +
-                (pathname.startsWith(href) ? ' ' + styles.active : '')
-              }
+              className={styles.navLink + (pathname.startsWith(href) ? ' ' + styles.active : '')}
             >
               {label}
             </Link>
@@ -54,8 +47,7 @@ export default function Header({ onMenuClick }: Readonly<Props>) {
           <Link
             to="/reference/"
             className={
-              styles.navLink +
-              (pathname.startsWith('/reference') ? ' ' + styles.active : '')
+              styles.navLink + (pathname.startsWith('/reference') ? ' ' + styles.active : '')
             }
           >
             Reference

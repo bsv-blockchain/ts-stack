@@ -13,10 +13,7 @@ export async function backup(): Promise<void> {
 /**
  * @publicbody
  */
-export async function backupWalletClient(
-  env: SetupEnv,
-  identityKey: string
-): Promise<void> {
+export async function backupWalletClient(env: SetupEnv, identityKey: string): Promise<void> {
   const setup = await Setup.createWalletClient({
     env,
     rootKeyHex: env.devKeys[identityKey]

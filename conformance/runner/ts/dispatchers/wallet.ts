@@ -74,12 +74,8 @@ import { Wallet } from '@wallet-toolbox/Wallet'
 import { WalletStorageManager } from '@wallet-toolbox/storage/WalletStorageManager'
 
 // ─── Types re-used from wallet-toolbox SDK layer ──────────────────────────────
-import type {
-  AuthId,
-  TableSettings,
-  TableUser,
-  WalletStorageProvider
-} from '@wallet-toolbox/sdk/WalletStorage.interfaces'
+import type { AuthId, WalletStorageProvider } from '@wallet-toolbox/sdk/WalletStorage.interfaces'
+import type { TableSettings, TableUser } from '@wallet-toolbox/storage/schema/tables'
 
 export const categories: ReadonlyArray<string> = [
   'getpublickey',
@@ -117,18 +113,18 @@ export const categories: ReadonlyArray<string> = [
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getNumber (m: Record<string, unknown>, key: string, fallback = 0): number {
+function getNumber(m: Record<string, unknown>, key: string, fallback = 0): number {
   const v = m[key]
   return typeof v === 'number' ? v : fallback
 }
 
 /** Normalise `data` from args — vectors pass either a string or byte array. */
-function toDataArray (data: unknown): number[] {
+function toDataArray(data: unknown): number[] {
   if (typeof data === 'string') {
     return Array.from(new TextEncoder().encode(data))
   }
@@ -137,8 +133,10 @@ function toDataArray (data: unknown): number[] {
 }
 
 /** Build a ProtoWallet from the root_key field (hex). */
-function makeWallet (input: Record<string, unknown>): ProtoWallet {
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+function makeWallet(input: Record<string, unknown>): ProtoWallet {
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   return new ProtoWallet(PrivateKey.fromHex(rootHex))
 }
 
@@ -150,7 +148,7 @@ function makeWallet (input: Record<string, unknown>): ProtoWallet {
 // queries and throws on operations that require pre-existing state.
 
 /** Minimal in-memory storage stub satisfying the WalletStorageProvider duck-type. */
-function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider {
+function makeMinimalStorageProvider(identityKey: string): WalletStorageProvider {
   const STORAGE_KEY = 'conformance-test-mock-storage'
   const now = new Date()
 
@@ -182,68 +180,96 @@ function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider
 
     // ── WalletStorageWriter.makeAvailable ──────────────────────────────────
     isAvailable: () => true,
-    async makeAvailable () { return fakeSettings },
-    async migrate (_storageName: string, _storageIdentityKey: string) { return STORAGE_KEY },
-    async destroy () {},
+    async makeAvailable() {
+      return fakeSettings
+    },
+    async migrate(_storageName: string, _storageIdentityKey: string) {
+      return STORAGE_KEY
+    },
+    async destroy() {},
 
     // ── User creation ──────────────────────────────────────────────────────
-    async findOrInsertUser (_key: string) {
+    async findOrInsertUser(_key: string) {
       return { user: fakeUser, isNew: false }
     },
 
     // ── Reader: list operations return empty ───────────────────────────────
-    async listActions (_auth: AuthId, _vargs: any) {
+    async listActions(_auth: AuthId, _vargs: any) {
       return { totalActions: 0, actions: [] }
     },
-    async listCertificates (_auth: AuthId, _vargs: any) {
+    async listCertificates(_auth: AuthId, _vargs: any) {
       return { totalCertificates: 0, certificates: [] }
     },
-    async listOutputs (_auth: AuthId, _vargs: any) {
+    async listOutputs(_auth: AuthId, _vargs: any) {
       return { totalOutputs: 0, outputs: [], BEEF: undefined }
     },
 
     // ── Reader: find operations return empty ────────────────────────────────
-    async findCertificatesAuth (_auth: AuthId, _args: any) { return [] },
-    async findOutputBasketsAuth (_auth: AuthId, _args: any) { return [] },
-    async findOutputsAuth (_auth: AuthId, _args: any) { return [] },
-    async findProvenTxReqs (_args: any) { return [] },
-    getServices () {
+    async findCertificatesAuth(_auth: AuthId, _args: any) {
+      return []
+    },
+    async findOutputBasketsAuth(_auth: AuthId, _args: any) {
+      return []
+    },
+    async findOutputsAuth(_auth: AuthId, _args: any) {
+      return []
+    },
+    async findProvenTxReqs(_args: any) {
+      return []
+    },
+    getServices() {
       return {
-        async getChainTracker () { throw new Error('mock: no chain tracker') }
+        async getChainTracker() {
+          throw new Error('mock: no chain tracker')
+        }
       }
     },
-    getSettings () { return fakeSettings },
+    getSettings() {
+      return fakeSettings
+    },
 
     // ── Sync / sync-state stubs (required by WalletStorageSync) ───────────
-    async findOrInsertSyncStateAuth (_auth: AuthId, _storageIdentityKey: string, _storageName: string) {
+    async findOrInsertSyncStateAuth(
+      _auth: AuthId,
+      _storageIdentityKey: string,
+      _storageName: string
+    ) {
       throw new Error('mock: findOrInsertSyncStateAuth not implemented')
     },
-    async setActive (_auth: AuthId, _newActiveStorageIdentityKey: string) { return 1 },
-    async getSyncChunk (_args: any) { throw new Error('mock: getSyncChunk not implemented') },
-    async processSyncChunk (_args: any, _chunk: any) { throw new Error('mock: processSyncChunk not implemented') },
+    async setActive(_auth: AuthId, _newActiveStorageIdentityKey: string) {
+      return 1
+    },
+    async getSyncChunk(_args: any) {
+      throw new Error('mock: getSyncChunk not implemented')
+    },
+    async processSyncChunk(_args: any, _chunk: any) {
+      throw new Error('mock: processSyncChunk not implemented')
+    },
 
     // ── Write operations that require state ────────────────────────────────
-    async abortAction (_auth: AuthId, _args: any) {
+    async abortAction(_auth: AuthId, _args: any) {
       // A fresh wallet has no in-flight actions; any reference is unknown.
-      const err: any = new Error('reference is not an inprocess, outgoing action that has not been signed and shared to the network.')
+      const err: any = new Error(
+        'reference is not an inprocess, outgoing action that has not been signed and shared to the network.'
+      )
       err.code = 'ERR_INVALID_PARAMETER'
       throw err
     },
-    async createAction (_auth: AuthId, _args: any) {
+    async createAction(_auth: AuthId, _args: any) {
       throw new Error('mock: createAction requires funded wallet')
     },
-    async processAction (_auth: AuthId, _args: any) {
+    async processAction(_auth: AuthId, _args: any) {
       throw new Error('mock: processAction not implemented')
     },
-    async internalizeAction (_auth: AuthId, _args: any) {
+    async internalizeAction(_auth: AuthId, _args: any) {
       throw new Error('mock: internalizeAction not implemented')
     },
 
     // ── Certificate operations ─────────────────────────────────────────────
-    async insertCertificateAuth (_auth: AuthId, _cert: any) {
+    async insertCertificateAuth(_auth: AuthId, _cert: any) {
       return nextCertId++
     },
-    async relinquishCertificate (_auth: AuthId, _args: any) {
+    async relinquishCertificate(_auth: AuthId, _args: any) {
       // Fresh wallet has no certs; anything is "not found".
       const err: any = new Error('Certificate not found.')
       err.code = 'ERR_CERTIFICATE_NOT_FOUND'
@@ -251,20 +277,26 @@ function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider
     },
 
     // ── Output operations ──────────────────────────────────────────────────
-    async relinquishOutput (_auth: AuthId, _args: any) {
+    async relinquishOutput(_auth: AuthId, _args: any) {
       // Fresh wallet has no outputs.
       const err: any = new Error('Output not found.')
       err.code = 'ERR_OUTPUT_NOT_FOUND'
       throw err
     },
-    async insertCertificate (_cert: any) {
+    async insertCertificate(_cert: any) {
       return nextCertId++
     },
 
     // ── StorageProvider reader methods (for WalletStorageManager compatibility) ─
-    async findCertificates (_args: any) { return [] },
-    async findOutputBaskets (_args: any) { return [] },
-    async findOutputs (_args: any) { return [] },
+    async findCertificates(_args: any) {
+      return []
+    },
+    async findOutputBaskets(_args: any) {
+      return []
+    },
+    async findOutputs(_args: any) {
+      return []
+    }
 
     // Catch-all for any other method the manager might call
     // (TypeScript `any` cast lets us skip exhaustive implementation)
@@ -273,9 +305,9 @@ function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider
 }
 
 /** No-op LookupResolver that returns empty output-list for any query. */
-function makeStubLookupResolver (): LookupResolver {
+function makeStubLookupResolver(): LookupResolver {
   const stub = {
-    async query (_question: LookupQuestion): Promise<LookupAnswer> {
+    async query(_question: LookupQuestion): Promise<LookupAnswer> {
       return { type: 'output-list' as const, outputs: [] }
     }
   }
@@ -287,7 +319,7 @@ function makeStubLookupResolver (): LookupResolver {
  *
  * Seeded from `rootKeyHex`. No SQLite, no network.
  */
-async function setupTestWallet (
+async function setupTestWallet(
   rootKeyHex: string = '0000000000000000000000000000000000000000000000000000000000000001'
 ): Promise<Wallet> {
   const rootKey = PrivateKey.fromHex(rootKeyHex)
@@ -310,7 +342,7 @@ async function setupTestWallet (
 
 // ─── CRYPTO DISPATCHERS ───────────────────────────────────────────────────────
 
-async function dispatchGetPublicKey (
+async function dispatchGetPublicKey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -329,7 +361,7 @@ async function dispatchGetPublicKey (
   }
 }
 
-async function dispatchCreateHmac (
+async function dispatchCreateHmac(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -349,7 +381,7 @@ async function dispatchCreateHmac (
   }
 }
 
-async function dispatchVerifyHmac (
+async function dispatchVerifyHmac(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -372,7 +404,7 @@ async function dispatchVerifyHmac (
   expect(result).toHaveProperty('valid', true)
 }
 
-async function dispatchCreateSignature (
+async function dispatchCreateSignature(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -392,7 +424,7 @@ async function dispatchCreateSignature (
   }
 }
 
-async function dispatchVerifySignature (
+async function dispatchVerifySignature(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -415,7 +447,7 @@ async function dispatchVerifySignature (
   expect(result).toHaveProperty('valid', true)
 }
 
-async function dispatchEncrypt (
+async function dispatchEncrypt(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -444,7 +476,7 @@ async function dispatchEncrypt (
   expect(Array.from(decResult.plaintext)).toEqual(plaintext)
 }
 
-async function dispatchDecrypt (
+async function dispatchDecrypt(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -463,7 +495,7 @@ async function dispatchDecrypt (
   }
 }
 
-async function dispatchRevealCounterpartyKeyLinkage (
+async function dispatchRevealCounterpartyKeyLinkage(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -481,7 +513,7 @@ async function dispatchRevealCounterpartyKeyLinkage (
   expect(result).toHaveProperty('encryptedLinkage')
 }
 
-async function dispatchRevealSpecificKeyLinkage (
+async function dispatchRevealSpecificKeyLinkage(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -506,7 +538,7 @@ async function dispatchRevealSpecificKeyLinkage (
 
 // ─── STATE DISPATCHERS ────────────────────────────────────────────────────────
 
-async function dispatchIsAuthenticated (
+async function dispatchIsAuthenticated(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -521,7 +553,7 @@ async function dispatchIsAuthenticated (
   expect(true).toBe(true)
 }
 
-async function dispatchWaitForAuthentication (
+async function dispatchWaitForAuthentication(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -532,7 +564,7 @@ async function dispatchWaitForAuthentication (
   expect(expected.authenticated).toBe(true)
 }
 
-async function dispatchGetHeight (
+async function dispatchGetHeight(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -543,7 +575,7 @@ async function dispatchGetHeight (
   expect(result.height).toBe(wantHeight)
 }
 
-async function dispatchGetHeaderForHeight (
+async function dispatchGetHeaderForHeight(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -552,8 +584,10 @@ async function dispatchGetHeaderForHeight (
   const args = (input.args as Record<string, unknown>) ?? {}
   const height = getNumber(args as any, 'height', 1)
 
-  const GENESIS_HEADER = '0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c'
-  const ZERO_HEADER = '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+  const GENESIS_HEADER =
+    '0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c'
+  const ZERO_HEADER =
+    '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
 
   const stubbedHeader = height === 0 ? GENESIS_HEADER : ZERO_HEADER
 
@@ -562,7 +596,7 @@ async function dispatchGetHeaderForHeight (
   }
 }
 
-async function dispatchGetNetwork (
+async function dispatchGetNetwork(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -576,7 +610,7 @@ async function dispatchGetNetwork (
   expect(result.network).toBe('mainnet')
 }
 
-async function dispatchGetVersion (
+async function dispatchGetVersion(
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -595,7 +629,7 @@ async function dispatchGetVersion (
 // calls the actual method. Vectors that require pre-existing state (funded UTXOs,
 // in-flight actions, pre-stored certs) are demoted in their vector files.
 
-async function dispatchCreateAction (
+async function dispatchCreateAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -613,7 +647,7 @@ async function dispatchCreateAction (
   expect(expected).toHaveProperty('status')
 }
 
-async function dispatchSignAction (
+async function dispatchSignAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -626,11 +660,13 @@ async function dispatchSignAction (
   expect(expected).toHaveProperty('txid')
 }
 
-async function dispatchAbortAction (
+async function dispatchAbortAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
@@ -639,9 +675,7 @@ async function dispatchAbortAction (
   // Vector 5 needs a previously-broadcast transaction — demoted.
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.abortAction(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.abortAction(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -650,21 +684,21 @@ async function dispatchAbortAction (
   expect(expected.aborted).toBe(true)
 }
 
-async function dispatchListActions (
+async function dispatchListActions(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
   // Vector 14 expects 1 action (pre-populated state) — demoted.
   // All other vectors expect empty results from a fresh wallet.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.listActions(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.listActions(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -681,7 +715,7 @@ async function dispatchListActions (
   expect(result.actions).toEqual(expected.actions)
 }
 
-async function dispatchInternalizeAction (
+async function dispatchInternalizeAction(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -691,15 +725,15 @@ async function dispatchInternalizeAction (
   //   expect accepted:true. Demoted to intended-skip.
   //
   // Vectors 6 and 7 expect errors (invalid BEEF) and are handled below.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.internalizeAction(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.internalizeAction(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -707,19 +741,19 @@ async function dispatchInternalizeAction (
   expect(expected.accepted).toBe(true)
 }
 
-async function dispatchListOutputs (
+async function dispatchListOutputs(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.listOutputs(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.listOutputs(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -730,21 +764,21 @@ async function dispatchListOutputs (
   expect(result.outputs).toEqual(expected.outputs ?? [])
 }
 
-async function dispatchRelinquishOutput (
+async function dispatchRelinquishOutput(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
   // Vectors 1,2,3,6,7,8 expect success — require a pre-existing output.
   // Demoted to intended-skip. Vectors 4 and 5 expect errors.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.relinquishOutput(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.relinquishOutput(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -752,7 +786,7 @@ async function dispatchRelinquishOutput (
   expect(expected.relinquished).toBe(true)
 }
 
-async function dispatchAcquireCertificate (
+async function dispatchAcquireCertificate(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -766,15 +800,15 @@ async function dispatchAcquireCertificate (
   //   (https://certifier.example.com). Cannot reproduce in-process. Demoted.
   //
   // Vectors 4, 5, 6 expect errors — real harness exercises rejection paths.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.acquireCertificate(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.acquireCertificate(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -782,21 +816,21 @@ async function dispatchAcquireCertificate (
   expect(expected).toHaveProperty('type')
 }
 
-async function dispatchListCertificates (
+async function dispatchListCertificates(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
   // Vector 5 expects 1 certificate (pre-populated state) — demoted.
   // All other vectors expect empty results from a fresh wallet.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.listCertificates(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.listCertificates(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -812,7 +846,7 @@ async function dispatchListCertificates (
   expect(result.certificates).toEqual(expected.certificates ?? [])
 }
 
-async function dispatchProveCertificate (
+async function dispatchProveCertificate(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -823,15 +857,15 @@ async function dispatchProveCertificate (
   //   These vectors expect success — demoted to intended-skip.
   //
   // Vector 5 expects an error — fresh wallet has no cert → throws.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.proveCertificate(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.proveCertificate(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -839,21 +873,21 @@ async function dispatchProveCertificate (
   expect(expected).toHaveProperty('keyringForVerifier')
 }
 
-async function dispatchRelinquishCertificate (
+async function dispatchRelinquishCertificate(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
   // Vectors 1,2,4,6 expect success — require pre-existing cert. Demoted.
   // Vectors 3 and 5 expect errors — fresh wallet throws.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.relinquishCertificate(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.relinquishCertificate(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -861,7 +895,7 @@ async function dispatchRelinquishCertificate (
   expect(expected.relinquished).toBe(true)
 }
 
-async function dispatchDiscoverByIdentityKey (
+async function dispatchDiscoverByIdentityKey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -873,15 +907,15 @@ async function dispatchDiscoverByIdentityKey (
   // Vector 10 expects an error (invalid pubkey) — validation throws before
   //   overlay is queried.
   // Vectors 1-4, 7-9: fresh wallet with stub lookup → { totalCertificates: 0, certificates: [] }.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.discoverByIdentityKey(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.discoverByIdentityKey(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -897,7 +931,7 @@ async function dispatchDiscoverByIdentityKey (
   expect(result.certificates).toEqual([])
 }
 
-async function dispatchDiscoverByAttributes (
+async function dispatchDiscoverByAttributes(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
@@ -906,15 +940,15 @@ async function dispatchDiscoverByAttributes (
   //   Demoted to intended-skip.
   //
   // All other vectors expect empty results; stub lookup returns empty.
-  const rootHex = getString(input, 'root_key') || '0000000000000000000000000000000000000000000000000000000000000001'
+  const rootHex =
+    getString(input, 'root_key') ||
+    '0000000000000000000000000000000000000000000000000000000000000001'
   const args = (input.args as Record<string, unknown>) ?? {}
   const originator = getString(input, 'originator') || undefined
 
   if ('error' in expected) {
     const wallet = await setupTestWallet(rootHex)
-    await expect(
-      wallet.discoverByAttributes(args as any, originator as any)
-    ).rejects.toThrow()
+    await expect(wallet.discoverByAttributes(args as any, originator as any)).rejects.toThrow()
     return
   }
 
@@ -943,11 +977,12 @@ async function dispatchDiscoverByAttributes (
 // This uses the same ProtoWallet.getPublicKey() path that BRC-100 vectors use,
 // so it exercises the real BRC-42/BRC-29 derivation pathway in the SDK.
 
-async function dispatchPaymentDerivation (
+async function dispatchPaymentDerivation(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  const rootHex = getString(input, 'root_key') ||
+  const rootHex =
+    getString(input, 'root_key') ||
     '0000000000000000000000000000000000000000000000000000000000000001'
   const pk = PrivateKey.fromHex(rootHex)
   const wallet = new ProtoWallet(pk)
@@ -966,48 +1001,77 @@ async function dispatchPaymentDerivation (
   }
 }
 
-export async function dispatch (
+export async function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
   switch (category) {
     // Payment derivation (Wave 1E / BRC-29)
-    case 'payment-derivation':            return dispatchPaymentDerivation(input, expected)
+    case 'payment-derivation':
+      return dispatchPaymentDerivation(input, expected)
 
     // Crypto (ProtoWallet)
-    case 'getpublickey':                  return dispatchGetPublicKey(input, expected)
-    case 'createhmac':                    return dispatchCreateHmac(input, expected)
-    case 'verifyhmac':                    return dispatchVerifyHmac(input, expected)
-    case 'createsignature':               return dispatchCreateSignature(input, expected)
-    case 'verifysignature':               return dispatchVerifySignature(input, expected)
-    case 'encrypt':                       return dispatchEncrypt(input, expected)
-    case 'decrypt':                       return dispatchDecrypt(input, expected)
-    case 'revealcounterpartykeylinkage':  return dispatchRevealCounterpartyKeyLinkage(input, expected)
-    case 'revealspecifickeylinkage':      return dispatchRevealSpecificKeyLinkage(input, expected)
+    case 'getpublickey':
+      return dispatchGetPublicKey(input, expected)
+    case 'createhmac':
+      return dispatchCreateHmac(input, expected)
+    case 'verifyhmac':
+      return dispatchVerifyHmac(input, expected)
+    case 'createsignature':
+      return dispatchCreateSignature(input, expected)
+    case 'verifysignature':
+      return dispatchVerifySignature(input, expected)
+    case 'encrypt':
+      return dispatchEncrypt(input, expected)
+    case 'decrypt':
+      return dispatchDecrypt(input, expected)
+    case 'revealcounterpartykeylinkage':
+      return dispatchRevealCounterpartyKeyLinkage(input, expected)
+    case 'revealspecifickeylinkage':
+      return dispatchRevealSpecificKeyLinkage(input, expected)
 
     // State (stubs)
-    case 'isauthenticated':       return dispatchIsAuthenticated(input, expected)
-    case 'waitforauthentication': return dispatchWaitForAuthentication(input, expected)
-    case 'getheight':             return dispatchGetHeight(input, expected)
-    case 'getheaderforheight':    return dispatchGetHeaderForHeight(input, expected)
-    case 'getnetwork':            return dispatchGetNetwork(input, expected)
-    case 'getversion':            return dispatchGetVersion(input, expected)
+    case 'isauthenticated':
+      return dispatchIsAuthenticated(input, expected)
+    case 'waitforauthentication':
+      return dispatchWaitForAuthentication(input, expected)
+    case 'getheight':
+      return dispatchGetHeight(input, expected)
+    case 'getheaderforheight':
+      return dispatchGetHeaderForHeight(input, expected)
+    case 'getnetwork':
+      return dispatchGetNetwork(input, expected)
+    case 'getversion':
+      return dispatchGetVersion(input, expected)
 
     // Action / output / cert (real wallet-toolbox harness — Wave 1G)
-    case 'createaction':             return dispatchCreateAction(input, expected)
-    case 'signaction':               return dispatchSignAction(input, expected)
-    case 'abortaction':              return dispatchAbortAction(input, expected)
-    case 'listactions':              return dispatchListActions(input, expected)
-    case 'internalizeaction':        return dispatchInternalizeAction(input, expected)
-    case 'listoutputs':              return dispatchListOutputs(input, expected)
-    case 'relinquishoutput':         return dispatchRelinquishOutput(input, expected)
-    case 'acquirecertificate':       return dispatchAcquireCertificate(input, expected)
-    case 'listcertificates':         return dispatchListCertificates(input, expected)
-    case 'provecertificate':         return dispatchProveCertificate(input, expected)
-    case 'relinquishcertificate':    return dispatchRelinquishCertificate(input, expected)
-    case 'discoverbyidentitykey':    return dispatchDiscoverByIdentityKey(input, expected)
-    case 'discoverbyattributes':     return dispatchDiscoverByAttributes(input, expected)
+    case 'createaction':
+      return dispatchCreateAction(input, expected)
+    case 'signaction':
+      return dispatchSignAction(input, expected)
+    case 'abortaction':
+      return dispatchAbortAction(input, expected)
+    case 'listactions':
+      return dispatchListActions(input, expected)
+    case 'internalizeaction':
+      return dispatchInternalizeAction(input, expected)
+    case 'listoutputs':
+      return dispatchListOutputs(input, expected)
+    case 'relinquishoutput':
+      return dispatchRelinquishOutput(input, expected)
+    case 'acquirecertificate':
+      return dispatchAcquireCertificate(input, expected)
+    case 'listcertificates':
+      return dispatchListCertificates(input, expected)
+    case 'provecertificate':
+      return dispatchProveCertificate(input, expected)
+    case 'relinquishcertificate':
+      return dispatchRelinquishCertificate(input, expected)
+    case 'discoverbyidentitykey':
+      return dispatchDiscoverByIdentityKey(input, expected)
+    case 'discoverbyattributes':
+      return dispatchDiscoverByAttributes(input, expected)
 
     // Sub-domain stubs handled by other wave agents
     case 'adapter-conformance':

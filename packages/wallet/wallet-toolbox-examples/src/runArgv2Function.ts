@@ -12,12 +12,21 @@ import path from 'node:path'
  * Optionally, if there is a functionName in `module_exports` that matches the filename,
  * then 'functionName' can be ommitted.
  *
- * @param module_exports pass in `module.exports` to resolve functionName
+ * @param moduleExports pass in `module.exports` to resolve functionName
+ * @returns the example execution promise, or `undefined` when no function matches
  */
-export function runArgv2Function(module_exports: object): void {
-  let functionName = process.argv[2] || path.parse(process.argv[1]).name
-  if (functionName && module_exports[functionName]) {
-    const fn = module_exports[functionName] as () => Promise<void>
-    fn().catch(console.error)
-  }
+export function runArgv2Function(
+  moduleExports: Record<string, unknown>
+): Promise<void> | undefined {
+  const scriptPath = process.argv[1] ?? ''
+  const functionName = process.argv[2] || path.parse(scriptPath).name
+  const candidate = moduleExports[functionName]
+  if (typeof candidate !== 'function') return undefined
+
+  const run = candidate as () => void | Promise<void>
+  return Promise.resolve()
+    .then(() => run())
+    .catch(error => {
+      console.error(error)
+    })
 }

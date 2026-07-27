@@ -75,7 +75,7 @@ export const categories: ReadonlyArray<string> = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-export function hexToBytes (hex: string): number[] {
+export function hexToBytes(hex: string): number[] {
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
@@ -84,30 +84,32 @@ export function hexToBytes (hex: string): number[] {
   return out
 }
 
-export function bytesToHex (bytes: number[] | Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+export function bytesToHex(bytes: number[] | Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
-export function decodeMessage (msg: string, encoding: string): number[] {
+export function decodeMessage(msg: string, encoding: string): number[] {
   if (encoding === 'hex') return hexToBytes(msg)
   return Array.from(new TextEncoder().encode(msg))
 }
 
-export function getString (m: Record<string, unknown>, key: string): string {
+export function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-export function getBool (m: Record<string, unknown>, key: string): boolean {
+export function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
 }
 
-export function getNumber (m: Record<string, unknown>, key: string, fallback = 0): number {
+export function getNumber(m: Record<string, unknown>, key: string, fallback = 0): number {
   const v = m[key]
   return typeof v === 'number' ? v : fallback
 }
 
-export function getStringArray (m: Record<string, unknown>, key: string): string[] {
+export function getStringArray(m: Record<string, unknown>, key: string): string[] {
   const v = m[key]
   if (!Array.isArray(v)) return []
   return v.filter((item): item is string => typeof item === 'string')
@@ -115,10 +117,7 @@ export function getStringArray (m: Record<string, unknown>, key: string): string
 
 // ── Individual dispatchers ─────────────────────────────────────────────────────
 
-function dispatchSHA256 (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchSHA256(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const msg = getString(input, 'message')
   const encoding = getString(input, 'encoding')
   const double = getBool(input, 'double')
@@ -129,7 +128,7 @@ function dispatchSHA256 (
   expect(bytesToHex(result)).toBe(getString(expected, 'hash'))
 }
 
-function dispatchRIPEMD160 (
+function dispatchRIPEMD160(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -140,10 +139,7 @@ function dispatchRIPEMD160 (
   expect(bytesToHex(result)).toBe(getString(expected, 'hash'))
 }
 
-function dispatchHash160 (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchHash160(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   let data: number[]
   const pubkey = getString(input, 'pubkey')
   if (pubkey === '') {
@@ -157,19 +153,15 @@ function dispatchHash160 (
   expect(bytesToHex(result)).toBe(getString(expected, 'hash160'))
 }
 
-function dispatchHMAC (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchHMAC(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const algorithm = getString(input, 'algorithm').toLowerCase()
   const keyStr = getString(input, 'key')
   const keyEncoding = getString(input, 'key_encoding')
   const msg = getString(input, 'message')
   const msgEncoding = getString(input, 'message_encoding')
 
-  const keyData = keyEncoding === 'hex'
-    ? hexToBytes(keyStr)
-    : Array.from(new TextEncoder().encode(keyStr))
+  const keyData =
+    keyEncoding === 'hex' ? hexToBytes(keyStr) : Array.from(new TextEncoder().encode(keyStr))
   const msgData = decodeMessage(msg, msgEncoding)
 
   let result: number[]
@@ -184,10 +176,7 @@ function dispatchHMAC (
   expect(bytesToHex(result)).toBe(getString(expected, 'hmac'))
 }
 
-function dispatchECDSA (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchECDSA(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   // Custom k values require TS-specific API — skip gracefully
   const kVal = getString(input, 'k')
   if (kVal !== '' && kVal !== 'drbg') return
@@ -238,13 +227,12 @@ function dispatchECDSA (
   ecdsaSignAndVerify(input, expected, privKey)
 }
 
-function dispatchECIES (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
-  const senderPrivHex = getString(input, 'sender_private_key') || getString(input, 'alice_private_key')
+function dispatchECIES(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const senderPrivHex =
+    getString(input, 'sender_private_key') || getString(input, 'alice_private_key')
   const recipPubHex = getString(input, 'recipient_public_key') || getString(input, 'bob_public_key')
-  const recipPrivHex = getString(input, 'recipient_private_key') || getString(input, 'bob_private_key')
+  const recipPrivHex =
+    getString(input, 'recipient_private_key') || getString(input, 'bob_private_key')
   const msgStr = getString(input, 'message')
   const msgEncoding = getString(input, 'message_encoding')
 
@@ -278,7 +266,9 @@ function dispatchECIES (
     }
     if (getString(expected, 'decrypted_message_utf8') !== '') {
       const plain = ECIES.electrumDecrypt(ct1, bobPriv, alicePub)
-      expect(new TextDecoder().decode(new Uint8Array(plain))).toBe(getString(expected, 'decrypted_message_utf8'))
+      expect(new TextDecoder().decode(new Uint8Array(plain))).toBe(
+        getString(expected, 'decrypted_message_utf8')
+      )
     }
     return
   }
@@ -301,10 +291,7 @@ function dispatchECIES (
   }
 }
 
-function dispatchAES (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchAES(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const algorithm = getString(input, 'algorithm')
   const keyHex = getString(input, 'key')
   const key = hexToBytes(keyHex)
@@ -343,7 +330,10 @@ function dispatchAES (
 
 // ── Key-derivation sub-handlers ───────────────────────────────────────────────
 
-function keyDerivationPrivkeyRoundtrip (privHexIn: string, expected: Record<string, unknown>): boolean {
+function keyDerivationPrivkeyRoundtrip(
+  privHexIn: string,
+  expected: Record<string, unknown>
+): boolean {
   const wantRound = getString(expected, 'privkey_hex_roundtrip')
   if (wantRound !== '') {
     expect(PrivateKey.fromHex(privHexIn).toHex()).toBe(wantRound)
@@ -363,7 +353,10 @@ function keyDerivationPrivkeyRoundtrip (privHexIn: string, expected: Record<stri
   return false
 }
 
-function keyDerivationOffCurve (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+function keyDerivationOffCurve(
+  input: Record<string, unknown>,
+  _expected: Record<string, unknown>
+): void {
   const xF = input['pubkey_x'] as number
   const yF = input['pubkey_y'] as number
   const xHex = BigInt(Math.round(xF)).toString(16).padStart(64, '0')
@@ -371,7 +364,7 @@ function keyDerivationOffCurve (input: Record<string, unknown>, expected: Record
   expect(() => PublicKey.fromString('04' + xHex + yHex)).toThrow()
 }
 
-function dispatchKeyDerivation (
+function dispatchKeyDerivation(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -397,7 +390,9 @@ function dispatchKeyDerivation (
     const recipPub = PublicKey.fromString(getString(input, 'recipient_public_key_hex'))
     const invoiceNum = getString(input, 'invoice_number')
     const derived = recipPub.deriveChild(PrivateKey.fromHex(senderPrivHex), invoiceNum)
-    expect(bytesToHex(derived.encode(true) as number[])).toBe(getString(expected, 'derived_public_key_hex'))
+    expect(bytesToHex(derived.encode(true) as number[])).toBe(
+      getString(expected, 'derived_public_key_hex')
+    )
     return
   }
 
@@ -411,7 +406,7 @@ function dispatchKeyDerivation (
   if (getString(input, 'operation') === 'direct_constructor') return
 }
 
-function dispatchPrivateKey (
+function dispatchPrivateKey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -429,7 +424,9 @@ function dispatchPrivateKey (
       expect(privKey.toHex()).toBe(getString(expected, 'privkey_hex'))
     }
     if (getString(expected, 'pubkey_hex') !== '') {
-      expect(bytesToHex(privKey.toPublicKey().encode(true) as number[])).toBe(getString(expected, 'pubkey_hex'))
+      expect(bytesToHex(privKey.toPublicKey().encode(true) as number[])).toBe(
+        getString(expected, 'pubkey_hex')
+      )
     }
     return
   }
@@ -448,7 +445,9 @@ function dispatchPrivateKey (
       expect(privKey.toHex()).toBe(getString(expected, 'privkey_hex_roundtrip'))
     }
     if (getString(expected, 'pubkey_hex') !== '') {
-      expect(bytesToHex(privKey.toPublicKey().encode(true) as number[])).toBe(getString(expected, 'pubkey_hex'))
+      expect(bytesToHex(privKey.toPublicKey().encode(true) as number[])).toBe(
+        getString(expected, 'pubkey_hex')
+      )
     }
     return
   }
@@ -461,21 +460,21 @@ function dispatchPrivateKey (
 
 // ── Public-key sub-handlers ────────────────────────────────────────────────────
 
-function pubkeyFromPrivkey (privHex: string, expected: Record<string, unknown>): void {
+function pubkeyFromPrivkey(privHex: string, expected: Record<string, unknown>): void {
   if (getString(expected, 'pubkey_der_hex') !== '') {
     const der = PrivateKey.fromHex(privHex).toPublicKey().encode(true) as number[]
     expect(bytesToHex(der)).toBe(getString(expected, 'pubkey_der_hex'))
   }
 }
 
-function pubkeyRoundtrip (pubHex: string, expected: Record<string, unknown>): void {
+function pubkeyRoundtrip(pubHex: string, expected: Record<string, unknown>): void {
   if (getString(expected, 'pubkey_der_hex_roundtrip') !== '') {
     const der = PublicKey.fromString(pubHex).encode(true) as number[]
     expect(bytesToHex(der)).toBe(getString(expected, 'pubkey_der_hex_roundtrip'))
   }
 }
 
-function dispatchPublicKey (
+function dispatchPublicKey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -503,17 +502,7 @@ function dispatchPublicKey (
   if ('constructor_arg' in input) return
 }
 
-function dispatchMerkleParent (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
-  const left = hexToBytes(getString(input, 'left_hex'))
-  const right = hexToBytes(getString(input, 'right_hex'))
-  const parent = Hash.hash256([...left, ...right])
-  expect(bytesToHex(parent)).toBe(getString(expected, 'parent_hex'))
-}
-
-function dispatchMerklePath (
+function dispatchMerklePath(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -533,14 +522,17 @@ function dispatchMerklePath (
     if ('txids' in input) {
       const txids = (input['txids'] as unknown[]).map(String)
       const root = computeMerkleRootFromDisplayTxids(txids)
-      if (getString(expected, 'merkle_root') !== '') expect(root).toBe(getString(expected, 'merkle_root'))
+      if (getString(expected, 'merkle_root') !== '')
+        expect(root).toBe(getString(expected, 'merkle_root'))
       return
     }
     if ('full_block_txids' in input) {
       const txids = (input['full_block_txids'] as unknown[]).map(String)
       const root = computeMerkleRootFromDisplayTxids(txids)
-      if (getString(expected, 'merkle_root') !== '') expect(root).toBe(getString(expected, 'merkle_root'))
-      if (getBool(expected, 'extracted_smaller_than_full')) expect(txids.length).toBeGreaterThanOrEqual(2)
+      if (getString(expected, 'merkle_root') !== '')
+        expect(root).toBe(getString(expected, 'merkle_root'))
+      if (getBool(expected, 'extracted_smaller_than_full'))
+        expect(txids.length).toBeGreaterThanOrEqual(2)
       return
     }
     if ('txids_to_extract' in input) {
@@ -554,10 +546,7 @@ function dispatchMerklePath (
   merklePathFromBump(MerklePath.fromHex(bumpHex), input, expected)
 }
 
-function dispatchBEEF (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchBEEF(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const beefHex = getString(input, 'beef_hex')
   const beefBytes = hexToBytes(beefHex)
 
@@ -567,7 +556,7 @@ function dispatchBEEF (
   try {
     beef = Beef.fromBinary(beefBytes)
     parseSucceeds = true
-  } catch (_e) {
+  } catch {
     parseSucceeds = false
   }
 
@@ -583,7 +572,7 @@ function dispatchBEEF (
 
 // ── Serialization op handlers ─────────────────────────────────────────────────
 
-function serOpNewTransaction (expected: Record<string, unknown>): void {
+function serOpNewTransaction(expected: Record<string, unknown>): void {
   const tx = new Transaction()
   if ('version' in expected) expect(tx.version).toBe(expected['version'])
   if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
@@ -591,7 +580,10 @@ function serOpNewTransaction (expected: Record<string, unknown>): void {
   if ('locktime' in expected) expect(tx.lockTime).toBe(expected['locktime'])
 }
 
-function serOpFromAtomicBEEF (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+function serOpFromAtomicBEEF(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
   const beefBytes = hexToBytes(getString(input, 'beef_hex'))
   if (getBool(expected, 'throws')) {
     expect(() => Transaction.fromAtomicBEEF(beefBytes)).toThrow()
@@ -600,7 +592,7 @@ function serOpFromAtomicBEEF (input: Record<string, unknown>, expected: Record<s
   }
 }
 
-function serOpAddInput (expected: Record<string, unknown>): void {
+function serOpAddInput(expected: Record<string, unknown>): void {
   if (getBool(expected, 'throws')) {
     const tx = new Transaction()
     expect(() => tx.addInput({} as any)).toThrow()
@@ -611,7 +603,10 @@ function serOpAddInput (expected: Record<string, unknown>): void {
   }
 }
 
-function serOpGetFeeNoSource (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+function serOpGetFeeNoSource(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
   if (!getBool(expected, 'throws')) return
   const sourceTxid = getString(input, 'source_txid')
   const sourceOutputIdx = (input['source_output_index'] as number) ?? 0
@@ -620,20 +615,25 @@ function serOpGetFeeNoSource (input: Record<string, unknown>, expected: Record<s
   expect(() => tx.getFee()).toThrow()
 }
 
-function serOpParseScriptOffsets (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+function serOpParseScriptOffsets(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
   const tx = Transaction.fromHex(getString(input, 'raw_hex'))
   if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
   if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
 }
 
 /** Dispatch named operation vectors via a lookup table to keep CC low. */
-function dispatchSerializationOp (
+function dispatchSerializationOp(
   op: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): boolean {
   switch (op) {
-    case 'new_transaction':          serOpNewTransaction(expected); return true
+    case 'new_transaction':
+      serOpNewTransaction(expected)
+      return true
     case 'new_transaction_hash_hex': {
       const txid = new Transaction().id('hex')
       if ('hash_length_chars' in expected) expect(txid.length).toBe(expected['hash_length_chars'])
@@ -644,8 +644,12 @@ function dispatchSerializationOp (
       if ('id_length_bytes' in expected) expect(txid.length).toBe(expected['id_length_bytes'])
       return true
     }
-    case 'fromAtomicBEEF':    serOpFromAtomicBEEF(input, expected); return true
-    case 'addInput':          serOpAddInput(expected); return true
+    case 'fromAtomicBEEF':
+      serOpFromAtomicBEEF(input, expected)
+      return true
+    case 'addInput':
+      serOpAddInput(expected)
+      return true
     case 'addOutput': {
       if (getBool(expected, 'throws')) {
         const tx = new Transaction()
@@ -653,26 +657,42 @@ function dispatchSerializationOp (
       }
       return true
     }
-    case 'getFee_no_source':    serOpGetFeeNoSource(input, expected); return true
-    case 'parseScriptOffsets':  serOpParseScriptOffsets(input, expected); return true
-    default:                    return false
+    case 'getFee_no_source':
+      serOpGetFeeNoSource(input, expected)
+      return true
+    case 'parseScriptOffsets':
+      serOpParseScriptOffsets(input, expected)
+      return true
+    default:
+      return false
   }
 }
 
-function dispatchSerialization (
+function dispatchSerialization(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   const op = getString(input, 'operation')
   if (op !== '' && dispatchSerializationOp(op, input, expected)) return
 
-  if (getString(input, 'raw_hex') !== '') { serializationRawHex(input, expected); return }
-  if (getString(input, 'ef_hex') !== '') { serializationEfHex(input, expected); return }
-  if (getString(input, 'beef_hex') !== '') { serializationBeefHex(input, expected); return }
-  if (getString(input, 'bump_hex') !== '') { serializationBumpHex(input, expected) }
+  if (getString(input, 'raw_hex') !== '') {
+    serializationRawHex(input, expected)
+    return
+  }
+  if (getString(input, 'ef_hex') !== '') {
+    serializationEfHex(input, expected)
+    return
+  }
+  if (getString(input, 'beef_hex') !== '') {
+    serializationBeefHex(input, expected)
+    return
+  }
+  if (getString(input, 'bump_hex') !== '') {
+    serializationBumpHex(input, expected)
+  }
 }
 
-function dispatchSignature (
+function dispatchSignature(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -704,10 +724,7 @@ function dispatchSignature (
   if ('first_byte' in input && getBool(expected, 'throws')) return
 }
 
-function dispatchBSM (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchBSM(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const msgBytes = hexToBytes(getString(input, 'message_hex'))
 
   // magicHash vectors
@@ -757,58 +774,101 @@ function dispatchBSM (
   }
 }
 
-function dispatchEvaluation (
+function dispatchEvaluation(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   switch (getString(input, 'fixture_type')) {
-    case 'node-script':      return dispatchNodeScriptFixture(input, expected)
-    case 'node-sighash':     return dispatchNodeSighashFixture(input, expected)
-    case 'node-transaction': return dispatchNodeTransactionFixture(input, expected)
+    case 'node-script':
+      return dispatchNodeScriptFixture(input, expected)
+    case 'node-sighash':
+      return dispatchNodeSighashFixture(input, expected)
+    case 'node-transaction':
+      return dispatchNodeTransactionFixture(input, expected)
   }
 
   const op = getString(input, 'operation')
   if (op !== '') {
     switch (op) {
-      case 'writeBn':       evalWriteBn(input, expected); return
-      case 'writeBn_range': evalWriteBnRange(input, expected); return
-      case 'findAndDelete': evalFindAndDelete(input, expected); return
-      default:              return
+      case 'writeBn':
+        evalWriteBn(input, expected)
+        return
+      case 'writeBn_range':
+        evalWriteBnRange(input, expected)
+        return
+      case 'findAndDelete':
+        evalFindAndDelete(input, expected)
+        return
+      default:
+        return
     }
   }
 
-  if ('hex' in input)                                   { evalHex(input, expected); return }
-  if ('binary' in input)                                { evalBinary(input, expected); return }
-  if (getString(input, 'type') === 'P2PKH_lock')        { evalP2PKH(input, expected); return }
-  if ('script_pubkey_hex' in input)                     { evalScriptPubkey(input, expected); return }
-  if ('data_length_bytes' in input)                     { evalDataLengthBytes(input, expected); return }
-  if ('script_asm' in input)                            { evalScriptAsm(input, expected) }
+  if ('hex' in input) {
+    evalHex(input, expected)
+    return
+  }
+  if ('binary' in input) {
+    evalBinary(input, expected)
+    return
+  }
+  if (getString(input, 'type') === 'P2PKH_lock') {
+    evalP2PKH(input, expected)
+    return
+  }
+  if ('script_pubkey_hex' in input) {
+    evalScriptPubkey(input, expected)
+    return
+  }
+  if ('data_length_bytes' in input) {
+    evalDataLengthBytes(input, expected)
+    return
+  }
+  if ('script_asm' in input) {
+    evalScriptAsm(input, expected)
+  }
 }
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void | Promise<void> {
   switch (category) {
-    case 'sha256':        return dispatchSHA256(input, expected)
-    case 'ripemd160':     return dispatchRIPEMD160(input, expected)
-    case 'hash160':       return dispatchHash160(input, expected)
-    case 'hmac':          return dispatchHMAC(input, expected)
-    case 'ecdsa':         return dispatchECDSA(input, expected)
-    case 'aes':           return dispatchAES(input, expected)
-    case 'ecies':         return dispatchECIES(input, expected)
-    case 'signature':     return dispatchSignature(input, expected)
-    case 'bsm':           return dispatchBSM(input, expected)
-    case 'key-derivation':  return dispatchKeyDerivation(input, expected)
-    case 'private-key':     return dispatchPrivateKey(input, expected)
-    case 'public-key':      return dispatchPublicKey(input, expected)
-    case 'evaluation':      return dispatchEvaluation(input, expected)
-    case 'merkle-path':     return dispatchMerklePath(input, expected)
-    case 'serialization':   return dispatchSerialization(input, expected)
-    case 'beef-v2-txid-panic': return dispatchBEEF(input, expected)
+    case 'sha256':
+      return dispatchSHA256(input, expected)
+    case 'ripemd160':
+      return dispatchRIPEMD160(input, expected)
+    case 'hash160':
+      return dispatchHash160(input, expected)
+    case 'hmac':
+      return dispatchHMAC(input, expected)
+    case 'ecdsa':
+      return dispatchECDSA(input, expected)
+    case 'aes':
+      return dispatchAES(input, expected)
+    case 'ecies':
+      return dispatchECIES(input, expected)
+    case 'signature':
+      return dispatchSignature(input, expected)
+    case 'bsm':
+      return dispatchBSM(input, expected)
+    case 'key-derivation':
+      return dispatchKeyDerivation(input, expected)
+    case 'private-key':
+      return dispatchPrivateKey(input, expected)
+    case 'public-key':
+      return dispatchPublicKey(input, expected)
+    case 'evaluation':
+      return dispatchEvaluation(input, expected)
+    case 'merkle-path':
+      return dispatchMerklePath(input, expected)
+    case 'serialization':
+      return dispatchSerialization(input, expected)
+    case 'beef-v2-txid-panic':
+      return dispatchBEEF(input, expected)
     default:
       throw new Error(`sdk dispatcher: unknown category '${category}'`)
   }

@@ -1,11 +1,6 @@
 import { Beef, SignActionArgs } from '@bsv/sdk'
 
-import {
-  randomBytesBase64,
-  ScriptTemplateBRC29,
-  Setup,
-  SetupWallet
-} from '@bsv/wallet-toolbox'
+import { randomBytesBase64, ScriptTemplateBRC29, Setup, SetupWallet } from '@bsv/wallet-toolbox'
 import { runArgv2Function } from './runArgv2Function'
 
 /**

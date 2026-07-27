@@ -24,13 +24,20 @@ export default function CodeBlock({ children, ...rest }: Readonly<Props>) {
     : undefined
   const rawCode = textContent(codeEl?.children ?? children)
   // Shiki strips language-xxx from <code> but we inject data-language on <pre> via transformer
-  const lang = (rest['data-language'] as string | undefined)
-    ?? codeEl?.className?.replace('language-', '')
-    ?? 'text'
+  const lang =
+    (rest['data-language'] as string | undefined) ??
+    codeEl?.className?.replace('language-', '') ??
+    'text'
 
   if (lang === 'mermaid') {
     return (
-      <Suspense fallback={<pre className="code-block"><code>{rawCode}</code></pre>}>
+      <Suspense
+        fallback={
+          <pre className="code-block">
+            <code>{rawCode}</code>
+          </pre>
+        }
+      >
         <Mermaid code={rawCode} />
       </Suspense>
     )

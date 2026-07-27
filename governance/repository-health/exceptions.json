@@ -146,21 +146,6 @@
       "removeWhen": "The manual coverage review assigns and resolves every explicit skip or replaces it with a narrowly documented, continuously reviewed environment-gated test."
     },
     {
-      "id": "placeholder-and-pass-with-no-tests",
-      "category": "skipped-test",
-      "target": "Four passWithNoTests manifests",
-      "owner": "ts-stack-maintainers",
-      "reason": "Several packages can currently report success without discovering tests; the package-contract ratchet and baseline inventory keep each case visible until real coverage exists.",
-      "evidence": [
-        "governance/repository-health/baselines.json#testExceptions",
-        "governance/repository-health/contract-baseline.json",
-        "packages/**/package.json"
-      ],
-      "created": "2026-07-24",
-      "reviewBy": "2026-08-24",
-      "removeWhen": "Every affected profile has meaningful tests or a permanent documented profile decision, with no passWithNoTests command."
-    },
-    {
       "id": "legacy-sonar-analysis-suppressions",
       "category": "quality-rule",
       "target": "sonar-project.properties and .sonarcloud.properties broad test and generated-file exclusions",

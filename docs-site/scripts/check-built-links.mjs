@@ -3,9 +3,17 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { dirname, join, relative, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
+import {
+  SITE_BASE,
+  assetPathForBuiltUrl,
+  isExternalUrl,
+  resolveInsideRoot,
+  splitUrl
+} from './path-policy.mjs'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DIST_ROOT = resolve(__dirname, '../dist')
-const BASE = '/ts-stack/'
+const BASE = SITE_BASE
 
 function walk(dir) {
   const results = []
@@ -21,32 +29,6 @@ function walk(dir) {
   return results
 }
 
-function isExternal(value) {
-  return /^(?:https?:|data:|mailto:|#|\/\/)/.test(value)
-}
-
-function splitUrl(value) {
-  const suffixIndex = value.search(/[?#]/)
-  if (suffixIndex === -1) return { pathname: value, suffix: '' }
-  return {
-    pathname: value.slice(0, suffixIndex),
-    suffix: value.slice(suffixIndex),
-  }
-}
-
-function assetPathForBuiltUrl(pathname) {
-  if (pathname.startsWith(BASE)) return pathname.slice(BASE.length)
-  if (pathname.startsWith('/assets/')) return pathname.slice(1)
-  return null
-}
-
-function resolveDistPath(localPath) {
-  const full = resolve(DIST_ROOT, decodeURIComponent(localPath))
-  const rel = relative(DIST_ROOT, full)
-  if (rel.startsWith('..') || rel.startsWith('/')) return null
-  return full
-}
-
 let errors = 0
 const attrPattern = /\s(href|src)=["']([^"']+)["']/g
 
@@ -56,7 +38,7 @@ for (const file of walk(DIST_ROOT)) {
 
   while ((match = attrPattern.exec(html)) !== null) {
     const [, attr, rawValue] = match
-    if (isExternal(rawValue)) continue
+    if (isExternalUrl(rawValue)) continue
 
     const { pathname } = splitUrl(rawValue)
 
@@ -66,7 +48,12 @@ for (const file of walk(DIST_ROOT)) {
       continue
     }
 
-    if (attr === 'href' && pathname && !pathname.startsWith(BASE) && !pathname.startsWith('/_pagefind/')) {
+    if (
+      attr === 'href' &&
+      pathname &&
+      !pathname.startsWith(BASE) &&
+      !pathname.startsWith('/_pagefind/')
+    ) {
       console.error(`BUILT LINK IS NOT BASE-ABSOLUTE: ${relative(DIST_ROOT, file)} → ${rawValue}`)
       errors++
       continue
@@ -74,7 +61,7 @@ for (const file of walk(DIST_ROOT)) {
 
     const assetPath = assetPathForBuiltUrl(pathname)
     if (assetPath?.startsWith('assets/')) {
-      const target = resolveDistPath(assetPath)
+      const target = resolveInsideRoot(DIST_ROOT, assetPath)
       if (!target || !existsSync(target)) {
         console.error(`MISSING BUILT ASSET: ${relative(DIST_ROOT, file)} → ${rawValue}`)
         errors++

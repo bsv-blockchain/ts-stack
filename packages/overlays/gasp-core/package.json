@@ -68,7 +68,8 @@
     "protocol",
     "sync",
     "transaction",
-    "GASP"
+    "GASP",
+    "BSV"
   ],
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",

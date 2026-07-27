@@ -49,11 +49,11 @@ const deterministicEnvironment = {
   TZ: 'UTC'
 }
 
-function executable (name) {
+function executable(name) {
   return process.platform === 'win32' ? `${name}.cmd` : name
 }
 
-function run (command, args, options = {}) {
+function run(command, args, options = {}) {
   let resolvedCommand = executable(command)
   if (options.exactPath === true) {
     resolvedCommand = process.platform === 'win32' ? `${command}.cmd` : command
@@ -63,9 +63,7 @@ function run (command, args, options = {}) {
     encoding: 'utf8',
     env: deterministicEnvironment,
     maxBuffer: 16 * 1024 * 1024,
-    stdio: options.captureStdout === true
-      ? ['ignore', 'pipe', 'inherit']
-      : 'inherit'
+    stdio: options.captureStdout === true ? ['ignore', 'pipe', 'inherit'] : 'inherit'
   })
 
   if (result.error != null) {
@@ -77,7 +75,7 @@ function run (command, args, options = {}) {
   return result.stdout ?? ''
 }
 
-function outputPath (temporaryDirectory, fileName) {
+function outputPath(temporaryDirectory, fileName) {
   const temporary = resolve(temporaryDirectory, fileName)
   const committed = resolve(ROOT, 'conformance/generated', fileName)
   generatedFiles.push({ committed, temporary })
@@ -85,39 +83,26 @@ function outputPath (temporaryDirectory, fileName) {
   return temporary
 }
 
-function generateContract (contract) {
+function generateContract(contract) {
   const specification = resolve(ROOT, contract.spec)
-  const typescriptOutput = outputPath(
-    temporaryRoot,
-    `${contract.name}/types.gen.d.ts`
-  )
-  const goOutput = outputPath(
-    temporaryRoot,
-    `${contract.name}/types.gen.go`
-  )
-  const pythonOutput = outputPath(
-    temporaryRoot,
-    `${contract.name}/models.py`
+  const typescriptOutput = outputPath(temporaryRoot, `${contract.name}/types.gen.d.ts`)
+  const goOutput = outputPath(temporaryRoot, `${contract.name}/types.gen.go`)
+  const pythonOutput = outputPath(temporaryRoot, `${contract.name}/models.py`)
+
+  run(
+    resolve(NODE_TOOLS, 'node_modules/.bin/openapi-typescript'),
+    [specification, '--output', typescriptOutput],
+    { exactPath: true }
   )
 
-  run(resolve(NODE_TOOLS, 'node_modules/.bin/openapi-typescript'), [
-    specification,
-    '--output',
-    typescriptOutput
-  ], { exactPath: true })
-
-  const goSource = run('go', [
-    'tool',
-    'oapi-codegen',
-    '-generate',
-    'types',
-    '-package',
-    contract.goPackage,
-    specification
-  ], {
-    captureStdout: true,
-    cwd: GO_TOOLS
-  })
+  const goSource = run(
+    'go',
+    ['tool', 'oapi-codegen', '-generate', 'types', '-package', contract.goPackage, specification],
+    {
+      captureStdout: true,
+      cwd: GO_TOOLS
+    }
+  )
   writeFileSync(goOutput, goSource)
 
   run('uv', [
@@ -141,7 +126,7 @@ function generateContract (contract) {
   ])
 }
 
-function verifyGeneratedFiles () {
+function verifyGeneratedFiles() {
   const stale = generatedFiles.filter(({ committed, temporary }) => {
     if (!existsSync(committed)) return true
     return !readFileSync(committed).equals(readFileSync(temporary))
@@ -160,7 +145,7 @@ function verifyGeneratedFiles () {
   process.exitCode = 1
 }
 
-function updateGeneratedFiles () {
+function updateGeneratedFiles() {
   for (const { committed, temporary } of generatedFiles) {
     mkdirSync(dirname(committed), { recursive: true })
     copyFileSync(temporary, committed)

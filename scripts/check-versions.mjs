@@ -27,7 +27,7 @@ for (const pkg of pkgList) {
   }
 }
 
-function parseVersion (version) {
+function parseVersion(version) {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
   if (!match) return null
   return {
@@ -37,11 +37,11 @@ function parseVersion (version) {
   }
 }
 
-function compareVersion (a, b) {
+function compareVersion(a, b) {
   return a.major - b.major || a.minor - b.minor || a.patch - b.patch
 }
 
-function caretUpperBound (version) {
+function caretUpperBound(version) {
   if (version.major > 0) {
     return { major: version.major + 1, minor: 0, patch: 0 }
   }
@@ -51,7 +51,7 @@ function caretUpperBound (version) {
   return { major: 0, minor: 0, patch: version.patch + 1 }
 }
 
-function acceptsPeerVersion (range, wsVersion) {
+function acceptsPeerVersion(range, wsVersion) {
   if (range === `^${wsVersion}`) return true
   if (!range.startsWith('^')) return false
 
@@ -99,10 +99,9 @@ for (const pkg of pkgList) {
   const testCommand = d.scripts?.test
   const coverageCommand = d.scripts?.['test:coverage']
   if (typeof testCommand === 'string' && typeof coverageCommand === 'string') {
-    const missingCoverageBehaviors = [
-      '--passWithNoTests',
-      '--experimental-vm-modules'
-    ].filter(option => testCommand.includes(option) && !coverageCommand.includes(option))
+    const missingCoverageBehaviors = ['--passWithNoTests', '--experimental-vm-modules'].filter(
+      option => testCommand.includes(option) && !coverageCommand.includes(option)
+    )
 
     if (
       coverageCommand.includes('--coverageReporters') &&
@@ -112,19 +111,27 @@ for (const pkg of pkgList) {
     }
 
     if (missingCoverageBehaviors.length > 0) {
-      console.log(`COVERAGE MISMATCH  ${d.name} test:coverage is missing ${missingCoverageBehaviors.join(', ')}`)
+      console.log(
+        `COVERAGE MISMATCH  ${d.name} test:coverage is missing ${missingCoverageBehaviors.join(', ')}`
+      )
       coverageMismatches++
     }
   }
 
-  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+  for (const field of [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies'
+  ]) {
     if (!d[field]) continue
     for (const [dep, range] of Object.entries(d[field])) {
       const wsVersion = workspaceMap[dep]
       if (!wsVersion) continue
-      const valid = field === 'peerDependencies'
-        ? acceptsPeerVersion(range, wsVersion)
-        : range === 'workspace:^'
+      const valid =
+        field === 'peerDependencies'
+          ? acceptsPeerVersion(range, wsVersion)
+          : range === 'workspace:^'
       if (!valid) {
         console.log(`STALE  ${d.name}  ${dep}  ${range}  (current: ${wsVersion})`)
         stale++
@@ -146,7 +153,7 @@ for (const pkg of pkgList) {
 const located = pkgList.filter(p => p.name && p.version && p.path)
 let mismatched = 0
 
-const isPrivate = (pkgPath) => {
+const isPrivate = pkgPath => {
   try {
     return JSON.parse(readFileSync(resolve(pkgPath, 'package.json'), 'utf-8')).private === true
   } catch {
@@ -167,7 +174,9 @@ for (const child of located) {
   }
   if (!parent) continue
   if (child.version !== parent.version) {
-    console.log(`VERSION MISMATCH  ${child.name}@${child.version}  must match enclosing  ${parent.name}@${parent.version}`)
+    console.log(
+      `VERSION MISMATCH  ${child.name}@${child.version}  must match enclosing  ${parent.name}@${parent.version}`
+    )
     mismatched++
   }
 }
@@ -175,9 +184,21 @@ for (const child of located) {
 if (stale === 0 && mismatched === 0 && coverageMismatches === 0 && runtimeToolLeaks === 0) {
   console.log('All cross-package version references up to date.')
 } else {
-  if (stale > 0) console.error(`\n${stale} stale references. Run: node scripts/sync-versions.mjs --workspace-only`)
-  if (mismatched > 0) console.error(`\n${mismatched} nested package(s) out of lockstep with their enclosing package. Bump them to match.`)
-  if (coverageMismatches > 0) console.error(`\n${coverageMismatches} coverage script(s) disagree with their package test semantics.`)
-  if (runtimeToolLeaks > 0) console.error(`\n${runtimeToolLeaks} development-only dependency entries would leak into published runtime installs.`)
+  if (stale > 0)
+    console.error(
+      `\n${stale} stale references. Run: node scripts/sync-versions.mjs --workspace-only`
+    )
+  if (mismatched > 0)
+    console.error(
+      `\n${mismatched} nested package(s) out of lockstep with their enclosing package. Bump them to match.`
+    )
+  if (coverageMismatches > 0)
+    console.error(
+      `\n${coverageMismatches} coverage script(s) disagree with their package test semantics.`
+    )
+  if (runtimeToolLeaks > 0)
+    console.error(
+      `\n${runtimeToolLeaks} development-only dependency entries would leak into published runtime installs.`
+    )
   process.exit(1)
 }

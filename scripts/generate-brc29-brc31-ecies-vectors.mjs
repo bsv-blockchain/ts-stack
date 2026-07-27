@@ -5,7 +5,6 @@
  *  - messaging/brc31/authrite-signature.json (4 → 25+ vectors)
  *  - sdk/crypto/ecies.json (5 → 25+ vectors)
  */
-import { createRequire } from 'module'
 import { readFileSync, writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -13,9 +12,7 @@ import path from 'path'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 
-const { PrivateKey, ProtoWallet, ECIES: ECIESCompat } = await import(
-  `${rootDir}/packages/sdk/dist/esm/mod.js`
-)
+const { PrivateKey, ProtoWallet } = await import(`${rootDir}/packages/sdk/dist/esm/mod.js`)
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,11 +29,26 @@ function wallet(scalarHex) {
 
 // Known private keys and their identity public keys
 const KEYS = [
-  { scalar: '0000000000000000000000000000000000000000000000000000000000000001', pubkey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' },
-  { scalar: '0000000000000000000000000000000000000000000000000000000000000002', pubkey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5' },
-  { scalar: '0000000000000000000000000000000000000000000000000000000000000003', pubkey: '02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9' },
-  { scalar: '0000000000000000000000000000000000000000000000000000000000000004', pubkey: '02e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13' },
-  { scalar: '0000000000000000000000000000000000000000000000000000000000000005', pubkey: '022f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4' },
+  {
+    scalar: '0000000000000000000000000000000000000000000000000000000000000001',
+    pubkey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+  },
+  {
+    scalar: '0000000000000000000000000000000000000000000000000000000000000002',
+    pubkey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+  },
+  {
+    scalar: '0000000000000000000000000000000000000000000000000000000000000003',
+    pubkey: '02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9'
+  },
+  {
+    scalar: '0000000000000000000000000000000000000000000000000000000000000004',
+    pubkey: '02e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13'
+  },
+  {
+    scalar: '0000000000000000000000000000000000000000000000000000000000000005',
+    pubkey: '022f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4'
+  }
 ]
 
 // ---------------------------------------------------------------------------
@@ -55,7 +67,7 @@ async function generateBrc29Vectors() {
     ['dHJhbnNhY3Rpb25w', 'cHJlZml4dmFsdWU0'],
     ['bm9uY2VwcmVmaXgx', 'bm9uY2VzdWZmaXgx'],
     ['MTIzNDU2Nzg5MA==', 'YWJjZGVmZ2hpams='],
-    ['a2V5ZGVyaXZhdGlv', 'bm91dHB1dGtleXN1'],
+    ['a2V5ZGVyaXZhdGlv', 'bm91dHB1dGtleXN1']
   ]
 
   // 1. Sender derives recipient key: various sender/recipient combos
@@ -67,7 +79,7 @@ async function generateBrc29Vectors() {
         const result = await w.getPublicKey({
           protocolID: [2, '3241645161d8'],
           keyID: `${prefix} ${suffix}`,
-          counterparty: KEYS[recipientIdx].pubkey,
+          counterparty: KEYS[recipientIdx].pubkey
         })
         vectors.push({
           id: `wallet.brc29.payment-derivation.${id++}`,
@@ -77,11 +89,11 @@ async function generateBrc29Vectors() {
             args: {
               protocolID: [2, '3241645161d8'],
               keyID: `${prefix} ${suffix}`,
-              counterparty: KEYS[recipientIdx].pubkey,
-            },
+              counterparty: KEYS[recipientIdx].pubkey
+            }
           },
           expected: { publicKey: result.publicKey },
-          tags: ['brc-29', 'brc-42', 'payment', 'sender-derives'],
+          tags: ['brc-29', 'brc-42', 'payment', 'sender-derives']
         })
       }
     }
@@ -97,7 +109,7 @@ async function generateBrc29Vectors() {
           protocolID: [2, '3241645161d8'],
           keyID: `${prefix} ${suffix}`,
           counterparty: KEYS[senderIdx].pubkey,
-          forSelf: true,
+          forSelf: true
         })
         vectors.push({
           id: `wallet.brc29.payment-derivation.${id++}`,
@@ -108,11 +120,11 @@ async function generateBrc29Vectors() {
               protocolID: [2, '3241645161d8'],
               keyID: `${prefix} ${suffix}`,
               counterparty: KEYS[senderIdx].pubkey,
-              forSelf: true,
-            },
+              forSelf: true
+            }
           },
           expected: { publicKey: result.publicKey },
-          tags: ['brc-29', 'brc-42', 'payment', 'recipient-view', 'forSelf'],
+          tags: ['brc-29', 'brc-42', 'payment', 'recipient-view', 'forSelf']
         })
       }
     }
@@ -125,29 +137,30 @@ async function generateBrc29Vectors() {
   const senderResult = await w1.getPublicKey({
     protocolID: [2, '3241645161d8'],
     keyID: `${p0} ${s0}`,
-    counterparty: KEYS[1].pubkey,
+    counterparty: KEYS[1].pubkey
   })
   const recipResult = await w2.getPublicKey({
     protocolID: [2, '3241645161d8'],
     keyID: `${p0} ${s0}`,
     counterparty: KEYS[0].pubkey,
-    forSelf: true,
+    forSelf: true
   })
   // They should be equal (same derived key)
   vectors.push({
     id: `wallet.brc29.payment-derivation.${id++}`,
-    description: 'Symmetry: sender-derived == recipient-derived for same prefix/suffix (schema note)',
+    description:
+      'Symmetry: sender-derived == recipient-derived for same prefix/suffix (schema note)',
     input: {
       root_key: KEYS[0].scalar,
       args: {
         protocolID: [2, '3241645161d8'],
         keyID: `${p0} ${s0}`,
-        counterparty: KEYS[1].pubkey,
+        counterparty: KEYS[1].pubkey
       },
-      _schema_note: `recipient forSelf=true with senderKey MUST produce same publicKey: ${recipResult.publicKey}`,
+      _schema_note: `recipient forSelf=true with senderKey MUST produce same publicKey: ${recipResult.publicKey}`
     },
     expected: { publicKey: senderResult.publicKey },
-    tags: ['brc-29', 'brc-42', 'payment', 'symmetry'],
+    tags: ['brc-29', 'brc-42', 'payment', 'symmetry']
   })
 
   // 4. Self-payment (sender == recipient, counterparty='self')
@@ -155,7 +168,7 @@ async function generateBrc29Vectors() {
   const selfResult = await wSelf.getPublicKey({
     protocolID: [2, '3241645161d8'],
     keyID: `${p0} ${s0}`,
-    counterparty: 'self',
+    counterparty: 'self'
   })
   vectors.push({
     id: `wallet.brc29.payment-derivation.${id++}`,
@@ -165,11 +178,11 @@ async function generateBrc29Vectors() {
       args: {
         protocolID: [2, '3241645161d8'],
         keyID: `${p0} ${s0}`,
-        counterparty: 'self',
-      },
+        counterparty: 'self'
+      }
     },
     expected: { publicKey: selfResult.publicKey },
-    tags: ['brc-29', 'brc-42', 'payment', 'self-payment'],
+    tags: ['brc-29', 'brc-42', 'payment', 'self-payment']
   })
 
   // 5. Different key pairs with timestamps as suffix (BRC-121 pattern)
@@ -179,7 +192,7 @@ async function generateBrc29Vectors() {
     const result = await w.getPublicKey({
       protocolID: [2, '3241645161d8'],
       keyID: `3q2+7w== ${suffix}`,
-      counterparty: KEYS[3].pubkey,
+      counterparty: KEYS[3].pubkey
     })
     vectors.push({
       id: `wallet.brc29.payment-derivation.${id++}`,
@@ -189,11 +202,11 @@ async function generateBrc29Vectors() {
         args: {
           protocolID: [2, '3241645161d8'],
           keyID: `3q2+7w== ${suffix}`,
-          counterparty: KEYS[3].pubkey,
-        },
+          counterparty: KEYS[3].pubkey
+        }
       },
       expected: { publicKey: result.publicKey },
-      tags: ['brc-29', 'brc-42', 'payment', 'brc-121-timestamp'],
+      tags: ['brc-29', 'brc-42', 'payment', 'brc-121-timestamp']
     })
   }
 
@@ -213,10 +226,10 @@ async function generateBrc31Vectors() {
     Buffer.alloc(32, 0x01).toString('base64'), // all 0x01
     Buffer.alloc(32, 0x02).toString('base64'), // all 0x02
     Buffer.alloc(32, 0x03).toString('base64'), // all 0x03
-    Buffer.alloc(32, 0xAA).toString('base64'), // all 0xAA
-    Buffer.alloc(32, 0xFF).toString('base64'), // all 0xFF
+    Buffer.alloc(32, 0xaa).toString('base64'), // all 0xAA
+    Buffer.alloc(32, 0xff).toString('base64'), // all 0xFF
     Buffer.from('deadbeef'.repeat(8), 'hex').toString('base64'),
-    Buffer.from('cafebabe'.repeat(8), 'hex').toString('base64'),
+    Buffer.from('cafebabe'.repeat(8), 'hex').toString('base64')
   ]
 
   // Data payloads for general messages
@@ -225,7 +238,7 @@ async function generateBrc31Vectors() {
     Buffer.from('{"action":"listOutputs","limit":10}').toString('hex'),
     Buffer.from('GET /sendMessage HTTP/1.1').toString('hex'),
     Buffer.alloc(0).toString('hex'), // empty
-    Buffer.from(new Uint8Array(32).fill(0x42)).toString('hex'), // 32 bytes of 0x42
+    Buffer.from(new Uint8Array(32).fill(0x42)).toString('hex') // 32 bytes of 0x42
   ]
 
   // Phase 1: initialResponse signatures (various sender/recipient combos)
@@ -233,7 +246,7 @@ async function generateBrc31Vectors() {
     { senderIdx: 0, recipientIdx: 1 }, // Key1 → Key2
     { senderIdx: 1, recipientIdx: 0 }, // Key2 → Key1
     { senderIdx: 0, recipientIdx: 2 }, // Key1 → Key3
-    { senderIdx: 2, recipientIdx: 0 }, // Key3 → Key1
+    { senderIdx: 2, recipientIdx: 0 } // Key3 → Key1
   ]
 
   for (const { senderIdx, recipientIdx } of handshakePairs) {
@@ -251,7 +264,7 @@ async function generateBrc31Vectors() {
         data: hexToBytes(data),
         protocolID: [2, 'authrite message signature'],
         keyID,
-        counterparty: KEYS[recipientIdx].pubkey,
+        counterparty: KEYS[recipientIdx].pubkey
       })
 
       vectors.push({
@@ -264,21 +277,26 @@ async function generateBrc31Vectors() {
             data,
             protocolID: [2, 'authrite message signature'],
             keyID,
-            counterparty: KEYS[recipientIdx].pubkey,
-          },
+            counterparty: KEYS[recipientIdx].pubkey
+          }
         },
         expected: { signature: Buffer.from(signResult.signature).toString('hex') },
-        tags: ['brc-31', 'brc-43', 'initial-response', `key${senderIdx + 1}-to-key${recipientIdx + 1}`],
+        tags: [
+          'brc-31',
+          'brc-43',
+          'initial-response',
+          `key${senderIdx + 1}-to-key${recipientIdx + 1}`
+        ]
       })
 
       // Corresponding verify
       const recipientWallet = wallet(KEYS[recipientIdx].scalar)
-      const verifyResult = await recipientWallet.verifySignature({
+      await recipientWallet.verifySignature({
         data: hexToBytes(data),
         signature: signResult.signature,
         protocolID: [2, 'authrite message signature'],
         keyID,
-        counterparty: KEYS[senderIdx].pubkey,
+        counterparty: KEYS[senderIdx].pubkey
       })
       vectors.push({
         id: `messaging.brc31.authrite-signature.${id++}`,
@@ -291,11 +309,17 @@ async function generateBrc31Vectors() {
             signature: Buffer.from(signResult.signature).toString('hex'),
             protocolID: [2, 'authrite message signature'],
             keyID,
-            counterparty: KEYS[senderIdx].pubkey,
-          },
+            counterparty: KEYS[senderIdx].pubkey
+          }
         },
         expected: { valid: true },
-        tags: ['brc-31', 'brc-43', 'initial-response', 'verify', `key${senderIdx + 1}-to-key${recipientIdx + 1}`],
+        tags: [
+          'brc-31',
+          'brc-43',
+          'initial-response',
+          'verify',
+          `key${senderIdx + 1}-to-key${recipientIdx + 1}`
+        ]
       })
     }
   }
@@ -314,7 +338,7 @@ async function generateBrc31Vectors() {
           data: hexToBytes(payload) || [],
           protocolID: [2, 'authrite message signature'],
           keyID,
-          counterparty: KEYS[ri].pubkey,
+          counterparty: KEYS[ri].pubkey
         })
         vectors.push({
           id: `messaging.brc31.authrite-signature.${id++}`,
@@ -326,11 +350,11 @@ async function generateBrc31Vectors() {
               data: payload,
               protocolID: [2, 'authrite message signature'],
               keyID,
-              counterparty: KEYS[ri].pubkey,
-            },
+              counterparty: KEYS[ri].pubkey
+            }
           },
           expected: { signature: Buffer.from(signResult.signature).toString('hex') },
-          tags: ['brc-31', 'brc-43', 'general-message'],
+          tags: ['brc-31', 'brc-43', 'general-message']
         })
       }
     }
@@ -345,12 +369,12 @@ async function generateBrc31Vectors() {
     data: hexToBytes(basePayload),
     protocolID: [2, 'authrite message signature'],
     keyID: `${baseNonce} ${altNonce}`,
-    counterparty: KEYS[1].pubkey,
+    counterparty: KEYS[1].pubkey
   })
 
   // Flip last byte of signature
   const tamperedSig = [...validSig.signature]
-  tamperedSig[tamperedSig.length - 1] ^= 0xFF
+  tamperedSig[tamperedSig.length - 1] ^= 0xff
   vectors.push({
     id: `messaging.brc31.authrite-signature.${id++}`,
     description: 'invalid signature: tampered DER byte — verify returns false',
@@ -362,11 +386,11 @@ async function generateBrc31Vectors() {
         signature: Buffer.from(tamperedSig).toString('hex'),
         protocolID: [2, 'authrite message signature'],
         keyID: `${baseNonce} ${altNonce}`,
-        counterparty: KEYS[0].pubkey,
-      },
+        counterparty: KEYS[0].pubkey
+      }
     },
     expected: { valid: false },
-    tags: ['brc-31', 'brc-43', 'error', 'tampered-signature'],
+    tags: ['brc-31', 'brc-43', 'error', 'tampered-signature']
   })
 
   // Wrong data
@@ -382,11 +406,11 @@ async function generateBrc31Vectors() {
         signature: Buffer.from(validSig.signature).toString('hex'),
         protocolID: [2, 'authrite message signature'],
         keyID: `${baseNonce} ${altNonce}`,
-        counterparty: KEYS[0].pubkey,
-      },
+        counterparty: KEYS[0].pubkey
+      }
     },
     expected: { valid: false },
-    tags: ['brc-31', 'brc-43', 'error', 'wrong-data'],
+    tags: ['brc-31', 'brc-43', 'error', 'wrong-data']
   })
 
   return vectors
@@ -408,12 +432,20 @@ async function generateEciesVectors() {
     { label: 'single byte', hex: 'ff', lenBytes: 1 },
     { label: '4 bytes', hex: '01020304', lenBytes: 4 },
     { label: '16 bytes', hex: '000102030405060708090a0b0c0d0e0f', lenBytes: 16 },
-    { label: '32 bytes', hex: '0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20', lenBytes: 32 },
+    {
+      label: '32 bytes',
+      hex: '0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20',
+      lenBytes: 32
+    },
     { label: 'ASCII text', hex: Buffer.from('Hello, BSV!').toString('hex'), lenBytes: 11 },
-    { label: 'JSON-like payload', hex: Buffer.from('{"action":"pay","amount":1000}').toString('hex'), lenBytes: 30 },
+    {
+      label: 'JSON-like payload',
+      hex: Buffer.from('{"action":"pay","amount":1000}').toString('hex'),
+      lenBytes: 30
+    },
     { label: '100 bytes', hex: Buffer.alloc(100, 0x42).toString('hex'), lenBytes: 100 },
-    { label: '256 bytes', hex: Buffer.alloc(256, 0xAB).toString('hex'), lenBytes: 256 },
-    { label: 'all zeros 32B', hex: Buffer.alloc(32, 0).toString('hex'), lenBytes: 32 },
+    { label: '256 bytes', hex: Buffer.alloc(256, 0xab).toString('hex'), lenBytes: 256 },
+    { label: 'all zeros 32B', hex: Buffer.alloc(32, 0).toString('hex'), lenBytes: 32 }
   ]
 
   // For each sender/recipient pair, document the round-trip interface
@@ -422,7 +454,7 @@ async function generateEciesVectors() {
     { sender: KEYS[1], recipient: KEYS[0] },
     { sender: KEYS[2], recipient: KEYS[3] },
     { sender: KEYS[0], recipient: KEYS[2] },
-    { sender: KEYS[3], recipient: KEYS[4] },
+    { sender: KEYS[3], recipient: KEYS[4] }
   ]
 
   for (const { sender, recipient } of pairs.slice(0, 3)) {
@@ -433,7 +465,7 @@ async function generateEciesVectors() {
         plaintext: hexToBytes(msg.hex),
         protocolID: [0, 'ECIES'],
         keyID: '1',
-        counterparty: recipient.pubkey,
+        counterparty: recipient.pubkey
       })
       // Decrypt from recipient side
       const recipientWallet = wallet(recipient.scalar)
@@ -441,7 +473,7 @@ async function generateEciesVectors() {
         ciphertext: encResult.ciphertext,
         protocolID: [0, 'ECIES'],
         keyID: '1',
-        counterparty: sender.pubkey,
+        counterparty: sender.pubkey
       })
       // Verify the round-trip gives back the original
       const decHex = Buffer.from(decResult.plaintext).toString('hex')
@@ -457,13 +489,14 @@ async function generateEciesVectors() {
           protocolID: [0, 'ECIES'],
           keyID: '1',
           counterparty_pub: recipient.pubkey,
-          _note: 'ECIES is non-deterministic; this vector documents the interface and verifies round-trip correctness',
+          _note:
+            'ECIES is non-deterministic; this vector documents the interface and verifies round-trip correctness'
         },
         expected: {
           plaintext_recovered: msg.hex,
-          roundtrip: true,
+          roundtrip: true
         },
-        tags: ['ecies', 'round-trip', `${msg.lenBytes}B`],
+        tags: ['ecies', 'round-trip', `${msg.lenBytes}B`]
       })
     }
   }
@@ -479,12 +512,12 @@ async function generateEciesVectors() {
       protocolID: [0, 'ECIES'],
       keyID: '1',
       counterparty_pub: KEYS[1].pubkey, // encrypted to key2
-      _note: 'decrypt with key3 instead of key2 must fail',
+      _note: 'decrypt with key3 instead of key2 must fail'
     },
     expected: {
-      error: true,
+      error: true
     },
-    tags: ['ecies', 'error', 'wrong-key'],
+    tags: ['ecies', 'error', 'wrong-key']
   })
 
   vectors.push({
@@ -498,12 +531,12 @@ async function generateEciesVectors() {
       keyID: '1',
       counterparty_pub: KEYS[1].pubkey,
       _note: 'HMAC check fails on tampered ciphertext',
-      _tamper: 'flip_last_byte',
+      _tamper: 'flip_last_byte'
     },
     expected: {
-      error: true,
+      error: true
     },
-    tags: ['ecies', 'error', 'tampered-ciphertext'],
+    tags: ['ecies', 'error', 'tampered-ciphertext']
   })
 
   // Self-encryption
@@ -513,13 +546,13 @@ async function generateEciesVectors() {
       plaintext: hexToBytes(msg.hex),
       protocolID: [0, 'ECIES'],
       keyID: '1',
-      counterparty: 'self',
+      counterparty: 'self'
     })
     const decResult = await w.decrypt({
       ciphertext: encResult.ciphertext,
       protocolID: [0, 'ECIES'],
       keyID: '1',
-      counterparty: 'self',
+      counterparty: 'self'
     })
     const decHex = Buffer.from(decResult.plaintext).toString('hex')
     if (decHex !== msg.hex) throw new Error(`Self ECIES round-trip failed`)
@@ -532,13 +565,13 @@ async function generateEciesVectors() {
         plaintext: msg.hex,
         protocolID: [0, 'ECIES'],
         keyID: '1',
-        counterparty_pub: 'self',
+        counterparty_pub: 'self'
       },
       expected: {
         plaintext_recovered: msg.hex,
-        roundtrip: true,
+        roundtrip: true
       },
-      tags: ['ecies', 'round-trip', 'self'],
+      tags: ['ecies', 'round-trip', 'self']
     })
   }
 
@@ -549,16 +582,17 @@ async function generateEciesVectors() {
       plaintext: hexToBytes('deadbeef'),
       protocolID: [0, 'ECIES'],
       keyID,
-      counterparty: KEYS[1].pubkey,
+      counterparty: KEYS[1].pubkey
     })
     const rw = wallet(KEYS[1].scalar)
     const decResult = await rw.decrypt({
       ciphertext: encResult.ciphertext,
       protocolID: [0, 'ECIES'],
       keyID,
-      counterparty: KEYS[0].pubkey,
+      counterparty: KEYS[0].pubkey
     })
-    if (Buffer.from(decResult.plaintext).toString('hex') !== 'deadbeef') throw new Error(`keyID round-trip failed for ${keyID}`)
+    if (Buffer.from(decResult.plaintext).toString('hex') !== 'deadbeef')
+      throw new Error(`keyID round-trip failed for ${keyID}`)
     vectors.push({
       id: `sdk.crypto.ecies.${id++}`,
       description: `ECIES round-trip with keyID='${keyID}'`,
@@ -568,13 +602,13 @@ async function generateEciesVectors() {
         plaintext: 'deadbeef',
         protocolID: [0, 'ECIES'],
         keyID,
-        counterparty_pub: KEYS[1].pubkey,
+        counterparty_pub: KEYS[1].pubkey
       },
       expected: {
         plaintext_recovered: 'deadbeef',
-        roundtrip: true,
+        roundtrip: true
       },
-      tags: ['ecies', 'round-trip', 'keyID-variant'],
+      tags: ['ecies', 'round-trip', 'keyID-variant']
     })
   }
 
@@ -589,24 +623,31 @@ async function main() {
 
   // BRC-29
   console.log('Generating BRC-29 vectors...')
-  const brc29Existing = JSON.parse(readFileSync(`${base}/wallet/brc29/payment-derivation.json`, 'utf8'))
+  const brc29Existing = JSON.parse(
+    readFileSync(`${base}/wallet/brc29/payment-derivation.json`, 'utf8')
+  )
   const brc29New = await generateBrc29Vectors()
   const brc29File = {
     ...brc29Existing,
-    vectors: brc29New,
+    vectors: brc29New
   }
   writeFileSync(`${base}/wallet/brc29/payment-derivation.json`, JSON.stringify(brc29File, null, 2))
   console.log(`  BRC-29: ${brc29New.length} vectors`)
 
   // BRC-31
   console.log('Generating BRC-31 vectors...')
-  const brc31Existing = JSON.parse(readFileSync(`${base}/messaging/brc31/authrite-signature.json`, 'utf8'))
+  const brc31Existing = JSON.parse(
+    readFileSync(`${base}/messaging/brc31/authrite-signature.json`, 'utf8')
+  )
   const brc31New = await generateBrc31Vectors()
   const brc31File = {
     ...brc31Existing,
-    vectors: brc31New,
+    vectors: brc31New
   }
-  writeFileSync(`${base}/messaging/brc31/authrite-signature.json`, JSON.stringify(brc31File, null, 2))
+  writeFileSync(
+    `${base}/messaging/brc31/authrite-signature.json`,
+    JSON.stringify(brc31File, null, 2)
+  )
   console.log(`  BRC-31: ${brc31New.length} vectors`)
 
   // ECIES
@@ -615,7 +656,7 @@ async function main() {
   const eciesNew = await generateEciesVectors()
   const eciesFile = {
     ...eciesExisting,
-    vectors: eciesNew,
+    vectors: eciesNew
   }
   writeFileSync(`${base}/sdk/crypto/ecies.json`, JSON.stringify(eciesFile, null, 2))
   console.log(`  ECIES: ${eciesNew.length} vectors`)

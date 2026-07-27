@@ -21,8 +21,12 @@
 
 import { expect } from '@jest/globals'
 import {
-  Hash, PrivateKey,
-  Beef, Script, UnlockingScript, Transaction,
+  Hash,
+  PrivateKey,
+  Beef,
+  Script,
+  UnlockingScript,
+  Transaction,
   TransactionSignature
 } from '@bsv/sdk'
 import { StorageUtils } from '@bsv/sdk/storage'
@@ -46,7 +50,7 @@ export const categories: ReadonlyArray<string> = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function hexToBytes (hex: string): number[] {
+function hexToBytes(hex: string): number[] {
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
@@ -55,27 +59,29 @@ function hexToBytes (hex: string): number[] {
   return out
 }
 
-function bytesToHex (bytes: number[] | Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+function bytesToHex(bytes: number[] | Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
-function getString (m: Record<string, unknown>, key: string): string {
+function getString(m: Record<string, unknown>, key: string): string {
   const v = m[key]
   return typeof v === 'string' ? v : ''
 }
 
-function getBool (m: Record<string, unknown>, key: string): boolean {
+function getBool(m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
 }
 
-function getNumber (m: Record<string, unknown>, key: string, fallback = 0): number {
+function getNumber(m: Record<string, unknown>, key: string, fallback = 0): number {
   const v = m[key]
   return typeof v === 'number' ? v : fallback
 }
 
 // ── Implemented dispatchers ───────────────────────────────────────────────────
 
-function dispatchMerklePathOddNode (
+function dispatchMerklePathOddNode(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -89,10 +95,7 @@ function dispatchMerklePathOddNode (
   // Other operation shapes are no-ops for TS (covered by Go runner)
 }
 
-function dispatchUHRPURL (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchUHRPURL(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const hashHex = getString(input, 'hash_hex')
   if (hashHex !== '') {
     const hashBytes = hexToBytes(hashHex)
@@ -120,7 +123,7 @@ function dispatchUHRPURL (
   }
 }
 
-function dispatchPrivKeyWIF (
+function dispatchPrivKeyWIF(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -150,7 +153,7 @@ function dispatchPrivKeyWIF (
  * TS SDK populates inputTxids from the raw bytes so isValid() traverses
  * correctly without a separate "hydration" step.
  */
-function dispatchBeefIsValidHydration (
+function dispatchBeefIsValidHydration(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -186,7 +189,7 @@ function dispatchBeefIsValidHydration (
  * BIP276 format: <prefix>:<network_hex2><version_hex2><data_hex><checksum_hex8>
  * where checksum = Hash256(prefix + ':' + network + version + data)[0..3] as LE hex.
  */
-function bip276Encode (prefix: string, network: number, version: number, dataHex: string): string {
+function bip276Encode(prefix: string, network: number, version: number, dataHex: string): string {
   const networkHex = network.toString(16).padStart(2, '0')
   const versionHex = version.toString(16).padStart(2, '0')
   const payload = networkHex + versionHex + dataHex
@@ -197,7 +200,9 @@ function bip276Encode (prefix: string, network: number, version: number, dataHex
   return `${prefix}:${payload}${checksumHex}`
 }
 
-function bip276Decode (encoded: string): { prefix: string, network: number, version: number, dataHex: string } | null {
+function bip276Decode(
+  encoded: string
+): { prefix: string; network: number; version: number; dataHex: string } | null {
   const colonIdx = encoded.indexOf(':')
   if (colonIdx === -1) return null
   const prefix = encoded.slice(0, colonIdx)
@@ -212,10 +217,7 @@ function bip276Decode (encoded: string): { prefix: string, network: number, vers
   return { prefix, network, version, dataHex }
 }
 
-function dispatchBIP276 (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+function dispatchBIP276(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const op = getString(input, 'operation')
 
   if (op === 'DecodeBIP276') {
@@ -252,13 +254,13 @@ function dispatchBIP276 (
  * any nonzero size when rate > 0. This is independent of SDK fee model classes;
  * we compute it directly to assert the correct formula is applied.
  */
-function bsvNodeFee (sizeBytes: number, satoshisPerKb: number): number {
+function bsvNodeFee(sizeBytes: number, satoshisPerKb: number): number {
   if (sizeBytes === 0 || satoshisPerKb === 0) return 0
-  const fee = Math.floor(sizeBytes * satoshisPerKb / 1000)
+  const fee = Math.floor((sizeBytes * satoshisPerKb) / 1000)
   return fee === 0 ? 1 : fee // minimum-1 rule
 }
 
-function dispatchFeeModelMismatch (
+function dispatchFeeModelMismatch(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -278,7 +280,7 @@ function dispatchFeeModelMismatch (
  * producing hex '0176', not as OP_DUP (0x76). Named opcodes like 'OP_DUP'
  * must still emit the bare opcode byte.
  */
-function dispatchScriptFromASMNumericToken (
+function dispatchScriptFromASMNumericToken(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -304,7 +306,7 @@ function dispatchScriptFromASMNumericToken (
  *   - for LSHIFT: mask to original bit-width (truncate MSB overflow)
  *   - serialise back as big-endian, same length as input
  */
-function computeShift (valueHex: string, shiftBits: number, opcode: 'lshift' | 'rshift'): string {
+function computeShift(valueHex: string, shiftBits: number, opcode: 'lshift' | 'rshift'): string {
   const buf = hexToBytes(valueHex)
   const len = buf.length
 
@@ -325,16 +327,16 @@ function computeShift (valueHex: string, shiftBits: number, opcode: 'lshift' | '
   }
 
   // Serialise back as big-endian, same length as input
-  const out: number[] = new Array(len).fill(0)
+  const out = Array.from<number>({ length: len }).fill(0)
   let tmp = shifted
   for (let i = len - 1; i >= 0; i--) {
-    out[i] = Number(tmp & 0xFFn)
+    out[i] = Number(tmp & 0xffn)
     tmp >>= 8n
   }
   return bytesToHex(out)
 }
 
-function dispatchScriptLShiftTruncation (
+function dispatchScriptLShiftTruncation(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -354,7 +356,7 @@ function dispatchScriptLShiftTruncation (
  * OP_LSHIFT and OP_RSHIFT must preserve big-endian byte order.
  * The pre-fix bug produced byte-swapped output (toArray('le') vs 'be').
  */
-function dispatchScriptShiftEndianness (
+function dispatchScriptShiftEndianness(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -375,7 +377,7 @@ function dispatchScriptShiftEndianness (
  * Script.writeBin([]) must push OP_0 (0x00) which serialises as '00' in hex
  * and 'OP_0' in ASM.
  */
-function dispatchScriptWriteBinEmpty (
+function dispatchScriptWriteBinEmpty(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -408,7 +410,7 @@ function dispatchScriptWriteBinEmpty (
  * For the serialise_input_sequence operation we just build a Transaction and
  * inspect the raw bytes.
  */
-function dispatchTxSequenceZeroSighash (
+function dispatchTxSequenceZeroSighash(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -452,12 +454,14 @@ function dispatchTxSequenceZeroSighash (
     const inputSequence = getNumber(input, 'input_sequence')
     const tx = new Transaction(
       1,
-      [{
-        sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
-        sourceOutputIndex: 0,
-        unlockingScript: new UnlockingScript([]),
-        sequence: inputSequence
-      }],
+      [
+        {
+          sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript([]),
+          sequence: inputSequence
+        }
+      ],
       [],
       0
     )
@@ -471,7 +475,7 @@ function dispatchTxSequenceZeroSighash (
 
 // ── Main dispatch entry point ─────────────────────────────────────────────────
 
-export function dispatch (
+export function dispatch(
   category: string,
   input: Record<string, unknown>,
   expected: Record<string, unknown>

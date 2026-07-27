@@ -49,7 +49,7 @@ const REGRESSION_SCHEMA_PATH = join(SCHEMA_DIR, 'regression-vector.schema.json')
 let validateStandard
 let validateRegression
 
-async function initSchemaValidation () {
+async function initSchemaValidation() {
   let AjvMod
   try {
     // Use ajv/dist/2020 because our schemas declare draft-2020-12
@@ -59,8 +59,8 @@ async function initSchemaValidation () {
   } catch (err) {
     throw new Error(
       'ajv is a hard dependency of the BSV conformance structural runner.\n' +
-      'Please run `cd conformance/runner && pnpm install` (or equivalent) to install it.\n' +
-      `Import error: ${err.message}`
+        'Please run `cd conformance/runner && pnpm install` (or equivalent) to install it.\n' +
+        `Import error: ${err.message}`
     )
   }
 
@@ -74,8 +74,8 @@ async function initSchemaValidation () {
   } catch (err) {
     throw new Error(
       `Failed to load conformance schemas from ${SCHEMA_DIR}.\n` +
-      `Make sure both vector.schema.json and regression-vector.schema.json exist.\n` +
-      `Original error: ${err.message}`
+        `Make sure both vector.schema.json and regression-vector.schema.json exist.\n` +
+        `Original error: ${err.message}`
     )
   }
 
@@ -87,7 +87,7 @@ async function initSchemaValidation () {
 // CLI args
 // ---------------------------------------------------------------------------
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const args = argv.slice(2)
   const opts = {
     validateOnly: false,
@@ -106,7 +106,7 @@ function parseArgs (argv) {
 // Vector file loading — recursive glob over all *.json
 // ---------------------------------------------------------------------------
 
-async function findJsonFiles (dir) {
+async function findJsonFiles(dir) {
   const results = []
   let entries
   try {
@@ -134,13 +134,21 @@ const REQUIRED_TOP_LEVEL = ['vectors']
 
 // Regression vectors follow a different (intentionally richer) format for historical bug tracking.
 // We keep a small set of recommended fields for helpful warnings on regressions.
-const REGRESSION_RECOMMENDED_TOP_LEVEL = ['version', 'domain', 'category', 'description', 'regression']
+const REGRESSION_RECOMMENDED_TOP_LEVEL = [
+  'version',
+  'domain',
+  'category',
+  'description',
+  'regression'
+]
 const REQUIRED_VECTOR_FIELDS = ['id', 'input', 'expected']
 
-function checkTopLevelShape (path, data) {
+function checkTopLevelShape(path, data) {
   if (Array.isArray(data)) {
     return {
-      errors: [`WARN: ${path} uses legacy bare-array format — wrap in { "vectors": [...] } envelope`],
+      errors: [
+        `WARN: ${path} uses legacy bare-array format — wrap in { "vectors": [...] } envelope`
+      ],
       vectors: data,
       done: true
     }
@@ -155,7 +163,7 @@ function checkTopLevelShape (path, data) {
   return { errors: [], vectors: null, done: false }
 }
 
-function checkRequiredFields (path, data) {
+function checkRequiredFields(path, data) {
   const errors = []
   for (const field of REQUIRED_TOP_LEVEL) {
     if (!(field in data)) {
@@ -165,7 +173,7 @@ function checkRequiredFields (path, data) {
   return errors
 }
 
-function checkRegressionMetadata (path, data) {
+function checkRegressionMetadata(path, data) {
   const errors = []
   for (const field of REGRESSION_RECOMMENDED_TOP_LEVEL) {
     if (!(field in data)) {
@@ -178,7 +186,7 @@ function checkRegressionMetadata (path, data) {
   return errors
 }
 
-function runSchemaValidator (path, data, isRegression) {
+function runSchemaValidator(path, data, isRegression) {
   const validator = isRegression ? validateRegression : validateStandard
   const schemaName = isRegression ? 'regression-vector.schema.json' : 'vector.schema.json'
   if (!validator || validator(data)) return []
@@ -188,7 +196,7 @@ function runSchemaValidator (path, data, isRegression) {
   })
 }
 
-function validateFile (path, data) {
+function validateFile(path, data) {
   const shape = checkTopLevelShape(path, data)
   if (shape.done) return { errors: shape.errors, vectors: shape.vectors }
 
@@ -208,7 +216,7 @@ function validateFile (path, data) {
   return { errors, vectors: data.vectors }
 }
 
-function validateVector (filePath, vec, index) {
+function validateVector(filePath, vec, index) {
   const errors = []
   for (const field of REQUIRED_VECTOR_FIELDS) {
     if (!(field in vec)) {
@@ -222,7 +230,7 @@ function validateVector (filePath, vec, index) {
 // JUnit XML helpers
 // ---------------------------------------------------------------------------
 
-function escXml (s = '') {
+function escXml(s = '') {
   return String(s)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -230,31 +238,35 @@ function escXml (s = '') {
     .replaceAll('"', '&quot;')
 }
 
-function toJUnit (suites) {
+function toJUnit(suites) {
   const allCases = suites.flatMap(s => s.cases)
   const total = allCases.length
   const failed = allCases.filter(c => !c.pass).length
 
-  const suiteXml = suites.map(s => {
-    const sTotal = s.cases.length
-    const sFailed = s.cases.filter(c => !c.pass).length
-    const casesXml = s.cases.map(c => {
-      if (c.pass) {
-        return `    <testcase name="${escXml(c.name)}" classname="${escXml(s.name)}" time="0"/>`
-      }
-      return [
-        `    <testcase name="${escXml(c.name)}" classname="${escXml(s.name)}" time="0">`,
-        `      <failure message="${escXml(c.error)}">${escXml(c.error)}</failure>`,
-        '    </testcase>'
-      ].join('\n')
-    }).join('\n')
+  const suiteXml = suites
+    .map(s => {
+      const sTotal = s.cases.length
+      const sFailed = s.cases.filter(c => !c.pass).length
+      const casesXml = s.cases
+        .map(c => {
+          if (c.pass) {
+            return `    <testcase name="${escXml(c.name)}" classname="${escXml(s.name)}" time="0"/>`
+          }
+          return [
+            `    <testcase name="${escXml(c.name)}" classname="${escXml(s.name)}" time="0">`,
+            `      <failure message="${escXml(c.error)}">${escXml(c.error)}</failure>`,
+            '    </testcase>'
+          ].join('\n')
+        })
+        .join('\n')
 
-    return [
-      `  <testsuite name="${escXml(s.name)}" tests="${sTotal}" failures="${sFailed}" errors="0" skipped="0">`,
-      casesXml,
-      '  </testsuite>'
-    ].join('\n')
-  }).join('\n')
+      return [
+        `  <testsuite name="${escXml(s.name)}" tests="${sTotal}" failures="${sFailed}" errors="0" skipped="0">`,
+        casesXml,
+        '  </testsuite>'
+      ].join('\n')
+    })
+    .join('\n')
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -268,7 +280,7 @@ function toJUnit (suites) {
 // Main
 // ---------------------------------------------------------------------------
 
-async function run () {
+async function run() {
   const opts = parseArgs(process.argv)
   const vectorsDir = opts.vectorsDir
 
@@ -335,7 +347,6 @@ async function run () {
     const warnFileErrors = fileErrors.filter(e => e.startsWith('WARN:'))
 
     const suiteName = relPath.replace(/\.json$/, '')
-    const suitePass = fatalFileErrors.length === 0
 
     // If the file itself has fatal errors, add a synthetic failing case
     if (fatalFileErrors.length > 0) {
@@ -351,7 +362,7 @@ async function run () {
     suites.push({ name: suiteName, cases })
     totalVectors += vectors.length
 
-    const status = (fatalFileErrors.length === 0 && cases.every(c => c.pass)) ? 'OK' : 'FAIL'
+    const status = fatalFileErrors.length === 0 && cases.every(c => c.pass) ? 'OK' : 'FAIL'
     const isRegressionFile = relPath.includes('/regressions/')
     let warnStr = ''
     if (warnFileErrors.length > 0) {
@@ -409,4 +420,9 @@ async function run () {
   process.exit(0)
 }
 
-run().catch(err => { console.error(err); process.exit(1) })
+try {
+  await run()
+} catch (err) {
+  console.error(err)
+  process.exit(1)
+}

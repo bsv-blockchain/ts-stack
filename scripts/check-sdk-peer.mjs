@@ -25,7 +25,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 
 // Walk packages/** with Node's fs (no shell out) collecting package.json paths.
-function findManifests (dir) {
+function findManifests(dir) {
   const out = []
   for (const name of readdirSync(dir)) {
     if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue
@@ -54,7 +54,7 @@ for (const rel of files) {
   if (asDep !== undefined) {
     violations.push(
       `${pkg.name} (${rel}): @bsv/sdk is a regular "dependency" ("${asDep}"). ` +
-      'Move it to peerDependencies: { "@bsv/sdk": "^2" } + devDependencies: { "@bsv/sdk": "workspace:^" }.'
+        'Move it to peerDependencies: { "@bsv/sdk": "^2" } + devDependencies: { "@bsv/sdk": "workspace:^" }.'
     )
   }
 
@@ -69,8 +69,12 @@ for (const rel of files) {
 if (violations.length > 0) {
   console.error('@bsv/sdk peer-dependency contract violations:\n')
   for (const v of violations) console.error(`  - ${v}`)
-  console.error(`\n${violations.length} violation(s). See scripts/check-sdk-peer.mjs for the rationale.`)
+  console.error(
+    `\n${violations.length} violation(s). See scripts/check-sdk-peer.mjs for the rationale.`
+  )
   process.exit(1)
 }
 
-console.log(`@bsv/sdk peer contract OK: scanned ${files.length} packages/** manifests, no violations.`)
+console.log(
+  `@bsv/sdk peer contract OK: scanned ${files.length} packages/** manifests, no violations.`
+)

@@ -42,7 +42,7 @@ for (const pkg of pkgList) {
   }
 }
 
-function parseVersion (version) {
+function parseVersion(version) {
   const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
   if (!match) return null
   return {
@@ -52,23 +52,24 @@ function parseVersion (version) {
   }
 }
 
-function compareVersion (a, b) {
+function compareVersion(a, b) {
   return a.major - b.major || a.minor - b.minor || a.patch - b.patch
 }
 
-function caretUpperBound (version) {
+function caretUpperBound(version) {
   if (version.major > 0) return { major: version.major + 1, minor: 0, patch: 0 }
   if (version.minor > 0) return { major: 0, minor: version.minor + 1, patch: 0 }
   return { major: 0, minor: 0, patch: version.patch + 1 }
 }
 
-function acceptsPeerVersion (range, wsVersion) {
+function acceptsPeerVersion(range, wsVersion) {
   if (!range.startsWith('^')) return false
   const minimum = parseVersion(range.slice(1))
   const current = parseVersion(wsVersion)
   if (!minimum || !current) return false
-  return compareVersion(current, minimum) >= 0 &&
-    compareVersion(current, caretUpperBound(minimum)) < 0
+  return (
+    compareVersion(current, minimum) >= 0 && compareVersion(current, caretUpperBound(minimum)) < 0
+  )
 }
 
 console.log(`Found ${Object.keys(workspaceMap).length} workspace packages`)
@@ -88,7 +89,12 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
   const pkg = JSON.parse(raw)
   let changed = false
 
-  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+  for (const field of [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies'
+  ]) {
     if (!pkg[field]) continue
     for (const [dep, range] of Object.entries(pkg[field])) {
       const ws = workspaceMap[dep]
@@ -98,9 +104,8 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
       // Peer ranges remain ordinary semver because they express the public
       // compatibility contract rather than an installation edge.
       const target = field === 'peerDependencies' ? `^${ws.version}` : 'workspace:^'
-      const valid = field === 'peerDependencies'
-        ? acceptsPeerVersion(range, ws.version)
-        : range === target
+      const valid =
+        field === 'peerDependencies' ? acceptsPeerVersion(range, ws.version) : range === target
       if (!valid) {
         console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
         pkg[field][dep] = target
@@ -115,7 +120,9 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
   }
 }
 
-console.log(`\n${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${totalChanges} cross-package references`)
+console.log(
+  `\n${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${totalChanges} cross-package references`
+)
 
 // --- 3. Sync ./infra/* (not part of pnpm workspace) ---
 //
@@ -132,15 +139,15 @@ let infraBumps = 0
 // regex so we can't accidentally hit catastrophic backtracking (and don't trip
 // SonarCloud's typescript:S5852 "super-linear regex" rule) on a degenerate
 // version string. Linear scan, capped length.
-const isAsciiDigit = (code) => code >= 48 && code <= 57
-const allDigits = (s) => {
+const isAsciiDigit = code => code >= 48 && code <= 57
+const allDigits = s => {
   if (s.length === 0) return false
   for (let i = 0; i < s.length; i++) {
     if (!isAsciiDigit(s.codePointAt(i))) return false
   }
   return true
 }
-const bumpPatch = (version) => {
+const bumpPatch = version => {
   if (typeof version !== 'string' || version.length === 0 || version.length > 64) return null
 
   const dot1 = version.indexOf('.')
@@ -169,7 +176,8 @@ if (!WORKSPACE_ONLY) {
   try {
     entries = readdirSync(INFRA_DIR, { withFileTypes: true })
   } catch (error) {
-    const missing = typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+    const missing =
+      typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
     if (!missing) throw error
   }
   for (const entry of entries) {
@@ -181,7 +189,12 @@ if (!WORKSPACE_ONLY) {
     const pkg = JSON.parse(raw)
     let changed = false
 
-    for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+    for (const field of [
+      'dependencies',
+      'devDependencies',
+      'peerDependencies',
+      'optionalDependencies'
+    ]) {
       if (!pkg[field]) continue
       for (const [dep, range] of Object.entries(pkg[field])) {
         const ws = workspaceMap[dep]
@@ -210,4 +223,6 @@ if (!WORKSPACE_ONLY) {
   }
 }
 
-console.log(`${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${infraDepChanges} infra dep reference(s) across ${infraBumps} component(s)`)
+console.log(
+  `${DRY_RUN ? '[DRY RUN] Would update' : 'Updated'} ${infraDepChanges} infra dep reference(s) across ${infraBumps} component(s)`
+)

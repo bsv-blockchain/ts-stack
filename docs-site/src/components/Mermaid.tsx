@@ -31,9 +31,9 @@ export default function Mermaid({ code }: Readonly<Props>) {
           titleColor: '#e2e8f0',
           edgeLabelBackground: '#16161f',
           attributeBackgroundColorEven: '#111119',
-          attributeBackgroundColorOdd: '#16161f',
+          attributeBackgroundColorOdd: '#16161f'
         },
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'JetBrains Mono', monospace"
       })
 
       const id = `mermaid-${renderId}`

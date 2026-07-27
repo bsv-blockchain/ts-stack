@@ -24,25 +24,16 @@ import {
 } from '@bsv/sdk'
 import * as BSM from '@bsv/sdk/compat/BSM'
 import { expect } from '@jest/globals'
-import {
-  hexToBytes,
-  bytesToHex,
-  getString,
-  getBool,
-  getNumber,
-  getStringArray
-} from './sdk.js'
+import { hexToBytes, bytesToHex, getString, getBool, getNumber, getStringArray } from './sdk.js'
 
 // Parse a fill-byte field: hex string like "0x01" or "" (defaults to 0x01)
-function parseFillByte (hex: string): number {
+function parseFillByte(hex: string): number {
   return hex === '' ? 0x01 : hexToBytes(hex.replace('0x', ''))[0]
 }
 
 // ── ECDSA sub-handlers ────────────────────────────────────────────────────────
 
-export function ecdsaMessageTooLarge (
-  input: Record<string, unknown>
-): void {
+export function ecdsaMessageTooLarge(input: Record<string, unknown>): void {
   const privKey = PrivateKey.fromHex(getString(input, 'privkey_hex'))
   const bits = typeof input['message_bits'] === 'number' ? input['message_bits'] : 258
   const bigMsg = new BigNumber(1).iushln(bits)
@@ -56,9 +47,7 @@ export function ecdsaMessageTooLarge (
   }
 }
 
-export function ecdsaPubkeyInfinity (
-  input: Record<string, unknown>
-): void {
+export function ecdsaPubkeyInfinity(input: Record<string, unknown>): void {
   const privKey = PrivateKey.fromHex(getString(input, 'privkey_hex'))
   const msgHex = getString(input, 'message_hex') || getString(input, 'signed_message_hex')
   const msgBN = new BigNumber(hexToBytes(msgHex))
@@ -67,7 +56,7 @@ export function ecdsaPubkeyInfinity (
   expect(() => ECDSA.verify(msgBN, sig, infKey)).toThrow()
 }
 
-export function ecdsaExplicitSignatureVerify (
+export function ecdsaExplicitSignatureVerify(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -81,10 +70,7 @@ export function ecdsaExplicitSignatureVerify (
   expect(ECDSA.verify(msgBN, sig, pubKey)).toBe(getBool(expected, 'valid'))
 }
 
-export function ecdsaBatchMessages (
-  msgs: unknown[],
-  privKey: PrivateKey
-): void {
+export function ecdsaBatchMessages(msgs: unknown[], privKey: PrivateKey): void {
   for (const mh of msgs) {
     if (typeof mh !== 'string') continue
     const sig = ECDSA.sign(new BigNumber(hexToBytes(mh)), privKey, true)
@@ -92,7 +78,7 @@ export function ecdsaBatchMessages (
   }
 }
 
-export function ecdsaWrongPubkey (
+export function ecdsaWrongPubkey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>,
   privKey: PrivateKey
@@ -107,7 +93,7 @@ export function ecdsaWrongPubkey (
   expect(valid).toBe(getBool(expected, 'valid'))
 }
 
-export function ecdsaSignAndVerify (
+export function ecdsaSignAndVerify(
   input: Record<string, unknown>,
   expected: Record<string, unknown>,
   privKey: PrivateKey
@@ -146,7 +132,7 @@ export function ecdsaSignAndVerify (
 
 // ── MerklePath sub-handlers ───────────────────────────────────────────────────
 
-export function computeMerkleRootFromDisplayTxids (txids: string[]): string {
+export function computeMerkleRootFromDisplayTxids(txids: string[]): string {
   if (txids.length === 0) throw new Error('empty txid list')
   let level: number[][] = txids.map(txidHex => {
     const b = hexToBytes(txidHex)
@@ -165,7 +151,7 @@ export function computeMerkleRootFromDisplayTxids (txids: string[]): string {
   return bytesToHex(root)
 }
 
-export function merklePathLeafPair (
+export function merklePathLeafPair(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -179,30 +165,30 @@ export function merklePathLeafPair (
   }
 }
 
-export function merklePathCoinbase (
+export function merklePathCoinbase(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   const txidStr = getString(input, 'txid')
   const height = input['height'] as number
   const mp = MerklePath.fromCoinbaseTxidAndHeight(txidStr, height)
-  if (getString(expected, 'bump_hex') !== '') expect(mp.toHex()).toBe(getString(expected, 'bump_hex'))
+  if (getString(expected, 'bump_hex') !== '')
+    expect(mp.toHex()).toBe(getString(expected, 'bump_hex'))
   if ('block_height' in expected) expect(mp.blockHeight).toBe(expected['block_height'])
-  if (getString(expected, 'merkle_root') !== '') expect(mp.computeRoot(txidStr)).toBe(getString(expected, 'merkle_root'))
+  if (getString(expected, 'merkle_root') !== '')
+    expect(mp.computeRoot(txidStr)).toBe(getString(expected, 'merkle_root'))
 }
 
-function assertMerklePathStructure (
-  mp: MerklePath,
-  expected: Record<string, unknown>
-): void {
+function assertMerklePathStructure(mp: MerklePath, expected: Record<string, unknown>): void {
   if ('block_height' in expected) expect(mp.blockHeight).toBe(expected['block_height'])
   if ('path_levels' in expected) expect(mp.path.length).toBe(expected['path_levels'])
-  if ('path_level0_length' in expected) expect(mp.path[0].length).toBe(expected['path_level0_length'])
+  if ('path_level0_length' in expected)
+    expect(mp.path[0].length).toBe(expected['path_level0_length'])
   const wantHex = getString(expected, 'toHex') || getString(expected, 'serialized_bump_hex')
   if (wantHex !== '') expect(mp.toHex()).toBe(wantHex)
 }
 
-function assertTxidMerkleRoots (
+function assertTxidMerkleRoots(
   mp: MerklePath,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -225,7 +211,7 @@ function assertTxidMerkleRoots (
   assertSparseTxidRoots(mp, input, expected)
 }
 
-function assertSparseTxidRoots (
+function assertSparseTxidRoots(
   mp: MerklePath,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -241,7 +227,7 @@ function assertSparseTxidRoots (
   }
 }
 
-export function merklePathFromBump (
+export function merklePathFromBump(
   mp: MerklePath,
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -252,7 +238,7 @@ export function merklePathFromBump (
 
 // ── Serialization sub-handlers ────────────────────────────────────────────────
 
-export function serializationRawHex (
+export function serializationRawHex(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -262,10 +248,11 @@ export function serializationRawHex (
   if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
   if ('locktime' in expected) expect(tx.lockTime).toBe(expected['locktime'])
   if (getString(expected, 'txid') !== '') expect(tx.id('hex')).toBe(getString(expected, 'txid'))
-  if (getString(expected, 'raw_hex_roundtrip') !== '') expect(tx.toHex()).toBe(getString(expected, 'raw_hex_roundtrip'))
+  if (getString(expected, 'raw_hex_roundtrip') !== '')
+    expect(tx.toHex()).toBe(getString(expected, 'raw_hex_roundtrip'))
 }
 
-export function serializationEfHex (
+export function serializationEfHex(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -274,7 +261,7 @@ export function serializationEfHex (
   if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
 }
 
-export function serializationBeefHex (
+export function serializationBeefHex(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -284,7 +271,7 @@ export function serializationBeefHex (
   }
 }
 
-export function serializationBumpHex (
+export function serializationBumpHex(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -295,7 +282,7 @@ export function serializationBumpHex (
 
 // ── Signature sub-handlers ────────────────────────────────────────────────────
 
-export function signatureFromPrivkey (
+export function signatureFromPrivkey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -308,7 +295,9 @@ export function signatureFromPrivkey (
   if ('recovery' in input && getBool(expected, 'throws')) {
     const recovVal = input['recovery'] as number
     if (recovVal < 0 || recovVal > 3) {
-      expect(() => new Signature(new BigNumber(0), new BigNumber(0)).toCompact(recovVal, true)).toThrow()
+      expect(() =>
+        new Signature(new BigNumber(0), new BigNumber(0)).toCompact(recovVal, true)
+      ).toThrow()
       return
     }
   }
@@ -337,11 +326,13 @@ export function signatureFromPrivkey (
     const compact = sig.toCompact(recoveryVal, compressed) as number[]
     expect(compact[0]).toBe(expected['first_byte'])
   }
-  if (getString(expected, 'r_hex') !== '') expect(sig.r.toHex(32)).toBe(getString(expected, 'r_hex'))
-  if (getString(expected, 's_hex') !== '') expect(sig.s.toHex(32)).toBe(getString(expected, 's_hex'))
+  if (getString(expected, 'r_hex') !== '')
+    expect(sig.r.toHex(32)).toBe(getString(expected, 'r_hex'))
+  if (getString(expected, 's_hex') !== '')
+    expect(sig.s.toHex(32)).toBe(getString(expected, 's_hex'))
 }
 
-export function signatureFromDer (
+export function signatureFromDer(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -351,11 +342,13 @@ export function signatureFromDer (
     return
   }
   const sig = Signature.fromDER(derBytes)
-  if (getString(expected, 'r_hex') !== '') expect(sig.r.toHex(32)).toBe(getString(expected, 'r_hex'))
-  if (getString(expected, 's_hex') !== '') expect(sig.s.toHex(32)).toBe(getString(expected, 's_hex'))
+  if (getString(expected, 'r_hex') !== '')
+    expect(sig.r.toHex(32)).toBe(getString(expected, 'r_hex'))
+  if (getString(expected, 's_hex') !== '')
+    expect(sig.s.toHex(32)).toBe(getString(expected, 's_hex'))
 }
 
-export function signatureFromCompact (
+export function signatureFromCompact(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -374,7 +367,7 @@ export function signatureFromCompact (
 
 // ── BSM sub-handlers ──────────────────────────────────────────────────────────
 
-export function bsmVerifyDer (
+export function bsmVerifyDer(
   input: Record<string, unknown>,
   expected: Record<string, unknown>,
   magicHashBN: BigNumber
@@ -383,7 +376,7 @@ export function bsmVerifyDer (
   let sig: Signature
   try {
     sig = Signature.fromDER(hexToBytes(getString(input, 'der_hex')))
-  } catch (_e) {
+  } catch {
     expect(wantValid).toBe(false)
     return
   }
@@ -391,7 +384,7 @@ export function bsmVerifyDer (
   expect(ECDSA.verify(magicHashBN, sig, pub)).toBe(wantValid)
 }
 
-export function bsmVerifyCompact (
+export function bsmVerifyCompact(
   input: Record<string, unknown>,
   expected: Record<string, unknown>,
   magicHashBN: BigNumber
@@ -402,7 +395,7 @@ export function bsmVerifyCompact (
   try {
     const recoveryFactor = (compactBytes[0] - 27) & ~4
     recoveredPub = Signature.fromCompact(compactBytes).RecoverPublicKey(recoveryFactor, magicHashBN)
-  } catch (_e) {
+  } catch {
     expect(wantValid).toBe(false)
     return
   }
@@ -410,7 +403,7 @@ export function bsmVerifyCompact (
   expect(bytesToHex(recoveredPub.encode(true) as number[]) === wantPubHex).toBe(wantValid)
 }
 
-export function bsmRecovery (
+export function bsmRecovery(
   input: Record<string, unknown>,
   expected: Record<string, unknown>,
   msgBytes: number[]
@@ -425,7 +418,9 @@ export function bsmRecovery (
   const recoveredPub = sig.RecoverPublicKey(recoveryFactor, magicHashBN)
 
   if (getString(expected, 'recovered_pubkey_hex') !== '') {
-    expect(bytesToHex(recoveredPub.encode(true) as number[])).toBe(getString(expected, 'recovered_pubkey_hex'))
+    expect(bytesToHex(recoveredPub.encode(true) as number[])).toBe(
+      getString(expected, 'recovered_pubkey_hex')
+    )
   }
   if ('recovery_factor' in expected) {
     expect(recoveryFactor).toBe(expected['recovery_factor'])
@@ -434,7 +429,7 @@ export function bsmRecovery (
 
 // ── Evaluation sub-handlers ───────────────────────────────────────────────────
 
-export function evalWriteBn (
+export function evalWriteBn(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -443,7 +438,7 @@ export function evalWriteBn (
   if ('chunk_0_op' in expected) expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
 }
 
-export function evalWriteBnRange (
+export function evalWriteBnRange(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -456,7 +451,7 @@ export function evalWriteBnRange (
   }
 }
 
-export function evalFindAndDelete (
+export function evalFindAndDelete(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -464,7 +459,7 @@ export function evalFindAndDelete (
   const fillByte = parseFillByte(getString(input, 'fill_byte'))
   const hasTrailingOp1 = getBool(input, 'source_has_trailing_op1')
 
-  const data = new Array(dataLen).fill(fillByte)
+  const data = Array.from<number>({ length: dataLen }).fill(fillByte)
   const source = new Script()
   source.writeBin(data)
   source.writeBin(data)
@@ -474,14 +469,13 @@ export function evalFindAndDelete (
   needle.writeBin(data)
 
   const result = source.findAndDelete(needle)
-  if ('remaining_chunks_count' in expected) expect(result.chunks.length).toBe(expected['remaining_chunks_count'])
-  if ('remaining_chunk_0_op' in expected) expect(result.chunks[0].op).toBe(expected['remaining_chunk_0_op'])
+  if ('remaining_chunks_count' in expected)
+    expect(result.chunks.length).toBe(expected['remaining_chunks_count'])
+  if ('remaining_chunk_0_op' in expected)
+    expect(result.chunks[0].op).toBe(expected['remaining_chunk_0_op'])
 }
 
-export function evalHex (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+export function evalHex(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const h = input['hex'] as string
   if (getBool(expected, 'throws')) {
     expect(() => Script.fromHex(h)).toThrow()
@@ -489,11 +483,13 @@ export function evalHex (
   }
   const s = Script.fromHex(h)
   if ('chunks_count' in expected) expect(s.chunks.length).toBe(expected['chunks_count'])
-  if ('chunk_0_op' in expected && s.chunks.length > 0) expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
-  if (getString(expected, 'hex_roundtrip') !== '') expect(s.toHex()).toBe(getString(expected, 'hex_roundtrip'))
+  if ('chunk_0_op' in expected && s.chunks.length > 0)
+    expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
+  if (getString(expected, 'hex_roundtrip') !== '')
+    expect(s.toHex()).toBe(getString(expected, 'hex_roundtrip'))
 }
 
-export function evalBinary (
+export function evalBinary(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -505,29 +501,27 @@ export function evalBinary (
   }
 }
 
-export function evalP2PKH (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
+export function evalP2PKH(input: Record<string, unknown>, expected: Record<string, unknown>): void {
   const hashBytes = hexToBytes(getString(input, 'pubkey_hash_hex'))
   const scriptBytes = [0x76, 0xa9, 0x14, ...hashBytes, 0x88, 0xac]
   const s = Script.fromBinary(scriptBytes)
   if (getString(expected, 'hex') !== '') expect(s.toHex()).toBe(getString(expected, 'hex'))
   if ('byte_length' in expected) expect(scriptBytes.length).toBe(expected['byte_length'])
   const asm = s.toASM()
-  if (getString(expected, 'asm_prefix') !== '') expect(asm.startsWith(getString(expected, 'asm_prefix'))).toBe(true)
-  if (getString(expected, 'asm_suffix') !== '') expect(asm.endsWith(getString(expected, 'asm_suffix'))).toBe(true)
+  if (getString(expected, 'asm_prefix') !== '')
+    expect(asm.startsWith(getString(expected, 'asm_prefix'))).toBe(true)
+  if (getString(expected, 'asm_suffix') !== '')
+    expect(asm.endsWith(getString(expected, 'asm_suffix'))).toBe(true)
 }
 
-export function evalScriptPubkey (
+export function evalScriptPubkey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   const sigHex = getString(input, 'script_sig_hex')
   const lockingScript = LockingScript.fromHex(getString(input, 'script_pubkey_hex'))
-  const unlockingScript = sigHex === ''
-    ? UnlockingScript.fromBinary([])
-    : UnlockingScript.fromHex(sigHex)
+  const unlockingScript =
+    sigHex === '' ? UnlockingScript.fromBinary([]) : UnlockingScript.fromHex(sigHex)
 
   const spend = new Spend({
     sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
@@ -547,25 +541,25 @@ export function evalScriptPubkey (
   let valid = false
   try {
     valid = spend.validate()
-  } catch (_e) {
+  } catch {
     valid = false
   }
   expect(valid).toBe(getBool(expected, 'valid'))
 }
 
-export function evalDataLengthBytes (
+export function evalDataLengthBytes(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   const dLen = input['data_length_bytes'] as number
   const fillByte = parseFillByte(getString(input, 'data_fill_byte'))
-  const data = new Array(dLen).fill(fillByte)
+  const data = Array.from<number>({ length: dLen }).fill(fillByte)
   const s = new Script()
   s.writeBin(data)
   if ('chunk_0_op' in expected) expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
 }
 
-export function evalScriptAsm (
+export function evalScriptAsm(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -575,7 +569,8 @@ export function evalScriptAsm (
   if ('append_asm' in input) {
     const s2 = Script.fromASM(input['append_asm'] as string)
     s1.writeScript(s2)
-    if (getString(expected, 'result_asm') !== '') expect(s1.toASM()).toBe(getString(expected, 'result_asm'))
+    if (getString(expected, 'result_asm') !== '')
+      expect(s1.toASM()).toBe(getString(expected, 'result_asm'))
     return
   }
 
@@ -592,34 +587,40 @@ export function evalScriptAsm (
 
 const ZERO_TXID = '0000000000000000000000000000000000000000000000000000000000000000'
 
-export function emptyUnlockingScript (): UnlockingScript {
+export function emptyUnlockingScript(): UnlockingScript {
   return UnlockingScript.fromBinary([])
 }
 
-export function buildCreditingTransaction (lockingScript: LockingScript, amount: number): Transaction {
+export function buildCreditingTransaction(
+  lockingScript: LockingScript,
+  amount: number
+): Transaction {
   return new Transaction(
     1,
-    [{
-      sourceTXID: ZERO_TXID,
-      sourceOutputIndex: 0xffffffff,
-      unlockingScript: new UnlockingScript([{ op: OP.OP_0 }, { op: OP.OP_0 }]),
-      sequence: 0xffffffff
-    }],
+    [
+      {
+        sourceTXID: ZERO_TXID,
+        sourceOutputIndex: 0xffffffff,
+        unlockingScript: new UnlockingScript([{ op: OP.OP_0 }, { op: OP.OP_0 }]),
+        sequence: 0xffffffff
+      }
+    ],
     [{ lockingScript, satoshis: amount }],
     0
   )
 }
 
-export function validateNodeTransactionSpend (
+export function validateNodeTransactionSpend(
   tx: Transaction,
   prevouts: Array<Record<string, unknown>>,
   flags: string,
   inputIndex: number
 ): boolean {
   const txInput = tx.inputs[inputIndex]
-  const prevout = prevouts.find(candidate =>
-    getString(candidate, 'txid') === txInput.sourceTXID &&
-    (getNumber(candidate, 'vout') >>> 0) === txInput.sourceOutputIndex
+  const prevout = prevouts.find(
+    candidate =>
+      getString(candidate, 'txid') === txInput.sourceTXID &&
+      getNumber(candidate, 'vout') >>> 0 === txInput.sourceOutputIndex
   )
   if (prevout === undefined || txInput.unlockingScript === undefined) {
     throw new Error(`Missing prevout fixture for input ${inputIndex}`)
@@ -644,7 +645,7 @@ export function validateNodeTransactionSpend (
   return spend.validate()
 }
 
-export function dispatchNodeScriptFixture (
+export function dispatchNodeScriptFixture(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -672,13 +673,13 @@ export function dispatchNodeScriptFixture (
   let valid = false
   try {
     valid = spend.validate()
-  } catch (_e) {
+  } catch {
     valid = false
   }
   expect(valid).toBe(getBool(expected, 'valid'))
 }
 
-export function dispatchNodeSighashFixture (
+export function dispatchNodeSighashFixture(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -702,17 +703,19 @@ export function dispatchNodeSighashFixture (
     scope: getNumber(input, 'hash_type')
   }
 
-  const regular = Hash.hash256(TransactionSignature.format({
-    ...params,
-    ignoreChronicle: getStringArray(input, 'sources').includes('teranode')
-  })).reverse()
+  const regular = Hash.hash256(
+    TransactionSignature.format({
+      ...params,
+      ignoreChronicle: getStringArray(input, 'sources').includes('teranode')
+    })
+  ).reverse()
   const original = Hash.hash256(TransactionSignature.formatOTDA(params)).reverse()
 
   expect(bytesToHex(regular)).toBe(getString(expected, 'regular_hash'))
   expect(bytesToHex(original)).toBe(getString(expected, 'original_hash'))
 }
 
-function parseTransactionOrReturnInvalid (
+function parseTransactionOrReturnInvalid(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Transaction | null {
@@ -726,7 +729,7 @@ function parseTransactionOrReturnInvalid (
   }
 }
 
-function countRejectedSpends (
+function countRejectedSpends(
   tx: Transaction,
   prevouts: Array<Record<string, unknown>>,
   flagStrings: string[],
@@ -741,7 +744,7 @@ function countRejectedSpends (
   return rejectedSpendCases
 }
 
-function countOneSpend (
+function countOneSpend(
   tx: Transaction,
   prevouts: Array<Record<string, unknown>>,
   flags: string,
@@ -758,7 +761,7 @@ function countOneSpend (
   }
 }
 
-export function dispatchNodeTransactionFixture (
+export function dispatchNodeTransactionFixture(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
@@ -766,7 +769,7 @@ export function dispatchNodeTransactionFixture (
   if (tx === null) return
 
   const prevouts = Array.isArray(input.prevouts)
-    ? input.prevouts as Array<Record<string, unknown>>
+    ? (input.prevouts as Array<Record<string, unknown>>)
     : []
   const flagStrings = getStringArray(input, 'flag_strings')
   const expectValid = getBool(expected, 'valid')

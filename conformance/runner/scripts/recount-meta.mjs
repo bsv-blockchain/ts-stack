@@ -22,7 +22,7 @@ const CONFORMANCE_DIR = join(__dirname, '..', '..')
 const VECTORS_DIR = join(CONFORMANCE_DIR, 'vectors')
 const META_PATH = join(CONFORMANCE_DIR, 'META.json')
 
-function findJsonFiles (dir) {
+function findJsonFiles(dir) {
   const results = []
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry)

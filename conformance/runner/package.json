@@ -8,12 +8,16 @@
     "test": "node src/runner.js",
     "validate": "node src/runner.js --validate-only",
     "report": "node src/runner.js --report conformance/reports/results.xml",
-    "build": "echo 'no build step'"
+    "build": "node --check src/runner.js",
+    "format:check": "prettier --check \"src/**/*.js\" \"scripts/**/*.mjs\" \"*.{json,md}\"",
+    "lint": "oxlint src scripts --deny-warnings"
   },
   "dependencies": {
     "ajv": "^8.20.0"
   },
   "devDependencies": {
+    "oxlint": "^1.75.0",
+    "prettier": "^3.9.6",
     "typescript": "^6.0.3"
   },
   "license": "SEE LICENSE IN LICENSE.txt"

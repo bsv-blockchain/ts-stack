@@ -12,14 +12,12 @@ export default function ToC() {
   const [active, setActive] = useState<string>('')
 
   useEffect(() => {
-    const els = Array.from(
-      document.querySelectorAll<HTMLHeadingElement>('.prose h2, .prose h3')
-    )
+    const els = Array.from(document.querySelectorAll<HTMLHeadingElement>('.prose h2, .prose h3'))
     setHeadings(
       els.map(el => ({
         id: el.id,
         text: el.textContent ?? '',
-        level: Number.parseInt(el.tagName.slice(1)),
+        level: Number.parseInt(el.tagName.slice(1))
       }))
     )
   }, [])

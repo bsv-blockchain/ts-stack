@@ -112,8 +112,11 @@ function validateGeneratedArtifact(artifact, ownerDefinitions) {
   if (!isNonEmptyString(artifact?.owner) || !ownerDefinitions?.[artifact.owner]) {
     errors.push(`${prefix} references unknown owner ${JSON.stringify(artifact?.owner)}`)
   }
-  if (!Array.isArray(artifact?.sourceInputs) || artifact.sourceInputs.length === 0 ||
-      artifact.sourceInputs.some(item => !isNonEmptyString(item))) {
+  if (
+    !Array.isArray(artifact?.sourceInputs) ||
+    artifact.sourceInputs.length === 0 ||
+    artifact.sourceInputs.some(item => !isNonEmptyString(item))
+  ) {
     errors.push(`${prefix} must have one or more sourceInputs`)
   }
   for (const field of ['generator', 'reviewPolicy']) {
@@ -129,8 +132,9 @@ function validateGeneratedArtifacts(registry) {
   if (!Array.isArray(registry?.generatedArtifacts)) {
     return ['projects.json generatedArtifacts must be an array']
   }
-  const errors = duplicateValues(registry.generatedArtifacts.map(item => item.path))
-    .map(duplicate => `projects.json contains duplicate generated artifact path: ${duplicate}`)
+  const errors = duplicateValues(registry.generatedArtifacts.map(item => item.path)).map(
+    duplicate => `projects.json contains duplicate generated artifact path: ${duplicate}`
+  )
   for (const artifact of registry.generatedArtifacts) {
     errors.push(...validateGeneratedArtifact(artifact, registry.ownerDefinitions))
   }
@@ -157,12 +161,10 @@ function validateDependencyAutomation(registry) {
       errors.push(`${prefix}.${field} must be ${JSON.stringify(value)}`)
     }
   }
-  if (!isNonEmptyString(policy.owner) ||
-      !registry.ownerDefinitions?.[policy.owner]) {
+  if (!isNonEmptyString(policy.owner) || !registry.ownerDefinitions?.[policy.owner]) {
     errors.push(`${prefix} references unknown owner ${JSON.stringify(policy.owner)}`)
   }
-  if (!isNonEmptyString(policy.rationale) ||
-      policy.rationale.trim().length < 40) {
+  if (!isNonEmptyString(policy.rationale) || policy.rationale.trim().length < 40) {
     errors.push(`${prefix}.rationale must be at least 40 characters`)
   }
   return errors
@@ -183,8 +185,11 @@ function validateProjectMetadata(project, registry) {
   if (!CRITICALITIES.has(project.criticality)) {
     errors.push(`${prefix} has invalid criticality ${JSON.stringify(project.criticality)}`)
   }
-  if (!Array.isArray(project.runtimeTargets) || project.runtimeTargets.length === 0 ||
-      project.runtimeTargets.some(target => !isNonEmptyString(target))) {
+  if (
+    !Array.isArray(project.runtimeTargets) ||
+    project.runtimeTargets.length === 0 ||
+    project.runtimeTargets.some(target => !isNonEmptyString(target))
+  ) {
     errors.push(`${prefix} must have one or more runtimeTargets`)
   }
   if (!RELEASES.has(project.release)) {
@@ -201,7 +206,7 @@ function validateProjectManifest(project, actual) {
   if (actual.manifest.name !== project.name) {
     errors.push(
       `${prefix} name ${JSON.stringify(project.name)} does not match package.json ` +
-      `${JSON.stringify(actual.manifest.name)}`
+        `${JSON.stringify(actual.manifest.name)}`
     )
   }
   const isPrivate = actual.manifest.private === true
@@ -232,10 +237,7 @@ export function validateProjectRegistry(registry, discovered) {
   if (!registry?.ownerDefinitions || typeof registry.ownerDefinitions !== 'object') {
     errors.push('projects.json ownerDefinitions must be an object')
   }
-  errors.push(
-    ...validateDependencyAutomation(registry),
-    ...validateGeneratedArtifacts(registry)
-  )
+  errors.push(...validateDependencyAutomation(registry), ...validateGeneratedArtifacts(registry))
   if (!registry?.profiles || typeof registry.profiles !== 'object') {
     errors.push('projects.json profiles must be an object')
   }
@@ -244,17 +246,21 @@ export function validateProjectRegistry(registry, discovered) {
   }
 
   errors.push(
-    ...duplicateValues(registry.projects.map(project => project.path))
-      .map(duplicate => `projects.json contains duplicate path: ${duplicate}`),
-    ...duplicateValues(registry.projects.map(project => project.name))
-      .map(duplicate => `projects.json contains duplicate name: ${duplicate}`),
+    ...duplicateValues(registry.projects.map(project => project.path)).map(
+      duplicate => `projects.json contains duplicate path: ${duplicate}`
+    ),
+    ...duplicateValues(registry.projects.map(project => project.name)).map(
+      duplicate => `projects.json contains duplicate name: ${duplicate}`
+    ),
     ...validateConfiguredProjects(registry, discovered)
   )
 
   const configuredPaths = new Set(registry.projects.map(project => project.path))
-  errors.push(...discovered
-    .filter(actual => !configuredPaths.has(actual.path))
-    .map(actual => `Discovered workspace project is missing from projects.json: ${actual.path}`))
+  errors.push(
+    ...discovered
+      .filter(actual => !configuredPaths.has(actual.path))
+      .map(actual => `Discovered workspace project is missing from projects.json: ${actual.path}`)
+  )
   return errors
 }
 
@@ -281,8 +287,11 @@ function validateExceptionDates(exception, prefix, today) {
       errors.push(`${prefix} ${field} must be a real YYYY-MM-DD date`)
     }
   }
-  if (isValidDate(exception?.created) && isValidDate(exception?.reviewBy) &&
-      exception.created > exception.reviewBy) {
+  if (
+    isValidDate(exception?.created) &&
+    isValidDate(exception?.reviewBy) &&
+    exception.created > exception.reviewBy
+  ) {
     errors.push(`${prefix} reviewBy cannot precede created`)
   }
   if (isValidDate(exception?.reviewBy) && exception.reviewBy < today) {
@@ -303,15 +312,21 @@ function validateException(exception, today, ownerDefinitions) {
   for (const field of ['target', 'owner']) {
     if (!isNonEmptyString(exception?.[field])) errors.push(`${prefix} must have ${field}`)
   }
-  if (ownerDefinitions && isNonEmptyString(exception?.owner) &&
-      !ownerDefinitions[exception.owner]) {
+  if (
+    ownerDefinitions &&
+    isNonEmptyString(exception?.owner) &&
+    !ownerDefinitions[exception.owner]
+  ) {
     errors.push(`${prefix} references unknown owner ${JSON.stringify(exception.owner)}`)
   }
   if (!isNonEmptyString(exception?.reason) || exception.reason.trim().length < 20) {
     errors.push(`${prefix} reason must be at least 20 characters`)
   }
-  if (!Array.isArray(exception?.evidence) || exception.evidence.length === 0 ||
-      exception.evidence.some(item => !isNonEmptyString(item))) {
+  if (
+    !Array.isArray(exception?.evidence) ||
+    exception.evidence.length === 0 ||
+    exception.evidence.some(item => !isNonEmptyString(item))
+  ) {
     errors.push(`${prefix} must have one or more evidence references`)
   }
   errors.push(...validateExceptionDates(exception, prefix, today))
@@ -333,8 +348,11 @@ export function validateExceptionRegistry(
     return [...errors, 'exceptions.json exceptions must be an array']
   }
 
-  errors.push(...duplicateValues(registry.exceptions.map(exception => exception.id))
-    .map(duplicate => `exceptions.json contains duplicate id: ${duplicate}`))
+  errors.push(
+    ...duplicateValues(registry.exceptions.map(exception => exception.id)).map(
+      duplicate => `exceptions.json contains duplicate id: ${duplicate}`
+    )
+  )
   for (const exception of registry.exceptions) {
     errors.push(...validateException(exception, today, ownerDefinitions))
   }
@@ -370,7 +388,7 @@ function validateBaselineWorkspace(baselines, registry, discovered) {
     if (baselines?.workspace?.[key] !== actual) {
       errors.push(
         `baselines.json workspace.${key} is ${JSON.stringify(baselines?.workspace?.[key])}; ` +
-        `discovered ${actual}`
+          `discovered ${actual}`
       )
     }
   }
@@ -397,7 +415,7 @@ function validateBaselineVersions(baselines, discovered) {
     if (versions[name] !== version) {
       errors.push(
         `baselines.json version for ${name} is ${JSON.stringify(versions[name])}; ` +
-        `package.json is ${JSON.stringify(version)}`
+          `package.json is ${JSON.stringify(version)}`
       )
     }
   }
@@ -443,16 +461,17 @@ function validateBaselineAlertSet(alertSet) {
       `baselines.json security ${alertSet.name} alert total does not match its alert list`
     )
   }
-  errors.push(...duplicateValues(alertSet.alerts.map(alert => alert.number))
-    .map(duplicate =>
-      `baselines.json security ${alertSet.name} contains duplicate alert ${duplicate}`
-    ))
+  errors.push(
+    ...duplicateValues(alertSet.alerts.map(alert => alert.number)).map(
+      duplicate => `baselines.json security ${alertSet.name} contains duplicate alert ${duplicate}`
+    )
+  )
   for (const [severity, expected] of Object.entries(alertSet.severities)) {
     const actual = alertSet.alerts.filter(alert => alert.severity === severity).length
     if (actual !== expected) {
       errors.push(
         `baselines.json security ${alertSet.name} ${severity} count is ${expected}; ` +
-        `alert list contains ${actual}`
+          `alert list contains ${actual}`
       )
     }
   }
@@ -489,15 +508,18 @@ function finding(project, rule, message, detail = '') {
 
 function isMutatingCheck(command) {
   if (!isNonEmptyString(command)) return false
-  return /(?:^|\s)(?:--fix|--write)(?:\s|$)/.test(command) ||
-    /\bprettier\b.*\s-w(?:\s|$)/.test(command)
+  return (
+    /(?:^|\s)(?:--fix|--write)(?:\s|$)/.test(command) || /\bprettier\b.*\s-w(?:\s|$)/.test(command)
+  )
 }
 
 function isPlaceholderCheck(command) {
   if (!isNonEmptyString(command)) return false
-  return /\bno test specified\b/i.test(command) ||
+  return (
+    /\bno test specified\b/i.test(command) ||
     /\bnot implemented\b/i.test(command) ||
     /(?:^|&&|;)\s*exit\s+1(?:\s|$)/.test(command)
+  )
 }
 
 function collectScriptFindings(project, configured, profile) {
@@ -505,40 +527,48 @@ function collectScriptFindings(project, configured, profile) {
   const scripts = project.manifest.scripts ?? {}
   for (const scriptName of profile.requiredScripts ?? []) {
     if (!isNonEmptyString(scripts[scriptName])) {
-      findings.push(finding(
-        project,
-        'missing-script',
-        `Profile ${configured.profile} requires script ${scriptName}`,
-        scriptName
-      ))
+      findings.push(
+        finding(
+          project,
+          'missing-script',
+          `Profile ${configured.profile} requires script ${scriptName}`,
+          scriptName
+        )
+      )
     }
   }
   for (const scriptName of ['lint', 'format:check']) {
     if (isMutatingCheck(scripts[scriptName])) {
-      findings.push(finding(
-        project,
-        'mutating-check-script',
-        `${scriptName} must not modify the working tree`,
-        scriptName
-      ))
+      findings.push(
+        finding(
+          project,
+          'mutating-check-script',
+          `${scriptName} must not modify the working tree`,
+          scriptName
+        )
+      )
     }
   }
   for (const disabledScript of Object.keys(scripts).filter(name => name.endsWith('-disabled'))) {
-    findings.push(finding(
-      project,
-      'disabled-quality-script',
-      `Remove disabled quality escape hatch ${disabledScript}`,
-      disabledScript
-    ))
+    findings.push(
+      finding(
+        project,
+        'disabled-quality-script',
+        `Remove disabled quality escape hatch ${disabledScript}`,
+        disabledScript
+      )
+    )
   }
   for (const scriptName of profile.requiredScripts ?? []) {
     if (isPlaceholderCheck(scripts[scriptName])) {
-      findings.push(finding(
-        project,
-        'placeholder-quality-script',
-        `${scriptName} is a failing placeholder, not a quality check`,
-        scriptName
-      ))
+      findings.push(
+        finding(
+          project,
+          'placeholder-quality-script',
+          `${scriptName} is a failing placeholder, not a quality check`,
+          scriptName
+        )
+      )
     }
   }
   return findings
@@ -547,39 +577,99 @@ function collectScriptFindings(project, configured, profile) {
 function collectFileFindings(project, profile, root) {
   const findings = []
   const directory = path.join(root, project.path === '.' ? '' : project.path)
-  if (profile.requiresReadme &&
-      !directoryContainsMatchingFile(directory, /^readme(?:\.[^.]+)?$/i)) {
+  if (
+    profile.requiresReadme &&
+    !directoryContainsMatchingFile(directory, /^readme(?:\.[^.]+)?$/i)
+  ) {
     findings.push(finding(project, 'missing-readme', 'Profile requires a README'))
   }
-  if (profile.requiresLicenseFile &&
-      !directoryContainsMatchingFile(directory, /^(?:licen[cs]e|copying)(?:\.[^.]+)?$/i)) {
-    findings.push(finding(project, 'missing-license-file', 'Profile requires a shipped license file'))
+  if (
+    profile.requiresLicenseFile &&
+    !directoryContainsMatchingFile(directory, /^(?:licen[cs]e|copying)(?:\.[^.]+)?$/i)
+  ) {
+    findings.push(
+      finding(project, 'missing-license-file', 'Profile requires a shipped license file')
+    )
   }
   return findings
 }
 
-function publicManifestChecks(manifest) {
+const PUBLIC_REPOSITORY_URL = 'git+https://github.com/bsv-blockchain/ts-stack.git'
+const PUBLIC_BUGS_URL = 'https://github.com/bsv-blockchain/ts-stack/issues'
+
+function publicManifestChecks(manifest, projectPath) {
+  const expectedHomepage = `https://github.com/bsv-blockchain/ts-stack/tree/main/${projectPath}#readme`
   return [
-    ['missing-license-field', !isNonEmptyString(manifest.license), 'Public package requires license'],
-    ['missing-repository', !manifest.repository, 'Public package requires repository metadata'],
-    ['unsupported-node-engine', manifest.engines?.node !== '>=22',
-      'Public package requires engines.node >=22'],
-    ['missing-files-allowlist', !Array.isArray(manifest.files) || manifest.files.length === 0,
-      'Public package requires a non-empty files allowlist'],
-    ['missing-publish-access', manifest.publishConfig?.access !== 'public',
-      'Public package requires publishConfig.access=public'],
-    ['missing-side-effects',
+    [
+      'missing-license-field',
+      !isNonEmptyString(manifest.license),
+      'Public package requires license'
+    ],
+    [
+      'missing-description',
+      !isNonEmptyString(manifest.description),
+      'Public package requires a description'
+    ],
+    [
+      'invalid-repository',
+      manifest.repository?.type !== 'git' ||
+        manifest.repository?.url !== PUBLIC_REPOSITORY_URL ||
+        manifest.repository?.directory !== projectPath,
+      'Public package requires canonical repository metadata and package directory'
+    ],
+    [
+      'invalid-homepage',
+      manifest.homepage !== expectedHomepage,
+      'Public package requires a canonical package README homepage'
+    ],
+    [
+      'invalid-bugs-url',
+      manifest.bugs?.url !== PUBLIC_BUGS_URL,
+      'Public package requires the canonical repository issue tracker'
+    ],
+    [
+      'missing-author',
+      !isNonEmptyString(manifest.author),
+      'Public package requires author or organization metadata'
+    ],
+    [
+      'missing-keywords',
+      !Array.isArray(manifest.keywords) ||
+        manifest.keywords.length === 0 ||
+        !manifest.keywords.some(
+          keyword => isNonEmptyString(keyword) && keyword.toLowerCase() === 'bsv'
+        ),
+      'Public package requires non-empty keywords including BSV'
+    ],
+    [
+      'unsupported-node-engine',
+      manifest.engines?.node !== '>=22',
+      'Public package requires engines.node >=22'
+    ],
+    [
+      'missing-files-allowlist',
+      !Array.isArray(manifest.files) || manifest.files.length === 0,
+      'Public package requires a non-empty files allowlist'
+    ],
+    [
+      'missing-publish-access',
+      manifest.publishConfig?.access !== 'public',
+      'Public package requires publishConfig.access=public'
+    ],
+    [
+      'missing-side-effects',
       typeof manifest.sideEffects !== 'boolean' &&
         (!Array.isArray(manifest.sideEffects) ||
           manifest.sideEffects.some(item => !isNonEmptyString(item))),
-      'Public package requires an explicit sideEffects declaration']
+      'Public package requires an explicit sideEffects declaration'
+    ]
   ]
 }
 
 function collectPublicManifestFindings(project, profile) {
   const findings = []
   const manifest = project.manifest
-  for (const [rule, failed, message] of publicManifestChecks(manifest)) {
+  for (const [rule, failed, message] of publicManifestChecks(manifest, project.path)) {
     if (failed) findings.push(finding(project, rule, message))
   }
   if (profile.requiresExports && !manifest.exports) {
@@ -620,8 +710,8 @@ export function collectContractFindings(registry, discovered, root = REPOSITORY_
 function summarizeFindings(findings, key) {
   const counts = new Map()
   for (const item of findings) counts.set(item[key], (counts.get(item[key]) ?? 0) + 1)
-  return [...counts.entries()].sort((left, right) =>
-    right[1] - left[1] || left[0].localeCompare(right[0])
+  return [...counts.entries()].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0])
   )
 }
 
@@ -665,12 +755,15 @@ export function compareContractBaseline(baseline, findings) {
     if (!previous) {
       errors.push(
         `New package-contract finding is not recorded in contract-baseline.json: ` +
-        `${item.id} (${item.message})`
+          `${item.id} (${item.message})`
       )
-    } else if (JSON.stringify(previous) !== JSON.stringify({
-      id: item.id,
-      message: item.message
-    })) {
+    } else if (
+      JSON.stringify(previous) !==
+      JSON.stringify({
+        id: item.id,
+        message: item.message
+      })
+    ) {
       errors.push(`Package-contract finding changed without refreshing baseline: ${item.id}`)
     }
   }
@@ -678,7 +771,7 @@ export function compareContractBaseline(baseline, findings) {
     if (!currentById.has(item.id)) {
       errors.push(
         `Resolved package-contract finding remains in contract-baseline.json: ${item.id}; ` +
-        `run pnpm health:baseline`
+          `run pnpm health:baseline`
       )
     }
   }
@@ -687,11 +780,18 @@ export function compareContractBaseline(baseline, findings) {
 }
 
 function escapeTable(value) {
-  return String(value).replaceAll('|', String.raw`\|`).replaceAll('\n', ' ')
+  return String(value)
+    .replaceAll('|', String.raw`\|`)
+    .replaceAll('\n', ' ')
 }
 
 function renderFindingSummary(title, findings, key) {
-  const lines = [title, '', '| ' + (key === 'rule' ? 'Rule' : 'Project') + ' | Count |', '|---|---:|']
+  const lines = [
+    title,
+    '',
+    '| ' + (key === 'rule' ? 'Rule' : 'Project') + ' | Count |',
+    '|---|---:|'
+  ]
   for (const [label, count] of summarizeFindings(findings, key)) {
     lines.push(`| \`${escapeTable(label)}\` | ${count} |`)
   }
@@ -710,7 +810,7 @@ function renderDetailedFindings(findings) {
   for (const item of findings) {
     lines.push(
       `| \`${escapeTable(item.path)}\` | \`${escapeTable(item.rule)}\` | ` +
-      `${escapeTable(item.message)} |`
+        `${escapeTable(item.message)} |`
     )
   }
   return [...lines, '']
@@ -766,7 +866,10 @@ export function evaluateRepositoryHealth({
   const projectsPath = path.join(root, 'governance/repository-health/projects.json')
   const exceptionsPath = path.join(root, 'governance/repository-health/exceptions.json')
   const baselinesPath = path.join(root, 'governance/repository-health/baselines.json')
-  const contractBaselinePath = path.join(root, 'governance/repository-health/contract-baseline.json')
+  const contractBaselinePath = path.join(
+    root,
+    'governance/repository-health/contract-baseline.json'
+  )
   const discovered = discoverWorkspaceProjects(root)
   const registry = readJson(projectsPath)
   const exceptions = readJson(exceptionsPath)
@@ -781,8 +884,7 @@ export function evaluateRepositoryHealth({
   if (!skipContractBaseline) {
     if (!fs.existsSync(contractBaselinePath)) {
       errors.push(
-        'Missing governance/repository-health/contract-baseline.json; ' +
-        'run pnpm health:baseline'
+        'Missing governance/repository-health/contract-baseline.json; ' + 'run pnpm health:baseline'
       )
     } else {
       errors.push(...compareContractBaseline(readJson(contractBaselinePath), findings))
@@ -831,15 +933,19 @@ function parseArguments(args) {
 }
 
 function renderJson(result) {
-  return `${JSON.stringify({
-    errors: result.errors,
-    exceptions: result.exceptions,
-    findingCount: result.findings.length,
-    findings: result.findings,
-    projectCount: result.projects.length,
-    publicPackages: result.publicPackages,
-    today: result.today
-  }, null, 2)}\n`
+  return `${JSON.stringify(
+    {
+      errors: result.errors,
+      exceptions: result.exceptions,
+      findingCount: result.findings.length,
+      findings: result.findings,
+      projectCount: result.projects.length,
+      publicPackages: result.publicPackages,
+      today: result.today
+    },
+    null,
+    2
+  )}\n`
 }
 
 function renderOutput(result, format) {
@@ -905,6 +1011,6 @@ export function runCli(args = process.argv.slice(2)) {
   return result.errors.length > 0 || (options.strict && result.findings.length > 0) ? 1 : 0
 }
 
-const isMain = process.argv[1] &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+const isMain =
+  process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 if (isMain) process.exitCode = runCli()

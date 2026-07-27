@@ -28,7 +28,9 @@ export default function GuideLayout({ meta, children }: Readonly<Props>) {
               <span className={styles.label}>Previous</span>
               <span className={styles.title}>{prev.label}</span>
             </Link>
-          ) : <div />}
+          ) : (
+            <div />
+          )}
           {next && (
             <Link to={next.href} className={styles.next}>
               <span className={styles.label}>Next</span>
