@@ -1,6 +1,6 @@
 {
   "name": "@bsv/amountinator",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

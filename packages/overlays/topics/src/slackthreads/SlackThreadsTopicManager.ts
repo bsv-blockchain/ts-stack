@@ -1,5 +1,12 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction, OP } from '@bsv/sdk'
+import { Transaction, OP, type TransactionOutput } from '@bsv/sdk'
+
+function validateSlackThreadsOutput (output: TransactionOutput): void {
+  if (output.lockingScript.chunks.length !== 3) throw new Error('Invalid locking script')
+  if (output.lockingScript.chunks[0].op !== OP.OP_SHA256) throw new Error('Invalid locking script')
+  if (output.lockingScript.chunks[1].op !== 32) throw new Error('Invalid locking script')
+  if (output.lockingScript.chunks[2].op !== OP.OP_EQUAL) throw new Error('Invalid locking script')
+}
 
 export default class SlackThreadsTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -14,10 +21,7 @@ export default class SlackThreadsTopicManager implements TopicManager {
 
       for (const [index, output] of parsedTx.outputs.entries()) {
         try {
-          if (output.lockingScript.chunks.length !== 3) throw new Error('Invalid locking script')
-          if (output.lockingScript.chunks[0].op !== OP.OP_SHA256) throw new Error('Invalid locking script')
-          if (output.lockingScript.chunks[1].op !== 32) throw new Error('Invalid locking script')
-          if (output.lockingScript.chunks[2].op !== OP.OP_EQUAL) throw new Error('Invalid locking script')
+          validateSlackThreadsOutput(output)
           outputsToAdmit.push(index)
         } catch (err) {
           console.error(`Error processing output ${index}:`, err)

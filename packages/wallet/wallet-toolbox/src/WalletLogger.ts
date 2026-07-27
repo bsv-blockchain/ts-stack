@@ -2,6 +2,31 @@ import { Beef, CreateActionArgs, WalletLoggerInterface, WalletLoggerLog } from '
 
 import { WalletError } from './sdk/WalletError'
 
+function logMarker (entry: WalletLoggerLog): string {
+  if (entry.isBegin) return ' begin'
+  if (entry.isEnd) return ' end'
+  if (entry.isError) return ' ERROR'
+  return ''
+}
+
+function logMessage (entry: WalletLoggerLog, begins: WalletLoggerLog[]): string {
+  if (entry.isBegin) begins.push(entry)
+  if (!entry.log && entry.isEnd && begins.length > 0) {
+    return begins.pop()!.log
+  }
+  return entry.log
+}
+
+function formatLogLine (
+  entry: WalletLoggerLog,
+  previous: WalletLoggerLog,
+  begins: WalletLoggerLog[]
+): string {
+  const elapsed = (entry.when - previous.when).toString()
+  const paddedElapsed = `${' '.repeat(8 - elapsed.length)}${elapsed}`
+  return `${paddedElapsed}${'  '.repeat(entry.indent)}${logMarker(entry)} ${logMessage(entry, begins)}\n`
+}
+
 export class WalletLogger implements WalletLoggerInterface {
   indent: number = 0
   logs: WalletLoggerLog[] = []
@@ -84,32 +109,20 @@ export class WalletLogger implements WalletLoggerInterface {
   }
 
   toLogString (): string {
-    let log = ''
-    if (this.logs.length > 0) {
-      const first = this.logs[0]
-      const last = this.logs.at(-1)!
-      const msecs = last.when - first.when
-      log += `   msecs WalletLogger ${new Date(first.when).toISOString()} logged ${msecs / 1000} seconds\n`
-      let prev = first
-      const begins: WalletLoggerLog[] = []
-      for (const d of this.logs) {
-        let df = (d.when - prev.when).toString()
-        df = `${' '.repeat(8 - df.length)}${df}`
-        let what: string
-        if (d.isBegin) what = ' begin'
-        else if (d.isEnd) what = ' end'
-        else if (d.isError) what = ' ERROR'
-        else what = ''
-        if (d.isBegin) begins.push(d)
-        let m = d.log
-        if (!m && d.isEnd && begins.length > 0) {
-          const begin = begins.pop()!
-          m = begin.log
-        }
-        log += `${df}${'  '.repeat(d.indent)}${what} ${m}\n`
-        prev = d
-      }
+    if (this.logs.length === 0) return ''
+
+    const first = this.logs[0]
+    const last = this.logs.at(-1)!
+    const msecs = last.when - first.when
+    let log = `   msecs WalletLogger ${new Date(first.when).toISOString()} logged ${msecs / 1000} seconds\n`
+    let previous = first
+    const begins: WalletLoggerLog[] = []
+
+    for (const entry of this.logs) {
+      log += formatLogLine(entry, previous, begins)
+      previous = entry
     }
+
     return log
   }
 
