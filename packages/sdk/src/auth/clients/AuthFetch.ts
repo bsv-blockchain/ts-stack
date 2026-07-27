@@ -11,7 +11,7 @@ import { createNonce } from '../utils/createNonce.js'
 import { Peer } from '../Peer.js'
 import { SimplifiedFetchTransport } from '../transports/SimplifiedFetchTransport.js'
 import { SessionManager, AsyncSessionManager } from '../SessionManager.js'
-import { AuthMessage, RequestedCertificateSet } from '../types.js'
+import { RequestedCertificateSet } from '../types.js'
 import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
 import { getVerifiableCertificates } from '../utils/index.js'
@@ -137,9 +137,6 @@ export class AuthFetch {
           if (this.peers[baseURL] === undefined) {
             // Create a peer for the request
             const newTransport = new SimplifiedFetchTransport(baseURL)
-            newTransport.onDataError((error, message) => {
-              this.settleFailedResponse(error, message)
-            })
             const newPeer = new Peer(
               this.wallet,
               newTransport,
@@ -396,35 +393,6 @@ export class AuthFetch {
    */
   public consumeReceivedCertificates(): VerifiableCertificate[] {
     return this.certificatesReceived.splice(0)
-  }
-
-  /**
-   * Rejects the request a failed incoming message belongs to.
-   *
-   * The HTTP exchange has already completed by the time the peer processes a
-   * response, so a failure there cannot reject the request on its own. A
-   * general message opens with the 32-byte request nonce of the request it
-   * answers, which identifies the caller still waiting on it. Without this the
-   * failure would be dropped and that caller would wait forever.
-   *
-   * Messages that carry no usable payload cannot be attributed to a request
-   * and are left alone.
-   *
-   * @param error - The failure raised while processing the message.
-   * @param message - The message being processed when the failure was raised.
-   */
-  private settleFailedResponse(error: Error, message: AuthMessage): void {
-    const payload = message.payload
-    if (payload == null || payload.length < 32) {
-      return
-    }
-    const requestNonceAsBase64 = Utils.toBase64(payload.slice(0, 32))
-    const callback = this.callbacks[requestNonceAsBase64]
-    if (callback === undefined) {
-      return
-    }
-    delete this.callbacks[requestNonceAsBase64]
-    callback.reject(error)
   }
 
   /**

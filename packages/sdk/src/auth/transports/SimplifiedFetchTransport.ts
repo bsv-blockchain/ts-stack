@@ -14,7 +14,6 @@ const defaultFetch: typeof fetch =
  */
 export class SimplifiedFetchTransport implements Transport {
   private onDataCallback?: (message: AuthMessage) => void
-  private onDataErrorCallback?: (error: Error, message: AuthMessage) => void
   fetchClient: typeof fetch
   baseUrl: string
 
@@ -243,39 +242,11 @@ export class SimplifiedFetchTransport implements Transport {
    */
   async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
     this.onDataCallback = (m) => {
-      void callback(m).catch((error: unknown) => {
-        // The peer processes incoming messages detached from the HTTP
-        // exchange that carried them, so a failure here cannot reject the
-        // originating request by itself. Hand it to the error listener, which
-        // can match it back to the caller waiting on that response — without
-        // one, the failure is dropped and that caller never settles.
-        let failure: Error
-        if (error instanceof Error) {
-          failure = error
-        } else {
-          failure = new Error(
-            typeof error === 'string' ? error : 'Failed to process an incoming message'
-          )
-          ; (failure as any).cause = error
-        }
-        this.onDataErrorCallback?.(failure, m)
+      void callback(m).catch(() => {
+        // Errors from handleIncomingMessage on the client side are not
+        // actionable here — prevent unhandled promise rejections.
       })
     }
-  }
-
-  /**
-   * Registers a handler for failures raised while an incoming message is being
-   * processed, after its HTTP exchange has already completed successfully.
-   *
-   * These failures — an unresolvable session, a signature that does not verify
-   * — arrive too late to reject the HTTP request promise, so they are reported
-   * here instead of being discarded. The message that triggered the failure is
-   * supplied so the handler can identify which request it belongs to.
-   *
-   * @param callback - Invoked with the failure and the message that caused it.
-   */
-  onDataError(callback: (error: Error, message: AuthMessage) => void): void {
-    this.onDataErrorCallback = callback
   }
 
   private createNetworkError(url: string, originalError: unknown): Error {
