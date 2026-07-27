@@ -24,6 +24,7 @@
   },
   "scripts": {
     "test": "jest",
+    "test:property": "jest --runInBand --runTestsByPath src/topic-managers/__tests/BTMSTopicManager.property.test.ts",
     "test:build": "npm run build && jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "ts-jest": "^29.4.12",

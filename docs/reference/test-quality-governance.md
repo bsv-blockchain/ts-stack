@@ -71,22 +71,25 @@ pnpm --filter @bsv/sdk test:resource
 ## Property-based security tests
 
 Required CI uses `fast-check` to generate and shrink unexpected inputs across
-20 packages and the stack's highest-risk trust boundaries:
+25 packages and the stack's highest-risk trust boundaries:
 
 - binary and text codecs: SDK Base58Check, DID base64url/multibase/SD-JWT,
   Bitcoin script numbers, asset outpoints, wallet action packs, and native BDK
-  batches;
+  batches, plus wallet script classification and arbitrary OP_RETURN fields;
 - public protocol parsers: Paymail addresses, Teranode message envelopes,
-  reorg SSE frames, overlay advertisements, Message Box hosts, and wallet
-  pairing URIs;
+  reorg SSE frames, GASP requests/responses and UTXO reconciliation, overlay
+  advertisements, Message Box hosts, and wallet pairing URIs;
 - authorization and integrity: signed authentication bodies, exact issuer
   allowlists, BASM/TAC hashes, valid relay keys, expiry/freshness windows, and
-  reserved-network rejection;
+  reserved-network rejection, plus per-origin BTMS authorization isolation and
+  unsigned Bitcoin varint handling;
 - HTTP and operator inputs: BRC-121 challenges, authenticated Express byte
   framing, payment replay admission, fund-wallet CLI keys/endpoints/amounts,
-  and currency conversion/formatting; and
+  currency conversion/formatting, and project-scaffolder path/configuration
+  validation; and
 - untrusted application data: Mandala linkage payloads, BTMS metadata and
-  derivation instructions, and forge-resistant overlay log fields.
+  derivation instructions, canonical token amounts and asset IDs, and
+  forge-resistant overlay log fields.
 
 These are not round-trip-only tests. Depending on the boundary, the registered
 invariants also require an independently encoded oracle, canonicalization,
@@ -99,7 +102,11 @@ Every property suite and package declaration is registered under
 `propertyTesting` in the policy. The governance check rejects a removed suite,
 an unregistered `*.property.test.ts`, a missing package command, an undeclared
 library/version, a missing trust-boundary/invariant description, or a run budget
-below 300 generated cases.
+below 300 generated cases. It also inventories all 33 package manifests: each
+must either own a registered property suite or have a dated, owned exclusion
+that explains why the package is only an adapter, composition layer, example,
+or platform harness. This prevents both silent coverage gaps and low-value
+properties added solely to increase a package count.
 
 Each property is part of its package's ordinary required suite, so pull
 requests execute at least 300 cases per property. The independent

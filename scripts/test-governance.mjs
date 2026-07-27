@@ -193,6 +193,63 @@ function loadPropertyManifests(root, propertyTesting, errors) {
   return { manifestPaths, manifests }
 }
 
+function validatePropertyExclusions(
+  root,
+  propertyTesting,
+  propertyManifestPaths,
+  policy,
+  errors,
+  today
+) {
+  const exclusions = propertyTesting.exclusions ?? []
+  const excludedManifestPaths = exclusions.map(exclusion => exclusion.manifest)
+  if (new Set(excludedManifestPaths).size !== excludedManifestPaths.length) {
+    errors.push('property testing policy contains duplicate exclusions')
+  }
+
+  const propertyManifestSet = new Set(propertyManifestPaths)
+  for (const exclusion of exclusions) {
+    const label = `property exclusion ${exclusion.manifest}`
+    validateDatedOwner({ ...propertyTesting, ...exclusion }, policy, label, errors, today)
+    if (propertyManifestSet.has(exclusion.manifest)) {
+      errors.push(`${exclusion.manifest} cannot be both a property manifest and an exclusion`)
+    }
+    if (exclusion.kind !== 'adapter-or-composition' && exclusion.kind !== 'example-or-platform') {
+      errors.push(`${label} must declare adapter-or-composition or example-or-platform`)
+    }
+    if (typeof exclusion.rationale !== 'string' || exclusion.rationale.trim().length < 40) {
+      errors.push(`${label} must declare a concrete rationale`)
+    }
+    if (
+      typeof exclusion.manifest !== 'string' ||
+      !exclusion.manifest.startsWith('packages/') ||
+      !fs.existsSync(path.join(root, exclusion.manifest))
+    ) {
+      errors.push(`${label} does not reference an existing package manifest`)
+      continue
+    }
+    const manifest = readJson(root, exclusion.manifest)
+    if (typeof manifest.scripts?.['test:property'] === 'string') {
+      errors.push(`${label} has a test:property command and must be registered as a suite`)
+    }
+  }
+
+  const discoveredManifestPaths = walkFiles(root, 'packages', name => name === 'package.json')
+  const classifications = new Set([...propertyManifestPaths, ...excludedManifestPaths])
+  for (const manifestPath of discoveredManifestPaths) {
+    if (!classifications.has(manifestPath)) {
+      errors.push(`${manifestPath} lacks a property suite or governed exclusion`)
+    }
+  }
+  for (const manifestPath of classifications) {
+    if (!discoveredManifestPaths.includes(manifestPath)) {
+      errors.push(`stale property classification references ${manifestPath}`)
+    }
+  }
+
+  return excludedManifestPaths
+}
+
 function validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, today) {
   validateDatedOwner(
     { ...propertyTesting, ...suite },
@@ -329,8 +386,16 @@ function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, e
     validatePropertySuite(root, suite, context, propertyTesting, policy, errors, today)
   }
   validatePropertyRegistrations(context, manifestPaths, errors)
+  const excludedManifestPaths = validatePropertyExclusions(
+    root,
+    propertyTesting,
+    manifestPaths,
+    policy,
+    errors,
+    today
+  )
   validatePropertyWorkflow(root, propertyTesting, errors)
-  return manifestPaths
+  return { excludedManifestPaths, manifestPaths }
 }
 
 function validateManualPolicies(policy, errors, today) {
@@ -464,7 +529,7 @@ export function evaluateTestGovernance({
   const errors = []
   const { manualFiles, requiredFiles } = collectTestInventory(root)
   const propertyTesting = policy.propertyTesting
-  const manifestPaths = validatePropertyTesting(
+  const { excludedManifestPaths, manifestPaths } = validatePropertyTesting(
     root,
     requiredFiles,
     propertyTesting,
@@ -486,6 +551,8 @@ export function evaluateTestGovernance({
       requiredDirectSkips: observedSkips.length,
       propertySuites: propertyTesting.suites?.length ?? 0,
       propertyPackages: manifestPaths.length,
+      propertyExcludedPackages: excludedManifestPaths.length,
+      propertyClassifiedPackages: manifestPaths.length + excludedManifestPaths.length,
       manualAndLiveFiles: manualFiles.length,
       conformanceSkipFiles: conformance.byFile.size,
       conformanceSkips: [...conformance.byFile.values()].reduce(
@@ -512,6 +579,7 @@ function run() {
       `${summary.requiredTestFiles} required test files`,
       `${summary.requiredDirectSkips} governed direct skips`,
       `${summary.propertySuites} governed property suites across ${summary.propertyPackages} packages`,
+      `${summary.propertyExcludedPackages} governed property exclusions`,
       `${summary.manualAndLiveFiles} classified manual/live files`,
       `${summary.conformanceSkips} governed conformance skips across ${summary.conformanceSkipFiles} files`
     ].join(' ')
