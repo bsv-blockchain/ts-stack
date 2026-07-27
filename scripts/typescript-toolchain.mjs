@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -19,6 +18,16 @@ const DEPENDENCY_FIELDS = [
   'optionalDependencies',
   'peerDependencies'
 ]
+const IGNORED_MANIFEST_DIRECTORIES = new Set([
+  '.git',
+  '.stryker-tmp',
+  '.venv',
+  'artifacts',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out'
+])
 
 function compilerScript(manifest) {
   return Object.values(manifest.scripts ?? {}).some(
@@ -88,15 +97,24 @@ export function inspectTypeScriptManifest(relativePath, manifest) {
   return { findings, governed: true, codegen: false }
 }
 
-export function trackedPackageManifests(root = REPOSITORY_ROOT) {
-  return execFileSync('git', ['ls-files', '-z'], {
-    cwd: root,
-    encoding: 'utf8',
-    maxBuffer: 2 * 1024 * 1024
-  })
-    .split('\0')
-    .filter(file => file === 'package.json' || file.endsWith('/package.json'))
-    .sort((left, right) => left.localeCompare(right))
+export function repositoryPackageManifests(root = REPOSITORY_ROOT) {
+  const manifests = []
+
+  function visit(relativeDirectory) {
+    const absoluteDirectory = path.join(root, relativeDirectory)
+    for (const entry of fs.readdirSync(absoluteDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (!IGNORED_MANIFEST_DIRECTORIES.has(entry.name)) {
+          visit(path.join(relativeDirectory, entry.name))
+        }
+      } else if (entry.isFile() && entry.name === 'package.json') {
+        manifests.push(path.join(relativeDirectory, entry.name).split(path.sep).join('/'))
+      }
+    }
+  }
+
+  visit('')
+  return manifests.sort((left, right) => left.localeCompare(right))
 }
 
 export function inspectTypeScriptToolchain(root = REPOSITORY_ROOT) {
@@ -104,7 +122,7 @@ export function inspectTypeScriptToolchain(root = REPOSITORY_ROOT) {
   let governed = 0
   let codegen = 0
 
-  for (const relativePath of trackedPackageManifests(root)) {
+  for (const relativePath of repositoryPackageManifests(root)) {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'))
     const result = inspectTypeScriptManifest(relativePath, manifest)
     findings.push(...result.findings)

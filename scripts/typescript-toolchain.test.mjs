@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
 import {
@@ -7,7 +10,8 @@ import {
   COMPATIBILITY_TYPESCRIPT_SPECIFIER,
   inspectTypeScriptManifest,
   inspectTypeScriptToolchain,
-  NATIVE_TYPESCRIPT_SPECIFIER
+  NATIVE_TYPESCRIPT_SPECIFIER,
+  repositoryPackageManifests
 } from './typescript-toolchain.mjs'
 
 const governedManifest = {
@@ -60,4 +64,24 @@ test('the reproducible OpenAPI generator retains its independent API compiler', 
     inspectTypeScriptManifest(CODEGEN_MANIFEST, governedManifest).findings[0],
     /isolated TypeScript 5\.9\.3/
   )
+})
+
+test('manifest discovery does not execute PATH commands or inspect generated dependency trees', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-stack-typescript-toolchain-'))
+  try {
+    fs.mkdirSync(path.join(root, 'packages', 'live'), { recursive: true })
+    fs.mkdirSync(path.join(root, 'node_modules', 'ignored'), { recursive: true })
+    fs.mkdirSync(path.join(root, '.stryker-tmp', 'ignored'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'package.json'), '{}')
+    fs.writeFileSync(path.join(root, 'packages', 'live', 'package.json'), '{}')
+    fs.writeFileSync(path.join(root, 'node_modules', 'ignored', 'package.json'), '{}')
+    fs.writeFileSync(path.join(root, '.stryker-tmp', 'ignored', 'package.json'), '{}')
+
+    assert.deepEqual(repositoryPackageManifests(root), [
+      'package.json',
+      'packages/live/package.json'
+    ])
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })
