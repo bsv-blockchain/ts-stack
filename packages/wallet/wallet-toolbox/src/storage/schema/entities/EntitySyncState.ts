@@ -25,6 +25,19 @@ import { EntityTxLabelMap } from './EntityTxLabelMap'
 import { EntityUser } from './EntityUser'
 import { MergeEntity } from './MergeEntity'
 
+function formatSyncSection<T>(
+  heading: string,
+  rows: readonly T[] | null | undefined,
+  formatRow: (row: T) => string
+): string {
+  if (rows == null) return ''
+  let section = `  ${heading}\n`
+  for (const row of rows) {
+    section += `    ${formatRow(row)}\n`
+  }
+  return section
+}
+
 export class EntitySyncState extends EntityBase<TableSyncState> {
   constructor(api?: TableSyncState) {
     const now = new Date()
@@ -313,37 +326,28 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
   }
 
   static syncChunkSummary(c: SyncChunk): string {
-    let log = ''
-    log += `SYNC CHUNK SUMMARY
+    let log = `SYNC CHUNK SUMMARY
   from storage: ${c.fromStorageIdentityKey}
   to storage: ${c.toStorageIdentityKey}
   for user: ${c.userIdentityKey}
 `
     if (c.user != null) log += `  USER activeStorage ${c.user.activeStorage}\n`
-    if (c.provenTxs != null) {
-      log += '  PROVEN_TXS\n'
-      for (const r of c.provenTxs) {
-        log += `    ${r.provenTxId} ${r.txid}\n`
-      }
-    }
-    if (c.provenTxReqs != null) {
-      log += '  PROVEN_TX_REQS\n'
-      for (const r of c.provenTxReqs) {
-        log += `    ${r.provenTxReqId} ${r.txid} ${r.status} ${r.provenTxId || ''}\n`
-      }
-    }
-    if (c.transactions != null) {
-      log += '  TRANSACTIONS\n'
-      for (const r of c.transactions) {
-        log += `    ${r.transactionId} ${r.txid} ${r.status} ${r.provenTxId || ''} sats:${r.satoshis}\n`
-      }
-    }
-    if (c.outputs != null) {
-      log += '  OUTPUTS\n'
-      for (const r of c.outputs) {
-        log += `    ${r.outputId} ${r.txid}.${r.vout} ${r.transactionId} ${r.spendable ? 'spendable' : ''} sats:${r.satoshis}\n`
-      }
-    }
+    log += formatSyncSection('PROVEN_TXS', c.provenTxs, r => `${r.provenTxId} ${r.txid}`)
+    log += formatSyncSection(
+      'PROVEN_TX_REQS',
+      c.provenTxReqs,
+      r => `${r.provenTxReqId} ${r.txid} ${r.status} ${r.provenTxId || ''}`
+    )
+    log += formatSyncSection(
+      'TRANSACTIONS',
+      c.transactions,
+      r => `${r.transactionId} ${r.txid} ${r.status} ${r.provenTxId || ''} sats:${r.satoshis}`
+    )
+    log += formatSyncSection(
+      'OUTPUTS',
+      c.outputs,
+      r => `${r.outputId} ${r.txid}.${r.vout} ${r.transactionId} ${r.spendable ? 'spendable' : ''} sats:${r.satoshis}`
+    )
     return log
   }
 

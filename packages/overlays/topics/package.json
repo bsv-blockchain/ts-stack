@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

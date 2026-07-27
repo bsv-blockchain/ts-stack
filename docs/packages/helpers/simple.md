@@ -3,7 +3,7 @@ id: pkg-simple
 title: '@bsv/simple'
 kind: package
 domain: helpers
-version: '0.4.2'
+version: '0.4.3'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-07-27'
 last_verified: '2026-07-27'

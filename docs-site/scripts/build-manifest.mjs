@@ -8,6 +8,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const DOCS_ROOT = resolve(__dirname, '../../docs')
 const OUT = resolve(__dirname, '../src/manifest.json')
 
+function parseFrontmatterValue(rawValue) {
+  let value = rawValue.trim()
+  if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1)
+  if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1)
+  if (value === 'true') return true
+  if (value === 'false') return false
+  if (value === 'null') return null
+  return value
+}
+
 function readFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) return {}
@@ -16,13 +26,7 @@ function readFrontmatter(content) {
   for (const line of yaml.split('\n')) {
     const [key, ...rest] = line.split(':')
     if (!key?.trim()) continue
-    let val = rest.join(':').trim()
-    if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1)
-    if (val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1)
-    if (val === 'true') val = true
-    if (val === 'false') val = false
-    if (val === 'null') val = null
-    result[key.trim()] = val
+    result[key.trim()] = parseFrontmatterValue(rest.join(':'))
   }
   return result
 }

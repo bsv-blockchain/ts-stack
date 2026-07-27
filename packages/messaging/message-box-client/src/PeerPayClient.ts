@@ -72,6 +72,20 @@ export const PAYMENT_REQUESTS_MESSAGEBOX = 'payment_requests'
 export const PAYMENT_REQUEST_RESPONSES_MESSAGEBOX = 'payment_request_responses'
 const STANDARD_PAYMENT_OUTPUT_INDEX = 0
 
+interface ParsedPaymentRequest {
+  messageId: string
+  sender: string
+  body: PaymentRequestMessage
+}
+
+interface PaymentRequestClassification {
+  active: IncomingPaymentRequest[]
+  expiredMessageIds: string[]
+  outOfRangeMessageIds: string[]
+  cancelledOriginalMessageIds: string[]
+  malformedMessageIds: string[]
+}
+
 /**
  * Configuration options for initializing PeerPayClient.
  */
@@ -782,102 +796,141 @@ export class PeerPayClient extends MessageBoxClient {
     })
     const myIdentityKey = await this.getIdentityKey()
     const now = Date.now()
+    const parsedRequests = this.parsePaymentRequestMessages(messages)
+    const cancellations = await this.collectPaymentRequestCancellations(
+      parsedRequests.parsed,
+      myIdentityKey
+    )
+    const classified = await this.classifyPaymentRequests(
+      parsedRequests.parsed,
+      cancellations.cancelledRequests,
+      myIdentityKey,
+      now,
+      limits
+    )
+    const malformedMessageIds = [
+      ...parsedRequests.malformedMessageIds,
+      ...cancellations.malformedMessageIds,
+      ...classified.malformedMessageIds
+    ]
 
-    // Parse and validate all messages, collecting malformed ones for ack
+    await this.acknowledgePaymentRequestMessages(classified.expiredMessageIds, hostOverride)
+    await this.acknowledgePaymentRequestMessages(
+      [...classified.cancelledOriginalMessageIds, ...cancellations.cancelMessageIds],
+      hostOverride
+    )
+    await this.acknowledgePaymentRequestMessages(classified.outOfRangeMessageIds, hostOverride)
+    await this.acknowledgePaymentRequestMessages(malformedMessageIds, hostOverride)
+
+    return classified.active
+  }
+
+  private parsePaymentRequestMessages(messages: PeerMessage[]): {
+    parsed: ParsedPaymentRequest[]
+    malformedMessageIds: string[]
+  } {
+    const parsed: ParsedPaymentRequest[] = []
     const malformedMessageIds: string[] = []
-    const parsed: Array<{ messageId: string; sender: string; body: PaymentRequestMessage }> = []
 
-    for (const msg of messages) {
-      const body = safeParse<PaymentRequestMessage>(msg.body)
+    for (const message of messages) {
+      const body = safeParse<PaymentRequestMessage>(message.body)
       if (body != null && isValidPaymentRequestMessage(body)) {
-        parsed.push({ messageId: msg.messageId, sender: msg.sender, body })
+        parsed.push({ messageId: message.messageId, sender: message.sender, body })
       } else {
-        malformedMessageIds.push(msg.messageId)
+        malformedMessageIds.push(message.messageId)
       }
     }
+    return { parsed, malformedMessageIds }
+  }
 
-    // Collect cancelled requestIds — verify HMAC proof before accepting
-    const cancelledRequests = new Map<string, string>() // requestId → sender
+  private async verifyPaymentRequestProof(
+    item: ParsedPaymentRequest,
+    myIdentityKey: string
+  ): Promise<void> {
+    const proofData = Array.from(new TextEncoder().encode(item.body.requestId + myIdentityKey))
+    await this.peerPayWalletClient.verifyHmac(
+      {
+        data: proofData,
+        hmac: hexToBytes(item.body.requestProof),
+        protocolID: [2, 'payment request auth'],
+        keyID: item.body.requestId,
+        counterparty: item.sender
+      },
+      this.originator
+    )
+  }
+
+  private async collectPaymentRequestCancellations(
+    parsed: ParsedPaymentRequest[],
+    myIdentityKey: string
+  ): Promise<{
+    cancelledRequests: Map<string, string>
+    cancelMessageIds: string[]
+    malformedMessageIds: string[]
+  }> {
+    const cancelledRequests = new Map<string, string>()
     const cancelMessageIds: string[] = []
+    const malformedMessageIds: string[] = []
+
     for (const item of parsed) {
-      if (item.body.cancelled === true) {
-        // Verify cancellation HMAC proof
-        try {
-          const proofData = Array.from(
-            new TextEncoder().encode(item.body.requestId + myIdentityKey)
-          )
-          await this.peerPayWalletClient.verifyHmac(
-            {
-              data: proofData,
-              hmac: hexToBytes(item.body.requestProof),
-              protocolID: [2, 'payment request auth'],
-              keyID: item.body.requestId,
-              counterparty: item.sender
-            },
-            this.originator
-          )
-          cancelledRequests.set(item.body.requestId, item.sender)
-          cancelMessageIds.push(item.messageId)
-        } catch {
-          Logger.warn(
-            `[PP CLIENT] Invalid cancellation proof for requestId=${item.body.requestId}, discarding`
-          )
-          malformedMessageIds.push(item.messageId)
-        }
+      if (item.body.cancelled !== true) continue
+      try {
+        await this.verifyPaymentRequestProof(item, myIdentityKey)
+        cancelledRequests.set(item.body.requestId, item.sender)
+        cancelMessageIds.push(item.messageId)
+      } catch {
+        Logger.warn(
+          `[PP CLIENT] Invalid cancellation proof for requestId=${item.body.requestId}, discarding`
+        )
+        malformedMessageIds.push(item.messageId)
       }
     }
+    return { cancelledRequests, cancelMessageIds, malformedMessageIds }
+  }
 
-    const expiredMessageIds: string[] = []
-    const outOfRangeMessageIds: string[] = []
-    const cancelledOriginalMessageIds: string[] = []
-    const active: IncomingPaymentRequest[] = []
+  private async classifyPaymentRequests(
+    parsed: ParsedPaymentRequest[],
+    cancelledRequests: Map<string, string>,
+    myIdentityKey: string,
+    now: number,
+    limits?: PaymentRequestLimits
+  ): Promise<PaymentRequestClassification> {
+    const classification: PaymentRequestClassification = {
+      active: [],
+      expiredMessageIds: [],
+      outOfRangeMessageIds: [],
+      cancelledOriginalMessageIds: [],
+      malformedMessageIds: []
+    }
+    const effectiveMin = limits?.minAmount ?? DEFAULT_PAYMENT_REQUEST_MIN_AMOUNT
+    const effectiveMax = limits?.maxAmount ?? DEFAULT_PAYMENT_REQUEST_MAX_AMOUNT
 
     for (const item of parsed) {
-      // Skip cancellation messages themselves (already collected above)
       if (item.body.cancelled === true) continue
-
       const { requestId, amount, description, expiresAt } = item.body
 
-      // Filter expired
       if (expiresAt < now) {
-        expiredMessageIds.push(item.messageId)
+        classification.expiredMessageIds.push(item.messageId)
         continue
       }
-
-      // Filter cancelled originals — only if cancellation came from the same sender
       if (cancelledRequests.has(requestId) && cancelledRequests.get(requestId) === item.sender) {
-        cancelledOriginalMessageIds.push(item.messageId)
+        classification.cancelledOriginalMessageIds.push(item.messageId)
         continue
       }
-
-      // Filter out-of-range — apply defaults for any missing limit fields
-      const effectiveMin = limits?.minAmount ?? DEFAULT_PAYMENT_REQUEST_MIN_AMOUNT
-      const effectiveMax = limits?.maxAmount ?? DEFAULT_PAYMENT_REQUEST_MAX_AMOUNT
       if (amount < effectiveMin || amount > effectiveMax) {
-        outOfRangeMessageIds.push(item.messageId)
+        classification.outOfRangeMessageIds.push(item.messageId)
         continue
       }
 
-      // Verify HMAC proof — ensures message came from claimed sender
       try {
-        const proofData = Array.from(new TextEncoder().encode(requestId + myIdentityKey))
-        await this.peerPayWalletClient.verifyHmac(
-          {
-            data: proofData,
-            hmac: hexToBytes(item.body.requestProof),
-            protocolID: [2, 'payment request auth'],
-            keyID: requestId,
-            counterparty: item.sender
-          },
-          this.originator
-        )
+        await this.verifyPaymentRequestProof(item, myIdentityKey)
       } catch {
         Logger.warn(`[PP CLIENT] Invalid requestProof for requestId=${requestId}, discarding`)
-        malformedMessageIds.push(item.messageId)
+        classification.malformedMessageIds.push(item.messageId)
         continue
       }
 
-      active.push({
+      classification.active.push({
         messageId: item.messageId,
         sender: item.sender,
         requestId,
@@ -886,29 +939,16 @@ export class PeerPayClient extends MessageBoxClient {
         expiresAt
       })
     }
+    return classification
+  }
 
-    // Acknowledge expired
-    if (expiredMessageIds.length > 0) {
-      await this.acknowledgeMessage({ messageIds: expiredMessageIds, host: hostOverride })
+  private async acknowledgePaymentRequestMessages(
+    messageIds: string[],
+    host?: string
+  ): Promise<void> {
+    if (messageIds.length > 0) {
+      await this.acknowledgeMessage({ messageIds, host })
     }
-
-    // Acknowledge cancelled originals + cancel messages together
-    const cancelAckIds = [...cancelledOriginalMessageIds, ...cancelMessageIds]
-    if (cancelAckIds.length > 0) {
-      await this.acknowledgeMessage({ messageIds: cancelAckIds, host: hostOverride })
-    }
-
-    // Acknowledge out-of-range
-    if (outOfRangeMessageIds.length > 0) {
-      await this.acknowledgeMessage({ messageIds: outOfRangeMessageIds, host: hostOverride })
-    }
-
-    // Acknowledge malformed messages so they don't reappear
-    if (malformedMessageIds.length > 0) {
-      await this.acknowledgeMessage({ messageIds: malformedMessageIds, host: hostOverride })
-    }
-
-    return active
   }
 
   /**

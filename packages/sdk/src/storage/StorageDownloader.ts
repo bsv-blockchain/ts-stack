@@ -17,7 +17,7 @@ export class StorageDownloader {
   private readonly networkPreset?: 'mainnet' | 'testnet' | 'local' = 'mainnet'
   private readonly lookupResolver: LookupResolver
 
-  constructor (config?: DownloaderConfig) {
+  constructor(config?: DownloaderConfig) {
     this.networkPreset = config?.networkPreset ?? 'mainnet'
     this.lookupResolver = new LookupResolver({ networkPreset: this.networkPreset })
   }
@@ -27,7 +27,7 @@ export class StorageDownloader {
    * @param uhrpUrl The UHRP URL to resolve.
    * @returns A promise that resolves to an array of HTTP URLs.
    */
-  public async resolve (uhrpUrl: string): Promise<string[]> {
+  public async resolve(uhrpUrl: string): Promise<string[]> {
     // Use UHRP lookup service
     const response = await this.lookupResolver.query({ service: 'ls_uhrp', query: { uhrpUrl } })
     if (response.type !== 'output-list') {
@@ -54,7 +54,7 @@ export class StorageDownloader {
    * @param uhrpUrl The UHRP URL to download.
    * @returns A promise that resolves to the downloaded content.
    */
-  public async download (uhrpUrl: string): Promise<DownloadResult> {
+  public async download(uhrpUrl: string): Promise<DownloadResult> {
     if (!StorageUtils.isValidURL(uhrpUrl)) {
       throw new Error('Invalid parameter UHRP url')
     }
@@ -67,48 +67,54 @@ export class StorageDownloader {
     }
 
     for (const url of downloadURLs) {
-      try {
-        // The url is fetched
-        const result = await fetch(url, { method: 'GET' })
-
-        // If the request fails, continue to the next url
-        if (!result.ok || result.status >= 400 || result.body == null) {
-          continue
-        }
-
-        const reader = result.body.getReader()
-        const hashStream = new Hash.SHA256()
-        const chunks: Uint8Array[] = []
-        let totalLength = 0
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          hashStream.update(Array.from(value))
-          chunks.push(value)
-          totalLength += value.length
-        }
-
-        const digest = Utils.toHex(hashStream.digest())
-        if (digest !== expected) {
-          throw new Error('Data integrity error: value of content does not match hash of the url given')
-        }
-
-        const data = new Uint8Array(totalLength)
-        let offset = 0
-        for (const chunk of chunks) {
-          data.set(chunk, offset)
-          offset += chunk.length
-        }
-
-        return {
-          data,
-          mimeType: result.headers.get('Content-Type')
-        }
-      } catch {
-        continue
-      }
+      const result = await this.tryDownload(url, expected)
+      if (result !== undefined) return result
     }
     throw new Error(`Unable to download content from ${uhrpUrl}`)
+  }
+
+  private async tryDownload(url: string, expected: string): Promise<DownloadResult | undefined> {
+    try {
+      const result = await fetch(url, { method: 'GET' })
+      if (!result.ok || result.status >= 400 || result.body == null) return undefined
+
+      const data = await this.readAndValidateBody(result.body.getReader(), expected)
+      return {
+        data,
+        mimeType: result.headers.get('Content-Type')
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  private async readAndValidateBody(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    expected: string
+  ): Promise<Uint8Array> {
+    const hashStream = new Hash.SHA256()
+    const chunks: Uint8Array[] = []
+    let totalLength = 0
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      hashStream.update(Array.from(value))
+      chunks.push(value)
+      totalLength += value.length
+    }
+
+    const digest = Utils.toHex(hashStream.digest())
+    if (digest !== expected) {
+      throw new Error('Data integrity error: value of content does not match hash of the url given')
+    }
+
+    const data = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      data.set(chunk, offset)
+      offset += chunk.length
+    }
+    return data
   }
 }
