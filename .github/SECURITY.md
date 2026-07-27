@@ -80,10 +80,14 @@ This repository follows the MBGA reliability and security programme:
   security updates. Container builds additionally use digest-pinned bases,
   committed locks, high/critical image gates, SPDX SBOMs, SLSA provenance,
   immutable release tags, and keyless signatures or attestations with
-  verification before release completion. Automated license-policy
-  enforcement and npm-package SBOM/signing remain tracked completion gates in
-  the repository health program; they are not represented here as complete.
+  verification before release completion. npm releases likewise pack once,
+  produce per-package and aggregate CycloneDX SBOMs, reject high/critical
+  vulnerability and license findings, attest and verify the exact tarballs,
+  retain offline evidence, publish with npm OIDC provenance, and verify registry
+  digests. Automated Open BSV license-policy enforcement covers every package.
 
 See `specs/reliability/` for per-package security status.
 See `docs/reference/container-supply-chain.md` for image release and
+verification procedures.
+See `docs/reference/npm-package-supply-chain.md` for npm release and
 verification procedures.
