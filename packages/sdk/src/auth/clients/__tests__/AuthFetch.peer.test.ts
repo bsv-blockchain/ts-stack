@@ -53,6 +53,13 @@ function buildResponsePayload(
   return writer.toArray()
 }
 
+beforeEach(() => {
+  // AuthFetch registers an error listener on every transport it creates.
+  SimplifiedFetchTransportMock.mockImplementation(() => ({
+    onDataError: jest.fn()
+  }))
+})
+
 afterEach(() => {
   jest.restoreAllMocks()
   PeerMock.mockReset()
@@ -303,5 +310,84 @@ describe('AuthFetch authenticated peer lifecycle', () => {
     await expect(authFetch.fetch('https://service.example/second')).rejects.toThrow(
       'peer transport failed'
     )
+  })
+
+  test('rejects the pending request when its response cannot be processed', async () => {
+    let reportDataError: ((error: Error, message: any) => void) | undefined
+    const stopListeningForGeneralMessages = jest.fn()
+
+    SimplifiedFetchTransportMock.mockImplementation(() => ({
+      onDataError: (listener: (error: Error, message: any) => void) => {
+        reportDataError = listener
+      }
+    }))
+
+    const peer = {
+      ready: Promise.resolve(),
+      listenForCertificatesReceived: jest.fn(),
+      listenForCertificatesRequested: jest.fn(),
+      listenForGeneralMessages: jest.fn(() => 23),
+      stopListeningForGeneralMessages,
+      toPeer: jest.fn(async () => {
+        // The HTTP exchange succeeded; the peer then failed to process the
+        // response it carried — for instance because the server replied on a
+        // session this client does not hold.
+        reportDataError?.(new Error('Session not found for nonce: other-session'), {
+          version: '0.1',
+          messageType: 'general',
+          identityKey: 'server-identity-key',
+          payload: buildResponsePayload(new Array(32).fill(7), 200, {}, [])
+        })
+      })
+    }
+    PeerMock.mockImplementation(() => peer)
+
+    const authFetch = new AuthFetch({ getPublicKey: jest.fn() } as any)
+
+    await expect(authFetch.fetch('https://service.example/resource')).rejects.toThrow(
+      'Session not found for nonce: other-session'
+    )
+    expect(stopListeningForGeneralMessages).toHaveBeenCalledWith(23)
+  })
+
+  test('leaves other pending requests alone when one response fails', async () => {
+    let reportDataError: ((error: Error, message: any) => void) | undefined
+    let generalMessage: ((senderPublicKey: string, payload: number[]) => void) | undefined
+
+    SimplifiedFetchTransportMock.mockImplementation(() => ({
+      onDataError: (listener: (error: Error, message: any) => void) => {
+        reportDataError = listener
+      }
+    }))
+
+    const peer = {
+      ready: Promise.resolve(),
+      listenForCertificatesReceived: jest.fn(),
+      listenForCertificatesRequested: jest.fn(),
+      listenForGeneralMessages: jest.fn((listener: typeof generalMessage) => {
+        generalMessage = listener
+        return 24
+      }),
+      stopListeningForGeneralMessages: jest.fn(),
+      toPeer: jest.fn(async () => {
+        // A failure carrying a different request nonce must not settle this one.
+        reportDataError?.(new Error('Session not found for nonce: other-session'), {
+          version: '0.1',
+          messageType: 'general',
+          identityKey: 'server-identity-key',
+          payload: buildResponsePayload(new Array(32).fill(8), 200, {}, [])
+        })
+        generalMessage?.(
+          'server-identity-key',
+          buildResponsePayload(new Array(32).fill(7), 200, {}, [])
+        )
+      })
+    }
+    PeerMock.mockImplementation(() => peer)
+
+    const authFetch = new AuthFetch({ getPublicKey: jest.fn() } as any)
+
+    const response = await authFetch.fetch('https://service.example/resource')
+    expect(response.status).toBe(200)
   })
 })

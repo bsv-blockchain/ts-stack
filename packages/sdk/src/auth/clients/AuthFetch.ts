@@ -11,7 +11,7 @@ import { createNonce } from '../utils/createNonce.js'
 import { Peer } from '../Peer.js'
 import { SimplifiedFetchTransport } from '../transports/SimplifiedFetchTransport.js'
 import { SessionManager, AsyncSessionManager } from '../SessionManager.js'
-import { RequestedCertificateSet } from '../types.js'
+import { AuthMessage, RequestedCertificateSet } from '../types.js'
 import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
 import { getVerifiableCertificates } from '../utils/index.js'
@@ -76,7 +76,10 @@ const PAYMENT_VERSION = '1.0'
 export class AuthFetch {
   private readonly sessionManager: SessionManager
   private readonly wallet: WalletInterface
-  private callbacks: Record<string, { resolve: Function; reject: Function }> = {}
+  private callbacks: Record<
+    string,
+    { resolve: Function; reject: Function; stopListening?: () => void }
+  > = {}
   private readonly certificatesReceived: VerifiableCertificate[] = []
   private readonly requestedCertificates?: RequestedCertificateSet
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
@@ -137,6 +140,9 @@ export class AuthFetch {
           if (this.peers[baseURL] === undefined) {
             // Create a peer for the request
             const newTransport = new SimplifiedFetchTransport(baseURL)
+            newTransport.onDataError((error, message) => {
+              this.settleFailedResponse(error, message)
+            })
             const newPeer = new Peer(
               this.wallet,
               newTransport,
@@ -203,7 +209,7 @@ export class AuthFetch {
 
           // Setup general message listener to resolve requests once a response is received
           this.callbacks[requestNonceAsBase64] = { resolve, reject }
-          const listenerId = peerToUse.peer.listenForGeneralMessages(
+          const listenerId: number = peerToUse.peer.listenForGeneralMessages(
             (senderPublicKey: string, payload: number[]) => {
               // Create a reader
               const responseReader = new Utils.Reader(payload)
@@ -263,6 +269,13 @@ export class AuthFetch {
               delete this.callbacks[requestNonceAsBase64]
             }
           )
+          // Recorded so a response that fails to process can retire its
+          // listener as well as settle its caller.
+          if (this.callbacks[requestNonceAsBase64] !== undefined) {
+            this.callbacks[requestNonceAsBase64].stopListening = () => {
+              peerToUse.peer.stopListeningForGeneralMessages(listenerId)
+            }
+          }
 
           // Before sending general messages to the peer, ensure that no certificate requests are pending.
           // This way, the user would need to choose to either allow or reject the certificate request first.
@@ -407,6 +420,36 @@ export class AuthFetch {
    *
    * @throws Will throw an error if unsupported headers are used or serialization fails.
    */
+  /**
+   * Rejects the request a failed incoming message belongs to.
+   *
+   * The HTTP exchange has already completed by the time the peer processes a
+   * response, so a failure there cannot reject the request on its own. A
+   * general message opens with the 32-byte request nonce of the request it
+   * answers, which identifies the caller still waiting on it. Without this the
+   * failure would be dropped and that caller would wait forever.
+   *
+   * Messages that carry no usable payload cannot be attributed to a request
+   * and are left alone.
+   *
+   * @param error - The failure raised while processing the message.
+   * @param message - The message being processed when the failure was raised.
+   */
+  private settleFailedResponse(error: Error, message: AuthMessage): void {
+    const payload = message.payload
+    if (payload == null || payload.length < 32) {
+      return
+    }
+    const requestNonceAsBase64 = Utils.toBase64(payload.slice(0, 32))
+    const callback = this.callbacks[requestNonceAsBase64]
+    if (callback === undefined) {
+      return
+    }
+    delete this.callbacks[requestNonceAsBase64]
+    callback.stopListening?.()
+    callback.reject(error)
+  }
+
   private async serializeRequest(
     method: string,
     headers: Record<string, string>,
