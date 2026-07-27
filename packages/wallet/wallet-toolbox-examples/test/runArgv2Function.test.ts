@@ -38,6 +38,12 @@ describe('runArgv2Function', () => {
     expect(runArgv2Function({ other: async () => {} })).toBeUndefined()
   })
 
+  test('does not execute when the script path and function name are absent', () => {
+    process.argv = ['node']
+
+    expect(runArgv2Function({ other: async () => {} })).toBeUndefined()
+  })
+
   test('reports synchronous and asynchronous example failures', async () => {
     const syncFailure = new Error('sync failure')
     const asyncFailure = new Error('async failure')
