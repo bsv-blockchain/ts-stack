@@ -134,4 +134,45 @@ describe('wallet pairing URI properties', () => {
       expect(parsePairingUri(uri).params).toBeNull()
     }
   })
+
+  test('rejects each missing field, ambiguous credentials, and malformed protocol tuples', () => {
+    const valid = buildPairingUri({
+      sessionId: 'session',
+      backendIdentityKey: BACKEND_KEY,
+      protocolID: '[0,"pairing"]',
+      origin: 'https://wallet.example.org',
+      expiry: FUTURE_EXPIRY
+    })
+
+    for (const field of ['topic', 'backendIdentityKey', 'protocolID', 'origin', 'expiry']) {
+      const url = new URL(valid)
+      url.searchParams.delete(field)
+      expect(parsePairingUri(url.toString())).toEqual(
+        expect.objectContaining({ params: null, error: expect.any(String) })
+      )
+    }
+
+    for (const invalidOrigin of [
+      'https://user@wallet.example.org',
+      'https://:password@wallet.example.org'
+    ]) {
+      const url = new URL(valid)
+      url.searchParams.set('origin', invalidOrigin)
+      expect(parsePairingUri(url.toString()).params).toBeNull()
+    }
+
+    for (const invalidProtocol of ['[]', '[0]', '[0,"pairing",true]', '["0","pairing"]', '[0,1]']) {
+      const url = new URL(valid)
+      url.searchParams.set('protocolID', invalidProtocol)
+      expect(parsePairingUri(url.toString()).params).toBeNull()
+    }
+
+    for (const invalidExpiry of [` ${FUTURE_EXPIRY}`, `${FUTURE_EXPIRY} `]) {
+      const url = new URL(valid)
+      url.searchParams.set('expiry', invalidExpiry)
+      expect(parsePairingUri(url.toString()).params).toBeNull()
+    }
+
+    expect(parsePairingUri('bsv-browser://%').params).toBeNull()
+  })
 })

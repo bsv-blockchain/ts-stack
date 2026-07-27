@@ -63,6 +63,44 @@ describe('project configuration properties', () => {
     )
   })
 
+  test('enforces exact empty, absolute, type, default, and registry boundaries', () => {
+    expect(validBsvDir('')).toBe(false)
+
+    const emptyTarget = resolveConfig({
+      mode: 'add',
+      name: 'app',
+      dir: '',
+      bsvDir: 'src/bsv',
+      targets: { client: '', server: '' }
+    })
+    expect(emptyTarget.dir).toBe('.')
+    expect(emptyTarget.targets).toEqual({ client: '', server: '' })
+
+    for (const target of ['/absolute', 'C:\\absolute', '../escape']) {
+      expect(() =>
+        resolveConfig({
+          mode: 'add',
+          name: 'app',
+          targets: { client: target }
+        })
+      ).toThrow('safe relative path')
+    }
+    expect(() =>
+      resolveConfig({
+        mode: 'add',
+        name: 'app',
+        capabilities: [1]
+      })
+    ).toThrow('capabilities must be strings')
+    expect(() =>
+      resolveConfig({
+        mode: 'add',
+        name: 'app',
+        starter: 'not-registered'
+      })
+    ).toThrow('unknown starter: not-registered')
+  })
+
   test('handles arbitrary structured configuration as a resolved config or a governed error', () => {
     fc.assert(
       fc.property(fc.jsonValue(), input => {

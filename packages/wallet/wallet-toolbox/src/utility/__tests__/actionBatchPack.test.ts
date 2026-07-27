@@ -66,9 +66,38 @@ describe('action batch pack transport', () => {
       .toThrow('bounded action batch pack')
     expect(() => encodeActionBatchPack([], maxBytes, maxItems))
       .toThrow('between 1 and')
+    expect(() => encodeActionBatchPack(
+      [item(Uint8Array.of(1))],
+      actionBatchPackLength([item(Uint8Array.of(1))]) - 1,
+      maxItems
+    )).toThrow('within the provider pack limit')
     expect(() => encodeActionBatchPack([
       { digest: '00', bytes: new Uint8Array() }
     ], maxBytes, maxItems)).toThrow('32-byte hexadecimal')
+
+    const wrongMagic = encoded.slice()
+    wrongMagic[0] ^= 0xff
+    expect(() => decodeActionBatchPack(wrongMagic, maxBytes, maxItems))
+      .toThrow('bounded action batch pack')
+
+    const zeroItems = encoded.slice(0, 8)
+    new DataView(zeroItems.buffer).setUint32(4, 0, true)
+    expect(() => decodeActionBatchPack(zeroItems, maxBytes, maxItems))
+      .toThrow('between 1 and')
+
+    const missingItemHeader = encoded.slice(0, 8)
+    new DataView(missingItemHeader.buffer).setUint32(4, 1, true)
+    expect(() => decodeActionBatchPack(missingItemHeader, maxBytes, maxItems))
+      .toThrow('complete item headers')
+  })
+
+  test('rejects a mathematically unaddressable aggregate before allocation', () => {
+    const impossible = [{
+      digest: '00'.repeat(32),
+      bytes: { length: Number.MAX_SAFE_INTEGER } as Uint8Array
+    }]
+    expect(() => actionBatchPackLength(impossible))
+      .toThrow('addressable memory')
   })
 
   test('bounds decompressed bytes before parsing a compression bomb', async () => {

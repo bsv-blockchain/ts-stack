@@ -22,6 +22,28 @@ describe('formatAmountWithCurrency', () => {
     expect(formatAmountWithCurrency(1234.56, 'USD').formattedAmount).toBe('$1,234.56')
   })
 
+  test.each([
+    ['USD', '$'],
+    ['GBP', '£'],
+    ['EUR', '€'],
+    ['JPY', '¥'],
+    ['CNY', '¥'],
+    ['INR', '₹'],
+    ['AUD', 'A$'],
+    ['CAD', 'C$'],
+    ['CHF', 'CHF '],
+    ['HKD', 'HK$'],
+    ['SGD', 'S$'],
+    ['NZD', 'NZ$'],
+    ['SEK', 'SEK '],
+    ['NOK', 'NOK '],
+    ['MXN', 'MX$']
+  ])('uses the canonical %s currency marker', (currency, marker) => {
+    expect(formatAmountWithCurrency(1234.5, currency, { decimalPlaces: 1 }).formattedAmount).toBe(
+      `${marker}1,234.5`
+    )
+  })
+
   test('formats EUR with no decimals', () => {
     expect(formatAmountWithCurrency(1234, 'EUR', { decimalPlaces: 0 }).formattedAmount).toBe(
       '€1,234'
@@ -49,6 +71,26 @@ describe('formatAmountWithCurrency', () => {
     expect(formatAmountWithCurrency(0.00000012345, 'USD', { decimalPlaces: 10 }).hoverText).toBe(
       '$0.0000001235'
     )
+  })
+
+  test('keeps the exact small-amount threshold and implicit decimal boundaries', () => {
+    expect(formatAmountWithCurrency(0, 'USD')).toEqual({
+      formattedAmount: '< $0.01',
+      hoverText: '$0'
+    })
+    expect(formatAmountWithCurrency(0.009, 'USD')).toEqual({
+      formattedAmount: '< $0.01',
+      hoverText: '$0.009'
+    })
+    expect(formatAmountWithCurrency(0.01, 'USD')).toEqual({
+      formattedAmount: '$0.01'
+    })
+    expect(formatAmountWithCurrency(0.1, 'USD')).toEqual({
+      formattedAmount: '$0.1'
+    })
+    expect(formatAmountWithCurrency(1, 'USD')).toEqual({
+      formattedAmount: '$1'
+    })
   })
 
   test('formats very small amounts for BSV and currencies without a known symbol', () => {

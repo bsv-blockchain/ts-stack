@@ -4,9 +4,15 @@ import {
   decodeDidKey,
   publicKeyFromDid,
   publicKeyToDidKey,
-  publicKeyToJwk
+  publicKeyToJwk,
+  verificationMethodForDid
 } from '../src/index.js'
 import { sha256Base64Url } from '../src/utils/crypto.js'
+import {
+  didFromVerificationMethod,
+  encodeBase58Multibase,
+  SECP256K1_PUB_MULTICODEC_PREFIX
+} from '../src/utils/multibase.js'
 
 describe('BsvDid', () => {
   test('creates a secp256k1 did:key and DID Document', () => {
@@ -27,12 +33,41 @@ describe('BsvDid', () => {
   })
 
   test('normalizes hexadecimal and byte-array public-key inputs', () => {
-    const publicKey = PrivateKey.fromRandom().toPublicKey().toDER() as number[]
+    const publicKeyObject = PrivateKey.fromRandom().toPublicKey()
+    const publicKey = publicKeyObject.toDER() as number[]
     const publicKeyHex = publicKey.map(byte => byte.toString(16).padStart(2, '0')).join('')
     const publicKeyBytes = new Uint8Array(publicKey)
 
     expect(publicKeyToDidKey(publicKeyHex)).toBe(publicKeyToDidKey(publicKeyBytes))
+    expect(publicKeyToDidKey(publicKeyObject)).toBe(publicKeyToDidKey(publicKeyBytes))
     expect(publicKeyToJwk(publicKeyHex)).toEqual(publicKeyToJwk(publicKeyBytes))
+  })
+
+  test('round-trips the canonical verification method and rejects forged fragments', () => {
+    const did = publicKeyToDidKey(new PrivateKey(1).toPublicKey())
+    const verificationMethod = verificationMethodForDid(did)
+
+    expect(didFromVerificationMethod(verificationMethod)).toBe(did)
+    expect(() => didFromVerificationMethod(did)).toThrow('with a fragment')
+    expect(() => didFromVerificationMethod(`${did}#`)).toThrow('with a fragment')
+    expect(() => didFromVerificationMethod(`${did}#wrong`)).toThrow('does not match')
+  })
+
+  test('rejects malformed DID grammar, multicodecs, key lengths, and curve points', () => {
+    const validKey = new PrivateKey(1).toPublicKey().toDER() as number[]
+    const invalidInputs = [
+      'did:key',
+      'did:web:example.com',
+      'did:key:not-multibase',
+      `did:key:${encodeBase58Multibase([0xe8, 0x01, ...validKey])}`,
+      `did:key:${encodeBase58Multibase([...SECP256K1_PUB_MULTICODEC_PREFIX, ...validKey.slice(1)])}`,
+      `did:key:${encodeBase58Multibase([
+        ...SECP256K1_PUB_MULTICODEC_PREFIX,
+        ...Array.from({ length: 33 }, () => 0)
+      ])}`
+    ]
+
+    for (const did of invalidInputs) expect(() => decodeDidKey(did)).toThrow()
   })
 
   test('hashes both text and byte-array values', () => {

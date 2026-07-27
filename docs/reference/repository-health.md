@@ -2,7 +2,7 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.2.0'
+version: '1.3.0'
 last_updated: '2026-07-26'
 last_verified: '2026-07-26'
 review_cadence_days: 30
@@ -79,6 +79,9 @@ contract inventories required skips, classifies every manual/live/resource
 suite, rejects empty tests, ratchets all conformance skip groups, and requires
 every property-fuzz suite to declare its package, trust boundary, concrete
 invariants, minimum PR budget, and reproducible long-run campaign.
+`governance/mutation-testing/policy.json` then pairs all 25 property suites with
+focused implementation mutation targets, per-boundary score ratchets, zero
+uncovered mutants, and zero invalid mutants.
 
 ## Commands
 
@@ -88,6 +91,7 @@ Run the blocking control and its unit tests:
 pnpm health:check
 pnpm test:governance
 pnpm test:property
+pnpm test:mutation --all
 pnpm typecheck
 ```
 
@@ -156,6 +160,13 @@ checks:
 5. exception records are owned, structurally valid, and unexpired;
 6. current package-contract findings exactly match the ratcheted snapshot; and
 7. the health implementation’s unit tests pass.
+
+Affected package changes also select their matching mutation targets. The
+parallel mutation lane restores the shared workspace build, executes only the
+focused property and regression tests for each selected implementation
+boundary, retains its JSON report, and feeds the required merge gate. SDK,
+toolchain, CI, and governance changes deliberately fan out to the full target
+registry. A separate scheduled workflow validates all targets weekly.
 
 The job writes a rule-by-rule and project-by-project report to the GitHub Actions
 step summary and feeds the required `merge-gate`. Known findings stay visible

@@ -70,6 +70,11 @@ describe('Script Validation Functions', () => {
         expect(isP2PKH(hex)).toBe(false)
       })
 
+      it('should return false for the right total length with a wrong hash-length opcode', () => {
+        const hex = '76a913' + 'ab'.repeat(20) + '88ac'
+        expect(isP2PKH(hex)).toBe(false)
+      })
+
       it('should return false for hex string with wrong prefix', () => {
         const hex = '76a9' + 'ab'.repeat(20) + '88ac' // Wrong prefix
         expect(isP2PKH(hex)).toBe(false)

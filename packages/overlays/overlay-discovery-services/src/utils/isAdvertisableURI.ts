@@ -63,7 +63,6 @@ export const isAdvertisableURI = (uri: string): boolean => {
   else if (uri.startsWith('wss://')) {
     try {
       const parsed = new URL(uri)
-      if (parsed.protocol !== 'wss:') return false
       if (parsed.hostname.toLowerCase() === 'localhost') return false
       return true
     } catch {

@@ -41,6 +41,8 @@ describe('BTMS untrusted data properties', () => {
         }
       )
     )
+    expect(parseMetadata('{not-json')).toBeUndefined()
+    expect(parseIncomingMessage({ body: '{not-json' })).toBeNull()
   })
 
   test('round-trips valid derivation instructions and rejects non-string derivation material', () => {
@@ -77,6 +79,7 @@ describe('BTMS untrusted data properties', () => {
         }
       )
     )
+    expect(() => parseCustomInstructions(undefined, 'txid', 7)).toThrow('txid.7')
   })
 
   test('strips exactly one governed label prefix and is total for arbitrary message text', () => {

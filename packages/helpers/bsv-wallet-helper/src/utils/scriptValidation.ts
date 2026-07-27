@@ -136,12 +136,6 @@ export function isP2PKH(input: ScriptInput): boolean {
       return false
     }
 
-    // Check length byte (should be 0x14 = 20 bytes)
-    const lengthByte = hex.substring(4, 6)
-    if (lengthByte !== '14') {
-      return false
-    }
-
     // Check suffix (OP_EQUALVERIFY OP_CHECKSIG)
     if (!hex.endsWith(suffix)) {
       return false
@@ -731,9 +725,6 @@ export function extractOpReturnData(input: ScriptInput): string[] | null {
 
   // Find OP_RETURN chunk (opcode 0x6a = 106)
   const opReturnIndex = chunks.findIndex(chunk => chunk.op === 0x6a)
-  if (opReturnIndex === -1) {
-    return null
-  }
 
   // Extract all data chunks after OP_RETURN
   const dataFields: string[] = []

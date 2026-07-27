@@ -68,4 +68,30 @@ describe('auth transport serialization properties', () => {
       })
     )
   })
+
+  test('classifies every response-value family without treating malformed byte arrays as bytes', () => {
+    expect(convertValueToArray(undefined, {})).toEqual([])
+    expect(convertValueToArray(null, {})).toEqual([])
+    expect(convertValueToArray('é', {})).toEqual(Utils.toArray('é', 'utf8'))
+    expect(convertValueToArray(Buffer.from([0, 255]), {})).toEqual([0, 255])
+    expect(convertValueToArray(new Uint8Array([0, 255]), {})).toEqual([0, 255])
+    expect(convertValueToArray([0, 255], {})).toEqual([0, 255])
+
+    for (const malformed of [[-1], [256], [0.5], ['1']]) {
+      const headers: Record<string, string> = {}
+      expect(convertValueToArray(malformed, headers)).toEqual(
+        Utils.toArray(JSON.stringify(malformed), 'utf8')
+      )
+      expect(headers['content-type']).toBe('application/json')
+    }
+
+    const existingHeaders = { 'content-type': 'application/custom' }
+    expect(convertValueToArray({ ok: true }, existingHeaders)).toEqual(
+      Utils.toArray('{"ok":true}', 'utf8')
+    )
+    expect(existingHeaders['content-type']).toBe('application/custom')
+    expect(convertValueToArray(42, {})).toEqual(Utils.toArray('42', 'utf8'))
+    expect(convertValueToArray(false, {})).toEqual(Utils.toArray('false', 'utf8'))
+    expect(convertValueToArray(1n, {})).toEqual(Utils.toArray('1', 'utf8'))
+  })
 })

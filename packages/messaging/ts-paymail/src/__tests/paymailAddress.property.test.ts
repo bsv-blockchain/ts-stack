@@ -43,6 +43,30 @@ describe('paymail address parser properties', () => {
     )
   })
 
+  test('enforces exact alias, host, and label boundaries', () => {
+    const aliasAtLimit = 'a'.repeat(64)
+    const domainAtLimit = ['a'.repeat(63), 'b'.repeat(63), 'c'.repeat(63), 'd'.repeat(61)].join('.')
+
+    expect(parsePaymail(`${aliasAtLimit}@${domainAtLimit}`)).toEqual({
+      name: aliasAtLimit,
+      domain: domainAtLimit
+    })
+    for (const invalid of [
+      'example.com',
+      '@example.com',
+      'name@',
+      'name@@example.com',
+      `${'a'.repeat(65)}@example.com`,
+      `name@${'a'.repeat(63)}.${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(63)}`,
+      'name@example..com',
+      'name@exa_mple.com',
+      '!name@example.com',
+      'name!@example.com'
+    ]) {
+      expect(parsePaymail(invalid)).toBeUndefined()
+    }
+  })
+
   test('is total for arbitrary untrusted strings', () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 1024 }), value => {
