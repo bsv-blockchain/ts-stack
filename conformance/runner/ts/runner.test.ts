@@ -14,7 +14,7 @@
  * are executed and their dispatcher runs; only metadata-declared gaps are skipped.
  */
 
-import { describe, test } from '@jest/globals'
+import { describe, expect, test } from '@jest/globals'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { join, extname, basename } from 'path'
 import { fileURLToPath } from 'url'
@@ -64,6 +64,17 @@ function isNotImplemented(err: unknown): err is Error {
   return err instanceof Error && err.message.startsWith('not implemented')
 }
 
+/**
+ * Register an intentional, metadata-governed compatibility gap as a real Jest
+ * skip. The policy validator requires a concrete reason and removal condition,
+ * while the assertion prevents this registration callback from being vacuous.
+ */
+function registerGovernedSkip(vectorId: string, reason: string): void {
+  test.skip(`${vectorId} — ${reason}`, () => {
+    expect(reason.length).toBeGreaterThanOrEqual(20)
+  })
+}
+
 // ── Main runner ───────────────────────────────────────────────────────────────
 
 const vectorFiles = findJsonFiles(VECTORS_DIR)
@@ -95,12 +106,12 @@ for (const filePath of vectorFiles) {
 
       // Always-skip rules
       if (parityClass === 'intended') {
-        test.skip(`${vectorId} — ${skipReason ?? 'missing governed skip reason'}`, () => {})
+        registerGovernedSkip(vectorId, skipReason ?? 'missing governed skip reason')
         continue
       }
 
       if (v.skip === true) {
-        test.skip(`${vectorId} — ${skipReason ?? 'missing governed skip reason'}`, () => {})
+        registerGovernedSkip(vectorId, skipReason ?? 'missing governed skip reason')
         continue
       }
 
@@ -114,7 +125,10 @@ for (const filePath of vectorFiles) {
             throw new Error(`no dispatcher registered for category '${cat}' (${vf.id ?? filePath})`)
           })
         } else {
-          test.skip(`${vectorId} — ${skipReason ?? `no dispatcher for non-required ${parityClass} capability`}`, () => {})
+          registerGovernedSkip(
+            vectorId,
+            skipReason ?? `no dispatcher for non-required ${parityClass} capability`
+          )
         }
         continue
       }

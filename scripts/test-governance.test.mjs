@@ -26,7 +26,7 @@ test('current required, manual, live, resource, and conformance tests are govern
   assert.equal(result.summary.requiredDirectSkips, 6)
   assert.equal(result.summary.propertySuites, 15)
   assert.equal(result.summary.propertyPackages, 15)
-  assert.equal(result.summary.manualAndLiveFiles, 41)
+  assert.equal(result.summary.manualAndLiveFiles, 40)
   assert.equal(result.summary.conformanceSkipFiles, 19)
   assert.equal(result.summary.conformanceSkips, 211)
 })

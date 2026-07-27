@@ -265,7 +265,7 @@ describe('Wallet services tests', () => {
         })
         try {
           const rawTx = await wallet.services.getRawTx(txid)
-          if (chain === 'main') expect(rawTx.rawTx!.length).toBe(176)
+          if (chain === 'main') expect(rawTx.rawTx).toHaveLength(176)
           else expect(rawTx.rawTx).not.toBeTruthy()
         } finally {
           wallet.services.getRawTx = origGetRawTx
@@ -286,7 +286,7 @@ describe('Wallet services tests', () => {
           expect(us.history.length).toBeGreaterThan(0)
         } else {
           expect(us.status).toBe('success')
-          expect(us.history.length).toBe(0)
+          expect(us.history).toHaveLength(0)
         }
       }
     }
@@ -298,17 +298,17 @@ describe('Wallet services tests', () => {
       {
         const txids = ['32c691a077b0ce46051aa7a45fa3b131c71ff85950264575a32171086b02ad98']
         const r = await services.getStatusForTxids(txids)
-        expect(r.results.length).toBe(1)
+        expect(r.results).toHaveLength(1)
         expect(r.results[0].txid).toBe(txids[0])
         expect(r.name).toBeTruthy()
         expect(r.status).toBe('success')
-        expect(r.error).toBe(undefined)
+        expect(r.error).toBeUndefined()
         if (chain === 'main') {
           expect(r.results[0].status).toBe('mined')
           expect(r.results[0].depth).toBeGreaterThan(146)
         } else {
           expect(r.results[0].status).toBe('unknown')
-          expect(r.results[0].depth).toBe(undefined)
+          expect(r.results[0].depth).toBeUndefined()
         }
         await wait(3000)
       }

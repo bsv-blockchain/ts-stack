@@ -1,7 +1,7 @@
 import { AESGCM, AESGCMDecrypt } from '../../primitives/AESGCM'
 
 function expectUint8ArrayEqual(a: Uint8Array, b: Uint8Array): void {
-  expect(a.length).toBe(b.length)
+  expect(a).toHaveLength(b.length)
 
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) {
@@ -24,7 +24,7 @@ describe('AESGCM resource-intensive boundary', () => {
 
     expect(decrypted).not.toBeNull()
     const decryptedBytes = decrypted as Uint8Array
-    expect(decryptedBytes.length).toBe(bigSizeBytes)
+    expect(decryptedBytes).toHaveLength(bigSizeBytes)
     expectUint8ArrayEqual(decryptedBytes, plaintext)
   })
 })

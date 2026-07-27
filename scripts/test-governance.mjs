@@ -118,25 +118,22 @@ export function collectConformanceSkips(root) {
   return { byFile, errors }
 }
 
-export function evaluateTestGovernance({
-  root = REPOSITORY_ROOT,
-  policy = readJson(root, POLICY_PATH),
-  today = new Date().toISOString().slice(0, 10)
-} = {}) {
-  const errors = []
+function collectTestInventory(root) {
   const testFiles = [
     ...walkFiles(root, 'packages', name => TEST_FILE_PATTERN.test(name)),
     ...walkFiles(root, 'infra', name => TEST_FILE_PATTERN.test(name)),
     ...walkFiles(root, 'docs-site', name => TEST_FILE_PATTERN.test(name))
-  ].sort()
+  ].sort((left, right) => left.localeCompare(right))
   const manualFiles = testFiles.filter(file =>
     MANUAL_SUFFIXES.some(suffix => file.endsWith(suffix))
   )
   const requiredFiles = testFiles.filter(
     file => !MANUAL_SUFFIXES.some(suffix => file.endsWith(suffix))
   )
+  return { manualFiles, requiredFiles }
+}
 
-  const propertyTesting = policy.propertyTesting
+function validatePropertyPolicy(root, propertyTesting, policy, errors, today) {
   validateDatedOwner(propertyTesting, policy, 'property testing policy', errors, today)
   if (typeof propertyTesting.library !== 'string' || propertyTesting.library.trim() === '') {
     errors.push('property testing policy must declare a library')
@@ -160,16 +157,22 @@ export function evaluateTestGovernance({
   if (typeof rootManifest.scripts?.['test:property'] !== 'string') {
     errors.push('root package.json must declare test:property')
   }
-  const requiredReplayEnvironment = ['FAST_CHECK_NUM_RUNS', 'FAST_CHECK_SEED', 'FAST_CHECK_PATH']
+}
+
+function validateReplayEnvironment(propertyTesting, errors) {
+  const requiredEnvironment = ['FAST_CHECK_NUM_RUNS', 'FAST_CHECK_SEED', 'FAST_CHECK_PATH']
   if (
     !Array.isArray(propertyTesting.replayEnvironment) ||
-    requiredReplayEnvironment.some(name => !propertyTesting.replayEnvironment.includes(name))
+    requiredEnvironment.some(name => !propertyTesting.replayEnvironment.includes(name))
   ) {
     errors.push(
-      `property testing policy must declare replay environment ${requiredReplayEnvironment.join(', ')}`
+      `property testing policy must declare replay environment ${requiredEnvironment.join(', ')}`
     )
   }
+  return requiredEnvironment
+}
 
+function loadPropertyManifests(root, propertyTesting, errors) {
   const manifestPaths = propertyTesting.manifests ?? []
   if (new Set(manifestPaths).size !== manifestPaths.length) {
     errors.push('property testing policy contains duplicate manifests')
@@ -187,115 +190,150 @@ export function evaluateTestGovernance({
       errors.push(`${manifestPath} must declare a test:property script`)
     }
   }
+  return { manifestPaths, manifests }
+}
 
-  const suitePaths = new Set()
-  const suiteManifestPaths = new Set()
-  for (const suite of propertyTesting.suites ?? []) {
-    if (suitePaths.has(suite.path)) {
-      errors.push(`duplicate property suite ${suite.path}`)
-    }
-    suitePaths.add(suite.path)
-    suiteManifestPaths.add(suite.manifest)
-    validateDatedOwner(
-      { ...propertyTesting, ...suite },
-      policy,
-      `property suite ${suite.path}`,
-      errors,
-      today
+function validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, today) {
+  validateDatedOwner(
+    { ...propertyTesting, ...suite },
+    policy,
+    `property suite ${suite.path}`,
+    errors,
+    today
+  )
+  if (typeof suite.target !== 'string' || suite.target.trim().length < 20) {
+    errors.push(`property suite ${suite.path} must declare its target`)
+  }
+  if (suite.risk !== 'critical' && suite.risk !== 'high') {
+    errors.push(`property suite ${suite.path} must declare critical or high risk`)
+  }
+  if (typeof suite.boundary !== 'string' || suite.boundary.trim().length < 20) {
+    errors.push(`property suite ${suite.path} must declare its trust boundary`)
+  }
+  if (
+    !Array.isArray(suite.invariants) ||
+    suite.invariants.length < 2 ||
+    suite.invariants.some(invariant => typeof invariant !== 'string' || invariant.length < 20)
+  ) {
+    errors.push(`property suite ${suite.path} must declare at least two concrete invariants`)
+  }
+}
+
+function validatePropertySuiteManifest(suite, manifest, errors) {
+  if (manifest === undefined) {
+    errors.push(`property suite ${suite.path} references unregistered manifest ${suite.manifest}`)
+    return
+  }
+  const manifestDirectory = `${normalizePath(path.dirname(suite.manifest))}/`
+  if (!suite.path.startsWith(manifestDirectory)) {
+    errors.push(`property suite ${suite.path} is outside ${suite.manifest}`)
+  }
+  if (!manifest.scripts['test:property'].includes(path.basename(suite.path))) {
+    errors.push(`${suite.manifest} test:property does not select ${suite.path}`)
+  }
+}
+
+function validatePropertySuiteSource(root, suite, propertyTesting, requiredEnvironment, errors) {
+  const source = fs.readFileSync(path.join(root, suite.path), 'utf8')
+  const importsLibrary =
+    source.includes(`from '${propertyTesting.library}'`) ||
+    source.includes(`from "${propertyTesting.library}"`)
+  if (
+    !importsLibrary ||
+    !/\bfc\.assert\s*\(/.test(source) ||
+    !/\bfc\.configureGlobal\s*\(/.test(source)
+  ) {
+    errors.push(
+      `property suite ${suite.path} must import ${propertyTesting.library}, configure it, and call fc.assert`
     )
-    if (!requiredFiles.includes(suite.path)) {
-      errors.push(`property suite ${suite.path} is missing from required tests`)
-      continue
-    }
-    if (typeof suite.target !== 'string' || suite.target.trim().length < 20) {
-      errors.push(`property suite ${suite.path} must declare its target`)
-    }
-    if (suite.risk !== 'critical' && suite.risk !== 'high') {
-      errors.push(`property suite ${suite.path} must declare critical or high risk`)
-    }
-    if (typeof suite.boundary !== 'string' || suite.boundary.trim().length < 20) {
-      errors.push(`property suite ${suite.path} must declare its trust boundary`)
-    }
-    if (
-      !Array.isArray(suite.invariants) ||
-      suite.invariants.length < 2 ||
-      suite.invariants.some(invariant => typeof invariant !== 'string' || invariant.length < 20)
-    ) {
-      errors.push(`property suite ${suite.path} must declare at least two concrete invariants`)
-    }
-    const manifest = manifests.get(suite.manifest)
-    if (manifest === undefined) {
-      errors.push(`property suite ${suite.path} references unregistered manifest ${suite.manifest}`)
-    } else {
-      const manifestDirectory = `${normalizePath(path.dirname(suite.manifest))}/`
-      if (!suite.path.startsWith(manifestDirectory)) {
-        errors.push(`property suite ${suite.path} is outside ${suite.manifest}`)
-      }
-      if (!manifest.scripts['test:property'].includes(path.basename(suite.path))) {
-        errors.push(`${suite.manifest} test:property does not select ${suite.path}`)
-      }
-    }
-    const source = fs.readFileSync(path.join(root, suite.path), 'utf8')
-    const importPattern = new RegExp(
-      `\\bfrom\\s+['"]${propertyTesting.library.replaceAll('-', '\\-')}['"]`
+  }
+  const minimumMatch = source.match(/\bconst\s+MIN_PROPERTY_RUNS\s*=\s*(\d+)/)
+  const configuredMinimum = minimumMatch === null ? undefined : Number.parseInt(minimumMatch[1], 10)
+  if (configuredMinimum !== propertyTesting.minimumRuns) {
+    errors.push(
+      `property suite ${suite.path} must set MIN_PROPERTY_RUNS to ${propertyTesting.minimumRuns}`
     )
-    if (
-      !importPattern.test(source) ||
-      !/\bfc\.assert\s*\(/.test(source) ||
-      !/\bfc\.configureGlobal\s*\(/.test(source)
-    ) {
-      errors.push(
-        `property suite ${suite.path} must import ${propertyTesting.library}, configure it, and call fc.assert`
-      )
-    }
-    const minimumMatch = source.match(/\bconst\s+MIN_PROPERTY_RUNS\s*=\s*(\d+)/)
-    const configuredMinimum =
-      minimumMatch === null ? undefined : Number.parseInt(minimumMatch[1], 10)
-    if (configuredMinimum !== propertyTesting.minimumRuns) {
-      errors.push(
-        `property suite ${suite.path} must set MIN_PROPERTY_RUNS to ${propertyTesting.minimumRuns}`
-      )
-    }
-    for (const environmentName of requiredReplayEnvironment) {
-      if (!source.includes(`process.env.${environmentName}`)) {
-        errors.push(`property suite ${suite.path} must honor ${environmentName}`)
-      }
+  }
+  for (const environmentName of requiredEnvironment) {
+    if (!source.includes(`process.env.${environmentName}`)) {
+      errors.push(`property suite ${suite.path} must honor ${environmentName}`)
     }
   }
+}
+
+function validatePropertySuite(root, suite, context, propertyTesting, policy, errors, today) {
+  if (context.suitePaths.has(suite.path)) {
+    errors.push(`duplicate property suite ${suite.path}`)
+  }
+  context.suitePaths.add(suite.path)
+  context.suiteManifestPaths.add(suite.manifest)
+  validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, today)
+  if (!context.requiredFiles.includes(suite.path)) {
+    errors.push(`property suite ${suite.path} is missing from required tests`)
+    return
+  }
+  validatePropertySuiteManifest(suite, context.manifests.get(suite.manifest), errors)
+  validatePropertySuiteSource(root, suite, propertyTesting, context.requiredEnvironment, errors)
+}
+
+function validatePropertyRegistrations(context, manifestPaths, errors) {
   for (const manifestPath of manifestPaths) {
-    if (!suiteManifestPaths.has(manifestPath)) {
+    if (!context.suiteManifestPaths.has(manifestPath)) {
       errors.push(`stale property manifest ${manifestPath} has no registered suite`)
     }
   }
-  for (const propertyFile of requiredFiles.filter(file => PROPERTY_TEST_FILE_PATTERN.test(file))) {
-    if (!suitePaths.has(propertyFile)) {
+  const propertyFiles = context.requiredFiles.filter(file => PROPERTY_TEST_FILE_PATTERN.test(file))
+  for (const propertyFile of propertyFiles) {
+    if (!context.suitePaths.has(propertyFile)) {
       errors.push(`${propertyFile} is an unregistered property suite`)
     }
   }
+}
 
+function validatePropertyWorkflow(root, propertyTesting, errors) {
   if (
     typeof propertyTesting.workflow !== 'string' ||
     !fs.existsSync(path.join(root, propertyTesting.workflow))
   ) {
     errors.push('property testing policy workflow is missing')
-  } else {
-    const workflow = fs.readFileSync(path.join(root, propertyTesting.workflow), 'utf8')
-    for (const requiredFragment of [
-      'schedule:',
-      'workflow_dispatch:',
-      'FAST_CHECK_NUM_RUNS',
-      'FAST_CHECK_SEED',
-      'FAST_CHECK_PATH',
-      'pnpm test:property'
-    ]) {
-      if (!workflow.includes(requiredFragment)) {
-        errors.push(
-          `property testing workflow ${propertyTesting.workflow} lacks ${requiredFragment}`
-        )
-      }
+    return
+  }
+  const workflow = fs.readFileSync(path.join(root, propertyTesting.workflow), 'utf8')
+  const requiredFragments = [
+    'schedule:',
+    'workflow_dispatch:',
+    'FAST_CHECK_NUM_RUNS',
+    'FAST_CHECK_SEED',
+    'FAST_CHECK_PATH',
+    'pnpm test:property'
+  ]
+  for (const requiredFragment of requiredFragments) {
+    if (!workflow.includes(requiredFragment)) {
+      errors.push(`property testing workflow ${propertyTesting.workflow} lacks ${requiredFragment}`)
     }
   }
+}
 
+function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, errors, today) {
+  validatePropertyPolicy(root, propertyTesting, policy, errors, today)
+  const requiredEnvironment = validateReplayEnvironment(propertyTesting, errors)
+  const { manifestPaths, manifests } = loadPropertyManifests(root, propertyTesting, errors)
+  const context = {
+    manifests,
+    requiredEnvironment,
+    requiredFiles,
+    suiteManifestPaths: new Set(),
+    suitePaths: new Set()
+  }
+  for (const suite of propertyTesting.suites ?? []) {
+    validatePropertySuite(root, suite, context, propertyTesting, policy, errors, today)
+  }
+  validatePropertyRegistrations(context, manifestPaths, errors)
+  validatePropertyWorkflow(root, propertyTesting, errors)
+  return manifestPaths
+}
+
+function validateManualPolicies(policy, errors, today) {
   const manualPolicies = new Map(
     policy.manualPolicies.map(manualPolicy => [manualPolicy.id, manualPolicy])
   )
@@ -310,7 +348,10 @@ export function evaluateTestGovernance({
       errors.push(`manual policy ${manualPolicy.id} must declare prerequisites`)
     }
   }
+  return manualPolicies
+}
 
+function validateManualFiles(manualFiles, policy, manualPolicies, errors) {
   for (const file of manualFiles) {
     const matches = classifyManualFile(file, policy.manualRules)
     if (matches.length !== 1) {
@@ -327,7 +368,9 @@ export function evaluateTestGovernance({
       )
     }
   }
+}
 
+function collectRequiredTestSkips(root, requiredFiles, errors) {
   const observedSkips = []
   for (const file of requiredFiles) {
     const source = fs.readFileSync(path.join(root, file), 'utf8')
@@ -340,8 +383,12 @@ export function evaluateTestGovernance({
       )
     }
   }
+  return observedSkips
+}
 
-  const requiredSkipKey = entry => `${entry.path}\0${entry.title}`
+const requiredSkipKey = entry => `${entry.path}\0${entry.title}`
+
+function registerRequiredSkips(policy, errors, today) {
   const registeredSkips = new Map()
   for (const skip of policy.requiredSkips) {
     const key = requiredSkipKey(skip)
@@ -356,6 +403,10 @@ export function evaluateTestGovernance({
       }
     }
   }
+  return registeredSkips
+}
+
+function compareRequiredSkips(observedSkips, registeredSkips, errors) {
   const observedSkipKeys = new Set()
   for (const skip of observedSkips) {
     const key = requiredSkipKey(skip)
@@ -369,7 +420,9 @@ export function evaluateTestGovernance({
       errors.push(`stale required skip registration for ${skip.path} :: ${skip.title}`)
     }
   }
+}
 
+function validateConformanceGroups(root, policy, errors, today) {
   const conformance = collectConformanceSkips(root)
   errors.push(...conformance.errors)
   const registeredConformance = new Map(
@@ -385,6 +438,11 @@ export function evaluateTestGovernance({
       )
     }
   }
+  validateRegisteredConformanceGroups(conformance, policy, errors, today)
+  return conformance
+}
+
+function validateRegisteredConformanceGroups(conformance, policy, errors, today) {
   for (const group of policy.conformanceSkipGroups) {
     validateDatedOwner(group, policy, `conformance skip group ${group.path}`, errors, today)
     if (!conformance.byFile.has(group.path)) {
@@ -396,6 +454,30 @@ export function evaluateTestGovernance({
       }
     }
   }
+}
+
+export function evaluateTestGovernance({
+  root = REPOSITORY_ROOT,
+  policy = readJson(root, POLICY_PATH),
+  today = new Date().toISOString().slice(0, 10)
+} = {}) {
+  const errors = []
+  const { manualFiles, requiredFiles } = collectTestInventory(root)
+  const propertyTesting = policy.propertyTesting
+  const manifestPaths = validatePropertyTesting(
+    root,
+    requiredFiles,
+    propertyTesting,
+    policy,
+    errors,
+    today
+  )
+  const manualPolicies = validateManualPolicies(policy, errors, today)
+  validateManualFiles(manualFiles, policy, manualPolicies, errors)
+  const observedSkips = collectRequiredTestSkips(root, requiredFiles, errors)
+  const registeredSkips = registerRequiredSkips(policy, errors, today)
+  compareRequiredSkips(observedSkips, registeredSkips, errors)
+  const conformance = validateConformanceGroups(root, policy, errors, today)
 
   return {
     errors,

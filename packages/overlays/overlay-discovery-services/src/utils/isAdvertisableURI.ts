@@ -19,7 +19,7 @@ export const isAdvertisableURI = (uri: string): boolean => {
   if (typeof uri !== 'string' || uri.trim() === '') return false
 
   const parsePositiveMeasurement = (value: string): number | undefined => {
-    const match = value.trim().match(/^(\d+(?:\.\d+)?)(?:[a-zA-Z][a-zA-Z0-9/_-]*)?$/)
+    const match = /^(\d+(?:\.\d+)?)(?:[a-zA-Z][a-zA-Z0-9/_-]*)?$/.exec(value.trim())
     if (match === null) return undefined
     const parsed = Number(match[1])
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined

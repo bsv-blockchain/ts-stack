@@ -3,6 +3,7 @@
 import { existsSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { inspect } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 const MODES = Object.freeze({
@@ -44,7 +45,7 @@ function run() {
   try {
     testPath = resolveGovernedTest(process.cwd(), mode, requestedPath)
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error))
+    console.error(error instanceof Error ? error.message : inspect(error))
     process.exitCode = 2
     return
   }

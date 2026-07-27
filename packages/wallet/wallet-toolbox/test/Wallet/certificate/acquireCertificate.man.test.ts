@@ -97,7 +97,7 @@ describe('acquireCertificate tests', () => {
       certifiers: [cert.certifier],
       types: []
     })
-    expect(lcs.certificates.length).toBe(1)
+    expect(lcs.certificates).toHaveLength(1)
     const lc = lcs.certificates[0]
     // the result should be encrypted.
     expect(lc.fields['name']).not.toBe('Alice')
@@ -200,7 +200,7 @@ describe('acquireCertificate tests', () => {
       certifiers: [cert.certifier],
       types: []
     })
-    expect(lcs.certificates.length).toBe(1)
+    expect(lcs.certificates).toHaveLength(1)
     const lc = lcs.certificates[0]
     // the result should be encrypted.
     expect(lc.fields['name']).not.toBe('Alice')
@@ -275,7 +275,7 @@ describe('acquireCertificate tests', () => {
       certifiers: [args.certifier],
       types: []
     })
-    expect(certificatesFound.certificates.length).toBe(1)
+    expect(certificatesFound.certificates).toHaveLength(1)
     const lc = certificatesFound.certificates[0]
     // the result should be encrypted.
     expect(lc.fields['name']).not.toBe('Alice')

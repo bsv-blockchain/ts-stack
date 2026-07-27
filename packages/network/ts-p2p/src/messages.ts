@@ -201,8 +201,8 @@ function base64ToBytes(b64: string): Uint8Array {
     throw new TypeError('Invalid canonical base64 payload')
   }
   if (
-    (b64.endsWith('==') && (B64[b64[b64.length - 3]] & 0x0f) !== 0) ||
-    (!b64.endsWith('==') && b64.endsWith('=') && (B64[b64[b64.length - 2]] & 0x03) !== 0)
+    (b64.endsWith('==') && (B64[b64.at(-3) ?? ''] & 0x0f) !== 0) ||
+    (!b64.endsWith('==') && b64.endsWith('=') && (B64[b64.at(-2) ?? ''] & 0x03) !== 0)
   ) {
     throw new TypeError('Invalid canonical base64 payload')
   }
