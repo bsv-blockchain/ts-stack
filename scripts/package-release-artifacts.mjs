@@ -75,13 +75,20 @@ function packagePurl(name, version) {
   return `pkg:npm/${encodedName}@${encodeURIComponent(version)}`
 }
 
+function compareStrings(left, right) {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 function uuidBytes(value) {
   return Buffer.from(value.replaceAll('-', ''), 'hex')
 }
 
 export function deterministicUuid(seed) {
-  const digest = crypto
-    .createHash('sha1')
+  // UUID v5 mandates SHA-1 as a deterministic, non-security identifier.
+  const uuidHash = crypto.createHash('sha1') // NOSONAR -- required by the UUID v5 standard
+  const digest = uuidHash
     .update(uuidBytes(URL_NAMESPACE_UUID))
     .update(seed)
     .digest()
@@ -104,8 +111,11 @@ function sha256(value) {
 
 async function fileDigests(filePath) {
   const value = await fs.readFile(filePath)
+  // npm's registry API defines dist.shasum as SHA-1. Security decisions below
+  // use SHA-256/SHA-512; this value exists solely for registry compatibility.
+  const npmShasum = crypto.createHash('sha1').update(value).digest('hex') // NOSONAR
   return {
-    sha1: crypto.createHash('sha1').update(value).digest('hex'),
+    sha1: npmShasum,
     sha256: sha256(value),
     integrity: `sha512-${crypto.createHash('sha512').update(value).digest('base64')}`,
     size: value.length
@@ -190,11 +200,10 @@ export function topologicallyOrderProjects(projects) {
     const ready = [...remainingDependencies]
       .filter(([, dependencies]) => dependencies.size === 0)
       .map(([name]) => name)
-      .sort()
+      .toSorted(compareStrings)
     if (ready.length === 0) {
-      throw new Error(
-        `npm package dependency cycle: ${[...remainingDependencies.keys()].sort().join(', ')}`
-      )
+      const cycleMembers = [...remainingDependencies.keys()].toSorted(compareStrings)
+      throw new Error(`npm package dependency cycle: ${cycleMembers.join(', ')}`)
     }
     for (const name of ready) {
       ordered.push(byName.get(name))
@@ -231,7 +240,9 @@ async function projectsForFilter(filter, projects) {
   const governedNames = new Set(projects.map(project => project.name))
   const unknown = [...selectedNames].filter(name => !governedNames.has(name))
   if (unknown.length > 0) {
-    throw new Error(`pnpm selected ungoverned public packages: ${unknown.sort().join(', ')}`)
+    throw new Error(
+      `pnpm selected ungoverned public packages: ${unknown.toSorted(compareStrings).join(', ')}`
+    )
   }
   return projects.filter(project => selectedNames.has(project.name))
 }
@@ -375,7 +386,10 @@ function normalizeRootComponent(component, record, manifest) {
   const properties = (component.properties ?? []).filter(
     property => !property.name.startsWith('org.bsvblockchain.')
   )
-  for (const [name, value] of Object.entries(manifest.peerDependencies ?? {}).sort()) {
+  const peerDependencies = Object.entries(manifest.peerDependencies ?? {}).toSorted(
+    ([left], [right]) => compareStrings(left, right)
+  )
+  for (const [name, value] of peerDependencies) {
     properties.push({
       name: 'org.bsvblockchain.npm.peer-dependency',
       value: `${name}@${value}`
@@ -438,7 +452,7 @@ function normalizedRegistryLicenses(metadata) {
     add(metadata.license)
     for (const license of Array.isArray(metadata.licenses) ? metadata.licenses : []) add(license)
   }
-  return [...new Set(values)].sort()
+  return [...new Set(values)].toSorted(compareStrings)
 }
 
 async function registryLicenses(name, version) {
@@ -586,7 +600,7 @@ export function createLicenseInventory(aggregate, policy) {
     expression: new RegExp(item.pattern, 'i')
   }))
   const components = aggregate.components.map(component => {
-    const licenses = [...new Set(componentLicenseValues(component))].sort()
+    const licenses = [...new Set(componentLicenseValues(component))].toSorted(compareStrings)
     const findings = []
     if (licenses.length === 0 && policy.licensePolicy.requireDeclaredLicense) {
       findings.push({
@@ -671,12 +685,13 @@ export function mergeCycloneDxDocuments(records, source) {
   dependencyMap.set(releaseReference, new Set(records.map(record => record.rootBomRef)))
   const seed = records
     .map(record => `${record.project.name}:${record.sha256}`)
-    .sort()
+    .toSorted(compareStrings)
     .join('\n')
+  const releaseUuidSeed = `${source.commit}\n${seed}`
   return {
     bomFormat: 'CycloneDX',
     specVersion: CYCLONEDX_SPEC_VERSION,
-    serialNumber: `urn:uuid:${deterministicUuid(`${source.commit}\n${seed}`)}`,
+    serialNumber: `urn:uuid:${deterministicUuid(releaseUuidSeed)}`,
     version: 1,
     metadata: {
       timestamp: source.created,
@@ -711,7 +726,10 @@ export function mergeCycloneDxDocuments(records, source) {
       left['bom-ref'].localeCompare(right['bom-ref'])
     ),
     dependencies: [...dependencyMap]
-      .map(([ref, dependsOn]) => ({ ref, dependsOn: [...dependsOn].sort() }))
+      .map(([ref, dependsOn]) => ({
+        ref,
+        dependsOn: [...dependsOn].toSorted(compareStrings)
+      }))
       .sort((left, right) => left.ref.localeCompare(right.ref))
   }
 }
@@ -912,25 +930,16 @@ async function verifyDigest(filePath, expected, description) {
   return actual
 }
 
-async function verifyArtifacts(manifestOption) {
-  if (!manifestOption) throw new Error('verify requires a manifest path')
-  const manifestPath = path.resolve(REPOSITORY_ROOT, manifestOption)
-  const releaseRoot = path.dirname(manifestPath)
-  const manifest = await readJson(manifestPath)
+function validateManifestEnvelope(manifest, currentCommit, policy) {
   if (manifest.schemaVersion !== ARTIFACT_SCHEMA_VERSION) {
     throw new Error(`unsupported release artifact schema ${manifest.schemaVersion}`)
   }
   if (manifest.source?.repository !== EXPECTED_REPOSITORY) {
     throw new Error(`unexpected source repository ${manifest.source?.repository}`)
   }
-  const [{ stdout: currentCommit }, governed, policy] = await Promise.all([
-    run('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT }),
-    loadGovernedProjects(),
-    readJson(POLICY_PATH)
-  ])
-  if (manifest.source.commit !== currentCommit.trim()) {
+  if (manifest.source.commit !== currentCommit) {
     throw new Error(
-      `release source ${manifest.source.commit} does not match checked-out commit ${currentCommit.trim()}`
+      `release source ${manifest.source.commit} does not match checked-out commit ${currentCommit}`
     )
   }
   if (
@@ -940,78 +949,87 @@ async function verifyArtifacts(manifestOption) {
   ) {
     throw new Error('release artifact build runtime does not match policy')
   }
-  const governedByName = new Map(governed.map(project => [project.name, project]))
-  const names = new Set()
-  const tarballs = new Set()
-  const sboms = new Set()
-  const checksumLines = []
-  for (const item of manifest.packages ?? []) {
-    const governedProject = governedByName.get(item.name)
-    if (
-      !governedProject ||
-      governedProject.path !== item.sourcePath ||
-      governedProject.manifest.version !== item.version
-    ) {
-      throw new Error(
-        `${item.name}@${item.version} is not the governed package at ${item.sourcePath}`
-      )
-    }
-    if (names.has(item.name)) throw new Error(`duplicate package ${item.name}`)
-    names.add(item.name)
-    if (tarballs.has(item.tarball)) throw new Error(`duplicate tarball ${item.tarball}`)
-    tarballs.add(item.tarball)
-    if (sboms.has(item.sbom)) throw new Error(`duplicate package SBOM ${item.sbom}`)
-    sboms.add(item.sbom)
-    const tarballPath = resolveArtifactPath(releaseRoot, item.tarball)
-    const tarballDigest = await verifyDigest(tarballPath, item.sha256, item.tarball)
-    if (
-      tarballDigest.sha1 !== item.sha1 ||
-      tarballDigest.integrity !== item.integrity ||
-      tarballDigest.size !== item.size
-    ) {
-      throw new Error(`${item.tarball} digest metadata does not match`)
-    }
-    const [{ stdout: packedManifestSource }, { stdout: packedLicense }] = await Promise.all([
-      run('tar', ['-xOf', tarballPath, 'package/package.json'], { cwd: releaseRoot }),
-      run('tar', ['-xOf', tarballPath, `package/${LICENSE_FILE}`], { cwd: releaseRoot })
-    ])
-    const packedManifest = parseJson(packedManifestSource, `${item.tarball} package manifest`)
-    if (
-      packedManifest.name !== item.name ||
-      packedManifest.version !== item.version ||
-      packedManifest.private === true ||
-      packedManifest.publishConfig?.access !== 'public'
-    ) {
-      throw new Error(`${item.tarball} has an invalid publish identity or access policy`)
-    }
-    for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
-      for (const specification of Object.values(packedManifest[field] ?? {})) {
-        if (typeof specification === 'string' && specification.startsWith('workspace:')) {
-          throw new Error(`${item.tarball} retains an unresolved workspace dependency`)
-        }
-      }
-    }
-    if (sha256(Buffer.from(packedLicense)) !== EXPECTED_LICENSE_SHA256) {
-      throw new Error(`${item.tarball} does not contain the canonical Open BSV license`)
-    }
-    const sbomPath = resolveArtifactPath(releaseRoot, item.sbom)
-    const sbomDigest = await verifyDigest(sbomPath, item.sbomSha256, item.sbom)
-    if (sbomDigest.size !== item.sbomSize) {
-      throw new Error(`${item.sbom} size does not match`)
-    }
-    const bom = await readJson(sbomPath)
-    if (
-      bom.bomFormat !== 'CycloneDX' ||
-      bom.specVersion !== CYCLONEDX_SPEC_VERSION ||
-      bom.metadata?.component?.purl !== packagePurl(item.name, item.version)
-    ) {
-      throw new Error(`${item.sbom} does not describe ${item.name}@${item.version}`)
-    }
-    checksumLines.push(`${item.sha256} *${item.tarball}`)
+}
+
+function addUniqueValue(values, value, description) {
+  if (values.has(value)) throw new Error(`duplicate ${description} ${value}`)
+  values.add(value)
+}
+
+function validateGovernedPackage(item, governedByName) {
+  const governedProject = governedByName.get(item.name)
+  if (
+    !governedProject ||
+    governedProject.path !== item.sourcePath ||
+    governedProject.manifest.version !== item.version
+  ) {
+    throw new Error(
+      `${item.name}@${item.version} is not the governed package at ${item.sourcePath}`
+    )
   }
-  if (manifest.selection?.artifactCount !== names.size) {
-    throw new Error('manifest artifact count does not match package records')
+}
+
+function validatePackedManifest(item, packedManifest) {
+  if (
+    packedManifest.name !== item.name ||
+    packedManifest.version !== item.version ||
+    packedManifest.private === true ||
+    packedManifest.publishConfig?.access !== 'public'
+  ) {
+    throw new Error(`${item.tarball} has an invalid publish identity or access policy`)
   }
+  const runtimeSpecifications = ['dependencies', 'optionalDependencies', 'peerDependencies']
+    .flatMap(field => Object.values(packedManifest[field] ?? {}))
+    .filter(specification => typeof specification === 'string')
+  if (runtimeSpecifications.some(specification => specification.startsWith('workspace:'))) {
+    throw new Error(`${item.tarball} retains an unresolved workspace dependency`)
+  }
+}
+
+async function verifyPackageArtifact(item, context) {
+  const { governedByName, names, releaseRoot, sboms, tarballs } = context
+  validateGovernedPackage(item, governedByName)
+  addUniqueValue(names, item.name, 'package')
+  addUniqueValue(tarballs, item.tarball, 'tarball')
+  addUniqueValue(sboms, item.sbom, 'package SBOM')
+
+  const tarballPath = resolveArtifactPath(releaseRoot, item.tarball)
+  const tarballDigest = await verifyDigest(tarballPath, item.sha256, item.tarball)
+  if (
+    tarballDigest.sha1 !== item.sha1 ||
+    tarballDigest.integrity !== item.integrity ||
+    tarballDigest.size !== item.size
+  ) {
+    throw new Error(`${item.tarball} digest metadata does not match`)
+  }
+
+  const [{ stdout: packedManifestSource }, { stdout: packedLicense }] = await Promise.all([
+    run('tar', ['-xOf', tarballPath, 'package/package.json'], { cwd: releaseRoot }),
+    run('tar', ['-xOf', tarballPath, `package/${LICENSE_FILE}`], { cwd: releaseRoot })
+  ])
+  const packedManifest = parseJson(packedManifestSource, `${item.tarball} package manifest`)
+  validatePackedManifest(item, packedManifest)
+  if (sha256(Buffer.from(packedLicense)) !== EXPECTED_LICENSE_SHA256) {
+    throw new Error(`${item.tarball} does not contain the canonical Open BSV license`)
+  }
+
+  const sbomPath = resolveArtifactPath(releaseRoot, item.sbom)
+  const sbomDigest = await verifyDigest(sbomPath, item.sbomSha256, item.sbom)
+  if (sbomDigest.size !== item.sbomSize) {
+    throw new Error(`${item.sbom} size does not match`)
+  }
+  const bom = await readJson(sbomPath)
+  if (
+    bom.bomFormat !== 'CycloneDX' ||
+    bom.specVersion !== CYCLONEDX_SPEC_VERSION ||
+    bom.metadata?.component?.purl !== packagePurl(item.name, item.version)
+  ) {
+    throw new Error(`${item.sbom} does not describe ${item.name}@${item.version}`)
+  }
+  return `${item.sha256} *${item.tarball}`
+}
+
+async function verifyAggregateSbom(manifest, releaseRoot, policy) {
   const aggregatePath = resolveArtifactPath(releaseRoot, manifest.aggregateSbom.path)
   const aggregateDigest = await verifyDigest(
     aggregatePath,
@@ -1032,6 +1050,10 @@ async function verifyArtifacts(manifestOption) {
   if (expectedLicenseInventory.findings.length > 0) {
     throw new Error('aggregate SBOM violates the npm release license policy')
   }
+  return expectedLicenseInventory
+}
+
+async function verifyLicenseInventory(manifest, releaseRoot, expectedLicenseInventory) {
   const licenseInventoryPath = resolveArtifactPath(releaseRoot, manifest.licenseInventory.path)
   const licenseInventoryDigest = await verifyDigest(
     licenseInventoryPath,
@@ -1048,13 +1070,48 @@ async function verifyArtifacts(manifestOption) {
   if (JSON.stringify(actualLicenseInventory) !== JSON.stringify(expectedLicenseInventory)) {
     throw new Error('license inventory does not exactly match the aggregate SBOM')
   }
+}
+
+async function verifyChecksumFile(manifest, releaseRoot, checksumLines) {
   const checksumPath = resolveArtifactPath(releaseRoot, manifest.checksums)
   const expectedChecksums = checksumLines.length > 0 ? `${checksumLines.join('\n')}\n` : ''
   const actualChecksums = await fs.readFile(checksumPath, 'utf8')
   if (actualChecksums !== expectedChecksums) {
     throw new Error('checksums.sha256 does not exactly match the package manifest')
   }
-  console.log(`Verified ${names.size} staged npm artifact(s) and their CycloneDX evidence.`)
+}
+
+async function verifyArtifacts(manifestOption) {
+  if (!manifestOption) throw new Error('verify requires a manifest path')
+  const manifestPath = path.resolve(REPOSITORY_ROOT, manifestOption)
+  const releaseRoot = path.dirname(manifestPath)
+  const manifest = await readJson(manifestPath)
+  const [{ stdout: currentCommit }, governed, policy] = await Promise.all([
+    run('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT }),
+    loadGovernedProjects(),
+    readJson(POLICY_PATH)
+  ])
+  validateManifestEnvelope(manifest, currentCommit.trim(), policy)
+
+  const context = {
+    governedByName: new Map(governed.map(project => [project.name, project])),
+    names: new Set(),
+    releaseRoot,
+    sboms: new Set(),
+    tarballs: new Set()
+  }
+  const checksumLines = []
+  for (const item of manifest.packages ?? []) {
+    checksumLines.push(await verifyPackageArtifact(item, context))
+  }
+  if (manifest.selection?.artifactCount !== context.names.size) {
+    throw new Error('manifest artifact count does not match package records')
+  }
+  const expectedLicenseInventory = await verifyAggregateSbom(manifest, releaseRoot, policy)
+  await verifyLicenseInventory(manifest, releaseRoot, expectedLicenseInventory)
+  await verifyChecksumFile(manifest, releaseRoot, checksumLines)
+
+  console.log(`Verified ${context.names.size} staged npm artifact(s) and their CycloneDX evidence.`)
   return { manifest, manifestPath, releaseRoot }
 }
 
