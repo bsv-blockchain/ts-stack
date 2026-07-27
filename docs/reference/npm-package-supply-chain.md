@@ -1,10 +1,10 @@
 ---
 id: npm-package-supply-chain
-title: "npm Package Supply Chain"
+title: 'npm Package Supply Chain'
 kind: reference
-version: "1.0.0"
-last_updated: "2026-07-27"
-last_verified: "2026-07-27"
+version: '1.0.0'
+last_updated: '2026-07-27'
+last_verified: '2026-07-27'
 review_cadence_days: 30
 status: stable
 tags: [reference, packages, npm, security, releases]
@@ -30,7 +30,7 @@ The uncredentialed `prepare` job:
 1. resolves the governed, public packages whose checked-in versions are not
    already present on npm;
 2. packs each selected package once with lifecycle scripts disabled;
-3. records SHA-1, SHA-256, SHA-512 integrity, size, source commit, package
+3. records SHA-256, SHA-512 integrity, size, source commit, package
    identity, and topological publication order in `manifest.json`;
 4. generates a production-dependency CycloneDX 1.5 SBOM for every exact
    tarball and an aggregate release SBOM;
@@ -49,7 +49,7 @@ build or lifecycle code, and:
    bundles as a 90-day workflow artifact;
 9. passes those same `.tgz` files to `npm publish --provenance` with lifecycle
    scripts disabled; and
-10. verifies that npm exposes the same SHA-1 and SHA-512 integrity values.
+10. verifies that npm exposes the same SHA-512 integrity value.
 
 No build, pack, code-generation, or version-rewrite step may run between
 attestation and publication. Published npm versions are immutable. A partial

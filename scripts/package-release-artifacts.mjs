@@ -86,14 +86,14 @@ function uuidBytes(value) {
 }
 
 export function deterministicUuid(seed) {
-  // UUID v5 mandates SHA-1 as a deterministic, non-security identifier.
-  const uuidHash = crypto.createHash('sha1') // NOSONAR -- required by the UUID v5 standard
-  const digest = uuidHash
+  const digest = crypto
+    .createHash('sha256')
     .update(uuidBytes(URL_NAMESPACE_UUID))
     .update(seed)
     .digest()
     .subarray(0, 16)
-  digest[6] = (digest[6] & 0x0f) | 0x50
+  // RFC 9562 UUID v8 reserves the payload for application-defined data.
+  digest[6] = (digest[6] & 0x0f) | 0x80
   digest[8] = (digest[8] & 0x3f) | 0x80
   const hex = digest.toString('hex')
   return [
@@ -111,11 +111,7 @@ function sha256(value) {
 
 async function fileDigests(filePath) {
   const value = await fs.readFile(filePath)
-  // npm's registry API defines dist.shasum as SHA-1. Security decisions below
-  // use SHA-256/SHA-512; this value exists solely for registry compatibility.
-  const npmShasum = crypto.createHash('sha1').update(value).digest('hex') // NOSONAR
   return {
-    sha1: npmShasum,
     sha256: sha256(value),
     integrity: `sha512-${crypto.createHash('sha512').update(value).digest('base64')}`,
     size: value.length
@@ -251,7 +247,7 @@ async function registryMetadata(name, version) {
   try {
     const { stdout } = await execFileAsync(
       'npm',
-      ['view', `${name}@${version}`, 'name', 'version', 'dist.shasum', 'dist.integrity', '--json'],
+      ['view', `${name}@${version}`, 'name', 'version', 'dist.integrity', '--json'],
       {
         cwd: REPOSITORY_ROOT,
         encoding: 'utf8',
@@ -264,7 +260,6 @@ async function registryMetadata(name, version) {
       published: true,
       name: metadata.name,
       version: metadata.version,
-      shasum: metadata['dist.shasum'],
       integrity: metadata['dist.integrity']
     }
   } catch (error) {
@@ -345,10 +340,7 @@ async function stageTarball(project, packagesDirectory) {
     throw new Error(`${project.name} packed outside ${packagesDirectory}`)
   }
   const digests = await fileDigests(tarballPath)
-  if (
-    (packResult.shasum && packResult.shasum !== digests.sha1) ||
-    (packResult.integrity && packResult.integrity !== digests.integrity)
-  ) {
+  if (packResult.integrity && packResult.integrity !== digests.integrity) {
     throw new Error(`${project.name} pack metadata does not match the staged tarball`)
   }
   return {
@@ -767,7 +759,6 @@ function manifestPackage(record) {
     version: record.project.manifest.version,
     sourcePath: record.project.path,
     tarball: record.tarball,
-    sha1: record.sha1,
     sha256: record.sha256,
     integrity: record.integrity,
     size: record.size,
@@ -995,11 +986,7 @@ async function verifyPackageArtifact(item, context) {
 
   const tarballPath = resolveArtifactPath(releaseRoot, item.tarball)
   const tarballDigest = await verifyDigest(tarballPath, item.sha256, item.tarball)
-  if (
-    tarballDigest.sha1 !== item.sha1 ||
-    tarballDigest.integrity !== item.integrity ||
-    tarballDigest.size !== item.size
-  ) {
+  if (tarballDigest.integrity !== item.integrity || tarballDigest.size !== item.size) {
     throw new Error(`${item.tarball} digest metadata does not match`)
   }
 
@@ -1131,15 +1118,11 @@ function validatePublishEnvironment() {
 async function waitForPublishedArtifact(item) {
   for (let attempt = 1; attempt <= REGISTRY_RETRY_ATTEMPTS; attempt += 1) {
     const metadata = await registryMetadata(item.name, item.version)
-    if (
-      metadata.published &&
-      metadata.shasum === item.sha1 &&
-      metadata.integrity === item.integrity
-    ) {
+    if (metadata.published && metadata.integrity === item.integrity) {
       console.log(`Verified npm registry bytes for ${item.name}@${item.version}.`)
       return
     }
-    if (metadata.published && (metadata.shasum || metadata.integrity)) {
+    if (metadata.published && metadata.integrity) {
       throw new Error(
         `${item.name}@${item.version} exists on npm with bytes that differ from the staged artifact`
       )
@@ -1167,7 +1150,7 @@ async function publishArtifacts(manifestOption, dryRun) {
     }
     const existing = await registryMetadata(item.name, item.version)
     if (existing.published) {
-      if (existing.shasum !== item.sha1 || existing.integrity !== item.integrity) {
+      if (existing.integrity !== item.integrity) {
         throw new Error(
           `${item.name}@${item.version} is already published with different immutable bytes`
         )

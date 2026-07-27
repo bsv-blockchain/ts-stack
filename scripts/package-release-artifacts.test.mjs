@@ -16,11 +16,11 @@ const RELEASE_WORKFLOW = path.join(REPOSITORY_ROOT, '.github/workflows/release.y
 const POLICY_PATH = path.join(REPOSITORY_ROOT, 'governance/npm-package-supply-chain.json')
 const PROJECTS_PATH = path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
 
-test('deterministic UUIDs are stable RFC 4122 version 5 identifiers', () => {
+test('deterministic UUIDs are stable RFC 9562 version 8 identifiers', () => {
   const first = deterministicUuid('release-artifact')
   assert.equal(first, deterministicUuid('release-artifact'))
   assert.notEqual(first, deterministicUuid('other-artifact'))
-  assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
 })
 
 test('package order respects internal runtime and peer dependencies with deterministic ties', () => {
