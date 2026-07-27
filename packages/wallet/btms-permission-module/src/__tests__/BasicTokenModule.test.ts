@@ -11,10 +11,12 @@ import {
   type CreateActionResult,
   type WalletInterface
 } from '@bsv/sdk'
+import { jest as jestRuntime } from '@jest/globals'
 import { BasicTokenModule, createBtmsModule } from '../index.js'
 import type { BTMS } from '@bsv/btms'
 import type { AuthorizedTransaction, ParsedTokenInfo, TokenSpendInfo } from '../types.js'
 
+const jestApi = jestRuntime as unknown as typeof jest
 const ORIGINATOR = 'https://app.example'
 
 type AuthorizationState = {
@@ -100,8 +102,8 @@ function createSignableTransaction(): Transaction {
 
 describe('BasicTokenModule authorization boundary', () => {
   afterEach(() => {
-    jest.restoreAllMocks()
-    jest.useRealTimers()
+    jestApi.restoreAllMocks()
+    jestApi.useRealTimers()
   })
 
   it('requires a prompt callback', () => {
@@ -111,7 +113,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('passes unknown wallet methods through without prompting', async () => {
-    const prompt = jest.fn<Promise<boolean>, [string, string]>()
+    const prompt = jestApi.fn<Promise<boolean>, [string, string]>()
     const module = new BasicTokenModule(prompt)
     const args = { value: 1 }
 
@@ -120,7 +122,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('auto-authorizes only explicitly marked issuance actions', async () => {
-    const prompt = jest.fn<Promise<boolean>, [string, string]>()
+    const prompt = jestApi.fn<Promise<boolean>, [string, string]>()
     const module = new BasicTokenModule(prompt)
     const args = {
       description: 'Issue BTMS tokens',
@@ -133,7 +135,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('prompts for an unmarked action even when it has no explicit inputs', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
     const args = { description: 'Unmarked action', outputs: [] }
 
@@ -142,7 +144,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('fails closed when an unmarked action is denied', async () => {
-    const module = new BasicTokenModule(jest.fn().mockResolvedValue(false))
+    const module = new BasicTokenModule(jestApi.fn().mockResolvedValue(false))
 
     await expect(
       request(module, 'createAction', { description: 'Unmarked action', outputs: [] })
@@ -151,7 +153,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('prompts instead of treating a short signature payload as issuance', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
     const args = { data: [1, 2, 3] }
 
@@ -164,7 +166,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('fails closed on malformed data once a transaction commitment exists', async () => {
-    const module = new BasicTokenModule(jest.fn().mockResolvedValue(true))
+    const module = new BasicTokenModule(jestApi.fn().mockResolvedValue(true))
     await request(module, 'listOutputs', { basket: 'p btms' })
     state(module).authorizedTransactions.set(ORIGINATOR, {
       authorizedDigests: new Set(['11'.repeat(32)]),
@@ -178,7 +180,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('rejects a digest that was not derived from the approved transaction', async () => {
-    const module = new BasicTokenModule(jest.fn().mockResolvedValue(true))
+    const module = new BasicTokenModule(jestApi.fn().mockResolvedValue(true))
     await request(module, 'listOutputs', { basket: 'p btms' })
     state(module).authorizedTransactions.set(ORIGINATOR, {
       authorizedDigests: new Set(['11'.repeat(32)]),
@@ -192,7 +194,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('rejects a full preimage that was not derived from the approved transaction', async () => {
-    const module = new BasicTokenModule(jest.fn().mockResolvedValue(true))
+    const module = new BasicTokenModule(jestApi.fn().mockResolvedValue(true))
     await request(module, 'listOutputs', { basket: 'p btms' })
     state(module).authorizedTransactions.set(ORIGINATOR, {
       authorizedDigests: new Set(['11'.repeat(32)]),
@@ -207,7 +209,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('invalidates session authorization when transaction binding fails', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
     await request(module, 'createAction', { description: 'Spend', outputs: [] })
 
@@ -226,7 +228,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('clears authorization when createAction completes without a signable transaction', async () => {
-    const module = new BasicTokenModule(jest.fn().mockResolvedValue(true))
+    const module = new BasicTokenModule(jestApi.fn().mockResolvedValue(true))
     await request(module, 'createAction', { description: 'Spend', outputs: [] })
     expect(state(module).sessionAuthorizations.has(ORIGINATOR)).toBe(true)
 
@@ -238,7 +240,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('clears authorization when a signable transaction omits required binding data', async () => {
-    const module = new BasicTokenModule(jest.fn().mockResolvedValue(true))
+    const module = new BasicTokenModule(jestApi.fn().mockResolvedValue(true))
     await request(module, 'createAction', { description: 'Spend', outputs: [] })
 
     await expect(
@@ -251,7 +253,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('captures a valid transaction commitment from createAction responses', async () => {
-    const module = new BasicTokenModule(jest.fn())
+    const module = new BasicTokenModule(jestApi.fn())
     const transaction = createSignableTransaction()
     const expectedDigest = Utils.toHex(Hash.sha256(transaction.preimage(0)))
     const response = {
@@ -280,22 +282,22 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('caches access approval for sixty seconds and re-prompts after expiry', async () => {
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date('2026-07-26T00:00:00.000Z'))
-    const prompt = jest.fn().mockResolvedValue(true)
+    jestApi.useFakeTimers()
+    jestApi.setSystemTime(new Date('2026-07-26T00:00:00.000Z'))
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
 
     await request(module, 'listOutputs', { basket: 'p btms asset.0' })
     await request(module, 'listActions', { labels: ['p btms assetId asset.0'] })
     expect(prompt).toHaveBeenCalledTimes(1)
 
-    jest.setSystemTime(new Date('2026-07-26T00:01:01.000Z'))
+    jestApi.setSystemTime(new Date('2026-07-26T00:01:01.000Z'))
     await request(module, 'listOutputs', { basket: 'p btms asset.0' })
     expect(prompt).toHaveBeenCalledTimes(2)
   })
 
   it('ignores unrelated and malformed labels before extracting a BTMS asset label', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
 
     await request(module, 'listActions', {
@@ -306,7 +308,7 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('clears sensitive authorization state when disposed', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = new BasicTokenModule(prompt)
     await request(module, 'listOutputs', { basket: 'p btms' })
 
@@ -319,9 +321,9 @@ describe('BasicTokenModule authorization boundary', () => {
   })
 
   it('sweeps expired transaction state during subsequent requests', async () => {
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date('2026-07-26T00:02:00.000Z'))
-    const module = new BasicTokenModule(jest.fn())
+    jestApi.useFakeTimers()
+    jestApi.setSystemTime(new Date('2026-07-26T00:02:00.000Z'))
+    const module = new BasicTokenModule(jestApi.fn())
     state(module).sessionAuthorizations.set(
       'expired.example',
       new Date('2026-07-26T00:00:00.000Z').getTime()
@@ -364,7 +366,7 @@ describe('BasicTokenModule security primitives', () => {
   }
 
   afterEach(() => {
-    jest.restoreAllMocks()
+    jestApi.restoreAllMocks()
   })
 
   it.each([
@@ -375,12 +377,12 @@ describe('BasicTokenModule security primitives', () => {
       'Invalid args'
     ]
   ])('rejects malformed permission requests', async (permissionRequest, message) => {
-    const module = new BasicTokenModule(jest.fn())
+    const module = new BasicTokenModule(jestApi.fn())
     await expect(module.onRequest(permissionRequest)).rejects.toThrow(message)
   })
 
   it('parses every bounded Bitcoin varint form and rejects truncation', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
+    const module = state(new BasicTokenModule(jestApi.fn()))
 
     expect(module.readVarint([0xfc], 0)).toEqual({ value: 0xfc, nextOffset: 1 })
     expect(module.readVarint([0xfd, 0x34, 0x12], 0)).toEqual({
@@ -401,7 +403,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('handles create actions whose output list is absent', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
+    const module = state(new BasicTokenModule(jestApi.fn()))
     expect(module.extractTokenSpendInfo({} as CreateActionArgs)).toMatchObject({
       hasTokenOutputs: false,
       outputChangeAmount: 0,
@@ -410,7 +412,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('reports no BEEF amount when inputs are present but none resolve to tokens', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
+    const module = state(new BasicTokenModule(jestApi.fn()))
     expect(
       module.parseInputAmounts({ description: 'Inspect inputs', inputBEEF: [], inputs: [] })
     ).toMatchObject({
@@ -420,7 +422,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('classifies pure burns and rejects mixed burn-and-send actions', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
+    const module = state(new BasicTokenModule(jestApi.fn()))
 
     expect(
       module.classifyTokenAction({
@@ -445,7 +447,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('produces structured spend and burn prompts and honors denial', async () => {
-    const approve = jest.fn().mockResolvedValue(true)
+    const approve = jestApi.fn().mockResolvedValue(true)
     const approvedModule = state(new BasicTokenModule(approve))
 
     await approvedModule.promptForTokenSpend(ORIGINATOR, defaultSpendInfo)
@@ -466,7 +468,7 @@ describe('BasicTokenModule security primitives', () => {
       type: 'btms_burn'
     })
 
-    const deniedModule = state(new BasicTokenModule(jest.fn().mockResolvedValue(false)))
+    const deniedModule = state(new BasicTokenModule(jestApi.fn().mockResolvedValue(false)))
     await expect(deniedModule.promptForTokenSpend(ORIGINATOR, defaultSpendInfo)).rejects.toThrow(
       'User denied permission to spend tokens'
     )
@@ -482,9 +484,9 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('routes parsed spends and burns to their exact authorization prompts', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = state(new BasicTokenModule(prompt))
-    const extract = jest.spyOn(module, 'extractTokenSpendInfo')
+    const extract = jestApi.spyOn(module, 'extractTokenSpendInfo')
 
     extract.mockReturnValueOnce(defaultSpendInfo)
     await module.handleCreateAction({ description: 'Send', inputs: [], outputs: [] }, ORIGINATOR)
@@ -517,8 +519,8 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('parses valid token fields and rejects invalid token encodings', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
-    const decode = jest.spyOn(PushDrop, 'decode')
+    const module = state(new BasicTokenModule(jestApi.fn()))
+    const decode = jestApi.spyOn(PushDrop, 'decode')
 
     decode.mockReturnValueOnce(
       decoded([
@@ -572,11 +574,11 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('recognizes explicit issuance markers in tags, scripts, and preimages', async () => {
-    const module = state(new BasicTokenModule(jest.fn()))
+    const module = state(new BasicTokenModule(jestApi.fn()))
     expect(module.outputIndicatesIssuance({ tags: ['btms_type_issue'] })).toBe(true)
     expect(module.outputIndicatesIssuance({ tags: ['other'] })).toBe(false)
 
-    jest
+    jestApi
       .spyOn(PushDrop, 'decode')
       .mockReturnValue(decoded([Array.from(Buffer.from('ISSUE')), Array.from(Buffer.from('10'))]))
     expect(module.outputIndicatesIssuance({ lockingScript: '00' })).toBe(true)
@@ -593,7 +595,7 @@ describe('BasicTokenModule security primitives', () => {
     truncatedScript[104] = 0xfc
     expect(module.isIssuanceFromPreimage(truncatedScript)).toBe(false)
 
-    const prompt = jest.fn()
+    const prompt = jestApi.fn()
     await expect(
       request(new BasicTokenModule(prompt), 'createSignature', { data: preimage })
     ).resolves.toEqual({ args: { data: preimage } })
@@ -601,7 +603,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('computes exact PushDrop signing digests for every transaction input', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
+    const module = state(new BasicTokenModule(jestApi.fn()))
     const transaction = createSignableTransaction()
     expect(module.computeAuthorizedDigests(transaction)).toEqual(
       new Set([Utils.toHex(Hash.sha256(transaction.preimage(0)))])
@@ -614,7 +616,7 @@ describe('BasicTokenModule security primitives', () => {
   it('matches the 32-byte digest emitted by the SDK PushDrop signer', async () => {
     const transaction = createSignableTransaction()
     const signingKey = new PrivateKey(1)
-    const createSignature = jest.fn(async ({ data }: { data: number[] }) => ({
+    const createSignature = jestApi.fn(async ({ data }: { data: number[] }) => ({
       signature: signingKey.sign(data).toDER() as number[]
     }))
     const wallet = { createSignature } as unknown as WalletInterface
@@ -628,7 +630,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('accepts only the exact approved transaction signing digest or preimage', async () => {
-    const prompt = jest.fn().mockResolvedValue(true)
+    const prompt = jestApi.fn().mockResolvedValue(true)
     const module = state(new BasicTokenModule(prompt))
     const transaction = createSignableTransaction()
     const preimage = transaction.preimage(0)
@@ -655,9 +657,9 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('expires transaction commitments and rejects missing verification data', () => {
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date('2026-07-26T00:02:00.000Z'))
-    const module = state(new BasicTokenModule(jest.fn()))
+    jestApi.useFakeTimers()
+    jestApi.setSystemTime(new Date('2026-07-26T00:02:00.000Z'))
+    const module = state(new BasicTokenModule(jestApi.fn()))
     expect(() =>
       module.verifyAuthorizedTransaction({ data: Array(32).fill(0) }, ORIGINATOR)
     ).toThrow('No approved transaction')
@@ -683,7 +685,7 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('enriches prompts from BTMS metadata and tolerates lookup failure', async () => {
-    const getAssetInfo = jest
+    const getAssetInfo = jestApi
       .fn()
       .mockResolvedValueOnce({
         metadata: { iconURL: 'https://example/icon' },
@@ -691,7 +693,7 @@ describe('BasicTokenModule security primitives', () => {
       })
       .mockRejectedValueOnce(new Error('offline'))
     const module = state(
-      new BasicTokenModule(jest.fn(), { getAssetInfo } as Pick<BTMS, 'getAssetInfo'>)
+      new BasicTokenModule(jestApi.fn(), { getAssetInfo } as Pick<BTMS, 'getAssetInfo'>)
     )
 
     await expect(module.getAssetMetadata('asset.0')).resolves.toEqual({
@@ -702,8 +704,8 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('extracts send/change totals and rejects mixed asset outputs', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
-    const resolve = jest.spyOn(module, 'resolveTokenForOutput')
+    const module = state(new BasicTokenModule(jestApi.fn()))
+    const resolve = jestApi.spyOn(module, 'resolveTokenForOutput')
     resolve
       .mockReturnValueOnce({
         amount: 40,
@@ -761,8 +763,8 @@ describe('BasicTokenModule security primitives', () => {
   })
 
   it('aggregates parsed input amounts and detects mixed input assets', () => {
-    const module = state(new BasicTokenModule(jest.fn()))
-    const resolveInput = jest
+    const module = state(new BasicTokenModule(jestApi.fn()))
+    const resolveInput = jestApi
       .spyOn(
         module as unknown as {
           resolveTokenForInput(input: { outpoint: string }, beef: number[]): ParsedTokenInfo | null

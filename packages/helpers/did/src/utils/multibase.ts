@@ -37,9 +37,6 @@ export function decodeBase58Multibase(value: string): number[] {
 // https://w3c-ccg.github.io/did-key-spec/#did-key-identifier-syntax
 export function publicKeyToDidKey(publicKey: PublicKeyInput | PublicKey): string {
   const compressed = normalizePublicKey(publicKey)
-  if (compressed.length !== 33) {
-    throw new Error('secp256k1 did:key requires a 33-byte compressed public key')
-  }
   const multibaseValue = encodeBase58Multibase([...SECP256K1_PUB_MULTICODEC_PREFIX, ...compressed])
   return `did:key:${multibaseValue}`
 }

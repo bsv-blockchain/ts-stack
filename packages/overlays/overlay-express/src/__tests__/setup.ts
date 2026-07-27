@@ -1,4 +1,5 @@
 // Jest setup file for global test configuration
+import { jest } from '@jest/globals'
 
 // Mock uuid to avoid ES module issues
 jest.mock('uuid', () => ({

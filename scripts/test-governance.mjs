@@ -4,13 +4,25 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const POLICY_PATH = 'governance/test-quality/policy.json'
+const MUTATION_POLICY_PATH = 'governance/mutation-testing/policy.json'
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/
 const PROPERTY_TEST_FILE_PATTERN = /\.property\.test\.[cm]?[jt]sx?$/
 const MANUAL_SUFFIXES = ['.man.test.ts', '.live.test.ts']
-const SKIPPED_DIRECTORIES = new Set(['.git', 'coverage', 'dist', 'node_modules', 'out', 'reports'])
+const SKIPPED_DIRECTORIES = new Set([
+  '.git',
+  '.stryker-tmp',
+  'artifacts',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+  'reports'
+])
 
 function normalizePath(value) {
   return value.split(path.sep).join('/')
@@ -425,6 +437,141 @@ function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, e
   return { excludedManifestPaths, manifestPaths }
 }
 
+function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, errors, today) {
+  validateDatedOwner(mutationPolicy, policy, 'mutation testing policy', errors, today)
+  const tool = mutationPolicy.tool ?? {}
+  const expectedTool = '@stryker-mutator/core'
+  if (tool.package !== expectedTool || typeof tool.version !== 'string') {
+    errors.push(`mutation testing policy must declare ${expectedTool} and its exact version`)
+  }
+  if (tool.rootCommand !== 'pnpm test:mutation --all') {
+    errors.push('mutation testing policy rootCommand must be "pnpm test:mutation --all"')
+  }
+
+  const rootManifest = readJson(root, 'package.json')
+  if (rootManifest.scripts?.['test:mutation'] !== 'node scripts/mutation-testing.mjs') {
+    errors.push('root package.json must declare the governed test:mutation runner')
+  }
+  for (const dependency of [
+    expectedTool,
+    '@stryker-mutator/jest-runner',
+    '@stryker-mutator/vitest-runner'
+  ]) {
+    if (rootManifest.devDependencies?.[dependency] !== tool.version) {
+      errors.push(`root package.json must pin ${dependency}@${tool.version}`)
+    }
+  }
+
+  for (const field of ['config', 'targets', 'runner', 'ciWorkflow', 'scheduledWorkflow']) {
+    if (typeof tool[field] !== 'string' || !fs.existsSync(path.join(root, tool[field]))) {
+      errors.push(`mutation testing policy ${field} is missing`)
+    }
+  }
+  if (!Number.isSafeInteger(tool.reportRetentionDays) || tool.reportRetentionDays < 30) {
+    errors.push('mutation testing reports must be retained for at least 30 days')
+  }
+  if (tool.propertyRuns !== propertyTesting.minimumRuns) {
+    errors.push('mutation testing propertyRuns must match the required PR property budget')
+  }
+  if (
+    !Number.isInteger(tool.propertySeed) ||
+    tool.propertySeed < -2147483648 ||
+    tool.propertySeed > 2147483647
+  ) {
+    errors.push('mutation testing propertySeed must be a signed 32-bit integer')
+  }
+
+  const requiredWorkflowFragments = new Map([
+    [tool.ciWorkflow, ['mutation-tests:', 'mutation-quality:', 'scripts/mutation-testing.mjs']],
+    [
+      tool.scheduledWorkflow,
+      ['schedule:', 'workflow_dispatch:', 'matrix:', 'scripts/mutation-testing.mjs']
+    ]
+  ])
+  for (const [workflowPath, fragments] of requiredWorkflowFragments) {
+    if (typeof workflowPath !== 'string' || !fs.existsSync(path.join(root, workflowPath))) continue
+    const workflow = fs.readFileSync(path.join(root, workflowPath), 'utf8')
+    for (const fragment of fragments) {
+      if (!workflow.includes(fragment)) {
+        errors.push(`mutation testing workflow ${workflowPath} lacks ${fragment}`)
+      }
+    }
+  }
+
+  const definitions = buildMutationTargets(root)
+  const suites = new Map(propertyTesting.suites.map(suite => [suite.path, suite]))
+  const registeredIds = new Set()
+  const registeredSuites = new Set()
+  for (const target of mutationPolicy.targets ?? []) {
+    const label = `mutation target ${target.id}`
+    if (registeredIds.has(target.id)) errors.push(`duplicate ${label}`)
+    registeredIds.add(target.id)
+    if (registeredSuites.has(target.propertyTest)) {
+      errors.push(`duplicate mutation property suite ${target.propertyTest}`)
+    }
+    registeredSuites.add(target.propertyTest)
+
+    const definition = definitions[target.id]
+    if (definition === undefined) {
+      errors.push(`${label} has no executable target definition`)
+      continue
+    }
+    const suite = suites.get(target.propertyTest)
+    if (suite === undefined) {
+      errors.push(`${label} references an unregistered property suite ${target.propertyTest}`)
+    } else {
+      for (const field of ['manifest', 'risk', 'boundary']) {
+        if (target[field] !== suite[field]) {
+          errors.push(`${label} ${field} must match its property suite`)
+        }
+      }
+    }
+    if (
+      definition.manifest !== target.manifest ||
+      definition.propertyTest !== target.propertyTest
+    ) {
+      errors.push(`${label} executable definition does not match its policy registration`)
+    }
+    if (
+      !Number.isFinite(target.minimumScore) ||
+      target.minimumScore < 60 ||
+      target.minimumScore > 100
+    ) {
+      errors.push(`${label} minimumScore must be between 60 and 100`)
+    }
+    if (target.maximumNoCoverage !== 0 || target.maximumInvalid !== 0) {
+      errors.push(`${label} must reject every no-coverage and invalid mutant`)
+    }
+    if (!Array.isArray(definition.mutate) || definition.mutate.length === 0) {
+      errors.push(`${label} must declare at least one mutation scope`)
+    }
+    for (const mutationScope of definition.mutate ?? []) {
+      const sourcePath = mutationScope.replace(/:\d+(?:-\d+)?$/, '')
+      if (!fs.existsSync(path.join(root, definition.packageDirectory, sourcePath))) {
+        errors.push(`${label} mutation scope is missing ${mutationScope}`)
+      }
+    }
+    const configFile =
+      definition.runnerOptions?.jest?.configFile ?? definition.runnerOptions?.vitest?.configFile
+    if (
+      typeof configFile !== 'string' ||
+      !fs.existsSync(path.join(root, definition.packageDirectory, configFile))
+    ) {
+      errors.push(`${label} test-runner config is missing`)
+    }
+  }
+
+  for (const id of Object.keys(definitions)) {
+    if (!registeredIds.has(id)) errors.push(`executable mutation target ${id} is unregistered`)
+  }
+  for (const suite of propertyTesting.suites) {
+    if (!registeredSuites.has(suite.path)) {
+      errors.push(`property suite ${suite.path} lacks mutation validation`)
+    }
+  }
+  return registeredIds.size
+}
+
 function validateManualPolicies(policy, errors, today) {
   const manualPolicies = new Map(
     policy.manualPolicies.map(manualPolicy => [manualPolicy.id, manualPolicy])
@@ -551,6 +698,7 @@ function validateRegisteredConformanceGroups(conformance, policy, errors, today)
 export function evaluateTestGovernance({
   root = REPOSITORY_ROOT,
   policy = readJson(root, POLICY_PATH),
+  mutationPolicy = readJson(root, MUTATION_POLICY_PATH),
   today = new Date().toISOString().slice(0, 10)
 } = {}) {
   const errors = []
@@ -559,6 +707,14 @@ export function evaluateTestGovernance({
   const { excludedManifestPaths, manifestPaths } = validatePropertyTesting(
     root,
     requiredFiles,
+    propertyTesting,
+    policy,
+    errors,
+    today
+  )
+  const mutationTargets = validateMutationTesting(
+    root,
+    mutationPolicy,
     propertyTesting,
     policy,
     errors,
@@ -580,6 +736,7 @@ export function evaluateTestGovernance({
       propertyPackages: manifestPaths.length,
       propertyExcludedPackages: excludedManifestPaths.length,
       propertyClassifiedPackages: manifestPaths.length + excludedManifestPaths.length,
+      mutationTargets,
       manualAndLiveFiles: manualFiles.length,
       conformanceSkipFiles: conformance.byFile.size,
       conformanceSkips: [...conformance.byFile.values()].reduce(
@@ -606,6 +763,7 @@ function run() {
       `${summary.requiredTestFiles} required test files`,
       `${summary.requiredDirectSkips} governed direct skips`,
       `${summary.propertySuites} governed property suites across ${summary.propertyPackages} packages`,
+      `${summary.mutationTargets} governed mutation targets`,
       `${summary.propertyExcludedPackages} governed property exclusions`,
       `${summary.manualAndLiveFiles} classified manual/live files`,
       `${summary.conformanceSkips} governed conformance skips across ${summary.conformanceSkipFiles} files`

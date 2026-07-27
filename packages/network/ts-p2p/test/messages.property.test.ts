@@ -28,6 +28,10 @@ function frame(sender: string, value: unknown): Uint8Array {
   return encoder.encode(JSON.stringify({ name: sender, data }))
 }
 
+function envelopeFrame(name: unknown, data: unknown): Uint8Array {
+  return encoder.encode(JSON.stringify({ name, data }))
+}
+
 describe('Teranode message decoder properties', () => {
   test('round-trips arbitrary nested payloads through independent UTF-8 and base64 encoders', () => {
     fc.assert(
@@ -52,19 +56,42 @@ describe('Teranode message decoder properties', () => {
         fc.string({ maxLength: 40 }),
         fc.constantFrom('!', '-', '_', ' ', 'A', 'AAA===', 'Zh==', 'Zm9='),
         (sender, data) => {
-          const malformed = encoder.encode(JSON.stringify({ name: sender, data }))
+          const malformed = envelopeFrame(sender, data)
+          expect(() => decodeMessage(malformed)).toThrow('Invalid canonical base64 payload')
           expect(tryDecodeMessage(malformed)).toBeNull()
         }
       )
     )
+    for (const data of ['AAAA!', '!AAAA', '=AAA', 'AAA=AAAA']) {
+      expect(() => decodeMessage(envelopeFrame('sender', data))).toThrow(
+        'Invalid canonical base64 payload'
+      )
+    }
 
     fc.assert(
       fc.property(
         fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null)),
         primitive => {
+          expect(() => decodeMessage(frame('sender', primitive))).toThrow('Invalid message payload')
           expect(tryDecodeMessage(frame('sender', primitive))).toBeNull()
         }
       )
     )
+
+    for (const envelope of [
+      null,
+      [],
+      'message',
+      1,
+      {},
+      { name: 1, data: 'e30=' },
+      { name: 'sender', data: 1 }
+    ]) {
+      const malformed = encoder.encode(JSON.stringify(envelope))
+      expect(() => decodeMessage(malformed)).toThrow('Invalid message envelope')
+      expect(tryDecodeMessage(malformed)).toBeNull()
+    }
+    expect(() => decodeMessage(frame('sender', []))).toThrow('Invalid message payload')
+    expect(tryDecodeMessage(frame('sender', []))).toBeNull()
   })
 })

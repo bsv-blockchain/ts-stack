@@ -28,9 +28,24 @@ test('current required, manual, live, resource, and conformance tests are govern
   assert.equal(result.summary.propertyPackages, 25)
   assert.equal(result.summary.propertyExcludedPackages, 8)
   assert.equal(result.summary.propertyClassifiedPackages, 33)
+  assert.equal(result.summary.mutationTargets, 25)
   assert.equal(result.summary.manualAndLiveFiles, 40)
   assert.equal(result.summary.conformanceSkipFiles, 19)
   assert.equal(result.summary.conformanceSkips, 211)
+})
+
+test('every property suite must retain an exact mutation-quality target', () => {
+  const mutationPolicyPath = path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json')
+  const mutationPolicy = JSON.parse(fs.readFileSync(mutationPolicyPath, 'utf8'))
+  mutationPolicy.targets.pop()
+  const result = evaluateTestGovernance({
+    policy,
+    mutationPolicy,
+    today: '2026-07-26'
+  })
+
+  assert.match(result.errors.join('\n'), /lacks mutation validation/)
+  assert.match(result.errors.join('\n'), /executable mutation target .* is unregistered/)
 })
 
 test('an unregistered required skip fails the exact inventory', () => {

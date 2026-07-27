@@ -114,7 +114,21 @@ resource-intensive, and intended conformance gaps follow the
 Run `pnpm test:governance` before submitting test-classification changes. New
 untrusted parsers, codecs, serializers, signature framing, or network
 destination logic should include a registered property suite; use
-`pnpm test:property` to run the complete reproducible campaign.
+`pnpm test:property` to run the complete reproducible campaign. Every property
+suite also owns a focused mutation target so its assertions are proven capable
+of detecting semantic defects:
+
+```bash
+# List the governed targets
+pnpm test:mutation --list
+
+# Run the target for the boundary being changed
+pnpm test:mutation --target p2p-messages
+```
+
+When a mutant survives, add the missing observable assertion or correlated
+input case when it represents a real behavior gap. Do not add broad mutation
+exclusions or weaken the ratchet to make a pull request pass.
 
 ### Lint Code
 
@@ -282,12 +296,17 @@ Run before submitting:
 
 ```bash
 pnpm test
+pnpm test:property
 pnpm conformance
 pnpm lint
 pnpm format:check
 pnpm health:check
 pnpm typecheck
 ```
+
+Run the affected mutation target while iterating. Root toolchain, SDK,
+governance, and CI changes require the complete `pnpm test:mutation --all`
+campaign; CI selects this automatically.
 
 ## Reporting Issues
 

@@ -1,5 +1,8 @@
 import BTMSTopicManager from '../BTMSTopicManager'
 import { Beef, LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils } from '@bsv/sdk'
+import { jest as jestRuntime } from '@jest/globals'
+
+const jestApi = jestRuntime as unknown as typeof jest
 
 /**
  * Helper to create a simple PushDrop-style locking script for testing.
@@ -118,7 +121,7 @@ describe('BTMS Topic Manager', () => {
   })
 
   afterEach(() => {
-    jest.restoreAllMocks()
+    jestApi.restoreAllMocks()
   })
 
   describe('Issuance outputs', () => {
@@ -785,7 +788,7 @@ describe('BTMS Topic Manager', () => {
         ]
       } as unknown as Transaction
       const beef = {
-        findTxid: jest.fn().mockReturnValue({ tx: sourceTx })
+        findTxid: jestApi.fn().mockReturnValue({ tx: sourceTx })
       } as unknown as Beef
 
       expect(internals(manager).collectPreviousUTXOs(transaction, beef, [0, 1, 2, 3])).toEqual([
@@ -800,13 +803,13 @@ describe('BTMS Topic Manager', () => {
       const second = new LockingScript()
       const malformed = new LockingScript()
       const subject = internals(manager)
-      subject.decodeToken = jest.fn(lockingScript => {
+      subject.decodeToken = jestApi.fn(lockingScript => {
         if (lockingScript === skip) return undefined
         if (lockingScript === first) return { assetIdField: 'asset.0', amount: 4, metadata: 'm' }
         if (lockingScript === second) return { assetIdField: 'asset.0', amount: 6, metadata: 'm' }
         throw new Error('malformed token')
       })
-      const log = jest.spyOn(console, 'log').mockImplementation()
+      const log = jestApi.spyOn(console, 'log').mockImplementation()
 
       expect(
         subject.buildAssetAllowances(
@@ -827,7 +830,7 @@ describe('BTMS Topic Manager', () => {
     it('admits only valid issuance and allowance-preserving outputs', () => {
       const scripts = Array.from({ length: 7 }, () => new LockingScript())
       const subject = internals(manager)
-      subject.decodeToken = jest.fn(lockingScript => {
+      subject.decodeToken = jestApi.fn(lockingScript => {
         const index = scripts.indexOf(lockingScript)
         if (index === 0) return undefined
         if (index === 1) return { assetIdField: 'ISSUE', amount: 20 }
@@ -837,7 +840,7 @@ describe('BTMS Topic Manager', () => {
         if (index === 5) return { assetIdField: 'other.0', amount: 1, metadata: 'wrong' }
         throw new Error('malformed output')
       })
-      const debug = jest.spyOn(console, 'debug').mockImplementation()
+      const debug = jestApi.spyOn(console, 'debug').mockImplementation()
       const transaction = {
         outputs: scripts.map(lockingScript => ({ lockingScript }))
       } as unknown as Transaction
@@ -857,13 +860,13 @@ describe('BTMS Topic Manager', () => {
       const skipped = new LockingScript()
       const malformed = new LockingScript()
       const subject = internals(manager)
-      subject.decodeToken = jest.fn(lockingScript => {
+      subject.decodeToken = jestApi.fn(lockingScript => {
         if (lockingScript === admitted) return { assetIdField: 'asset.0', amount: 1 }
         if (lockingScript === ignored) return { assetIdField: 'other.0', amount: 1 }
         if (lockingScript === skipped) return undefined
         throw new Error('malformed previous coin')
       })
-      const debug = jest.spyOn(console, 'debug').mockImplementation()
+      const debug = jestApi.spyOn(console, 'debug').mockImplementation()
       const previousUTXOs = [admitted, ignored, skipped, malformed].map(
         (lockingScript, coinIndex) => ({
           coinIndex,
@@ -882,7 +885,7 @@ describe('BTMS Topic Manager', () => {
       const undecodable = new LockingScript()
       const malformed = new LockingScript()
       const subject = internals(manager)
-      subject.decodeToken = jest.fn(lockingScript => {
+      subject.decodeToken = jestApi.fn(lockingScript => {
         if (lockingScript === issuance) return { assetIdField: 'ISSUE', amount: 1 }
         if (lockingScript === undecodable) return undefined
         throw new Error('mutated output')
@@ -902,10 +905,10 @@ describe('BTMS Topic Manager', () => {
     })
 
     it('fails closed when a parsed transaction has no output array', async () => {
-      jest
+      jestApi
         .spyOn(Transaction, 'fromBEEF')
         .mockReturnValue({ outputs: undefined } as unknown as Transaction)
-      const warn = jest.spyOn(console, 'warn').mockImplementation()
+      const warn = jestApi.spyOn(console, 'warn').mockImplementation()
 
       await expect(manager.identifyAdmissibleOutputs([], [1])).resolves.toEqual({
         outputsToAdmit: [],

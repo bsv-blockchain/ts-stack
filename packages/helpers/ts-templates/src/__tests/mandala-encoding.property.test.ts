@@ -27,6 +27,39 @@ const hashHex = fc
   .map(bytes => Buffer.from(bytes).toString('hex'))
 
 describe('Mandala encoding properties', () => {
+  test('selects exact minimal push opcodes at every length boundary', () => {
+    for (const [length, op] of [
+      [0, 0],
+      [75, 75],
+      [76, 0x4c],
+      [255, 0x4c],
+      [256, 0x4d],
+      [65535, 0x4d],
+      [65536, 0x4e]
+    ] as const) {
+      expect(createMinimallyEncodedScriptChunk(Array.from({ length }, () => 0x42)).op).toBe(op)
+    }
+    const scriptNumberVectors: Array<
+      [value: number, encoded: number[], chunk: { op: number; data?: number[] }]
+    > = [
+      [0, [], { op: 0 }],
+      [-1, [0x81], { op: 0x4f }],
+      [1, [0x01], { op: 0x51 }],
+      [16, [0x10], { op: 0x60 }],
+      [17, [0x11], { op: 1, data: [0x11] }],
+      [-17, [0x91], { op: 1, data: [0x91] }],
+      [127, [0x7f], { op: 1, data: [0x7f] }],
+      [128, [0x80, 0x00], { op: 2, data: [0x80, 0x00] }]
+    ]
+    for (const [value, encoded, chunk] of scriptNumberVectors) {
+      expect(encodeScriptNum(value)).toEqual(encoded)
+      expect(createMinimallyEncodedScriptChunk([...encoded])).toEqual(chunk)
+      expect(decodeScriptNumChunk(chunk)).toBe(value)
+    }
+    expect(createMinimallyEncodedScriptChunk([0])).toEqual({ op: 0 })
+    expect(decodeScriptNumChunk({ op: 0x4c })).toBe(0)
+  })
+
   test('round-trips every arbitrary safe script number through bytes and minimal chunks', () => {
     fc.assert(
       fc.property(
@@ -63,6 +96,8 @@ describe('Mandala encoding properties', () => {
         }
       )
     )
+    expect(() => encodeAssetId('missing-separator')).toThrow('"<txid>.<vout>"')
     expect(() => encodeAssetId(`${'00'.repeat(32)}.4294967296`)).toThrow('unsigned 32-bit')
+    expect(() => decodeAssetId(Array.from({ length: 35 }, () => 0))).toThrow('exactly 36 bytes')
   })
 })

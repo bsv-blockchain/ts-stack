@@ -36,6 +36,9 @@ describe('standalone serializeAuthSigData / createAuthSigData', () => {
   it('serialization is deterministic and changes with any field', () => {
     const base = JSON.stringify(serializeAuthSigData(sigData()))
     expect(JSON.stringify(serializeAuthSigData(sigData()))).toBe(base)
+    expect(new TextDecoder().decode(new Uint8Array(serializeAuthSigData(sigData())))).toBe(
+      `login\n${IDENTITY}\n${String(NOW + WINDOW)}\ncmFuZG9tbm9uY2U=`
+    )
     expect(JSON.stringify(serializeAuthSigData(sigData({ action: 'delete' })))).not.toBe(base)
     expect(JSON.stringify(serializeAuthSigData(sigData({ nonce: 'b3RoZXI=' })))).not.toBe(base)
   })
@@ -86,6 +89,10 @@ describe('AuthProofServer.checkAuthSigData', () => {
 
   it('accepts right up to the expiry boundary; rejects empty fields', () => {
     expect(server.checkAuthSigData(sigData({ expiresAt: NOW + 1 }), 'login', NOW).valid).toBe(true)
+    expect(server.checkAuthSigData(sigData({ expiresAt: NOW }), 'login', NOW)).toEqual({
+      valid: false,
+      error: 'Proof expired'
+    })
     expect(server.checkAuthSigData(sigData({ identityKey: '' }), 'login', NOW).error).toBe(
       'Malformed proof'
     )
@@ -95,6 +102,21 @@ describe('AuthProofServer.checkAuthSigData', () => {
     expect(server.checkAuthSigData(sigData({ expiresAt: Number.NaN }), 'login', NOW).error).toBe(
       'Malformed proof'
     )
+  })
+
+  it('rejects every malformed field shape independently', () => {
+    for (const malformed of [
+      sigData({ action: undefined as unknown as string }),
+      sigData({ identityKey: undefined as unknown as string }),
+      sigData({ nonce: undefined as unknown as string }),
+      sigData({ expiresAt: 'tomorrow' as unknown as number }),
+      sigData({ expiresAt: Number.POSITIVE_INFINITY })
+    ]) {
+      expect(server.checkAuthSigData(malformed, 'login', NOW)).toEqual({
+        valid: false,
+        error: 'Malformed proof'
+      })
+    }
   })
 })
 
@@ -163,7 +185,7 @@ describe('AuthProofServer.verifyAuthProof', () => {
       now: NOW,
       consumeNonce: consume
     })
-    expect(result.error).toBe('Invalid signature')
+    expect(result).toEqual({ valid: false, error: 'Invalid signature' })
     expect(consume).not.toHaveBeenCalled()
   })
 
@@ -181,7 +203,7 @@ describe('AuthProofServer.verifyAuthProof', () => {
       now: NOW,
       consumeNonce: consume
     })
-    expect(result.error).toBe('Invalid signature')
+    expect(result).toEqual({ valid: false, error: 'Invalid signature' })
     expect(consume).not.toHaveBeenCalled()
   })
 
@@ -193,7 +215,7 @@ describe('AuthProofServer.verifyAuthProof', () => {
       now: NOW,
       consumeNonce: () => false
     })
-    expect(result.error).toBe('Proof already used')
+    expect(result).toEqual({ valid: false, error: 'Proof already used' })
   })
 
   it('verifies the signature against the proof identity key and nonce', async () => {
@@ -207,6 +229,22 @@ describe('AuthProofServer.verifyAuthProof', () => {
     })
     expect(wallet.verifySignature).toHaveBeenCalledWith(
       expect.objectContaining({ counterparty: IDENTITY, keyID: 'cmFuZG9tbm9uY2U=' })
+    )
+  })
+
+  it('passes a custom protocol directly to wallet signature operations', async () => {
+    const wallet = {
+      getPublicKey: jest.fn(async () => ({ publicKey: IDENTITY })),
+      createSignature: jest.fn(async () => ({ signature: [1, 2, 3] }))
+    }
+    await createAuthProof({
+      wallet: wallet as never,
+      counterparty: 'server',
+      action: 'login',
+      ...OPTIONS
+    })
+    expect(wallet.createSignature).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolID: OPTIONS.protocol })
     )
   })
 })
