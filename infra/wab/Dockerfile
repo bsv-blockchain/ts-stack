@@ -19,7 +19,8 @@ RUN npm ci --ignore-scripts \
 COPY src ./src
 
 # Build the TypeScript project
-RUN npm run build
+RUN npm run build \
+ && npm prune --omit=dev --ignore-scripts
 
 # ------------------------------------------------------------------------------
 # 2) Production Stage: minimal runtime image
@@ -39,7 +40,8 @@ COPY --chown=root:root --chmod=0444 package*.json ./
 # Copy the compiled TypeScript output
 COPY --from=builder --chown=root:root --chmod=0555 /app/dist ./dist
 
-# Copy node_modules from builder (includes compiled native bindings)
+# Copy production node_modules from the pruned builder (including the compiled
+# native bindings, but excluding compilers, test runners, and other dev tools).
 COPY --from=builder --chown=root:root --chmod=0555 /app/node_modules ./node_modules
 
 # Expose port
