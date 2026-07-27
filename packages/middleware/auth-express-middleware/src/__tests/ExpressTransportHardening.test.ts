@@ -4,7 +4,6 @@ import { MockWallet } from './MockWallet'
 
 const IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 const REQUEST_ID = Utils.toBase64(Array(32).fill(0))
-const SESSION_NONCE = 'Ag=='
 
 function responseMock(): any {
   const response: any = {
@@ -40,7 +39,7 @@ function validGeneralRequest(overrides: Record<string, unknown> = {}): any {
       'x-bsv-auth-version': '1',
       'x-bsv-auth-identity-key': IDENTITY_KEY,
       'x-bsv-auth-nonce': 'AQ==',
-      'x-bsv-auth-your-nonce': SESSION_NONCE,
+      'x-bsv-auth-your-nonce': 'Ag==',
       'x-bsv-auth-signature': '00'
     },
     get: jest.fn((name: string) => (name === 'host' ? 'example.com' : undefined))
@@ -495,7 +494,7 @@ describe('ExpressTransport hardening', () => {
     res.status(201).set({ 'x-bsv-result': 7, 'x-bsv-auth-ignore': 'private' }).json({ ok: true })
     await flushPromises()
 
-    expect(peer.toSession).toHaveBeenCalledWith(expect.any(Array), SESSION_NONCE)
+    expect(peer.toSession).toHaveBeenCalledWith(expect.any(Array), 'Ag==')
     expect(transport.openGeneralHandles.has(REQUEST_ID)).toBe(true)
 
     await transport.send({
@@ -546,7 +545,7 @@ describe('ExpressTransport hardening', () => {
 
     expect(peer.toSession).toHaveBeenCalledWith(
       responsePayload(200, {}, Utils.toArray('authenticated response', 'utf8')),
-      SESSION_NONCE
+      'Ag=='
     )
     expect(debug).toHaveBeenCalledWith(
       '[ExpressTransport] [DEBUG] Sending general message response',

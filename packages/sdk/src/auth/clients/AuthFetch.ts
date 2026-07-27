@@ -209,7 +209,7 @@ export class AuthFetch {
 
           // Setup general message listener to resolve requests once a response is received
           this.callbacks[requestNonceAsBase64] = { resolve, reject }
-          const listenerId: number = peerToUse.peer.listenForGeneralMessages(
+          const listenerId = peerToUse.peer.listenForGeneralMessages(
             (senderPublicKey: string, payload: number[]) => {
               // Create a reader
               const responseReader = new Utils.Reader(payload)
