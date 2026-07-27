@@ -927,6 +927,9 @@ export class ExpressTransport implements Transport {
   ): void {
     this.log('debug', 'General message from the correct identity key')
     req.auth = { identityKey: senderPublicKey }
+    // Validated as canonical base64 by `validateGeneralAuthRequest` before any
+    // general message reaches this point.
+    const sessionNonce = singleHeader(req, 'x-bsv-auth-your-nonce') as string
 
     const wrapper = new ResponseWriterWrapper()
     let responseSent = false
@@ -956,7 +959,13 @@ export class ExpressTransport implements Transport {
           responseBodyLength: wrapper.getBody().length
         })
         if (this.peer === undefined) throw new Error('Authentication peer is unavailable.')
-        await this.peer.toPeer(responsePayload, senderPublicKey)
+        // Reply on the session that carried the request, identified by the
+        // session nonce the client echoed in `x-bsv-auth-your-nonce`. Resolving
+        // by identity key instead would return the client's most recently
+        // updated session, which for a client holding concurrent sessions can
+        // be a different one — stamping the response with a `yourNonce` the
+        // requesting session cannot verify.
+        await this.peer.toSession(responsePayload, sessionNonce)
       } catch (err) {
         this.clearOpenGeneralHandle(requestId)
         this.log('error', 'Failed to build and send authenticated response', safeErrorDetails(err))

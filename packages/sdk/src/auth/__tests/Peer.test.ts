@@ -1274,4 +1274,110 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       expect(messageReceived).toBe(false)
     })
   })
+
+  describe('Replying on a specific session', () => {
+    class RecordingTransport implements Transport {
+      public readonly sent: AuthMessage[] = []
+
+      async send(message: AuthMessage): Promise<void> {
+        this.sent.push(message)
+      }
+
+      async onData(): Promise<void> {
+        // Only outbound messages are recorded; nothing is ever delivered.
+      }
+    }
+
+    const aliceIdentityKey = alicePrivKey.toPublicKey().toString()
+    const olderSession: PeerSession = {
+      isAuthenticated: true,
+      sessionNonce: 'b2xkZXItc2VydmVyLXNlc3Npb24tbm9uY2U=',
+      peerNonce: 'b2xkZXItY2xpZW50LXNlc3Npb24tbm9uY2U=',
+      peerIdentityKey: aliceIdentityKey,
+      lastUpdate: 1_000
+    }
+    const newerSession: PeerSession = {
+      isAuthenticated: true,
+      sessionNonce: 'bmV3ZXItc2VydmVyLXNlc3Npb24tbm9uY2U=',
+      peerNonce: 'bmV3ZXItY2xpZW50LXNlc3Npb24tbm9uY2U=',
+      peerIdentityKey: aliceIdentityKey,
+      lastUpdate: 2_000
+    }
+
+    let sessions: SessionManager
+    let transport: RecordingTransport
+    let responder: Peer
+
+    beforeEach(async () => {
+      sessions = new SessionManager()
+      sessions.addSession({ ...olderSession })
+      sessions.addSession({ ...newerSession })
+      transport = new RecordingTransport()
+      responder = new Peer(
+        new CompletedProtoWallet(bobPrivKey),
+        transport,
+        undefined,
+        sessions
+      )
+      await responder.ready
+    })
+
+    it('replies on the requesting session even when the peer has a newer one', async () => {
+      await responder.toSession(
+        Utils.toArray('Hello Alice!'),
+        olderSession.sessionNonce as string
+      )
+
+      expect(transport.sent).toHaveLength(1)
+      expect(transport.sent[0].yourNonce).toEqual(olderSession.peerNonce)
+    })
+
+    it('cannot reply on the requesting session when resolving by identity key', async () => {
+      // Why a responder must not use `toPeer`: it resolves the peer's most
+      // recently updated session, which need not be the session that carried
+      // the request being answered.
+      await responder.toPeer(Utils.toArray('Hello Alice!'), aliceIdentityKey)
+
+      expect(transport.sent).toHaveLength(1)
+      expect(transport.sent[0].yourNonce).toEqual(newerSession.peerNonce)
+      expect(transport.sent[0].yourNonce).not.toEqual(olderSession.peerNonce)
+    })
+
+    it('does not initiate a handshake when the session is unknown', async () => {
+      await expect(
+        responder.toSession(Utils.toArray('Hello Alice!'), 'dW5rbm93bi1ub25jZQ==')
+      ).rejects.toThrow('Session not found for nonce: dW5rbm93bi1ub25jZQ==')
+
+      expect(transport.sent).toHaveLength(0)
+    })
+
+    it('refuses to reply on a session resolved from an identity key', async () => {
+      await expect(
+        responder.toSession(Utils.toArray('Hello Alice!'), aliceIdentityKey)
+      ).rejects.toThrow(`Session not found for nonce: ${aliceIdentityKey}`)
+
+      expect(transport.sent).toHaveLength(0)
+    })
+
+    it('refuses to reply on a session that is not authenticated', async () => {
+      const pendingSession: PeerSession = {
+        isAuthenticated: false,
+        sessionNonce: 'cGVuZGluZy1zZXJ2ZXItc2Vzc2lvbi1ub25jZQ==',
+        peerIdentityKey: aliceIdentityKey,
+        lastUpdate: 3_000
+      }
+      sessions.addSession(pendingSession)
+
+      await expect(
+        responder.toSession(
+          Utils.toArray('Hello Alice!'),
+          pendingSession.sessionNonce as string
+        )
+      ).rejects.toThrow(
+        `Session is not authenticated for nonce: ${pendingSession.sessionNonce as string}`
+      )
+
+      expect(transport.sent).toHaveLength(0)
+    })
+  })
 })

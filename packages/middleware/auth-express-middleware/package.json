@@ -83,7 +83,7 @@
     "mime-types": "^3.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.2.0"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
