@@ -126,7 +126,8 @@
         "format:check",
         "health:check",
         "lint",
-        "test"
+        "test",
+        "typecheck"
       ],
       "requiresReadme": true,
       "requiresLicenseFile": true
@@ -143,7 +144,7 @@
     },
     "documentation-site": {
       "description": "Private browser documentation application",
-      "requiredScripts": ["build", "format:check", "lint", "test", "validate"],
+      "requiredScripts": ["build", "format:check", "lint", "test", "typecheck", "validate"],
       "requiresReadme": true
     },
     "node-library": {

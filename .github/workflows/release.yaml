@@ -79,6 +79,9 @@ jobs:
       - name: Build all packages
         run: pnpm -r --filter '!@bsv/ts-stack' run build
 
+      - name: Typecheck workspace
+        run: pnpm typecheck
+
       - name: Verify package license payloads
         run: pnpm license:pack-check
 

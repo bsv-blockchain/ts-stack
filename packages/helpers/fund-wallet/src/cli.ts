@@ -1,15 +1,10 @@
 import { randomBytes } from 'node:crypto'
+import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 import chalk from 'chalk'
-import {
-  type InternalizeActionArgs,
-  KeyDeriver,
-  P2PKH,
-  PrivateKey,
-  PublicKey,
-  WalletClient,
-  type WalletInterface
-} from '@bsv/sdk'
+import type { InternalizeActionArgs, WalletInterface } from '@bsv/sdk' with {
+  'resolution-mode': 'require'
+}
 import {
   Services,
   StorageClient,
@@ -17,6 +12,18 @@ import {
   WalletSigner,
   WalletStorageManager
 } from '@bsv/wallet-toolbox'
+
+type CommonJsSdk = typeof import('@bsv/sdk', {
+  with: { 'resolution-mode': 'require' }
+})
+
+// Wallet Toolbox is currently a CommonJS package. Load the matching SDK
+// condition so both packages share one runtime module and one nominal type
+// identity; importing the SDK's ESM condition here would create a dual-package
+// hazard for private-field classes such as PrivateKey and BigNumber.
+const { KeyDeriver, P2PKH, PrivateKey, PublicKey, WalletClient } = createRequire(import.meta.url)(
+  '@bsv/sdk'
+) as CommonJsSdk
 
 export type Chain = 'test' | 'main'
 

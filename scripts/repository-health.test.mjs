@@ -292,3 +292,18 @@ test('workflows pin actions, deny implicit lifecycle scripts, and keep codegen r
     assert.match(codegen, new RegExp(lockfile.replaceAll('.', '\\.')))
   }
 })
+
+test('CI and release typecheck the built cross-package declaration graph', () => {
+  for (const [file, buildStep] of [
+    ['ci.yml', '- name: Build workspace'],
+    ['release.yaml', '- name: Build all packages']
+  ]) {
+    const source = fs.readFileSync(path.join(REPOSITORY_ROOT, '.github/workflows', file), 'utf8')
+    const buildIndex = source.indexOf(buildStep)
+    const typecheckIndex = source.indexOf('- name: Typecheck workspace')
+
+    assert.notEqual(buildIndex, -1, `${file} must retain its workspace build`)
+    assert.ok(typecheckIndex > buildIndex, `${file} must typecheck after building package outputs`)
+    assert.match(source.slice(typecheckIndex), /run: pnpm typecheck/)
+  }
+})

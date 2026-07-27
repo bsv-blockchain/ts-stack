@@ -88,6 +88,7 @@ Run the blocking control and its unit tests:
 pnpm health:check
 pnpm test:governance
 pnpm test:property
+pnpm typecheck
 ```
 
 Render the complete current report:
@@ -134,6 +135,12 @@ shared workspace build. The release workflow repeats every implemented check
 before resolving or publishing a release plan. Adding a script therefore adds
 a blocking release contract; it must not be a placeholder or a source-only
 check.
+
+The workspace typecheck runs after the shared build so cross-package
+declarations resolve exactly as downstream consumers see them. It catches
+dual-package hazards where one consumer accidentally combines the ESM and
+CommonJS `@bsv/sdk` runtime/type conditions: SDK classes with private fields
+must retain one nominal identity throughout a consuming application.
 
 ## CI behavior
 
