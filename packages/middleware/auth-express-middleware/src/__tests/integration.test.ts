@@ -9,7 +9,7 @@ import {
   AuthFetch
 } from '@bsv/sdk'
 import { Server } from 'http'
-import { startServer } from './testExpressServer'
+import { holdNextDelayedResponse, startServer } from './testExpressServer'
 import { MockWallet } from './MockWallet'
 
 export interface RequestedCertificateSet {
@@ -272,8 +272,46 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
   })
 
   // --------------------------------------------------------------------------
-  // New Test for Restarting Server Mid-Test with Two AuthFetch Instances
+  // Multi-session and server-lifecycle regressions
   // --------------------------------------------------------------------------
+  test('routes delayed responses to the exact session when one identity has concurrent sessions', async () => {
+    const firstClient = new AuthFetch(new MockWallet(privKey))
+    const secondClient = new AuthFetch(new MockWallet(privKey))
+
+    await expect(firstClient.fetch('http://localhost:3000/custom-headers')).resolves.toHaveProperty(
+      'status',
+      200
+    )
+    await expect(
+      secondClient.fetch('http://localhost:3000/custom-headers')
+    ).resolves.toHaveProperty('status', 200)
+
+    const delayedResponse = holdNextDelayedResponse()
+    const delayedFirstResponse = firstClient.fetch('http://localhost:3000/delayed-response')
+    await delayedResponse.started
+    try {
+      await expect(
+        secondClient.fetch('http://localhost:3000/custom-headers')
+      ).resolves.toHaveProperty('status', 200)
+    } finally {
+      delayedResponse.release()
+    }
+
+    const outcome = await Promise.race([
+      delayedFirstResponse.then(response => ({ result: 'response' as const, response })),
+      new Promise<{ result: 'timeout' }>(resolve => {
+        const timeout = setTimeout(() => resolve({ result: 'timeout' }), 5_000)
+        timeout.unref?.()
+      })
+    ])
+
+    expect(outcome.result).toBe('response')
+    if (outcome.result === 'response') {
+      expect(outcome.response.status).toBe(200)
+      await expect(outcome.response.json()).resolves.toEqual({ status: 'delayed response' })
+    }
+  })
+
   test('Test 12: Two AuthFetch instances from the same identity key (restart server mid-test)', async () => {
     // Use separate wallet instances with the same identity key.
     const wallet1 = new MockWallet(privKey)
