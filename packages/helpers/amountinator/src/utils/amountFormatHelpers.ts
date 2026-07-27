@@ -20,6 +20,61 @@ function trimInsignificantZeros(fixed: string): string {
   return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed
 }
 
+const currencySymbols: Record<string, string> = {
+  USD: '$',
+  GBP: '£',
+  EUR: '€',
+  JPY: '¥',
+  CNY: '¥',
+  INR: '₹',
+  AUD: 'A$',
+  CAD: 'C$',
+  CHF: 'CHF ',
+  HKD: 'HK$',
+  SGD: 'S$',
+  NZD: 'NZ$',
+  SEK: 'SEK ',
+  NOK: 'NOK ',
+  MXN: 'MX$'
+}
+
+function determineDecimalPlaces(
+  amount: number,
+  currency: string,
+  decimalPlaces: number | undefined
+): number {
+  if (decimalPlaces !== undefined) return decimalPlaces
+  if (amount < 1 && amount !== 0) {
+    return Math.min(Math.max(2, -Math.floor(Math.log10(amount)) + 1), 4)
+  }
+  return ['BSV', 'SATS'].includes(currency) ? 8 : 2
+}
+
+function groupingSeparator(useCommas: boolean, useUnderscores: boolean): string | undefined {
+  if (useUnderscores) return '_'
+  if (useCommas) return ','
+  return undefined
+}
+
+function formatFixedNumber(fixed: string, separator: string | undefined): string {
+  let [integerPart, decimalPart] = fixed.split('.')
+  if (separator !== undefined) {
+    integerPart = groupIntegerPart(integerPart, separator)
+  }
+  return decimalPart ? `${integerPart}.${decimalPart}` : integerPart
+}
+
+function applyCurrency(number: string, currency: string): string {
+  if (currency === 'SATS') return number + ' satoshis'
+  if (currency === 'BSV') return number + ' BSV'
+  return (currencySymbols[currency] || currency + ' ') + number
+}
+
+function smallAmountLabel(currency: string): string {
+  if (currency === 'BSV') return '< 0.01 BSV'
+  return '< ' + (currencySymbols[currency] || currency + ' ') + '0.01'
+}
+
 /**
  * Formats a numerical amount with a specified currency and optional formatting options.
  *
@@ -52,16 +107,7 @@ export function formatAmountWithCurrency(
   options?: { decimalPlaces?: number; useCommas?: boolean; useUnderscores?: boolean }
 ): { formattedAmount: string; hoverText?: string } {
   const { decimalPlaces, useCommas = true, useUnderscores = false } = options || {}
-
-  // Determine the number of decimal places
-  let decimals: number
-  if (decimalPlaces !== undefined) {
-    decimals = decimalPlaces
-  } else if (amount < 1 && amount !== 0) {
-    decimals = Math.min(Math.max(2, -Math.floor(Math.log10(amount)) + 1), 4)
-  } else {
-    decimals = ['BSV', 'SATS'].includes(currency) ? 8 : 2
-  }
+  const decimals = determineDecimalPlaces(amount, currency, decimalPlaces)
 
   // Format the amount with determined decimal places
   let fixed = amount.toFixed(decimals)
@@ -70,52 +116,16 @@ export function formatAmountWithCurrency(
     fixed = trimInsignificantZeros(fixed)
   }
 
-  let [integerPart, decimalPart] = fixed.split('.')
-
-  // Format the integer part with underscores or commas
-  if (useUnderscores) {
-    integerPart = groupIntegerPart(integerPart, '_')
-  } else if (useCommas) {
-    integerPart = groupIntegerPart(integerPart, ',')
-  }
-
-  // Construct the full number string with decimal part conditionally added
-  let formattedAmount = decimalPart ? `${integerPart}.${decimalPart}` : integerPart
-
-  // Prepare the currency symbol or suffix
-  const symbols: Record<string, string> = {
-    USD: '$',
-    GBP: '£',
-    EUR: '€',
-    JPY: '¥',
-    CNY: '¥',
-    INR: '₹',
-    AUD: 'A$',
-    CAD: 'C$',
-    CHF: 'CHF ',
-    HKD: 'HK$',
-    SGD: 'S$',
-    NZD: 'NZ$',
-    SEK: 'SEK ',
-    NOK: 'NOK ',
-    MXN: 'MX$'
-  }
-  if (currency === 'SATS') {
-    formattedAmount = formattedAmount + ' satoshis'
-  } else if (currency === 'BSV') {
-    formattedAmount = formattedAmount + ' BSV'
-  } else {
-    formattedAmount = (symbols[currency] || currency + ' ') + formattedAmount
-  }
+  const separator = groupingSeparator(useCommas, useUnderscores)
+  const formattedAmount = applyCurrency(formatFixedNumber(fixed, separator), currency)
 
   // build result with hover text
-  const result: { formattedAmount: string; hoverText?: string } = { formattedAmount }
   if (amount < 0.01) {
-    result.hoverText = formattedAmount
-    const currencyPrefix = currency === 'BSV' ? '' : symbols[currency] || currency + ' '
-    const smallAmountLabel = currency === 'BSV' ? '< 0.01 BSV' : '< ' + currencyPrefix + '0.01'
-    result.formattedAmount = smallAmountLabel
+    return {
+      formattedAmount: smallAmountLabel(currency),
+      hoverText: formattedAmount
+    }
   }
 
-  return result
+  return { formattedAmount }
 }

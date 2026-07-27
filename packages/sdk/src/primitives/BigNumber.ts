@@ -534,6 +534,22 @@ export default class BigNumber {
     return this._magnitude.toString(16)
   }
 
+  private _toHexString(padding: number): string {
+    let hexStr = this._getMinimalHex()
+
+    if (padding > 1) {
+      // Preserve whole bytes before applying the bn.js multiple-of-N rule.
+      if (hexStr !== '0' && hexStr.length % 2 !== 0) {
+        hexStr = '0' + hexStr
+      }
+      while (hexStr.length % padding !== 0) {
+        hexStr = '0' + hexStr
+      }
+    }
+
+    return (this.isNeg() ? '-' : '') + hexStr
+  }
+
   /**
    * Converts the BigNumber instance to a string representation.
    *
@@ -544,24 +560,7 @@ export default class BigNumber {
    */
   toString(base: number | 'hex' = 10, padding: number = 1): string {
     if (base === 16 || base === 'hex') {
-      // For toString('hex', N), N is the 'multiple-of-N characters' rule from bn.js tests
-      // For toString(16, P) where P=1 (default) or P=0, it means minimal hex.
-      let hexStr = this._getMinimalHex() // e.g., "f", "123", "0"
-
-      if (padding > 1) {
-        // N-multiple rule for characters
-        // Ensure hexStr is even length if not "0" to represent full bytes before applying multiple rule
-        if (hexStr !== '0' && hexStr.length % 2 !== 0) {
-          hexStr = '0' + hexStr
-        }
-        while (hexStr.length % padding !== 0) {
-          hexStr = '0' + hexStr
-        }
-      }
-      // If padding is 0 or 1, hexStr (minimal) is used as is.
-      // "0" is always "0" unless toHex("") specific case.
-      // Single digit hex like "f" is not "0f" by default from toString(16).
-      return (this.isNeg() ? '-' : '') + hexStr
+      return this._toHexString(padding)
     }
 
     if (typeof base !== 'number' || base < 2 || base > 36 || base % 1 !== 0)

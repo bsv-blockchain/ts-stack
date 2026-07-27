@@ -1,5 +1,52 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { ProtoWallet, PushDrop, Transaction, Utils, VerifiableCertificate } from '@bsv/sdk'
+import {
+  ProtoWallet,
+  PushDrop,
+  Transaction,
+  Utils,
+  VerifiableCertificate,
+  type TransactionOutput
+} from '@bsv/sdk'
+
+async function validateIdentityOutput (
+  output: TransactionOutput,
+  anyoneWallet: ProtoWallet
+): Promise<void> {
+  const result = PushDrop.decode(output.lockingScript)
+  const parsedCert = JSON.parse(Utils.toUTF8(result.fields[0]))
+  const certificate = new VerifiableCertificate(
+    parsedCert.type,
+    parsedCert.serialNumber,
+    parsedCert.subject,
+    parsedCert.certifier,
+    parsedCert.revocationOutpoint,
+    parsedCert.fields,
+    parsedCert.keyring,
+    parsedCert.signature
+  )
+
+  const signature = result.fields.pop()!
+  const data: number[] = []
+  for (const field of result.fields) {
+    data.push(...field)
+  }
+  const { valid: hasValidSignature } = await anyoneWallet.verifySignature({
+    data,
+    signature,
+    counterparty: parsedCert.subject,
+    protocolID: [1, 'identity'],
+    keyID: '1'
+  })
+  if (!hasValidSignature) throw new Error('Invalid signature!')
+
+  const valid = await certificate.verify()
+  if (!valid) throw new Error('Invalid certificate signature!')
+
+  const decryptedFields = await certificate.decryptFields(anyoneWallet)
+  if (Object.keys(decryptedFields).length === 0) {
+    throw new Error('No publicly revealed attributes present!')
+  }
+}
 
 export default class IdentityTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -15,40 +62,7 @@ export default class IdentityTopicManager implements TopicManager {
 
       for (const [i, output] of parsedTransaction.outputs.entries()) {
         try {
-          const result = PushDrop.decode(output.lockingScript)
-          const parsedCert = JSON.parse(Utils.toUTF8(result.fields[0]))
-          const certificate = new VerifiableCertificate(
-            parsedCert.type,
-            parsedCert.serialNumber,
-            parsedCert.subject,
-            parsedCert.certifier,
-            parsedCert.revocationOutpoint,
-            parsedCert.fields,
-            parsedCert.keyring,
-            parsedCert.signature
-          )
-
-          const signature = result.fields.pop()!
-          const data: number[] = []
-          for (const field of result.fields) {
-            data.push(...field)
-          }
-
-          const { valid: hasValidSignature } = await anyoneWallet.verifySignature({
-            data,
-            signature,
-            counterparty: parsedCert.subject,
-            protocolID: [1, 'identity'],
-            keyID: '1'
-          })
-          if (!hasValidSignature) throw new Error('Invalid signature!')
-
-          const valid = await certificate.verify()
-          if (!valid) throw new Error('Invalid certificate signature!')
-
-          const decryptedFields = await certificate.decryptFields(anyoneWallet)
-          if (Object.keys(decryptedFields).length === 0) throw new Error('No publicly revealed attributes present!')
-
+          await validateIdentityOutput(output, anyoneWallet)
           outputsToAdmit.push(i)
         } catch (error) {
           console.error(`Error parsing output ${i}`, error)

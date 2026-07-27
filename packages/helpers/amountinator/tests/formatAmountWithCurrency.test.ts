@@ -107,4 +107,10 @@ describe('formatAmountWithCurrency', () => {
   test('formats negative amounts correctly', () => {
     expect(formatAmountWithCurrency(-1234.56, 'EUR').hoverText).toBe('€-1,235')
   })
+
+  test('does not classify NaN as a small amount', () => {
+    expect(formatAmountWithCurrency(Number.NaN, 'USD')).toEqual({
+      formattedAmount: '$NaN'
+    })
+  })
 })

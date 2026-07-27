@@ -12,7 +12,16 @@
  * subject and certifier with the 'anyone' wallet derivation — skipped below.
  */
 
-import { LockingScript, PrivateKey, PublicKey, Transaction, Utils } from '@bsv/sdk'
+import {
+  LockingScript,
+  PrivateKey,
+  ProtoWallet,
+  PublicKey,
+  Transaction,
+  Utils,
+  VerifiableCertificate
+} from '@bsv/sdk'
+import { jest } from '@jest/globals'
 import IdentityTopicManager from '../identity/IdentityTopicManager.js'
 
 // ---------------------------------------------------------------------------
@@ -68,6 +77,24 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
   return tx
 }
 
+function buildCertificateOutput(): Transaction {
+  const key = PrivateKey.fromRandom()
+  const subjectKey = PrivateKey.fromRandom()
+  const certData = {
+    type: 'deadbeef'.repeat(8),
+    serialNumber: 'testserial123',
+    subject: subjectKey.toPublicKey().toString(),
+    certifier: key.toPublicKey().toString(),
+    revocationOutpoint: 'deadbeef'.repeat(8) + '.0',
+    fields: { name: 'encrypted-blob' },
+    keyring: {},
+    signature: 'invalidsig'
+  }
+  const certBytes = Utils.toArray(JSON.stringify(certData), 'utf8')
+  const fakeSignature = Array.from({ length: 71 }, (_, i) => i % 256)
+  return buildTxWithInput([buildPushDropScript(key.toPublicKey(), [certBytes, fakeSignature])])
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -117,27 +144,41 @@ describe('IdentityTopicManager', () => {
   })
 
   it('rejects a PushDrop with a JSON certificate-shaped object but wrong signature', async () => {
-    const key = PrivateKey.fromRandom()
-    const subjectKey = PrivateKey.fromRandom()
-
-    // Construct a certificate-shaped JSON (will fail signature verification)
-    const certData = {
-      type: 'deadbeef'.repeat(8), // 32-byte type as hex string
-      serialNumber: 'testserial123',
-      subject: subjectKey.toPublicKey().toString(),
-      certifier: key.toPublicKey().toString(),
-      revocationOutpoint: 'deadbeef'.repeat(8) + '.0',
-      fields: { name: 'encrypted-blob' },
-      keyring: {},
-      signature: 'invalidsig'
-    }
-    const certBytes = Utils.toArray(JSON.stringify(certData), 'utf8')
-    const fakeSignature = Array.from({ length: 71 }, (_, i) => i % 256)
-    const lockingScript = buildPushDropScript(key.toPublicKey(), [certBytes, fakeSignature])
-    const tx = buildTxWithInput([lockingScript])
+    const tx = buildCertificateOutput()
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('rejects an output whose certificate signature is invalid', async () => {
+    jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
+    jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(false)
+    const decryptFields = jest.spyOn(VerifiableCertificate.prototype, 'decryptFields')
+
+    const result = await manager.identifyAdmissibleOutputs(buildCertificateOutput().toBEEF(), [])
+
+    expect(result.outputsToAdmit).toEqual([])
+    expect(decryptFields).not.toHaveBeenCalled()
+  })
+
+  it('rejects an output without publicly revealed certificate attributes', async () => {
+    jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
+    jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(true)
+    jest.spyOn(VerifiableCertificate.prototype, 'decryptFields').mockResolvedValue({})
+
+    const result = await manager.identifyAdmissibleOutputs(buildCertificateOutput().toBEEF(), [])
+
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('admits an output with a valid signature and publicly revealed attributes', async () => {
+    jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
+    jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(true)
+    jest.spyOn(VerifiableCertificate.prototype, 'decryptFields').mockResolvedValue({ name: 'Alice' })
+
+    const result = await manager.identifyAdmissibleOutputs(buildCertificateOutput().toBEEF(), [])
+
+    expect(result.outputsToAdmit).toEqual([0])
   })
 
   it('returns empty results for malformed BEEF bytes', async () => {
@@ -178,5 +219,9 @@ describe('IdentityTopicManager', () => {
     const meta = await manager.getMetaData()
     expect(meta.name).toBe('Identity Topic Manager')
     expect(typeof meta.shortDescription).toBe('string')
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 })

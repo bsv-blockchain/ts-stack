@@ -98,6 +98,75 @@ function getLegacySubPath(url: string): string | null {
   return null
 }
 
+type IssuerFactory = () => Promise<any>
+
+async function certifyIdentity(
+  body: any,
+  getIssuer: IssuerFactory,
+  defaultSchemaId: string | undefined
+): Promise<HandlerResponse> {
+  const { identityKey, schemaId, fields } = body
+  if (identityKey == null || fields == null) {
+    return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
+  }
+  const issuer = await getIssuer()
+  const vc = await issuer.issue(identityKey, schemaId ?? defaultSchemaId, fields)
+  return jsonResponse(vc._bsv.certificate)
+}
+
+async function issueCredential(
+  body: any,
+  getIssuer: IssuerFactory,
+  defaultSchemaId: string | undefined
+): Promise<HandlerResponse> {
+  const { subjectKey, schemaId, fields } = body
+  if (subjectKey == null || fields == null) {
+    return jsonResponse({ success: false, error: 'Missing subjectKey or fields' }, 400)
+  }
+  const issuer = await getIssuer()
+  const vc = await issuer.issue(subjectKey, schemaId ?? defaultSchemaId, fields)
+  return jsonResponse({ success: true, credential: vc })
+}
+
+async function verifyCredential(body: any, getIssuer: IssuerFactory): Promise<HandlerResponse> {
+  const { credential } = body
+  if (credential == null) {
+    return jsonResponse({ success: false, error: 'Missing credential' }, 400)
+  }
+  const issuer = await getIssuer()
+  const result = await issuer.verify(credential)
+  return jsonResponse({ success: true, verification: result })
+}
+
+async function revokeCredential(body: any, getIssuer: IssuerFactory): Promise<HandlerResponse> {
+  const { serialNumber } = body
+  if (serialNumber == null || serialNumber === '') {
+    return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
+  }
+  const issuer = await getIssuer()
+  const result = await issuer.revoke(serialNumber)
+  return jsonResponse({ success: true, ...result })
+}
+
+async function handleCredentialPost(
+  req: HandlerRequest,
+  getIssuer: IssuerFactory,
+  defaultSchemaId: string | undefined
+): Promise<HandlerResponse> {
+  const body = await req.json()
+  const legacyPath = getLegacySubPath(req.url)
+  const action = getSearchParams(req.url).get('action')
+
+  if (legacyPath === 'certify' || action === 'certify') {
+    return await certifyIdentity(body, getIssuer, defaultSchemaId)
+  }
+  if (action === 'issue') return await issueCredential(body, getIssuer, defaultSchemaId)
+  if (action === 'verify') return await verifyCredential(body, getIssuer)
+  if (action === 'revoke') return await revokeCredential(body, getIssuer)
+
+  return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
+}
+
 // ============================================================================
 // Next.js handler factory
 // ============================================================================
@@ -177,63 +246,7 @@ export function createCredentialIssuerHandler(
 
     async POST(req: HandlerRequest): Promise<HandlerResponse> {
       try {
-        const body = await req.json()
-        const legacyPath = getLegacySubPath(req.url)
-        const params = getSearchParams(req.url)
-
-        // Legacy path: POST .../api/certify
-        if (legacyPath === 'certify') {
-          const { identityKey, schemaId, fields } = body
-          if (identityKey == null || fields == null) {
-            return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
-          }
-          const issuer = await getIssuer()
-          const vc = await issuer.issue(identityKey, schemaId ?? config.schemas[0]?.id, fields)
-          return jsonResponse(vc._bsv.certificate)
-        }
-
-        const action = params.get('action')
-
-        // New query-param based certify — also used by acquireCredential()
-        if (action === 'certify') {
-          const { identityKey, schemaId, fields } = body
-          if (identityKey == null || fields == null) {
-            return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
-          }
-          const issuer = await getIssuer()
-          const vc = await issuer.issue(identityKey, schemaId ?? config.schemas[0]?.id, fields)
-          return jsonResponse(vc._bsv.certificate)
-        }
-
-        if (action === 'issue') {
-          const { subjectKey, schemaId, fields } = body
-          if (subjectKey == null || fields == null) {
-            return jsonResponse({ success: false, error: 'Missing subjectKey or fields' }, 400)
-          }
-          const issuer = await getIssuer()
-          const vc = await issuer.issue(subjectKey, schemaId ?? config.schemas[0]?.id, fields)
-          return jsonResponse({ success: true, credential: vc })
-        }
-
-        if (action === 'verify') {
-          const { credential } = body
-          if (credential == null)
-            return jsonResponse({ success: false, error: 'Missing credential' }, 400)
-          const issuer = await getIssuer()
-          const result = await issuer.verify(credential)
-          return jsonResponse({ success: true, verification: result })
-        }
-
-        if (action === 'revoke') {
-          const { serialNumber } = body
-          if (serialNumber == null || serialNumber === '')
-            return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
-          const issuer = await getIssuer()
-          const result = await issuer.revoke(serialNumber)
-          return jsonResponse({ success: true, ...result })
-        }
-
-        return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
+        return await handleCredentialPost(req, getIssuer, config.schemas[0]?.id)
       } catch (error) {
         return jsonResponse({ success: false, error: `Failed: ${(error as Error).message}` }, 500)
       }

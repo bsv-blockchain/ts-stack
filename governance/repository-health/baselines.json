@@ -273,13 +273,13 @@
     ]
   },
   "publicPackageVersions": {
-    "@bsv/amountinator": "2.1.1",
+    "@bsv/amountinator": "2.1.2",
     "@bsv/wallet-helper": "0.1.1",
     "create-bsv-app": "1.0.2",
     "@bsv/did": "0.2.1",
     "@bsv/did-client": "1.2.1",
     "@bsv/fund-wallet": "1.4.1",
-    "@bsv/simple": "0.4.1",
+    "@bsv/simple": "0.4.2",
     "@bsv/templates": "1.9.1",
     "@bsv/authsocket": "2.1.1",
     "@bsv/authsocket-client": "2.1.1",
@@ -294,14 +294,14 @@
     "@bsv/overlay": "2.2.2",
     "@bsv/overlay-discovery-services": "2.1.1",
     "@bsv/overlay-express": "2.4.3",
-    "@bsv/overlay-topics": "1.6.1",
-    "@bsv/sdk": "2.2.2",
+    "@bsv/overlay-topics": "1.6.2",
+    "@bsv/sdk": "2.2.3",
     "@bsv/verifast": "0.3.0",
     "@bsv/btms": "1.1.1",
     "@bsv/btms-permission-module": "1.1.1",
     "@bsv/wallet-relay": "0.2.3",
-    "@bsv/wallet-toolbox-client": "2.4.5",
-    "@bsv/wallet-toolbox-mobile": "2.4.5",
-    "@bsv/wallet-toolbox": "2.4.5"
+    "@bsv/wallet-toolbox-client": "2.4.6",
+    "@bsv/wallet-toolbox-mobile": "2.4.6",
+    "@bsv/wallet-toolbox": "2.4.6"
   }
 }

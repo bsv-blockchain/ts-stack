@@ -1,5 +1,21 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Signature, Transaction, PushDrop, Utils } from '@bsv/sdk'
+import { Signature, Transaction, PushDrop, Utils, type TransactionOutput } from '@bsv/sdk'
+
+function isAdmissibleHelloWorldOutput (output: TransactionOutput): boolean {
+  const result = PushDrop.decode(output.lockingScript)
+  const signature = result.fields.pop()
+
+  if (result.fields?.length !== 1) return false
+
+  const message = Utils.toUTF8(result.fields[0])
+  if (message.length < 2) return false
+  if (!result.lockingPublicKey || !signature) return false
+
+  const data = result.fields.flat()
+  const hasValidSignature = result.lockingPublicKey.verify(data, Signature.fromDER(signature))
+  if (!hasValidSignature) throw new Error('Invalid signature!')
+  return true
+}
 
 export default class HelloWorldTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -15,19 +31,7 @@ export default class HelloWorldTopicManager implements TopicManager {
 
       for (const [index, output] of parsedTx.outputs.entries()) {
         try {
-          const result = PushDrop.decode(output.lockingScript)
-          const signature = result.fields.pop()
-
-          if (result.fields?.length !== 1) continue
-
-          const message = Utils.toUTF8(result.fields[0])
-          if (message.length < 2) continue
-          if (!result.lockingPublicKey || !signature) continue
-
-          const data = result.fields.flat()
-          const hasValidSignature = result.lockingPublicKey.verify(data, Signature.fromDER(signature))
-          if (!hasValidSignature) throw new Error('Invalid signature!')
-          outputsToAdmit.push(index)
+          if (isAdmissibleHelloWorldOutput(output)) outputsToAdmit.push(index)
         } catch (err) {
           console.error(`Error processing output ${index}:`, err)
         }

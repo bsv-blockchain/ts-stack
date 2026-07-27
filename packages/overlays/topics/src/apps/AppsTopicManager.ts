@@ -1,7 +1,52 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { PushDrop, Transaction, Utils } from '@bsv/sdk'
+import { PushDrop, Transaction, Utils, type TransactionOutput } from '@bsv/sdk'
 import { PublishedAppMetadata } from './types.js'
 import { isTokenSignatureCorrectlyLinked } from './isTokenSignatureCorrectlyLinked.js'
+
+function parseAppMetadata (output: TransactionOutput): {
+  metadata: PublishedAppMetadata
+  lockingPublicKey: ReturnType<typeof PushDrop.decode>['lockingPublicKey']
+  fields: number[][]
+} {
+  const result = PushDrop.decode(output.lockingScript)
+  if (result.fields.length !== 2) {
+    throw new Error('App token must have exactly one metadata field + signature')
+  }
+
+  const metadataJSON = Utils.toUTF8(result.fields[0])
+  let metadata: PublishedAppMetadata
+  try {
+    metadata = JSON.parse(metadataJSON)
+  } catch {
+    throw new Error('Metadata field is not valid JSON')
+  }
+
+  if (metadata == null) throw new Error('App token must contain valid metadata')
+  if (
+    typeof metadata.version !== 'string' ||
+    typeof metadata.name !== 'string' ||
+    typeof metadata.description !== 'string' ||
+    typeof metadata.icon !== 'string' ||
+    !(typeof metadata.httpURL === 'string' || typeof metadata.uhrpURL === 'string') ||
+    typeof metadata.domain !== 'string' ||
+    typeof metadata.publisher !== 'string' ||
+    typeof metadata.release_date !== 'string'
+  ) {
+    throw new TypeError('App metadata missing required fields')
+  }
+
+  return {
+    metadata,
+    lockingPublicKey: result.lockingPublicKey,
+    fields: result.fields
+  }
+}
+
+async function validateAppOutput (output: TransactionOutput): Promise<void> {
+  const { metadata, lockingPublicKey, fields } = parseAppMetadata(output)
+  const isLinked = await isTokenSignatureCorrectlyLinked(lockingPublicKey, metadata.publisher, fields)
+  if (!isLinked) throw new Error('Signature is not properly linked')
+}
 
 export default class AppsTopicManager implements TopicManager {
   async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
@@ -15,35 +60,7 @@ export default class AppsTopicManager implements TopicManager {
 
       for (const [i, output] of parsedTransaction.outputs.entries()) {
         try {
-          const result = PushDrop.decode(output.lockingScript)
-          if (result.fields.length !== 2) throw new Error('App token must have exactly one metadata field + signature')
-
-          const metadataJSON = Utils.toUTF8(result.fields[0])
-          let metadata: PublishedAppMetadata
-          try {
-            metadata = JSON.parse(metadataJSON)
-          } catch {
-            throw new Error('Metadata field is not valid JSON')
-          }
-
-          if (metadata == null) throw new Error('App token must contain valid metadata')
-
-          if (
-            typeof metadata?.version !== 'string' ||
-            typeof metadata.name !== 'string' ||
-            typeof metadata.description !== 'string' ||
-            typeof metadata.icon !== 'string' ||
-            !(typeof metadata.httpURL === 'string' || typeof metadata.uhrpURL === 'string') ||
-            typeof metadata.domain !== 'string' ||
-            typeof metadata.publisher !== 'string' ||
-            typeof metadata.release_date !== 'string'
-          ) {
-            throw new TypeError('App metadata missing required fields')
-          }
-
-          const isLinked = await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, metadata.publisher, result.fields)
-          if (!isLinked) throw new Error('Signature is not properly linked')
-
+          await validateAppOutput(output)
           outputsToAdmit.push(i)
         } catch (error) {
           // Output does not meet Apps protocol requirements; skip it
