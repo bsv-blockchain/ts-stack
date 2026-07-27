@@ -49,4 +49,22 @@ describe('base58 property tests', () => {
       })
     )
   })
+
+  test('matches independent vectors and enforces malformed-input and hex-output boundaries', () => {
+    expect(fromBase58('111z')).toEqual([0, 0, 0, 57])
+    expect(toBase58([0, 0, 0, 57])).toBe('111z')
+    const base58Alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    const invalidAscii = Array.from({ length: 128 }, (_, codePoint) =>
+      String.fromCodePoint(codePoint)
+    ).filter(character => !base58Alphabet.includes(character))
+    for (const invalid of ['', ...invalidAscii, 'é', '🚀']) {
+      expect(() => fromBase58(invalid)).toThrow()
+    }
+
+    const encoded = toBase58Check([1, 2])
+    expect(fromBase58Check(encoded, 'hex')).toEqual({
+      prefix: '00',
+      data: '0102'
+    })
+  })
 })

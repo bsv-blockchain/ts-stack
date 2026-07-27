@@ -86,4 +86,27 @@ describe('currency boundary properties', () => {
       )
     )
   })
+
+  test('trims implicit decimals and fails closed for unavailable conversion rates', () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 0.01, max: 1_000_000, noNaN: true, noDefaultInfinity: true }),
+        fc.constantFrom(...currencies),
+        (amount, currency) => {
+          const result = formatAmountWithCurrency(amount, currency)
+          expect(result.formattedAmount).toEqual(expect.any(String))
+          expect(result.formattedAmount).not.toContain('NaN')
+        }
+      )
+    )
+
+    const unavailable = new CurrencyConverter(0, {
+      get: async () => ({ currency: 'USD' })
+    } as never)
+    expect(() => unavailable.convertCurrency(1, 'USD', 'BSV')).toThrow('usdPerBsv')
+    unavailable.exchangeRates = { usdPerBsv: 50, fiatPerUsd: { ...rates, EUR: 0 } }
+    expect(() => unavailable.convertCurrency(1, 'EUR', 'USD')).toThrow('EUR per USD')
+    expect(() => unavailable.convertCurrency(1, 'USD', 'EUR')).toThrow('EUR per USD')
+    expect(() => unavailable.convertCurrency(1, 'UNKNOWN', 'USD')).toThrow('Currency not supported')
+  })
 })

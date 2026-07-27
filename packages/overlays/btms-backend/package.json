@@ -38,6 +38,7 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
+    "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
     "fast-check": "^4.9.0",

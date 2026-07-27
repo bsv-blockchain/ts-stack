@@ -1,9 +1,11 @@
 import { PushDrop, Utils } from '@bsv/sdk'
 import fc from 'fast-check'
+import { jest as jestRuntime } from '@jest/globals'
 
 import { BasicTokenModule } from '../index.js'
 import type { ParsedTokenInfo } from '../types.js'
 
+const jestApi = jestRuntime as unknown as typeof jest
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
 const requestedSeed = Number.parseInt(process.env.FAST_CHECK_SEED ?? '', 10)
@@ -35,7 +37,7 @@ describe('BTMS permission boundary properties', () => {
   test('decodes the full unsigned Bitcoin uint32 varint domain', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), value => {
-        const module = new BasicTokenModule(jest.fn()) as unknown as ModuleInternals
+        const module = new BasicTokenModule(jestApi.fn()) as unknown as ModuleInternals
         expect(module.readVarint([0xfe, ...encodeUint32(value)], 0)).toEqual({
           value,
           nextOffset: 5
@@ -45,8 +47,8 @@ describe('BTMS permission boundary properties', () => {
   })
 
   test('accepts exactly canonical positive safe-integer token amounts', () => {
-    const module = new BasicTokenModule(jest.fn()) as unknown as ModuleInternals
-    const decode = jest.spyOn(PushDrop, 'decode')
+    const module = new BasicTokenModule(jestApi.fn()) as unknown as ModuleInternals
+    const decode = jestApi.spyOn(PushDrop, 'decode')
     const amountText = fc.oneof(
       fc.string({ maxLength: 200 }),
       fc.integer({ min: 1, max: Number.MAX_SAFE_INTEGER }).map(value => value.toString()),
@@ -70,6 +72,13 @@ describe('BTMS permission boundary properties', () => {
         }
       })
     )
+
+    decode.mockReturnValue({
+      fields: [Utils.toArray('', 'utf8'), Utils.toArray('1', 'utf8')]
+    } as ReturnType<typeof PushDrop.decode>)
+    expect(module.parseTokenLockingScript('51')).toBeNull()
+    expect(module.parseTokenLockingScript('')).toBeNull()
+    expect(module.parseTokenLockingScript(undefined as unknown as string)).toBeNull()
     decode.mockRestore()
   })
 
@@ -81,7 +90,7 @@ describe('BTMS permission boundary properties', () => {
           { minLength: 1, maxLength: 30 }
         ),
         async originators => {
-          const prompt = jest.fn(async () => true)
+          const prompt = jestApi.fn(async () => true)
           const module = new BasicTokenModule(prompt)
 
           for (const originator of originators) {
@@ -101,7 +110,7 @@ describe('BTMS permission boundary properties', () => {
   test('rejects arbitrary array-shaped request arguments at the authorization boundary', async () => {
     await fc.assert(
       fc.asyncProperty(fc.array(fc.jsonValue(), { maxLength: 30 }), async args => {
-        const module = new BasicTokenModule(jest.fn())
+        const module = new BasicTokenModule(jestApi.fn())
         await expect(
           module.onRequest({
             method: 'getVersion',

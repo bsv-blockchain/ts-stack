@@ -73,6 +73,22 @@ describe('overlay discovery boundary properties', () => {
     )
   })
 
+  test('rejects malformed transports and exact geographic boundary violations', () => {
+    for (const invalid of [
+      'https://%',
+      'https+bsvauth://%',
+      'wss://%',
+      'https://localhost',
+      'wss://localhost',
+      'https://example.org/path',
+      'js8c+bsvauth+smf:?lat=91&long=0&freq=1Hz&radius=1km',
+      'js8c+bsvauth+smf:?lat=0&long=181&freq=1Hz&radius=1km',
+      'js8c+bsvauth+smf:?lat=0&long=NaN&freq=1Hz&radius=1km'
+    ]) {
+      expect(isAdvertisableURI(invalid)).toBe(false)
+    }
+  })
+
   test('is total for arbitrary untrusted strings', () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 4096 }), value => {

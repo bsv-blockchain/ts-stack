@@ -1,0 +1,140 @@
+name: Mutation quality
+
+on:
+  schedule:
+    - cron: '17 8 * * 0'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Optional exact governed target ID; blank runs all 25
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: mutation-quality-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Build mutation campaign
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+
+      - name: Select the full campaign or one exact target
+        id: targets
+        env:
+          REQUESTED_TARGET: ${{ inputs.target || '' }}
+        run: |
+          GOVERNED_TARGETS=$(node scripts/mutation-testing.mjs --list)
+          if [ -n "$REQUESTED_TARGET" ]; then
+            if ! grep -Fxq "$REQUESTED_TARGET" <<<"$GOVERNED_TARGETS"; then
+              echo "::error::Unknown mutation target: $REQUESTED_TARGET"
+              exit 1
+            fi
+            TARGETS=$(jq -cn --arg target "$REQUESTED_TARGET" '[$target]')
+          else
+            TARGETS=$(jq -R -s -c 'split("\n") | map(select(length > 0))' <<<"$GOVERNED_TARGETS")
+          fi
+          echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
+
+      - name: Build the governed package graph
+        run: pnpm build:property
+
+      - name: Archive build outputs
+        run: |
+          {
+            find packages -type d \( -name dist -o -name out \) -prune -print0
+            find packages -type f -name '*.tsbuildinfo' -print0
+          } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
+
+      - name: Share build outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-build-outputs
+          path: build-outputs.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  mutation-tests:
+    name: Mutation / ${{ matrix.target }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target: ${{ fromJSON(needs.prepare.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: mutation-build-outputs
+          path: .ci-artifacts
+
+      - name: Restore build outputs
+        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+
+      - name: Enforce the governed mutation-quality ratchet
+        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}"
+
+      - name: Preserve the machine-readable mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-${{ matrix.target }}-${{ github.run_id }}
+          path: artifacts/mutation/${{ matrix.target }}/mutation.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  mutation-quality:
+    name: Full mutation campaign
+    if: always()
+    needs:
+      - prepare
+      - mutation-tests
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Verify the campaign
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          MUTATION_RESULT: ${{ needs.mutation-tests.result }}
+        run: |
+          if [[ "$PREPARE_RESULT" != "success" || "$MUTATION_RESULT" != "success" ]]; then
+            echo "::error::Mutation campaign failed: prepare=$PREPARE_RESULT mutation=$MUTATION_RESULT"
+            exit 1
+          fi

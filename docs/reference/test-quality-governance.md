@@ -2,7 +2,7 @@
 id: test-quality-governance
 title: 'Test Quality and Skip Governance'
 kind: reference
-version: '1.0.0'
+version: '1.1.0'
 last_updated: '2026-07-26'
 last_verified: '2026-07-26'
 review_cadence_days: 30
@@ -143,6 +143,59 @@ regression, then fix the implementation, and retain the general property.
 Changes that introduce a new parser, codec, serializer, cryptographic framing
 rule, network destination, or authorization decision must extend this registry
 when an arbitrary-input invariant can be stated.
+
+## Mutation-validated fuzzing
+
+Property generation is only valuable when its assertions can detect a broken
+invariant. Every one of the 25 registered property suites therefore has a
+matching Stryker mutation target. The target mutates the implementation owned
+by that property boundary and runs the smallest relevant combination of
+property and deterministic regression tests. This catches weak round trips,
+uncorrelated generators, assertions that only prove “did not throw,” and rare
+boundaries that random generation is unlikely to reach.
+
+The machine-readable ratchet is
+`governance/mutation-testing/policy.json`. For each target it records the same
+package, risk, trust boundary, and property suite as the property policy, plus
+its measured minimum mutation score. All targets reject:
+
+- any `NoCoverage` mutant in the selected implementation boundary;
+- any compile-error or runtime-error mutant, which does not prove test
+  detection; and
+- a mutation-score regression below the target's reviewed baseline.
+
+Surviving mutants are not automatically ignored. Review them to decide whether
+they reveal a missing negative case, an insufficiently correlated generator,
+an unasserted observable result, redundant implementation logic, or a genuinely
+equivalent transformation. Prefer a deterministic regression plus the general
+property when a survivor identifies a concrete boundary. Narrow a mutation
+scope only to the implementation contract described by the registered
+property; never exclude product code merely to raise the score.
+
+Pull requests run the targets owned by changed packages. Changes to the SDK,
+root toolchain, mutation governance, or CI fan out to all 25 targets. The
+independent `Mutation quality` workflow runs the full matrix every Sunday and
+can run one exact target manually. Targets execute in parallel, reuse one
+workspace build, and preserve machine-readable reports for 30 days. Mutation
+runs use the policy's fixed 300-case fast-check seed by default so the dry run
+and every mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
+`FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit
+replay or deeper local investigation.
+
+List and run targets locally:
+
+```sh
+pnpm test:mutation --list
+pnpm test:mutation --target p2p-messages
+pnpm test:mutation --all
+```
+
+The mutation score follows Stryker's valid-mutant definition: killed and timed
+out mutants are detected; survived and uncovered mutants are undetected;
+compile and runtime errors are excluded from the score but rejected separately
+by this repository's policy. A score is a ratchet, not a substitute for
+reviewing the surviving-mutant report and the semantic quality of each
+generator.
 
 Before running a governed non-PR suite, read its policy prerequisites. After the
 run, perform its cleanup and attach evidence to the tracker or release record.

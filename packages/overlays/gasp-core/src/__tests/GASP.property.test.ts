@@ -132,6 +132,21 @@ describe('GASP protocol properties', () => {
       )
     )
 
+    const local = [
+      { txid: 'a', outputIndex: 0, score: 1 },
+      { txid: 'a', outputIndex: 1, score: 2 },
+      { txid: 'b', outputIndex: 0, score: 3 }
+    ]
+    const remote = [
+      { txid: 'a', outputIndex: 0, score: 10 },
+      { txid: 'b', outputIndex: 1, score: 11 }
+    ]
+    await expect(
+      harness(local).gasp.getInitialReply({ UTXOList: remote, since: 0 })
+    ).resolves.toEqual({
+      UTXOList: [local[1], local[2]]
+    })
+
     await fc.assert(
       fc.asyncProperty(
         fc.jsonValue().filter(value => !Array.isArray(value)),

@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-26",
+  "reviewBy": "2026-08-26",
+  "owner": "ts-stack-maintainers",
+  "tool": {
+    "package": "@stryker-mutator/core",
+    "version": "9.6.1",
+    "config": "governance/mutation-testing/stryker.config.mjs",
+    "targets": "governance/mutation-testing/targets.mjs",
+    "runner": "scripts/mutation-testing.mjs",
+    "rootCommand": "pnpm test:mutation --all",
+    "ciWorkflow": ".github/workflows/ci.yml",
+    "scheduledWorkflow": ".github/workflows/mutation-tests.yml",
+    "reportRetentionDays": 30,
+    "propertyRuns": 300,
+    "propertySeed": 3242026
+  },
+  "targets": [
+    {
+      "id": "sdk-codecs",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/primitives/__tests/utils.property.test.ts",
+      "risk": "critical",
+      "boundary": "SDK binary-to-text codecs used by keys, addresses, and protocol payloads",
+      "minimumScore": 86,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-action-batch",
+      "manifest": "packages/wallet/wallet-toolbox/package.json",
+      "propertyTest": "packages/wallet/wallet-toolbox/src/utility/__tests/actionBatchPack.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet authenticated action-batch binary framing",
+      "minimumScore": 88,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-linkage",
+      "manifest": "packages/overlays/topics/package.json",
+      "propertyTest": "packages/overlays/topics/src/mandala/__tests/types.property.test.ts",
+      "risk": "critical",
+      "boundary": "Overlay Mandala linkage payloads and issuer authorization",
+      "minimumScore": 82,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "did-codecs",
+      "manifest": "packages/helpers/did/package.json",
+      "propertyTest": "packages/helpers/did/tests/codec.property.test.ts",
+      "risk": "critical",
+      "boundary": "DID, multibase, base64url, JSON, and SD-JWT compact encodings",
+      "minimumScore": 82,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "mandala-encoding",
+      "manifest": "packages/helpers/ts-templates/package.json",
+      "propertyTest": "packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bitcoin script-number and on-chain asset outpoint encodings",
+      "minimumScore": 92,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "paymail-address",
+      "manifest": "packages/messaging/ts-paymail/package.json",
+      "propertyTest": "packages/messaging/ts-paymail/src/__tests/paymailAddress.property.test.ts",
+      "risk": "high",
+      "boundary": "Public Paymail alias and DNS-name parser",
+      "minimumScore": 91,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "p2p-messages",
+      "manifest": "packages/network/ts-p2p/package.json",
+      "propertyTest": "packages/network/ts-p2p/test/messages.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted Teranode GossipSub UTF-8, JSON, and base64 envelopes",
+      "minimumScore": 88,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "auth",
+      "manifest": "packages/middleware/auth/package.json",
+      "propertyTest": "packages/middleware/auth/src/__tests__/core.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authentication signature canonicalization, body binding, and freshness validation",
+      "minimumScore": 86,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "reorg-stream",
+      "manifest": "packages/overlays/overlay-express/package.json",
+      "propertyTest": "packages/overlays/overlay-express/src/__tests/ReorgStream.property.test.ts",
+      "risk": "critical",
+      "boundary": "Public chain-reorg SSE framing and height/hash normalization",
+      "minimumScore": 82,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "message-box-host",
+      "manifest": "packages/messaging/message-box-client/package.json",
+      "propertyTest": "packages/messaging/message-box-client/src/__tests/host.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted overlay-advertised Message Box network destinations",
+      "minimumScore": 81,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-pairing",
+      "manifest": "packages/wallet/ts-wallet-relay/package.json",
+      "propertyTest": "packages/wallet/ts-wallet-relay/tests/pairingUri.property.test.ts",
+      "risk": "critical",
+      "boundary": "Mobile/deep-link wallet pairing URI trust bootstrap",
+      "minimumScore": 88,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-advertisement",
+      "manifest": "packages/overlays/overlay-discovery-services/package.json",
+      "propertyTest": "packages/overlays/overlay-discovery-services/src/utils/__tests/isAdvertisableURI.property.test.ts",
+      "risk": "critical",
+      "boundary": "BRC-87 names and BRC-101 public service advertisements",
+      "minimumScore": 86,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "overlay-integrity",
+      "manifest": "packages/overlays/overlay/package.json",
+      "propertyTest": "packages/overlays/overlay/src/__tests/BASM.property.test.ts",
+      "risk": "critical",
+      "boundary": "Overlay BASM/TAC integrity hashing and untrusted log serialization",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "verifast-batch",
+      "manifest": "packages/verifast/package.json",
+      "propertyTest": "packages/verifast/src/__tests/BdkBatch.property.test.ts",
+      "risk": "critical",
+      "boundary": "Native BDK batch memory framing, offsets, flags, and result decoding",
+      "minimumScore": 95,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "btms-helpers",
+      "manifest": "packages/wallet/btms/package.json",
+      "propertyTest": "packages/wallet/btms/src/__tests/BTMSHelpers.property.test.ts",
+      "risk": "critical",
+      "boundary": "BTMS wallet metadata, message bodies, labels, and key-derivation instructions",
+      "minimumScore": 79,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "amount-format",
+      "manifest": "packages/helpers/amountinator/package.json",
+      "propertyTest": "packages/helpers/amountinator/tests/amountFormat.property.test.ts",
+      "risk": "high",
+      "boundary": "Wallet-facing currency conversion, decimal formatting, and safe-integer display",
+      "minimumScore": 83,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "fund-wallet-cli",
+      "manifest": "packages/helpers/fund-wallet/package.json",
+      "propertyTest": "packages/helpers/fund-wallet/src/cli.property.test.ts",
+      "risk": "critical",
+      "boundary": "Operator-supplied wallet keys, funding amounts, networks, and storage endpoints",
+      "minimumScore": 89,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "payment-402",
+      "manifest": "packages/middleware/402-pay/package.json",
+      "propertyTest": "packages/middleware/402-pay/src/server.property.test.ts",
+      "risk": "critical",
+      "boundary": "Public BRC-121 payment challenge identity and price headers",
+      "minimumScore": 83,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "auth-express-bytes",
+      "manifest": "packages/middleware/auth-express-middleware/package.json",
+      "propertyTest": "packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts",
+      "risk": "critical",
+      "boundary": "Authenticated Express request and response canonical byte serialization",
+      "minimumScore": 81,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "payment-replay",
+      "manifest": "packages/middleware/payment-express-middleware/package.json",
+      "propertyTest": "packages/middleware/payment-express-middleware/src/__tests/PaymentReplayStore.property.test.ts",
+      "risk": "critical",
+      "boundary": "Public payment replay admission and bounded in-memory capacity",
+      "minimumScore": 94,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "wallet-script-encoding",
+      "manifest": "packages/helpers/bsv-wallet-helper/package.json",
+      "propertyTest": "packages/helpers/bsv-wallet-helper/src/utils/__tests__/scriptEncoding.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet transaction script classification and arbitrary OP_RETURN binary payload framing",
+      "minimumScore": 87,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "create-app-config",
+      "manifest": "packages/helpers/create-bsv-app/package.json",
+      "propertyTest": "packages/helpers/create-bsv-app/src/config/__tests__/validate.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted project-scaffolder configuration and filesystem-relative output destinations",
+      "minimumScore": 82,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "gasp-inputs",
+      "manifest": "packages/overlays/gasp-core/package.json",
+      "propertyTest": "packages/overlays/gasp-core/src/__tests/GASP.property.test.ts",
+      "risk": "critical",
+      "boundary": "Public Graph Aware Sync Protocol request, response, pagination, and UTXO-set reconciliation",
+      "minimumScore": 88,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "btms-topic",
+      "manifest": "packages/overlays/btms-backend/package.json",
+      "propertyTest": "packages/overlays/btms-backend/src/topic-managers/__tests/BTMSTopicManager.property.test.ts",
+      "risk": "critical",
+      "boundary": "Untrusted BTMS overlay token amount and asset identifier fields",
+      "minimumScore": 99,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "btms-permission",
+      "manifest": "packages/wallet/btms-permission-module/package.json",
+      "propertyTest": "packages/wallet/btms-permission-module/src/__tests__/BasicTokenModule.property.test.ts",
+      "risk": "critical",
+      "boundary": "BTMS wallet authorization sessions, request shapes, and Bitcoin varint framing",
+      "minimumScore": 82,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    }
+  ]
+}

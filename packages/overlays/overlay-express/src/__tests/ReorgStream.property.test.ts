@@ -1,7 +1,9 @@
 import fc from 'fast-check'
+import { jest as jestRuntime } from '@jest/globals'
 
 import { extractSseFrames, parseReorgEvent, ReorgSseAdapter } from '../ReorgStream.js'
 
+const jestApi = jestRuntime as unknown as typeof jest
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
 const requestedSeed = Number.parseInt(process.env.FAST_CHECK_SEED ?? '', 10)
@@ -156,6 +158,41 @@ describe('reorg stream parser properties', () => {
         }
       )
     )
+
+    expect(
+      parseReorgEvent(
+        JSON.stringify({
+          orphanedHashes: [],
+          commonAncestor: null,
+          newTip: { height: -1 },
+          depth: 0
+        })
+      )
+    ).toBeNull()
+  })
+
+  test('retains only exact 32-byte hexadecimal orphan hashes', () => {
+    const valid = 'ab'.repeat(32)
+    expect(
+      parseReorgEvent(
+        JSON.stringify({
+          orphanedHashes: [
+            valid.toUpperCase(),
+            valid.slice(1),
+            `${valid}00`,
+            'g'.repeat(64),
+            1,
+            null
+          ],
+          commonAncestor: { height: 9 },
+          newTip: { height: 10 }
+        })
+      )
+    ).toEqual({
+      orphanedBlockHashes: [valid],
+      rebuildFromHeight: 10,
+      newTipHeight: 10
+    })
   })
 
   test('extracts arbitrary complete SSE data frames and preserves the exact partial suffix', () => {
@@ -226,7 +263,7 @@ describe('reorg stream parser properties', () => {
           const complete = new Promise<void>(resolve => {
             resolveComplete = resolve
           })
-          const fetchImpl = jest.fn(async () => response) as unknown as typeof fetch
+          const fetchImpl = jestApi.fn(async () => response) as unknown as typeof fetch
           const adapter = new ReorgSseAdapter({
             url: 'https://arcade.example/reorg',
             fetchImpl,
@@ -256,9 +293,9 @@ describe('reorg stream parser properties', () => {
   })
 
   test('reconnects after HTTP and clean-stream failures while isolating malformed and failed handlers', async () => {
-    const warn = jest.fn()
-    const error = jest.fn()
-    const fetchImpl = jest
+    const warn = jestApi.fn()
+    const error = jestApi.fn()
+    const fetchImpl = jestApi
       .fn()
       .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(streamResponse([]))
@@ -274,7 +311,7 @@ describe('reorg stream parser properties', () => {
       url: 'https://arcade.example/reorg',
       fetchImpl,
       reconnectDelayMs: 0,
-      logger: { log: jest.fn(), warn, error },
+      logger: { log: jestApi.fn(), warn, error },
       onReorg: async () => {
         handlerCalls += 1
         if (handlerCalls === 1) throw new Error('expected handler failure')
@@ -293,17 +330,17 @@ describe('reorg stream parser properties', () => {
   })
 
   test('continues event delivery when reconnect catch-up fails', async () => {
-    const warn = jest.fn()
+    const warn = jestApi.fn()
     let resolveComplete: () => void
     const complete = new Promise<void>(resolve => {
       resolveComplete = resolve
     })
     const adapter = new ReorgSseAdapter({
       url: 'https://arcade.example/reorg',
-      fetchImpl: jest.fn(async () =>
+      fetchImpl: jestApi.fn(async () =>
         streamResponse([encodedReorgFrame(20)])
       ) as unknown as typeof fetch,
-      logger: { log: jest.fn(), warn, error: jest.fn() },
+      logger: { log: jestApi.fn(), warn, error: jestApi.fn() },
       onConnect: async () => {
         throw new Error('expected catch-up failure')
       },

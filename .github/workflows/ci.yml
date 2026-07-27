@@ -53,6 +53,7 @@ jobs:
       filter: ${{ steps.scope.outputs.filter }}
       standard-packages: ${{ steps.scope.outputs.standard-packages }}
       coverage-other-packages: ${{ steps.scope.outputs.coverage-other-packages }}
+      mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -103,16 +104,28 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests)\.yml|governance/(repository-health|test-quality)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|test-governance|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests)\.yml|governance/(repository-health|test-quality|mutation-testing)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|test-governance|mutation-testing|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"
             fi
           else
             FILTER=""
+            BEFORE_SHA="${{ github.event.before }}"
+            if [ -z "$BEFORE_SHA" ] ||
+               [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] ||
+               ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+              CHANGED=$(git ls-files)
+            else
+              CHANGED=$(git diff --name-only "$BEFORE_SHA"...HEAD)
+            fi
           fi
 
+          printf '%s\n' "$CHANGED" > .ci-changed-files.txt
           echo "filter=$FILTER" >> "$GITHUB_OUTPUT"
+          MUTATION_TARGETS=$(node scripts/mutation-testing.mjs \
+            --affected-file .ci-changed-files.txt)
+          echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
           if [ -n "$FILTER" ]; then
             PROJECTS=$(pnpm -r --filter "$FILTER" list --depth -1 --json)
           else
@@ -208,6 +221,67 @@ jobs:
           path: build-outputs.tar.gz
           if-no-files-found: error
           retention-days: 1
+
+  mutation-tests:
+    name: Mutation / ${{ matrix.target }}
+    if: needs.prepare.outputs.mutation-targets != '[]'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target: ${{ fromJSON(needs.prepare.outputs.mutation-targets) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - name: Restore build outputs
+        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Enforce the affected mutation-quality ratchet
+        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}"
+      - name: Preserve the machine-readable mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-${{ matrix.target }}
+          path: artifacts/mutation/${{ matrix.target }}/mutation.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  mutation-quality:
+    name: Mutation quality
+    if: always()
+    needs:
+      - prepare
+      - mutation-tests
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Verify the affected mutation targets
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          MUTATION_RESULT: ${{ needs.mutation-tests.result }}
+        run: |
+          if [[ "$PREPARE_RESULT" != "success" ||
+                ( "$MUTATION_RESULT" != "success" && "$MUTATION_RESULT" != "skipped" ) ]]; then
+            echo "::error::Mutation quality failed: prepare=$PREPARE_RESULT mutation=$MUTATION_RESULT"
+            exit 1
+          fi
 
   standard-tests:
     name: Tests / non-coverage packages
@@ -897,6 +971,7 @@ jobs:
     needs:
       - repository-health
       - build-and-test
+      - mutation-quality
       - infra
       - docs-validate
       - conformance
@@ -908,6 +983,7 @@ jobs:
         env:
           HEALTH_RESULT: ${{ needs.repository-health.result }}
           BUILD_RESULT: ${{ needs.build-and-test.result }}
+          MUTATION_RESULT: ${{ needs.mutation-quality.result }}
           INFRA_RESULT: ${{ needs.infra.result }}
           DOCS_RESULT: ${{ needs.docs-validate.result }}
           CONFORMANCE_RESULT: ${{ needs.conformance.result }}
@@ -915,10 +991,11 @@ jobs:
         run: |
           if [[ "$HEALTH_RESULT" != "success" ||
                 "$BUILD_RESULT" != "success" ||
+                "$MUTATION_RESULT" != "success" ||
                 "$INFRA_RESULT" != "success" ||
                 "$DOCS_RESULT" != "success" ||
                 "$CONFORMANCE_RESULT" != "success" ]]; then
-            echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
+            echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT mutation=$MUTATION_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
             exit 1
           fi
           if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then

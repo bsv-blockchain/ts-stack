@@ -83,6 +83,56 @@ describe('Message Box host boundary properties', () => {
     }
   })
 
+  test('blocks exact reserved-network edges without widening them into adjacent public space', () => {
+    const cases: Array<[host: string, blocked: boolean]> = [
+      ['0.0.0.0', true],
+      ['1.0.0.0', false],
+      ['10.255.255.255', true],
+      ['11.0.0.0', false],
+      ['100.63.255.255', false],
+      ['100.64.0.0', true],
+      ['100.127.255.255', true],
+      ['100.128.0.0', false],
+      ['127.255.255.255', true],
+      ['128.0.0.0', false],
+      ['169.253.255.255', false],
+      ['169.254.0.0', true],
+      ['169.255.0.0', false],
+      ['172.15.255.255', false],
+      ['172.16.0.0', true],
+      ['172.31.255.255', true],
+      ['172.32.0.0', false],
+      ['192.0.0.1', true],
+      ['192.0.1.1', false],
+      ['192.0.2.1', true],
+      ['192.167.255.255', false],
+      ['192.168.0.0', true],
+      ['192.169.0.0', false],
+      ['198.17.255.255', false],
+      ['198.18.0.0', true],
+      ['198.19.255.255', true],
+      ['198.20.0.0', false],
+      ['198.51.99.255', false],
+      ['198.51.100.0', true],
+      ['198.51.101.0', false],
+      ['203.0.112.255', false],
+      ['203.0.113.0', true],
+      ['203.0.114.0', false],
+      ['223.255.255.255', false],
+      ['224.0.0.0', true],
+      ['[fe7f::1]', false],
+      ['[fe80::1]', true],
+      ['[febf::1]', true],
+      ['[fec0::1]', false]
+    ]
+
+    for (const [host, blocked] of cases) {
+      const normalized = normalizeOverlayMessageBoxHost(`https://${host}`)
+      if (blocked) expect(normalized).toBeUndefined()
+      else expect(normalized).toBeDefined()
+    }
+  })
+
   test('never lets an arbitrary endpoint path replace the selected authority', () => {
     fc.assert(
       fc.property(publicHost, fc.string({ minLength: 1, maxLength: 512 }), (host, path) => {

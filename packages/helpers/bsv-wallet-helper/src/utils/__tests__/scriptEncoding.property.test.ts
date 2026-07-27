@@ -61,6 +61,7 @@ describe('wallet script encoding properties', () => {
 
         expect(isP2PKH(canonical)).toBe(true)
         expect(isP2PKH(`75${canonical.slice(2)}`)).toBe(false)
+        expect(isP2PKH(`${canonical.slice(0, 4)}13${canonical.slice(6)}`)).toBe(false)
         expect(isP2PKH(`${canonical.slice(0, -2)}ad`)).toBe(false)
       })
     )

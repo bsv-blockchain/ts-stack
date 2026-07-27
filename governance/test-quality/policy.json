@@ -45,10 +45,11 @@
         "manifest": "packages/sdk/package.json",
         "risk": "critical",
         "boundary": "SDK binary-to-text codecs used by keys, addresses, and protocol payloads",
-        "target": "Base58 and Base58Check arbitrary-byte round trips plus checksum tamper rejection",
+        "target": "Base58 and Base58Check arbitrary-byte round trips, canonical alphabet enforcement, and checksum tamper rejection",
         "invariants": [
           "Every non-empty byte sequence round-trips through Base58.",
           "Every prefix and payload round-trips through Base58Check.",
+          "Characters outside the exact Base58 alphabet are rejected.",
           "A deterministic checksum mutation is rejected."
         ]
       },
@@ -93,9 +94,10 @@
         "manifest": "packages/helpers/ts-templates/package.json",
         "risk": "critical",
         "boundary": "Bitcoin script-number and on-chain asset outpoint encodings",
-        "target": "Safe-integer script numbers, minimal chunks, uint32 outpoints, and truncation rejection",
+        "target": "Safe-integer script numbers, exact minimal-push boundaries, uint32 outpoints, and truncation rejection",
         "invariants": [
           "Every safe integer round-trips through script-number bytes and minimal chunks.",
+          "Zero, negative one, small integers, sign-bit boundaries, and every push-length transition use their exact minimal opcode.",
           "Every 32-byte transaction ID and uint32 output index round-trips.",
           "Non-hex IDs and overflowing output indexes are rejected."
         ]
@@ -145,6 +147,7 @@
         "target": "Reorg normalization, bounded depth fallback, numeric validation, chunked SSE delivery, and parser totality",
         "invariants": [
           "Valid reorg hashes are canonicalized and common-ancestor heights are honored.",
+          "Only exact 32-byte hexadecimal orphan hashes survive normalization.",
           "A common ancestor cannot exceed the new chain tip.",
           "Depth fallback never produces a negative rebuild height.",
           "Non-safe heights are rejected.",
@@ -162,7 +165,7 @@
         "invariants": [
           "Public HTTPS destinations canonicalize idempotently.",
           "Endpoint paths cannot replace the chosen authority.",
-          "Reserved IPv4 and IPv6 destinations are rejected.",
+          "Reserved IPv4 and IPv6 destinations are rejected without blocking adjacent public ranges.",
           "Arbitrary advertisements never throw at the tolerant boundary."
         ]
       },
@@ -235,11 +238,12 @@
         "manifest": "packages/helpers/amountinator/package.json",
         "risk": "high",
         "boundary": "Wallet-facing currency conversion, decimal formatting, and safe-integer display",
-        "target": "Currency-pair round trips, safe-integer digit preservation, and finite formatting totality",
+        "target": "Currency-pair round trips, safe-integer digit preservation, canonical symbols, and finite formatting totality",
         "invariants": [
           "Grouping separators never alter arbitrary safe-integer digits.",
           "Every supported currency pair round-trips bounded finite amounts.",
-          "Bounded finite amounts and decimal policies always produce non-NaN text."
+          "Bounded finite amounts and decimal policies always produce non-NaN text.",
+          "Known fiat currencies retain their canonical marker and unavailable rates fail closed."
         ]
       },
       {
@@ -271,11 +275,12 @@
         "manifest": "packages/middleware/auth-express-middleware/package.json",
         "risk": "critical",
         "boundary": "Authenticated Express request and response canonical byte serialization",
-        "target": "Unicode field framing, typed-array slice fidelity, and deterministic JSON response bytes",
+        "target": "Unicode field framing, typed-array slice fidelity, response-value classification, and deterministic JSON bytes",
         "invariants": [
           "Arbitrary Unicode header pairs round-trip without framing ambiguity.",
           "Typed-array views serialize only their selected bytes.",
-          "Arbitrary JSON response values serialize deterministically with canonical content type."
+          "Arbitrary JSON response values serialize deterministically with canonical content type.",
+          "Only integer arrays bounded to byte values bypass JSON serialization; every primitive family has a deterministic byte form."
         ]
       },
       {
@@ -307,10 +312,11 @@
         "manifest": "packages/helpers/create-bsv-app/package.json",
         "risk": "critical",
         "boundary": "Untrusted project-scaffolder configuration and filesystem-relative output destinations",
-        "target": "Safe path preservation, traversal rejection, structured-input totality, and governed validation errors",
+        "target": "Safe path preservation, absolute/traversal rejection, structured-input totality, and governed validation errors",
         "invariants": [
           "Arbitrary safe relative BSV and target paths retain their exact destination.",
-          "Absolute and traversal-bearing BSV paths are rejected before filesystem use.",
+          "Absolute and traversal-bearing BSV and target paths are rejected before filesystem use.",
+          "Non-string capabilities and unregistered starters are rejected with governed configuration errors.",
           "Arbitrary structured configuration either resolves safely or raises the dedicated configuration error."
         ]
       },

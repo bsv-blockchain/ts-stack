@@ -256,7 +256,7 @@ export const fromBase58 = (str: string): number[] => {
   if (str === '' || typeof str !== 'string') {
     throw new Error(`Expected base58 string but got “${str}”`)
   }
-  const match: string[] | null = str.match(/[IOl0]/gmu)
+  const match: string[] | null = str.match(/[^1-9A-HJ-NP-Za-km-z]/gmu)
 
   if (match !== null) {
     throw new Error(`Invalid base58 character “${match.join('')}”`)
@@ -267,7 +267,7 @@ export const fromBase58 = (str: string): number[] => {
 
   const uint8 = new Uint8Array([
     ...new Uint8Array(psz),
-    ...(str.match(/./gmu) ?? []) // ✅ Safe Fix: If null, use []
+    ...Array.from(str)
       .map(i => base58chars.indexOf(i))
       .reduce((acc, i) => {
         acc = acc.map(j => {
