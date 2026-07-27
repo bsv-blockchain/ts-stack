@@ -55,6 +55,13 @@ type HydratedUTXOHistoryNode = {
   transaction: Transaction
 }
 
+function findSpendingInputIndex(tx: Transaction, output: Output): number {
+  return tx.inputs.findIndex(input => {
+    const realSource = input.sourceTXID || input.sourceTransaction?.id('hex')
+    return realSource === output.txid && input.sourceOutputIndex === output.outputIndex
+  })
+}
+
 /**
  * An engine for running BSV Overlay Services (topic managers and lookup services).
  */
@@ -674,13 +681,7 @@ export class Engine {
                       topic
                     })
                   } else if (l.spendNotificationMode === 'script') {
-                    const inputIndex = tx.inputs.findIndex(i => {
-                      let realSource = i.sourceTXID
-                      if (!realSource) {
-                        realSource = i.sourceTransaction?.id('hex')
-                      }
-                      return realSource === output.txid && i.sourceOutputIndex === output.outputIndex
-                    })
+                    const inputIndex = findSpendingInputIndex(tx, output)
                     if (inputIndex === -1) {
                       throw new Error('Could not find input index')
                     }

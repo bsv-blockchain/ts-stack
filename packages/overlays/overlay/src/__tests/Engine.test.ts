@@ -754,6 +754,57 @@ describe('BSV Overlay Services Engine', () => {
             topic: 'Hello'
           })
         })
+
+        it('preserves script-mode spending input details', async () => {
+          const spentOutput: Output = {
+            ...mockOutput,
+            txid: examplePreviousTXID
+          }
+          mockStorageEngine.findOutput = jest.fn(async () => spentOutput)
+          const outputSpent = jest.fn()
+          const scriptLookupService: LookupService = {
+            ...mockLookupService,
+            spendNotificationMode: 'script',
+            outputSpent
+          }
+          const engine = new Engine(
+            {
+              Hello: mockTopicManager
+            },
+            {
+              Hello: scriptLookupService
+            },
+            mockStorageEngine,
+            mockChainTracker
+          )
+          const offChainValues = [3, 1, 4]
+
+          await engine.submit(
+            {
+              beef: exampleBeef,
+              topics: ['Hello']
+            },
+            undefined,
+            'current-tx',
+            offChainValues
+          )
+
+          expect(outputSpent).toHaveBeenCalledTimes(1)
+          const notification = outputSpent.mock.calls[0][0]
+          expect(notification).toMatchObject({
+            mode: 'script',
+            spendingTxid: exampleTXID,
+            inputIndex: 0,
+            sequenceNumber: exampleTX.inputs[0].sequence ?? 0xffffffff,
+            txid: examplePreviousTXID,
+            outputIndex: 0,
+            topic: 'Hello',
+            offChainValues
+          })
+          expect(notification.unlockingScript.toHex()).toEqual(
+            exampleTX.inputs[0].unlockingScript!.toHex()
+          )
+        })
       })
       describe('When previous UTXOs were not retained by the topic manager', () => {
         it('Marks the UTXO as stale, deleting all stale UTXOs by calling deleteUTXODeep', async () => {

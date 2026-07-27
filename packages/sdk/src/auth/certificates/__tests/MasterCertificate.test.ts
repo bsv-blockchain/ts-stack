@@ -351,6 +351,7 @@ describe('MasterCertificate', () => {
 
       expect(newCert).toBeInstanceOf(MasterCertificate)
       expect(newCert.serialNumber).toEqual(customSerialNumber) // Must match exactly
+      expect(newCert.revocationOutpoint).toEqual('00'.repeat(32))
       // Check encryption
       for (const fieldName in newPlaintextFields) {
         expect(newCert.fields[fieldName]).toMatch(/^[A-Za-z0-9+/]+=*$/)
