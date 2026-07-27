@@ -409,8 +409,9 @@ export default class ReductionContext {
     while (t.cmp(one) !== 0) {
       let tmp = t
       let i = 0
-      for (; tmp.cmp(one) !== 0; i++) {
+      while (tmp.cmp(one) !== 0) {
         tmp = tmp.redSqr()
+        i++
       }
       this.assert(i < m)
       const b = this.pow(c, new BigNumber(1).iushln(m - i - 1))

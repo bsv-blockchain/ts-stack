@@ -230,10 +230,8 @@ export class MasterCertificate extends Certificate {
     subject: WalletCounterparty,
     fields: Record<CertificateFieldNameUnder50Bytes, string>,
     certificateType: string,
-    getRevocationOutpoint = async (_serial: string): Promise<string> => {
-      void _serial // Explicitly acknowledge unused parameter
-      return '00'.repeat(32)
-    },
+    getRevocationOutpoint = async (_serial: string): Promise<string> =>
+      '00'.repeat(32),
     serialNumber?: string
   ): Promise<MasterCertificate> {
     // 1. Generate a random serialNumber if not provided
