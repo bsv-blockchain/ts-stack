@@ -8,13 +8,45 @@ interface PriceCalculationParams {
   fileSize: number
 }
 
+const FALLBACK_EXCHANGE_RATE = 30
+
+function hasUsableExchangeRate(data: unknown): data is { rate: number } {
+  if (typeof data !== 'object' || data === null || !('rate' in data)) return false
+  const { rate } = data
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0
+}
+
+async function fetchExchangeRate(): Promise<number> {
+  try {
+    const response = await axios.get('https://api.whatsonchain.com/v1/bsv/main/exchangerate')
+    if (!hasUsableExchangeRate(response.data)) {
+      throw new TypeError('Invalid rate response')
+    }
+    return response.data.rate
+  } catch (error) {
+    log.error(
+      {
+        operation: 'exchange_rate.fetch',
+        outcome: 'error',
+        fallback_rate: FALLBACK_EXCHANGE_RATE,
+        err: error
+      },
+      'Exchange rate failed, using fallback rate'
+    )
+    return FALLBACK_EXCHANGE_RATE
+  }
+}
+
 /**
  * Calculates the satoshi price for file storage.
  *
  * @param {PriceCalculationParams} params - Parameters for price calculation.
  * @returns {Promise<number>} - The price in satoshis.
  */
-const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationParams): Promise<number> => {
+const getPriceForFile = async ({
+  retentionPeriod,
+  fileSize
+}: PriceCalculationParams): Promise<number> => {
   if (!PRICE_PER_GB_MO) {
     throw new Error('PRICE_PER_GB_MO is undefined')
   }
@@ -33,26 +65,7 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
   // Calculate the USD price
   const usdPrice = fileSizeGB * retentionPeriodMonths * pricePerGBMonth
 
-  // Get the exchange rate
-  let exchangeRate: number
-  try {
-    const { data } = await axios.get(
-      'https://api.whatsonchain.com/v1/bsv/main/exchangerate'
-    )
-    if (
-      typeof data !== 'object' ||
-      data === null ||
-      typeof data.rate !== 'number' ||
-      !Number.isFinite(data.rate) ||
-      data.rate <= 0
-    ) {
-      throw new TypeError('Invalid rate response')
-    }
-    exchangeRate = data.rate
-  } catch (e) {
-    exchangeRate = 30
-    log.error({ operation: 'exchange_rate.fetch', outcome: 'error', fallback_rate: 30, err: e }, 'Exchange rate failed, using fallback rate')
-  }
+  const exchangeRate = await fetchExchangeRate()
 
   // Exchange rate is in BSV, convert to satoshis
   const exchangeRateInSatoshis = 1 / (exchangeRate / 100000000)
