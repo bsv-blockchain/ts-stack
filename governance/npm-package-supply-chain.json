@@ -19,6 +19,13 @@
   },
   "artifacts": {
     "tarballs": "packages/*.tgz",
+    "canonicalManifestDependencyFields": [
+      "dependencies",
+      "devDependencies",
+      "optionalDependencies",
+      "peerDependencies",
+      "peerDependenciesMeta"
+    ],
     "manifest": "manifest.json",
     "checksums": "checksums.sha256",
     "aggregateSbom": "release.cdx.json",
@@ -30,7 +37,14 @@
     "format": "CycloneDX",
     "specVersion": "1.5",
     "scope": "production dependencies",
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "localFilesystemReferences": false,
+    "coordinatedCandidates": {
+      "resolver": "staged tarball runtime and peer dependency closure",
+      "runtimeFields": ["dependencies", "optionalDependencies", "peerDependencies"],
+      "registryFallbackForStagedCandidates": false,
+      "preserveOriginalRootRelationships": true
+    }
   },
   "scanGate": {
     "scanner": "Trivy",
