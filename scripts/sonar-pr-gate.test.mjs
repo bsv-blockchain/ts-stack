@@ -95,6 +95,33 @@ test('argument parsing requires an exact revision and positive identifiers', () 
       ]),
     /full 40-character commit SHA/
   )
+  assert.equal(
+    parseArguments([
+      '--project',
+      'bsv-blockchain_ts-stack',
+      '--pull-request',
+      '385',
+      '--revision',
+      REVISION,
+      '--base-url',
+      'https://sonarcloud.example///'
+    ]).baseUrl,
+    'https://sonarcloud.example'
+  )
+  assert.throws(
+    () =>
+      parseArguments([
+        '--project',
+        'bsv-blockchain_ts-stack',
+        '--pull-request',
+        '385',
+        '--revision',
+        REVISION,
+        '--base-url',
+        'file:///tmp/sonar'
+      ]),
+    /must use HTTP or HTTPS/
+  )
 })
 
 test('the gate waits for the exact PR head before evaluating findings', async () => {

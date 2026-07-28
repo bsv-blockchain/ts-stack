@@ -48,7 +48,11 @@ export function parseArguments(argv) {
   if (!/^[0-9a-f]{40}$/i.test(options.revision ?? '')) {
     throw new Error('--revision must be a full 40-character commit SHA')
   }
-  options.baseUrl = options.baseUrl.replace(/\/+$/, '')
+  const baseUrl = new URL(options.baseUrl)
+  if (baseUrl.protocol !== 'https:' && baseUrl.protocol !== 'http:') {
+    throw new Error('--base-url must use HTTP or HTTPS')
+  }
+  options.baseUrl = baseUrl.origin
   return options
 }
 
