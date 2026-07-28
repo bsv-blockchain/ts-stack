@@ -153,4 +153,15 @@ describe('TaskSendWaiting', () => {
     expect(processSpy).not.toHaveBeenCalled()
     expect(task.triggerNextMsecs).toBe(80)
   })
+
+  test('2 records requests that became terminal before processing', async () => {
+    const req = makeReq(1, 'tx1', new Date())
+    req.status = 'unmined'
+    const m = makeMonitor([req])
+    const task = new TaskSendWaiting(m.monitor as any)
+
+    await expect(task.processUnsent([req] as any)).resolves.toContain(
+      'txid=tx1: status now unmined'
+    )
+  })
 })

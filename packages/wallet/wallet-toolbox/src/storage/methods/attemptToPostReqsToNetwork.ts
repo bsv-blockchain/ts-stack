@@ -196,6 +196,53 @@ function aggregatePostBeefResultsByTxid (
  * @param services if valid, doubleSpend results will be verified (but only if not within a trx. e.g. trx must be undefined)
  * @param trx
  */
+function applyAggregateStatus(
+  req: EntityProvenTxReq,
+  status: AggregateStatus
+): { newReqStatus: sdk.ProvenTxReqStatus; newTxStatus: sdk.TransactionStatus } {
+  switch (status) {
+    case 'success':
+      // Mark as broadcast so proof-timeout resets to rebroadcast rather than invalid.
+      req.wasBroadcast = true
+      return { newReqStatus: 'unmined', newTxStatus: 'unproven' }
+    case 'doubleSpend':
+      return { newReqStatus: 'doubleSpend', newTxStatus: 'failed' }
+    case 'invalidTx':
+      return { newReqStatus: 'invalid', newTxStatus: 'failed' }
+    case 'serviceError':
+      req.attempts++
+      return { newReqStatus: 'sending', newTxStatus: 'sending' }
+    default:
+      throw new sdk.WERR_INTERNAL(`unimplemented AggregateStatus ${status}`)
+  }
+}
+
+async function recordStaleInputEvidence(
+  ar: AggregatePostBeefTxResult,
+  req: EntityProvenTxReq,
+  storage: StorageProvider,
+  services: sdk.WalletServices | undefined,
+  trx: sdk.TrxToken | undefined,
+  logger: WalletLoggerInterface | undefined
+): Promise<void> {
+  if (services == null || trx != null) return
+
+  const stale = await markStaleInputsAsSpent(ar, storage, services, trx, logger)
+  if (stale.checked === 0) return
+
+  req.addHistoryNote({
+    when: new Date().toISOString(),
+    what: 'markStaleInputsAsSpent',
+    aggStatus: ar.status,
+    checked: stale.checked,
+    confirmed: stale.staleConfirmed,
+    ...(stale.staleOutpoints.length > 0
+      ? { outpoints: stale.staleOutpoints.join(',') }
+      : {})
+  })
+  await req.updateStorageDynamicProperties(storage, trx)
+}
+
 export async function updateReqsFromAggregateResults (
   txids: string[],
   r: PostReqsToNetworkResult,
@@ -230,47 +277,21 @@ export async function updateReqsFromAggregateResults (
 
     if (ar.status === 'doubleSpend' && (services != null) && (trx == null)) await confirmDoubleSpend(ar, r.beef, storage, services, logger)
 
-    let newReqStatus: sdk.ProvenTxReqStatus | undefined
-    let newTxStatus: sdk.TransactionStatus | undefined
-    switch (ar.status) {
-      case 'success':
-        newReqStatus = 'unmined'
-        newTxStatus = 'unproven'
-        // Mark as broadcast so proof-timeout resets to rebroadcast rather than invalid
-        req.wasBroadcast = true
-        break
-      case 'doubleSpend':
-        newReqStatus = 'doubleSpend'
-        newTxStatus = 'failed'
-        break
-      case 'invalidTx':
-        newReqStatus = 'invalid'
-        newTxStatus = 'failed'
-        break
-      case 'serviceError':
-        newReqStatus = 'sending'
-        newTxStatus = 'sending'
-        req.attempts++
-        break
-      default:
-        throw new sdk.WERR_INTERNAL(`unimplemented AggregateStatus ${ar.status}`)
-    }
+    const { newReqStatus, newTxStatus } = applyAggregateStatus(req, ar.status)
 
     note.newReqStatus = newReqStatus
     note.newTxStatus = newTxStatus
     note.newAttempts = req.attempts
 
-    if (newReqStatus) req.status = newReqStatus
+    req.status = newReqStatus
 
     req.addHistoryNote(note)
     await req.updateStorageDynamicProperties(storage, trx)
 
-    if (newTxStatus) {
-      const ids = req.notify.transactionIds
-      if (ids != null) {
-        // Also set generated outputs to spendable false and consumed input outputs to spendable true (and clears their spentBy).
-        await storage.updateTransactionsStatus(ids, newTxStatus, trx)
-      }
+    const ids = req.notify.transactionIds
+    if (ids != null) {
+      // Also set generated outputs to spendable false and consumed input outputs to spendable true (and clears their spentBy).
+      await storage.updateTransactionsStatus(ids, newTxStatus, trx)
     }
 
     // For ANY failed-broadcast result (doubleSpend, invalidTx,
@@ -294,26 +315,8 @@ export async function updateReqsFromAggregateResults (
     //
     // Gate: services available + not in a nested transaction (chain
     // queries are async I/O — same gate as confirmDoubleSpend).
-    if (
-      newTxStatus === 'failed' &&
-      services != null &&
-      trx == null
-    ) {
-      const stale = await markStaleInputsAsSpent(ar, storage, services, trx, logger)
-      if (stale.checked > 0) {
-        req.addHistoryNote({
-          when: new Date().toISOString(),
-          what: 'markStaleInputsAsSpent',
-          aggStatus: ar.status,
-          checked: stale.checked,
-          confirmed: stale.staleConfirmed,
-          ...(stale.staleOutpoints.length > 0
-            ? { outpoints: stale.staleOutpoints.join(',') }
-            : {})
-        })
-        await req.updateStorageDynamicProperties(storage, trx)
-      }
-    }
+    if (newTxStatus === 'failed')
+      await recordStaleInputEvidence(ar, req, storage, services, trx, logger)
 
     // Transfer critical results to details going back to the user
     const details = r.details.find(d => d.txid === txid)!

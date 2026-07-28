@@ -257,6 +257,115 @@ describe('BulkFileDataManager tests', () => {
     await storage.destroy()
   })
 
+  test('6 validates last-file update transitions', async () => {
+    const manager = createEmptyManager()
+    const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
+    manager['bfds'] = [cdn] as any
+
+    await expect(
+      manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental'), cdn as any)
+    ).rejects.toThrow('incremental file to update an existing incremental file')
+
+    const incremental = makeBulkFile(0, 10, 'incremental')
+    manager['bfds'] = [incremental] as any
+    await expect(
+      manager['resolveUpdatePlan'](
+        makeBulkFile(0, 11, 'incremental') as any,
+        incremental as any
+      )
+    ).resolves.toEqual({ index: 0, truncate: undefined })
+
+    manager['bfds'] = [cdn] as any
+    await expect(
+      manager['resolveUpdatePlan'](
+        makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example'),
+        cdn as any
+      )
+    ).rejects.toThrow('CDN update must have more headers')
+
+    manager['bfds'] = [incremental] as any
+    const partialCdn = makeBulkFile(0, 5, 'mainNet_0.headers', 'https://cdn.example')
+    await expect(
+      manager['resolveUpdatePlan'](partialCdn as any, incremental as any)
+    ).resolves.toEqual({ index: 0, truncate: incremental })
+
+    const replacementCdn = makeBulkFile(0, 12, 'mainNet_0.headers', 'https://cdn.example')
+    await expect(
+      manager['resolveUpdatePlan'](replacementCdn as any, incremental as any)
+    ).resolves.toEqual({ index: 0, truncate: undefined })
+  })
+
+  test('7 validates penultimate-file update transitions', async () => {
+    const manager = createEmptyManager()
+    const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
+    cdn.fileId = 7
+    const incremental = makeBulkFile(10, 10, 'incremental')
+    manager['bfds'] = [cdn, incremental] as any
+
+    await expect(
+      manager['resolveUpdatePlan'](
+        makeBulkFile(5, 11, 'mainNet_0.headers', 'https://cdn.example') as any,
+        makeBulkFile(5, 10, 'mainNet_0.headers', 'https://cdn.example') as any
+      )
+    ).rejects.toThrow('an update to last or second to last file')
+
+    manager['bfds'] = [makeBulkFile(0, 10, 'incremental'), incremental] as any
+    await expect(
+      manager['resolveUpdatePlan'](
+        makeBulkFile(0, 11, 'mainNet_0.headers', 'https://cdn.example') as any,
+        manager['bfds'][0]
+      )
+    ).rejects.toThrow('CDN file update with more headers')
+
+    manager['bfds'] = [cdn, incremental] as any
+    await expect(
+      manager['resolveUpdatePlan'](makeBulkFile(0, 11, 'incremental') as any, cdn as any)
+    ).rejects.toThrow('CDN file update with more headers')
+    await expect(
+      manager['resolveUpdatePlan'](
+        makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example') as any,
+        cdn as any
+      )
+    ).rejects.toThrow('CDN file update with more headers')
+
+    const trailingCdn = makeBulkFile(10, 10, 'mainNet_1.headers', 'https://cdn.example')
+    manager['bfds'] = [cdn, trailingCdn] as any
+    await expect(
+      manager['resolveUpdatePlan'](
+        makeBulkFile(0, 11, 'mainNet_0.headers', 'https://cdn.example') as any,
+        cdn as any
+      )
+    ).rejects.toThrow('CDN file update followed by an incremental file')
+  })
+
+  test('8 preserves or inherits file identity for valid penultimate updates', async () => {
+    const manager = createEmptyManager()
+    const cdn = makeBulkFile(0, 10, 'mainNet_0.headers', 'https://cdn.example')
+    cdn.fileId = 7
+    const incremental = makeBulkFile(10, 10, 'incremental')
+    manager['bfds'] = [cdn, incremental] as any
+
+    const truncateUpdate = makeBulkFile(0, 15, 'mainNet_0.headers', 'https://cdn.example')
+    truncateUpdate.fileId = 99
+    await expect(
+      manager['resolveUpdatePlan'](truncateUpdate as any, cdn as any)
+    ).resolves.toEqual({
+      index: 0,
+      truncate: incremental,
+      replaced: cdn
+    })
+    expect(truncateUpdate.fileId).toBe(99)
+
+    const dropUpdate = makeBulkFile(0, 20, 'mainNet_0.headers', 'https://cdn.example')
+    await expect(
+      manager['resolveUpdatePlan'](dropUpdate as any, cdn as any)
+    ).resolves.toEqual({
+      index: 0,
+      drop: incremental
+    })
+    expect(dropUpdate.fileId).toBe(7)
+  })
+
   async function setupStorageKnex (
     manager: BulkFileDataManager,
     filename: string,
@@ -290,6 +399,37 @@ describe('BulkFileDataManager tests', () => {
     return manager
   }
 })
+
+function createEmptyManager (): BulkFileDataManager {
+  return new BulkFileDataManager({
+    chain: 'main',
+    maxPerFile: 100,
+    maxRetained: 2
+  })
+}
+
+function makeBulkFile (
+  firstHeight: number,
+  count: number,
+  fileName: string,
+  sourceUrl?: string
+): BulkHeaderFileInfo & { mru: number; fileHash: string } {
+  return {
+    chain: 'main',
+    count,
+    data: new Uint8Array(count * 80),
+    fileHash: `${fileName}-${firstHeight}-${count}`,
+    fileName,
+    firstHeight,
+    lastChainWork: '02'.repeat(32),
+    lastHash: '03'.repeat(32),
+    mru: 0,
+    prevChainWork: '00'.repeat(32),
+    prevHash: '01'.repeat(32),
+    sourceUrl,
+    validated: true
+  }
+}
 
 async function updateFromLocalServer (manager: BulkFileDataManager, server: LocalCdnServer) {
   await manager.updateFromUrl(`http://localhost:${server.port}/blockheaders`)

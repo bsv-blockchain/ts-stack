@@ -260,6 +260,23 @@ export function deserializeBlockHeaders(
  *
  * @returns true if the header is correctly formatted
  */
+function validateUnsignedHeaderInteger(
+  value: unknown,
+  field: string,
+  maximum: number,
+  rangeField = field
+): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`Header ${field} must be a number.`)
+  }
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`Header ${field} must be an integer.`)
+  }
+  if (value < 0 || value > maximum) {
+    throw new Error(`Header ${rangeField} must be between 0 and ${maximum}.`)
+  }
+}
+
 export function validateHeaderFormat(header: BlockHeader): void {
   const ALLOWED_KEYS = {
     version: true,
@@ -290,28 +307,12 @@ export function validateHeaderFormat(header: BlockHeader): void {
   /**
    * Version
    */
-  if (typeof header.version !== 'number') {
-    throw new TypeError('Header version must be a number.')
-  }
-  if (!Number.isInteger(header.version)) {
-    throw new TypeError('Header version must be an integer.')
-  }
-  if (header.version < 0 || header.version > UINT_MAX) {
-    throw new Error(`Header version must be between 0 and ${UINT_MAX}.`)
-  }
+  validateUnsignedHeaderInteger(header.version, 'version', UINT_MAX)
 
   /**
    * Height
    */
-  if (typeof header.height !== 'number') {
-    throw new TypeError('Header height must be a number.')
-  }
-  if (!Number.isInteger(header.height)) {
-    throw new TypeError('Header height must be an integer.')
-  }
-  if (header.height < 0 || header.height > UINT_MAX / 2) {
-    throw new Error(`Header version must be between 0 and ${UINT_MAX / 2}.`)
-  }
+  validateUnsignedHeaderInteger(header.height, 'height', UINT_MAX / 2, 'version')
 
   /**
    * Previous hash
@@ -330,41 +331,17 @@ export function validateHeaderFormat(header: BlockHeader): void {
   /**
    * Time
    */
-  if (typeof header.time !== 'number') {
-    throw new TypeError('Header time must be a number.')
-  }
-  if (!Number.isInteger(header.time)) {
-    throw new TypeError('Header time must be an integer.')
-  }
-  if (header.time < 0 || header.time > UINT_MAX) {
-    throw new Error(`Header time must be between 0 and ${UINT_MAX}.`)
-  }
+  validateUnsignedHeaderInteger(header.time, 'time', UINT_MAX)
 
   /**
    * Bits
    */
-  if (typeof header.bits !== 'number') {
-    throw new TypeError('Header bits must be a number.')
-  }
-  if (!Number.isInteger(header.bits)) {
-    throw new TypeError('Header bits must be an integer.')
-  }
-  if (header.bits < 0 || header.bits > UINT_MAX) {
-    throw new Error(`Header bits must be between 0 and ${UINT_MAX}.`)
-  }
+  validateUnsignedHeaderInteger(header.bits, 'bits', UINT_MAX)
 
   /**
    * Nonce
    */
-  if (typeof header.nonce !== 'number') {
-    throw new TypeError('Header nonce must be a number.')
-  }
-  if (!Number.isInteger(header.nonce)) {
-    throw new TypeError('Header nonce must be an integer.')
-  }
-  if (header.nonce < 0 || header.nonce > UINT_MAX) {
-    throw new Error(`Header nonce must be between 0 and ${UINT_MAX}.`)
-  }
+  validateUnsignedHeaderInteger(header.nonce, 'nonce', UINT_MAX)
 
   /**
    * Hash

@@ -116,18 +116,10 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
     for (const reqApi of reqs) {
       const req = new EntityProvenTxReq(reqApi)
-
-      const acceptedByNetwork = [
-        'SENT_TO_NETWORK',
-        'ACCEPTED_BY_NETWORK',
-        'SEEN_ON_NETWORK',
-        'SEEN_MULTIPLE_NODES'
-      ].includes(event.txStatus)
-      const confirmedByNetwork = ['MINED', 'IMMUTABLE'].includes(event.txStatus)
       // Arcade can emit REJECTED before another node accepts the same transaction.
       // Permit a later positive network observation to heal requests that an older
       // Monitor version prematurely marked invalid.
-      const canRecoverRejectedRequest = req.status === 'invalid' && (acceptedByNetwork || confirmedByNetwork)
+      const canRecoverRejectedRequest = this.canRecoverRejectedRequest(req, event)
       if (ProvenTxReqTerminalStatus.includes(req.status) && !canRecoverRejectedRequest) {
         log += `  req ${req.id} already terminal: ${req.status}\n`
         continue
@@ -139,82 +131,113 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         arcStatus: event.txStatus
       }
 
-      switch (event.txStatus) {
-        case 'SENT_TO_NETWORK':
-        case 'ACCEPTED_BY_NETWORK':
-        case 'SEEN_ON_NETWORK':
-        case 'SEEN_MULTIPLE_NODES': {
-          if (['unsent', 'sending', 'callback', 'invalid'].includes(req.status)) {
-            const wasInvalid = req.status === 'invalid'
-            if (wasInvalid) {
-              // Restore transaction state, re-reserve wallet inputs, and verify
-              // output spendability using the established unfail repair path.
-              log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
-            } else if (req.notify.transactionIds != null) {
-              await this.storage.runAsStorageProvider(async sp => {
-                await sp.updateTransactionsStatus(req.notify.transactionIds ?? [], 'unproven')
-              })
-            }
-            // Apply event state after recovery because the recovery helper
-            // refreshes the entity from storage before its atomic update.
-            req.status = 'unmined'
-            if (wasInvalid) req.attempts = 0
-            req.wasBroadcast = true
-            req.addHistoryNote(note)
-            await req.updateStorageDynamicProperties(this.storage)
-            log += `  req ${req.id} => unmined\n`
-          }
-          break
-        }
-
-        case 'MINED':
-        case 'IMMUTABLE': {
-          if (req.status === 'invalid') {
-            log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
-            req.status = 'unmined'
-            req.attempts = 0
-            req.wasBroadcast = true
-          }
-          req.addHistoryNote(note)
-          await req.updateStorageDynamicProperties(this.storage)
-          log += await this.fetchProofFromServices(req)
-          break
-        }
-
-        case 'DOUBLE_SPEND_ATTEMPTED': {
-          req.status = 'doubleSpend'
-          req.addHistoryNote(note)
-          await req.updateStorageDynamicProperties(this.storage)
-          const ids = req.notify.transactionIds
-          if (ids != null) {
-            await this.storage.runAsStorageProvider(async sp => {
-              await sp.updateTransactionsStatus(ids, 'failed')
-            })
-          }
-          log += `  req ${req.id} => doubleSpend\n`
-          break
-        }
-
-        case 'REJECTED': {
-          // REJECTED is not a final consensus result: production Arcade has
-          // subsequently reported SEEN_MULTIPLE_NODES for the same txid. Keep
-          // wallet inputs reserved while proof/rebroadcast processing resolves
-          // the transaction authoritatively.
-          req.addHistoryNote(note)
-          await req.updateStorageDynamicProperties(this.storage)
-          log += `  req ${req.id} rejection recorded; awaiting resolution\n`
-          break
-        }
-
-        default:
-          log += `  req ${req.id} unhandled status: ${event.txStatus}\n`
-          break
-      }
+      log += await this.applyStatusEvent(req, event, note)
     }
 
     this.monitor.callOnTransactionStatusChanged(event.txid, event.txStatus)
 
     return log
+  }
+
+  private canRecoverRejectedRequest(req: EntityProvenTxReq, event: ArcSSEEvent): boolean {
+    const acceptedStatuses = [
+      'SENT_TO_NETWORK',
+      'ACCEPTED_BY_NETWORK',
+      'SEEN_ON_NETWORK',
+      'SEEN_MULTIPLE_NODES'
+    ]
+    const confirmedStatuses = ['MINED', 'IMMUTABLE']
+    return req.status === 'invalid' &&
+      (acceptedStatuses.includes(event.txStatus) || confirmedStatuses.includes(event.txStatus))
+  }
+
+  private async applyStatusEvent(
+    req: EntityProvenTxReq,
+    event: ArcSSEEvent,
+    note: { when: string; what: string; arcStatus: string }
+  ): Promise<string> {
+    switch (event.txStatus) {
+      case 'SENT_TO_NETWORK':
+      case 'ACCEPTED_BY_NETWORK':
+      case 'SEEN_ON_NETWORK':
+      case 'SEEN_MULTIPLE_NODES':
+        return await this.applyAcceptedStatus(req, note)
+      case 'MINED':
+      case 'IMMUTABLE':
+        return await this.applyMinedStatus(req, note)
+      case 'DOUBLE_SPEND_ATTEMPTED':
+        return await this.applyDoubleSpendStatus(req, note)
+      case 'REJECTED':
+        // REJECTED is not a final consensus result: production Arcade has
+        // subsequently reported SEEN_MULTIPLE_NODES for the same txid. Keep
+        // wallet inputs reserved while proof/rebroadcast processing resolves
+        // the transaction authoritatively.
+        req.addHistoryNote(note)
+        await req.updateStorageDynamicProperties(this.storage)
+        return `  req ${req.id} rejection recorded; awaiting resolution\n`
+      default:
+        return `  req ${req.id} unhandled status: ${event.txStatus}\n`
+    }
+  }
+
+  private async applyAcceptedStatus(
+    req: EntityProvenTxReq,
+    note: { when: string; what: string; arcStatus: string }
+  ): Promise<string> {
+    if (!['unsent', 'sending', 'callback', 'invalid'].includes(req.status)) return ''
+
+    const wasInvalid = req.status === 'invalid'
+    let log = ''
+    if (wasInvalid) {
+      // Restore transaction state, re-reserve wallet inputs, and verify output
+      // spendability using the established unfail repair path.
+      log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
+    } else if (req.notify.transactionIds != null) {
+      await this.storage.runAsStorageProvider(async sp => {
+        await sp.updateTransactionsStatus(req.notify.transactionIds ?? [], 'unproven')
+      })
+    }
+
+    // Apply event state after recovery because the recovery helper refreshes
+    // the entity from storage before its atomic update.
+    req.status = 'unmined'
+    if (wasInvalid) req.attempts = 0
+    req.wasBroadcast = true
+    req.addHistoryNote(note)
+    await req.updateStorageDynamicProperties(this.storage)
+    return log + `  req ${req.id} => unmined\n`
+  }
+
+  private async applyMinedStatus(
+    req: EntityProvenTxReq,
+    note: { when: string; what: string; arcStatus: string }
+  ): Promise<string> {
+    let log = ''
+    if (req.status === 'invalid') {
+      log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
+      req.status = 'unmined'
+      req.attempts = 0
+      req.wasBroadcast = true
+    }
+    req.addHistoryNote(note)
+    await req.updateStorageDynamicProperties(this.storage)
+    return log + await this.fetchProofFromServices(req)
+  }
+
+  private async applyDoubleSpendStatus(
+    req: EntityProvenTxReq,
+    note: { when: string; what: string; arcStatus: string }
+  ): Promise<string> {
+    req.status = 'doubleSpend'
+    req.addHistoryNote(note)
+    await req.updateStorageDynamicProperties(this.storage)
+    const ids = req.notify.transactionIds
+    if (ids != null) {
+      await this.storage.runAsStorageProvider(async sp => {
+        await sp.updateTransactionsStatus(ids, 'failed')
+      })
+    }
+    return `  req ${req.id} => doubleSpend\n`
   }
 
   /**

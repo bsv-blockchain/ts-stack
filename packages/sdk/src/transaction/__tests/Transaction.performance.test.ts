@@ -87,6 +87,43 @@ describe('transaction pipeline scalability', () => {
     await expect(linked.verify('scripts only')).resolves.toBe(true)
   })
 
+  it('rejects cyclic source transaction graphs before serialization', () => {
+    const tx = new Transaction()
+    tx.addOutput({ lockingScript: Script.fromHex('51'), satoshis: 1 })
+    tx.inputs.push({
+      sourceTransaction: tx,
+      sourceOutputIndex: 0,
+      unlockingScript: UnlockingScript.fromHex(''),
+      sequence: 0xffffffff
+    })
+
+    expect(() => tx.toBEEFBytes()).toThrow('Cyclic source transaction graph')
+  })
+
+  it('deduplicates shared and equivalent Merkle paths during BEEF serialization', () => {
+    const first = new Transaction()
+    first.addOutput({ lockingScript: Script.fromHex('51'), satoshis: 3 })
+    const second = new Transaction()
+    second.addOutput({ lockingScript: Script.fromHex('51'), satoshis: 2 })
+    const third = new Transaction()
+    third.addOutput({ lockingScript: Script.fromHex('51'), satoshis: 1 })
+
+    const leaves = [
+      { offset: 0, hash: first.id('hex'), txid: true },
+      { offset: 1, hash: second.id('hex'), txid: true }
+    ]
+    const sharedPath = new MerklePath(1, [leaves])
+    first.merklePath = sharedPath
+    second.merklePath = sharedPath
+    third.merklePath = new MerklePath(1, [[...leaves]])
+
+    const subject = makeMultiInputChild([first, second, third], 1)
+    const beef = Beef.fromBinary(subject.toBEEFBytes())
+
+    expect(beef.bumps).toHaveLength(1)
+    expect(beef.txs).toHaveLength(4)
+  })
+
   it('keeps the deprecated runtime shape while providing a correct typed replacement', () => {
     const tx = makeDeepChain(2)
     const legacy = tx.toBEEFUint8Array()

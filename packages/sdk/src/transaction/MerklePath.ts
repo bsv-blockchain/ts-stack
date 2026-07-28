@@ -562,62 +562,24 @@ export default class MerklePath {
     const maxOffset = this.path[0].reduce((max, l) => Math.max(max, l.offset), 0)
     const treeHeight = Math.max(this.path.length, 32 - Math.clz32(maxOffset))
 
-    // Build O(1) lookup indexes for the source path
-    const sourceIndex: Array<Map<number, MerklePathLeaf>> = Array.from({ length: this.path.length })
-    for (let h = 0; h < this.path.length; h++) {
-      const map = new Map<number, MerklePathLeaf>()
-      for (const leaf of this.path[h]) map.set(leaf.offset, leaf)
-      sourceIndex[h] = map
-    }
-
+    const sourceIndex = this.createSourceLeafIndex()
     const hashCache = new Map<string, MerklePathLeaf | undefined>()
-
-    // Build txid-to-offset index for O(1) lookup
-    const txidToOffset = new Map<string, number>()
-    for (const leaf of this.path[0]) {
-      if (leaf.hash != null) txidToOffset.set(leaf.hash, leaf.offset)
-    }
-
-    // Collect all needed leaves per level
-    const neededPerLevel: Array<Map<number, MerklePathLeaf>> = Array.from({ length: treeHeight })
-    for (let h = 0; h < treeHeight; h++) neededPerLevel[h] = new Map()
+    const txidToOffset = this.createTxidToOffsetIndex()
+    const neededPerLevel = this.createNeededLeafLevels(treeHeight)
 
     for (const txid of txids) {
-      const txOffset = txidToOffset.get(txid)
-      if (txOffset === undefined) {
-        throw new Error(`Transaction ID ${txid} not found in the Merkle Path`)
-      }
-
-      // Level 0: the txid leaf + its sibling
-      neededPerLevel[0].set(txOffset, { offset: txOffset, txid: true, hash: txid })
-      const sib0Offset = txOffset ^ 1
-      if (!neededPerLevel[0].has(sib0Offset)) {
-        const sib = this.cachedFindLeaf(0, sib0Offset, sourceIndex, hashCache, maxOffset)
-        if (sib != null) neededPerLevel[0].set(sib0Offset, sib)
-      }
-
-      // Higher levels: just the sibling at each height
-      for (let h = 1; h < treeHeight; h++) {
-        const sibOffset = (txOffset >> h) ^ 1
-        if (neededPerLevel[h].has(sibOffset)) continue
-        const sib = this.cachedFindLeaf(h, sibOffset, sourceIndex, hashCache, maxOffset)
-        if (sib != null) {
-          neededPerLevel[h].set(sibOffset, sib)
-        } else if (txOffset >> h === maxOffset >> h) {
-          neededPerLevel[h].set(sibOffset, { offset: sibOffset, duplicate: true })
-        }
-      }
+      this.collectExtractedLeaves(
+        txid,
+        txidToOffset,
+        neededPerLevel,
+        sourceIndex,
+        hashCache,
+        maxOffset,
+        treeHeight
+      )
     }
 
-    // Build sorted compound path
-    const compoundPath: Array<
-      Array<{ offset: number; hash?: string; txid?: boolean; duplicate?: boolean }>
-    > = Array.from({ length: treeHeight })
-    for (let h = 0; h < treeHeight; h++) {
-      compoundPath[h] = Array.from(neededPerLevel[h].values()).sort((a, b) => a.offset - b.offset)
-    }
-
-    const compound = new MerklePath(this.blockHeight, compoundPath)
+    const compound = new MerklePath(this.blockHeight, this.buildExtractedPath(neededPerLevel))
     compound.trim()
 
     const extractedRoot = compound.computeRoot()
@@ -628,5 +590,72 @@ export default class MerklePath {
     }
 
     return compound
+  }
+
+  private createSourceLeafIndex(): Array<Map<number, MerklePathLeaf>> {
+    const sourceIndex: Array<Map<number, MerklePathLeaf>> = Array.from({ length: this.path.length })
+    for (let h = 0; h < this.path.length; h++) {
+      const map = new Map<number, MerklePathLeaf>()
+      for (const leaf of this.path[h]) map.set(leaf.offset, leaf)
+      sourceIndex[h] = map
+    }
+    return sourceIndex
+  }
+
+  private createTxidToOffsetIndex(): Map<string, number> {
+    const txidToOffset = new Map<string, number>()
+    for (const leaf of this.path[0]) {
+      if (leaf.hash != null) txidToOffset.set(leaf.hash, leaf.offset)
+    }
+    return txidToOffset
+  }
+
+  private createNeededLeafLevels(treeHeight: number): Array<Map<number, MerklePathLeaf>> {
+    const neededPerLevel: Array<Map<number, MerklePathLeaf>> = Array.from({ length: treeHeight })
+    for (let h = 0; h < treeHeight; h++) neededPerLevel[h] = new Map()
+    return neededPerLevel
+  }
+
+  private collectExtractedLeaves(
+    txid: string,
+    txidToOffset: Map<string, number>,
+    neededPerLevel: Array<Map<number, MerklePathLeaf>>,
+    sourceIndex: Array<Map<number, MerklePathLeaf>>,
+    hashCache: Map<string, MerklePathLeaf | undefined>,
+    maxOffset: number,
+    treeHeight: number
+  ): void {
+    const txOffset = txidToOffset.get(txid)
+    if (txOffset === undefined) {
+      throw new Error(`Transaction ID ${txid} not found in the Merkle Path`)
+    }
+
+    // Level 0: the txid leaf + its sibling.
+    neededPerLevel[0].set(txOffset, { offset: txOffset, txid: true, hash: txid })
+    const levelZeroSiblingOffset = txOffset ^ 1
+    if (!neededPerLevel[0].has(levelZeroSiblingOffset)) {
+      const sibling = this.cachedFindLeaf(0, levelZeroSiblingOffset, sourceIndex, hashCache, maxOffset)
+      if (sibling != null) neededPerLevel[0].set(levelZeroSiblingOffset, sibling)
+    }
+
+    // Higher levels need only the sibling at each height.
+    for (let h = 1; h < treeHeight; h++) {
+      const siblingOffset = (txOffset >> h) ^ 1
+      if (neededPerLevel[h].has(siblingOffset)) continue
+      const sibling = this.cachedFindLeaf(h, siblingOffset, sourceIndex, hashCache, maxOffset)
+      if (sibling != null) {
+        neededPerLevel[h].set(siblingOffset, sibling)
+      } else if (txOffset >> h === maxOffset >> h) {
+        neededPerLevel[h].set(siblingOffset, { offset: siblingOffset, duplicate: true })
+      }
+    }
+  }
+
+  private buildExtractedPath(
+    neededPerLevel: Array<Map<number, MerklePathLeaf>>
+  ): MerklePathLeaf[][] {
+    return neededPerLevel.map(level => {
+      return Array.from(level.values()).sort((a, b) => a.offset - b.offset)
+    })
   }
 }

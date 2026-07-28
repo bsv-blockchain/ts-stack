@@ -6,6 +6,7 @@ import { Transaction, Utils, TaggedBEEF, AdmittanceInstructions, STEAK } from '@
 import { Output } from '../Output'
 import { SyncConfiguration } from '../SyncConfiguration'
 import { Advertiser } from '../Advertiser'
+import { GASP } from '@bsv/gasp'
 
 const mockChainTracker = {
   isValidRootForHeight: jest.fn(async () => true),
@@ -100,6 +101,10 @@ describe('BSV Overlay Services Engine', () => {
       updateLastInteraction: jest.fn(),
       getLastInteraction: jest.fn(async () => 0)
     }
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('engine.syncAdvertisements should return void when invalid hostingURL is provided', async () => {
@@ -307,6 +312,144 @@ describe('BSV Overlay Services Engine', () => {
       tm_slap: ['tracker2']
     })
   })
+
+  it('synchronizes configured GASP peers sequentially, excludes itself, and persists progress', async () => {
+    const logger = {
+      ...console,
+      info: jest.fn(),
+      error: jest.fn()
+    }
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      { ls_helloworld: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker,
+      'https://self.example',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        tm_helloworld: [
+          'https://first.example',
+          'https://self.example',
+          'https://second.example'
+        ]
+      },
+      false,
+      '[OVERLAY_ENGINE] ',
+      false,
+      undefined,
+      logger
+    )
+    mockStorageEngine.getLastInteraction = jest.fn(async () => 10)
+    const sync = jest.spyOn(GASP.prototype, 'sync').mockImplementation(async function () {
+      this.lastInteraction = 20
+    })
+
+    await engine.startGASPSync()
+
+    expect(sync.mock.calls).toEqual([
+      ['https://first.example', 10000],
+      ['https://second.example', 10000]
+    ])
+    expect(mockStorageEngine.updateLastInteraction).toHaveBeenCalledTimes(2)
+    expect(mockStorageEngine.updateLastInteraction).toHaveBeenNthCalledWith(
+      1,
+      'https://first.example',
+      'tm_helloworld',
+      20
+    )
+    expect(mockStorageEngine.updateLastInteraction).toHaveBeenNthCalledWith(
+      2,
+      'https://second.example',
+      'tm_helloworld',
+      20
+    )
+  })
+
+  it('isolates a failed GASP peer and continues with the remaining peers', async () => {
+    const logger = {
+      ...console,
+      info: jest.fn(),
+      error: jest.fn()
+    }
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      { ls_helloworld: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker,
+      'https://self.example',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        tm_helloworld: ['https://failed.example', 'https://healthy.example']
+      },
+      false,
+      '[OVERLAY_ENGINE] ',
+      false,
+      undefined,
+      logger
+    )
+    mockStorageEngine.getLastInteraction = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('peer unavailable'))
+      .mockResolvedValueOnce(5)
+    const sync = jest.spyOn(GASP.prototype, 'sync').mockResolvedValue()
+
+    await expect(engine.startGASPSync()).resolves.toBeUndefined()
+
+    expect(sync).toHaveBeenCalledTimes(1)
+    expect(sync).toHaveBeenCalledWith('https://healthy.example', 10000)
+    expect(logger.error).toHaveBeenCalledWith(
+      '[GASP SYNC] Sync failed for topic "tm_helloworld" with peer "https://failed.example"',
+      expect.any(Error)
+    )
+  })
+
+  it('skips disabled and invalid GASP configurations while syncing a single valid peer', async () => {
+    const logger = {
+      ...console,
+      info: jest.fn(),
+      error: jest.fn()
+    }
+    const engine = new Engine(
+      {
+        tm_disabled: mockTopicManager,
+        tm_invalid: mockTopicManager,
+        tm_single: mockTopicManager
+      },
+      {},
+      mockStorageEngine,
+      mockChainTracker,
+      'https://self.example',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        tm_disabled: false,
+        tm_invalid: 'INVALID',
+        tm_single: ['https://only.example']
+      } as any,
+      false,
+      '[OVERLAY_ENGINE] ',
+      false,
+      undefined,
+      logger
+    )
+    mockStorageEngine.getLastInteraction = jest.fn(async () => 0)
+    const sync = jest.spyOn(GASP.prototype, 'sync').mockResolvedValue()
+
+    await engine.startGASPSync()
+
+    expect(sync).toHaveBeenCalledTimes(1)
+    expect(sync).toHaveBeenCalledWith('https://only.example', 10000)
+    expect(logger.info).toHaveBeenCalledWith('[GASP SYNC] Will attempt to sync with 1 peer')
+  })
+
   describe('handleNewMerkleProof tests', () => {
     it('persists a replacement proof when the stored BEEF is already mined', async () => {
       const tx = Transaction.fromHexBEEF(beef37abad0)

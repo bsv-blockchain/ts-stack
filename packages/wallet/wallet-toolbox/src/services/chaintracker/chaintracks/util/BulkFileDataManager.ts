@@ -569,41 +569,70 @@ export class BulkFileDataManager {
     hbf: BulkFileData
   ): Promise<{ index: number, truncate?: BulkFileData, replaced?: BulkFileData, drop?: BulkFileData }> {
     const lbf = this.getLastBfd()!
-    let index = this.bfds.length - 1
-    let truncate: BulkFileData | undefined
-    let replaced: BulkFileData | undefined
-    let drop: BulkFileData | undefined
+    const index = this.bfds.length - 1
 
     if (hbf.firstHeight === lbf.firstHeight) {
-      // Update targets the last file — three cases:
-      if (isBdfIncremental(update)) {
-        // 1. Incremental → incremental extension.
-        if (!isBdfIncremental(lbf)) throw new WERR_INVALID_PARAMETER('file', 'an incremental file to update an existing incremental file')
-      } else if (isBdfCdn(lbf)) {
-        // 2. CDN → CDN replacement (must grow).
-        if (update.count <= lbf.count) throw new WERR_INVALID_PARAMETER('update.count', `CDN update must have more headers. ${update.count} <= ${lbf.count}`)
-      } else if (update.count < lbf.count) {
-        // 3. New CDN partially replaces incremental tail — retain excess incremental headers.
-        await this.ensureData(lbf)
-        truncate = lbf
-      }
-    } else {
-      // Update targets the second-to-last file — must be CDN replacing CDN, last must be incremental.
-      const lbf2 = this.getLastBfd(2)
-      if (lbf2?.firstHeight !== hbf.firstHeight) throw new WERR_INVALID_PARAMETER('file', 'an update to last or second to last file')
-      if (!isBdfCdn(update) || !isBdfCdn(lbf2) || update.count <= lbf2.count) throw new WERR_INVALID_PARAMETER('file', 'a CDN file update with more headers than the current CDN file')
-      if (!isBdfIncremental(lbf)) throw new WERR_INVALID_PARAMETER('file', 'a CDN file update followed by an incremental file')
-      if (!update.fileId) update.fileId = lbf2.fileId
-      if (update.count >= lbf2.count + lbf.count) {
-        drop = lbf
-      } else {
-        await this.ensureData(lbf)
-        truncate = lbf
-        replaced = lbf2
-      }
-      index = index - 1
+      return await this.resolveLastFileUpdate(update, lbf, index)
     }
-    return { index, truncate, replaced, drop }
+
+    return await this.resolvePenultimateFileUpdate(update, hbf, lbf, index)
+  }
+
+  private async resolveLastFileUpdate (
+    update: BulkFileData,
+    lastFile: BulkFileData,
+    index: number
+  ): Promise<{ index: number, truncate?: BulkFileData }> {
+    let truncate: BulkFileData | undefined
+
+    // Update targets the last file — three cases.
+    if (isBdfIncremental(update)) {
+      // 1. Incremental → incremental extension.
+      if (!isBdfIncremental(lastFile))
+        throw new WERR_INVALID_PARAMETER('file', 'an incremental file to update an existing incremental file')
+    } else if (isBdfCdn(lastFile)) {
+      // 2. CDN → CDN replacement (must grow).
+      if (update.count <= lastFile.count)
+        throw new WERR_INVALID_PARAMETER(
+          'update.count',
+          `CDN update must have more headers. ${update.count} <= ${lastFile.count}`
+        )
+    } else if (update.count < lastFile.count) {
+      // 3. New CDN partially replaces incremental tail — retain excess incremental headers.
+      await this.ensureData(lastFile)
+      truncate = lastFile
+    }
+
+    return { index, truncate }
+  }
+
+  private async resolvePenultimateFileUpdate (
+    update: BulkFileData,
+    expectedFile: BulkFileData,
+    lastFile: BulkFileData,
+    lastIndex: number
+  ): Promise<{ index: number, truncate?: BulkFileData, replaced?: BulkFileData, drop?: BulkFileData }> {
+    // Update targets the second-to-last file — it must replace a CDN file and
+    // the last file must be incremental.
+    const penultimateFile = this.getLastBfd(2)
+    if (penultimateFile?.firstHeight !== expectedFile.firstHeight)
+      throw new WERR_INVALID_PARAMETER('file', 'an update to last or second to last file')
+    if (!isBdfCdn(update) || !isBdfCdn(penultimateFile) || update.count <= penultimateFile.count)
+      throw new WERR_INVALID_PARAMETER('file', 'a CDN file update with more headers than the current CDN file')
+    if (!isBdfIncremental(lastFile))
+      throw new WERR_INVALID_PARAMETER('file', 'a CDN file update followed by an incremental file')
+    if (!update.fileId) update.fileId = penultimateFile.fileId
+
+    if (update.count >= penultimateFile.count + lastFile.count) {
+      return { index: lastIndex - 1, drop: lastFile }
+    }
+
+    await this.ensureData(lastFile)
+    return {
+      index: lastIndex - 1,
+      truncate: lastFile,
+      replaced: penultimateFile
+    }
   }
 
   private async persistUpdate (
