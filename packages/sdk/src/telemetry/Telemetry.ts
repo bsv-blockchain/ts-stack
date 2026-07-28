@@ -97,7 +97,7 @@ const SENSITIVE_TERMS = [
 const SENSITIVE_LABEL_PATTERNS = SENSITIVE_TERMS.map(term => {
   const flexibleTerm = term.replace(/key|token|time/g, match => `[_ -]?${match}`)
   return new RegExp(
-    `(${flexibleTerm}\\s*["'=:]\\s*)(?:"[^"]*"|'[^']*'|[^\\s,;}]+)`,
+    String.raw`(${flexibleTerm}\s*["'=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)`,
     'gi'
   )
 })

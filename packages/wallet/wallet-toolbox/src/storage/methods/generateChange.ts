@@ -474,12 +474,16 @@ function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknow
     let detail: string
     if (typeof eu === 'object') {
       try {
-        detail = JSON.stringify(eu)
+        detail = JSON.stringify(eu) ?? '[unserializable object]'
       } catch {
-        detail = Object.prototype.toString.call(eu)
+        detail = '[unserializable object]'
       }
+    } else if (typeof eu === 'symbol') {
+      detail = eu.description ?? ''
+    } else if (typeof eu === 'function') {
+      detail = eu.name === '' ? '[function]' : `[function ${eu.name}]`
     } else {
-      detail = String(eu)
+      detail = eu.toString()
     }
     euStr = ` error: ${detail}`
   }

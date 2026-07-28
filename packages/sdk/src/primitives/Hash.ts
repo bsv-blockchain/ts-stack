@@ -1263,7 +1263,6 @@ function utf8ToBytes(str: string): Uint8Array {
   return new Uint8Array(new TextEncoder().encode(str))
 }
 type Input = string | Uint8Array
-type KDFInput = Input
 const kdfInputToBytes = toBytes
 interface IHash {
   (data: Uint8Array): Uint8Array
@@ -1935,8 +1934,8 @@ function pbkdf2Core(
   hash: (
     msg: Input
   ) => Uint8Array & { create: () => FastSHA512; blockLen: number; outputLen: number },
-  password: KDFInput,
-  salt: KDFInput,
+  password: Input,
+  salt: Input,
   opts: { c: number; dkLen?: number }
 ): Uint8Array {
   ahash(hash)

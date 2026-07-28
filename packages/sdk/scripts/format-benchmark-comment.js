@@ -132,14 +132,16 @@ function compareBenchmark(id, baseline, branch) {
 }
 
 function buildSummary(warnings, kudos) {
-  const summaryParts = [
-    warnings.length > 0
-      ? `⚠️ ${warnings.length} regression${warnings.length === 1 ? '' : 's'} detected (>${THRESHOLD * 100}% slower).`
-      : '✅ No regressions over the 5% threshold detected.'
-  ]
+  let regressionSummary = '✅ No regressions over the 5% threshold detected.'
+  if (warnings.length > 0) {
+    const suffix = warnings.length === 1 ? '' : 's'
+    regressionSummary = `⚠️ ${warnings.length} regression${suffix} detected (>${THRESHOLD * 100}% slower).`
+  }
+  const summaryParts = [regressionSummary]
   if (kudos.length > 0) {
+    const suffix = kudos.length === 1 ? '' : 's'
     summaryParts.push(
-      `🎉 ${kudos.length} significant speedup${kudos.length === 1 ? '' : 's'} (>${THRESHOLD * 100}% faster).`
+      `🎉 ${kudos.length} significant speedup${suffix} (>${THRESHOLD * 100}% faster).`
     )
   }
   return summaryParts.join(' ')

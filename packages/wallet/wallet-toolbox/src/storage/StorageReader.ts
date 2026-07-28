@@ -21,6 +21,8 @@ import { validateSecondsSinceEpoch, verifyOneOrNone, verifyTruthy } from '../uti
 import { getSyncChunk } from './methods/getSyncChunk'
 
 type StorageDate = Date | string
+type DateInput = Date | string | number
+type OptionalDateInput = DateInput | null | undefined
 
 /**
  * The `StorageReader` abstract class is the base of the concrete wallet storage provider classes.
@@ -113,7 +115,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * @param date
    * @returns
    */
-  validateEntityDate (date: Date | string | number): StorageDate {
+  validateEntityDate (date: DateInput): StorageDate {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     let r: StorageDate = this.validateDate(date)
     switch (this.dbtype) {
@@ -136,7 +138,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * @returns
    */
   validateOptionalEntityDate (
-    date: Date | string | number | null | undefined,
+    date: OptionalDateInput,
     useNowAsDefault?: boolean
   ): StorageDate | undefined {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
@@ -155,23 +157,23 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     return r
   }
 
-  validateDate (date: Date | string | number): Date {
+  validateDate (date: DateInput): Date {
     let r: Date
     if (date instanceof Date) r = date
     else r = new Date(date)
     return r
   }
 
-  validateOptionalDate (date: Date | string | number | null | undefined): Date | undefined {
+  validateOptionalDate (date: OptionalDateInput): Date | undefined {
     if (date === null || date === undefined) return undefined
     return this.validateDate(date)
   }
 
-  validateDateForWhere (date: Date | string | number): Date | string | number {
+  validateDateForWhere (date: DateInput): DateInput {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     if (typeof date === 'number') date = validateSecondsSinceEpoch(date)
     const vdate = verifyTruthy(this.validateDate(date))
-    let r: Date | string | number
+    let r: DateInput
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':

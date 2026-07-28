@@ -62,12 +62,15 @@ function formatAdminValue (value: unknown): string {
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object') {
     try {
-      return JSON.stringify(value)
+      return JSON.stringify(value) ?? '[unserializable object]'
     } catch {
-      return Object.prototype.toString.call(value)
+      return '[unserializable object]'
     }
   }
-  return String(value)
+  if (typeof value === 'string') return value
+  if (typeof value === 'symbol') return value.description ?? ''
+  if (typeof value === 'function') return value.name === '' ? '[function]' : `[function ${value.name}]`
+  return value.toString()
 }
 
 function asNumber (value: unknown, fallback: number): number {

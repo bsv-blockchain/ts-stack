@@ -1,12 +1,15 @@
 import { Knex, knex as makeKnex } from 'knex'
-import { Chain } from '../../../sdk'
 import { ChaintracksOptions } from './Api/ChaintracksApi'
 import { ChaintracksFs } from './util/ChaintracksFs'
-import { ChaintracksStorageKnex, ChaintracksStorageKnexOptions } from './Storage/ChaintracksStorageKnex'
-import { ChaintracksFetch } from './util/ChaintracksFetch'
-import { ChaintracksFetchApi } from './Api/ChaintracksFetchApi'
-import { BulkFileDataManager, BulkFileDataManagerOptions } from './util/BulkFileDataManager'
-import { buildChaintracksOptionsWithIngestors } from './configureChaintracksIngestors'
+import { ChaintracksStorageKnex } from './Storage/ChaintracksStorageKnex'
+import {
+  buildChaintracksOptionsWithIngestors,
+  createDefaultChaintracksStorageOptions
+} from './configureChaintracksIngestors'
+import {
+  type DefaultKnexChaintracksArguments,
+  resolveDefaultKnexChaintracksArguments
+} from './configureKnexChaintracks'
 
 /**
  *
@@ -14,68 +17,22 @@ import { buildChaintracksOptionsWithIngestors } from './configureChaintracksInge
  * @param rootFolder defaults to "./data/"
  * @returns
  */
-export function createDefaultKnexChaintracksOptions (
-  ...[
-    chain,
-    rootFolder = './data/',
-    knexConfig,
-    whatsonchainApiKey = '',
-    maxPerFile = 100000,
-    maxRetained = 2,
-    fetch,
-    cdnUrl = 'https://cdn.projectbabbage.com/blockheaders/',
-    liveHeightThreshold = 2000,
-    reorgHeightThreshold = 400,
-    bulkMigrationChunkSize = 500,
-    batchInsertLimit = 400,
-    addLiveRecursionLimit = 36
-  ]: [
-    chain: Chain,
-    rootFolder?: string,
-    knexConfig?: Knex.Config,
-    whatsonchainApiKey?: string,
-    maxPerFile?: number,
-    maxRetained?: number,
-    fetch?: ChaintracksFetchApi,
-    cdnUrl?: string,
-    liveHeightThreshold?: number,
-    reorgHeightThreshold?: number,
-    bulkMigrationChunkSize?: number,
-    batchInsertLimit?: number,
-    addLiveRecursionLimit?: number
-  ]
-): ChaintracksOptions {
-  fetch ??= new ChaintracksFetch()
+export function createDefaultKnexChaintracksOptions (...args: DefaultKnexChaintracksArguments): ChaintracksOptions {
+  const params = resolveDefaultKnexChaintracksArguments(args)
 
-  const bfo: BulkFileDataManagerOptions = {
-    chain,
-    fetch,
-    maxPerFile,
-    maxRetained,
-    fromKnownSourceUrl: cdnUrl
-  }
-  const bulkFileDataManager = new BulkFileDataManager(bfo)
-
-  knexConfig ??= {
+  const knexConfig: Knex.Config = params.knexConfig ?? {
     client: 'better-sqlite3',
-    connection: { filename: ChaintracksFs.pathJoin(rootFolder, `${chain}Net_chaintracks.sqlite`) },
+    connection: {
+      filename: ChaintracksFs.pathJoin(params.rootFolder, `${params.chain}Net_chaintracks.sqlite`)
+    },
     useNullAsDefault: true
   }
   const knexInstance = makeKnex(knexConfig)
 
-  const so: ChaintracksStorageKnexOptions = {
-    chain,
-    knex: knexInstance,
-    bulkFileDataManager,
-    liveHeightThreshold,
-    reorgHeightThreshold,
-    bulkMigrationChunkSize,
-    batchInsertLimit
-  }
-  const storage = new ChaintracksStorageKnex(so)
+  const storage = new ChaintracksStorageKnex({
+    ...createDefaultChaintracksStorageOptions(params),
+    knex: knexInstance
+  })
 
-  return buildChaintracksOptionsWithIngestors(
-    { chain, whatsonchainApiKey, maxPerFile, fetch, cdnUrl, addLiveRecursionLimit },
-    storage
-  )
+  return buildChaintracksOptionsWithIngestors(params, storage)
 }
