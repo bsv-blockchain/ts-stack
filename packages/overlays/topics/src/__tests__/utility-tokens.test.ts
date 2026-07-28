@@ -375,6 +375,36 @@ describe('TokenDemoTopicManager', () => {
     expect(result.outputsToAdmit).toEqual([0])
   })
 
+  it('rejects an unbalanced non-mint token output', async () => {
+    const tx = buildTxWithInput([buildTokenScript(pubKeyHex, 'token-id', 25, {})])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+
+    expect(result).toEqual({ outputsToAdmit: [], coinsToRetain: [] })
+  })
+
+  it('processes a requested previous mint output independently from a new mint', async () => {
+    const sourceTransaction = new Transaction()
+    sourceTransaction.addOutput({
+      lockingScript: buildMintTokenScript(pubKeyHex, 25, {}),
+      satoshis: 1000
+    })
+    const tx = new Transaction()
+    tx.addInput({
+      sourceTransaction,
+      sourceOutputIndex: 0,
+      unlockingScript: new LockingScript([])
+    })
+    tx.addOutput({
+      lockingScript: buildMintTokenScript(pubKeyHex, 10, {}),
+      satoshis: 1000
+    })
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [0])
+
+    expect(result.outputsToAdmit).toEqual([0])
+  })
+
   // --- Metadata ---
 
   it('getDocumentation returns a non-empty string', async () => {

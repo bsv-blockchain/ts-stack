@@ -184,39 +184,42 @@ export class HostReputationTracker {
     }
   }
 
+  private readStoredReputation(store: KeyValueStore): string | undefined {
+    for (const key of [STORAGE_KEY, LEGACY_STORAGE_KEY_V2, LEGACY_STORAGE_KEY_V1]) {
+      const raw = store.get(key)
+      if (typeof raw === 'string' && raw.length > 0) return raw
+    }
+    return undefined
+  }
+
+  private parseStoredEntry(key: string, value: unknown): HostReputationEntry | undefined {
+    if (value == null || typeof value !== 'object') return undefined
+    const stored: any = value
+    return {
+      host: String(stored.host ?? key),
+      totalSuccesses: Number(stored.totalSuccesses ?? 0),
+      totalFailures: Number(stored.totalFailures ?? 0),
+      consecutiveFailures: Number(stored.consecutiveFailures ?? 0),
+      avgLatencyMs: stored.avgLatencyMs == null ? null : Number(stored.avgLatencyMs),
+      lastLatencyMs: stored.lastLatencyMs == null ? null : Number(stored.lastLatencyMs),
+      backoffUntil: Number(stored.backoffUntil ?? 0),
+      lastUpdatedAt: Number(stored.lastUpdatedAt ?? 0),
+      lastError: typeof stored.lastError === 'string' ? stored.lastError : undefined
+    }
+  }
+
   private loadFromStorage(): void {
     const s = this.store
     if (s == null) return
     try {
-      let raw = s.get(STORAGE_KEY)
-      if (typeof raw !== 'string' || raw.length === 0) {
-        const v2 = s.get(LEGACY_STORAGE_KEY_V2)
-        if (typeof v2 === 'string' && v2.length > 0) raw = v2
-      }
-      if (typeof raw !== 'string' || raw.length === 0) {
-        const v1 = s.get(LEGACY_STORAGE_KEY_V1)
-        if (typeof v1 === 'string' && v1.length > 0) raw = v1
-      }
-      if (typeof raw !== 'string' || raw.length === 0) return
+      const raw = this.readStoredReputation(s)
+      if (raw === undefined) return
       const data = JSON.parse(raw)
       if (typeof data !== 'object' || data === null) return
       this.stats.clear()
       for (const k of Object.keys(data)) {
-        const v: any = data[k]
-        if (v != null && typeof v === 'object') {
-          const entry: HostReputationEntry = {
-            host: String(v.host ?? k),
-            totalSuccesses: Number(v.totalSuccesses ?? 0),
-            totalFailures: Number(v.totalFailures ?? 0),
-            consecutiveFailures: Number(v.consecutiveFailures ?? 0),
-            avgLatencyMs: v.avgLatencyMs == null ? null : Number(v.avgLatencyMs),
-            lastLatencyMs: v.lastLatencyMs == null ? null : Number(v.lastLatencyMs),
-            backoffUntil: Number(v.backoffUntil ?? 0),
-            lastUpdatedAt: Number(v.lastUpdatedAt ?? 0),
-            lastError: typeof v.lastError === 'string' ? v.lastError : undefined
-          }
-          this.stats.set(entry.host, entry)
-        }
+        const entry = this.parseStoredEntry(k, data[k])
+        if (entry !== undefined) this.stats.set(entry.host, entry)
       }
       this.prune(Date.now())
     } catch {}

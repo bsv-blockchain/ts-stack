@@ -140,43 +140,49 @@ describe('CertMapTopicManager', () => {
     expect(result.coinsToRetain).toEqual([])
   })
 
-  it('rejects a token with invalid certFields JSON (not an object)', async () => {
-    const registryPrivKey = PrivateKey.fromRandom()
-    const registryOperator = registryPrivKey.toPublicKey().toString()
+  it.each(['not-valid-json', '7'])(
+    'rejects invalid certFields JSON %s',
+    async serializedCertFields => {
+      const registryPrivKey = PrivateKey.fromRandom()
+      const registryOperator = registryPrivKey.toPublicKey().toString()
 
-    const dataFields = [
-      Utils.toArray('identity-cert-v1', 'utf8'),
-      Utils.toArray('Identity Certificate', 'utf8'),
-      Utils.toArray('https://example.com/icon.png', 'utf8'),
-      Utils.toArray('Description', 'utf8'),
-      Utils.toArray('https://docs.example.com/cert', 'utf8'),
-      Utils.toArray('not-valid-json', 'utf8'),                   // invalid certFields — not JSON
-      Utils.toArray(registryOperator, 'utf8'),
-    ]
-    const data = dataFields.reduce((a, e) => [...a, ...e], [] as number[])
+      const dataFields = [
+        Utils.toArray('identity-cert-v1', 'utf8'),
+        Utils.toArray('Identity Certificate', 'utf8'),
+        Utils.toArray('https://example.com/icon.png', 'utf8'),
+        Utils.toArray('Description', 'utf8'),
+        Utils.toArray('https://docs.example.com/cert', 'utf8'),
+        Utils.toArray(serializedCertFields, 'utf8'),
+        Utils.toArray(registryOperator, 'utf8'),
+      ]
+      const data = dataFields.reduce((a, e) => [...a, ...e], [] as number[])
 
-    const registryWallet = new ProtoWallet(registryPrivKey)
-    const { signature } = await registryWallet.createSignature({
-      data,
-      protocolID: PROTOCOL_ID,
-      keyID: KEY_ID,
-      counterparty: 'anyone'
-    })
+      const registryWallet = new ProtoWallet(registryPrivKey)
+      const { signature } = await registryWallet.createSignature({
+        data,
+        protocolID: PROTOCOL_ID,
+        keyID: KEY_ID,
+        counterparty: 'anyone'
+      })
 
-    const anyoneWallet = new ProtoWallet('anyone')
-    const { publicKey: lockingPubKeyHex } = await anyoneWallet.getPublicKey({
-      protocolID: PROTOCOL_ID,
-      keyID: KEY_ID,
-      counterparty: registryOperator
-    })
-    const lockingPubKey = PublicKey.fromString(lockingPubKeyHex)
+      const anyoneWallet = new ProtoWallet('anyone')
+      const { publicKey: lockingPubKeyHex } = await anyoneWallet.getPublicKey({
+        protocolID: PROTOCOL_ID,
+        keyID: KEY_ID,
+        counterparty: registryOperator
+      })
+      const lockingPubKey = PublicKey.fromString(lockingPubKeyHex)
 
-    const lockingScript = buildPushDropScript(lockingPubKey, [...dataFields, Array.from(signature)])
-    const tx = buildTxWithInput([lockingScript])
+      const lockingScript = buildPushDropScript(lockingPubKey, [
+        ...dataFields,
+        Array.from(signature)
+      ])
+      const tx = buildTxWithInput([lockingScript])
 
-    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
-    expect(result.outputsToAdmit).not.toContain(0)
-  })
+      const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+      expect(result.outputsToAdmit).not.toContain(0)
+    }
+  )
 
   it('rejects a token with missing fields (only 3 provided)', async () => {
     const key = PrivateKey.fromRandom()

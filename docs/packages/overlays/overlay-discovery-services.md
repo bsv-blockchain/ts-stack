@@ -4,7 +4,7 @@ title: '@bsv/overlay-discovery-services'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-discovery-services'
-version: '2.1.2'
+version: '2.1.3'
 last_updated: '2026-07-27'
 last_verified: '2026-07-27'
 review_cadence_days: 30

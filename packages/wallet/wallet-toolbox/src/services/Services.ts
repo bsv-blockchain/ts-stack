@@ -53,13 +53,13 @@ export class Services implements WalletServices {
   arcade?: Arcade
   bitails?: Bitails
 
-  getMerklePathServices: ServiceCollection<GetMerklePathService>
-  getRawTxServices: ServiceCollection<GetRawTxService>
-  postBeefServices: ServiceCollection<PostBeefService>
-  getUtxoStatusServices: ServiceCollection<GetUtxoStatusService>
-  getStatusForTxidsServices: ServiceCollection<GetStatusForTxidsService>
-  getScriptHashHistoryServices: ServiceCollection<GetScriptHashHistoryService>
-  updateFiatExchangeRateServices: ServiceCollection<UpdateFiatExchangeRateService>
+  getMerklePathServices!: ServiceCollection<GetMerklePathService>
+  getRawTxServices!: ServiceCollection<GetRawTxService>
+  postBeefServices!: ServiceCollection<PostBeefService>
+  getUtxoStatusServices!: ServiceCollection<GetUtxoStatusService>
+  getStatusForTxidsServices!: ServiceCollection<GetStatusForTxidsService>
+  getScriptHashHistoryServices!: ServiceCollection<GetScriptHashHistoryService>
+  updateFiatExchangeRateServices!: ServiceCollection<UpdateFiatExchangeRateService>
 
   chain: Chain
 
@@ -75,6 +75,13 @@ export class Services implements WalletServices {
     this.whatsonchain = new WhatsOnChain(this.chain, { apiKey: this.options.whatsOnChainApiKey }, this)
 
     this.arcTaal = new ARC(this.options.arcUrl, this.options.arcConfig, 'arcTaal')
+    const { hasBitails, hasWhatsOnChain } = this.configureOptionalProviders()
+    this.initializeReadServices(hasBitails, hasWhatsOnChain)
+    this.initializePostBeefServices(hasBitails, hasWhatsOnChain)
+    this.initializeFiatRateServices()
+  }
+
+  private configureOptionalProviders(): { hasBitails: boolean; hasWhatsOnChain: boolean } {
     if (this.options.arcGorillaPoolUrl != null && this.options.arcGorillaPoolUrl !== '') {
       this.arcGorillaPool = new ARC(this.options.arcGorillaPoolUrl, this.options.arcGorillaPoolConfig, 'arcGorillaPool')
     }
@@ -83,19 +90,17 @@ export class Services implements WalletServices {
     }
 
     const hasBitails = this.chain === 'main' || this.chain === 'test'
-
-    // tstn runs only Arcade + ChainTracks; it has no WhatsOnChain / block-explorer service, so
-    // WhatsOnChain is not registered as a provider on tstn. The WhatsOnChain-only lookups (raw
-    // tx, utxo status, txid status, script-hash history) therefore have no provider on tstn.
     const hasWhatsOnChain = this.chain !== 'tstn'
-
     if (hasBitails) {
       this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
     }
+    return { hasBitails, hasWhatsOnChain }
+  }
 
+  private initializeReadServices(hasBitails: boolean, hasWhatsOnChain: boolean): void {
     this.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath')
-    // Arcade first when configured: for txs it broadcast it can return the proof directly; for
-    // anything else it reports no proof and the collection falls through to WhatsOnChain/Bitails.
+    // Arcade is first when configured: it can return proofs for transactions
+    // it broadcast and otherwise allows the collection to fall through.
     if (this.arcade != null) {
       // prettier-ignore
       this.getMerklePathServices.add({ name: 'Arcade', service: this.arcade.getMerklePath.bind(this.arcade) })
@@ -114,29 +119,6 @@ export class Services implements WalletServices {
       // prettier-ignore
       this.getRawTxServices
         .add({ name: 'WhatsOnChain', service: this.whatsonchain.getRawTxResult.bind(this.whatsonchain) })
-    }
-
-    this.postBeefServices = new ServiceCollection<PostBeefService>('postBeef')
-    // Arcade is registered first so it is the primary broadcaster; ARC providers below
-    // act as fallback under the default 'UntilSuccess' postBeefMode.
-    if (this.arcade != null) {
-      // prettier-ignore
-      this.postBeefServices.add({ name: 'ArcadeBeef', service: this.arcade.postBeef.bind(this.arcade) })
-    }
-    if (this.arcGorillaPool != null) {
-      // prettier-ignore
-      this.postBeefServices.add({ name: 'GorillaPoolArcBeef', service: this.arcGorillaPool.postBeef.bind(this.arcGorillaPool) })
-    }
-    // prettier-ignore
-    this.postBeefServices
-      .add({ name: 'TaalArcBeef', service: this.arcTaal.postBeef.bind(this.arcTaal) })
-    if (hasBitails && this.bitails != null) {
-      this.postBeefServices.add({ name: 'Bitails', service: this.bitails.postBeef.bind(this.bitails) })
-    }
-    if (hasWhatsOnChain) {
-      // prettier-ignore
-      this.postBeefServices
-        .add({ name: 'WhatsOnChain', service: this.whatsonchain.postBeef.bind(this.whatsonchain) })
     }
 
     this.getUtxoStatusServices = new ServiceCollection<GetUtxoStatusService>('getUtxoStatus')
@@ -159,11 +141,38 @@ export class Services implements WalletServices {
       this.getScriptHashHistoryServices
         .add({ name: 'WhatsOnChain', service: this.whatsonchain.getScriptHashHistory.bind(this.whatsonchain) })
     }
+  }
 
+  private initializePostBeefServices(hasBitails: boolean, hasWhatsOnChain: boolean): void {
+    this.postBeefServices = new ServiceCollection<PostBeefService>('postBeef')
+    // Arcade remains the primary broadcaster. ARC and explorer providers
+    // retain their existing fallback order under the default UntilSuccess mode.
+    if (this.arcade != null) {
+      // prettier-ignore
+      this.postBeefServices.add({ name: 'ArcadeBeef', service: this.arcade.postBeef.bind(this.arcade) })
+    }
+    if (this.arcGorillaPool != null) {
+      // prettier-ignore
+      this.postBeefServices.add({ name: 'GorillaPoolArcBeef', service: this.arcGorillaPool.postBeef.bind(this.arcGorillaPool) })
+    }
+    // prettier-ignore
+    this.postBeefServices
+      .add({ name: 'TaalArcBeef', service: this.arcTaal.postBeef.bind(this.arcTaal) })
+    if (hasBitails && this.bitails != null) {
+      this.postBeefServices.add({ name: 'Bitails', service: this.bitails.postBeef.bind(this.bitails) })
+    }
+    if (hasWhatsOnChain) {
+      // prettier-ignore
+      this.postBeefServices
+        .add({ name: 'WhatsOnChain', service: this.whatsonchain.postBeef.bind(this.whatsonchain) })
+    }
+  }
+
+  private initializeFiatRateServices(): void {
     // prettier-ignore
     this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate')
-    // If the api key for paid service is set, only use that sesrvice.
-    // Otherwise use the chaintracks service
+    // A configured paid exchange-rate service is exclusive; otherwise use
+    // Chaintracks as the zero-configuration default.
     if (this.options.exchangeratesapiKey != null && this.options.exchangeratesapiKey !== '') {
       this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi })
     } else {

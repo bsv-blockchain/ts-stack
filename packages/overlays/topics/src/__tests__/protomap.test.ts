@@ -27,7 +27,7 @@
  */
 
 import { LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils, ProtoWallet, WalletProtocol } from '@bsv/sdk'
-import ProtoMapTopicManager from '../protomap/ProtoMapTopicManager.js'
+import ProtoMapTopicManager, { deserializeWalletProtocol } from '../protomap/ProtoMapTopicManager.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,6 +130,16 @@ describe('ProtoMapTopicManager', () => {
 
   beforeEach(() => {
     manager = new ProtoMapTopicManager()
+  })
+
+  it('rejects unsupported wallet protocol security levels', () => {
+    expect(() => deserializeWalletProtocol(JSON.stringify([7, 'protocol']))).toThrow(
+      'Invalid security level.'
+    )
+  })
+
+  it('rejects non-string wallet protocol names', () => {
+    expect(() => deserializeWalletProtocol(JSON.stringify([1, 7]))).toThrow('Invalid protocolID')
   })
 
   it('admits a valid protomap token with all 6 fields', async () => {

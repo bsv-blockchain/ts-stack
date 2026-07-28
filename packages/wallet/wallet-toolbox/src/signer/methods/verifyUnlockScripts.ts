@@ -2,6 +2,7 @@ import {
   Beef,
   ScriptEvaluationError,
   Spend,
+  Transaction,
   type SignatureHashCache,
   type SpendVerificationContext,
   type SpendVerifierInterface
@@ -27,22 +28,17 @@ const javaScriptOnlyVerifier: SpendVerifierInterface = {
   }
 }
 
-function invalidUnlockingScript (
-  inputIndex: number,
-  detail?: string
-): WERR_INVALID_PARAMETER {
+function invalidUnlockingScript(inputIndex: number, detail?: string): WERR_INVALID_PARAMETER {
   const suffix = detail == null ? '' : ` ${detail}`
   return new WERR_INVALID_PARAMETER(`inputs[${inputIndex}].unlockScript`, `valid.${suffix}`)
 }
 
-async function verifyOneSpend (
-  pending: PendingSpendVerification,
-  verifier?: SpendVerifierInterface
-): Promise<void> {
+async function verifyOneSpend(pending: PendingSpendVerification, verifier?: SpendVerifierInterface): Promise<void> {
   try {
-    const valid = verifier === undefined
-      ? pending.spend.validate(pending.context)
-      : await pending.spend.validateWith(verifier, pending.context)
+    const valid =
+      verifier === undefined
+        ? pending.spend.validate(pending.context)
+        : await pending.spend.validateWith(verifier, pending.context)
     if (!valid) throw invalidUnlockingScript(pending.inputIndex)
   } catch (error: unknown) {
     if (error instanceof ScriptEvaluationError) {
@@ -52,7 +48,7 @@ async function verifyOneSpend (
   }
 }
 
-async function verifyPendingSpends (
+async function verifyPendingSpends(
   pending: PendingSpendVerification[],
   verifier?: SpendVerifierInterface
 ): Promise<void> {
@@ -71,9 +67,7 @@ async function verifyPendingSpends (
 
   let verdicts: boolean[]
   try {
-    verdicts = await verifier.verifySpendsBatch(
-      batched.map(item => ({ spend: item.spend, ...item.context }))
-    )
+    verdicts = await verifier.verifySpendsBatch(batched.map(item => ({ spend: item.spend, ...item.context })))
   } catch (error: unknown) {
     if (error instanceof ScriptEvaluationError) {
       throw invalidUnlockingScript(batched[0].inputIndex, error.message)
@@ -88,11 +82,69 @@ async function verifyPendingSpends (
   })
 }
 
+function collectTransactionSpends(
+  txid: string,
+  resultIndex: number,
+  beef: Beef,
+  result: UnlockScriptVerificationResult,
+  pending: PendingSpendVerification[]
+): void {
+  const tx: Transaction | undefined = beef.findTxid(txid)?.tx
+  if (tx == null) throw new WERR_INVALID_PARAMETER('txid', `contained in beef, txid ${txid}`)
+  const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
+  for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
+    const input = tx.inputs[inputIndex]
+    if (input.sourceTXID == null) {
+      throw new WERR_INVALID_PARAMETER(`inputs[${inputIndex}].sourceTXID`, 'valid')
+    }
+    if (input.unlockingScript == null) {
+      throw new WERR_INVALID_PARAMETER(`inputs[${inputIndex}].unlockingScript`, 'valid')
+    }
+    input.sourceTransaction = beef.findTxid(input.sourceTXID)?.tx
+    if (input.sourceTransaction == null) {
+      // knownTxids may intentionally omit a source transaction. Only that
+      // input is skipped; every source that is present is still verified.
+      result.skippedInputs++
+      continue
+    }
+    const sourceOutput = input.sourceTransaction.outputs[input.sourceOutputIndex]
+    if (sourceOutput == null) {
+      throw new WERR_INVALID_PARAMETER(
+        `inputs[${inputIndex}].sourceOutputIndex`,
+        'reference an output in the source transaction'
+      )
+    }
+    const utxoHeight = input.sourceTransaction.merklePath?.blockHeight
+    const context: SpendVerificationContext =
+      utxoHeight === undefined ? { consensus: true } : { consensus: true, utxoHeight }
+    pending.push({
+      inputIndex,
+      resultIndex,
+      context,
+      spend: new Spend({
+        sourceTXID: input.sourceTXID,
+        sourceOutputIndex: input.sourceOutputIndex,
+        lockingScript: sourceOutput.lockingScript,
+        sourceSatoshis: sourceOutput.satoshis ?? 0,
+        transactionVersion: tx.version,
+        otherInputs: [],
+        allInputs: tx.inputs,
+        unlockingScript: input.unlockingScript,
+        inputSequence: input.sequence ?? 0,
+        inputIndex,
+        outputs: tx.outputs,
+        lockTime: tx.lockTime,
+        sigHashCache
+      })
+    })
+  }
+}
+
 /**
  * Verifies every resolvable input from several transactions in one optional
  * backend batch while preserving per-transaction verification counts.
  */
-export async function verifyUnlockScriptsBatch (
+export async function verifyUnlockScriptsBatch(
   txids: readonly string[],
   beef: Beef,
   verifier?: SpendVerifierInterface
@@ -100,57 +152,7 @@ export async function verifyUnlockScriptsBatch (
   const results = txids.map(() => ({ verifiedInputs: 0, skippedInputs: 0 }))
   const pending: PendingSpendVerification[] = []
   for (let resultIndex = 0; resultIndex < txids.length; resultIndex++) {
-    const txid = txids[resultIndex]
-    const tx = beef.findTxid(txid)?.tx
-    if (tx == null) throw new WERR_INVALID_PARAMETER('txid', `contained in beef, txid ${txid}`)
-    const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
-    for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
-      const input = tx.inputs[inputIndex]
-      if (input.sourceTXID == null) {
-        throw new WERR_INVALID_PARAMETER(`inputs[${inputIndex}].sourceTXID`, 'valid')
-      }
-      if (input.unlockingScript == null) {
-        throw new WERR_INVALID_PARAMETER(`inputs[${inputIndex}].unlockingScript`, 'valid')
-      }
-      input.sourceTransaction = beef.findTxid(input.sourceTXID)?.tx
-      if (input.sourceTransaction == null) {
-        // knownTxids may intentionally omit a source transaction. Only that
-        // input is skipped; every source that is present is still verified.
-        results[resultIndex].skippedInputs++
-        continue
-      }
-      const sourceOutput = input.sourceTransaction.outputs[input.sourceOutputIndex]
-      if (sourceOutput == null) {
-        throw new WERR_INVALID_PARAMETER(
-          `inputs[${inputIndex}].sourceOutputIndex`,
-          'reference an output in the source transaction'
-        )
-      }
-      const utxoHeight = input.sourceTransaction.merklePath?.blockHeight
-      const context: SpendVerificationContext = utxoHeight === undefined
-        ? { consensus: true }
-        : { consensus: true, utxoHeight }
-      pending.push({
-        inputIndex,
-        resultIndex,
-        context,
-        spend: new Spend({
-          sourceTXID: input.sourceTXID,
-          sourceOutputIndex: input.sourceOutputIndex,
-          lockingScript: sourceOutput.lockingScript,
-          sourceSatoshis: sourceOutput.satoshis ?? 0,
-          transactionVersion: tx.version,
-          otherInputs: [],
-          allInputs: tx.inputs,
-          unlockingScript: input.unlockingScript,
-          inputSequence: input.sequence ?? 0,
-          inputIndex,
-          outputs: tx.outputs,
-          lockTime: tx.lockTime,
-          sigHashCache
-        })
-      })
-    }
+    collectTransactionSpends(txids[resultIndex], resultIndex, beef, results[resultIndex], pending)
   }
   await verifyPendingSpends(pending, verifier)
   for (const item of pending) results[item.resultIndex].verifiedInputs++
@@ -162,7 +164,7 @@ export async function verifyUnlockScriptsBatch (
  * @param beef Must contain transactions for txid and all its inputs.
  * @throws WERR_INVALID_PARAMETER if any unlocking script is invalid, if sourceTXID is invalid, if beef doesn't contain required transactions.
  */
-export async function verifyUnlockScripts (
+export async function verifyUnlockScripts(
   txid: string,
   beef: Beef,
   verifier?: SpendVerifierInterface

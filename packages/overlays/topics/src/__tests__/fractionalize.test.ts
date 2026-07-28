@@ -33,6 +33,7 @@
  *   - Valid server-token, transfer-token, and payment scripts → admitted (built from hex)
  */
 
+import { jest } from '@jest/globals'
 import { LockingScript, Transaction, Utils } from '@bsv/sdk'
 import FractionalizeTopicManager from '../fractionalize/FractionalizeTopicManager.js'
 
@@ -150,6 +151,20 @@ function buildPaymentScript(): LockingScript {
   return LockingScript.fromHex(Utils.toHex(raw))
 }
 
+function replaceChunk(
+  script: LockingScript,
+  index: number,
+  replacement: { op: number; data?: number[] }
+): LockingScript {
+  return new LockingScript(
+    script.chunks.map((chunk, chunkIndex) =>
+      chunkIndex === index
+        ? replacement
+        : { op: chunk.op, data: chunk.data === undefined ? undefined : [...chunk.data] }
+    )
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -211,6 +226,21 @@ describe('FractionalizeTopicManager', () => {
     expect(result.outputsToAdmit).toEqual([])
   })
 
+  it('returns empty when parsed transaction outputs are missing', async () => {
+    const fromBEEF = jest.spyOn(Transaction, 'fromBEEF').mockReturnValueOnce({
+      outputs: []
+    } as unknown as Transaction)
+
+    try {
+      await expect(manager.identifyAdmissibleOutputs([], [])).resolves.toEqual({
+        outputsToAdmit: [],
+        coinsToRetain: []
+      })
+    } finally {
+      fromBEEF.mockRestore()
+    }
+  })
+
   it('admits a valid server-token script', async () => {
     // test.skip if constructing the script is too fragile — but we attempt it
     const lockingScript = buildServerTokenScript()
@@ -234,6 +264,35 @@ describe('FractionalizeTopicManager', () => {
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(result.outputsToAdmit).toContain(0)
+  })
+
+  it.each([
+    ['server-token formatStart', () => replaceChunk(buildServerTokenScript(), 2, { op: 3, data: [0, 0, 0] })],
+    ['server-token formatMiddle', () => replaceChunk(buildServerTokenScript(), 8, { op: 0x51 })],
+    ['server-token short hash', () => replaceChunk(buildServerTokenScript(), 11, { op: 19, data: Array(19).fill(0) })],
+    ['server-token missing hash', () => replaceChunk(buildServerTokenScript(), 11, { op: 0 })],
+    ['server-token formatEnd', () => replaceChunk(buildServerTokenScript(), 12, { op: 0x51 })],
+    ['server-token OP_RETURN opcode', () => replaceChunk(buildServerTokenScript(), 20, { op: 0x51, data: [1] })],
+    ['server-token empty OP_RETURN data', () => replaceChunk(buildServerTokenScript(), 20, { op: 0x6a, data: [] })],
+    ['server-token missing OP_RETURN data', () => replaceChunk(buildServerTokenScript(), 20, { op: 0x6a })],
+    ['transfer-token formatStart', () => replaceChunk(buildTransferTokenScript(), 2, { op: 3, data: [0, 0, 0] })],
+    ['transfer-token formatMiddle', () => replaceChunk(buildTransferTokenScript(), 8, { op: 0x51 })],
+    ['transfer-token short hash', () => replaceChunk(buildTransferTokenScript(), 10, { op: 19, data: Array(19).fill(0) })],
+    ['transfer-token missing hash', () => replaceChunk(buildTransferTokenScript(), 10, { op: 0 })],
+    ['transfer-token formatEnd', () => replaceChunk(buildTransferTokenScript(), 11, { op: 0x51 })],
+    ['transfer-token OP_RETURN opcode', () => replaceChunk(buildTransferTokenScript(), 13, { op: 0x51, data: [1] })],
+    ['transfer-token empty OP_RETURN data', () => replaceChunk(buildTransferTokenScript(), 13, { op: 0x6a, data: [] })],
+    ['transfer-token missing OP_RETURN data', () => replaceChunk(buildTransferTokenScript(), 13, { op: 0x6a })],
+    ['payment formatStart', () => replaceChunk(buildPaymentScript(), 0, { op: 0x51 })],
+    ['payment short hash', () => replaceChunk(buildPaymentScript(), 3, { op: 19, data: Array(19).fill(0) })],
+    ['payment missing hash', () => replaceChunk(buildPaymentScript(), 3, { op: 0 })],
+    ['payment formatEnd', () => replaceChunk(buildPaymentScript(), 4, { op: 0x51 })]
+  ])('rejects malformed %s', async (_caseName, makeScript) => {
+    const tx = buildTxWithInput([makeScript()])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+
+    expect(result.outputsToAdmit).toEqual([])
   })
 
   it('getDocumentation returns a non-empty string', async () => {

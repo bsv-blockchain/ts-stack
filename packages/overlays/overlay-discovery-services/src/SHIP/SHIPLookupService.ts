@@ -1,9 +1,22 @@
-import { LookupService, LookupQuestion, LookupFormula, AdmissionMode, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
+import {
+  LookupService,
+  LookupQuestion,
+  LookupFormula,
+  AdmissionMode,
+  OutputAdmittedByTopic,
+  OutputSpent,
+  SpendNotificationMode
+} from '@bsv/overlay'
 
 import { SHIPStorage } from './SHIPStorage.js'
 import { PushDrop, Utils } from '@bsv/sdk'
 import { SHIPQuery } from '../types.js'
 import SHIPLookupDocs from './SHIPLookup.docs.js'
+import {
+  validateOptionalString,
+  validateOptionalStringArray,
+  validatePaginationQuery
+} from '../utils/lookupQueryValidation.js'
 
 /**
  * Implements the SHIP lookup service
@@ -14,9 +27,9 @@ import SHIPLookupDocs from './SHIPLookup.docs.js'
 export class SHIPLookupService implements LookupService {
   admissionMode: AdmissionMode = 'locking-script'
   spendNotificationMode: SpendNotificationMode = 'none'
-  constructor (public storage: SHIPStorage) { }
+  constructor(public storage: SHIPStorage) {}
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { topic, lockingScript, txid, outputIndex } = payload
     if (topic !== 'tm_ship') return
@@ -30,18 +43,18 @@ export class SHIPLookupService implements LookupService {
     await this.storage.storeSHIPRecord(txid, outputIndex, identityKey, domain, topicSupported)
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_ship') return
     await this.storage.deleteSHIPRecord(txid, outputIndex)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storage.deleteSHIPRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided!')
     }
@@ -49,69 +62,32 @@ export class SHIPLookupService implements LookupService {
       throw new Error('Lookup service not supported!')
     }
 
-    // Handle legacy "findAll" string query
-    if (question.query === 'findAll') {
-      return await this.storage.findAll()
+    if (question.query === 'findAll') return await this.storage.findAll()
+    if (typeof question.query !== 'object') {
+      throw new TypeError(
+        'Invalid query format. Query must be "findAll" string or an object with valid parameters.'
+      )
     }
-
-    // Handle object-based query
-    if (typeof question.query === 'object') {
-      const query = question.query as SHIPQuery
-
-      // Handle new findAll mode with pagination
-      if (query.findAll) {
-        const { limit, skip, sortOrder } = query
-
-        // Validate pagination parameters
-        if (limit !== undefined && (typeof limit !== 'number' || limit < 0)) {
-          throw new Error('query.limit must be a positive number if provided')
-        }
-        if (skip !== undefined && (typeof skip !== 'number' || skip < 0)) {
-          throw new Error('query.skip must be a non-negative number if provided')
-        }
-        if (sortOrder !== undefined && sortOrder !== 'asc' && sortOrder !== 'desc') {
-          throw new Error('query.sortOrder must be "asc" or "desc" if provided')
-        }
-
-        return await this.storage.findAll(limit, skip, sortOrder)
-      }
-
-      // Handle specific query with domain, topics, identityKey
-      const { domain, topics, identityKey, limit, skip, sortOrder } = query
-
-      // Validate query parameters
-      if (typeof domain !== 'string' && domain !== undefined) {
-        throw new Error('query.domain must be a string if provided')
-      }
-      if (!Array.isArray(topics) && topics !== undefined) {
-        throw new Error('query.topics must be an array of strings if provided')
-      }
-      if (typeof identityKey !== 'string' && identityKey !== undefined) {
-        throw new Error('query.identityKey must be a string if provided')
-      }
-
-      // Validate pagination parameters
-      if (limit !== undefined && (typeof limit !== 'number' || limit < 0)) {
-        throw new Error('query.limit must be a positive number if provided')
-      }
-      if (skip !== undefined && (typeof skip !== 'number' || skip < 0)) {
-        throw new Error('query.skip must be a non-negative number if provided')
-      }
-      if (sortOrder !== undefined && sortOrder !== 'asc' && sortOrder !== 'desc') {
-        throw new Error('query.sortOrder must be "asc" or "desc" if provided')
-      }
-
-      return await this.storage.findRecord({ domain, topics, identityKey, limit, skip, sortOrder })
-    }
-
-    throw new Error('Invalid query format. Query must be "findAll" string or an object with valid parameters.')
+    return await this.lookupObject(question.query as SHIPQuery)
   }
 
-  async getDocumentation (): Promise<string> {
+  private async lookupObject(query: SHIPQuery): Promise<LookupFormula> {
+    validatePaginationQuery(query)
+    const { limit, skip, sortOrder } = query
+    if (query.findAll) return await this.storage.findAll(limit, skip, sortOrder)
+
+    validateOptionalString(query.domain, 'query.domain')
+    validateOptionalStringArray(query.topics, 'query.topics')
+    validateOptionalString(query.identityKey, 'query.identityKey')
+    const { domain, topics, identityKey } = query
+    return await this.storage.findRecord({ domain, topics, identityKey, limit, skip, sortOrder })
+  }
+
+  async getDocumentation(): Promise<string> {
     return SHIPLookupDocs
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

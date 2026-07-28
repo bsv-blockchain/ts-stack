@@ -94,6 +94,16 @@ describe('BTMS Topic Manager', () => {
       expectAdmitted(admitted, { outputsToAdmit: [0], coinsToRetain: [] }, [])
     })
 
+    it('Admits issuance output with long printable metadata', async () => {
+      const lockingScript = createPushDropScript(testPubKey, ['ISSUE', '100', 'a'.repeat(80)])
+      const tx = new Transaction()
+      tx.addOutput({ lockingScript, satoshis: 1000 })
+
+      const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [])
+
+      expectAdmitted(admitted, { outputsToAdmit: [0], coinsToRetain: [] }, [])
+    })
+
     it('Rejects issuance output when amount is non-integer', async () => {
       const lockingScript = createPushDropScript(testPubKey, ['ISSUE', '1.5'])
       const tx = new Transaction()
@@ -532,6 +542,92 @@ describe('BTMS Topic Manager', () => {
 
       // No outputs, no coins retained
       expectAdmitted(admitted, { outputsToAdmit: [], coinsToRetain: [] }, [0, 1])
+    })
+  })
+
+  describe('Malformed and unavailable previous coins', () => {
+    it('ignores a previous coin index that is not present in the transaction', async () => {
+      const tx = new Transaction()
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['ISSUE', '100']),
+        satoshis: 1000
+      })
+
+      const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [99])
+
+      expectAdmitted(admitted, { outputsToAdmit: [0], coinsToRetain: [] }, [99])
+    })
+
+    it('ignores an unresolved source transaction', async () => {
+      const tx = new Transaction()
+      tx.addInput({
+        sourceTXID: '11'.repeat(32),
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['ISSUE', '100']),
+        satoshis: 1000
+      })
+
+      const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [0])
+
+      expectAdmitted(admitted, { outputsToAdmit: [0], coinsToRetain: [] }, [0])
+    })
+
+    it('ignores a decodable previous output that is not a BTMS token', async () => {
+      const sourceTx = new Transaction()
+      sourceTx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['asset', '1', 'metadata', [1], 'extra']),
+        satoshis: 1000
+      })
+      const tx = new Transaction()
+      tx.addInput({
+        sourceTransaction: sourceTx,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['ISSUE', '100']),
+        satoshis: 1000
+      })
+
+      const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [0])
+
+      expectAdmitted(admitted, { outputsToAdmit: [0], coinsToRetain: [] }, [0])
+    })
+
+    it('isolates malformed previous and destination scripts', async () => {
+      const malformed = new LockingScript([{ op: 0x51 }])
+      const sourceTx = new Transaction()
+      sourceTx.addOutput({ lockingScript: malformed, satoshis: 1000 })
+      const tx = new Transaction()
+      tx.addInput({
+        sourceTransaction: sourceTx,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addOutput({ lockingScript: malformed, satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['ISSUE', '100']),
+        satoshis: 1000
+      })
+
+      const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [0])
+
+      expectAdmitted(admitted, { outputsToAdmit: [1], coinsToRetain: [] }, [0])
+    })
+
+    it('rejects a transfer when no previous coin provides an allowance', async () => {
+      const tx = new Transaction()
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['unfunded-asset', '100']),
+        satoshis: 1000
+      })
+
+      const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [])
+
+      expectAdmitted(admitted, { outputsToAdmit: [], coinsToRetain: [] }, [])
     })
   })
 

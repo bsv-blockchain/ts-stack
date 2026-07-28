@@ -6,11 +6,11 @@ const TAG = '$bsvBinary'
 const ESCAPED = 'escaped'
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
-function getBufferCtor (): any {
+function getBufferCtor(): any {
   return typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 }
 
-function toBase64 (bytes: Uint8Array): string {
+function toBase64(bytes: Uint8Array): string {
   const BufferCtor = getBufferCtor()
   if (BufferCtor != null) return BufferCtor.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64')
   if (typeof globalThis.btoa === 'function') {
@@ -34,7 +34,7 @@ function toBase64 (bytes: Uint8Array): string {
   return encoded
 }
 
-function fromBase64 (base64: string): Uint8Array {
+function validateBase64(base64: string): number {
   if (base64.length % 4 !== 0) throw new TypeError('Invalid base64 binary JSON value')
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
   const contentLength = base64.length - padding
@@ -47,20 +47,13 @@ function fromBase64 (base64: string): Uint8Array {
   if (
     (padding === 1 && (BASE64.indexOf(base64[contentLength - 1]) & 3) !== 0) ||
     (padding === 2 && (BASE64.indexOf(base64[contentLength - 1]) & 15) !== 0)
-  ) throw new TypeError('Invalid base64 binary JSON value')
+  )
+    throw new TypeError('Invalid base64 binary JSON value')
+  return padding
+}
 
-  const BufferCtor = getBufferCtor()
-  if (BufferCtor != null) {
-    const buffer = BufferCtor.from(base64, 'base64')
-    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-  }
-  if (typeof globalThis.atob === 'function') {
-    const binary = globalThis.atob(base64)
-    // Uint8Array.from performs the conversion in the native collection
-    // primitive and avoids an attacker-controlled JavaScript loop bound.
-    return Uint8Array.from(binary, character => character.charCodeAt(0))
-  }
-  const bytes = new Uint8Array(Math.floor(base64.length * 3 / 4) - padding)
+function decodeBase64WithoutPlatformSupport(base64: string, padding: number): Uint8Array {
+  const bytes = new Uint8Array(Math.floor((base64.length * 3) / 4) - padding)
   let offset = 0
   for (let i = 0; i < base64.length; i += 4) {
     const first = BASE64.indexOf(base64[i])
@@ -75,53 +68,80 @@ function fromBase64 (base64: string): Uint8Array {
   return bytes
 }
 
-function isTaggedBinary (value: unknown): value is { [TAG]: typeof BINARY_ENCODING, data: string } {
-  return value != null && typeof value === 'object' &&
-    (value as any)[TAG] === BINARY_ENCODING && typeof (value as any).data === 'string' &&
-    Object.keys(value).length === 2
+function fromBase64(base64: string): Uint8Array {
+  const padding = validateBase64(base64)
+  const BufferCtor = getBufferCtor()
+  if (BufferCtor != null) {
+    const buffer = BufferCtor.from(base64, 'base64')
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+  }
+  if (typeof globalThis.atob === 'function') {
+    const binary = globalThis.atob(base64)
+    // Uint8Array.from performs the conversion in the native collection
+    // primitive and avoids an attacker-controlled JavaScript loop bound.
+    return Uint8Array.from(binary, character => character.charCodeAt(0))
+  }
+  return decodeBase64WithoutPlatformSupport(base64, padding)
 }
 
-function isBufferJson (value: unknown): value is { type: 'Buffer', data: number[] } {
-  return value != null && typeof value === 'object' &&
-    (value as any).type === 'Buffer' && Array.isArray((value as any).data) &&
+function isTaggedBinary(value: unknown): value is { [TAG]: typeof BINARY_ENCODING; data: string } {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    (value as any)[TAG] === BINARY_ENCODING &&
+    typeof (value as any).data === 'string' &&
     Object.keys(value).length === 2
+  )
 }
 
-function isEscapedJson (value: unknown): value is { [TAG]: typeof ESCAPED, entries: Array<[string, unknown]> } {
-  return value != null && typeof value === 'object' &&
-    (value as any)[TAG] === ESCAPED && Array.isArray((value as any).entries) &&
+function isBufferJson(value: unknown): value is { type: 'Buffer'; data: number[] } {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    (value as any).type === 'Buffer' &&
+    Array.isArray((value as any).data) &&
+    Object.keys(value).length === 2
+  )
+}
+
+function isEscapedJson(value: unknown): value is { [TAG]: typeof ESCAPED; entries: Array<[string, unknown]> } {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    (value as any)[TAG] === ESCAPED &&
+    Array.isArray((value as any).entries) &&
     Object.keys(value).length === 2 &&
-    (value as any).entries.every((entry: unknown) =>
-      Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'string'
+    (value as any).entries.every(
+      (entry: unknown) => Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'string'
     )
+  )
 }
 
-function escapeJsonObject (value: object): unknown {
+function escapeJsonObject(value: object): unknown {
   return { [TAG]: ESCAPED, entries: Object.entries(value) }
 }
 
-function defineOwnValues (
-  target: object,
-  values: Array<readonly [string, unknown]>
-): void {
+function defineOwnValues(target: object, values: Array<readonly [string, unknown]>): void {
   // Build the descriptors through Object.fromEntries so reserved keys such as
   // __proto__ remain ordinary own data properties. Defining the batch avoids
   // both prototype setters and individual writes through remote property names.
   Object.defineProperties(
     target,
-    Object.fromEntries(values.map(([key, value]) => [
-      key,
-      {
-        value,
-        writable: true,
-        enumerable: true,
-        configurable: true
-      }
-    ]))
+    Object.fromEntries(
+      values.map(([key, value]) => [
+        key,
+        {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        }
+      ])
+    )
   )
 }
 
-function collectDecodedChild (
+function collectDecodedChild(
   key: string,
   child: unknown,
   replacements: Array<readonly [string, unknown]>,
@@ -138,7 +158,7 @@ function collectDecodedChild (
   }
 }
 
-export function binaryJsonReplacer (this: Record<string, unknown>, key: string, value: unknown): unknown {
+export function binaryJsonReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown {
   if (value instanceof Uint8Array) return { [TAG]: BINARY_ENCODING, data: toBase64(value) }
   if (value == null || typeof value !== 'object') return value
   // Buffer.toJSON runs before a JSON replacer, but the holder still contains
@@ -152,18 +172,18 @@ export function binaryJsonReplacer (this: Record<string, unknown>, key: string, 
   return value
 }
 
-export function legacyBinaryJsonReplacer (_key: string, value: unknown): unknown {
+export function legacyBinaryJsonReplacer(_key: string, value: unknown): unknown {
   if (value instanceof Uint8Array) return Array.from(value)
   return value
 }
 
-export function binaryJsonReviver (_key: string, value: unknown): unknown {
+export function binaryJsonReviver(_key: string, value: unknown): unknown {
   if (isTaggedBinary(value)) return fromBase64(value.data)
   if (isEscapedJson(value)) return Object.fromEntries(value.entries)
   return value
 }
 
-export function decodeBinaryJsonValue (value: unknown): unknown {
+export function decodeBinaryJsonValue(value: unknown): unknown {
   if (isTaggedBinary(value)) return fromBase64(value.data)
   if (value == null || typeof value !== 'object') return value
 
@@ -184,10 +204,10 @@ export function decodeBinaryJsonValue (value: unknown): unknown {
   return decoded
 }
 
-export function stringifyJsonRpc (value: unknown, binary: boolean): string {
+export function stringifyJsonRpc(value: unknown, binary: boolean): string {
   return JSON.stringify(value, binary ? binaryJsonReplacer : legacyBinaryJsonReplacer)
 }
 
-export function parseJsonRpc (text: string, binary: boolean = false): any {
+export function parseJsonRpc(text: string, binary: boolean = false): any {
   return binary ? JSON.parse(text, binaryJsonReviver) : JSON.parse(text)
 }

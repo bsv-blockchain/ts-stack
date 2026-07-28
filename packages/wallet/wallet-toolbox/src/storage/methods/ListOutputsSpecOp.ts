@@ -57,7 +57,7 @@ export interface ListOutputsSpecOp {
 
 const INVALID_CHANGE_MAX_CONCURRENCY = 12
 
-async function runWithConcurrency<T> (
+async function runWithConcurrency<T>(
   values: T[],
   maxConcurrency: number,
   worker: (value: T) => Promise<void>
@@ -124,7 +124,7 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
           if (!o.basketId) return // only care about outputs assigned to baskets.
           await s.validateOutputScript(o)
           let ok: boolean | undefined = false
-          if ((o.lockingScript != null) && o.lockingScript.length > 0) {
+          if (o.lockingScript != null && o.lockingScript.length > 0) {
             ok = await services.isUtxo(o)
           } else {
             ok = undefined
@@ -152,7 +152,9 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         vargs: Validation.ValidListOutputsArgs,
         specOpTags: string[]
       ): Promise<ListOutputsResult> => {
-        if (specOpTags.length !== 2) { throw new WERR_INVALID_PARAMETER('numberOfDesiredUTXOs and minimumDesiredUTXOValue', 'valid') }
+        if (specOpTags.length !== 2) {
+          throw new WERR_INVALID_PARAMETER('numberOfDesiredUTXOs and minimumDesiredUTXOValue', 'valid')
+        }
         const numberOfDesiredUTXOs: number = verifyInteger(Number(specOpTags[0]))
         const minimumDesiredUTXOValue: number = verifyInteger(Number(specOpTags[1]))
         const basket = verifyOne(
@@ -195,39 +197,47 @@ const getTagToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
 let _basketSpecOps: Record<string, ListOutputsSpecOp> | undefined
 let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined
 
+function resolveBasketSpecOp(
+  basket: string,
+  tags: string[]
+): { specOp: ListOutputsSpecOp; basket?: string; tags: string[] } | undefined {
+  if (!basket) return undefined
+  _basketSpecOps ??= getBasketToSpecOp()
+  const specOp = _basketSpecOps[basket]
+  return specOp === undefined ? undefined : { specOp, basket: specOp.useBasket, tags: tags || [] }
+}
+
+function resolveTagSpecOp(
+  basket: string,
+  tags: string[]
+): { specOp: ListOutputsSpecOp; basket?: string; tags: string[] } | undefined {
+  if (!tags) return undefined
+  _tagSpecOps ??= getTagToSpecOp()
+  for (const tag of tags) {
+    const specOp = _tagSpecOps[tag]
+    if (specOp === undefined) continue
+    if (!basket && specOp.useBasket) basket = specOp.useBasket
+    // The balance tag is also used to sum application baskets. Preserve
+    // that behavior, while treating the default basket as wallet balance
+    // and therefore restricting it to managed BRC-29 change.
+    const resolvedSpecOp =
+      specOp === _tagSpecOps[specOpWalletBalance] && basket === 'default'
+        ? { ...specOp, managedChangeOnly: true }
+        : specOp
+    return { specOp: resolvedSpecOp, basket, tags: tags.filter(candidate => candidate !== tag) }
+  }
+  return undefined
+}
+
 /**
  * Check basket and tags arguments passed to listOutputs to determine if they trigger a special operation execution mode.
  * @param basket
  * @param tags
  * @returns
  */
-export function getListOutputsSpecOp (
+export function getListOutputsSpecOp(
   basket: string,
   tags: string[]
-): { specOp: ListOutputsSpecOp | undefined, basket?: string, tags: string[] } {
-  let specOp: ListOutputsSpecOp | undefined
-  if (basket) {
-    _basketSpecOps ??= getBasketToSpecOp()
-    specOp = _basketSpecOps[basket]
-    if (specOp) {
-      return { specOp, basket: specOp.useBasket, tags: tags || [] }
-    }
-  }
-  if (tags) {
-    _tagSpecOps ??= getTagToSpecOp()
-    for (const tag of tags) {
-      specOp = _tagSpecOps[tag]
-      if (specOp) {
-        if (!basket && specOp.useBasket) basket = specOp.useBasket
-        // The balance tag is also used to sum application baskets. Preserve
-        // that behavior, while treating the default basket as wallet balance
-        // and therefore restricting it to managed BRC-29 change.
-        const resolvedSpecOp = specOp === _tagSpecOps[specOpWalletBalance] && basket === 'default'
-          ? { ...specOp, managedChangeOnly: true }
-          : specOp
-        return { specOp: resolvedSpecOp, basket, tags: tags.filter(t => t !== tag) }
-      }
-    }
-  }
-  return { specOp: undefined, basket, tags }
+): { specOp: ListOutputsSpecOp | undefined; basket?: string; tags: string[] } {
+  return resolveBasketSpecOp(basket, tags) ?? resolveTagSpecOp(basket, tags) ?? { specOp: undefined, basket, tags }
 }
