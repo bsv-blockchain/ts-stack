@@ -428,31 +428,43 @@ function stagedRuntimeClosure(manifest, stagedByName) {
   return [...closure].toSorted(compareStrings)
 }
 
-export function prepareSbomManifest(manifest, stagedByName) {
-  const rewritten = structuredClone(manifest)
-  const directRuntimeNames = new Set(runtimeDependencyNames(manifest))
+function rewriteDirectStagedDependencies(manifest, stagedByName) {
   for (const field of ['dependencies', 'optionalDependencies']) {
-    if (!rewritten[field]) continue
-    for (const name of Object.keys(rewritten[field])) {
+    if (!manifest[field]) continue
+    for (const name of Object.keys(manifest[field])) {
       const staged = stagedByName.get(name)
-      if (staged) rewritten[field][name] = `file:${staged.tarballPath}`
+      if (staged) manifest[field][name] = `file:${staged.tarballPath}`
     }
   }
-  for (const [name, range] of Object.entries(rewritten.peerDependencies ?? {})) {
-    if (rewritten.dependencies?.[name] || rewritten.optionalDependencies?.[name]) continue
-    const field = rewritten.peerDependenciesMeta?.[name]?.optional
+}
+
+function promotePeerDependencies(manifest, stagedByName) {
+  for (const [name, range] of Object.entries(manifest.peerDependencies ?? {})) {
+    if (manifest.dependencies?.[name] || manifest.optionalDependencies?.[name]) continue
+    const field = manifest.peerDependenciesMeta?.[name]?.optional
       ? 'optionalDependencies'
       : 'dependencies'
-    rewritten[field] ??= {}
+    manifest[field] ??= {}
     const staged = stagedByName.get(name)
-    rewritten[field][name] = staged ? `file:${staged.tarballPath}` : range
+    manifest[field][name] = staged ? `file:${staged.tarballPath}` : range
   }
+}
+
+function injectStagedClosure(manifest, stagedByName, injectedNames) {
+  for (const name of injectedNames) {
+    manifest.dependencies ??= {}
+    manifest.dependencies[name] = `file:${stagedByName.get(name).tarballPath}`
+  }
+}
+
+export function prepareSbomManifest(manifest, stagedByName) {
+  const rewritten = structuredClone(manifest)
+  rewriteDirectStagedDependencies(rewritten, stagedByName)
+  promotePeerDependencies(rewritten, stagedByName)
+  const directRuntimeNames = new Set(runtimeDependencyNames(manifest))
   const stagedClosure = stagedRuntimeClosure(manifest, stagedByName)
   const injectedNames = stagedClosure.filter(name => !directRuntimeNames.has(name))
-  for (const name of injectedNames) {
-    rewritten.dependencies ??= {}
-    rewritten.dependencies[name] = `file:${stagedByName.get(name).tarballPath}`
-  }
+  injectStagedClosure(rewritten, stagedByName, injectedNames)
   delete rewritten.devDependencies
   delete rewritten.scripts
   return { manifest: rewritten, injectedNames, stagedNames: stagedClosure }
