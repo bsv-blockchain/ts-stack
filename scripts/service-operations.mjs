@@ -54,118 +54,155 @@ const validateContainer = (container, prefix, errors) => {
   }
 }
 
-export async function validateServiceOperations(root = ROOT) {
-  const errors = []
-  const registry = await readJson(join(root, 'governance/service-operations.json'))
-  const containers = await readJson(join(root, 'governance/container-images.json'))
-
+const validateRegistryShape = (registry, containers, errors) => {
   if (registry.schemaVersion !== 1) errors.push('service-operations schemaVersion must be 1')
   const governedNames = containers.components.map(component => component.name).sort()
   const serviceNames = registry.services.map(service => service.name).sort()
   if (JSON.stringify(governedNames) !== JSON.stringify(serviceNames)) {
     errors.push('service-operations services must exactly match container-images components')
   }
+}
 
+const validateConfigMap = (document, manifestName, errors) => {
+  for (const [name, value] of Object.entries(document.data ?? {})) {
+    if (SECRET_NAME.test(name) && typeof value === 'string' && value !== '') {
+      errors.push(`${manifestName} ${name} must not contain secret material`)
+    }
+  }
+}
+
+const validateManifestWorkload = (spec, workload, errors) => {
+  if (spec.automountServiceAccountToken !== false) {
+    errors.push(`${workload} must disable service-account token mounting`)
+  }
+  for (const container of [...(spec.initContainers ?? []), ...(spec.containers ?? [])]) {
+    validateContainer(container, `${workload} container ${container.name}`, errors)
+  }
+}
+
+const validateManifestDocument = (root, manifest, document, errors) => {
+  const manifestName = `${relative(root, manifest)} ${document.kind}/${document.metadata?.name}`
+  if (document.kind === 'Secret') errors.push(`${manifestName} must not be checked in`)
+  if (document.kind === 'ConfigMap') validateConfigMap(document, manifestName, errors)
+  const spec = podSpec(document)
+  if (spec !== undefined) validateManifestWorkload(spec, manifestName, errors)
+}
+
+const validateManifestRoot = async (root, manifestRoot, errors) => {
+  const absoluteRoot = join(root, manifestRoot)
+  if (!existsSync(absoluteRoot)) {
+    errors.push(`service-operations references missing manifest root ${manifestRoot}`)
+    return
+  }
+  for (const manifest of await manifestFiles(absoluteRoot)) {
+    for (const document of await yamlDocuments(manifest)) {
+      validateManifestDocument(root, manifest, document, errors)
+    }
+  }
+}
+
+const REQUIRED_SERVICE_FIELDS = [
+  'path',
+  'port',
+  'livenessPath',
+  'readinessPath',
+  'state',
+  'migration',
+  'backup',
+  'operatorGuide'
+]
+
+const validateServiceFields = (service, prefix, errors) => {
+  for (const field of REQUIRED_SERVICE_FIELDS) {
+    if (typeof service[field] !== 'string' || service[field].trim() === '') {
+      errors.push(`${prefix} must define ${field}`)
+    }
+  }
+}
+
+const validateServiceDockerfile = async (root, service, prefix, errors) => {
+  const dockerfilePath = join(root, service.path, 'Dockerfile')
+  if (!existsSync(dockerfilePath)) {
+    errors.push(`${prefix} is missing Dockerfile`)
+    return
+  }
+  const dockerfile = await readFile(dockerfilePath, 'utf8')
+  if (!/^USER (?!root\b)\S+/m.test(dockerfile)) {
+    errors.push(`${prefix} Dockerfile must end in a non-root runtime user`)
+  }
+  if (!/^HEALTHCHECK /m.test(dockerfile)) {
+    errors.push(`${prefix} Dockerfile must define HEALTHCHECK`)
+  }
+  if (!dockerfile.includes(service.readinessPath)) {
+    errors.push(`${prefix} Dockerfile health check must use ${service.readinessPath}`)
+  }
+}
+
+const validateService = async (root, service, errors) => {
+  const prefix = `service ${service.name}`
+  validateServiceFields(service, prefix, errors)
+  for (const path of [service.path, service.operatorGuide]) {
+    if (!existsSync(join(root, path))) errors.push(`${prefix} references missing ${path}`)
+  }
+  await validateServiceDockerfile(root, service, prefix, errors)
+}
+
+const validatePodSecurity = (spec, prefix, errors) => {
+  if (spec.automountServiceAccountToken !== false) {
+    errors.push(`${prefix} must disable service-account token mounting`)
+  }
+  if (spec.securityContext?.runAsNonRoot !== true) {
+    errors.push(`${prefix} pod must require a non-root user`)
+  }
+  if (spec.securityContext?.seccompProfile?.type !== 'RuntimeDefault') {
+    errors.push(`${prefix} pod must use RuntimeDefault seccomp`)
+  }
+}
+
+const validateContainerSecurity = (container, prefix, errors) => {
+  if (container.securityContext?.allowPrivilegeEscalation !== false) {
+    errors.push(`${prefix} must disable privilege escalation`)
+  }
+  if (container.securityContext?.readOnlyRootFilesystem !== true) {
+    errors.push(`${prefix} must use a read-only root filesystem`)
+  }
+  if (!container.securityContext?.capabilities?.drop?.includes('ALL')) {
+    errors.push(`${prefix} must drop all Linux capabilities`)
+  }
+  for (const field of ['startupProbe', 'readinessProbe', 'livenessProbe', 'resources']) {
+    if (container[field] === undefined) errors.push(`${prefix} must define ${field}`)
+  }
+}
+
+const validateApplicationWorkload = async (root, workload, errors) => {
+  const documents = await workloadDocuments(join(root, workload.manifest))
+  const deployment = documents.find(document => document.kind === 'Deployment')
+  const spec = deployment === undefined ? undefined : podSpec(deployment)
+  const prefix = `${workload.manifest} container ${workload.container}`
+  const container = spec?.containers?.find(item => item.name === workload.container)
+  if (container === undefined) {
+    errors.push(`${prefix} is missing`)
+    return
+  }
+  validateContainer(container, prefix, errors)
+  validatePodSecurity(spec, prefix, errors)
+  validateContainerSecurity(container, prefix, errors)
+}
+
+export async function validateServiceOperations(root = ROOT) {
+  const errors = []
+  const registry = await readJson(join(root, 'governance/service-operations.json'))
+  const containers = await readJson(join(root, 'governance/container-images.json'))
+
+  validateRegistryShape(registry, containers, errors)
   for (const manifestRoot of registry.manifestRoots ?? []) {
-    const absoluteRoot = join(root, manifestRoot)
-    if (!existsSync(absoluteRoot)) {
-      errors.push(`service-operations references missing manifest root ${manifestRoot}`)
-      continue
-    }
-    for (const manifest of await manifestFiles(absoluteRoot)) {
-      for (const document of await yamlDocuments(manifest)) {
-        const manifestName = `${relative(root, manifest)} ${document.kind}/${document.metadata?.name}`
-        if (document.kind === 'Secret') {
-          errors.push(`${manifestName} must not be checked in`)
-        }
-        if (document.kind === 'ConfigMap') {
-          for (const [name, value] of Object.entries(document.data ?? {})) {
-            if (SECRET_NAME.test(name) && typeof value === 'string' && value !== '') {
-              errors.push(`${manifestName} ${name} must not contain secret material`)
-            }
-          }
-        }
-        const spec = podSpec(document)
-        if (spec === undefined) continue
-        const workload = manifestName
-        if (spec.automountServiceAccountToken !== false) {
-          errors.push(`${workload} must disable service-account token mounting`)
-        }
-        for (const container of [...(spec.initContainers ?? []), ...(spec.containers ?? [])]) {
-          validateContainer(container, `${workload} container ${container.name}`, errors)
-        }
-      }
-    }
+    await validateManifestRoot(root, manifestRoot, errors)
   }
-
   for (const service of registry.services) {
-    const prefix = `service ${service.name}`
-    for (const field of [
-      'path',
-      'port',
-      'livenessPath',
-      'readinessPath',
-      'state',
-      'migration',
-      'backup',
-      'operatorGuide'
-    ]) {
-      if (typeof service[field] !== 'string' || service[field].trim() === '') {
-        errors.push(`${prefix} must define ${field}`)
-      }
-    }
-    for (const path of [service.path, service.operatorGuide]) {
-      if (!existsSync(join(root, path))) errors.push(`${prefix} references missing ${path}`)
-    }
-    const dockerfilePath = join(root, service.path, 'Dockerfile')
-    if (!existsSync(dockerfilePath)) {
-      errors.push(`${prefix} is missing Dockerfile`)
-      continue
-    }
-    const dockerfile = await readFile(dockerfilePath, 'utf8')
-    if (!/^USER (?!root\b)\S+/m.test(dockerfile)) {
-      errors.push(`${prefix} Dockerfile must end in a non-root runtime user`)
-    }
-    if (!/^HEALTHCHECK /m.test(dockerfile)) {
-      errors.push(`${prefix} Dockerfile must define HEALTHCHECK`)
-    }
-    if (!dockerfile.includes(service.readinessPath)) {
-      errors.push(`${prefix} Dockerfile health check must use ${service.readinessPath}`)
-    }
+    await validateService(root, service, errors)
   }
-
   for (const workload of registry.applicationWorkloads) {
-    const documents = await workloadDocuments(join(root, workload.manifest))
-    const deployment = documents.find(document => document.kind === 'Deployment')
-    const spec = deployment === undefined ? undefined : podSpec(deployment)
-    const prefix = `${workload.manifest} container ${workload.container}`
-    const container = spec?.containers?.find(item => item.name === workload.container)
-    if (container === undefined) {
-      errors.push(`${prefix} is missing`)
-      continue
-    }
-    validateContainer(container, prefix, errors)
-    if (spec.automountServiceAccountToken !== false) {
-      errors.push(`${prefix} must disable service-account token mounting`)
-    }
-    if (spec.securityContext?.runAsNonRoot !== true) {
-      errors.push(`${prefix} pod must require a non-root user`)
-    }
-    if (spec.securityContext?.seccompProfile?.type !== 'RuntimeDefault') {
-      errors.push(`${prefix} pod must use RuntimeDefault seccomp`)
-    }
-    if (container.securityContext?.allowPrivilegeEscalation !== false) {
-      errors.push(`${prefix} must disable privilege escalation`)
-    }
-    if (container.securityContext?.readOnlyRootFilesystem !== true) {
-      errors.push(`${prefix} must use a read-only root filesystem`)
-    }
-    if (!container.securityContext?.capabilities?.drop?.includes('ALL')) {
-      errors.push(`${prefix} must drop all Linux capabilities`)
-    }
-    for (const field of ['startupProbe', 'readinessProbe', 'livenessProbe', 'resources']) {
-      if (container[field] === undefined) errors.push(`${prefix} must define ${field}`)
-    }
+    await validateApplicationWorkload(root, workload, errors)
   }
 
   return { errors, registry }

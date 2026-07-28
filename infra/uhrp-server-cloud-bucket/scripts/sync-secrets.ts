@@ -3,7 +3,8 @@
  *
  * Requirements:
  * - GitHub CLI installed: https://cli.github.com/
- * - Logged in: `gh auth login`s
+ * - Logged in: `gh auth login`
+ * - Optional absolute CLI overrides: `GH_CLI_PATH`, `GIT_CLI_PATH`
  *
  * Usage:
  *   npm run secrets:staging
@@ -13,9 +14,19 @@
  * Writes: Environment Secrets named KEY (unprefixed), scoped to the selected environment.
  */
 
-import { spawnSync, execSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import { execFileSync, spawnSync } from 'node:child_process'
+import {
+  accessSync,
+  constants,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { isAbsolute, join } from 'node:path'
 
 type EnvName = 'staging' | 'prod'
 
@@ -48,14 +59,14 @@ bulkSetSecrets(repo, envLabel, kv)
 console.log(`Done. Pushed ${keys.length} secrets to ${repo} (${envLabel})`)
 
 function ensureGhAuth() {
-  const res = spawnSync('gh', ['auth', 'status'], { stdio: 'ignore' })
+  const res = spawnSync(getGhExecutable(), ['auth', 'status'], { stdio: 'ignore' })
   if (res.status !== 0) die('GitHub CLI not authenticated. Run: gh auth login')
 }
 
 function ensureEnvironment(repository: string, env: string) {
   // 1) Check if the environment exists
   const check = spawnSync(
-    'gh',
+    getGhExecutable(),
     ['api', `repos/${repository}/environments/${encodeURIComponent(env)}`],
     { stdio: 'ignore' }
   )
@@ -64,7 +75,7 @@ function ensureEnvironment(repository: string, env: string) {
   console.log(`Creating environment '${env}' in ${repository}...`)
   // 2) Create it (no body needed for basic create)
   const res = spawnSync(
-    'gh',
+    getGhExecutable(),
     ['api', '-X', 'PUT', `repos/${repository}/environments/${encodeURIComponent(env)}`],
     { stdio: 'inherit' }
   )
@@ -101,7 +112,15 @@ function die(msg: string): never {
 
 function getRepoFromGit(): string {
   try {
-    const url = execSync('git config --get remote.origin.url').toString().trim()
+    const url = execFileSync(
+      getTrustedExecutable('GIT_CLI_PATH', [
+        '/usr/bin/git',
+        '/opt/homebrew/bin/git',
+        '/usr/local/bin/git'
+      ]),
+      ['config', '--get', 'remote.origin.url'],
+      { encoding: 'utf8' }
+    ).trim()
     if (url.startsWith('git@github.com:')) {
       return stripGitSuffix(url.slice('git@github.com:'.length))
     }
@@ -118,17 +137,48 @@ function stripGitSuffix(repo: string): string {
   return repo.endsWith('.git') ? repo.slice(0, -4) : repo
 }
 
+function getGhExecutable(): string {
+  return getTrustedExecutable('GH_CLI_PATH', [
+    '/usr/bin/gh',
+    '/opt/homebrew/bin/gh',
+    '/usr/local/bin/gh'
+  ])
+}
+
+function getTrustedExecutable(environmentName: string, defaults: string[]): string {
+  const configured = process.env[environmentName]
+  const candidates = configured === undefined ? defaults : [configured]
+  for (const candidate of candidates) {
+    if (!isAbsolute(candidate)) continue
+    try {
+      accessSync(candidate, constants.X_OK)
+      return realpathSync(candidate)
+    } catch {}
+  }
+  const instruction =
+    configured === undefined
+      ? `Install the CLI in one of: ${defaults.join(', ')}`
+      : `${environmentName} must name an existing executable by absolute path`
+  throw new Error(instruction)
+}
+
 function bulkSetSecrets(repository: string, env: string, kv: Record<string, string>) {
-  const tmp = join(process.cwd(), `.tmp_${env}_secrets_${Date.now()}.env`)
-  const lines = Object.entries(kv).map(([k, v]) =>
-    `${k}=${v.replace(/\n/g, String.raw`\n`)}`
-  )
-  writeFileSync(tmp, lines.join('\n'))
-  const res = spawnSync('gh', ['secret', 'set', '-R', repository, '-e', env, '-f', tmp], {
-    stdio: 'inherit'
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'uhrp-secrets-'))
+  const temporaryFile = join(temporaryDirectory, `${env}.env`)
+  const escapedNewline = String.raw`\n`
+  const lines = Object.entries(kv).map(([key, value]) => {
+    return `${key}=${value.split('\n').join(escapedNewline)}`
   })
+  let status: number | null = null
   try {
-    unlinkSync(tmp)
-  } catch {}
-  if (res.status !== 0) die(`Bulk secret set failed for env ${env}`)
+    writeFileSync(temporaryFile, lines.join('\n'), { encoding: 'utf8', mode: 0o600 })
+    status = spawnSync(
+      getGhExecutable(),
+      ['secret', 'set', '-R', repository, '-e', env, '-f', temporaryFile],
+      { stdio: 'inherit' }
+    ).status
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true })
+  }
+  if (status !== 0) die(`Bulk secret set failed for env ${env}`)
 }
