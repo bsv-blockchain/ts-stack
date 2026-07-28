@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-28",
+  "owner": "ts-stack-maintainers",
+  "entries": [
+    {
+      "name": "@bsv/402-pay",
+      "publishedVersion": "0.2.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/amountinator",
+      "publishedVersion": "2.1.1",
+      "releaseType": "patch",
+      "summary": "Adds the strict package and artifact contract and hardens amount formatting without changing the public API.",
+      "migration": "No consumer migration is required; this is a backward-compatible patch candidate."
+    },
+    {
+      "name": "@bsv/auth",
+      "publishedVersion": "0.1.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/auth-express-middleware",
+      "publishedVersion": "2.1.2",
+      "releaseType": "patch",
+      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries.",
+      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained."
+    },
+    {
+      "name": "@bsv/authsocket",
+      "publishedVersion": "2.1.1",
+      "releaseType": "patch",
+      "summary": "Adds an idempotent server shutdown API that closes authenticated sockets and the attached HTTP listener.",
+      "migration": "No existing behavior changes automatically; service owners can call await server.close() during graceful shutdown."
+    },
+    {
+      "name": "@bsv/authsocket-client",
+      "publishedVersion": "2.1.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/btms",
+      "publishedVersion": "1.1.1",
+      "releaseType": "patch",
+      "summary": "Adds strict package contracts and hardens untrusted-key accounting and token-manager maintainability.",
+      "migration": "No consumer migration is required; token and lookup wire contracts are unchanged."
+    },
+    {
+      "name": "@bsv/btms-permission-module",
+      "publishedVersion": "1.1.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/did",
+      "publishedVersion": "0.2.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/did-client",
+      "publishedVersion": "1.2.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/fund-wallet",
+      "publishedVersion": "1.4.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/gasp",
+      "publishedVersion": "1.3.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/message-box-client",
+      "publishedVersion": "2.2.2",
+      "releaseType": "patch",
+      "summary": "Adds strict package contracts and hardens PeerPay parsing, proof handling, cancellation, classification, and acknowledgement flows.",
+      "migration": "No consumer migration is required; Message Box protocol and client entry points are unchanged."
+    },
+    {
+      "name": "@bsv/overlay",
+      "publishedVersion": "2.2.1",
+      "releaseType": "patch",
+      "summary": "Repairs the documented storage export and reduces production complexity while preserving Engine and storage behavior.",
+      "migration": "No consumer migration is required; existing imports remain valid and the documented storage subpath is restored."
+    },
+    {
+      "name": "@bsv/overlay-discovery-services",
+      "publishedVersion": "2.1.1",
+      "releaseType": "patch",
+      "summary": "Hardens discovery URI and registry validation and reduces production complexity without changing SHIP or SLAP contracts.",
+      "migration": "No consumer migration is required; discovery records and public network behavior are unchanged."
+    },
+    {
+      "name": "@bsv/overlay-express",
+      "publishedVersion": "2.4.2",
+      "releaseType": "patch",
+      "summary": "Adds strict package and edge-policy contracts, restores declaration-safe exports, and adds idempotent HTTP, synchronization, and database shutdown.",
+      "migration": "No consumer migration is required; wildcard credential-free public access remains the default and runtimes may opt into the new close method."
+    },
+    {
+      "name": "@bsv/overlay-topics",
+      "publishedVersion": "1.6.1",
+      "releaseType": "patch",
+      "summary": "Hardens registry, discovery, and supply-chain validation and reduces topic and lookup production complexity.",
+      "migration": "No consumer migration is required; topic IDs, lookup contracts, and persisted formats are unchanged."
+    },
+    {
+      "name": "@bsv/paymail",
+      "publishedVersion": "2.4.2",
+      "releaseType": "patch",
+      "summary": "Modernizes the package contract and hardens DNS, capability discovery, and browser-compatible Paymail behavior.",
+      "migration": "No consumer migration is required; existing Paymail client APIs and protocol semantics are retained."
+    },
+    {
+      "name": "@bsv/payment-express-middleware",
+      "publishedVersion": "2.1.1",
+      "releaseType": "patch",
+      "summary": "Standardizes package quality and strengthens payment middleware validation, edge policy, and failure handling.",
+      "migration": "No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported."
+    },
+    {
+      "name": "@bsv/sdk",
+      "publishedVersion": "2.2.0",
+      "releaseType": "patch",
+      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, and production maintainability remediation.",
+      "migration": "No consumer migration is required; the source candidate preserves the 2.x public API and supported import forms."
+    },
+    {
+      "name": "@bsv/simple",
+      "publishedVersion": "0.4.1",
+      "releaseType": "patch",
+      "summary": "Adds strict browser and server package contracts and hardens wallet construction, output handling, and error behavior.",
+      "migration": "No consumer migration is required; the browser and server entry points remain compatible."
+    },
+    {
+      "name": "@bsv/templates",
+      "publishedVersion": "1.9.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/teranode-listener",
+      "publishedVersion": "1.1.1",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/verifast",
+      "publishedVersion": "0.3.0",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    },
+    {
+      "name": "@bsv/wallet-helper",
+      "publishedVersion": "0.1.1",
+      "releaseType": "patch",
+      "summary": "Adds strict package contracts and hardens transaction-builder and OP_RETURN validation behavior.",
+      "migration": "No consumer migration is required; fluent builder APIs and transaction semantics are unchanged."
+    },
+    {
+      "name": "@bsv/wallet-relay",
+      "publishedVersion": "0.2.2",
+      "releaseType": "patch",
+      "summary": "Adds the strict package and artifact contract and strengthens relay runtime and declaration consistency.",
+      "migration": "No consumer migration is required; relay protocol and CLI entry points are unchanged."
+    },
+    {
+      "name": "@bsv/wallet-toolbox",
+      "publishedVersion": "2.4.4",
+      "releaseType": "patch",
+      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, strict package contracts, and broad production maintainability improvements.",
+      "migration": "No consumer migration is required; persisted schemas and the 2.x wallet and storage interfaces remain compatible."
+    },
+    {
+      "name": "@bsv/wallet-toolbox-client",
+      "publishedVersion": "2.4.4",
+      "releaseType": "patch",
+      "summary": "Carries the lockstep Wallet Toolbox client candidate with transport, validation, package, and declaration hardening.",
+      "migration": "No consumer migration is required; client entry points and remote storage contracts remain compatible."
+    },
+    {
+      "name": "@bsv/wallet-toolbox-mobile",
+      "publishedVersion": "2.4.4",
+      "releaseType": "patch",
+      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with platform, package, declaration, and transport hardening.",
+      "migration": "No consumer migration is required; React Native and mobile bridge contracts remain compatible."
+    },
+    {
+      "name": "create-bsv-app",
+      "publishedVersion": "1.0.2",
+      "releaseType": "none",
+      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
+      "migration": "No migration is pending for the current source version."
+    }
+  ]
+}

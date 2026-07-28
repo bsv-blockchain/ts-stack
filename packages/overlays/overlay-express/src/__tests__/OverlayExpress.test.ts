@@ -97,6 +97,32 @@ describe('OverlayExpress', () => {
     })
   })
 
+  describe('close', () => {
+    it('closes runtime resources once when shutdown is requested repeatedly', async () => {
+      const closeHttp = jest.fn((callback: (error?: Error) => void) => callback())
+      const destroyKnex = jest.fn<() => Promise<void>>().mockResolvedValue()
+      const closeMongo = jest.fn<() => Promise<void>>().mockResolvedValue()
+      Object.assign(overlayExpress, {
+        server: { close: closeHttp },
+        knex: { destroy: destroyKnex },
+        mongoClient: { close: closeMongo },
+        mongoDb: { databaseName: 'test' },
+        isListening: true
+      })
+
+      await Promise.all([overlayExpress.close(), overlayExpress.close()])
+
+      expect(closeHttp).toHaveBeenCalledTimes(1)
+      expect(destroyKnex).toHaveBeenCalledTimes(1)
+      expect(closeMongo).toHaveBeenCalledTimes(1)
+      expect(overlayExpress.isListening).toBe(false)
+      expect(overlayExpress.server).toBeUndefined()
+      expect(overlayExpress.knex).toBeUndefined()
+      expect(overlayExpress.mongoClient).toBeUndefined()
+      expect(overlayExpress.mongoDb).toBeUndefined()
+    })
+  })
+
   describe('getAdminToken', () => {
     it('should return the admin token', () => {
       const token = overlayExpress.getAdminToken()

@@ -197,7 +197,7 @@ export function flattenNav(): NavItem[] {
 }
 
 export function findCurrentSection(pathname: string): string | null {
-  const first = pathname.split('/').filter(Boolean)[0]
+  const first = pathname.split('/').find(segment => segment.length > 0)
   if (!first) return null
   const section = NAV.find(s => s.items.some(i => i.href.startsWith(`/${first}`)))
   return section?.label ?? null

@@ -5,6 +5,11 @@ every application image to the release tag and digest verified by the repository
 release workflow. The checked-in digest is an example release and is not updated by
 an application rollout.
 
+The MySQL and MongoDB Deployments are explicitly classified
+`example-not-production`. Production must replace them with managed databases
+or operator-owned stateful workloads that define replication, upgrades,
+disruption handling, capacity alerts, encrypted backups, and restore tests.
+
 Before applying the manifests, create two secret objects through the operator's
 secret manager or deployment system:
 

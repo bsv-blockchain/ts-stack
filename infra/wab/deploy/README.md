@@ -4,6 +4,11 @@ These manifests are operator templates. They do not create credentials and they
 do not deploy themselves. Keep the WAB image tag paired with the digest verified
 by the repository's infrastructure release workflow.
 
+The sample MySQL Deployment is classified `example-not-production`.
+Production must replace it with a managed database or operator-owned stateful
+workload that defines replication, upgrades, disruption handling, capacity
+alerts, encrypted backups, and restore tests.
+
 Create `wab-secrets` through the cluster's secret-management path with:
 
 - `db-password`;

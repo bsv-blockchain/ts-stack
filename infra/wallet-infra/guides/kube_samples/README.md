@@ -4,6 +4,11 @@ These files demonstrate the workload contract; they are not a production
 environment. Replace the checked-in application image with the release tag and
 digest verified for the source revision being deployed.
 
+The sample MySQL Deployment is classified `example-not-production`.
+Production must replace it with a managed database or operator-owned stateful
+workload that defines replication, upgrades, disruption handling, capacity
+alerts, encrypted backups, and restore tests.
+
 Create `wallet-secrets` and `mysql-secrets` through the operator's secret
 manager. `wallet-secrets` supplies `SERVER_PRIVATE_KEY` and
 `KNEX_DB_CONNECTION`; `mysql-secrets` supplies `MYSQL_ROOT_PASSWORD`. Never

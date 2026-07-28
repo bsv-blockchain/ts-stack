@@ -70,6 +70,7 @@ For raw BRC-100 work, use `WalletClient` from `@bsv/sdk` and call methods such a
 - [Infrastructure](./infrastructure/index.md) - service status and deployed endpoint names.
 - [Vector Catalog](./conformance/vectors.md) - current conformance coverage and file paths.
 - [Generated Stack Facts](./reference/stack-facts.md) - source versions, runtime profiles, release routes, infrastructure manifests, and conformance totals.
+- [Package API, Declarations, and Migration Ledger](./reference/package-api-migrations.md) - every public entry point, declaration target, source candidate, release note, and migration decision.
 - [Release and Operations Guide](./reference/release-operations.md) - reviewed publication, deployment, failure handling, and rollback.
 
 ## Source Discipline

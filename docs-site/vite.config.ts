@@ -35,7 +35,7 @@ function docsAssetPathFromUrl(url: string | undefined) {
     assetPath = pathname.slice(1)
   }
 
-  if (!assetPath?.match(/^assets\/(?:diagrams|images)\//)) return null
+  if (assetPath === null || !/^assets\/(?:diagrams|images)\//.test(assetPath)) return null
   return decodeURIComponent(assetPath.slice('assets/'.length))
 }
 
@@ -141,7 +141,7 @@ function sourceFilePath(file: Record<string, unknown> | undefined) {
   if (typeof file?.path === 'string') return file.path
   const history = file?.history
   if (Array.isArray(history)) {
-    const last = history[history.length - 1]
+    const last = history.at(-1)
     if (typeof last === 'string') return last
   }
   return resolve(DOCS_ROOT, 'index.md')
@@ -162,7 +162,7 @@ function normalizeDocsPageHref(href: string, sourceFile: string) {
 function normalizeDocsAssetSrc(src: string) {
   if (isExternalHref(src)) return src
 
-  const match = src.match(/(?:^|\/)(assets\/(?:diagrams|images)\/[^?#]+)/)
+  const match = /(?:^|\/)(assets\/(?:diagrams|images)\/[^?#]+)/.exec(src)
   if (!match) return src
 
   const assetPath = match[1]
@@ -176,21 +176,18 @@ function rehypeDocsPaths() {
   }
 }
 
+function rewriteElementPath(node: Record<string, unknown>, sourceFile: string) {
+  if (node.type !== 'element') return
+  const properties = node.properties as Record<string, unknown> | undefined
+  if (node.tagName === 'a' && typeof properties?.href === 'string') {
+    properties.href = normalizeDocsPageHref(properties.href, sourceFile)
+  } else if (node.tagName === 'img' && typeof properties?.src === 'string') {
+    properties.src = normalizeDocsAssetSrc(properties.src)
+  }
+}
+
 function rewriteDocsPaths(node: Record<string, unknown>, sourceFile: string) {
-  if (node.type === 'element' && node.tagName === 'a') {
-    const properties = node.properties as Record<string, unknown> | undefined
-    if (properties && typeof properties.href === 'string') {
-      properties.href = normalizeDocsPageHref(properties.href, sourceFile)
-    }
-  }
-
-  if (node.type === 'element' && node.tagName === 'img') {
-    const properties = node.properties as Record<string, unknown> | undefined
-    if (properties && typeof properties.src === 'string') {
-      properties.src = normalizeDocsAssetSrc(properties.src)
-    }
-  }
-
+  rewriteElementPath(node, sourceFile)
   const children = node.children
   if (Array.isArray(children)) {
     for (const child of children) {
@@ -218,12 +215,12 @@ function liftInChildren(children: Array<Record<string, unknown>>) {
   for (let i = 0; i < children.length; i++) {
     const node = children[i]
     if (node.type === 'html' && typeof node.value === 'string') {
-      const asyncApiMatch = (node.value as string).match(/<AsyncApiEmbed\s+slug="([^"]+)"\s*\/>/)
+      const asyncApiMatch = /<AsyncApiEmbed\s+slug="([^"]+)"\s*\/>/.exec(node.value as string)
       if (asyncApiMatch) {
         children[i] = { type: 'asyncApiEmbed', slug: asyncApiMatch[1] }
         continue
       }
-      if ((node.value as string).match(/<HomeHero\s*\/>/)) {
+      if (/<HomeHero\s*\/>/.test(node.value as string)) {
         children[i] = { type: 'homeHero' }
         continue
       }

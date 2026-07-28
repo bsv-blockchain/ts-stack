@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express'
 
 export interface ServiceHealth {
   markReady: () => void
+  markNotReady: () => void
   register: (app: Express) => void
 }
 
@@ -11,6 +12,9 @@ export const createServiceHealth = (): ServiceHealth => {
   return {
     markReady: () => {
       ready = true
+    },
+    markNotReady: () => {
+      ready = false
     },
     register: app => {
       app.get('/health', (_req: Request, res: Response) => {

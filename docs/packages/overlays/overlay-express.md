@@ -4,9 +4,9 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.4.5'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '2.4.6'
+last_updated: '2026-07-28'
+last_verified: '2026-07-28'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
@@ -41,6 +41,9 @@ await server.configureLookupServiceWithMongo('ls_helloworld', mongoDb =>
 
 await server.configureEngine()
 await server.start()
+
+process.once('SIGTERM', () => void server.close())
+process.once('SIGINT', () => void server.close())
 ```
 
 ## What it provides
@@ -55,6 +58,7 @@ await server.start()
 - **Provider chain** — Arcade-first broadcast/proof lookup with Arc fallback
 - **Chaintracks integration** — Header resolution and reorg SSE for BASM
 - **OverlayMonitor** — Lookup probes plus optional admin maintenance actions
+- **Graceful lifecycle** — Idempotent `close()` drains HTTP and closes background work and databases
 
 ## Common patterns
 
@@ -214,6 +218,8 @@ monitor.start()
    provider outages do not create local-only overlay state.
 7. **BASM dependencies** — BASM should use a Chaintracks-compatible chain tracker;
    Arcade exposes this under `/chaintracks/v2`.
+8. **Lifecycle ownership** — Call `await server.close()` from the owning runtime
+   so listeners, sync timers, reorg streaming, Knex, and MongoDB close together.
 
 ## Related packages
 

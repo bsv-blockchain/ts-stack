@@ -4,7 +4,7 @@ import bodyparser from 'body-parser'
 import { PrivateKey } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { getWallet } from './utils/walletSingleton'
+import { destroyWallet, getWallet } from './utils/walletSingleton'
 import routes from './routes'
 import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
@@ -187,6 +187,25 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       socketTimeoutMs: 5 * 60 * 1000,
       maxRequestsPerSocket: 1_000
     })
+
+    let shutdownPromise: Promise<void> | undefined
+    const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+      shutdownPromise ??= (async () => {
+        serviceHealth.markNotReady()
+        log.info({ operation: 'shutdown', signal }, 'UHRP basic shutdown started')
+        await new Promise<void>((resolve, reject) => {
+          server.close(error => error == null ? resolve() : reject(error))
+        })
+        await destroyWallet()
+        log.info({ operation: 'shutdown', outcome: 'ok', signal }, 'UHRP basic shutdown complete')
+      })().catch(error => {
+        process.exitCode = 1
+        log.error({ operation: 'shutdown', outcome: 'error', signal, err: error }, 'UHRP basic shutdown failed')
+      })
+      return shutdownPromise
+    }
+    process.once('SIGTERM', () => void shutdown('SIGTERM'))
+    process.once('SIGINT', () => void shutdown('SIGINT'))
 
   })().catch((error) => {
     log.error({ operation: 'bootstrap', outcome: 'error', err: error }, 'UHRP Storage Server failed to start')

@@ -99,9 +99,9 @@ export default function SearchBox() {
       />
       <kbd className={styles.kbd}>⌘K</kbd>
       {open && results.length > 0 && (
-        <ul className={styles.dropdown} role="listbox">
+        <ul className={styles.dropdown}>
           {results.map(r => (
-            <li key={r.url} role="option" aria-selected={false}>
+            <li key={r.url}>
               <a className={styles.result} href={r.url} onClick={() => setOpen(false)}>
                 <span className={styles.resultTitle}>{r.meta.title ?? r.url}</span>
                 <span

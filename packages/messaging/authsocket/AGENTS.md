@@ -9,6 +9,7 @@ Server-side BRC-103 mutual authentication wrapper for Socket.IO. Enforces crypto
   - Wraps an HTTP server to add BRC-103 authentication to Socket.IO
   - Options: `wallet` (BRC-100 wallet), `cors` (Socket.IO CORS config), `sessionManager`, `certificatesToRequest`
   - Returns Socket.IO–like `io` object that emits authenticated `AuthSocket` instances on `'connection'`
+  - Lifecycle: idempotent `close()` disconnects clients and closes the attached HTTP server
 
 - **AuthSocket** (event handlers): wraps native Socket.IO socket
   - `.on(eventName, callback)` — listen for authenticated messages

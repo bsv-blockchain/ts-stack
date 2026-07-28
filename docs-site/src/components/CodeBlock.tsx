@@ -4,7 +4,7 @@ import '../styles/code.css'
 const Mermaid = lazy(() => import('./Mermaid'))
 
 interface Props {
-  children?: ReactNode
+  readonly children?: ReactNode
   [key: string]: unknown
 }
 
@@ -55,6 +55,7 @@ export default function CodeBlock({ children, ...rest }: Readonly<Props>) {
       <div className="code-block-header">
         <span className="code-block-lang">{lang}</span>
         <button
+          type="button"
           className={'code-copy-btn' + (copied ? ' copied' : '')}
           onClick={copy}
           aria-label="Copy code"

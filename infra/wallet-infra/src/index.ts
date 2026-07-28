@@ -13,7 +13,7 @@ import {
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import packageJson from '../package.json' with { type: 'json' }
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { log } from './logger.js'
@@ -22,6 +22,7 @@ import * as dotenv from 'dotenv'
 dotenv.config()
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)
+let shutdownPromise: Promise<void> | undefined
 
 // Load environment variables
 const {
@@ -251,10 +252,43 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
     log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
 
     // Conditionally start nginx
+    let nginxProcess: ChildProcess | undefined
     if (ENABLE_NGINX === 'true') {
-      spawn('/usr/sbin/nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
+      nginxProcess = spawn('/usr/sbin/nginx', [], {
+        stdio: ['inherit', 'inherit', 'inherit']
+      })
       log.info({ operation: 'nginx.spawn', outcome: 'ok' }, 'nginx started')
     }
+
+    const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+      shutdownPromise ??= (async () => {
+        log.info(
+          { operation: 'shutdown', signal },
+          'wallet-infra shutdown started'
+        )
+        context.monitor.stopTasks()
+        nginxProcess?.kill('SIGTERM')
+        await new Promise<void>((resolve, reject) => {
+          context.server.server.close((error?: Error) =>
+            error === undefined ? resolve() : reject(error)
+          )
+        })
+        await context.wallet.destroy()
+        log.info(
+          { operation: 'shutdown', outcome: 'ok', signal },
+          'wallet-infra shutdown complete'
+        )
+      })().catch(error => {
+        process.exitCode = 1
+        log.error(
+          { operation: 'shutdown', outcome: 'error', signal, err: error },
+          'wallet-infra shutdown failed'
+        )
+      })
+      return shutdownPromise
+    }
+    process.once('SIGTERM', () => void shutdown('SIGTERM'))
+    process.once('SIGINT', () => void shutdown('SIGINT'))
 
     const duration_ms = Date.now() - startedAt
     span.setAttribute('bsv.network', String(BSV_NETWORK))

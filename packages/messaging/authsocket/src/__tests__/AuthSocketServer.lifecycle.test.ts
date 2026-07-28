@@ -1,5 +1,6 @@
 const mockIoServer = {
-  on: jest.fn()
+  on: jest.fn(),
+  close: jest.fn()
 }
 
 const mockPeer = {
@@ -25,6 +26,7 @@ describe('AuthSocketServer lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockPeer.toPeer.mockResolvedValue(undefined)
+    mockIoServer.close.mockResolvedValue(undefined)
   })
 
   it('wraps new connections, discovers identity, and removes disconnected peers', async () => {
@@ -104,5 +106,13 @@ describe('AuthSocketServer lifecycle', () => {
     server.on('maintenance', callback)
 
     expect(mockIoServer.on).toHaveBeenCalledWith('maintenance', callback)
+  })
+
+  it('closes Socket.IO once when shutdown is requested repeatedly', async () => {
+    const server = new AuthSocketServer({} as never, { wallet: {} as never })
+
+    await Promise.all([server.close(), server.close()])
+
+    expect(mockIoServer.close).toHaveBeenCalledTimes(1)
   })
 })

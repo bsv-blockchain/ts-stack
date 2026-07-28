@@ -103,13 +103,12 @@ run_npm_capture() {
       continue
     fi
 
-    if [[ -f "$err_file" ]] && rg -q 'E409' "$err_file"; then
-      if [[ "$desc" == *"trust github"* ]]; then
-        if rg -q 'already exists|already exists in trusted list|existing trust|already granted' "$err_file" 2>/dev/null; then
-          echo "Ignoring duplicate trust; treating as success"
-          return 0
-        fi
-      fi
+    if [[ -f "$err_file" ]] &&
+      [[ "$desc" == *"trust github"* ]] &&
+      rg -q 'E409' "$err_file" &&
+      rg -q 'already exists|already exists in trusted list|existing trust|already granted' "$err_file" 2>/dev/null; then
+      echo "Ignoring duplicate trust; treating as success"
+      return 0
     fi
 
     if [[ -s "$err_file" ]]; then

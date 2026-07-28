@@ -1,6 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    ts-stack.bsvblockchain.org/workload-class: example-not-production
   labels:
     service: mysql
     app: wab

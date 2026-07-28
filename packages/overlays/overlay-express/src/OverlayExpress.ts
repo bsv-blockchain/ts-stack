@@ -408,6 +408,7 @@ export default class OverlayExpress {
   // Active HTTP server, retained so timeout policy is observable and the
   // process can add graceful-close handling without replacing app.listen().
   server?: Server
+  private closePromise?: Promise<void>
 
   edgePolicyConfig: EdgePolicyConfig = {
     environmentPrefix: 'OVERLAY',
@@ -2527,6 +2528,52 @@ export default class OverlayExpress {
       edgePolicy.environmentPrefix,
       edgePolicy.http
     )
+  }
+
+  /**
+   * Stops new HTTP work, background synchronization, and database clients.
+   *
+   * The operation is idempotent so multiple signal handlers or embedding
+   * runtimes can share shutdown ownership safely.
+   */
+  async close (): Promise<void> {
+    this.closePromise ??= this.closeResources()
+    await this.closePromise
+  }
+
+  private async closeResources (): Promise<void> {
+    this.isListening = false
+
+    if (this.basmBlockPollTimer !== undefined) {
+      clearInterval(this.basmBlockPollTimer)
+      this.basmBlockPollTimer = undefined
+    }
+    if (this.unprovenMaintenanceTimer !== undefined) {
+      clearInterval(this.unprovenMaintenanceTimer)
+      this.unprovenMaintenanceTimer = undefined
+    }
+    this.reorgAdapter?.stop()
+    this.reorgAdapter = undefined
+
+    const server = this.server
+    this.server = undefined
+    const closeServer = server === undefined
+      ? Promise.resolve()
+      : new Promise<void>((resolve, reject) => {
+          server.close(error => {
+            if (error !== undefined) reject(error)
+            else resolve()
+          })
+        })
+
+    await closeServer
+    await Promise.all([
+      this.knex?.destroy() ?? Promise.resolve(),
+      this.mongoClient?.close() ?? Promise.resolve()
+    ])
+    this.knex = undefined
+    this.mongoClient = undefined
+    this.mongoDb = undefined
   }
 
   /**

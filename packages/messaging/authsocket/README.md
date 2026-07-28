@@ -69,6 +69,10 @@ io.on('connection', (socket) => {
 server.listen(port, () => {
   console.log(`Server listening on port ${port}`)
 })
+
+process.once('SIGTERM', () => {
+  void io.close()
+})
 ```
 
 The `cors` setting belongs to Socket.IO and is intentionally configurable.
@@ -81,6 +85,9 @@ cross-origin default of its own.
 2. On `'connection'`, receive an `AuthSocket` that supports normal
    `socket.on(...)` and `socket.emit(...)` calls.
 3. Messages are signed and verified under the hood.
+
+Call `await io.close()` during shutdown. It is idempotent and disconnects
+active Socket.IO clients before closing the attached HTTP server.
 
 ### Targeted authenticated delivery
 
