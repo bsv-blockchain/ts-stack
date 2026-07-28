@@ -4,6 +4,7 @@ import { Format } from '../../utility/Format'
 import { Services } from '../../services/Services'
 import { MonitorDaemon } from '../../monitor/MonitorDaemon'
 import { Wallet } from '../../Wallet'
+import { formatUnknownForLog as formatAdminValue } from '../../utility/formatUnknown'
 import { renderAdminPage } from './adminUi'
 import path from 'node:path'
 import {
@@ -55,22 +56,6 @@ interface ReqRow {
   rawTxHex?: string
   batch?: string
   inputBeefHex?: string
-}
-
-function formatAdminValue (value: unknown): string {
-  if (value == null) return ''
-  if (value instanceof Date) return value.toISOString()
-  if (typeof value === 'object') {
-    try {
-      return JSON.stringify(value) ?? '[unserializable object]'
-    } catch {
-      return '[unserializable object]'
-    }
-  }
-  if (typeof value === 'string') return value
-  if (typeof value === 'symbol') return value.description ?? ''
-  if (typeof value === 'function') return value.name === '' ? '[function]' : `[function ${value.name}]`
-  return value.toString()
 }
 
 function asNumber (value: unknown, fallback: number): number {

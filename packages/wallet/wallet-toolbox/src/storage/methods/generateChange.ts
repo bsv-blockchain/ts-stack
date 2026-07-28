@@ -2,6 +2,7 @@ import { Random, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { formatUnknownForLog } from '../../utility/formatUnknown'
 import { validateStorageFeeModel } from '../StorageProvider'
 import { transactionSize } from './utils'
 /**
@@ -468,24 +469,8 @@ export function validateGenerateChangeSdkResult(
 function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknown) {
   let s = JSON.stringify(params)
   let euStr = ''
-  if (eu instanceof Error) {
-    euStr = ` error: ${eu.stack ?? eu.message}`
-  } else if (eu != null) {
-    let detail: string
-    if (typeof eu === 'object') {
-      try {
-        detail = JSON.stringify(eu) ?? '[unserializable object]'
-      } catch {
-        detail = '[unserializable object]'
-      }
-    } else if (typeof eu === 'symbol') {
-      detail = eu.description ?? ''
-    } else if (typeof eu === 'function') {
-      detail = eu.name === '' ? '[function]' : `[function ${eu.name}]`
-    } else {
-      detail = eu.toString()
-    }
-    euStr = ` error: ${detail}`
+  if (eu != null) {
+    euStr = ` error: ${formatUnknownForLog(eu)}`
   }
   console.log(`generateChangeSdk params length ${s.length}${euStr}`)
   let i = -1
