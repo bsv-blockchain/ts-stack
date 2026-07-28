@@ -17,22 +17,13 @@ export function formatUnknownForLog (value: unknown): string {
     return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString()
   }
 
-  switch (typeof value) {
-    case 'string':
-      return value
-    case 'number':
-      return value.toString(10)
-    case 'bigint':
-      return value.toString(10)
-    case 'boolean':
-      return value ? 'true' : 'false'
-    case 'symbol':
-      return value.description ?? ''
-    case 'function':
-      return value.name === '' ? '[function]' : `[function ${value.name}]`
-    case 'object':
-      return formatObjectForLog(value)
-    default:
-      return '[unserializable value]'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return value.toString(10)
+  if (typeof value === 'bigint') return value.toString(10)
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'symbol') return value.description ?? ''
+  if (typeof value === 'function') {
+    return value.name === '' ? '[function]' : `[function ${value.name}]`
   }
+  return formatObjectForLog(value)
 }

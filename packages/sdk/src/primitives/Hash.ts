@@ -216,8 +216,8 @@ abstract class BaseHash {
  * https://github.com/google/closure-library/blob/master/LICENSE
  */
 function appendUtf8CodeUnit(msg: string, i: number, out: number[]): number {
-  const c = msg.codePointAt(i)
-  if (c === undefined) return i
+  // The caller's loop guarantees that i is within msg.
+  const c = msg.codePointAt(i) as number
   if (c < 128) {
     out.push(c)
     return i

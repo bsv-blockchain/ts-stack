@@ -300,7 +300,22 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/gasp-core',
       manifest: 'packages/overlays/gasp-core/package.json',
       propertyTest: 'packages/overlays/gasp-core/src/__tests/GASP.property.test.ts',
-      mutate: ['src/GASP.ts:304-314', 'src/GASP.ts:452-509'],
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/overlays/gasp-core',
+          'src/GASP.ts',
+          'private validateTimestamp(',
+          'private compute36ByteStructure('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/overlays/gasp-core',
+          'src/GASP.ts',
+          'async buildInitialRequest(',
+          'async requestNode('
+        )
+      ],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/GASP*.test.ts'])
     },
     'btms-topic': {

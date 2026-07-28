@@ -82,6 +82,37 @@ describe('SessionManager', () => {
       )
       expect(retrievedSession).toBeUndefined()
     })
+
+    it('selects the newest session while treating missing timestamps as zero', () => {
+      const sessions: PeerSession[] = [
+        {
+          ...validSession,
+          sessionNonce: 'missing-first',
+          lastUpdate: undefined
+        },
+        {
+          ...validSession,
+          sessionNonce: 'missing-second',
+          lastUpdate: undefined
+        },
+        {
+          ...validSession,
+          sessionNonce: 'newest',
+          lastUpdate: 2
+        },
+        {
+          ...validSession,
+          sessionNonce: 'older',
+          lastUpdate: 1
+        }
+      ]
+
+      for (const session of sessions) {
+        sessionManager.addSession(session)
+      }
+
+      expect(sessionManager.getSession('testPeerIdentityKey')).toBe(sessions[2])
+    })
   })
 
   describe('removeSession', () => {

@@ -8,7 +8,7 @@ export interface StopListenerToken {
   stop: (() => void) | undefined
 }
 
-function createStopHandler (
+export function createStopHandler (
   markOk: () => void,
   isOpen: () => boolean,
   markClosed: () => void,

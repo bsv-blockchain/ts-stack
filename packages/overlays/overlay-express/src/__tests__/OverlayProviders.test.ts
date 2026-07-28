@@ -72,6 +72,59 @@ describe('Overlay transaction providers', () => {
     expect(second.broadcast).not.toHaveBeenCalled()
   })
 
+  it('rejects an internally exhausted provider list defensively', async () => {
+    const broadcaster = new ProviderChainBroadcaster([
+      {
+        name: 'ARC',
+        broadcaster: {
+          broadcast: jest.fn(async () => ({
+            status: 'success' as const,
+            txid: tx.id(),
+            message: 'accepted'
+          }))
+        }
+      }
+    ])
+    ;(broadcaster as unknown as { providers: unknown[] }).providers = []
+
+    await expect(broadcaster.broadcast(tx)).rejects.toThrow(
+      'ProviderChainBroadcaster exhausted no providers'
+    )
+  })
+
+  it('returns the last annotated failure after every provider fails transiently', async () => {
+    const first = {
+      broadcast: jest.fn(async () => ({
+        status: 'error' as const,
+        code: '503',
+        description: 'first unavailable'
+      }))
+    }
+    const second = {
+      broadcast: jest.fn(async () => ({
+        status: 'error' as const,
+        code: '504',
+        description: 'second unavailable'
+      }))
+    }
+    const broadcaster = new ProviderChainBroadcaster([
+      { name: 'first', broadcaster: first },
+      { name: 'second', broadcaster: second }
+    ])
+
+    await expect(broadcaster.broadcast(tx)).resolves.toMatchObject({
+      status: 'error',
+      code: '504',
+      more: {
+        provider: 'second',
+        providerFailures: [
+          { provider: 'first', code: '503' },
+          { provider: 'second', code: '504' }
+        ]
+      }
+    })
+  })
+
   it('classifies Arcade double-spend status as a broadcast failure', async () => {
     const requests: Array<{ url: string, init?: RequestInit }> = []
     const fetcher = jest.fn(async (url: string, init?: RequestInit) => {

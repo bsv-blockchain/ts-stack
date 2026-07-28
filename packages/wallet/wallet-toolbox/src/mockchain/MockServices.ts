@@ -55,6 +55,17 @@ export interface ReorgResult {
   deactivatedHeaders: BlockHeader[]
 }
 
+export function inputSourceTxid(input: BsvTransaction['inputs'][number]): string | undefined {
+  if (input.sourceTXID != null && input.sourceTXID !== '') return input.sourceTXID
+  return input.sourceTransaction?.id('hex')
+}
+
+export function rawTransactionBytes(rawTx: number[] | Uint8Array): number[] {
+  if (Buffer.isBuffer(rawTx)) return Array.from(rawTx)
+  if (Array.isArray(rawTx)) return rawTx
+  return Array.from(rawTx)
+}
+
 export class MockServices implements WalletServices {
   chain: Chain = 'mock'
   storage: MockChainStorage
@@ -112,17 +123,12 @@ export class MockServices implements WalletServices {
     await this.spendInputs(tx, txid)
   }
 
-  private sourceTxid(input: BsvTransaction['inputs'][number]): string | undefined {
-    if (input.sourceTXID != null && input.sourceTXID !== '') return input.sourceTXID
-    return input.sourceTransaction?.id('hex')
-  }
-
   private async validateTxInput(
     input: BsvTransaction['inputs'][number],
     index: number,
     currentHeight: number
   ): Promise<void> {
-    const sourceTxid = this.sourceTxid(input)
+    const sourceTxid = inputSourceTxid(input)
     if (sourceTxid == null || sourceTxid === '') {
       throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${index}`)
     }
@@ -158,15 +164,7 @@ export class MockServices implements WalletServices {
   private async loadSourceTransaction (sourceTxid: string): Promise<BsvTransaction | undefined> {
     const sourceTxRow = await this.storage.getTransaction(sourceTxid)
     if (sourceTxRow == null) return undefined
-    let raw: number[]
-    if (sourceTxRow.rawTx instanceof Buffer) {
-      raw = Array.from(sourceTxRow.rawTx)
-    } else if (Array.isArray(sourceTxRow.rawTx)) {
-      raw = sourceTxRow.rawTx
-    } else {
-      raw = Array.from(sourceTxRow.rawTx as Uint8Array)
-    }
-    return BsvTransaction.fromBinary(raw)
+    return BsvTransaction.fromBinary(rawTransactionBytes(sourceTxRow.rawTx))
   }
 
   private async populateMerklePaths (tx: BsvTransaction): Promise<void> {
@@ -193,10 +191,7 @@ export class MockServices implements WalletServices {
 
   private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
     for (const input of tx.inputs) {
-      let sourceTxid = input.sourceTXID ?? ''
-      if (sourceTxid === '') {
-        sourceTxid = input.sourceTransaction?.id('hex') ?? ''
-      }
+      const sourceTxid = inputSourceTxid(input) ?? ''
       await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
     }
   }
@@ -291,14 +286,7 @@ export class MockServices implements WalletServices {
   async getRawTx (txid: string): Promise<GetRawTxResult> {
     const tx = await this.storage.getTransaction(txid)
     if (tx == null) return { txid }
-    let rawTx: number[]
-    if (tx.rawTx instanceof Buffer) {
-      rawTx = Array.from(tx.rawTx)
-    } else if (Array.isArray(tx.rawTx)) {
-      rawTx = tx.rawTx
-    } else {
-      rawTx = Array.from(tx.rawTx as Uint8Array)
-    }
+    const rawTx = rawTransactionBytes(tx.rawTx)
     return { txid, rawTx, name: 'MockServices' }
   }
 
@@ -461,17 +449,12 @@ export class MockServices implements WalletServices {
     return nLockTime < height
   }
 
-  private rawTransactionBytes(row: { rawTx: Buffer | number[] | Uint8Array }): number[] {
-    if (row.rawTx instanceof Buffer) return Array.from(row.rawTx)
-    return Array.isArray(row.rawTx) ? row.rawTx : Array.from(row.rawTx)
-  }
-
   private async addTxToBeef(beef: Beef, tid: string, alreadyAdded: Set<string>): Promise<void> {
     if (alreadyAdded.has(tid)) return
     alreadyAdded.add(tid)
     const txRow = await this.storage.getTransaction(tid)
     if (txRow == null) return
-    const rawTx = this.rawTransactionBytes(txRow)
+    const rawTx = rawTransactionBytes(txRow.rawTx)
     if (txRow.blockHeight !== null) {
       const pathResult = await this.getMerklePath(tid)
       if (pathResult.merklePath != null) {
@@ -481,7 +464,7 @@ export class MockServices implements WalletServices {
     }
     const tx = BsvTransaction.fromBinary(rawTx)
     for (const input of tx.inputs) {
-      const sourceTxid = this.sourceTxid(input)
+      const sourceTxid = inputSourceTxid(input)
       if (sourceTxid != null && sourceTxid !== '' && sourceTxid !== '00'.repeat(32)) {
         await this.addTxToBeef(beef, sourceTxid, alreadyAdded)
       }

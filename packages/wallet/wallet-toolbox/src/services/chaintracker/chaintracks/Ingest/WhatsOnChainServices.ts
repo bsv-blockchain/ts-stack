@@ -11,7 +11,7 @@ import { HeightRange } from '../util/HeightRange'
 export type ErrorHandler = (code: number, message: string) => boolean
 export type EnqueueHandler = (header: BlockHeader) => void
 
-function parseFileLink (
+export function parseFileLink (
   file: string
 ): { range: { fromHeight: number, toHeight: number } | 'latest', sourceUrl: string, fileName: string } | undefined {
   const url = new URL(file)
