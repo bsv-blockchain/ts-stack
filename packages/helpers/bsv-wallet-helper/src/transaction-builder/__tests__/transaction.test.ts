@@ -12,6 +12,7 @@ import {
 import { TransactionBuilder, isHexPublicKey } from '../transaction'
 import P2PKH from '../../script-templates/p2pkh'
 import OrdP2PKH from '../../script-templates/ordinal'
+import OrdLock from '../../script-templates/ordlock'
 import { makeMockWallet } from '../../utils/mockWallet'
 
 // Dummy URL kept only to match original call sites for the local wrapper (value ignored)
@@ -1555,5 +1556,321 @@ describe('TransactionTemplate', () => {
         })
       ])
     })
+  })
+})
+
+describe('TransactionBuilder refactored artifact helpers', () => {
+  const lockingScript = LockingScript.fromASM('OP_TRUE')
+  let wallet: WalletInterface
+  let builder: TransactionBuilder
+  let sourceTransaction: Transaction
+
+  beforeEach(async () => {
+    wallet = await makeWallet('test', storageURL, new PrivateKey(250).toHex())
+    builder = new TransactionBuilder(wallet)
+    sourceTransaction = new Transaction()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  test('dispatches OrdLock and custom unlocking templates', () => {
+    const purchaseTemplate = { estimateLength: async () => 10 }
+    const cancelTemplate = { estimateLength: async () => 20 }
+    const customTemplate = { estimateLength: async () => 30 }
+    jest.spyOn(OrdLock.prototype, 'purchaseUnlock').mockReturnValue(purchaseTemplate as any)
+    jest.spyOn(OrdLock.prototype, 'cancelUnlock').mockReturnValue(cancelTemplate as any)
+
+    expect(
+      (builder as any).createUnlockingScriptTemplate({
+        type: 'ordLock',
+        kind: 'purchase',
+        sourceTransaction,
+        sourceOutputIndex: 0,
+        sourceSatoshis: 1,
+        lockingScript
+      })
+    ).toBe(purchaseTemplate)
+    expect(
+      (builder as any).createUnlockingScriptTemplate({
+        type: 'ordLock',
+        kind: 'cancel',
+        sourceTransaction,
+        sourceOutputIndex: 0,
+        sourceSatoshis: 1,
+        lockingScript
+      })
+    ).toBe(cancelTemplate)
+    expect(
+      (builder as any).createUnlockingScriptTemplate({
+        type: 'custom',
+        sourceTransaction,
+        sourceOutputIndex: 0,
+        unlockingScriptTemplate: customTemplate
+      })
+    ).toBe(customTemplate)
+    expect(() => (builder as any).createUnlockingScriptTemplate({ type: 'unsupported' })).toThrow(
+      'Unsupported input type: unsupported'
+    )
+
+    ;(builder as any).inputs = [
+      {
+        type: 'custom',
+        sourceTransaction,
+        sourceOutputIndex: 0,
+        unlockingScriptTemplate: customTemplate
+      }
+    ]
+    expect((builder as any).buildInputArtifacts()).toMatchObject({
+      unlockingScriptTemplates: [customTemplate],
+      actionInputs: [
+        {
+          inputDescription: 'Transaction input',
+          unlockingScriptLength: 0
+        }
+      ]
+    })
+  })
+
+  test('dispatches every addressed and specialized output form', async () => {
+    const p2pkhLock = jest.spyOn(P2PKH.prototype, 'lock').mockResolvedValue(lockingScript)
+    const ordinalLock = jest.spyOn(OrdP2PKH.prototype, 'lock').mockResolvedValue(lockingScript)
+    const orderLock = jest.spyOn(OrdLock.prototype, 'lock').mockResolvedValue(lockingScript)
+    const derivationInfo: any[] = []
+    const walletParams = {
+      protocolID: [2, 'test'] as WalletProtocol,
+      keyID: 'key',
+      counterparty: 'self' as WalletCounterparty
+    }
+    const publicKey = new PrivateKey(251).toPublicKey().toString()
+    const address = new PrivateKey(252).toAddress()
+
+    await expect(
+      (builder as any).createOutputLockingScript({ type: 'p2pkh', satoshis: 1 }, 0, derivationInfo)
+    ).resolves.toBe(lockingScript)
+    expect(derivationInfo).toEqual([
+      expect.objectContaining({
+        outputIndex: 0,
+        derivationPrefix: expect.any(String),
+        derivationSuffix: expect.any(String)
+      })
+    ])
+
+    for (const addressOrParams of [walletParams, publicKey, address]) {
+      await expect(
+        (builder as any).createOutputLockingScript(
+          { type: 'ordinalP2PKH', satoshis: 1, addressOrParams },
+          1,
+          derivationInfo
+        )
+      ).resolves.toBe(lockingScript)
+    }
+    await expect(
+      (builder as any).createOutputLockingScript(
+        {
+          type: 'ordLock',
+          satoshis: 1,
+          ordLockParams: {
+            ordAddress: address,
+            payAddress: address,
+            price: 1,
+            assetId: 'asset'
+          }
+        },
+        2,
+        derivationInfo
+      )
+    ).resolves.toBe(lockingScript)
+    await expect(
+      (builder as any).createOutputLockingScript(
+        { type: 'custom', satoshis: 1, lockingScript },
+        3,
+        derivationInfo
+      )
+    ).resolves.toBe(lockingScript)
+    await expect(
+      (builder as any).createOutputLockingScript(
+        { type: 'change', addressOrParams: publicKey },
+        4,
+        derivationInfo
+      )
+    ).resolves.toBe(lockingScript)
+    await expect(
+      (builder as any).createOutputLockingScript({ type: 'unsupported' }, 5, derivationInfo)
+    ).rejects.toThrow('Unsupported output type: unsupported')
+
+    expect(p2pkhLock).toHaveBeenCalledWith(
+      expect.objectContaining({ walletParams: expect.anything() })
+    )
+    expect(ordinalLock).toHaveBeenCalledWith(expect.objectContaining({ walletParams }))
+    expect(ordinalLock).toHaveBeenCalledWith(expect.objectContaining({ publicKey }))
+    expect(ordinalLock).toHaveBeenCalledWith(expect.objectContaining({ address }))
+    expect(orderLock).toHaveBeenCalledTimes(1)
+  })
+
+  test('creates derivation instructions and action-output metadata', () => {
+    const config = {
+      type: 'p2pkh',
+      satoshis: 5,
+      basket: 'basket',
+      customInstructions: 'existing-'
+    }
+    const derivations = [
+      {
+        outputIndex: 2,
+        derivationPrefix: 'prefix',
+        derivationSuffix: 'suffix'
+      }
+    ]
+
+    expect((builder as any).customInstructionsForOutput(config, 1, derivations)).toBe('existing-')
+    expect((builder as any).customInstructionsForOutput(config, 2, derivations)).toBe(
+      'existing-{"derivationPrefix":"prefix","derivationSuffix":"suffix"}'
+    )
+    expect(
+      (builder as any).customInstructionsForOutput({ type: 'p2pkh', satoshis: 5 }, 2, derivations)
+    ).toBe('{"derivationPrefix":"prefix","derivationSuffix":"suffix"}')
+
+    expect((builder as any).createActionOutput(config, lockingScript, 'instructions')).toEqual({
+      lockingScript: lockingScript.toHex(),
+      satoshis: 5,
+      outputDescription: 'Transaction output',
+      customInstructions: 'instructions',
+      basket: 'basket'
+    })
+    expect(
+      (builder as any).createActionOutput(
+        { type: 'change', description: 'Change description' },
+        lockingScript,
+        ''
+      )
+    ).toEqual({
+      lockingScript: lockingScript.toHex(),
+      satoshis: 0,
+      outputDescription: 'Change description'
+    })
+  })
+
+  test('creates preimages and supports every estimateLength signature', async () => {
+    const preimage = (builder as any).createPreimageTransaction(
+      [],
+      [
+        { lockingScript, change: true },
+        { lockingScript, satoshis: 3 }
+      ]
+    ) as Transaction
+    expect(preimage.outputs).toHaveLength(2)
+
+    const twoArguments = {
+      async estimateLength(_transaction: Transaction, _index: number): Promise<number> {
+        return 10
+      }
+    }
+    const oneArgument = {
+      async estimateLength(_transaction: Transaction): Promise<number> {
+        return 20
+      }
+    }
+    const noArguments = {
+      async estimateLength(): Promise<number> {
+        return 30
+      }
+    }
+    ;(builder as any).inputs = [
+      { type: 'ordLock', kind: 'purchase' },
+      { type: 'custom' },
+      { type: 'custom' }
+    ]
+    const actionInputs = [
+      { unlockingScriptLength: 0 },
+      { unlockingScriptLength: 0 },
+      { unlockingScriptLength: 0 }
+    ]
+
+    await (builder as any).populateUnlockingScriptLengths(
+      preimage,
+      [twoArguments, oneArgument, noArguments],
+      actionInputs
+    )
+    expect(actionInputs).toEqual([
+      { unlockingScriptLength: 78 },
+      { unlockingScriptLength: 20 },
+      { unlockingScriptLength: 30 }
+    ])
+    await expect(
+      (builder as any).populateUnlockingScriptLengths(
+        preimage,
+        [{}],
+        [{ unlockingScriptLength: 0 }]
+      )
+    ).rejects.toThrow('unlockingScriptTemplate must have an estimateLength() method')
+  })
+
+  test('applies, removes, and validates calculated change outputs', () => {
+    ;(builder as any).outputs = [
+      { type: 'change' },
+      { type: 'change' },
+      { type: 'p2pkh', satoshis: 1 }
+    ]
+    const actionOutputs = [{ satoshis: 0 }, { satoshis: 0 }, { satoshis: 1 }]
+
+    ;(builder as any).applyCalculatedChangeOutputs({ outputs: [{ satoshis: 7 }] }, actionOutputs)
+    expect(actionOutputs).toEqual([{ satoshis: 7 }, { satoshis: 1 }])
+
+    ;(builder as any).outputs = [{ type: 'change' }]
+    expect(() =>
+      (builder as any).applyCalculatedChangeOutputs({ outputs: [{}] }, [{ satoshis: 0 }])
+    ).toThrow('Change output at index 0 has no satoshis after fee calculation')
+  })
+
+  test('validates and signs wallet-created actions', async () => {
+    await expect(
+      (builder as any).signCreatedAction({ txid: 'txid', tx: [1] }, [])
+    ).resolves.toEqual({ txid: 'txid', tx: [1] })
+
+    ;(builder as any).inputs = [
+      {
+        type: 'custom',
+        sourceTransaction,
+        sourceOutputIndex: 0,
+        unlockingScriptTemplate: {}
+      }
+    ]
+    await expect((builder as any).signCreatedAction({}, [{}])).rejects.toThrow(
+      'Failed to create signable transaction'
+    )
+
+    const sign = jest.fn(async () => {})
+    const input = { unlockingScript: undefined as any }
+    const fromBeef = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
+      inputs: [input],
+      sign
+    } as any)
+    await expect(
+      (builder as any).signCreatedAction(
+        { signableTransaction: { reference: 'reference', tx: [1] } },
+        [{}]
+      )
+    ).rejects.toThrow('Missing unlocking script for input 0')
+
+    input.unlockingScript = { toHex: () => 'unlocking-script' }
+    ;(wallet.signAction as any).mockResolvedValue({ txid: 'signed', tx: [2] })
+    await expect(
+      (builder as any).signCreatedAction(
+        { signableTransaction: { reference: 'reference', tx: [1] } },
+        [{ template: true }]
+      )
+    ).resolves.toEqual({ txid: 'signed', tx: [2] })
+    expect(input).toMatchObject({
+      unlockingScriptTemplate: { template: true },
+      sourceTransaction
+    })
+    expect(sign).toHaveBeenCalledTimes(2)
+    expect(wallet.signAction).toHaveBeenCalledWith({
+      reference: 'reference',
+      spends: { '0': { unlockingScript: 'unlocking-script' } }
+    })
+    expect(fromBeef).toHaveBeenCalledTimes(2)
   })
 })

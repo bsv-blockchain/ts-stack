@@ -143,4 +143,108 @@ describe('WalletPermissionsManager permission-token parsing', () => {
 
     expect(requestArgs.outputs[0].insertionRemittance.customInstructions).toBe('encrypted')
   })
+
+  test('finds the first current protocol token after non-matches and expired tokens', async () => {
+    const expired = { outpoint: 'expired.0', satoshis: 1 }
+    const current = { outpoint: 'current.0', satoshis: 1 }
+    const currentToken = { txid: 'current', outputIndex: 0, expiry: 200 }
+    ;(manager as any).underlying.listOutputs = jest.fn().mockResolvedValue({
+      outputs: [output, expired, current]
+    })
+    jest
+      .spyOn(manager as any, 'parseProtocolTokenOutput')
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ txid: 'expired', outputIndex: 0, expiry: 100 })
+      .mockResolvedValueOnce(currentToken)
+    jest
+      .spyOn(manager as any, 'isTokenExpired')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+
+    await expect(
+      (manager as any).findProtocolToken('example.com', false, [1, 'protocol'], 'self', false)
+    ).resolves.toBe(currentToken)
+  })
+
+  test('finds all unique matching protocol tokens', async () => {
+    const duplicate = { outpoint: 'duplicate.0', satoshis: 1 }
+    const token = { txid: 'duplicate', outputIndex: 0, expiry: 100 }
+    ;(manager as any).underlying.listOutputs = jest.fn().mockResolvedValue({
+      outputs: [output, duplicate, duplicate]
+    })
+    jest
+      .spyOn(manager as any, 'parseProtocolTokenOutput')
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(token)
+
+    await expect(
+      (manager as any).findAllProtocolTokens('example.com', false, [1, 'protocol'], 'self')
+    ).resolves.toEqual([token])
+  })
+
+  test('finds current basket and certificate tokens', async () => {
+    const expiredOutput = { outpoint: 'expired.0', satoshis: 1 }
+    const currentOutput = { outpoint: 'current.0', satoshis: 1 }
+    const expiredToken = { txid: 'expired', outputIndex: 0, expiry: 100 }
+    const basketToken = { txid: 'basket', outputIndex: 0, expiry: 200 }
+    const certificateToken = { txid: 'certificate', outputIndex: 0, expiry: 200 }
+    ;(manager as any).underlying.listOutputs = jest.fn().mockResolvedValue({
+      outputs: [output, expiredOutput, currentOutput]
+    })
+    jest
+      .spyOn(manager as any, 'parseBasketTokenOutput')
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(expiredToken)
+      .mockResolvedValueOnce(basketToken)
+    jest
+      .spyOn(manager as any, 'isTokenExpired')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+
+    await expect((manager as any).findBasketToken('example.com', 'basket', false)).resolves.toBe(basketToken)
+
+    jest
+      .spyOn(manager as any, 'parseCertificateTokenOutput')
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(expiredToken)
+      .mockResolvedValueOnce(certificateToken)
+    ;(manager as any).isTokenExpired.mockReturnValueOnce(true).mockReturnValueOnce(false)
+
+    await expect(
+      (manager as any).findCertificateToken('example.com', false, 'verifier', 'type', ['name'], false)
+    ).resolves.toBe(certificateToken)
+  })
+
+  test('encrypts internalize-action module metadata only where present', async () => {
+    const requestArgs = {
+      outputs: [
+        {
+          protocol: 'basket insertion',
+          insertionRemittance: {
+            basket: 'p module',
+            customInstructions: 'plain'
+          }
+        },
+        {
+          protocol: 'basket insertion',
+          insertionRemittance: {
+            basket: 'p module'
+          }
+        },
+        {
+          protocol: 'wallet payment',
+          paymentRemittance: {
+            derivationPrefix: 'prefix',
+            derivationSuffix: 'suffix'
+          }
+        }
+      ]
+    }
+    jest.spyOn(manager as any, 'maybeEncryptMetadata').mockResolvedValue('encrypted')
+
+    await (manager as any).encryptInternalizeActionModuleMetadata(requestArgs)
+
+    expect(requestArgs.outputs[0].insertionRemittance?.customInstructions).toBe('encrypted')
+    expect((manager as any).maybeEncryptMetadata).toHaveBeenCalledTimes(1)
+  })
 })
