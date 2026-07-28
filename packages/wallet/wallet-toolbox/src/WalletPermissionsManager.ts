@@ -2521,6 +2521,145 @@ export class WalletPermissionsManager implements WalletInterface {
     return { domainDecoded, expiryDecoded, privDecoded, secLevelDecoded, protoNameDecoded, cptyDecoded }
   }
 
+  private protocolTokenTags(
+    originator: string,
+    privileged: boolean,
+    securityLevel: SecurityLevel,
+    protocolName: string,
+    counterparty: string
+  ): string[] {
+    const tags = [
+      `originator ${originator}`,
+      `privileged ${!!privileged}`,
+      `protocolName ${protocolName}`,
+      `protocolSecurityLevel ${securityLevel}`
+    ]
+    if (securityLevel === 2) tags.push(`counterparty ${counterparty}`)
+    return tags
+  }
+
+  private async parseProtocolTokenOutput(
+    result: ListOutputsResult,
+    output: ListOutputsResult['outputs'][number],
+    expected: {
+      originator: string
+      privileged: boolean
+      securityLevel: SecurityLevel
+      protocolName: string
+      counterparty: string
+    }
+  ): Promise<PermissionToken | undefined> {
+    const [txid, outputIndex] = this.parseOutpoint(output.outpoint)
+    const tx = this.transactionFromResultBeef(result, txid)
+    const decoded = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+    if (decoded?.fields == null || decoded.fields.length < 6) return undefined
+    const fields = await this.decryptProtocolTokenFields(decoded.fields)
+    if (this.normalizeOriginator(fields.domainDecoded) !== expected.originator) return undefined
+    const matches =
+      fields.privDecoded === !!expected.privileged &&
+      fields.secLevelDecoded === expected.securityLevel &&
+      fields.protoNameDecoded === expected.protocolName &&
+      (fields.secLevelDecoded !== 2 || fields.cptyDecoded === expected.counterparty)
+    if (!matches) return undefined
+    return {
+      tx: tx.toBEEF(),
+      txid,
+      outputIndex,
+      outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
+      satoshis: output.satoshis,
+      originator: expected.originator,
+      rawOriginator: fields.domainDecoded,
+      privileged: expected.privileged,
+      protocol: expected.protocolName,
+      securityLevel: expected.securityLevel,
+      expiry: fields.expiryDecoded,
+      counterparty: fields.cptyDecoded
+    }
+  }
+
+  private async parseBasketTokenOutput(
+    result: ListOutputsResult,
+    output: ListOutputsResult['outputs'][number],
+    originator: string,
+    basket: string
+  ): Promise<PermissionToken | undefined> {
+    const [txid, outputIndex] = this.parseOutpoint(output.outpoint)
+    const tx = this.transactionFromResultBeef(result, txid)
+    const decoded = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+    if (decoded?.fields == null || decoded.fields.length < 3) return undefined
+    const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[0]))
+    if (this.normalizeOriginator(domainDecoded) !== originator) return undefined
+    const expiryDecoded = Number.parseInt(
+      Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[1])),
+      10
+    )
+    const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[2]))
+    if (basketDecoded !== basket) return undefined
+    return {
+      tx: tx.toBEEF(),
+      txid,
+      outputIndex,
+      outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
+      satoshis: output.satoshis,
+      originator,
+      rawOriginator: domainDecoded,
+      basketName: basketDecoded,
+      expiry: expiryDecoded
+    }
+  }
+
+  private async parseCertificateTokenOutput(
+    result: ListOutputsResult,
+    output: ListOutputsResult['outputs'][number],
+    expected: {
+      originator: string
+      privileged: boolean
+      verifier: string
+      certType: string
+      fields: string[]
+    }
+  ): Promise<PermissionToken | undefined> {
+    const [txid, outputIndex] = this.parseOutpoint(output.outpoint)
+    const tx = this.transactionFromResultBeef(result, txid)
+    const decoded = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+    if (decoded?.fields == null || decoded.fields.length < 6) return undefined
+    const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = decoded.fields
+    const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
+    if (this.normalizeOriginator(domainDecoded) !== expected.originator) return undefined
+    const expiryDecoded = Number.parseInt(
+      Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)),
+      10
+    )
+    const privileged =
+      Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
+    const certType = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
+    const verifier = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
+    const allFields = JSON.parse(
+      Utils.toUTF8(await this.decryptPermissionTokenField(fieldsRaw))
+    ) as string[]
+    const metadataMatches =
+      privileged === !!expected.privileged &&
+      certType === expected.certType &&
+      verifier === expected.verifier
+    if (!metadataMatches) return undefined
+    const availableFields = new Set(allFields)
+    if (expected.fields.some(field => !availableFields.has(field))) return undefined
+    return {
+      tx: tx.toBEEF(),
+      txid,
+      outputIndex,
+      outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
+      satoshis: output.satoshis,
+      originator: expected.originator,
+      rawOriginator: domainDecoded,
+      privileged: expected.privileged,
+      verifier,
+      certType,
+      certFields: allFields,
+      expiry: expiryDecoded
+    }
+  }
+
   /** Parses outpoint string "txid.vout" into [txid, outputIndex]. */
   private parseOutpoint(outpoint: string): [string, number] {
     const [txid, indexStr] = outpoint.split('.')
@@ -2597,20 +2736,10 @@ export class WalletPermissionsManager implements WalletInterface {
     const originsToTry = originatorLookupValues?.length ? originatorLookupValues : [originator]
 
     for (const originTag of originsToTry) {
-      const tags = [
-        `originator ${originTag}`,
-        `privileged ${!!privileged}`,
-        `protocolName ${protoName}`,
-        `protocolSecurityLevel ${secLevel}`
-      ]
-      if (secLevel === 2) {
-        tags.push(`counterparty ${counterparty}`)
-      }
-
       const result = await this.underlying.listOutputs(
         {
           basket: BASKET_MAP.protocol,
-          tags,
+          tags: this.protocolTokenTags(originTag, privileged, secLevel, protoName, counterparty),
           tagQueryMode: 'all',
           include: 'entire transactions'
         },
@@ -2618,37 +2747,16 @@ export class WalletPermissionsManager implements WalletInterface {
       )
 
       for (const out of result.outputs) {
-        const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = this.transactionFromResultBeef(result, txid)
-        const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
-        if (dec?.fields == null || dec.fields.length < 6) continue
-
-        const f = await this.decryptProtocolTokenFields(dec.fields)
-        if (this.normalizeOriginator(f.domainDecoded) !== originator) continue
-        if (
-          f.privDecoded !== !!privileged ||
-          f.secLevelDecoded !== secLevel ||
-          f.protoNameDecoded !== protoName ||
-          (f.secLevelDecoded === 2 && f.cptyDecoded !== counterparty)
-        ) {
-          continue
-        }
-        if (!includeExpired && this.isTokenExpired(f.expiryDecoded)) continue
-
-        return {
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex,
-          outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
-          satoshis: out.satoshis,
+        const token = await this.parseProtocolTokenOutput(result, out, {
           originator,
-          rawOriginator: f.domainDecoded,
           privileged,
-          protocol: protoName,
           securityLevel: secLevel,
-          expiry: f.expiryDecoded,
-          counterparty: f.cptyDecoded
-        }
+          protocolName: protoName,
+          counterparty
+        })
+        if (token == null) continue
+        if (!includeExpired && this.isTokenExpired(token.expiry!)) continue
+        return token
       }
     }
     return undefined
@@ -2668,20 +2776,10 @@ export class WalletPermissionsManager implements WalletInterface {
     const seen = new Set<string>()
 
     for (const originTag of originsToTry) {
-      const tags = [
-        `originator ${originTag}`,
-        `privileged ${!!privileged}`,
-        `protocolName ${protoName}`,
-        `protocolSecurityLevel ${secLevel}`
-      ]
-      if (secLevel === 2) {
-        tags.push(`counterparty ${counterparty}`)
-      }
-
       const result = await this.underlying.listOutputs(
         {
           basket: BASKET_MAP.protocol,
-          tags,
+          tags: this.protocolTokenTags(originTag, privileged, secLevel, protoName, counterparty),
           tagQueryMode: 'all',
           include: 'entire transactions'
         },
@@ -2690,37 +2788,16 @@ export class WalletPermissionsManager implements WalletInterface {
 
       for (const out of result.outputs) {
         if (seen.has(out.outpoint)) continue
-        const [txid, vout] = this.parseOutpoint(out.outpoint)
-        const tx = this.transactionFromResultBeef(result, txid)
-        const dec = PushDrop.decode(tx.outputs[vout].lockingScript)
-        if (dec?.fields == null || dec.fields.length < 6) continue
-
-        const f = await this.decryptProtocolTokenFields(dec.fields)
-        if (this.normalizeOriginator(f.domainDecoded) !== originator) continue
-        if (
-          f.privDecoded !== !!privileged ||
-          f.secLevelDecoded !== secLevel ||
-          f.protoNameDecoded !== protoName ||
-          (f.secLevelDecoded === 2 && f.cptyDecoded !== counterparty)
-        ) {
-          continue
-        }
-
-        seen.add(out.outpoint)
-        matches.push({
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex: vout,
-          outputScript: tx.outputs[vout].lockingScript.toHex(),
-          satoshis: out.satoshis,
+        const token = await this.parseProtocolTokenOutput(result, out, {
           originator,
-          rawOriginator: f.domainDecoded,
           privileged,
-          protocol: protoName,
           securityLevel: secLevel,
-          expiry: f.expiryDecoded,
-          counterparty: f.cptyDecoded
+          protocolName: protoName,
+          counterparty
         })
+        if (token == null) continue
+        seen.add(out.outpoint)
+        matches.push(token)
       }
     }
 
@@ -2748,30 +2825,10 @@ export class WalletPermissionsManager implements WalletInterface {
       )
 
       for (const out of result.outputs) {
-        const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = this.transactionFromResultBeef(result, txid)
-        const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
-        if (!dec?.fields || dec.fields.length < 3) continue
-
-        const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(dec.fields[0]))
-        if (this.normalizeOriginator(domainDecoded) !== originator) continue
-
-        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(dec.fields[1])), 10)
-        const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(dec.fields[2]))
-        if (basketDecoded !== basket) continue
-        if (!includeExpired && this.isTokenExpired(expiryDecoded)) continue
-
-        return {
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex,
-          outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
-          satoshis: out.satoshis,
-          originator,
-          rawOriginator: domainDecoded,
-          basketName: basketDecoded,
-          expiry: expiryDecoded
-        }
+        const token = await this.parseBasketTokenOutput(result, out, originator, basket)
+        if (token == null) continue
+        if (!includeExpired && this.isTokenExpired(token.expiry!)) continue
+        return token
       }
     }
     return undefined
@@ -2801,42 +2858,16 @@ export class WalletPermissionsManager implements WalletInterface {
       )
 
       for (const out of result.outputs) {
-        const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = this.transactionFromResultBeef(result, txid)
-        const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
-        if (!dec?.fields || dec.fields.length < 6) continue
-        const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
-
-        const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
-        if (this.normalizeOriginator(domainDecoded) !== originator) continue
-
-        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
-        const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
-        const typeDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
-        const verifierDec = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
-        const allFields = JSON.parse(Utils.toUTF8(await this.decryptPermissionTokenField(fieldsRaw))) as string[]
-
-        if (privDecoded !== !!privileged || typeDecoded !== certType || verifierDec !== verifier) continue
-
-        // Check if 'fields' is a subset of 'allFields'
-        const setAll = new Set(allFields)
-        if (fields.some(f => !setAll.has(f))) continue
-        if (!includeExpired && this.isTokenExpired(expiryDecoded)) continue
-
-        return {
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex,
-          outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
-          satoshis: out.satoshis,
+        const token = await this.parseCertificateTokenOutput(result, out, {
           originator,
-          rawOriginator: domainDecoded,
           privileged,
-          verifier: verifierDec,
-          certType: typeDecoded,
-          certFields: allFields,
-          expiry: expiryDecoded
-        }
+          verifier,
+          certType,
+          fields
+        })
+        if (token == null) continue
+        if (!includeExpired && this.isTokenExpired(token.expiry!)) continue
+        return token
       }
     }
     return undefined
@@ -4314,6 +4345,103 @@ export class WalletPermissionsManager implements WalletInterface {
     return await this.decryptListActionsMetadata(results)
   }
 
+  private collectInternalizeActionBaskets(
+    requestArgs: InternalizeActionArgs,
+    pModulesByScheme: Map<string, PermissionsModule>
+  ): Array<{ outIndex: string; basket: string; customInstructions?: string }> {
+    const nonPModuleBaskets: Array<{
+      outIndex: string
+      basket: string
+      customInstructions?: string
+    }> = []
+    for (const outIndex in requestArgs.outputs) {
+      const output = requestArgs.outputs[outIndex]
+      if (output.protocol !== 'basket insertion') continue
+      const { basket, customInstructions } = output.insertionRemittance!
+      if (basket.startsWith('p ')) {
+        this.addPModuleByScheme(basket.split(' ')[1], 'basket', pModulesByScheme)
+      } else {
+        nonPModuleBaskets.push({ outIndex, basket, customInstructions })
+      }
+    }
+    return nonPModuleBaskets
+  }
+
+  private async authorizeInternalizeActionBaskets(
+    requestArgs: InternalizeActionArgs,
+    originator: string,
+    baskets: Array<{ outIndex: string; basket: string; customInstructions?: string }>
+  ): Promise<void> {
+    for (const { outIndex, basket, customInstructions } of baskets) {
+      await this.ensureBasketAccess({
+        originator,
+        basket,
+        reason: requestArgs.description,
+        usageType: 'insertion'
+      })
+      if (customInstructions == null || customInstructions === '') continue
+      requestArgs.outputs[outIndex].insertionRemittance!.customInstructions =
+        await this.maybeEncryptMetadata(customInstructions)
+    }
+  }
+
+  private async authorizeInternalizeActionLabels(
+    requestArgs: InternalizeActionArgs,
+    originator: string,
+    labels: string[]
+  ): Promise<void> {
+    for (const label of labels) {
+      await this.ensureLabelAccess({
+        originator,
+        label,
+        reason: requestArgs.description,
+        usageType: 'apply'
+      })
+    }
+  }
+
+  private async encryptInternalizeActionModuleMetadata(
+    requestArgs: InternalizeActionArgs
+  ): Promise<void> {
+    for (const outIndex in requestArgs.outputs) {
+      const output = requestArgs.outputs[outIndex]
+      const customInstructions = output.insertionRemittance?.customInstructions
+      if (output.protocol !== 'basket insertion' || !customInstructions) continue
+      output.insertionRemittance!.customInstructions =
+        await this.maybeEncryptMetadata(customInstructions)
+    }
+  }
+
+  private async runInternalizeActionModules(
+    requestArgs: InternalizeActionArgs,
+    originator: string,
+    modules: PermissionsModule[]
+  ): Promise<Awaited<ReturnType<WalletInterface['internalizeAction']>>> {
+    let transformedArgs: object = requestArgs
+    for (const module of modules) {
+      const transformed = await module.onRequest({
+        method: 'internalizeAction',
+        args: transformedArgs,
+        originator
+      })
+      transformedArgs = transformed.args
+    }
+    await this.encryptInternalizeActionModuleMetadata(
+      transformedArgs as InternalizeActionArgs
+    )
+    let result = await this.underlying.internalizeAction(
+      transformedArgs as InternalizeActionArgs,
+      originator
+    )
+    for (let index = modules.length - 1; index >= 0; index--) {
+      result = await modules[index].onResponse(result, {
+        method: 'internalizeAction',
+        originator
+      })
+    }
+    return result
+  }
+
   public async internalizeAction(
     ...args: Parameters<WalletInterface['internalizeAction']>
   ): ReturnType<WalletInterface['internalizeAction']> {
@@ -4321,92 +4449,18 @@ export class WalletPermissionsManager implements WalletInterface {
 
     // 1) Identify unique P-modules involved (one per schemeID) from both baskets and labels
     const pModulesByScheme = new Map<string, PermissionsModule>()
-    const nonPBaskets: Array<{ outIndex: string; basket: string; customInstructions?: string }> = []
-
-    // Check baskets for p modules
-    for (const outIndex in requestArgs.outputs) {
-      const out = requestArgs.outputs[outIndex]
-      if (out.protocol === 'basket insertion') {
-        const basket = out.insertionRemittance!.basket
-        if (basket.startsWith('p ')) {
-          const schemeID = basket.split(' ')[1]
-          this.addPModuleByScheme(schemeID, 'basket', pModulesByScheme)
-        } else {
-          // Track non-P baskets for normal permission checks
-          nonPBaskets.push({
-            outIndex,
-            basket,
-            customInstructions: out.insertionRemittance!.customInstructions
-          })
-        }
-      }
-    }
-
-    // Check labels for p modules
+    const nonPBaskets = this.collectInternalizeActionBaskets(requestArgs, pModulesByScheme)
     const nonPLabels = this.splitLabelsByPermissionModule(requestArgs.labels, pModulesByScheme)
-
-    // 2) Check permissions for non-P baskets
-    for (const { outIndex, basket, customInstructions } of nonPBaskets) {
-      await this.ensureBasketAccess({
-        originator: originator!,
-        basket,
-        reason: requestArgs.description,
-        usageType: 'insertion'
-      })
-      if (customInstructions) {
-        requestArgs.outputs[outIndex].insertionRemittance!.customInstructions =
-          await this.maybeEncryptMetadata(customInstructions)
-      }
-    }
-
-    // 3) Check permissions for non-P labels
-    for (const lbl of nonPLabels) {
-      await this.ensureLabelAccess({
-        originator: originator!,
-        label: lbl,
-        reason: requestArgs.description,
-        usageType: 'apply'
-      })
-    }
+    await this.authorizeInternalizeActionBaskets(requestArgs, originator!, nonPBaskets)
+    await this.authorizeInternalizeActionLabels(requestArgs, originator!, nonPLabels)
 
     // 4) Call underlying wallet, with P-module transformations if needed
     if (pModulesByScheme.size > 0) {
-      // P-modules are involved - chain transformations
-      const pModules = Array.from(pModulesByScheme.values())
-
-      // Chain onRequest calls through all modules in order
-      let transformedArgs: object = requestArgs
-      for (const module of pModules) {
-        const transformed = await module.onRequest({
-          method: 'internalizeAction',
-          args: transformedArgs,
-          originator: originator!
-        })
-        transformedArgs = transformed.args
-      }
-
-      // Encrypt custom instructions for p basket outputs
-      for (const outIndex in (transformedArgs as InternalizeActionArgs).outputs) {
-        const out = (transformedArgs as InternalizeActionArgs).outputs[outIndex]
-        if (out.protocol === 'basket insertion' && out.insertionRemittance?.customInstructions) {
-          out.insertionRemittance.customInstructions = await this.maybeEncryptMetadata(
-            out.insertionRemittance.customInstructions
-          )
-        }
-      }
-
-      // Call underlying wallet with transformed args
-      let results = await this.underlying.internalizeAction(transformedArgs as InternalizeActionArgs, originator)
-
-      // Chain onResponse calls in reverse order
-      for (let i = pModules.length - 1; i >= 0; i--) {
-        results = await pModules[i].onResponse(results, {
-          method: 'internalizeAction',
-          originator: originator!
-        })
-      }
-
-      return results
+      return await this.runInternalizeActionModules(
+        requestArgs,
+        originator!,
+        Array.from(pModulesByScheme.values())
+      )
     }
 
     // No P-modules - call underlying wallet directly

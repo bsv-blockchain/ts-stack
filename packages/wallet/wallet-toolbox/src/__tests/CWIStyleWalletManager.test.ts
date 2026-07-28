@@ -1045,5 +1045,51 @@ describe('CWIStyleWalletManager Tests', () => {
       fromBeefSpy.mockRestore()
       decodeSpy.mockRestore()
     })
+
+    test('parses valid v3 KDF metadata from a lookup token', () => {
+      const interactor = new OverlayUMPTokenInteractor({} as any, {} as any)
+      const payloadFields = Array.from({ length: 11 }, () => Random(32))
+      const protocolFields = [
+        ...payloadFields,
+        [3],
+        Utils.toArray('argon2id', 'utf8'),
+        Utils.toArray(
+          JSON.stringify({
+            iterations: 3,
+            memoryKiB: 65_536,
+            parallelism: 1,
+            hashLength: 32
+          }),
+          'utf8'
+        )
+      ]
+      const fromBeefSpy = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
+        outputs: [{ lockingScript: {} as any }],
+        id: () => 'txid125'
+      } as any)
+      const decodeSpy = jest.spyOn(PushDrop, 'decode').mockReturnValue({
+        fields: protocolFields
+      } as any)
+
+      const parsed = (interactor as any).parseLookupAnswer({
+        type: 'output-list',
+        outputs: [{ beef: [7, 8, 9], outputIndex: 0 }]
+      }) as UMPToken
+
+      expect(parsed).toMatchObject({
+        umpVersion: 3,
+        passwordKdf: {
+          algorithm: 'argon2id',
+          iterations: 3,
+          memoryKiB: 65_536,
+          parallelism: 1,
+          hashLength: 32
+        },
+        currentOutpoint: 'txid125.0'
+      })
+
+      fromBeefSpy.mockRestore()
+      decodeSpy.mockRestore()
+    })
   })
 })

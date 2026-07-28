@@ -114,6 +114,57 @@ function isValidKdfConfig(kdf: UMPToken['passwordKdf']): boolean {
   )
 }
 
+function findKdfVersionFieldIndex(protocolFields: number[][]): number {
+  const hasMetadataWithProfiles =
+    protocolFields.length >= 15 &&
+    protocolFields[12]?.length === 1 &&
+    protocolFields[12][0] === 3
+  if (hasMetadataWithProfiles) return 12
+  const hasMetadataWithoutProfiles =
+    protocolFields.length >= 14 &&
+    protocolFields[11]?.length === 1 &&
+    protocolFields[11][0] === 3
+  return hasMetadataWithoutProfiles ? 11 : -1
+}
+
+function addProfilesField(
+  token: UMPToken,
+  protocolFields: number[][],
+  kdfVersionFieldIndex: number
+): boolean {
+  const hasProfilesField =
+    kdfVersionFieldIndex === 12 || (kdfVersionFieldIndex !== 11 && protocolFields[11] != null)
+  if (!hasProfilesField || protocolFields[11].length === 0) return true
+  if (protocolFields[11].length > MAX_STATE_SNAPSHOT_BYTES) return false
+  token.profilesEncrypted = protocolFields[11]
+  return true
+}
+
+function addPasswordKdf(
+  token: UMPToken,
+  protocolFields: number[][],
+  kdfVersionFieldIndex: number
+): boolean {
+  if (kdfVersionFieldIndex === -1) return true
+  const kdfAlgorithmField = protocolFields[kdfVersionFieldIndex + 1]
+  const kdfParamsField = protocolFields[kdfVersionFieldIndex + 2]
+  if (kdfAlgorithmField == null || kdfParamsField == null || kdfParamsField.length > 1024) {
+    return false
+  }
+  const kdfParams = JSON.parse(Utils.toUTF8(kdfParamsField)) as Record<string, unknown>
+  const passwordKdf: UMPToken['passwordKdf'] = {
+    algorithm: Utils.toUTF8(kdfAlgorithmField) as 'pbkdf2-sha512' | 'argon2id',
+    iterations: kdfParams.iterations as number,
+    memoryKiB: kdfParams.memoryKiB as number | undefined,
+    parallelism: kdfParams.parallelism as number | undefined,
+    hashLength: kdfParams.hashLength as number | undefined
+  }
+  if (!isValidKdfConfig(passwordKdf)) return false
+  token.umpVersion = 3
+  token.passwordKdf = passwordKdf
+  return true
+}
+
 function isLikelyDerSignatureField(field: number[]): boolean {
   if (!field || field.length < 8 || field.length > 80) {
     return false
@@ -1020,16 +1071,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         return undefined
       }
 
-      const hasV3MetadataWithProfiles =
-        protocolFields.length >= 15 && protocolFields[12]?.length === 1 && protocolFields[12][0] === 3
-      const hasV3MetadataWithoutProfiles =
-        protocolFields.length >= 14 && protocolFields[11]?.length === 1 && protocolFields[11][0] === 3
-      let kdfVersionFieldIndex = -1
-      if (hasV3MetadataWithProfiles) {
-        kdfVersionFieldIndex = 12
-      } else if (hasV3MetadataWithoutProfiles) {
-        kdfVersionFieldIndex = 11
-      }
+      const kdfVersionFieldIndex = findKdfVersionFieldIndex(protocolFields)
 
       const token: UMPToken = {
         passwordSalt: protocolFields[0],
@@ -1047,31 +1089,8 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
       }
       if (token.presentationHash.length !== 32 || token.recoveryHash.length !== 32) return undefined
 
-      const hasProfilesField =
-        hasV3MetadataWithProfiles || (!hasV3MetadataWithoutProfiles && protocolFields[11] != null)
-      if (hasProfilesField && protocolFields[11].length > 0) {
-        if (protocolFields[11].length > MAX_STATE_SNAPSHOT_BYTES) return undefined
-        token.profilesEncrypted = protocolFields[11]
-      }
-
-      if (kdfVersionFieldIndex !== -1) {
-        const kdfAlgorithmField = protocolFields[kdfVersionFieldIndex + 1]
-        const kdfParamsField = protocolFields[kdfVersionFieldIndex + 2]
-        if (kdfAlgorithmField == null || kdfParamsField == null || kdfParamsField.length > 1024) {
-          return undefined
-        }
-        const kdfParams = JSON.parse(Utils.toUTF8(kdfParamsField)) as Record<string, unknown>
-        const passwordKdf: UMPToken['passwordKdf'] = {
-          algorithm: Utils.toUTF8(kdfAlgorithmField) as 'pbkdf2-sha512' | 'argon2id',
-          iterations: kdfParams.iterations as number,
-          memoryKiB: kdfParams.memoryKiB as number | undefined,
-          parallelism: kdfParams.parallelism as number | undefined,
-          hashLength: kdfParams.hashLength as number | undefined
-        }
-        if (!isValidKdfConfig(passwordKdf)) return undefined
-        token.umpVersion = 3
-        token.passwordKdf = passwordKdf
-      }
+      if (!addProfilesField(token, protocolFields, kdfVersionFieldIndex)) return undefined
+      if (!addPasswordKdf(token, protocolFields, kdfVersionFieldIndex)) return undefined
 
       return token
     } catch {

@@ -41,7 +41,7 @@ const assert = (expression: unknown, message: string = 'Hash assertion failed'):
  */
 abstract class BaseHash {
   pending: number[] | null = null
-  pendingTotal: number
+  pendingTotal: number = 0
   blockSize: number
   outSize: number
   endian: 'big' | 'little'
@@ -51,7 +51,6 @@ abstract class BaseHash {
   hmacStrength: number
 
   constructor(blockSize: number, outSize: number, hmacStrength: number, padLength: number) {
-    this.pendingTotal = 0
     this.blockSize = blockSize
     this.outSize = outSize
     this.hmacStrength = hmacStrength
@@ -758,9 +757,7 @@ export class SHA1 extends BaseHash {
     const W = this.W
 
     // Default start to 0
-    if (start === undefined) {
-      start = 0
-    }
+    start ??= 0
 
     let i: number
     for (i = 0; i < 16; i++) {

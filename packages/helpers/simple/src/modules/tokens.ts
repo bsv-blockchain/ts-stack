@@ -12,6 +12,56 @@ import {
 
 const TOKEN_MESSAGE_BOX = 'simple_token_inbox'
 
+function parseTokenData(plaintext: number[]): any {
+  const text = new TextDecoder().decode(new Uint8Array(plaintext))
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+
+function parseCustomInstructions(output: any): any {
+  if (output.customInstructions == null) return {}
+  try {
+    return JSON.parse(output.customInstructions as string)
+  } catch {
+    return {}
+  }
+}
+
+async function decryptTokenData(
+  client: any,
+  ciphertext: number[],
+  protocolID: [SecurityLevel, string],
+  keyID: string,
+  counterparty: string
+): Promise<any> {
+  try {
+    const { plaintext } = await client.decrypt({
+      ciphertext,
+      protocolID,
+      keyID,
+      counterparty
+    })
+    return parseTokenData(Array.from(plaintext))
+  } catch {
+    if (counterparty !== 'self') return null
+  }
+
+  try {
+    const { plaintext } = await client.decrypt({
+      ciphertext,
+      protocolID,
+      keyID,
+      counterparty: 'anyone'
+    })
+    return parseTokenData(Array.from(plaintext))
+  } catch {
+    return null
+  }
+}
+
 export function createTokenMethods(core: WalletCore): {
   createToken: (options: TokenOptions) => Promise<TokenResult>
   listTokenDetails: (basket?: string) => Promise<TokenDetail[]>
@@ -104,55 +154,21 @@ export function createTokenMethods(core: WalletCore): {
           const lockScript = LockingScript.fromHex(output.lockingScript as string)
           const decoded = PushDrop.decode(lockScript)
 
-          let ci: any = {}
-          if ((output as any).customInstructions != null) {
-            try {
-              ci = JSON.parse((output as any).customInstructions as string)
-            } catch {}
-          }
+          const ci = parseCustomInstructions(output)
           const protocolID = ci.protocolID ?? defaultProtocolID
           const keyID = (ci.keyID as string | undefined) ?? defaultKeyID
           const counterparty = (ci.counterparty as string | undefined) ?? defaultCounterparty
 
-          let data: any = null
-          if (decoded.fields[0] != null) {
-            try {
-              const { plaintext } = await client.decrypt({
-                ciphertext: Array.from(decoded.fields[0]),
-                protocolID,
-                keyID,
-                counterparty
-              } as any)
-              const text = new TextDecoder().decode(new Uint8Array(plaintext))
-              try {
-                data = JSON.parse(text)
-              } catch {
-                data = text
-              }
-            } catch {
-              // Fallback: try 'anyone' for pre-fix tokens
-              if (counterparty === 'self') {
-                try {
-                  const { plaintext } = await client.decrypt({
-                    ciphertext: Array.from(decoded.fields[0]),
-                    protocolID,
-                    keyID,
-                    counterparty: 'anyone'
-                  } as any)
-                  const text = new TextDecoder().decode(new Uint8Array(plaintext))
-                  try {
-                    data = JSON.parse(text)
-                  } catch {
-                    data = text
-                  }
-                } catch {
-                  data = null
-                }
-              } else {
-                data = null
-              }
-            }
-          }
+          const data =
+            decoded.fields[0] == null
+              ? null
+              : await decryptTokenData(
+                  client,
+                  Array.from(decoded.fields[0]),
+                  protocolID,
+                  keyID,
+                  counterparty
+                )
 
           details.push({
             outpoint: output.outpoint,

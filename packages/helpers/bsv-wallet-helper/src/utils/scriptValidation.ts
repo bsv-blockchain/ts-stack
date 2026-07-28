@@ -555,6 +555,35 @@ export interface MAP {
   [key: string]: string
 }
 
+function decodeMapChunk(
+  chunk: { data?: number[] } | undefined,
+  description: string
+): string | null {
+  if (chunk?.data == null || chunk.data.length === 0) return null
+  try {
+    return Utils.toUTF8(chunk.data)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`extractMapMetadata: Invalid UTF-8 in ${description}: ${message}`)
+  }
+}
+
+function parseMapKeyValuePairs(
+  chunks: Array<{ data?: number[] }>,
+  startIndex: number
+): Record<string, string> {
+  const metadata: Record<string, string> = {}
+  for (let index = startIndex; index < chunks.length - 1; index += 2) {
+    const keyChunk = chunks[index]
+    const valueChunk = chunks[index + 1]
+    if (keyChunk?.data == null || valueChunk?.data == null) break
+    const key = decodeMapChunk(keyChunk, 'metadata key-value pair')
+    const value = decodeMapChunk(valueChunk, 'metadata key-value pair')
+    if (key != null && value != null) metadata[key] = value
+  }
+  return metadata
+}
+
 /**
  * Extracts MAP (Magic Attribute Protocol) metadata from a script.
  *
@@ -605,64 +634,15 @@ export function extractMapMetadata(input: ScriptInput): MAP | null {
   }
 
   // Next chunk should be MAP prefix
-  const prefixChunk = chunks[opReturnIndex + 1]
-  if (prefixChunk?.data == null || prefixChunk.data.length === 0) {
-    return null
-  }
-
-  let prefix: string
-  try {
-    prefix = Utils.toUTF8(prefixChunk.data)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`extractMapMetadata: Invalid UTF-8 in MAP prefix: ${message}`)
-  }
-
-  if (prefix !== ORDINAL_MAP_PREFIX) {
-    return null
-  }
+  const prefix = decodeMapChunk(chunks[opReturnIndex + 1], 'MAP prefix')
+  if (prefix !== ORDINAL_MAP_PREFIX) return null
 
   // Next chunk should be 'SET' command
-  const cmdChunk = chunks[opReturnIndex + 2]
-  if (cmdChunk?.data == null || cmdChunk.data.length === 0) {
-    return null
-  }
-
-  let cmd: string
-  try {
-    cmd = Utils.toUTF8(cmdChunk.data)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`extractMapMetadata: Invalid UTF-8 in command: ${message}`)
-  }
-
-  if (cmd !== 'SET') {
-    return null
-  }
+  const command = decodeMapChunk(chunks[opReturnIndex + 2], 'command')
+  if (command !== 'SET') return null
 
   // Parse key-value pairs
-  const metadata: Record<string, string> = {}
-  let currentIndex = opReturnIndex + 3
-
-  while (currentIndex < chunks.length - 1) {
-    const keyChunk = chunks[currentIndex]
-    const valueChunk = chunks[currentIndex + 1]
-
-    if (keyChunk?.data == null || valueChunk?.data == null) {
-      break
-    }
-
-    try {
-      const key = Utils.toUTF8(keyChunk.data)
-      const value = Utils.toUTF8(valueChunk.data)
-      metadata[key] = value
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`extractMapMetadata: Invalid UTF-8 in metadata key-value pair: ${message}`)
-    }
-
-    currentIndex += 2
-  }
+  const metadata = parseMapKeyValuePairs(chunks, opReturnIndex + 3)
 
   // Validate required fields
   if (

@@ -3,6 +3,7 @@ const mockSockets: Array<{
   close: jest.Mock
   onopen?: (event: unknown) => void
   onclose?: (event: unknown) => void
+  onmessage?: (event: { data: unknown }) => void
 }> = []
 
 jest.mock('ws', () => ({
@@ -12,7 +13,8 @@ jest.mock('ws', () => ({
       send: jest.fn(),
       close: jest.fn(),
       onopen: undefined,
-      onclose: undefined
+      onclose: undefined,
+      onmessage: undefined
     }
     socket.close.mockImplementation(() => socket.onclose?.({}))
     mockSockets.push(socket)
@@ -104,5 +106,73 @@ describe('WhatsOnChain WebSocket listener stops', () => {
     await jest.advanceTimersByTimeAsync(1000)
     await expect(live).resolves.toBe(true)
     expect(liveSocket.close).toHaveBeenCalledTimes(1)
+  })
+
+  test('processes bulk control, header, and error frames', async () => {
+    jest.useFakeTimers()
+    const enqueue = jest.fn()
+    const error = jest.fn(() => false)
+    const logger = jest.fn()
+    const stop: StopListenerToken = { stop: undefined }
+    const listener = WocHeadersBulkListener(0, 10, enqueue, error, stop, 'main', logger, 1)
+    const socket = mockSockets[0]
+
+    socket.onopen?.({})
+    socket.onmessage?.({ data: '' })
+    socket.onmessage?.({ data: '{}' })
+    socket.onmessage?.({ data: JSON.stringify({ connect: true }) })
+    socket.onmessage?.({ data: JSON.stringify({ unexpected: true }) })
+    socket.onmessage?.({ data: JSON.stringify({ pub: {} }) })
+    socket.onmessage?.({ data: JSON.stringify({ type: 3 }) })
+    socket.onmessage?.({ data: JSON.stringify({ type: 5 }) })
+    socket.onmessage?.({ data: JSON.stringify({ type: 6 }) })
+    socket.onmessage?.({
+      data: JSON.stringify({
+        pub: {
+          data: {
+            hash: 'hash',
+            height: 10,
+            version: 1,
+            merkleroot: 'merkle-root',
+            time: 1,
+            bits: '1d00ffff',
+            nonce: 1,
+            previousblockhash: 'previous-hash'
+          }
+        }
+      })
+    })
+    socket.onmessage?.({ data: '{}' })
+
+    await jest.advanceTimersByTimeAsync(1)
+    await expect(listener).resolves.toBe(true)
+    expect(socket.send).toHaveBeenCalledWith('ping')
+    expect(logger).toHaveBeenCalledWith(JSON.stringify({ connect: true }))
+    expect(error).toHaveBeenCalledWith(42, `unknown data ${JSON.stringify({ unexpected: true })}`)
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ height: 10 }))
+
+    for (const frame of [{ type: 7, data: { code: 503 } }, { type: 9 }]) {
+      const nextStop: StopListenerToken = { stop: undefined }
+      const nextError = jest.fn(() => false)
+      const nextListener = WocHeadersBulkListener(0, 10, jest.fn(), nextError, nextStop, 'main', jest.fn(), 1)
+      const nextSocket = mockSockets.at(-1)!
+      nextSocket.onmessage?.({ data: JSON.stringify(frame) })
+      await jest.advanceTimersByTimeAsync(1)
+      await expect(nextListener).resolves.toBe(false)
+      expect(nextError).toHaveBeenCalled()
+      expect(nextSocket.close).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  test('reports a bulk listener that goes idle before its first header', async () => {
+    jest.useFakeTimers()
+    const error = jest.fn(() => false)
+    const stop: StopListenerToken = { stop: undefined }
+    const listener = WocHeadersBulkListener(0, 10, jest.fn(), error, stop, 'main', jest.fn(), 1)
+
+    await jest.advanceTimersByTimeAsync(15)
+
+    await expect(listener).resolves.toBe(false)
+    expect(error).toHaveBeenCalledWith(-2, 'unexpectedly went idle')
   })
 })

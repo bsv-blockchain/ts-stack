@@ -31,6 +31,53 @@ interface RenewResponse {
   description?: string
 }
 
+interface AdvertisementOutput {
+  outpoint: string
+  tags?: string[]
+}
+
+async function calculateRenewalAmount(size: string, additionalMinutes: number): Promise<number> {
+  const fileSize = Number.parseInt(size, 10) || 0
+  return fileSize > 0
+    ? await getPriceForFile({ fileSize, retentionPeriod: additionalMinutes })
+    : 0
+}
+
+function findFarthestAdvertisement(
+  outputs: AdvertisementOutput[]
+): AdvertisementOutput | undefined {
+  return outputs
+    .map(advertisement => {
+      const expiryTag = advertisement.tags?.find(tag => tag.startsWith('expiry_time_'))
+      const expiry =
+        expiryTag == null
+          ? 0
+          : Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+      return { advertisement, expiry }
+    })
+    .reduce<{ advertisement?: AdvertisementOutput; expiry: number }>(
+      (farthest, candidate) => (candidate.expiry > farthest.expiry ? candidate : farthest),
+      { expiry: 0 }
+    ).advertisement
+}
+
+function buildRenewalTags(
+  previousAdvertisement: AdvertisementOutput,
+  uhrpUrl: string,
+  objectIdentifier: string,
+  expiryTime: number
+): string[] {
+  const uploaderTags =
+    previousAdvertisement.tags
+      ?.filter(tag => tag.startsWith('uploader_identity_key_'))
+      .slice(0, 1) ?? []
+  return uploaderTags.concat(
+    `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+    `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
+    `expiry_time_${expiryTime}`
+  )
+}
+
 const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => {
   try {
     const { identityKey } = req.auth
@@ -67,14 +114,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
     const newCustomTimeIso = new Date(newExpiryTimeSeconds * 1000).toISOString()
 
-    const fileSizeNum = Number.parseInt(size, 10) || 0
-    let amount = 0
-    if (fileSizeNum > 0) {
-      amount = await getPriceForFile({
-        fileSize: fileSizeNum,
-        retentionPeriod: additionalMinutes
-      })
-    }
+    const amount = await calculateRenewalAmount(size, additionalMinutes)
 
     // When multiple advertisements match, renew the one with the farthest expiry.
     const wallet = await getWallet()
@@ -96,22 +136,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       })
     }
 
-    // Finding the maxpiry file with the same url
-    let prevAdvertisement
-    // Farthest expiration time given in seconds
-    let maxpiry = 0
-    for (const out of outputs) {
-      if (!out.tags) continue
-      const expiryTag = out.tags.find(t => t.startsWith('expiry_time_'))
-      if (!expiryTag) continue
-
-      const expiryNum = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-
-      if (expiryNum > maxpiry) {
-        maxpiry = expiryNum
-        prevAdvertisement = out
-      }
-    }
+    const prevAdvertisement = findFarthestAdvertisement(outputs)
 
     if (!prevAdvertisement || !BEEF) {
       return res.status(404).json({
@@ -144,16 +169,11 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       true
     )
 
-    // Creating new tags
-    const newTags: string[] = []
-    if (prevAdvertisement.tags) {
-      const uploaderTag = prevAdvertisement.tags.find(t => t.startsWith('uploader_identity_key_'))
-      if (uploaderTag) newTags.push(uploaderTag)
-    }
-    newTags.push(
-      `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
-      `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
-      `expiry_time_${newExpiryTimeSeconds}`
+    const newTags = buildRenewalTags(
+      prevAdvertisement,
+      uhrpUrl,
+      objectIdentifier,
+      newExpiryTimeSeconds
     )
 
     const { signableTransaction } = await wallet.createAction({
