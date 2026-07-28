@@ -33,6 +33,33 @@ export function parseFileLink (
   return undefined
 }
 
+type ParsedFileLink = NonNullable<ReturnType<typeof parseFileLink>>
+
+async function resolveHeaderFileLink(
+  parsed: ParsedFileLink,
+  currentRange: HeightRange | undefined,
+  neededRange: HeightRange,
+  fetch: ChaintracksFetchApi,
+  link: string
+): Promise<{ range: HeightRange | undefined; result?: GetHeaderByteFileLinksResult }> {
+  if (parsed.range !== 'latest') {
+    const range = new HeightRange(parsed.range.fromHeight, parsed.range.toHeight)
+    const result = neededRange.intersect(range).isEmpty
+      ? undefined
+      : { sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data: undefined }
+    return { range, result }
+  }
+  if (currentRange == null) return { range: currentRange }
+  const fromHeight = currentRange.maxHeight + 1
+  if (neededRange.maxHeight < fromHeight) return { range: currentRange }
+  const data = await fetch.download(link)
+  const range = new HeightRange(fromHeight, fromHeight + data.length / 80 - 1)
+  const result = neededRange.intersect(range).isEmpty
+    ? undefined
+    : { sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data }
+  return { range, result }
+}
+
 export interface WhatsOnChainServicesOptions {
   /**
    * Which chain is being tracked: main, test, or stn.
@@ -148,19 +175,9 @@ export class WhatsOnChainServices {
     for (const link of files.files) {
       const parsed = parseFileLink(link)
       if (parsed === undefined) continue // parse error, return empty result
-      if (parsed.range === 'latest') {
-        if (range === undefined) continue // should not happen on valid input
-        const fromHeight = range.maxHeight + 1
-        if (neededRange.maxHeight >= fromHeight) {
-          // We need this range but don't know maxHeight
-          const data = await fetch.download(link)
-          range = new HeightRange(fromHeight, fromHeight + data.length / 80 - 1)
-          if (!neededRange.intersect(range).isEmpty) { r.push({ sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data }) }
-        }
-      } else {
-        range = new HeightRange(parsed.range.fromHeight, parsed.range.toHeight)
-        if (!neededRange.intersect(range).isEmpty) { r.push({ sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data: undefined }) }
-      }
+      const resolved = await resolveHeaderFileLink(parsed, range, neededRange, fetch, link)
+      range = resolved.range
+      if (resolved.result != null) r.push(resolved.result)
     }
     return r
   }

@@ -1,6 +1,22 @@
 import { Setup } from '@bsv/wallet-toolbox'
 import { runArgv2Function } from './runArgv2Function'
 
+type WalletAction = Awaited<
+  ReturnType<Awaited<ReturnType<typeof Setup.createWalletClient>>['wallet']['listActions']>
+>['actions'][number]
+
+function logSpendableChange(actions: WalletAction[], statuses: string[]): void {
+  for (const action of actions) {
+    if (!statuses.includes(action.status)) continue
+    for (const output of action.outputs!) {
+      if (!output.spendable || output.basket !== 'default') continue
+      console.log(
+        `${ar(output.satoshis, 10)} ${al(action.status, 10)} ${ar(output.outputIndex, 3)} ${action.txid}`
+      )
+    }
+  }
+}
+
 /**
  * Run this function using the following command:
  *
@@ -32,18 +48,9 @@ Change for:
 
     const actionsNewestFirst = [...actions]
     actionsNewestFirst.reverse()
-    for (const stati of [['nosend'], ['completed', 'unproven']])
-      for (const a of actionsNewestFirst) {
-        if (stati.includes(a.status)) {
-          for (const o of a.outputs!) {
-            if (o.spendable && o.basket === 'default') {
-              console.log(
-                `${ar(o.satoshis, 10)} ${al(a.status, 10)} ${ar(o.outputIndex, 3)} ${a.txid}`
-              )
-            }
-          }
-        }
-      }
+    for (const statuses of [['nosend'], ['completed', 'unproven']]) {
+      logSpendableChange(actionsNewestFirst, statuses)
+    }
   }
 }
 

@@ -33,6 +33,80 @@ async function getWhatsOnChainTipHeight(chain: Chain = 'main', apiKey?: string):
   return chainInfo.blocks
 }
 
+interface BulkListenerState {
+  done: boolean
+  count: number
+  ping: number
+  ok: boolean
+  wsIsOpen: boolean
+}
+
+function processHeaderMessage(
+  data: any,
+  state: BulkListenerState,
+  ws: WebSocket,
+  toHeight: number,
+  enqueue: (header: BlockHeader) => void,
+  error: (code: number, message: string) => boolean,
+  logger: (...args: any[]) => void
+): void {
+  if (state.done) return
+  const json = JSON.stringify(data)
+  if (json === '{}') {
+    ws.send('ping')
+    return
+  }
+  if (data.connect) {
+    logger(json)
+    return
+  }
+  if (!data.pub) {
+    error(42, `unknown data ${json}`)
+    return
+  }
+  const wocHeader = data.pub.data
+  if (!wocHeader) return
+  const header = convertWocToBlockHeaderHex(wocHeader)
+  enqueue(header)
+  state.count++
+  if (header.height < toHeight) return
+  state.ok = true
+  state.done = true
+  ws.close()
+}
+
+function processBulkData(
+  rawData: any,
+  state: BulkListenerState,
+  ws: WebSocket,
+  toHeight: number,
+  enqueue: (header: BlockHeader) => void,
+  error: (code: number, message: string) => boolean,
+  logger: (...args: any[]) => void
+): void {
+  if (rawData.length === 0) {
+    state.ping++
+    return
+  }
+  const data = JSON.parse(rawData)
+  switch (data.type || 0) {
+    case 0:
+      processHeaderMessage(data, state, ws, toHeight, enqueue, error, logger)
+      break
+    case 3:
+    case 5:
+    case 6:
+      break
+    case 7:
+      error(data.data.code, JSON.stringify(data.data))
+      ws.close()
+      break
+    default:
+      error(42, `unknown rawData ${rawData}`)
+      ws.close()
+  }
+}
+
 /**
  * High speed WebSocket based based old block header listener
  * @param fromHeight
@@ -57,18 +131,20 @@ export async function WocHeadersBulkListener(
 ): Promise<boolean> {
   // logger(`WocHeadersBulkListener from ${fromHeight} to ${toHeight} on ${chain} chain`)
 
-  let done = false
-  let count = 0
-  let ping = 0
-  let ok = false
-  let wsIsOpen = false
+  const state: BulkListenerState = {
+    done: false,
+    count: 0,
+    ping: 0,
+    ok: false,
+    wsIsOpen: false
+  }
 
   stop.stop = createStopHandler(
-    () => { ok = true },
-    () => wsIsOpen,
-    () => { wsIsOpen = false },
+    () => { state.ok = true },
+    () => state.wsIsOpen,
+    () => { state.wsIsOpen = false },
     () => ws.close(),
-    () => { done = true }
+    () => { state.done = true }
   )
 
   let webSocketUrl: string
@@ -85,69 +161,12 @@ export async function WocHeadersBulkListener(
       throw new Error("WocHeadersBulkListener does not support 'mock' chain.")
   }
 
-  function processData(rawData) {
-    if (rawData.length === 0) {
-      ping++
-      return
-    }
-
-    // Earlier data formats...
-    // "{\"channel\":\"woc#c91c044b-66f5-4172-b509-82c11a41d7fc\",\"data\":{\"data\":{\"hash\":\"00000000000000000ce16106e2100b893f3da5989ef23cbac52eb568cf803dc1\",\"confirmations\":8,\"size\":3345869,\"height\":779890,\"version\":939515904,\"versionHex\":\"37ffe000\",\"merkleroot\":\"92e3d1d72d432c9216d296839eaa675b6ffb40ccf6e1a02229caf3d769dc0a5f\",\"txcount\":10757,\"time\":1676851109,\"mediantime\":1676849009,\"nonce\":4216995243,\"bits\":\"180e38cb\",\"difficulty\":77310268438.5808,\"chainwork\":\"00000000000000000000000000000000000000000142d5cf97c0ed497eae1066\",\"previousblockhash\":\"0000000000000000053d26b7b35a76bf2b672428bae591bc033ae99f9873697a\",\"nextblockhash\":\"000000000000000000e1a110376966033507953d50ade86eadef7226843f3349\"}}}"
-
-    // Returned rawData may be a Buffer...
-    const data = JSON.parse(rawData)
-    switch (data.type || 0) {
-      case 0:
-        // last wocHeader has empty string for nextBlockHash
-        // eslint-disable-next-line no-case-declarations
-        if (!done) {
-          const json = JSON.stringify(data)
-          if (json === '{}') {
-            ws.send('ping')
-          } else if (data.connect) {
-            logger(json)
-          } else if (data.pub) {
-            // logger(json)
-            const wocHeader = data.pub.data
-            if (wocHeader) {
-              const header = convertWocToBlockHeaderHex(wocHeader)
-              enqueue(header)
-              count++
-              if (header.height >= toHeight) {
-                ok = true
-                done = true
-                ws.close()
-              }
-            }
-          } else {
-            error(42, `unknown data ${json}`)
-          }
-        }
-        break
-      case 3:
-        break // Unsubscribe "{\"type\":3,\"channel\":\"woc#c91c044b-66f5-4172-b509-82c11a41d7fc\",\"data\":{}}"
-      case 5:
-        break // console.log('subscribed to a channel ' + data.channel)
-      case 6:
-        break // subscribe "{\"type\":6,\"data\":{\"client\":\"c91c044b-66f5-4172-b509-82c11a41d7fc\",\"subs\":{\"woc#c91c044b-66f5-4172-b509-82c11a41d7fc\":{}},\"session\":\"d8693511-5bc8-4815-beb6-8ae1bdaaf3a6\"}}"
-      case 7:
-        // If you don't close after unsubscribe or end of headers, after a delay, this is received.
-        // "{\"type\":7,\"data\":{\"code\":200,\"reason\":\"Data Delivered\"}}"
-        error(data.data.code, JSON.stringify(data.data))
-        ws.close()
-        break
-      default:
-        error(42, `unknown rawData ${rawData}`)
-        ws.close()
-    }
-  }
-
   const ws = new WebSocket(webSocketUrl)
 
   ws.onopen = function (this, _evt) {
     // This is required to trigger connect on server side.
     ws.send(JSON.stringify({}))
-    wsIsOpen = true
+    state.wsIsOpen = true
   }
 
   ws.onerror = function (this, evt) {
@@ -169,36 +188,41 @@ export async function WocHeadersBulkListener(
   ws.onclose = function (this, _ev) {
     // ok should be true if we got the last header, false otherwise.
     // error will have been called with anything abnormal...
-    done = true
+    state.done = true
   }
 
   ws.onmessage = function (this, ev) {
-    processData(ev.data)
+    processBulkData(ev.data, state, ws, toHeight, enqueue, error, logger)
   }
 
   // Allow this many wait repetitions for first header, then expect the headers to keep coming
   const firstHeaderCycles = 12
   let waitCycles = 0
 
-  while (!done) {
-    const qlPreWait = count
+  while (!state.done) {
+    const qlPreWait = state.count
     await wait(idleWait)
-    const qlPostWait = count
+    const qlPostWait = state.count
 
-    if (waitCycles > firstHeaderCycles && !done && qlPreWait === 0 && (qlPreWait === qlPostWait || ping > 0)) {
+    if (
+      waitCycles > firstHeaderCycles &&
+      !state.done &&
+      qlPreWait === 0 &&
+      (qlPreWait === qlPostWait || state.ping > 0)
+    ) {
       // Web socket didn't close normally but we aren't getting any new headers
       // Assume a broken connection
       error(-2, 'unexpectedly went idle')
-      done = true
+      state.done = true
     }
 
-    ping = 0
+    state.ping = 0
     waitCycles++
   }
 
   // logger(`WoC ${new Date().toISOString()} ${count} headers added`)
 
-  return ok
+  return state.ok
 }
 /* v1
 onmessage: "{\"type\":6,\"data\":{\"client\":\"c91c044b-66f5-4172-b509-82c11a41d7fc\",\"subs\":{\"woc#c91c044b-66f5-4172-b509-82c11a41d7fc\":{}},\"session\":\"d8693511-5bc8-4815-beb6-8ae1bdaaf3a6\"}}"

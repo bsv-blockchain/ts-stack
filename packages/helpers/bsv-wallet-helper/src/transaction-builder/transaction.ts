@@ -34,6 +34,73 @@ import {
 
 /** Address string, wallet derivation params, or undefined (BRC-29 auto-derive). */
 type AddressOrParams = string | WalletDerivationParams | undefined
+type AddressedOutputConfig = Extract<OutputConfig, { type: 'p2pkh' | 'ordinalP2PKH' | 'change' }>
+
+interface DerivationInfo {
+  outputIndex: number
+  derivationPrefix: string
+  derivationSuffix: string
+}
+
+interface ActionInputConfig {
+  outpoint: string
+  inputDescription: string
+  unlockingScriptLength: number
+}
+
+interface PreimageInput {
+  sourceTransaction: Transaction
+  sourceOutputIndex: number
+  unlockingScriptTemplate: any
+}
+
+interface PreimageOutput {
+  lockingScript: LockingScript
+  satoshis?: number
+  change?: boolean
+}
+
+interface InputArtifacts {
+  unlockingScriptTemplates: any[]
+  actionInputs: ActionInputConfig[]
+  preimageInputs: PreimageInput[]
+}
+
+interface OutputArtifacts {
+  actionOutputs: CreateActionOutput[]
+  preimageOutputs: PreimageOutput[]
+}
+
+const BOOLEAN_ACTION_OPTIONS = [
+  'signAndProcess',
+  'acceptDelayedBroadcast',
+  'returnTXIDOnly',
+  'noSend',
+  'randomizeOutputs'
+] as const
+
+function validateBooleanActionOptions(options: CreateActionOptions): void {
+  for (const key of BOOLEAN_ACTION_OPTIONS) {
+    const value = options[key]
+    if (value !== undefined && typeof value !== 'boolean') {
+      throw new Error(`${key} must be a boolean`)
+    }
+  }
+}
+
+function validateStringArrayOption(
+  value: unknown,
+  optionName: string,
+  itemDescription: string
+): void {
+  if (value === undefined) return
+  if (!Array.isArray(value)) throw new TypeError(`${optionName} must be an array`)
+  for (let index = 0; index < value.length; index++) {
+    if (typeof value[index] !== 'string') {
+      throw new TypeError(`${optionName}[${index}] must be a string (${itemDescription})`)
+    }
+  }
+}
 
 export function isHexPublicKey(value: string): boolean {
   return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130)
@@ -418,25 +485,7 @@ export class TransactionBuilder {
       throw new Error('Options must be an object')
     }
 
-    // Validate boolean options
-    if (opts.signAndProcess !== undefined && typeof opts.signAndProcess !== 'boolean') {
-      throw new Error('signAndProcess must be a boolean')
-    }
-    if (
-      opts.acceptDelayedBroadcast !== undefined &&
-      typeof opts.acceptDelayedBroadcast !== 'boolean'
-    ) {
-      throw new Error('acceptDelayedBroadcast must be a boolean')
-    }
-    if (opts.returnTXIDOnly !== undefined && typeof opts.returnTXIDOnly !== 'boolean') {
-      throw new Error('returnTXIDOnly must be a boolean')
-    }
-    if (opts.noSend !== undefined && typeof opts.noSend !== 'boolean') {
-      throw new Error('noSend must be a boolean')
-    }
-    if (opts.randomizeOutputs !== undefined && typeof opts.randomizeOutputs !== 'boolean') {
-      throw new Error('randomizeOutputs must be a boolean')
-    }
+    validateBooleanActionOptions(opts)
 
     // Validate trustSelf
     if (opts.trustSelf !== undefined) {
@@ -446,39 +495,9 @@ export class TransactionBuilder {
       }
     }
 
-    // Validate array options
-    if (opts.knownTxids !== undefined) {
-      if (!Array.isArray(opts.knownTxids)) {
-        throw new TypeError('knownTxids must be an array')
-      }
-      for (let i = 0; i < opts.knownTxids.length; i++) {
-        if (typeof opts.knownTxids[i] !== 'string') {
-          throw new TypeError(`knownTxids[${i}] must be a string (hex txid)`)
-        }
-      }
-    }
-
-    if (opts.noSendChange !== undefined) {
-      if (!Array.isArray(opts.noSendChange)) {
-        throw new TypeError('noSendChange must be an array')
-      }
-      for (let i = 0; i < opts.noSendChange.length; i++) {
-        if (typeof opts.noSendChange[i] !== 'string') {
-          throw new TypeError(`noSendChange[${i}] must be a string (outpoint format)`)
-        }
-      }
-    }
-
-    if (opts.sendWith !== undefined) {
-      if (!Array.isArray(opts.sendWith)) {
-        throw new TypeError('sendWith must be an array')
-      }
-      for (let i = 0; i < opts.sendWith.length; i++) {
-        if (typeof opts.sendWith[i] !== 'string') {
-          throw new TypeError(`sendWith[${i}] must be a string (hex txid)`)
-        }
-      }
-    }
+    validateStringArrayOption(opts.knownTxids, 'knownTxids', 'hex txid')
+    validateStringArrayOption(opts.noSendChange, 'noSendChange', 'outpoint format')
+    validateStringArrayOption(opts.sendWith, 'sendWith', 'hex txid')
 
     this.transactionOptions = { ...this.transactionOptions, ...opts }
     return this
@@ -708,6 +727,330 @@ export class TransactionBuilder {
     return new OutputBuilder(this, outputConfig)
   }
 
+  private validateBuildConfiguration(): void {
+    if (this.outputs.length === 0) {
+      throw new Error('At least one output is required to build a transaction')
+    }
+    const hasChangeOutputs = this.outputs.some(output => output.type === 'change')
+    if (hasChangeOutputs && this.inputs.length === 0) {
+      throw new Error('Change outputs require at least one input')
+    }
+  }
+
+  private createUnlockingScriptTemplate(config: InputConfig): any {
+    switch (config.type) {
+      case 'p2pkh':
+      case 'ordinalP2PKH': {
+        return new P2PKH(this.wallet).unlock({
+          protocolID: config.walletParams?.protocolID,
+          keyID: config.walletParams?.keyID,
+          counterparty: config.walletParams?.counterparty,
+          signOutputs: config.signOutputs,
+          anyoneCanPay: config.anyoneCanPay
+        })
+      }
+      case 'ordLock': {
+        const ordLock = new OrdLock(this.wallet)
+        if (config.kind === 'purchase') {
+          return ordLock.purchaseUnlock({
+            sourceSatoshis: config.sourceSatoshis,
+            lockingScript: config.lockingScript
+          })
+        }
+        return ordLock.cancelUnlock({
+          protocolID: config.walletParams?.protocolID,
+          keyID: config.walletParams?.keyID,
+          counterparty: config.walletParams?.counterparty,
+          signOutputs: config.signOutputs,
+          anyoneCanPay: config.anyoneCanPay,
+          sourceSatoshis: config.sourceSatoshis,
+          lockingScript: config.lockingScript
+        })
+      }
+      case 'custom':
+        return config.unlockingScriptTemplate
+      default:
+        throw new Error(`Unsupported input type: ${(config as any).type}`)
+    }
+  }
+
+  private buildInputArtifacts(): InputArtifacts {
+    const unlockingScriptTemplates: any[] = []
+    const actionInputs: ActionInputConfig[] = []
+    const preimageInputs: PreimageInput[] = []
+
+    for (const config of this.inputs) {
+      const unlockingScriptTemplate = this.createUnlockingScriptTemplate(config)
+      unlockingScriptTemplates.push(unlockingScriptTemplate)
+      const txid = config.sourceTransaction.id('hex')
+      actionInputs.push({
+        outpoint: `${txid}.${config.sourceOutputIndex}`,
+        inputDescription: config.description || 'Transaction input',
+        unlockingScriptLength: 0
+      })
+      preimageInputs.push({
+        sourceTransaction: config.sourceTransaction,
+        sourceOutputIndex: config.sourceOutputIndex,
+        unlockingScriptTemplate
+      })
+    }
+    return { unlockingScriptTemplates, actionInputs, preimageInputs }
+  }
+
+  private resolveOutputAddress(
+    config: AddressedOutputConfig,
+    outputIndex: number,
+    derivationInfo: DerivationInfo[]
+  ): Exclude<AddressOrParams, undefined> {
+    if (config.addressOrParams) return config.addressOrParams
+    const derivation = getDerivation()
+    const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ')
+    derivationInfo.push({ outputIndex, derivationPrefix, derivationSuffix })
+    return {
+      protocolID: derivation.protocolID,
+      keyID: derivation.keyID,
+      counterparty: 'self'
+    }
+  }
+
+  private async createP2PKHLockingScript(
+    addressOrParams: Exclude<AddressOrParams, undefined>,
+    treatStringAsPublicKey = false
+  ): Promise<LockingScript> {
+    const p2pkh = new P2PKH(this.wallet)
+    if (isDerivationParams(addressOrParams)) {
+      return await p2pkh.lock({ walletParams: addressOrParams })
+    }
+    if (treatStringAsPublicKey || isHexPublicKey(addressOrParams)) {
+      return await p2pkh.lock({ publicKey: addressOrParams })
+    }
+    return await p2pkh.lock({ address: addressOrParams })
+  }
+
+  private async createOrdinalLockingScript(
+    config: Extract<OutputConfig, { type: 'ordinalP2PKH' }>,
+    addressOrParams: Exclude<AddressOrParams, undefined>
+  ): Promise<LockingScript> {
+    const ordinal = new OrdP2PKH(this.wallet)
+    const common = { inscription: config.inscription, metadata: config.metadata }
+    if (isDerivationParams(addressOrParams)) {
+      return await ordinal.lock({ walletParams: addressOrParams, ...common })
+    }
+    if (isHexPublicKey(addressOrParams)) {
+      return await ordinal.lock({ publicKey: addressOrParams, ...common })
+    }
+    return await ordinal.lock({ address: addressOrParams, ...common })
+  }
+
+  private async createOutputLockingScript(
+    config: OutputConfig,
+    outputIndex: number,
+    derivationInfo: DerivationInfo[]
+  ): Promise<LockingScript> {
+    switch (config.type) {
+      case 'p2pkh':
+        return await this.createP2PKHLockingScript(
+          this.resolveOutputAddress(config, outputIndex, derivationInfo)
+        )
+      case 'ordinalP2PKH':
+        return await this.createOrdinalLockingScript(
+          config,
+          this.resolveOutputAddress(config, outputIndex, derivationInfo)
+        )
+      case 'ordLock':
+        return await new OrdLock(this.wallet).lock(config.ordLockParams)
+      case 'custom':
+        return config.lockingScript
+      case 'change':
+        return await this.createP2PKHLockingScript(
+          this.resolveOutputAddress(config, outputIndex, derivationInfo),
+          true
+        )
+      default:
+        throw new Error(`Unsupported output type: ${(config as any).type}`)
+    }
+  }
+
+  private customInstructionsForOutput(
+    config: OutputConfig,
+    outputIndex: number,
+    derivationInfo: DerivationInfo[]
+  ): string | undefined {
+    const derivation = derivationInfo.find(item => item.outputIndex === outputIndex)
+    if (derivation == null) return config.customInstructions
+    const instructions = JSON.stringify({
+      derivationPrefix: derivation.derivationPrefix,
+      derivationSuffix: derivation.derivationSuffix
+    })
+    return config.customInstructions == null
+      ? instructions
+      : config.customInstructions + instructions
+  }
+
+  private createActionOutput(
+    config: OutputConfig,
+    lockingScript: LockingScript,
+    customInstructions: string | undefined
+  ): CreateActionOutput {
+    const output: CreateActionOutput = {
+      lockingScript: lockingScript.toHex(),
+      satoshis: config.type === 'change' ? 0 : config.satoshis,
+      outputDescription:
+        config.description || (config.type === 'change' ? 'Change' : 'Transaction output')
+    }
+    if (customInstructions != null && customInstructions !== '') {
+      output.customInstructions = customInstructions
+    }
+    if (config.basket != null && config.basket !== '') output.basket = config.basket
+    return output
+  }
+
+  private async buildOutputArtifacts(): Promise<OutputArtifacts> {
+    const actionOutputs: CreateActionOutput[] = []
+    const preimageOutputs: PreimageOutput[] = []
+    const derivationInfo: DerivationInfo[] = []
+
+    for (let outputIndex = 0; outputIndex < this.outputs.length; outputIndex++) {
+      const config = this.outputs[outputIndex]
+      let lockingScript = await this.createOutputLockingScript(config, outputIndex, derivationInfo)
+      if (config.opReturnFields != null && config.opReturnFields.length > 0) {
+        lockingScript = addOpReturnData(lockingScript, config.opReturnFields)
+      }
+      const customInstructions = this.customInstructionsForOutput(
+        config,
+        outputIndex,
+        derivationInfo
+      )
+      actionOutputs.push(this.createActionOutput(config, lockingScript, customInstructions))
+      preimageOutputs.push(
+        config.type === 'change'
+          ? { lockingScript, change: true }
+          : { lockingScript, satoshis: config.satoshis }
+      )
+    }
+    return { actionOutputs, preimageOutputs }
+  }
+
+  private createPreimageTransaction(
+    preimageInputs: PreimageInput[],
+    preimageOutputs: PreimageOutput[]
+  ): Transaction {
+    const transaction = new Transaction()
+    for (const input of preimageInputs) transaction.addInput(input)
+    for (const output of preimageOutputs) {
+      transaction.addOutput(
+        output.change === true
+          ? { lockingScript: output.lockingScript, change: true }
+          : { satoshis: output.satoshis, lockingScript: output.lockingScript }
+      )
+    }
+    return transaction
+  }
+
+  private async populateUnlockingScriptLengths(
+    transaction: Transaction,
+    templates: any[],
+    actionInputs: ActionInputConfig[]
+  ): Promise<void> {
+    for (let index = 0; index < templates.length; index++) {
+      const template = templates[index]
+      const estimateLength = template?.estimateLength
+      if (typeof estimateLength !== 'function') {
+        throw new TypeError('unlockingScriptTemplate must have an estimateLength() method')
+      }
+      let length: number
+      if (estimateLength.length >= 2) {
+        length = await estimateLength.call(template, transaction, index)
+      } else if (estimateLength.length === 1) {
+        length = await estimateLength.call(template, transaction)
+      } else {
+        length = await estimateLength.call(template)
+      }
+      const inputConfig = this.inputs[index]
+      if (inputConfig?.type === 'ordLock' && inputConfig.kind === 'purchase') {
+        length += 68
+      }
+      actionInputs[index].unlockingScriptLength = length
+    }
+  }
+
+  private applyCalculatedChangeOutputs(
+    transaction: Transaction,
+    actionOutputs: CreateActionOutput[]
+  ): void {
+    const outputIndicesToRemove: number[] = []
+    for (let index = 0; index < this.outputs.length; index++) {
+      if (this.outputs[index].type !== 'change') continue
+      const preimageOutput = transaction.outputs[index]
+      if (preimageOutput == null) {
+        outputIndicesToRemove.push(index)
+        continue
+      }
+      if (preimageOutput.satoshis === undefined) {
+        throw new Error(`Change output at index ${index} has no satoshis after fee calculation`)
+      }
+      actionOutputs[index].satoshis = preimageOutput.satoshis
+    }
+    for (let index = outputIndicesToRemove.length - 1; index >= 0; index--) {
+      actionOutputs.splice(outputIndicesToRemove[index], 1)
+    }
+  }
+
+  private buildInputBEEF(preimageInputs: PreimageInput[]): number[] {
+    if (preimageInputs.length === 1) return preimageInputs[0].sourceTransaction.toBEEF()
+    const mergedBeef = new Beef()
+    for (const input of preimageInputs) mergedBeef.mergeBeef(input.sourceTransaction.toBEEF())
+    return mergedBeef.toBinary()
+  }
+
+  private async preparePreimage(
+    inputArtifacts: InputArtifacts,
+    outputArtifacts: OutputArtifacts
+  ): Promise<number[] | undefined> {
+    if (inputArtifacts.preimageInputs.length === 0) return undefined
+    const transaction = this.createPreimageTransaction(
+      inputArtifacts.preimageInputs,
+      outputArtifacts.preimageOutputs
+    )
+    await this.populateUnlockingScriptLengths(
+      transaction,
+      inputArtifacts.unlockingScriptTemplates,
+      inputArtifacts.actionInputs
+    )
+    await transaction.fee(new SatoshisPerKilobyte(DEFAULT_SAT_PER_KB))
+    await transaction.sign()
+    this.applyCalculatedChangeOutputs(transaction, outputArtifacts.actionOutputs)
+    return this.buildInputBEEF(inputArtifacts.preimageInputs)
+  }
+
+  private async signCreatedAction(actionResult: any, templates: any[]): Promise<any> {
+    if (this.inputs.length === 0) {
+      return { txid: actionResult.txid, tx: actionResult.tx }
+    }
+    if (actionResult?.signableTransaction == null) {
+      throw new Error('Failed to create signable transaction')
+    }
+
+    const { reference } = actionResult.signableTransaction
+    const transaction = Transaction.fromBEEF(actionResult.signableTransaction.tx)
+    for (let index = 0; index < this.inputs.length; index++) {
+      transaction.inputs[index].unlockingScriptTemplate = templates[index]
+      transaction.inputs[index].sourceTransaction = this.inputs[index].sourceTransaction
+    }
+    await transaction.sign()
+
+    const spends: { [key: string]: { unlockingScript: string } } = {}
+    for (let index = 0; index < this.inputs.length; index++) {
+      const unlockingScript = transaction.inputs[index].unlockingScript?.toHex()
+      if (unlockingScript == null || unlockingScript === '') {
+        throw new Error(`Missing unlocking script for input ${index}`)
+      }
+      spends[String(index)] = { unlockingScript }
+    }
+    const signedAction = await this.wallet.signAction({ reference, spends })
+    return { txid: signedAction.txid, tx: signedAction.tx }
+  }
+
   /**
    * Adds an OrdLock output to the transaction.
    *
@@ -850,451 +1193,18 @@ export class TransactionBuilder {
    * @throws Error if no outputs are configured or if locking script creation fails
    */
   async build(params?: BuildParams): Promise<any> {
-    // Validate that we have outputs
-    if (this.outputs.length === 0) {
-      throw new Error('At least one output is required to build a transaction')
-    }
-
-    // Validate that change outputs require inputs
-    const hasChangeOutputs = this.outputs.some(output => output.type === 'change')
-    if (hasChangeOutputs && this.inputs.length === 0) {
-      throw new Error('Change outputs require at least one input')
-    }
-
-    // Track derivation info for customInstructions
-    const derivationInfo: Array<{
-      outputIndex: number
-      derivationPrefix: string
-      derivationSuffix: string
-    }> = []
-
-    // Store unlocking script templates for later signing
-    const unlockingScriptTemplates: any[] = []
-
-    // Build the inputs array for wallet.createAction()
-    const actionInputsConfig = []
-
-    // Build inputs for the preimage transaction
-    const preimageInputs = []
-
-    // Process each input
-    for (const config of this.inputs) {
-      let unlockingScriptTemplate
-
-      // Process based on input type
-      switch (config.type) {
-        case 'p2pkh':
-        case 'ordinalP2PKH': {
-          // Both p2pkh and ordinalP2PKH inputs use the same P2PKH unlocking script
-          const p2pkh = new P2PKH(this.wallet)
-
-          // Create unlocking script template
-          const walletParams = config.walletParams
-
-          // Get the unlockingScript template for preimage
-          unlockingScriptTemplate = p2pkh.unlock({
-            protocolID: walletParams?.protocolID,
-            keyID: walletParams?.keyID,
-            counterparty: walletParams?.counterparty,
-            signOutputs: config.signOutputs,
-            anyoneCanPay: config.anyoneCanPay
-          })
-          break
-        }
-        case 'ordLock': {
-          const ordLock = new OrdLock(this.wallet)
-          const walletParams = config.walletParams
-
-          if (config.kind === 'purchase') {
-            unlockingScriptTemplate = ordLock.purchaseUnlock({
-              sourceSatoshis: config.sourceSatoshis,
-              lockingScript: config.lockingScript
-            })
-          } else {
-            unlockingScriptTemplate = ordLock.cancelUnlock({
-              protocolID: walletParams?.protocolID,
-              keyID: walletParams?.keyID,
-              counterparty: walletParams?.counterparty,
-              signOutputs: config.signOutputs,
-              anyoneCanPay: config.anyoneCanPay,
-              sourceSatoshis: config.sourceSatoshis,
-              lockingScript: config.lockingScript
-            })
-          }
-          break
-        }
-        case 'custom': {
-          // Use the provided unlocking script template directly
-          unlockingScriptTemplate = config.unlockingScriptTemplate
-          break
-        }
-        default: {
-          throw new Error(`Unsupported input type: ${(config as any).type}`)
-        }
-      }
-
-      // Store the unlocking script template for later use
-      unlockingScriptTemplates.push(unlockingScriptTemplate)
-
-      // Get txid from source
-      const txid = config.sourceTransaction.id('hex')
-
-      const inputConfig = {
-        outpoint: `${txid}.${config.sourceOutputIndex}`,
-        inputDescription: config.description || 'Transaction input',
-        unlockingScriptLength: 0
-      }
-
-      // Build the input object for preimage transaction
-      const inputForPreimage = {
-        sourceTransaction: config.sourceTransaction,
-        sourceOutputIndex: config.sourceOutputIndex,
-        unlockingScriptTemplate
-      }
-
-      preimageInputs.push(inputForPreimage)
-      actionInputsConfig.push(inputConfig)
-    }
-
-    // Build the outputs array for wallet.createAction()
-    const actionOutputs: CreateActionOutput[] = []
-
-    // Preimage outputs for calculating change
-    const preimageOutputs = []
-
-    // Process each output
-    for (let i = 0; i < this.outputs.length; i++) {
-      const config = this.outputs[i]
-      let lockingScript: LockingScript
-
-      // Create the base locking script based on output type
-      switch (config.type) {
-        case 'p2pkh': {
-          const p2pkh = new P2PKH(this.wallet)
-          let addressOrParams = config.addressOrParams
-
-          // If no addressOrParams provided, use BRC-29 derivation
-          if (!addressOrParams) {
-            const derivation = getDerivation()
-            addressOrParams = {
-              protocolID: derivation.protocolID,
-              keyID: derivation.keyID,
-              counterparty: 'self'
-            }
-
-            // Track derivation for customInstructions
-            const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ')
-            derivationInfo.push({
-              outputIndex: i,
-              derivationPrefix,
-              derivationSuffix
-            })
-          }
-
-          // Determine which overload to call
-          if (isDerivationParams(addressOrParams)) {
-            // Use wallet param overload
-            lockingScript = await p2pkh.lock({ walletParams: addressOrParams })
-          } else if (isHexPublicKey(addressOrParams)) {
-            // Use string overload (publicKey for hex)
-            lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
-          } else {
-            // Use string overload (address by default)
-            lockingScript = await p2pkh.lock({ address: addressOrParams })
-          }
-          break
-        }
-        case 'ordinalP2PKH': {
-          const ordinal = new OrdP2PKH(this.wallet)
-          let addressOrParams = config.addressOrParams
-
-          // If no addressOrParams provided, use BRC-29 derivation
-          if (!addressOrParams) {
-            const derivation = getDerivation()
-            addressOrParams = {
-              protocolID: derivation.protocolID,
-              keyID: derivation.keyID,
-              counterparty: 'self'
-            }
-
-            // Track derivation for customInstructions
-            const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ')
-            derivationInfo.push({
-              outputIndex: i,
-              derivationPrefix,
-              derivationSuffix
-            })
-          }
-
-          // Determine which overload to call
-          if (isDerivationParams(addressOrParams)) {
-            // Use wallet param overload
-            lockingScript = await ordinal.lock({
-              walletParams: addressOrParams,
-              inscription: config.inscription,
-              metadata: config.metadata
-            })
-          } else if (isHexPublicKey(addressOrParams)) {
-            // Use string overload (publicKey for hex)
-            lockingScript = await ordinal.lock({
-              publicKey: addressOrParams,
-              inscription: config.inscription,
-              metadata: config.metadata
-            })
-          } else {
-            // Use string overload (address by default)
-            lockingScript = await ordinal.lock({
-              address: addressOrParams,
-              inscription: config.inscription,
-              metadata: config.metadata
-            })
-          }
-          break
-        }
-        case 'ordLock': {
-          const ordLock = new OrdLock(this.wallet)
-          lockingScript = await ordLock.lock(config.ordLockParams)
-          break
-        }
-        case 'custom': {
-          // Use lockingscript directly for custom outputs
-          lockingScript = config.lockingScript
-          break
-        }
-        case 'change': {
-          // Change output - create locking script like P2PKH
-          const p2pkh = new P2PKH(this.wallet)
-          let addressOrParams = config.addressOrParams
-
-          // If no addressOrParams provided, use BRC-29 derivation
-          if (!addressOrParams) {
-            const derivation = getDerivation()
-            addressOrParams = {
-              protocolID: derivation.protocolID,
-              keyID: derivation.keyID,
-              counterparty: 'self'
-            }
-
-            // Track derivation for customInstructions
-            const [derivationPrefix, derivationSuffix] = derivation.keyID.split(' ')
-            derivationInfo.push({
-              outputIndex: i,
-              derivationPrefix,
-              derivationSuffix
-            })
-          }
-
-          // Determine which overload to call
-          if (isDerivationParams(addressOrParams)) {
-            // Use wallet param overload
-            lockingScript = await p2pkh.lock({ walletParams: addressOrParams })
-          } else {
-            // Use publicKey overload
-            lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
-          }
-          break
-        }
-        default: {
-          throw new Error(`Unsupported output type: ${(config as any).type}`)
-        }
-      }
-
-      // Apply OP_RETURN data if specified for this output
-      if (config.opReturnFields != null && config.opReturnFields.length > 0) {
-        lockingScript = addOpReturnData(lockingScript, config.opReturnFields)
-      }
-
-      // Build customInstructions: combine user-provided and auto-generated derivation instructions
-      const derivationForOutput = derivationInfo.find(d => d.outputIndex === i)
-      let finalCustomInstructions: string | undefined
-
-      if (derivationForOutput != null) {
-        // We have auto-generated derivation instructions
-        const derivationInstructions = JSON.stringify({
-          derivationPrefix: derivationForOutput.derivationPrefix,
-          derivationSuffix: derivationForOutput.derivationSuffix
-        })
-
-        if (config.customInstructions) {
-          // Concatenate user's custom instructions with derivation instructions
-          finalCustomInstructions = config.customInstructions + derivationInstructions
-        } else {
-          // Only derivation instructions
-          finalCustomInstructions = derivationInstructions
-        }
-      } else if (config.customInstructions) {
-        // Only user-provided custom instructions
-        finalCustomInstructions = config.customInstructions
-      }
-
-      // Handle change outputs specially - mark for auto-calculation in preimage
-      if (config.type === 'change') {
-        // Build the output object for preimage with change flag
-        const outputForPreimage: any = {
-          lockingScript,
-          change: true // Mark as change output for auto-calculation
-        }
-
-        preimageOutputs.push(outputForPreimage)
-
-        // Add placeholder to actionOutputs - satoshis will be updated after preimage
-        const output: CreateActionOutput = {
-          lockingScript: lockingScript.toHex(),
-          satoshis: 0, // Placeholder - will be updated after preimage
-          outputDescription: config.description || 'Change'
-        }
-        // Apply combined customInstructions (user + derivation)
-        if (finalCustomInstructions) {
-          output.customInstructions = finalCustomInstructions
-        }
-        // Apply basket if set
-        if (config.basket) {
-          output.basket = config.basket
-        }
-        actionOutputs.push(output)
-      } else {
-        // Regular output - add to both preimage and action outputs
-        const output: CreateActionOutput = {
-          lockingScript: lockingScript.toHex(),
-          satoshis: config.satoshis, // Non-change outputs must have satoshis
-          outputDescription: config.description || 'Transaction output'
-        }
-        // Apply final customInstructions (user + derivation)
-        if (finalCustomInstructions) {
-          output.customInstructions = finalCustomInstructions
-        }
-        // Apply basket if set
-        if (config.basket) {
-          output.basket = config.basket
-        }
-
-        // Build the output object for preimage
-        const outputForPreimage = {
-          lockingScript,
-          satoshis: config.satoshis
-        }
-
-        preimageOutputs.push(outputForPreimage)
-        actionOutputs.push(output)
-      }
-    }
-
-    // Build options for createAction
-    const createActionOptions: CreateActionOptions = {
-      ...this.transactionOptions
-    }
-
-    let inputBEEF: number[] | undefined
-
-    // Only build preimage transaction if there are inputs
-    if (preimageInputs.length > 0) {
-      // Build the preimage transaction to calculate change amounts
-      const preimageTx = new Transaction()
-      preimageInputs.forEach(input => {
-        preimageTx.addInput(input)
-      })
-      preimageOutputs.forEach(output => {
-        if (output.change) {
-          // Change output - don't specify satoshis, will be calculated
-          preimageTx.addOutput({
-            lockingScript: output.lockingScript,
-            change: true
-          })
-        } else {
-          // Regular output with specified satoshis
-          preimageTx.addOutput({
-            satoshis: output.satoshis,
-            lockingScript: output.lockingScript
-          })
-        }
-      })
-
-      // Compute unlockingScriptLength values now that we have a full transaction context.
-      for (let i = 0; i < unlockingScriptTemplates.length; i++) {
-        const template = unlockingScriptTemplates[i]
-        const fn = template?.estimateLength
-        if (typeof fn !== 'function') {
-          throw new TypeError('unlockingScriptTemplate must have an estimateLength() method')
-        }
-
-        const argc = fn.length
-        let length: number
-        if (argc >= 2) {
-          length = await fn.call(template, preimageTx, i)
-        } else if (argc === 1) {
-          length = await fn.call(template, preimageTx)
-        } else {
-          length = await fn.call(template)
-        }
-
-        const inputConfig = this.inputs[i]
-        if (inputConfig?.type === 'ordLock' && inputConfig.kind === 'purchase') {
-          length += 68 // +34 per wallet change output (expect no more than 2)
-        }
-
-        actionInputsConfig[i].unlockingScriptLength = length
-      }
-
-      // Calculate fee and sign preimage to get change amounts
-      await preimageTx.fee(new SatoshisPerKilobyte(DEFAULT_SAT_PER_KB))
-      await preimageTx.sign()
-
-      // Update change output satoshis from preimage transaction
-      // Track indices of outputs to remove (change outputs with insufficient satoshis)
-      const outputIndicesToRemove: number[] = []
-
-      for (let i = 0; i < this.outputs.length; i++) {
-        const config = this.outputs[i]
-
-        if (config.type === 'change') {
-          // Find the corresponding output in the preimage transaction
-          const preimageOutput = preimageTx.outputs[i]
-
-          // If the change output was removed due to insufficient satoshis, mark for removal
-          if (!preimageOutput) {
-            outputIndicesToRemove.push(i)
-            continue
-          }
-
-          // Validate that satoshis were calculated
-          if (preimageOutput.satoshis === undefined) {
-            throw new Error(`Change output at index ${i} has no satoshis after fee calculation`)
-          }
-
-          // Update the placeholder satoshis with calculated value
-          actionOutputs[i].satoshis = preimageOutput.satoshis
-        }
-      }
-
-      // Remove outputs that couldn't be created due to insufficient satoshis
-      // Iterate in reverse to maintain correct indices during removal
-      for (let i = outputIndicesToRemove.length - 1; i >= 0; i--) {
-        const indexToRemove = outputIndicesToRemove[i]
-        actionOutputs.splice(indexToRemove, 1)
-      }
-
-      // Get all the inputBEEFs needed for createAction and merge them
-      // For a single input, just use its BEEF directly
-      if (preimageInputs.length === 1) {
-        inputBEEF = preimageInputs[0].sourceTransaction.toBEEF()
-      } else {
-        // For multiple inputs, merge the BEEFs
-        const mergedBeef = new Beef()
-        preimageInputs.forEach(input => {
-          const beef = input.sourceTransaction.toBEEF()
-          mergedBeef.mergeBeef(beef)
-        })
-        inputBEEF = mergedBeef.toBinary()
-      }
-    }
+    this.validateBuildConfiguration()
+    const inputArtifacts = this.buildInputArtifacts()
+    const outputArtifacts = await this.buildOutputArtifacts()
+    const inputBEEF = await this.preparePreimage(inputArtifacts, outputArtifacts)
 
     // Build the createAction arguments object with unlockingScriptLength
     const createActionArgs = {
       description: this._transactionDescription || 'Transaction',
       ...(inputBEEF != null && { inputBEEF }),
-      ...(actionInputsConfig.length > 0 && { inputs: actionInputsConfig }),
-      ...(actionOutputs.length > 0 && { outputs: actionOutputs }),
-      options: createActionOptions
+      ...(inputArtifacts.actionInputs.length > 0 && { inputs: inputArtifacts.actionInputs }),
+      ...(outputArtifacts.actionOutputs.length > 0 && { outputs: outputArtifacts.actionOutputs }),
+      options: { ...this.transactionOptions }
     }
 
     // If preview mode, return the arguments object without calling createAction
@@ -1302,56 +1212,8 @@ export class TransactionBuilder {
       return createActionArgs
     }
 
-    // Call wallet.createAction() with unlockingScriptLength
-    const actionRes = await this.wallet.createAction(createActionArgs)
-
-    // If there are no inputs, return the result directly (no signing needed)
-    if (this.inputs.length === 0) {
-      return {
-        txid: actionRes.txid,
-        tx: actionRes.tx
-      }
-    }
-
-    // Extract the signable transaction
-    if (actionRes?.signableTransaction == null) {
-      throw new Error('Failed to create signable transaction')
-    }
-
-    const reference = actionRes.signableTransaction.reference
-    const txToSign = Transaction.fromBEEF(actionRes.signableTransaction.tx)
-
-    // Add unlocking script templates and source transactions to inputs
-    // The templates already have the correct sighash flags from user configuration
-    for (let i = 0; i < this.inputs.length; i++) {
-      const config = this.inputs[i]
-      txToSign.inputs[i].unlockingScriptTemplate = unlockingScriptTemplates[i]
-      txToSign.inputs[i].sourceTransaction = config.sourceTransaction
-    }
-
-    // Sign the complete transaction
-    await txToSign.sign()
-
-    // Extract the unlocking scripts
-    const spends: { [key: string]: { unlockingScript: string } } = {}
-    for (let i = 0; i < this.inputs.length; i++) {
-      const unlockingScript = txToSign.inputs[i].unlockingScript?.toHex()
-      if (!unlockingScript) {
-        throw new Error(`Missing unlocking script for input ${i}`)
-      }
-      spends[String(i)] = { unlockingScript }
-    }
-
-    // Sign the action with the actual unlocking scripts
-    const signedAction = await this.wallet.signAction({
-      reference,
-      spends
-    })
-
-    return {
-      txid: signedAction.txid,
-      tx: signedAction.tx
-    }
+    const actionResult = await this.wallet.createAction(createActionArgs)
+    return await this.signCreatedAction(actionResult, inputArtifacts.unlockingScriptTemplates)
   }
 
   /**

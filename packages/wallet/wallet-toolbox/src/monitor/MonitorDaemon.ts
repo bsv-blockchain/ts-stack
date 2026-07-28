@@ -43,78 +43,84 @@ export class MonitorDaemon {
     /* */
   }
 
+  private configureKnex (setup: MonitorDaemonSetup): void {
+    if (setup.sqliteFilename != null && setup.sqliteFilename !== '') {
+      setup.knexConfig = {
+        client: 'better-sqlite3',
+        connection: { filename: setup.sqliteFilename },
+        useNullAsDefault: true
+      }
+    }
+    if (setup.mySQLConnection != null && setup.mySQLConnection !== '') {
+      setup.knexConfig = {
+        client: 'mysql2',
+        connection: JSON.parse(setup.mySQLConnection),
+        useNullAsDefault: true,
+        pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
+      }
+    }
+    if (setup.knexConfig != null) setup.knex = makeKnex(setup.knexConfig)
+    if (setup.knex != null) {
+      setup.storageKnexOptions = {
+        knex: setup.knex,
+        chain: setup.chain!,
+        feeModel: { model: 'sat/kb', value: 100 },
+        commissionSatoshis: 0
+      }
+    }
+    if (setup.storageKnexOptions != null) {
+      setup.storageProvider = new StorageKnex(setup.storageKnexOptions)
+    }
+  }
+
+  private async configureStorage (setup: MonitorDaemonSetup): Promise<void> {
+    if (setup.storageProvider != null) {
+      await setup.storageProvider.makeAvailable()
+      const settings = setup.storageProvider.getSettings()
+      setup.storageManager = new WalletStorageManager(
+        settings.storageIdentityKey,
+        setup.storageProvider
+      )
+      await setup.storageManager.makeAvailable()
+      return
+    }
+    if (setup.storageManager == null) {
+      throw new WERR_INVALID_PARAMETER(
+        'storageManager',
+        'valid or one of mySQLConnection, knexConfig, knex, storageKnexOptions, or storageProvider'
+      )
+    }
+  }
+
+  private configureServices (setup: MonitorDaemonSetup): void {
+    if (setup.servicesOptions != null) {
+      if (setup.servicesOptions.chain !== setup.chain) {
+        throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain')
+      }
+      setup.servicesOptions.chaintracks ??= setup.chaintracks
+      setup.services = new Services(setup.servicesOptions)
+    }
+    setup.services ??= new Services(setup.chain ?? 'test')
+  }
+
   async createSetup (): Promise<void> {
     this.setup = { ...this.args }
     const a = this.setup
 
-    if (a.monitor == null) {
-      a.chain ||= 'test'
-
-      if (a.sqliteFilename != null && a.sqliteFilename !== '') {
-        a.knexConfig = {
-          client: 'better-sqlite3',
-          connection: { filename: a.sqliteFilename },
-          useNullAsDefault: true
-        }
-      }
-
-      if (a.mySQLConnection != null && a.mySQLConnection !== '') {
-        a.knexConfig = {
-          client: 'mysql2',
-          connection: JSON.parse(a.mySQLConnection),
-          useNullAsDefault: true,
-          pool: { min: 0, max: 7, idleTimeoutMillis: 15000 }
-        }
-      }
-
-      if (a.knexConfig != null) {
-        a.knex = makeKnex(a.knexConfig)
-      }
-
-      if (a.knex != null) {
-        a.storageKnexOptions = {
-          knex: a.knex,
-          chain: a.chain,
-          feeModel: { model: 'sat/kb', value: 100 },
-          commissionSatoshis: 0
-        }
-      }
-
-      if (a.storageKnexOptions != null) {
-        a.storageProvider = new StorageKnex(a.storageKnexOptions)
-      }
-
-      if (a.storageProvider != null) {
-        await a.storageProvider.makeAvailable()
-        const settings = a.storageProvider.getSettings()
-        a.storageManager = new WalletStorageManager(settings.storageIdentityKey, a.storageProvider)
-        await a.storageManager.makeAvailable()
-      } else if (a.storageManager == null) {
-        throw new WERR_INVALID_PARAMETER(
-          'storageManager',
-          'valid or one of mySQLConnection, knexConfig, knex, storageKnexOptions, or storageProvider'
-        )
-      }
-
-      if (a.servicesOptions != null) {
-        if (a.servicesOptions.chain !== a.chain) { throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain') }
-        a.servicesOptions.chaintracks ??= a.chaintracks
-        a.services = new Services(a.servicesOptions)
-      }
-
-      a.services ??= new Services(a.chain)
-
-      a.storageManager.setServices(a.services)
-
-      const monitorOptions = Monitor.createDefaultWalletMonitorOptions(
-        a.chain,
-        a.storageManager,
-        a.services,
-        a.chaintracks,
-        a.startupTaskMode ?? 'multiuser'
-      )
-      a.monitor = new Monitor(monitorOptions)
-    }
+    if (a.monitor != null) return
+    a.chain ||= 'test'
+    this.configureKnex(a)
+    await this.configureStorage(a)
+    this.configureServices(a)
+    a.storageManager!.setServices(a.services!)
+    const monitorOptions = Monitor.createDefaultWalletMonitorOptions(
+      a.chain,
+      a.storageManager!,
+      a.services!,
+      a.chaintracks,
+      a.startupTaskMode ?? 'multiuser'
+    )
+    a.monitor = new Monitor(monitorOptions)
   }
 
   async start (): Promise<void> {

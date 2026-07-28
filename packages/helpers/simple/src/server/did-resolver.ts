@@ -20,6 +20,7 @@ import {
 const DEFAULT_RESOLVER_URL = 'https://bsvdid-universal-resolver.nchain.systems'
 const DEFAULT_WOC_BASE = 'https://api.whatsonchain.com/v1/bsv/main'
 const BSVDID_MARKER = 'BSVDID'
+const DID_CONTENT_TYPE = 'application/did+ld+json'
 
 // ============================================================================
 // OP_RETURN parser
@@ -33,55 +34,183 @@ function hexToBytes(hex: string): number[] {
   return bytes
 }
 
+interface PushLength {
+  length: number
+  dataStart: number
+}
+
+function readPushLength(bytes: number[], opcodeIndex: number): PushLength | null {
+  const op = bytes[opcodeIndex]
+  const firstLengthByte = opcodeIndex + 1
+
+  if (op >= 0x01 && op <= 0x4b) {
+    return { length: op, dataStart: firstLengthByte }
+  }
+  if (op === 0x4c && firstLengthByte < bytes.length) {
+    return { length: bytes[firstLengthByte], dataStart: firstLengthByte + 1 }
+  }
+  if (op === 0x4d && firstLengthByte + 1 < bytes.length) {
+    return {
+      length: bytes[firstLengthByte] | (bytes[firstLengthByte + 1] << 8),
+      dataStart: firstLengthByte + 2
+    }
+  }
+  if (op === 0x4e && firstLengthByte + 3 < bytes.length) {
+    return {
+      length:
+        bytes[firstLengthByte] |
+        (bytes[firstLengthByte + 1] << 8) |
+        (bytes[firstLengthByte + 2] << 16) |
+        (bytes[firstLengthByte + 3] << 24),
+      dataStart: firstLengthByte + 4
+    }
+  }
+  return null
+}
+
 function parseOpReturnSegments(hexScript: string): string[] {
   try {
     const bytes = hexToBytes(hexScript)
     const segments: string[] = []
-    let i = 0
-
-    // Find OP_RETURN (0x6a)
-    while (i < bytes.length) {
-      if (bytes[i] === 0x6a) {
-        i++
-        break
-      }
-      i++
-    }
-    if (i >= bytes.length) return []
+    const opReturnIndex = bytes.indexOf(0x6a)
+    if (opReturnIndex < 0 || opReturnIndex + 1 >= bytes.length) return []
 
     // Read data pushes
-    while (i < bytes.length) {
-      const op = bytes[i]
-      i++
-
-      let len = 0
-      if (op >= 0x01 && op <= 0x4b) {
-        len = op
-      } else if (op === 0x4c) {
-        if (i >= bytes.length) break
-        len = bytes[i]
-        i++
-      } else if (op === 0x4d) {
-        if (i + 1 >= bytes.length) break
-        len = bytes[i] | (bytes[i + 1] << 8)
-        i += 2
-      } else if (op === 0x4e) {
-        if (i + 3 >= bytes.length) break
-        len = bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24)
-        i += 4
-      } else {
-        break
-      }
-
-      if (i + len > bytes.length) break
-      const data = bytes.slice(i, i + len)
-      i += len
+    let opcodeIndex = opReturnIndex + 1
+    while (opcodeIndex < bytes.length) {
+      const push = readPushLength(bytes, opcodeIndex)
+      if (push == null || push.dataStart + push.length > bytes.length) break
+      const data = bytes.slice(push.dataStart, push.dataStart + push.length)
+      opcodeIndex = push.dataStart + push.length
       segments.push(new TextDecoder().decode(new Uint8Array(data)))
     }
 
     return segments
   } catch {
     return []
+  }
+}
+
+interface WocChainState {
+  lastDocument: any
+  lastDocTxid: string | undefined
+  created: string | undefined
+  updated: string | undefined
+  foundIssuance: boolean
+}
+
+function notFoundResult(): DIDResolutionResult {
+  return {
+    didDocument: null,
+    didDocumentMetadata: {},
+    didResolutionMetadata: { error: 'notFound', message: 'DID not found on chain' }
+  }
+}
+
+function extractBsvdidSegments(vout: any[]): string[] {
+  for (const output of vout) {
+    const hex = output?.scriptPubKey?.hex as string | undefined
+    if (hex == null || hex === '') continue
+    const segments = parseOpReturnSegments(hex)
+    if (segments.length >= 3 && segments[0] === BSVDID_MARKER) return segments
+  }
+  return []
+}
+
+function processWocSegments(
+  segments: string[],
+  txData: any,
+  currentTxid: string,
+  state: WocChainState
+): DIDResolutionResult | null {
+  if (segments.length < 3) return null
+  const payload = segments[2]
+  const timestamp = txData.time == null ? undefined : new Date(txData.time * 1000).toISOString()
+
+  if (payload === '3') {
+    return {
+      didDocument: state.lastDocument,
+      didDocumentMetadata: {
+        created: state.created,
+        updated: state.updated,
+        deactivated: true,
+        versionId: currentTxid
+      },
+      didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+    }
+  }
+
+  if (payload === '1') {
+    state.foundIssuance = true
+  } else if (payload !== '2') {
+    try {
+      state.lastDocument = JSON.parse(payload)
+      state.lastDocTxid = currentTxid
+      state.updated = timestamp
+    } catch {
+      // Not valid JSON
+    }
+  }
+  return null
+}
+
+async function fetchNextTxidViaSpend(
+  wocBaseUrl: string,
+  currentTxid: string
+): Promise<string | null> {
+  try {
+    const response = await fetch(`${wocBaseUrl}/tx/${currentTxid}/out/0/spend`)
+    if (!response.ok || response.status === 404) return null
+    const data: any = await response.json()
+    return data?.txid ?? null
+  } catch {
+    return null
+  }
+}
+
+async function fetchNextTxidViaHistory(
+  wocBaseUrl: string,
+  txData: any,
+  visited: Set<string>
+): Promise<string | null> {
+  const out0Address = txData.vout?.[0]?.scriptPubKey?.addresses?.[0]
+  if (out0Address == null) return null
+
+  try {
+    const response = await fetch(`${wocBaseUrl}/address/${String(out0Address)}/history`)
+    if (!response.ok) return null
+    const history = (await response.json()) as Array<{ tx_hash: string; height: number }>
+    const candidates = history
+      .filter(entry => !visited.has(entry.tx_hash))
+      .sort((left, right) => right.height - left.height)
+    return candidates.length === 0 ? null : candidates[0].tx_hash
+  } catch {
+    return null
+  }
+}
+
+function finalChainResult(state: WocChainState): DIDResolutionResult | null {
+  if (state.lastDocument != null) {
+    return {
+      didDocument: state.lastDocument,
+      didDocumentMetadata: {
+        created: state.created,
+        updated: state.updated,
+        versionId: state.lastDocTxid
+      },
+      didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+    }
+  }
+
+  if (!state.foundIssuance) return null
+  return {
+    didDocument: null,
+    didDocumentMetadata: { created: state.created },
+    didResolutionMetadata: {
+      error: 'notYetAvailable',
+      message:
+        'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
+    }
   }
 }
 
@@ -155,128 +284,37 @@ export class DIDResolverService {
   }
 
   private async resolveViaWoC(txid: string): Promise<DIDResolutionResult> {
-    const notFound: DIDResolutionResult = {
-      didDocument: null,
-      didDocumentMetadata: {},
-      didResolutionMetadata: { error: 'notFound', message: 'DID not found on chain' }
-    }
-
     let currentTxid = txid
-    let lastDocument: any = null
-    let lastDocTxid: string | undefined
-    let created: string | undefined
-    let updated: string | undefined
-    let foundIssuance = false
     const visited = new Set<string>()
+    const state: WocChainState = {
+      lastDocument: null,
+      lastDocTxid: undefined,
+      created: undefined,
+      updated: undefined,
+      foundIssuance: false
+    }
 
     for (let hop = 0; hop < this.maxHops; hop++) {
       if (visited.has(currentTxid)) break
       visited.add(currentTxid)
 
       const txResp = await fetch(`${this.wocBaseUrl}/tx/${currentTxid}`)
-      if (!txResp.ok) return notFound
+      if (!txResp.ok) return notFoundResult()
       const txData: any = await txResp.json()
 
-      if (txData.time != null) {
-        created ??= new Date(txData.time * 1000).toISOString()
-      }
+      state.created ??= txData.time == null ? undefined : new Date(txData.time * 1000).toISOString()
 
-      // Parse OP_RETURN outputs
-      let segments: string[] = []
-      for (const vout of (txData.vout as any[] | null) ?? []) {
-        const hex = vout?.scriptPubKey?.hex as string | undefined
-        if (hex == null || hex === '') continue
-        const s = parseOpReturnSegments(hex)
-        if (s.length >= 3 && s[0] === BSVDID_MARKER) {
-          segments = s
-          break
-        }
-      }
+      const segments = extractBsvdidSegments((txData.vout as any[] | null) ?? [])
+      const earlyExit = processWocSegments(segments, txData, currentTxid, state)
+      if (earlyExit != null) return earlyExit
 
-      if (segments.length >= 3) {
-        const payload = segments[2]
-
-        if (payload === '3') {
-          return {
-            didDocument: lastDocument,
-            didDocumentMetadata: { created, updated, deactivated: true, versionId: currentTxid },
-            didResolutionMetadata: { contentType: 'application/did+ld+json' }
-          }
-        }
-
-        if (payload === '1') {
-          foundIssuance = true
-        } else if (payload !== '2') {
-          try {
-            lastDocument = JSON.parse(payload)
-            lastDocTxid = currentTxid
-            updated = txData.time == null ? undefined : new Date(txData.time * 1000).toISOString()
-          } catch {
-            // Not valid JSON
-          }
-        }
-      }
-
-      // Follow output 0 spend chain
-      let nextTxid: string | null = null
-
-      // Strategy 1: spend endpoint
-      try {
-        const spendResp = await fetch(`${this.wocBaseUrl}/tx/${currentTxid}/out/0/spend`)
-        if (spendResp.ok && spendResp.status !== 404) {
-          const spendData: any = await spendResp.json()
-          nextTxid = spendData?.txid ?? null
-        }
-      } catch {
-        /* fall through */
-      }
-
-      // Strategy 2: address history fallback
-      if (nextTxid == null) {
-        const out0Addr = txData.vout?.[0]?.scriptPubKey?.addresses?.[0]
-        if (out0Addr != null) {
-          try {
-            const histResp = await fetch(`${this.wocBaseUrl}/address/${String(out0Addr)}/history`)
-            if (histResp.ok) {
-              const history = (await histResp.json()) as Array<{ tx_hash: string; height: number }>
-              const candidates = history
-                .filter(e => !visited.has(e.tx_hash))
-                .sort((a, b) => b.height - a.height)
-              if (candidates.length > 0) {
-                nextTxid = candidates[0].tx_hash
-              }
-            }
-          } catch {
-            /* address history unavailable */
-          }
-        }
-      }
-
+      let nextTxid = await fetchNextTxidViaSpend(this.wocBaseUrl, currentTxid)
+      nextTxid ??= await fetchNextTxidViaHistory(this.wocBaseUrl, txData, visited)
       if (nextTxid == null) break
       currentTxid = nextTxid
     }
 
-    if (lastDocument != null) {
-      return {
-        didDocument: lastDocument,
-        didDocumentMetadata: { created, updated, versionId: lastDocTxid },
-        didResolutionMetadata: { contentType: 'application/did+ld+json' }
-      }
-    }
-
-    if (foundIssuance) {
-      return {
-        didDocument: null,
-        didDocumentMetadata: { created },
-        didResolutionMetadata: {
-          error: 'notYetAvailable',
-          message:
-            'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
-        }
-      }
-    }
-
-    return notFound
+    return finalChainResult(state) ?? notFoundResult()
   }
 }
 

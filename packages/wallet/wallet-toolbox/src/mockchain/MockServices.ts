@@ -169,14 +169,16 @@ export class MockServices implements WalletServices {
 
   private async populateMerklePaths (tx: BsvTransaction): Promise<void> {
     for (const input of tx.inputs) {
-      if ((input.sourceTransaction == null) || (input.sourceTransaction.merklePath != null)) continue
-      const stxid = input.sourceTransaction.id('hex')
+      const sourceTransaction = input.sourceTransaction
+      if (sourceTransaction == null) continue
+      if (sourceTransaction.merklePath != null) continue
+      const stxid = sourceTransaction.id('hex')
       const stx = await this.storage.getTransaction(stxid)
       if ((stx == null) || stx.blockHeight === null) continue
       const txsInBlock = await this.storage.getTransactionsInBlock(stx.blockHeight)
       const stxids = txsInBlock.map(t => t.txid)
       const idx = stxids.indexOf(stxid)
-      if (idx >= 0) input.sourceTransaction.merklePath = computeMerklePath(stxids, idx, stx.blockHeight)
+      if (idx >= 0) sourceTransaction.merklePath = computeMerklePath(stxids, idx, stx.blockHeight)
     }
   }
 
