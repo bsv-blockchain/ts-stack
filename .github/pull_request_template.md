@@ -33,6 +33,7 @@ through the release workflow after approval):
 - [ ] Changelog, runtime relevance, peer compatibility, transitive graph, and
       audit results were reviewed
 - [ ] CodeQL/negative tests cover any changed trust boundary
+- [ ] SonarCloud reports zero open/confirmed PR issues and zero unreviewed hotspots
 - [ ] No new override, advisory dismissal, quality suppression, or skipped test
 - [ ] Any temporary exception is registered with owner, evidence, review date,
       and removal condition

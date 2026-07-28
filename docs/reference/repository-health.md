@@ -72,6 +72,11 @@ coverage, or required check names.
 The advanced workflow is unconditional for each configured event. Do not gate
 it on repository variables: those variables are unavailable to fork-origin
 pull-request jobs, which would silently skip analysis of external contributions.
+The repository-owned `SonarCloud zero findings` job waits for SonarCloud to
+report the exact pull-request head, then requires both the configured quality
+gate and zero open/confirmed issues and zero unreviewed security hotspots. The
+existing required `merge-gate` depends on that job. A green aggregate Sonar
+quality rating alone is therefore not sufficient merge evidence.
 
 `governance/repository-health/exceptions.json` is the only registry for temporary
 exceptions. Its schema is in `exception.schema.json`. Every entry requires an
@@ -173,7 +178,8 @@ checks:
 7. generated stack/conformance facts, all 30 public package README contracts,
    and one current consolidated package page per public package are current;
    and
-8. the health implementation’s unit tests pass.
+8. the health implementation’s unit tests pass; and
+9. the exact SonarCloud pull-request analysis has no unresolved findings.
 
 Affected package changes also select their matching mutation targets. The
 parallel mutation lane restores the shared workspace build, executes only the

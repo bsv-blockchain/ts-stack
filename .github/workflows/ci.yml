@@ -46,6 +46,28 @@ jobs:
           --format text
           --summary-file "$GITHUB_STEP_SUMMARY"
 
+  sonar-zero-findings:
+    name: SonarCloud zero findings
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+
+      - name: Require the exact Sonar analysis to contain zero findings
+        run: >-
+          node scripts/sonar-pr-gate.mjs
+          --project bsv-blockchain_ts-stack
+          --pull-request "${{ github.event.pull_request.number }}"
+          --revision "${{ github.event.pull_request.head.sha }}"
+
   prepare:
     name: Build, lint, and policy
     runs-on: ubuntu-latest
@@ -110,7 +132,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|package-release-artifacts|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|package-release-artifacts|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|sonar-pr-gate|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"
@@ -991,6 +1013,7 @@ jobs:
     if: always()
     needs:
       - repository-health
+      - sonar-zero-findings
       - build-and-test
       - mutation-quality
       - infra
@@ -1003,6 +1026,7 @@ jobs:
       - name: Verify every required CI result
         env:
           HEALTH_RESULT: ${{ needs.repository-health.result }}
+          SONAR_RESULT: ${{ needs.sonar-zero-findings.result }}
           BUILD_RESULT: ${{ needs.build-and-test.result }}
           MUTATION_RESULT: ${{ needs.mutation-quality.result }}
           INFRA_RESULT: ${{ needs.infra.result }}
@@ -1017,6 +1041,10 @@ jobs:
                 "$DOCS_RESULT" != "success" ||
                 "$CONFORMANCE_RESULT" != "success" ]]; then
             echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT mutation=$MUTATION_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
+            exit 1
+          fi
+          if [[ "$SONAR_RESULT" != "success" && "$SONAR_RESULT" != "skipped" ]]; then
+            echo "::error::SonarCloud zero-findings gate failed: sonar=$SONAR_RESULT"
             exit 1
           fi
           if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then
