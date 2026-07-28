@@ -1,4 +1,11 @@
 import { toHex } from '../primitives/utils.js'
+
+function formatStackItem(item: number[] | null | undefined): string {
+  if (item == null) return 'null/undef'
+  if (item.length === undefined) return 'INVALID_STACK_ITEM'
+  return toHex(item)
+}
+
 export default class ScriptEvaluationError extends Error {
   txid: string
   outputIndex: number
@@ -22,8 +29,8 @@ export default class ScriptEvaluationError extends Error {
     stackMem: number
     altStackMem: number
   }) {
-    const stackHex = params.stackState.map(s => s?.length !== undefined ? toHex(s) : (s == null ? 'null/undef' : 'INVALID_STACK_ITEM')).join(', ')
-    const altStackHex = params.altStackState.map(s => s?.length !== undefined ? toHex(s) : (s == null ? 'null/undef' : 'INVALID_STACK_ITEM')).join(', ')
+    const stackHex = params.stackState.map(formatStackItem).join(', ')
+    const altStackHex = params.altStackState.map(formatStackItem).join(', ')
     const pcInfo = `Context: ${params.context}, PC: ${params.programCounter}`
     const stackInfo = `Stack: [${stackHex}] (len: ${params.stackState.length}, mem: ${params.stackMem})`
     const altStackInfo = `AltStack: [${altStackHex}] (len: ${params.altStackState.length}, mem: ${params.altStackMem})`

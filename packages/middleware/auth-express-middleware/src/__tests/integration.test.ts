@@ -8,7 +8,7 @@ import {
   Utils,
   AuthFetch
 } from '@bsv/sdk'
-import { Server } from 'http'
+import { Server } from 'node:http'
 import { holdNextDelayedResponse, startServer } from './testExpressServer'
 import { MockWallet } from './MockWallet'
 

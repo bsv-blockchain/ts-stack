@@ -12,11 +12,33 @@ import {
   verifyNotNull,
   constantTimeEquals,
   hexToUint8Array,
-  toUint8Array
+  toUint8Array,
+  toSafeString
 } from '../../primitives/utils'
 import Point from '../../primitives/Point'
 
 describe('utils', () => {
+  it('formats unknown diagnostic values without default object coercion', () => {
+    expect(toSafeString(null)).toBe('null')
+    expect(toSafeString(undefined)).toBe('undefined')
+    expect(toSafeString('message')).toBe('message')
+    expect(toSafeString(42)).toBe('42')
+    expect(toSafeString(42n)).toBe('42')
+    expect(toSafeString(true)).toBe('true')
+    expect(toSafeString(false)).toBe('false')
+    expect(toSafeString(Symbol('marker'))).toBe('marker')
+    expect(toSafeString(Symbol())).toBe('Symbol()')
+    expect(toSafeString(new Error('failure'))).toBe('failure')
+    expect(toSafeString({ message: 'structured failure' })).toBe('structured failure')
+    expect(toSafeString({ code: 7 })).toBe('{"code":7}')
+    expect(toSafeString(() => {})).toBe('Unknown value')
+
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    expect(toSafeString(circular)).toBe('Unknown value')
+    expect(toSafeString(circular, 'Unknown error')).toBe('Unknown error')
+  })
+
   it('should convert to array', () => {
     expect(toArray('1234', 'hex')).toEqual([0x12, 0x34])
     expect(toArray('1234')).toEqual([49, 50, 51, 52])

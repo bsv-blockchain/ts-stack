@@ -139,7 +139,12 @@ pnpm --filter @bsv/sdk exec oxlint --fix src
 ```
 
 Uses **Oxlint** for fast, consistent TypeScript checks. Errors and warnings fail
-CI for every affected package.
+CI for every affected package. The root `.oxlintrc.json` is the shared baseline:
+it enables the correctness profile, rejects non-`node:` built-in imports, and
+defines Node, browser, and test environments for their repository paths.
+Package scripts may narrow the files they own, but must not weaken the shared
+rules or the zero-warning gate. Legacy ESLint files are not part of the lint
+contract.
 
 ### Check Formatting
 

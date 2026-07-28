@@ -2,7 +2,7 @@ import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
 import { Utils } from '@bsv/sdk';
 import { getWallet } from '../utils/walletSingleton';
-import { IncomingHttpHeaders } from 'http';
+import { IncomingHttpHeaders } from 'node:http';
 import { log } from '../logger';
 import {
   resolveCdnObjectPath,

@@ -9,6 +9,29 @@ const BufferCtor = (globalThis as any).Buffer
 const CAN_USE_BUFFER = BufferCtor != null && typeof BufferCtor.from === 'function'
 
 /**
+ * Convert an unknown value to a diagnostic string without silently reducing
+ * objects to the unhelpful default "[object Object]" representation.
+ */
+export const toSafeString = (value: unknown, fallback = 'Unknown value'): string => {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'bigint') return value.toString()
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'symbol') return value.description ?? value.toString()
+  if (value instanceof Error && value.message.length > 0) return value.message
+
+  const message = (value as { message?: unknown }).message
+  if (typeof message === 'string' && message.length > 0) return message
+
+  try {
+    return JSON.stringify(value) ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
  * Prepends a '0' to an odd character length word to ensure it has an even number of characters.
  * @param {string} word - The input word.
  * @returns {string} - The word with a leading '0' if it's an odd character length; otherwise, the original word.

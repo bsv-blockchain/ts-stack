@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-import { access } from 'fs/promises'
-import { writeFile } from 'fs/promises'
-import { spawn } from 'child_process'
-import path from 'path'
+import { access, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import path from 'node:path'
 
 const DEFAULT_REPO = process.cwd()
 
@@ -186,7 +185,9 @@ async function main () {
   }
 }
 
-main().catch((err) => {
+try {
+  await main()
+} catch (err) {
   console.error(err)
-  process.exit(1)
-})
+  process.exitCode = 1
+}

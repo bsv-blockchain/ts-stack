@@ -5,7 +5,7 @@ import {
   AuthFetch,
   MasterCertificate
 } from '@bsv/sdk'
-import { Server } from 'http'
+import { Server } from 'node:http'
 import { startCertServer } from './testCertExpressServer'
 import { MockWallet } from './MockWallet'
 

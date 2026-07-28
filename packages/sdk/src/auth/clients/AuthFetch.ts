@@ -888,7 +888,7 @@ export class AuthFetch {
       entry.message = error.message
       entry.stack = error.stack ?? undefined
     } else {
-      entry.message = String(error)
+      entry.message = Utils.toSafeString(error)
     }
 
     return entry
@@ -976,7 +976,7 @@ export class AuthFetch {
     if (body instanceof FormData) {
       const entries: [string, string][] = []
       body.forEach((value, key) => {
-        entries.push([key, value.toString()])
+        entries.push([key, typeof value === 'string' ? value : value.name])
       })
       const urlEncoded = new URLSearchParams(entries).toString()
       return Utils.toArray(urlEncoded, 'utf8')

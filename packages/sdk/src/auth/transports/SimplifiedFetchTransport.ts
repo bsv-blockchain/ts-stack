@@ -250,7 +250,7 @@ export class SimplifiedFetchTransport implements Transport {
       ;(error as any).cause = originalError
       return error
     }
-    return new Error(`${baseMessage}: ${String(originalError)}`)
+    return new Error(`${baseMessage}: ${Utils.toSafeString(originalError)}`)
   }
 
   private createUnauthenticatedResponseError(
@@ -298,7 +298,7 @@ export class SimplifiedFetchTransport implements Transport {
       ;(error as any).cause = cause
       return error
     }
-    return new Error(`${errorMessage}. ${String(cause)}`)
+    return new Error(`${errorMessage}. ${Utils.toSafeString(cause)}`)
   }
 
   private getBodyPreview(bodyBytes: number[], contentType: string | null): string | undefined {

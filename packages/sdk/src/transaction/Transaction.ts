@@ -527,8 +527,7 @@ export default class Transaction {
   private serializationCacheMatchesState(): boolean {
     const cached = this.rawCacheState
     if (
-      cached == null ||
-      cached.version !== this.version ||
+      cached?.version !== this.version ||
       cached.lockTime !== this.lockTime ||
       cached.inputs.length !== this.inputs.length ||
       cached.outputs.length !== this.outputs.length

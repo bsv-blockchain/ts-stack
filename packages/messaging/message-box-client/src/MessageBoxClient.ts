@@ -831,7 +831,7 @@ export class MessageBoxClient {
     await this.joinRoom(messageBox, overrideHost)
 
     // Fallback to HTTP if WebSocket is not connected
-    if (this.socket == null || !this.socket.connected) {
+    if (!this.socket?.connected) {
       Logger.warn('[MB CLIENT WARNING] WebSocket not connected, falling back to HTTP')
       return await this.sendMessage(
         { recipient, messageBox, body, messageId, skipEncryption, checkPermissions },
@@ -902,7 +902,7 @@ export class MessageBoxClient {
 
         Logger.log('[MB CLIENT] Received WebSocket acknowledgment:', response)
 
-        if (response == null || response.status !== 'success') {
+        if (response?.status !== 'success') {
           Logger.warn(
             '[MB CLIENT] WebSocket message failed or returned unexpected response. Falling back to HTTP.'
           )

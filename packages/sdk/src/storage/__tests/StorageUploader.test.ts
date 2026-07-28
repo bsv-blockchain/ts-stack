@@ -1,7 +1,7 @@
 import { StorageUploader, DEFAULT_UHRP_SERVERS, RenewResiliencyError } from '../StorageUploader.js'
 import * as StorageUtils from '../StorageUtils.js'
 import WalletClient from '../../wallet/WalletClient.js'
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 
 /**
  * A helper for converting a string to a number[] of UTF-8 bytes

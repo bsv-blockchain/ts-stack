@@ -267,27 +267,7 @@ function normalizeLookupError(err: unknown, timedOut: boolean): Error {
   if (timedOut) return new Error('Request timed out')
   if ((err as { name?: string })?.name === 'AbortError') return new Error('Request timed out')
   if (err instanceof Error) return err
-  return new Error(stringifyErrorValue(err))
-}
-
-/**
- * Coerce a non-Error thrown value to a human-readable string without falling
- * back to the default `'[object Object]'` for plain objects.
- */
-function stringifyErrorValue(value: unknown): string {
-  if (value === null) return 'null'
-  if (value === undefined) return 'undefined'
-  if (typeof value === 'string') return value
-  if (typeof value === 'number') return value.toString()
-  if (typeof value === 'boolean') return value ? 'true' : 'false'
-  if (typeof value === 'bigint') return value.toString()
-  const message = (value as { message?: unknown }).message
-  if (typeof message === 'string' && message.length > 0) return message
-  try {
-    return JSON.stringify(value) ?? 'Unknown error'
-  } catch {
-    return 'Unknown error'
-  }
+  return new Error(Utils.toSafeString(err, 'Unknown error'))
 }
 
 /**

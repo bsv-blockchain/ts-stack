@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import crypto from 'crypto'
+import crypto from 'node:crypto'
 import { Utils } from '@bsv/sdk'
 import getPriceForFile from '../utils/getPriceForFile'
 import getUploadURL from '../utils/getUploadURL'

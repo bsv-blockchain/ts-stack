@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "unicorn/prefer-node-protocol": "error"
+  },
+  "env": {
+    "builtin": true
+  },
+  "overrides": [
+    {
+      "files": [
+        "scripts/**",
+        "**/scripts/**",
+        "**/*.config.js",
+        "**/*.config.mjs",
+        "**/*.config.cjs",
+        "**/*.config.ts",
+        "infra/**",
+        "conformance/runner/scripts/**"
+      ],
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "**/__test__/**",
+        "**/__tests__/**",
+        "**/test/**",
+        "**/tests/**",
+        "**/*.test.js",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.js",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+      ],
+      "env": {
+        "browser": true,
+        "jest": true,
+        "node": true,
+        "vitest": true
+      }
+    },
+    {
+      "files": ["docs-site/src/**", "**/*.jsx", "**/*.tsx"],
+      "env": {
+        "browser": true
+      }
+    }
+  ]
+}

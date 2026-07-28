@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
-import { dirname, join, relative, resolve } from 'path'
-import { fileURLToPath } from 'url'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   SITE_BASE,

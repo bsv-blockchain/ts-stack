@@ -87,7 +87,7 @@ export class UserController {
             }
 
             const method = await UserService.getAuthMethodById(authMethodId);
-            if (!method || method.userId !== user.id) {
+            if (method?.userId !== user.id) {
                 return res.status(404).json({ message: "Auth Method not found or not linked to user" });
             }
 

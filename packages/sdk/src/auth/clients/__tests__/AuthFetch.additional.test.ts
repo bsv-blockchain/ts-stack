@@ -709,6 +709,13 @@ describe('AuthFetch.normalizeBodyToNumberArray (private)', () => {
     expect(result).toEqual(Utils.toArray('name=alice', 'utf8'))
   })
 
+  it('normalizes FormData file entries by filename', async () => {
+    const fd = new FormData()
+    fd.append('upload', new Blob(['hello']), 'greeting.txt')
+    const result = await (authFetch as any).normalizeBodyToNumberArray(fd)
+    expect(result).toEqual(Utils.toArray('upload=greeting.txt', 'utf8'))
+  })
+
   it('normalizes URLSearchParams bytes', async () => {
     const params = new URLSearchParams({ q: 'hello' })
     const result = await (authFetch as any).normalizeBodyToNumberArray(params)

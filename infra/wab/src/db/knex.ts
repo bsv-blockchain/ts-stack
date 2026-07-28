@@ -1,5 +1,5 @@
 import knex, { Knex } from "knex";
-import * as path from "path";
+import * as path from "node:path";
 import config from "../knexfile";
 import { log } from "../logger";
 

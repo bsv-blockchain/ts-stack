@@ -162,8 +162,8 @@ export async function createOneSatTestOutput(
     noSendChange = car.noSendChange
 
     const req = await EntityProvenTxReq.fromStorageTxid(setup.activeStorage, car.txid!)
-    expect(req !== undefined && req.history.notes !== undefined)
-    if (req && req.history.notes) {
+    expect(req?.history.notes !== undefined)
+    if (req?.history.notes) {
       if (vargs.isNoSend) {
         expect(req.status === 'nosend').toBe(true)
         expect(req.history.notes.length).toBe(1)
@@ -231,7 +231,6 @@ export async function recoverOneSatTestOutputs(setup: LocalTestWalletSetup, test
       spends: {} //  0: { unlockingScript } },
     }
     for (let i = 0; i < outputs.outputs.length; i++) {
-      const o = outputs.outputs[i]
       const unlock = p2pkh.unlock(setup.keyDeriver.rootKey, 'all', false)
       const unlockingScript = (await unlock.sign(tx, i)).toHex()
       signArgs.spends[i] = { unlockingScript }
@@ -244,8 +243,8 @@ export async function recoverOneSatTestOutputs(setup: LocalTestWalletSetup, test
 export async function trackReqByTxid(setup: LocalTestWalletSetup, txid: string): Promise<void> {
   const req = await EntityProvenTxReq.fromStorageTxid(setup.activeStorage, txid)
 
-  expect(req !== undefined && req.history.notes !== undefined)
-  if (!req || !req.history.notes) throw new sdk.WERR_INTERNAL()
+  expect(req?.history.notes !== undefined)
+  if (req?.history.notes == null) throw new sdk.WERR_INTERNAL()
 
   let newBlocks = 0
   let lastHeight: number | undefined

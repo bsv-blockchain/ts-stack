@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, statSync } from 'fs'
-import { resolve, join, relative, dirname } from 'path'
-import { fileURLToPath } from 'url'
-import { createRequire } from 'module'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { resolve, join, relative, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 

@@ -1,14 +1,22 @@
 /**
+ * Analyzer note: the named primitive aliases in this file are the public
+ * BRC-100 wire vocabulary. Their names and JSDoc constraints feed generated
+ * API documentation and communicate semantics that primitive types cannot.
+ * S6564 is therefore suppressed on those declarations instead of erasing the
+ * public protocol vocabulary.
+ */
+
+/**
  * @typedef {boolean} BooleanDefaultFalse
  * Represents an optional boolean parameter, which defaults to `false` if not provided.
  */
-export type BooleanDefaultFalse = boolean
+export type BooleanDefaultFalse = boolean // NOSONAR
 
 /**
  * @typedef {boolean} BooleanDefaultTrue
  * Represents an optional boolean parameter, which defaults to `true` if not provided.
  */
-export type BooleanDefaultTrue = boolean
+export type BooleanDefaultTrue = boolean // NOSONAR
 
 /**
  * @typedef {number} Byte
@@ -16,7 +24,7 @@ export type BooleanDefaultTrue = boolean
  * @minimum 0
  * @maximum 255
  */
-export type Byte = number
+export type Byte = number // NOSONAR
 
 /**
  * @typedef {number} PositiveIntegerOrZero
@@ -24,7 +32,7 @@ export type Byte = number
  * @minimum 0
  * @maximum 4294967295
  */
-export type PositiveIntegerOrZero = number
+export type PositiveIntegerOrZero = number // NOSONAR
 
 /**
  * @typedef {number} PositiveInteger
@@ -32,7 +40,7 @@ export type PositiveIntegerOrZero = number
  * @minimum 1
  * @maximum 4294967295
  */
-export type PositiveInteger = number
+export type PositiveInteger = number // NOSONAR
 
 /**
  * @typedef {number} PositiveIntegerMax10
@@ -40,7 +48,7 @@ export type PositiveInteger = number
  * @minimum 1
  * @maximum 10
  */
-export type PositiveIntegerMax10 = number
+export type PositiveIntegerMax10 = number // NOSONAR
 
 /**
  * @typedef {number} PositiveIntegerDefault10Max10000
@@ -49,7 +57,7 @@ export type PositiveIntegerMax10 = number
  * @default 10
  * @maximum 10000
  */
-export type PositiveIntegerDefault10Max10000 = number
+export type PositiveIntegerDefault10Max10000 = number // NOSONAR
 
 /**
  * @typedef {number} SatoshiValue
@@ -57,75 +65,75 @@ export type PositiveIntegerDefault10Max10000 = number
  * @minimum 1
  * @maximum 2100000000000000
  */
-export type SatoshiValue = number
+export type SatoshiValue = number // NOSONAR
 
 /**
  * @typedef {string} ISOTimestampString
  * Represents an ISO timestamp string.
  */
-export type ISOTimestampString = string
+export type ISOTimestampString = string // NOSONAR
 
 /**
  * @typedef {string} HexString
  * A string containing only hexadecimal characters (0-9, a-f).
  */
-export type HexString = string
+export type HexString = string // NOSONAR
 
 /**
  * @typedef {HexString} TXIDHexString
  * Represents a transaction ID, enforced to be exactly 64 characters in length and in hexadecimal format.
  * @length 64
  */
-export type TXIDHexString = HexString
+export type TXIDHexString = HexString // NOSONAR
 
 /**
  * @typedef {string} OutpointString
  * Represents a transaction ID and output index pair. The TXID is given as a hex string followed by a period "." and then the output index is given as a decimal integer.
  */
-export type OutpointString = string
+export type OutpointString = string // NOSONAR
 
 /**
  * @typedef {HexString} PubKeyHex
  * Represents a compressed DER secp256k1 public key, exactly 66 hex characters (33 bytes) in length.
  * @length 66
  */
-export type PubKeyHex = HexString
+export type PubKeyHex = HexString // NOSONAR
 
 /**
  * @typedef {string} Base64String
  * A standard base64 encoded string.
  */
-export type Base64String = string
+export type Base64String = string // NOSONAR
 
 /**
  * @typedef {string} OriginatorDomainNameStringUnder250Bytes
  * Represents the fully qualified domain name (FQDN) of the application that originates the request.
  */
-export type OriginatorDomainNameStringUnder250Bytes = string
+export type OriginatorDomainNameStringUnder250Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { minLength: 5, maxLength: 50 }} DescriptionString5to50Bytes
  * A string used for descriptions, with a length between 5 and 50 characters.
  */
-export type DescriptionString5to50Bytes = string
+export type DescriptionString5to50Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 300 }} BasketStringUnder300Bytes
  * A string for naming baskets, with a maximum length of 300 characters.
  */
-export type BasketStringUnder300Bytes = string
+export type BasketStringUnder300Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 300 }} OutputTagStringUnder300Bytes
  * A string for tagging outputs, with a maximum length of 300 characters.
  */
-export type OutputTagStringUnder300Bytes = string
+export type OutputTagStringUnder300Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 300 }} LabelStringUnder300Bytes
  * A string for labeling transactions, with a maximum length of 300 characters.
  */
-export type LabelStringUnder300Bytes = string
+export type LabelStringUnder300Bytes = string // NOSONAR
 
 /**
  * @typedef {Byte[] | Uint8Array} BEEF
@@ -143,31 +151,31 @@ export type AtomicBEEF = Byte[] | Uint8Array
  * @typedef {string & { minLength: 5, maxLength: 400 }} ProtocolString5To400Bytes
  * A protocol identifier with a length between 5 and 400 characters.
  */
-export type ProtocolString5To400Bytes = string
+export type ProtocolString5To400Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 800 }} KeyIDStringUnder800Bytes
  * Represents a key identifier string, with a maximum length of 800 characters.
  */
-export type KeyIDStringUnder800Bytes = string
+export type KeyIDStringUnder800Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 50 }} CertificateFieldNameUnder50Bytes
  * Represents a certificate field name with a maximum length of 50 characters.
  */
-export type CertificateFieldNameUnder50Bytes = string
+export type CertificateFieldNameUnder50Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 100 }} EntityNameStringMax100Bytes
  * Represents a trusted entity name with a maximum length of 100 characters.
  */
-export type EntityNameStringMax100Bytes = string
+export type EntityNameStringMax100Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { maxLength: 500 }} EntityIconURLStringMax500Bytes
  * Represents a trusted entity icon URL with a maximum length of 500 characters.
  */
-export type EntityIconURLStringMax500Bytes = string
+export type EntityIconURLStringMax500Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { minLength: 7, maxLength: 30 }} VersionString7To30Bytes
@@ -175,19 +183,19 @@ export type EntityIconURLStringMax500Bytes = string
  *
  * The format is [vendor]-[major].[minor].[patch]
  */
-export type VersionString7To30Bytes = string
+export type VersionString7To30Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { minLength: 10, maxLength: 40 }} ErrorCodeString10To40Bytes
  * Represents a machine-readable error code string, with a length between 10 and 40 characters.
  */
-export type ErrorCodeString10To40Bytes = string
+export type ErrorCodeString10To40Bytes = string // NOSONAR
 
 /**
  * @typedef {string & { minLength: 20, maxLength: 200 }} ErrorDescriptionString20To200Bytes
  * Represents a human-readable error description string, with a length between 20 and 200 characters.
  */
-export type ErrorDescriptionString20To200Bytes = string
+export type ErrorDescriptionString20To200Bytes = string // NOSONAR
 
 export type WalletNetwork = 'mainnet' | 'testnet'
 
@@ -216,11 +224,11 @@ export type SecurityLevel = 0 | 1 | 2
 
 export type WalletProtocol = [SecurityLevel, ProtocolString5To400Bytes]
 
-export type WalletCounterparty = PubKeyHex
+export type WalletCounterparty = PubKeyHex // NOSONAR
 
 export type AcquisitionProtocol = 'direct' | 'issuance'
 
-export type KeyringRevealer = PubKeyHex
+export type KeyringRevealer = PubKeyHex // NOSONAR
 
 export type ActionStatus =
   | 'completed'

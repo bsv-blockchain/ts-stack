@@ -1,4 +1,4 @@
-import crypto from 'crypto'
+import crypto from 'node:crypto'
 import Secp256r1 from '../Secp256r1.js'
 import { sha256 } from '../Hash.js'
 

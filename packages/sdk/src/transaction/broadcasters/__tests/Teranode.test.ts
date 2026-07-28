@@ -2,7 +2,7 @@ import Teranode from '../../../transaction/broadcasters/Teranode'
 import Transaction from '../../../transaction/Transaction'
 import { BinaryFetchClient } from '../../../transaction/http/BinaryFetchClient'
 import { NodejsHttpClient } from '../../../transaction/http/NodejsHttpClient'
-import { RequestOptions } from 'https'
+import { RequestOptions } from 'node:https'
 
 // Mock Transaction so tests don't require a fully-formed BSV tx
 jest.mock('../../../transaction/Transaction', () => {

@@ -863,7 +863,8 @@ describe('Peer class mutual authentication and certificate exchange', () => {
         fail('Expected error to be thrown')
       } catch (error: any) {
         expect(error.message).toContain('Network error while sending authenticated request')
-        expect(error.message).toContain('[object Object]')
+        expect(error.message).toContain('nonexistent.domain')
+        expect(error.message).not.toContain('[object Object]')
       }
     }, 15000)
 

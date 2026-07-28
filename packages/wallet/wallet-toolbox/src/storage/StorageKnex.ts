@@ -1269,7 +1269,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (v.created_at != null) v.created_at = this.validateEntityDate(v.created_at)
     if (v.updated_at != null) v.updated_at = this.validateEntityDate(v.updated_at)
     if (v.created_at == null) delete v.created_at
-    if (v.updated_at == null) v.updated_at = this.validateEntityDate(new Date())
+    v.updated_at ??= this.validateEntityDate(new Date())
     this.coerceDateFields(v, dateFields)
     this.coerceBooleanFields(update, booleanFields)
     this.serialiseForKnex(v)
@@ -1439,7 +1439,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       byName[basket.name] = basket
     }
     for (const name of uniqueNames) {
-      if (byName[name] == null) byName[name] = await this.findOrInsertOutputBasket(userId, name, trx)
+      byName[name] ??= await this.findOrInsertOutputBasket(userId, name, trx)
     }
     return byName
   }

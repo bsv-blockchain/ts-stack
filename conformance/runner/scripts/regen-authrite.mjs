@@ -21,9 +21,9 @@
  *   node conformance/runner/scripts/regen-authrite.mjs
  */
 
-import { readFileSync, writeFileSync } from 'fs'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '..', '..', '..')
@@ -103,7 +103,7 @@ const pairsCreateToVerify = new Map()
 for (const v of vectors) {
   const num = vectorNum(v)
   const input = v.input
-  if (input && input.method === 'verifySignature' && !v.expected?.error) {
+  if (input?.method === 'verifySignature' && !v.expected?.error) {
     // Extract "from vector N" from description
     const match = v.description.match(/from vector (\d+)/i)
     if (match) {
@@ -181,7 +181,7 @@ for (const v of vectors) {
 for (const v of vectors) {
   const num = vectorNum(v)
   if (v.skip) continue
-  if (!v.input || v.input.method !== 'verifySignature') continue
+  if (v.input?.method !== 'verifySignature') continue
   if (v.expected?.error) continue // error-case vectors — leave alone
 
   // Find which create vector this verify corresponds to

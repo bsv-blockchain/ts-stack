@@ -1,5 +1,5 @@
 import { renderFile } from 'ejs'
-import { writeFileSync } from 'fs'
+import { writeFileSync } from 'node:fs'
 require('dotenv').config()
 
 renderFile(

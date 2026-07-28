@@ -9,6 +9,7 @@
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { inspect } from 'node:util'
 import { parse } from 'yaml'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -234,7 +235,7 @@ for (const { spec, out } of SPECS) {
     console.log(`generated ${out}/index.html`)
   } catch (error) {
     failures += 1
-    console.error(`failed ${spec}: ${error instanceof Error ? error.message : String(error)}`)
+    console.error(`failed ${spec}: ${error instanceof Error ? error.message : inspect(error)}`)
   }
 }
 

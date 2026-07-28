@@ -1,15 +1,14 @@
 import { PubKeyHex } from '@bsv/sdk'
 
-// TODO: Determine payload structure for notifications
+/** Minimal encrypted notification metadata; message content stays in Message Box. */
 export interface EncryptedNotificationPayload {
   title?: string // Optional unencrypted title for display
 }
 
-// Optional payment structure
+/** Optional payment hint attached to a notification. */
 export interface NotificationPayment {
   amount: number // Satoshis
   recipient: PubKeyHex
-  // TODO: Add more payment fields as needed for internalizeAction
 }
 
 // FCM configuration interface (adapted from Jackie's code)

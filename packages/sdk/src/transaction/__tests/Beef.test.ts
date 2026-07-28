@@ -179,6 +179,21 @@ describe('Beef tests', () => {
     expect(beef.isValid(true)).toBe(true)
   })
 
+  test('findTransactionForSigning returns undefined without transaction bytes', () => {
+    const beef = new Beef()
+    const missingTxid = '11'.repeat(32)
+    const txidOnly = '22'.repeat(32)
+
+    expect(beef.findTransactionForSigning(missingTxid)).toBeUndefined()
+    beef.mergeTxidOnly(txidOnly)
+    expect(beef.findTransactionForSigning(txidOnly)).toBeUndefined()
+
+    const transaction = new Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: new Script() })
+    beef.mergeTransaction(transaction)
+    expect(beef.findTransactionForSigning(transaction.id('hex'))).toBe(transaction)
+  })
+
   test('3_removeExistingTxid', async () => {
     const beef = Beef.fromString(beefs[0])
     expect(beef.isValid(undefined)).toBe(true)

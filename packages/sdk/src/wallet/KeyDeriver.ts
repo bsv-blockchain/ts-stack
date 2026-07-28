@@ -327,10 +327,7 @@ export class KeyDeriver implements KeyDeriverApi {
     counterparty: Counterparty
   ): Promise<SymmetricKey> {
     const backend = this.accelerationBackend('tweakPrivateKeyAdd')
-    if (
-      backend === undefined ||
-      !backend.supportsCrypto('tweakPublicKeyAdd')
-    ) {
+    if (!backend?.supportsCrypto('tweakPublicKeyAdd')) {
       return this.deriveSymmetricKey(protocolID, keyID, counterparty)
     }
     const normalizedCounterparty = counterparty === 'anyone'

@@ -11,6 +11,14 @@ import { User, AuthMethodEntity, PaymentEntity } from "../types";
 import { Curve, Random, RPuzzle, Utils } from '@bsv/sdk'
 import { log } from "../logger";
 
+function insertedIdFromResult(insertResult: unknown): number | undefined {
+    const candidate = Array.isArray(insertResult) ? insertResult[0] : insertResult;
+    if (typeof candidate === "number") return candidate;
+    if (candidate == null || typeof candidate !== "object" || !("id" in candidate)) return undefined;
+    const id = (candidate as { id?: unknown }).id;
+    return typeof id === "number" ? id : undefined;
+}
+
 //temp solution 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY
 const STORAGE_URL = process.env.STORAGE_URL
@@ -30,17 +38,11 @@ export class UserService {
     static async createUser(presentationKey: string): Promise<User> {
         // Note: SQLite does not support RETURNING. Knex will return the inserted row id as a number in SQLite,
         // while in MySQL it may return an object when specifying returning columns.
-        const insertResult: any = await db("users").insert({ presentationKey });
+        const insertResult: unknown = await db("users").insert({ presentationKey });
 
-        const insertedId = Array.isArray(insertResult)
-            ? (typeof insertResult[0] === "number"
-                ? insertResult[0]
-                : (insertResult[0]?.id as number | undefined))
-            : (typeof insertResult === "number"
-                ? insertResult
-                : (insertResult?.id as number | undefined));
-
-        const user = await this.getUserById(insertedId as number);
+        const insertedId = insertedIdFromResult(insertResult);
+        if (insertedId === undefined) throw new Error("User creation failed");
+        const user = await this.getUserById(insertedId);
         if (!user) {
             throw new Error("User creation failed");
         }
@@ -90,20 +92,14 @@ export class UserService {
         // Generate a unique placeholder for the legacy presentationKey field
         const placeholderKey = `shamir_${userIdHash.substring(0, 48)}`;
 
-        const insertResult: any = await db("users").insert({
+        const insertResult: unknown = await db("users").insert({
             presentationKey: placeholderKey,
             userIdHash
         });
 
-        const insertedId = Array.isArray(insertResult)
-            ? (typeof insertResult[0] === "number"
-                ? insertResult[0]
-                : (insertResult[0]?.id as number | undefined))
-            : (typeof insertResult === "number"
-                ? insertResult
-                : (insertResult?.id as number | undefined));
-
-        const user = await this.getUserById(insertedId as number);
+        const insertedId = insertedIdFromResult(insertResult);
+        if (insertedId === undefined) throw new Error("User creation failed");
+        const user = await this.getUserById(insertedId);
         if (!user) {
             throw new Error("User creation failed");
         }
@@ -242,7 +238,7 @@ export class UserService {
             })
             .first();
 
-        if (!authMethod || !authMethod.userId) {
+        if (!authMethod?.userId) {
             return undefined;
         }
         return await this.getUserById(authMethod.userId);

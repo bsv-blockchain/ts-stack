@@ -10,11 +10,9 @@ export class HelloWorldStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
+    this.indexInit ??= (async () => {
         await this.records.createIndex({ message: 'text' }, { name: 'MessageTextIndex' })
-      })()
-    }
+    })()
     return await this.indexInit
   }
 

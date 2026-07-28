@@ -53,12 +53,12 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
  *   formatEnd    = '88ac'
  *   chunks[13]   = OP_RETURN (0x6a) with non-empty data
  */
-function buildMonsterBattleTransferScript(): LockingScript {
+function buildMonsterBattleTransferScript(pubkeyHashLength = 20): LockingScript {
   const formatStart = Utils.toArray('0063036f726451126170706c69636174696f6e2f6273762d323000', 'hex')
   const jsonPayload = JSON.stringify({ p: 'bsv-20', op: 'transfer', id: 'monster_token_001', amt: '100' })
   const jsonBytes = Utils.toArray(jsonPayload, 'utf8')
   const formatMiddle = Utils.toArray('6876a9', 'hex')
-  const pubkeyHash = Array.from({ length: 20 }, () => 0xcd)
+  const pubkeyHash = Array.from({ length: pubkeyHashLength }, () => 0xcd)
   const formatEnd = Utils.toArray('88ac', 'hex')
   const opReturnData = Utils.toArray('deadbeef', 'hex')
 
@@ -70,7 +70,7 @@ function buildMonsterBattleTransferScript(): LockingScript {
       : [0x4c, jsonBytes.length, ...jsonBytes]),
     ...formatMiddle,
     // 20-byte pubkey hash push
-    0x14, ...pubkeyHash,
+    pubkeyHash.length, ...pubkeyHash,
     ...formatEnd,
     // OP_RETURN with data
     0x6a, opReturnData.length, ...opReturnData
@@ -176,6 +176,13 @@ describe('MonsterBattleTopicManager', () => {
       { op: 4, data: [0xde, 0xad, 0xbe, 0xef] }
     ])
     const tx = buildTxWithInput([badScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('rejects a script without pubkey hash data', async () => {
+    const tx = buildTxWithInput([buildMonsterBattleTransferScript(0)])
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(result.outputsToAdmit).toEqual([])

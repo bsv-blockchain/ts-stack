@@ -95,6 +95,39 @@ describe('WAB transport hardening', () => {
     expect(fetchClient).not.toHaveBeenCalled()
   })
 
+  it('normalizes network failures and timeouts while reading a response body', async () => {
+    const networkFailure = new WABClient('https://wab.example', {
+      fetch: jest.fn(async () => {
+        throw new TypeError('network unavailable')
+      }) as typeof fetch
+    })
+    await expect(networkFailure.getInfo()).rejects.toMatchObject({
+      code: 'WAB_NETWORK_ERROR',
+      message: 'WAB request failed before receiving a response.',
+      retryable: true
+    })
+
+    const stalledBody = new WABClient('https://wab.example', {
+      fetch: jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal
+        const body = new ReadableStream<Uint8Array>({
+          start: controller => {
+            signal?.addEventListener('abort', () => {
+              controller.error(new Error('response body aborted'))
+            })
+          }
+        })
+        return new Response(body)
+      }) as typeof fetch,
+      timeoutMs: 5
+    })
+    await expect(stalledBody.getInfo()).rejects.toMatchObject({
+      code: 'WAB_TIMEOUT',
+      message: 'WAB request timed out.',
+      retryable: true
+    })
+  })
+
   it('sends correlation IDs without telemetry and preserves request context on errors', async () => {
     const fetchClient = jest.fn(async () => jsonResponse({ message: 'not found' }, 404)) as typeof fetch
     const client = new WABClient('https://wab.example/customer', { fetch: fetchClient })
@@ -261,5 +294,40 @@ describe('WAB transport hardening', () => {
     await expect(manager.completeAuth({})).rejects.toBeInstanceOf(WABAccountContinuityError)
     expect(lookup).not.toHaveBeenCalled()
     expect(manager.authenticationFlow).toBe('unknown')
+  })
+
+  it('maps the legacy existingUser signal without a nested status expression', () => {
+    const interactor: UMPTokenInteractor = {
+      findByPresentationKeyHash: jest.fn(async () => undefined),
+      findByRecoveryKeyHash: jest.fn(async () => undefined),
+      buildAndSend: jest.fn(async () => `${'c'.repeat(64)}.0`)
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async (): Promise<WalletInterface> => Object.create(null) as WalletInterface,
+      interactor,
+      async (): Promise<true> => true,
+      async () => 'password',
+      new WABClient('https://wab.example'),
+      new DevConsoleInteractor()
+    )
+    const inferAccountStatus = (
+      manager as unknown as {
+        inferAccountStatus: (
+          result: { presentationKey: string, existingUser?: boolean },
+          temporaryPresentationKey: string
+        ) => 'new-user' | 'existing-user'
+      }
+    ).inferAccountStatus.bind(manager)
+    const temporaryPresentationKey = 'a'.repeat(64)
+
+    expect(inferAccountStatus(
+      { presentationKey: 'b'.repeat(64), existingUser: true },
+      temporaryPresentationKey
+    )).toBe('existing-user')
+    expect(inferAccountStatus(
+      { presentationKey: temporaryPresentationKey, existingUser: false },
+      temporaryPresentationKey
+    )).toBe('new-user')
   })
 })

@@ -458,7 +458,7 @@ export class Peer {
       throw error
     }
 
-    const message = `Failed to send message to peer ${peerIdentityKey ?? 'unknown'}: ${String(error)}`
+    const message = `Failed to send message to peer ${peerIdentityKey ?? 'unknown'}: ${Utils.toSafeString(error)}`
     throw new Error(message)
   }
 

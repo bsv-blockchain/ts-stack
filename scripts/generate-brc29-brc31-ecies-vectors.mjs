@@ -5,9 +5,9 @@
  *  - messaging/brc31/authrite-signature.json (4 → 25+ vectors)
  *  - sdk/crypto/ecies.json (5 → 25+ vectors)
  */
-import { readFileSync, writeFileSync } from 'fs'
-import { fileURLToPath } from 'url'
-import path from 'path'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -664,4 +664,9 @@ async function main() {
   console.log('\nDone!')
 }
 
-main().catch(console.error)
+try {
+  await main()
+} catch (error) {
+  console.error(error)
+  process.exitCode = 1
+}

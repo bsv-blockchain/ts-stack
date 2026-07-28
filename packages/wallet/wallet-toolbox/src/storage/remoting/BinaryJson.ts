@@ -36,7 +36,12 @@ function toBase64(bytes: Uint8Array): string {
 
 function validateBase64(base64: string): number {
   if (base64.length % 4 !== 0) throw new TypeError('Invalid base64 binary JSON value')
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  let padding = 0
+  if (base64.endsWith('==')) {
+    padding = 2
+  } else if (base64.endsWith('=')) {
+    padding = 1
+  }
   const contentLength = base64.length - padding
   for (let i = 0; i < contentLength; i++) {
     if (!BASE64.includes(base64[i])) throw new TypeError('Invalid base64 binary JSON value')

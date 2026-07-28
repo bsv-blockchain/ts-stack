@@ -25,6 +25,11 @@ images on one reviewed dependency baseline.
 CI, conformance, documentation, and release workflows run on Node.js 24.
 Root and package lint are warning-free and use blocking warning denial. A new
 warning is a regression, not baseline debt to be accepted or ratcheted later.
+The root `.oxlintrc.json` supplies the common correctness policy and
+environment-specific overrides; package lint scripts select owned source
+paths and inherit that policy. Node built-ins must use the explicit `node:`
+protocol. Orphaned ESLint configuration is removed rather than allowed to
+suggest a second, unenforced policy.
 
 Every published package declares `engines.node: ">=22"`. Node.js 22 is the
 consumer runtime floor; Node.js 24.11 is the stricter contributor and release

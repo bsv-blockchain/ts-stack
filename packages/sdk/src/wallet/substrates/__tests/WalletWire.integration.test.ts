@@ -840,6 +840,14 @@ describe('WalletWire Integration Tests', () => {
           {
             txid: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806',
             status: 'sending'
+          },
+          {
+            txid: 'feedface20248806feedface20248806feedface20248806feedface20248806',
+            status: 'failed'
+          },
+          {
+            txid: '0123456720248806012345672024880601234567202488060123456720248806',
+            status: 'unproven'
           }
         ],
         signableTransaction: {
@@ -890,6 +898,20 @@ describe('WalletWire Integration Tests', () => {
       expect(result).toHaveProperty('tx')
       expect(result).toHaveProperty('noSendChange')
       expect(result).toHaveProperty('sendWithResults')
+      expect(result.sendWithResults).toEqual([
+        {
+          txid: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806',
+          status: 'sending'
+        },
+        {
+          txid: 'feedface20248806feedface20248806feedface20248806feedface20248806',
+          status: 'failed'
+        },
+        {
+          txid: '0123456720248806012345672024880601234567202488060123456720248806',
+          status: 'unproven'
+        }
+      ])
       expect(result).toHaveProperty('signableTransaction')
       expect(createActionMock).toHaveBeenCalledWith(
         { ...args, inputBEEF: Uint8Array.from(args.inputBEEF) },

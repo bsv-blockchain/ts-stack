@@ -121,7 +121,7 @@ function validatePaymentScript(script: Script): void {
   const chunks = script.chunks
   const formatStart = new Script(chunks.slice(0, 3)).toHex()
   if (formatStart !== TEMPLATES.payment.formatStart) throw new Error('Malformed formatStart')
-  if (!chunks[3].data || chunks[3].data.length !== 20) throw new Error('Invalid hash data length')
+  if (chunks[3].data?.length !== 20) throw new Error('Invalid hash data length')
   const formatEnd = new Script(chunks.slice(4, 12)).toHex()
   if (formatEnd !== TEMPLATES.payment.formatEnd) throw new Error('Malformed formatEnd')
 }

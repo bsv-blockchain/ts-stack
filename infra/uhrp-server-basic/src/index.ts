@@ -9,7 +9,7 @@ import routes from './routes'
 import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
 import { cdnMimeTypeMiddleware } from './utils/mimeTypeMiddleware'
-import path from 'path'
+import path from 'node:path'
 import { log } from './logger'
 import { rateLimit } from 'express-rate-limit'
 import {

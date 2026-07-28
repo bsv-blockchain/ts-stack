@@ -59,6 +59,36 @@ import {
 describe('getBeefForTransaction tests', () => {
   jest.setTimeout(99999999)
 
+  test('accepts existing, serialized, and omitted merge targets', async () => {
+    const storage = new ProtoStorage('main')
+    const txid = '11'.repeat(32)
+    const options: StorageGetBeefOptions = {
+      ignoreStorage: true,
+      ignoreServices: true,
+      knownTxids: [txid]
+    }
+
+    const existing = new Beef()
+    const mergedExisting = await storage.getBeefForTransaction(txid, {
+      ...options,
+      mergeToBeef: existing
+    })
+    expect(mergedExisting).toBe(existing)
+    expect(mergedExisting.findTxid(txid)).toBeDefined()
+
+    const serialized = new Beef().toBinary()
+    const mergedSerialized = await storage.getBeefForTransaction(txid, {
+      ...options,
+      mergeToBeef: serialized
+    })
+    expect(mergedSerialized).toBeInstanceOf(Beef)
+    expect(mergedSerialized.findTxid(txid)).toBeDefined()
+
+    const fresh = await storage.getBeefForTransaction(txid, options)
+    expect(fresh).toBeInstanceOf(Beef)
+    expect(fresh.findTxid(txid)).toBeDefined()
+  })
+
   test('0 ProtoStorage.getBeefForTxid', async () => {
     const ps = new ProtoStorage('main')
 

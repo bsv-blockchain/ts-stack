@@ -79,8 +79,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       })
     }
 
-    // TODO handle edge case with multiple outputs
-    // Redeeming old advertisement token and replacing it with the new ones
+    // When multiple advertisements match, renew the one with the farthest expiry.
     const wallet = await getWallet()
     const { outputs, BEEF, } = await wallet.listOutputs({
       basket: 'uhrp advertisements',
@@ -88,8 +87,8 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       tagQueryMode: 'all',
       includeTags: true,
       include: 'entire transactions',
-      limit: limit !== undefined ? limit : 200,
-      offset: offset !== undefined ? offset : 0
+      limit: limit ?? 200,
+      offset: offset ?? 0
     })
 
     if (!outputs || outputs.length === 0) {

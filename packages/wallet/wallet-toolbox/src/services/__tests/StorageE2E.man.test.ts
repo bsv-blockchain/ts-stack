@@ -11,7 +11,7 @@
  *   STORAGE_E2E_ARCADE_TOKEN=<token shared by broadcaster and Monitor>
  */
 
-import { writeFileSync } from 'fs'
+import { writeFileSync } from 'node:fs'
 import { Beef, CachedKeyDeriver, P2PKH, PrivateKey } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { Services } from '../Services'

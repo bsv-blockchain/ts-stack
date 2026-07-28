@@ -27,9 +27,10 @@ import {
 
 import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
 
-/// /// TODO: ADD SUPPORT FOR ADMIN COUNTERPARTIES BASED ON WALLET STORAGE
-/// ///       PROHIBITION OF SPECIAL OPERATIONS IS ALSO CRITICAL.
-/// /// !!!!!!!! SECURITY-CRITICAL ADDITION — DO NOT USE UNTIL IMPLEMENTED.
+// Security invariant: only the configured admin originator bypasses permission
+// prompts. Admin-reserved protocols, baskets, and labels are rejected for all
+// other originators; counterparty bypasses require an explicit configuration
+// allowlist.
 
 function deepEqual(object1: any, object2: any): boolean {
   if (object1 === null || object1 === undefined || object2 === null || object2 === undefined) {

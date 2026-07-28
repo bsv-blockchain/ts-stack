@@ -103,9 +103,8 @@ export async function internalizeAction(
   async function validateAtomicBeef() {
     const ab = Beef.fromBinary(vargs.tx)
 
-    // TODO: Add support for known txids...which would speed up processing by avoiding a network call,
-    // unless a local chaintracker is used.
-
+    // Internalization is a trust boundary, so verify the AtomicBEEF against the
+    // configured chain tracker instead of accepting caller-supplied known txids.
     const txValid = await ab.verify(await wallet.getServices().getChainTracker(), false)
     if (!txValid || !ab.atomicTxid) {
       console.log(`internalizeAction beef is invalid: ${ab.toLogString()}`)

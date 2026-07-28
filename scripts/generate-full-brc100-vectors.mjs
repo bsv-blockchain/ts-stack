@@ -6,8 +6,8 @@
  * Run: node scripts/generate-full-brc100-vectors.mjs
  */
 
-import { writeFileSync, mkdirSync } from 'fs'
-import { join } from 'path'
+import { writeFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { PrivateKey, ProtoWallet } from '../packages/sdk/dist/esm/mod.js'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -1870,4 +1870,9 @@ async function main() {
   )
 }
 
-main().catch(console.error)
+try {
+  await main()
+} catch (error) {
+  console.error(error)
+  process.exitCode = 1
+}

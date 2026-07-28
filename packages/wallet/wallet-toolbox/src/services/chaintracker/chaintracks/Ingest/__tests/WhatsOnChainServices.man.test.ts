@@ -6,7 +6,7 @@ import { ChaintracksFs } from '../../util/ChaintracksFs'
 import { EnqueueHandler, ErrorHandler, WhatsOnChainServices, WocGetHeadersHeader } from '../WhatsOnChainServices'
 import { StopListenerToken, WocHeadersBulkListener, WocHeadersLiveListener } from '../WhatsOnChainIngestorWs'
 import { Chain } from '../../../../../sdk'
-import { URL } from 'url'
+import { URL } from 'node:url'
 import { HeightRange } from '../../util/HeightRange'
 import { _tu } from '../../../../../../test/utils/TestUtilsWalletStorage'
 

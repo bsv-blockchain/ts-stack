@@ -11,8 +11,7 @@ export class KVStoreStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
+    this.indexInit ??= (async () => {
         await Promise.all([
           this.records.createIndex({ key: 1 }),
           this.records.createIndex({ protocolID: 1 }),
@@ -20,8 +19,7 @@ export class KVStoreStorageManager {
           this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
           this.records.createIndex({ tags: 1 })
         ])
-      })()
-    }
+    })()
     return await this.indexInit
   }
 

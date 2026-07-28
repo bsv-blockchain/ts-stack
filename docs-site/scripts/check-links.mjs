@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, statSync, existsSync } from 'fs'
-import { resolve, join, relative, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
+import { resolve, join, relative, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DOCS_ROOT = resolve(__dirname, '../../docs')

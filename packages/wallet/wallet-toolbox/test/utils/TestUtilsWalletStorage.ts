@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv'
-import path from 'path'
-import { promises as fsp } from 'fs'
+import path from 'node:path'
+import { promises as fsp } from 'node:fs'
 import { Knex, knex as makeKnex } from 'knex'
 import {
   Beef,
