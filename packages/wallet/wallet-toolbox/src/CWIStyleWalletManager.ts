@@ -1275,26 +1275,38 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param kdfConfig         Optional KDF configuration for new UMP tokens.
    */
   constructor(
-    adminOriginator: OriginatorDomainNameStringUnder250Bytes,
-    walletBuilder: (
-      profilePrimaryKey: number[],
-      profilePrivilegedKeyManager: PrivilegedKeyManager,
-      profileId: number[]
-    ) => Promise<WalletInterface>,
-    interactor: UMPTokenInteractor | undefined,
-    recoveryKeySaver: (key: number[]) => Promise<true>,
-    passwordRetriever: (
-      reason: string,
-      test: (passwordCandidate: string) => boolean | Promise<boolean>
-    ) => Promise<string>,
-    newWalletFunder?: (
-      presentationKey: number[],
-      wallet: WalletInterface, // Default profile wallet
-      adminOriginator: OriginatorDomainNameStringUnder250Bytes
-    ) => Promise<void>,
-    stateSnapshot?: number[],
-    kdfConfig?: KdfConfig,
-    telemetry?: TelemetryConfig
+    ...[
+      adminOriginator,
+      walletBuilder,
+      interactor,
+      recoveryKeySaver,
+      passwordRetriever,
+      newWalletFunder,
+      stateSnapshot,
+      kdfConfig,
+      telemetry
+    ]: [
+      adminOriginator: OriginatorDomainNameStringUnder250Bytes,
+      walletBuilder: (
+        profilePrimaryKey: number[],
+        profilePrivilegedKeyManager: PrivilegedKeyManager,
+        profileId: number[]
+      ) => Promise<WalletInterface>,
+      interactor: UMPTokenInteractor | undefined,
+      recoveryKeySaver: (key: number[]) => Promise<true>,
+      passwordRetriever: (
+        reason: string,
+        test: (passwordCandidate: string) => boolean | Promise<boolean>
+      ) => Promise<string>,
+      newWalletFunder?: (
+        presentationKey: number[],
+        wallet: WalletInterface,
+        adminOriginator: OriginatorDomainNameStringUnder250Bytes
+      ) => Promise<void>,
+      stateSnapshot?: number[],
+      kdfConfig?: KdfConfig,
+      telemetry?: TelemetryConfig
+    ]
   ) {
     this.adminOriginator = adminOriginator
     this.walletBuilder = walletBuilder
@@ -2417,7 +2429,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     const outpointLen = reader.readVarIntNum()
     const outpointBytes = reader.read(outpointLen)
     const currentOutpoint = Utils.toUTF8(outpointBytes)
-    if (currentOutpoint.length > 128 || !/^[^\s.:]+[.:][0-9]+$/.test(currentOutpoint)) {
+    if (currentOutpoint.length > 128 || !/^[^\s.:]+[.:]\d+$/.test(currentOutpoint)) {
       throw new Error('Serialized UMP token contains an invalid outpoint.')
     }
 

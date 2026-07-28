@@ -76,7 +76,7 @@ function scriptNumBytes(value) {
     absValue >>= 8n
   }
 
-  if ((bytes[bytes.length - 1] & 0x80) !== 0) {
+  if ((bytes.at(-1) & 0x80) !== 0) {
     bytes.push(negative ? 0x80 : 0)
   } else if (negative) {
     bytes[bytes.length - 1] |= 0x80
@@ -205,6 +205,46 @@ function generatedTags(type, sources, valid) {
   ]
 }
 
+function parseScriptFixture(source, entry) {
+  let offset = 0
+  let amount = 0
+  let txVersion = 1
+
+  if (Array.isArray(entry[0])) {
+    amount = amountFromJSON(entry[0][0])
+    offset = 1
+  }
+
+  if (source.key === 'bitcoin-sv') {
+    return {
+      amount,
+      txVersion: Number(entry[offset]),
+      scriptSig: String(entry[offset + 1]),
+      scriptPubKey: String(entry[offset + 2]),
+      flags: String(entry[offset + 3]),
+      expectedResult: String(entry[offset + 4]),
+      comment: entry[offset + 5]
+    }
+  }
+
+  return {
+    amount,
+    txVersion,
+    scriptSig: String(entry[offset]),
+    scriptPubKey: String(entry[offset + 1]),
+    flags: String(entry[offset + 2]),
+    expectedResult: String(entry[offset + 3]),
+    comment: entry[offset + 4]
+  }
+}
+
+function groupedFixtureEntries(file) {
+  return sourceGroupsFor(file).flatMap(group => {
+    const entries = readFixture(group[0], file)
+    return entries.map((entry, index) => ({ group, index, entry }))
+  })
+}
+
 function generateScriptVectors() {
   const vectors = []
 
@@ -213,37 +253,8 @@ function generateScriptVectors() {
     for (const [index, entry] of raw.entries()) {
       if (!Array.isArray(entry) || entry.length <= 1) continue
 
-      let offset = 0
-      let amount = 0
-      let txVersion = 1
-      let scriptSig
-      let scriptPubKey
-      let flags
-      let expectedResult
-      let comment
-
-      if (source.key === 'bitcoin-sv') {
-        if (Array.isArray(entry[0])) {
-          amount = amountFromJSON(entry[0][0])
-          offset = 1
-        }
-        txVersion = Number(entry[offset])
-        scriptSig = String(entry[offset + 1])
-        scriptPubKey = String(entry[offset + 2])
-        flags = String(entry[offset + 3])
-        expectedResult = String(entry[offset + 4])
-        comment = entry[offset + 5]
-      } else {
-        if (Array.isArray(entry[0])) {
-          amount = amountFromJSON(entry[0][0])
-          offset = 1
-        }
-        scriptSig = String(entry[offset])
-        scriptPubKey = String(entry[offset + 1])
-        flags = String(entry[offset + 2])
-        expectedResult = String(entry[offset + 3])
-        comment = entry[offset + 4]
-      }
+      const { amount, txVersion, scriptSig, scriptPubKey, flags, expectedResult, comment } =
+        parseScriptFixture(source, entry)
 
       const valid = expectedResult === 'OK'
       vectors.push({
@@ -327,41 +338,37 @@ function normalizePrevouts(prevouts) {
 function generateTransactionVectors(file, valid) {
   const vectors = []
 
-  for (const group of sourceGroupsFor(file)) {
-    const source = group[0]
-    const raw = readFixture(source, file)
-    for (const [index, entry] of raw.entries()) {
-      if (!Array.isArray(entry) || entry.length <= 1) continue
+  for (const { group, index, entry } of groupedFixtureEntries(file)) {
+    if (!Array.isArray(entry) || entry.length <= 1) continue
 
-      const idType = valid ? 'tx-valid' : 'tx-invalid'
-      const vector = {
-        id: `node.${idType}.${sourceId(group)}.${padIndex(index)}`,
-        description: `${sourceLabels(group)} ${file} #${index}`,
-        input: {
-          fixture_type: 'node-transaction',
-          sources: sourceKeys(group),
-          source_file: file,
-          source_index: index,
-          tx_hex: String(entry[1]),
-          prevouts: normalizePrevouts(entry[0]),
-          flag_strings: Array.isArray(entry[2]) ? entry[2].map(String) : [String(entry[2])],
-          flag_sets: flagSets(entry[2])
-        },
-        expected: {
-          valid
-        },
-        tags: generatedTags('transaction', group, valid)
-      }
-
-      if (!valid && TX_INVALID_INTENDED_INDICES.has(index)) {
-        vector.parity_class = 'intended'
-        vector.skip_reason =
-          'Preserved from upstream tx_invalid.json, but not required for script-interpreter conformance because the standalone script spend validates without full transaction consensus checks.'
-        vector.tags.push('intended', 'full-transaction-consensus')
-      }
-
-      vectors.push(vector)
+    const idType = valid ? 'tx-valid' : 'tx-invalid'
+    const vector = {
+      id: `node.${idType}.${sourceId(group)}.${padIndex(index)}`,
+      description: `${sourceLabels(group)} ${file} #${index}`,
+      input: {
+        fixture_type: 'node-transaction',
+        sources: sourceKeys(group),
+        source_file: file,
+        source_index: index,
+        tx_hex: String(entry[1]),
+        prevouts: normalizePrevouts(entry[0]),
+        flag_strings: Array.isArray(entry[2]) ? entry[2].map(String) : [String(entry[2])],
+        flag_sets: flagSets(entry[2])
+      },
+      expected: {
+        valid
+      },
+      tags: generatedTags('transaction', group, valid)
     }
+
+    if (!valid && TX_INVALID_INTENDED_INDICES.has(index)) {
+      vector.parity_class = 'intended'
+      vector.skip_reason =
+        'Preserved from upstream tx_invalid.json, but not required for script-interpreter conformance because the standalone script spend validates without full transaction consensus checks.'
+      vector.tags.push('intended', 'full-transaction-consensus')
+    }
+
+    vectors.push(vector)
   }
 
   return vectors
@@ -401,7 +408,7 @@ const next = {
   id: 'sdk.scripts.evaluation',
   name: 'Script parsing, encoding, sighash and evaluation parity with SV Node and Teranode',
   brc: ['BRC-14'],
-  version: '3.0.0',
+  version: existing.version ?? '3.0.0',
   reference_impl:
     'packages/sdk/src/script/Script.ts, packages/sdk/src/script/Spend.ts, packages/sdk/src/primitives/TransactionSignature.ts',
   parity_class: 'required',

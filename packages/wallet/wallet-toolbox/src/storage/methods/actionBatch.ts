@@ -664,16 +664,29 @@ async function persistOutputs (
 }
 
 async function persistAction (
-  storage: StorageProvider,
-  userId: number,
-  validated: ValidatedBatchAction,
-  reservedOutputIds: Set<number>,
-  storedByOutpoint: Readonly<Record<string, TableOutput>>,
-  stagedByOutpoint: Map<string, TableOutput>,
-  labelsByName: ReadonlyMap<string, TableTxLabel>,
-  baskets: Record<string, TableOutputBasket>,
-  tags: Record<string, TableOutputTag>,
-  trx: TrxToken
+  ...[
+    storage,
+    userId,
+    validated,
+    reservedOutputIds,
+    storedByOutpoint,
+    stagedByOutpoint,
+    labelsByName,
+    baskets,
+    tags,
+    trx
+  ]: [
+    storage: StorageProvider,
+    userId: number,
+    validated: ValidatedBatchAction,
+    reservedOutputIds: Set<number>,
+    storedByOutpoint: Readonly<Record<string, TableOutput>>,
+    stagedByOutpoint: Map<string, TableOutput>,
+    labelsByName: ReadonlyMap<string, TableTxLabel>,
+    baskets: Record<string, TableOutputBasket>,
+    tags: Record<string, TableOutputTag>,
+    trx: TrxToken
+  ]
 ): Promise<EntityProvenTxReq> {
   const { action, tx, rawTx } = validated
   const statuses = transactionStatuses(action)

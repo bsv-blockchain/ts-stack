@@ -529,7 +529,7 @@ export class AuthFetch {
    */
   private async handlePaymentAndRetry(
     url: string,
-    config: SimplifiedFetchRequestOptions = {},
+    config: SimplifiedFetchRequestOptions,
     originalResponse: Response
   ): Promise<Response | null> {
     const paymentVersion = originalResponse.headers.get('x-bsv-payment-version')

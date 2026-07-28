@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url'
 const DEFAULT_BASE_URL = 'https://sonarcloud.io'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
 const DEFAULT_POLL_MS = 15 * 1000
+const BLOCKING_ISSUE_STATUSES = 'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
 
 function requiredValue(argv, index, option) {
   const value = argv[index + 1]
@@ -129,7 +130,7 @@ export async function enforceSonarPullRequestGate(options, dependencies = {}) {
     }),
     requestJson(fetchImpl, options.baseUrl, '/api/issues/search', {
       componentKeys: options.project,
-      issueStatuses: 'OPEN,CONFIRMED',
+      issueStatuses: BLOCKING_ISSUE_STATUSES,
       ps: 1,
       ...common
     }),
@@ -149,7 +150,7 @@ export async function enforceSonarPullRequestGate(options, dependencies = {}) {
     failures.push(`quality gate status is ${qualityGateStatus ?? 'missing'}, expected OK`)
   }
   if (issueCount !== 0) {
-    failures.push(`${issueCount} open or confirmed issue(s), expected 0`)
+    failures.push(`${issueCount} new issue finding(s), expected 0`)
   }
   if (hotspotCount !== 0) {
     failures.push(`${hotspotCount} unreviewed security hotspot(s), expected 0`)
@@ -171,7 +172,7 @@ export async function enforceSonarPullRequestGate(options, dependencies = {}) {
   log(
     `SonarCloud zero-findings gate passed for PR #${result.pullRequest} at ` +
       `${result.revision}: quality=${result.qualityGateStatus}, ` +
-      `issues=${result.issueCount}, unreviewedHotspots=${result.hotspotCount}`
+      `newFindings=${result.issueCount}, unreviewedHotspots=${result.hotspotCount}`
   )
   return result
 }

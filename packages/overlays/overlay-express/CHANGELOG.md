@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file. The format 
   CSP/browser response headers.
 
 ### Changed
+
+- Harden provider-chain terminal/fallback failure reporting and preserve the
+  public positional and synchronization configuration contracts while
+  simplifying their declarations.
 - Public protocol endpoints now allow credential-free cross-origin browser
   calls by default. Operators can opt into exact origins or disable
   Origin-bearing calls.

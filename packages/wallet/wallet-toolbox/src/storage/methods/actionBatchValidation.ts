@@ -80,17 +80,14 @@ async function resolveManifestBytes(
   return blob.bytes instanceof Uint8Array ? blob.bytes : Uint8Array.from(blob.bytes)
 }
 
-function sameStrings(left: string[] | undefined, right: string[] | undefined): boolean {
+function sameValues<T>(left: T[] | undefined, right: T[] | undefined): boolean {
   const a = left ?? []
   const b = right ?? []
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
-function sameNumbers(left: number[] | undefined, right: number[] | undefined): boolean {
-  const a = left ?? []
-  const b = right ?? []
-  return a.length === b.length && a.every((value, index) => value === b[index])
-}
+const sameStrings: (left: string[] | undefined, right: string[] | undefined) => boolean = sameValues
+const sameNumbers: (left: number[] | undefined, right: number[] | undefined) => boolean = sameValues
 
 function validateActionInputs(action: ActionBatchCommitAction): void {
   if (action.metadata.inputs.length > action.plan.inputs.length) {
@@ -373,7 +370,7 @@ export async function validateManifestActions(
     }
     for (const planned of action.plan.inputs) {
       const input = tx.inputs[planned.vin]
-      if (input == null || input.sourceTXID !== planned.sourceTxid || input.sourceOutputIndex !== planned.sourceVout) {
+      if (input?.sourceTXID !== planned.sourceTxid || input.sourceOutputIndex !== planned.sourceVout) {
         throw new WERR_INVALID_PARAMETER('inputs', 'match planned transaction outpoints')
       }
       const source = await requireSourceOutput(storage, beef, planned.sourceTxid, planned.sourceVout)

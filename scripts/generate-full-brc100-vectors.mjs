@@ -73,6 +73,13 @@ function encodeText(s) {
   return Array.from(new TextEncoder().encode(s))
 }
 
+function cartesianProduct(...dimensions) {
+  return dimensions.reduce(
+    (rows, values) => rows.flatMap(row => values.map(value => [...row, value])),
+    [[]]
+  )
+}
+
 // ── Method Generators ──────────────────────────────────────────────────────────
 
 async function generateDecryptVectors() {
@@ -86,71 +93,68 @@ async function generateDecryptVectors() {
     Array.from({ length: 256 }, (_, i) => i % 256)
   ]
 
-  for (const root of ROOT_KEYS) {
+  const cases = cartesianProduct(
+    ROOT_KEYS,
+    PROTOCOLS.slice(0, 3),
+    KEY_IDS.slice(0, 3),
+    COUNTERPARTIES.slice(0, 2)
+  )
+  for (const [root, proto, kid, cp] of cases) {
     const w = makeWallet(root)
-    for (const proto of PROTOCOLS.slice(0, 3)) {
-      for (const kid of KEY_IDS.slice(0, 3)) {
-        for (const cp of COUNTERPARTIES.slice(0, 2)) {
-          const args = {
-            protocolID: proto,
-            keyID: kid,
-            counterparty: cp,
-            plaintext: DATA_SAMPLES[n % DATA_SAMPLES.length]
-          }
-          try {
-            const enc = await w.encrypt({
-              protocolID: proto,
-              keyID: kid,
-              counterparty: cp,
-              plaintext: args.plaintext
-            })
-            const dec = await w.decrypt({
+    const args = {
+      protocolID: proto,
+      keyID: kid,
+      counterparty: cp,
+      plaintext: DATA_SAMPLES[n % DATA_SAMPLES.length]
+    }
+    try {
+      const enc = await w.encrypt({
+        protocolID: proto,
+        keyID: kid,
+        counterparty: cp,
+        plaintext: args.plaintext
+      })
+      const dec = await w.decrypt({
+        protocolID: proto,
+        keyID: kid,
+        counterparty: cp,
+        ciphertext: enc.ciphertext
+      })
+      vectors.push(
+        makeVector(
+          `wallet.brc100.decrypt.${n++}`,
+          `decrypt round-trip proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
+          {
+            root_key: root,
+            args: {
               protocolID: proto,
               keyID: kid,
               counterparty: cp,
               ciphertext: enc.ciphertext
-            })
-            vectors.push(
-              makeVector(
-                `wallet.brc100.decrypt.${n++}`,
-                `decrypt round-trip proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
-                {
-                  root_key: root,
-                  args: {
-                    protocolID: proto,
-                    keyID: kid,
-                    counterparty: cp,
-                    ciphertext: enc.ciphertext
-                  }
-                },
-                { plaintext: dec.plaintext },
-                ['brc-100', 'decrypt']
-              )
-            )
-          } catch (e) {
-            vectors.push(
-              makeVector(
-                `wallet.brc100.decrypt.${n++}`,
-                `decrypt error proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
-                {
-                  root_key: root,
-                  args: {
-                    protocolID: proto,
-                    keyID: kid,
-                    counterparty: cp,
-                    ciphertext: [0, 1, 2, 3]
-                  }
-                },
-                { error: true, message: e.message },
-                ['brc-100', 'decrypt', 'error']
-              )
-            )
-          }
-          if (n > 50) break
-        }
-        if (n > 50) break
-      }
-      if (n > 50) break
+            }
+          },
+          { plaintext: dec.plaintext },
+          ['brc-100', 'decrypt']
+        )
+      )
+    } catch (e) {
+      vectors.push(
+        makeVector(
+          `wallet.brc100.decrypt.${n++}`,
+          `decrypt error proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
+          {
+            root_key: root,
+            args: {
+              protocolID: proto,
+              keyID: kid,
+              counterparty: cp,
+              ciphertext: [0, 1, 2, 3]
+            }
+          },
+          { error: true, message: e.message },
+          ['brc-100', 'decrypt', 'error']
+        )
+      )
     }
     if (n > 50) break
   }
@@ -199,69 +203,66 @@ async function generateVerifyHmacVectors() {
   const vectors = []
   let n = 1
 
-  for (const root of ROOT_KEYS) {
+  const cases = cartesianProduct(
+    ROOT_KEYS,
+    PROTOCOLS.slice(0, 3),
+    KEY_IDS.slice(0, 3),
+    COUNTERPARTIES.slice(0, 2)
+  )
+  for (const [root, proto, kid, cp] of cases) {
     const w = makeWallet(root)
-    for (const proto of PROTOCOLS.slice(0, 3)) {
-      for (const kid of KEY_IDS.slice(0, 3)) {
-        for (const cp of COUNTERPARTIES.slice(0, 2)) {
-          const data = encodeText(`hmac-verify data for ${proto[1]}/${kid}/${cp}`)
-          const args = { protocolID: proto, keyID: kid, counterparty: cp, data }
-          try {
-            const hmacRes = await w.createHmac(args)
-            // Valid HMAC
-            const verArgs = {
-              protocolID: proto,
-              keyID: kid,
-              counterparty: cp,
-              data,
-              hmac: hmacRes.hmac
-            }
-            await w.verifyHmac(verArgs)
-            vectors.push(
-              makeVector(
-                `wallet.brc100.verifyhmac.${n++}`,
-                `verifyHmac valid proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
-                { root_key: root, args: verArgs },
-                { valid: true },
-                ['brc-100', 'verifyHmac']
-              )
-            )
-            // Invalid HMAC (flip last byte)
-            const badHmac = [...hmacRes.hmac]
-            badHmac[badHmac.length - 1] ^= 0xff
-            const badArgs = { protocolID: proto, keyID: kid, counterparty: cp, data, hmac: badHmac }
-            try {
-              await w.verifyHmac(badArgs)
-            } catch {
-              vectors.push(
-                makeVector(
-                  `wallet.brc100.verifyhmac.${n++}`,
-                  `verifyHmac invalid HMAC proto=${proto[0]},${proto[1]} kid=${kid}`,
-                  { root_key: root, args: badArgs },
-                  { error: true, code: 'ERR_INVALID_HMAC' },
-                  ['brc-100', 'verifyHmac', 'error']
-                )
-              )
-            }
-          } catch (e) {
-            vectors.push(
-              makeVector(
-                `wallet.brc100.verifyhmac.${n++}`,
-                `verifyHmac error proto=${proto[0]},${proto[1]} kid=${kid}`,
-                {
-                  root_key: root,
-                  args: { protocolID: proto, keyID: kid, counterparty: cp, data, hmac: [] }
-                },
-                { error: true, message: e.message },
-                ['brc-100', 'verifyHmac', 'error']
-              )
-            )
-          }
-          if (n > 70) break
-        }
-        if (n > 70) break
+    const data = encodeText(`hmac-verify data for ${proto[1]}/${kid}/${cp}`)
+    const args = { protocolID: proto, keyID: kid, counterparty: cp, data }
+    try {
+      const hmacRes = await w.createHmac(args)
+      // Valid HMAC
+      const verArgs = {
+        protocolID: proto,
+        keyID: kid,
+        counterparty: cp,
+        data,
+        hmac: hmacRes.hmac
       }
-      if (n > 70) break
+      await w.verifyHmac(verArgs)
+      vectors.push(
+        makeVector(
+          `wallet.brc100.verifyhmac.${n++}`,
+          `verifyHmac valid proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
+          { root_key: root, args: verArgs },
+          { valid: true },
+          ['brc-100', 'verifyHmac']
+        )
+      )
+      // Invalid HMAC (flip last byte)
+      const badHmac = [...hmacRes.hmac]
+      badHmac[badHmac.length - 1] ^= 0xff
+      const badArgs = { protocolID: proto, keyID: kid, counterparty: cp, data, hmac: badHmac }
+      try {
+        await w.verifyHmac(badArgs)
+      } catch {
+        vectors.push(
+          makeVector(
+            `wallet.brc100.verifyhmac.${n++}`,
+            `verifyHmac invalid HMAC proto=${proto[0]},${proto[1]} kid=${kid}`,
+            { root_key: root, args: badArgs },
+            { error: true, code: 'ERR_INVALID_HMAC' },
+            ['brc-100', 'verifyHmac', 'error']
+          )
+        )
+      }
+    } catch (e) {
+      vectors.push(
+        makeVector(
+          `wallet.brc100.verifyhmac.${n++}`,
+          `verifyHmac error proto=${proto[0]},${proto[1]} kid=${kid}`,
+          {
+            root_key: root,
+            args: { protocolID: proto, keyID: kid, counterparty: cp, data, hmac: [] }
+          },
+          { error: true, message: e.message },
+          ['brc-100', 'verifyHmac', 'error']
+        )
+      )
     }
     if (n > 70) break
   }
@@ -272,96 +273,93 @@ async function generateVerifySignatureVectors() {
   const vectors = []
   let n = 1
 
-  for (const root of ROOT_KEYS) {
+  const cases = cartesianProduct(
+    ROOT_KEYS,
+    PROTOCOLS.slice(0, 3),
+    KEY_IDS.slice(0, 3),
+    COUNTERPARTIES.slice(0, 2)
+  )
+  for (const [root, proto, kid, cp] of cases) {
     const w = makeWallet(root)
-    for (const proto of PROTOCOLS.slice(0, 3)) {
-      for (const kid of KEY_IDS.slice(0, 3)) {
-        for (const cp of COUNTERPARTIES.slice(0, 2)) {
-          const data = encodeText(`signature data for ${proto[1]}/${kid}/${cp}`)
-          const createArgs = { protocolID: proto, keyID: kid, counterparty: cp, data }
-          try {
-            const sigRes = await w.createSignature(createArgs)
-            // Valid signature
-            const verArgs = {
-              protocolID: proto,
-              keyID: kid,
-              counterparty: cp,
-              data,
-              signature: sigRes.signature
-            }
-            await w.verifySignature(verArgs)
-            vectors.push(
-              makeVector(
-                `wallet.brc100.verifysignature.${n++}`,
-                `verifySignature valid proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
-                { root_key: root, args: verArgs },
-                { valid: true },
-                ['brc-100', 'verifySignature']
-              )
-            )
-            // forSelf=true
-            try {
-              const selfArgs = {
-                protocolID: proto,
-                keyID: kid,
-                counterparty: cp,
-                data,
-                signature: sigRes.signature,
-                forSelf: true
-              }
-              await w.verifySignature(selfArgs)
-              vectors.push(
-                makeVector(
-                  `wallet.brc100.verifysignature.${n++}`,
-                  `verifySignature forSelf proto=${proto[0]},${proto[1]} kid=${kid}`,
-                  { root_key: root, args: selfArgs },
-                  { valid: true },
-                  ['brc-100', 'verifySignature', 'forSelf']
-                )
-              )
-            } catch {}
-            // Invalid signature (flip last byte)
-            const badSig = [...sigRes.signature]
-            badSig[badSig.length - 1] ^= 0x01
-            const badArgs = {
-              protocolID: proto,
-              keyID: kid,
-              counterparty: cp,
-              data,
-              signature: badSig
-            }
-            try {
-              await w.verifySignature(badArgs)
-            } catch {
-              vectors.push(
-                makeVector(
-                  `wallet.brc100.verifysignature.${n++}`,
-                  `verifySignature invalid signature proto=${proto[0]},${proto[1]} kid=${kid}`,
-                  { root_key: root, args: badArgs },
-                  { error: true, code: 'ERR_INVALID_SIGNATURE' },
-                  ['brc-100', 'verifySignature', 'error']
-                )
-              )
-            }
-          } catch (e) {
-            vectors.push(
-              makeVector(
-                `wallet.brc100.verifysignature.${n++}`,
-                `verifySignature error proto=${proto[0]},${proto[1]} kid=${kid}`,
-                {
-                  root_key: root,
-                  args: { protocolID: proto, keyID: kid, counterparty: cp, data, signature: [] }
-                },
-                { error: true, message: e.message },
-                ['brc-100', 'verifySignature', 'error']
-              )
-            )
-          }
-          if (n > 80) break
-        }
-        if (n > 80) break
+    const data = encodeText(`signature data for ${proto[1]}/${kid}/${cp}`)
+    const createArgs = { protocolID: proto, keyID: kid, counterparty: cp, data }
+    try {
+      const sigRes = await w.createSignature(createArgs)
+      // Valid signature
+      const verArgs = {
+        protocolID: proto,
+        keyID: kid,
+        counterparty: cp,
+        data,
+        signature: sigRes.signature
       }
-      if (n > 80) break
+      await w.verifySignature(verArgs)
+      vectors.push(
+        makeVector(
+          `wallet.brc100.verifysignature.${n++}`,
+          `verifySignature valid proto=${proto[0]},${proto[1]} kid=${kid} cp=${cp}`,
+          { root_key: root, args: verArgs },
+          { valid: true },
+          ['brc-100', 'verifySignature']
+        )
+      )
+      // forSelf=true
+      try {
+        const selfArgs = {
+          protocolID: proto,
+          keyID: kid,
+          counterparty: cp,
+          data,
+          signature: sigRes.signature,
+          forSelf: true
+        }
+        await w.verifySignature(selfArgs)
+        vectors.push(
+          makeVector(
+            `wallet.brc100.verifysignature.${n++}`,
+            `verifySignature forSelf proto=${proto[0]},${proto[1]} kid=${kid}`,
+            { root_key: root, args: selfArgs },
+            { valid: true },
+            ['brc-100', 'verifySignature', 'forSelf']
+          )
+        )
+      } catch {}
+      // Invalid signature (flip last byte)
+      const badSig = [...sigRes.signature]
+      badSig[badSig.length - 1] ^= 0x01
+      const badArgs = {
+        protocolID: proto,
+        keyID: kid,
+        counterparty: cp,
+        data,
+        signature: badSig
+      }
+      try {
+        await w.verifySignature(badArgs)
+      } catch {
+        vectors.push(
+          makeVector(
+            `wallet.brc100.verifysignature.${n++}`,
+            `verifySignature invalid signature proto=${proto[0]},${proto[1]} kid=${kid}`,
+            { root_key: root, args: badArgs },
+            { error: true, code: 'ERR_INVALID_SIGNATURE' },
+            ['brc-100', 'verifySignature', 'error']
+          )
+        )
+      }
+    } catch (e) {
+      vectors.push(
+        makeVector(
+          `wallet.brc100.verifysignature.${n++}`,
+          `verifySignature error proto=${proto[0]},${proto[1]} kid=${kid}`,
+          {
+            root_key: root,
+            args: { protocolID: proto, keyID: kid, counterparty: cp, data, signature: [] }
+          },
+          { error: true, message: e.message },
+          ['brc-100', 'verifySignature', 'error']
+        )
+      )
     }
     if (n > 80) break
   }

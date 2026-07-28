@@ -33,7 +33,9 @@ interface ReviewProvenTxsCheckpoint {
 export class TaskReviewProvenTxs extends WalletMonitorTask {
   static readonly taskName = 'ReviewProvenTxs'
 
-  static checkNow = false
+  private static checkNowRequested = false
+  static get checkNow (): boolean { return this.checkNowRequested }
+  static set checkNow (value: boolean) { this.checkNowRequested = value }
 
   triggerNextMsecs: number
 

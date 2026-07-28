@@ -28,6 +28,7 @@ import { createServiceHealth } from './serviceHealth'
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
 const NODE_ENV = process.env.NODE_ENV || 'development'
+type HttpRouteMethod = 'get' | 'put' | 'post' | 'patch' | 'delete'
 
 const preAuthRateLimit = rateLimit(rateLimitOptions(
   'UHRP_PRE_AUTH_RATE_LIMIT',
@@ -79,13 +80,13 @@ preAuthRoutes.filter(route => (route as any).unsecured).forEach((route) => {
   log.info({ operation: 'route.register', phase: 'pre_auth', secured: false, route_path: route.path }, 'Registering route')
   // If we need middleware for a route, attach it
   if ((route as any).middleware) {
-    app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](
+    app[route.type as HttpRouteMethod](
       route.path,
       (route as any).middleware,
       (route as any).func
     )
   } else {
-    app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](route.path, (route as any).func)
+    app[route.type as HttpRouteMethod](route.path, (route as any).func)
   }
 })
 
@@ -106,13 +107,13 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
   log.info({ operation: 'route.register', phase: 'pre_auth', secured: true, route_path: route.path }, 'Registering route')
   // If we need middleware for a route, attach it
   if ((route as any).middleware) {
-    app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](
+    app[route.type as HttpRouteMethod](
       route.path,
       (route as any).middleware,
       (route as any).func
     )
   } else {
-    app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](route.path, (route as any).func)
+    app[route.type as HttpRouteMethod](route.path, (route as any).func)
   }
 })
 
@@ -163,13 +164,13 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       log.info({ operation: 'route.register', phase: 'post_auth', secured: true, route_path: route.path }, 'Registering route')
       // If we need middleware for a route, attach it
       if ((route as any).middleware) {
-        app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](
+        app[route.type as HttpRouteMethod](
           route.path,
           (route as any).middleware,
           (route as any).func
         )
       } else {
-        app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](route.path, (route as any).func)
+        app[route.type as HttpRouteMethod](route.path, (route as any).func)
       }
     })
 

@@ -10,14 +10,12 @@ export class TokenDemoStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
-        await Promise.all([
-          this.records.createIndex({ txid: 1, outputIndex: 1 }, { name: 'OutpointIndex' }),
-          this.records.createIndex({ tokenId: 'hashed' }, { name: 'TokenIdTextIndex' })
-        ])
-      })()
-    }
+    this.indexInit ??= (async () => {
+      await Promise.all([
+        this.records.createIndex({ txid: 1, outputIndex: 1 }, { name: 'OutpointIndex' }),
+        this.records.createIndex({ tokenId: 'hashed' }, { name: 'TokenIdTextIndex' })
+      ])
+    })()
     return await this.indexInit
   }
 

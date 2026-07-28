@@ -27,6 +27,22 @@ describe('WAB transport hardening', () => {
     expect(() => new WABClient('http://localhost:3000')).not.toThrow()
   })
 
+  it('normalizes root and repeated trailing slashes without hanging or duplicating separators', async () => {
+    const rootFetch = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    await new WABClient('https://wab.example/', { fetch: rootFetch }).getInfo()
+    expect(rootFetch).toHaveBeenCalledWith(
+      'https://wab.example/info',
+      expect.any(Object)
+    )
+
+    const nestedFetch = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    await new WABClient('https://wab.example/customer///', { fetch: nestedFetch }).getInfo()
+    expect(nestedFetch).toHaveBeenCalledWith(
+      'https://wab.example/customer/info',
+      expect.any(Object)
+    )
+  })
+
   it('requires canonical E.164 phone identity before sending authentication', async () => {
     const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
     const client = new WABClient('https://wab.example', { fetch: fetchClient })

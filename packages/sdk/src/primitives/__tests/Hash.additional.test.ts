@@ -1,11 +1,18 @@
 import { createHash, createHmac } from 'node:crypto'
-import { SHA1HMAC, SHA512HMAC, pbkdf2 } from '../../primitives/Hash'
+import { SHA1HMAC, SHA512HMAC, pbkdf2, toArray } from '../../primitives/Hash'
 
 function toHex (arr: number[]): string {
   return Buffer.from(arr).toString('hex')
 }
 
 describe('Hash – additional coverage', () => {
+  describe('UTF-8 conversion', () => {
+    it('encodes three- and four-byte Unicode scalar values', () => {
+      expect(toArray('€', 'utf8')).toEqual([0xe2, 0x82, 0xac])
+      expect(toArray('😀', 'utf8')).toEqual([0xf0, 0x9f, 0x98, 0x80])
+    })
+  })
+
   describe('SHA1HMAC', () => {
     it('produces a correct HMAC-SHA1 digest', () => {
       // SHA1HMAC constructor calls toArray(key, 'hex'), so key must be hex
@@ -112,6 +119,9 @@ describe('Hash – additional coverage', () => {
           expect(
             toHex(fallback.sha512hmac(Array.from(key), Array.from(msg)))
           ).toBe(expectedSha512Hmac)
+          expect(
+            fallback.pbkdf2([1, 2], [3, 4], 1, undefined)
+          ).toHaveLength(32)
         })
       } finally {
         ;(process as any).getBuiltinModule = originalGetBuiltin

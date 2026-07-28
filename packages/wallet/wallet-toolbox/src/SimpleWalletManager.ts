@@ -31,7 +31,7 @@ export class SimpleWalletManager implements WalletInterface {
    * Whether the user is currently authenticated (meaning both the primary key
    * and privileged key manager have been provided).
    */
-  authenticated: boolean
+  authenticated = false
 
   /**
    * Resolves once the optional snapshot (if provided to the constructor) has been
@@ -40,9 +40,7 @@ export class SimpleWalletManager implements WalletInterface {
    * Await `ready` before calling wallet methods after constructing with a snapshot.
    */
   get ready (): Promise<void> {
-    if (this._readyInit === undefined) {
-      this._readyInit = this._init()
-    }
+    this._readyInit ??= this._init()
     return this._readyInit
   }
 
@@ -92,7 +90,6 @@ export class SimpleWalletManager implements WalletInterface {
     walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>,
     stateSnapshot?: number[]
   ) {
-    this.authenticated = false
     this.adminOriginator = adminOriginator
     this.walletBuilder = walletBuilder
 

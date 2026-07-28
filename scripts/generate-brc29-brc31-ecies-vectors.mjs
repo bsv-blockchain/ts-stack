@@ -27,6 +27,13 @@ function wallet(scalarHex) {
   return new ProtoWallet(PrivateKey.fromHex(scalarHex))
 }
 
+function cartesianProduct(...dimensions) {
+  return dimensions.reduce(
+    (rows, values) => rows.flatMap(row => values.map(value => [...row, value])),
+    [[]]
+  )
+}
+
 // Known private keys and their identity public keys
 const KEYS = [
   {
@@ -71,63 +78,57 @@ async function generateBrc29Vectors() {
   ]
 
   // 1. Sender derives recipient key: various sender/recipient combos
-  for (let senderIdx = 0; senderIdx < 3; senderIdx++) {
-    for (let recipientIdx = 0; recipientIdx < 3; recipientIdx++) {
-      if (senderIdx === recipientIdx) continue
-      for (const [prefix, suffix] of pairs.slice(0, 3)) {
-        const w = wallet(KEYS[senderIdx].scalar)
-        const result = await w.getPublicKey({
+  const senderCases = cartesianProduct([0, 1, 2], [0, 1, 2], pairs.slice(0, 3))
+  for (const [senderIdx, recipientIdx, [prefix, suffix]] of senderCases) {
+    if (senderIdx === recipientIdx) continue
+    const w = wallet(KEYS[senderIdx].scalar)
+    const result = await w.getPublicKey({
+      protocolID: [2, '3241645161d8'],
+      keyID: `${prefix} ${suffix}`,
+      counterparty: KEYS[recipientIdx].pubkey
+    })
+    vectors.push({
+      id: `wallet.brc29.payment-derivation.${id++}`,
+      description: `Sender (key ${senderIdx + 1}) derives recipient (key ${recipientIdx + 1}) output key: prefix='${prefix}', suffix='${suffix}'`,
+      input: {
+        root_key: KEYS[senderIdx].scalar,
+        args: {
           protocolID: [2, '3241645161d8'],
           keyID: `${prefix} ${suffix}`,
           counterparty: KEYS[recipientIdx].pubkey
-        })
-        vectors.push({
-          id: `wallet.brc29.payment-derivation.${id++}`,
-          description: `Sender (key ${senderIdx + 1}) derives recipient (key ${recipientIdx + 1}) output key: prefix='${prefix}', suffix='${suffix}'`,
-          input: {
-            root_key: KEYS[senderIdx].scalar,
-            args: {
-              protocolID: [2, '3241645161d8'],
-              keyID: `${prefix} ${suffix}`,
-              counterparty: KEYS[recipientIdx].pubkey
-            }
-          },
-          expected: { publicKey: result.publicKey },
-          tags: ['brc-29', 'brc-42', 'payment', 'sender-derives']
-        })
-      }
-    }
+        }
+      },
+      expected: { publicKey: result.publicKey },
+      tags: ['brc-29', 'brc-42', 'payment', 'sender-derives']
+    })
   }
 
   // 2. Recipient derives same key (forSelf=true)
-  for (let recipientIdx = 0; recipientIdx < 2; recipientIdx++) {
-    for (let senderIdx = 0; senderIdx < 2; senderIdx++) {
-      if (senderIdx === recipientIdx) continue
-      for (const [prefix, suffix] of pairs.slice(0, 2)) {
-        const w = wallet(KEYS[recipientIdx].scalar)
-        const result = await w.getPublicKey({
+  const recipientCases = cartesianProduct([0, 1], [0, 1], pairs.slice(0, 2))
+  for (const [recipientIdx, senderIdx, [prefix, suffix]] of recipientCases) {
+    if (senderIdx === recipientIdx) continue
+    const w = wallet(KEYS[recipientIdx].scalar)
+    const result = await w.getPublicKey({
+      protocolID: [2, '3241645161d8'],
+      keyID: `${prefix} ${suffix}`,
+      counterparty: KEYS[senderIdx].pubkey,
+      forSelf: true
+    })
+    vectors.push({
+      id: `wallet.brc29.payment-derivation.${id++}`,
+      description: `Recipient (key ${recipientIdx + 1}) forSelf=true derives same key with senderIdentityKey (key ${senderIdx + 1}): prefix='${prefix}'`,
+      input: {
+        root_key: KEYS[recipientIdx].scalar,
+        args: {
           protocolID: [2, '3241645161d8'],
           keyID: `${prefix} ${suffix}`,
           counterparty: KEYS[senderIdx].pubkey,
           forSelf: true
-        })
-        vectors.push({
-          id: `wallet.brc29.payment-derivation.${id++}`,
-          description: `Recipient (key ${recipientIdx + 1}) forSelf=true derives same key with senderIdentityKey (key ${senderIdx + 1}): prefix='${prefix}'`,
-          input: {
-            root_key: KEYS[recipientIdx].scalar,
-            args: {
-              protocolID: [2, '3241645161d8'],
-              keyID: `${prefix} ${suffix}`,
-              counterparty: KEYS[senderIdx].pubkey,
-              forSelf: true
-            }
-          },
-          expected: { publicKey: result.publicKey },
-          tags: ['brc-29', 'brc-42', 'payment', 'recipient-view', 'forSelf']
-        })
-      }
-    }
+        }
+      },
+      expected: { publicKey: result.publicKey },
+      tags: ['brc-29', 'brc-42', 'payment', 'recipient-view', 'forSelf']
+    })
   }
 
   // 3. Symmetry: verify sender-derived == recipient-derived for same pair
@@ -249,115 +250,113 @@ async function generateBrc31Vectors() {
     { senderIdx: 2, recipientIdx: 0 } // Key3 → Key1
   ]
 
-  for (const { senderIdx, recipientIdx } of handshakePairs) {
-    for (let nonceI = 0; nonceI < 3; nonceI++) {
-      const senderNonce = nonces[nonceI]
-      const recipientNonce = nonces[(nonceI + 1) % nonces.length]
-      // Data = concat of both nonce bytes
-      const senderNonceBytes = Buffer.from(senderNonce, 'base64')
-      const recipientNonceBytes = Buffer.from(recipientNonce, 'base64')
-      const data = Buffer.concat([senderNonceBytes, recipientNonceBytes]).toString('hex')
-      const keyID = `${senderNonce} ${recipientNonce}`
+  const handshakeCases = cartesianProduct(handshakePairs, [0, 1, 2])
+  for (const [{ senderIdx, recipientIdx }, nonceI] of handshakeCases) {
+    const senderNonce = nonces[nonceI]
+    const recipientNonce = nonces[(nonceI + 1) % nonces.length]
+    // Data = concat of both nonce bytes
+    const senderNonceBytes = Buffer.from(senderNonce, 'base64')
+    const recipientNonceBytes = Buffer.from(recipientNonce, 'base64')
+    const data = Buffer.concat([senderNonceBytes, recipientNonceBytes]).toString('hex')
+    const keyID = `${senderNonce} ${recipientNonce}`
 
-      const senderWallet = wallet(KEYS[senderIdx].scalar)
-      const signResult = await senderWallet.createSignature({
-        data: hexToBytes(data),
-        protocolID: [2, 'authrite message signature'],
-        keyID,
-        counterparty: KEYS[recipientIdx].pubkey
-      })
+    const senderWallet = wallet(KEYS[senderIdx].scalar)
+    const signResult = await senderWallet.createSignature({
+      data: hexToBytes(data),
+      protocolID: [2, 'authrite message signature'],
+      keyID,
+      counterparty: KEYS[recipientIdx].pubkey
+    })
 
-      vectors.push({
-        id: `messaging.brc31.authrite-signature.${id++}`,
-        description: `initialResponse: key${senderIdx + 1} signs concat(nonce_A || nonce_B) with keyID='<nonceA> <nonceB>', counterparty=key${recipientIdx + 1}`,
-        input: {
-          root_key: KEYS[senderIdx].scalar,
-          method: 'createSignature',
-          args: {
-            data,
-            protocolID: [2, 'authrite message signature'],
-            keyID,
-            counterparty: KEYS[recipientIdx].pubkey
-          }
-        },
-        expected: { signature: Buffer.from(signResult.signature).toString('hex') },
-        tags: [
-          'brc-31',
-          'brc-43',
-          'initial-response',
-          `key${senderIdx + 1}-to-key${recipientIdx + 1}`
-        ]
-      })
+    vectors.push({
+      id: `messaging.brc31.authrite-signature.${id++}`,
+      description: `initialResponse: key${senderIdx + 1} signs concat(nonce_A || nonce_B) with keyID='<nonceA> <nonceB>', counterparty=key${recipientIdx + 1}`,
+      input: {
+        root_key: KEYS[senderIdx].scalar,
+        method: 'createSignature',
+        args: {
+          data,
+          protocolID: [2, 'authrite message signature'],
+          keyID,
+          counterparty: KEYS[recipientIdx].pubkey
+        }
+      },
+      expected: { signature: Buffer.from(signResult.signature).toString('hex') },
+      tags: [
+        'brc-31',
+        'brc-43',
+        'initial-response',
+        `key${senderIdx + 1}-to-key${recipientIdx + 1}`
+      ]
+    })
 
-      // Corresponding verify
-      const recipientWallet = wallet(KEYS[recipientIdx].scalar)
-      await recipientWallet.verifySignature({
-        data: hexToBytes(data),
-        signature: signResult.signature,
-        protocolID: [2, 'authrite message signature'],
-        keyID,
-        counterparty: KEYS[senderIdx].pubkey
-      })
-      vectors.push({
-        id: `messaging.brc31.authrite-signature.${id++}`,
-        description: `initialResponse verify: key${recipientIdx + 1} verifies key${senderIdx + 1}'s signature`,
-        input: {
-          root_key: KEYS[recipientIdx].scalar,
-          method: 'verifySignature',
-          args: {
-            data,
-            signature: Buffer.from(signResult.signature).toString('hex'),
-            protocolID: [2, 'authrite message signature'],
-            keyID,
-            counterparty: KEYS[senderIdx].pubkey
-          }
-        },
-        expected: { valid: true },
-        tags: [
-          'brc-31',
-          'brc-43',
-          'initial-response',
-          'verify',
-          `key${senderIdx + 1}-to-key${recipientIdx + 1}`
-        ]
-      })
-    }
+    // Corresponding verify
+    const recipientWallet = wallet(KEYS[recipientIdx].scalar)
+    await recipientWallet.verifySignature({
+      data: hexToBytes(data),
+      signature: signResult.signature,
+      protocolID: [2, 'authrite message signature'],
+      keyID,
+      counterparty: KEYS[senderIdx].pubkey
+    })
+    vectors.push({
+      id: `messaging.brc31.authrite-signature.${id++}`,
+      description: `initialResponse verify: key${recipientIdx + 1} verifies key${senderIdx + 1}'s signature`,
+      input: {
+        root_key: KEYS[recipientIdx].scalar,
+        method: 'verifySignature',
+        args: {
+          data,
+          signature: Buffer.from(signResult.signature).toString('hex'),
+          protocolID: [2, 'authrite message signature'],
+          keyID,
+          counterparty: KEYS[senderIdx].pubkey
+        }
+      },
+      expected: { valid: true },
+      tags: [
+        'brc-31',
+        'brc-43',
+        'initial-response',
+        'verify',
+        `key${senderIdx + 1}-to-key${recipientIdx + 1}`
+      ]
+    })
   }
 
   // Phase 2: general message signatures
-  for (let si = 0; si < 3; si++) {
-    for (let ri = 0; ri < 2; ri++) {
-      if (si === ri) continue
-      for (const payload of payloads.slice(0, 3)) {
-        const origNonce = nonces[si % nonces.length]
-        const newNonce = nonces[(si + 2) % nonces.length]
-        const keyID = `${origNonce} ${newNonce}`
+  const messageCases = cartesianProduct([0, 1, 2], [0, 1], payloads.slice(0, 3))
+  for (const [si, ri, payload] of messageCases) {
+    if (si === ri) continue
+    const origNonce = nonces[si % nonces.length]
+    const newNonce = nonces[(si + 2) % nonces.length]
+    const keyID = `${origNonce} ${newNonce}`
 
-        const sWallet = wallet(KEYS[si].scalar)
-        const signResult = await sWallet.createSignature({
-          data: hexToBytes(payload) || [],
+    const sWallet = wallet(KEYS[si].scalar)
+    const signResult = await sWallet.createSignature({
+      data: hexToBytes(payload) || [],
+      protocolID: [2, 'authrite message signature'],
+      keyID,
+      counterparty: KEYS[ri].pubkey
+    })
+    const payloadDescription =
+      payload.length > 0 ? `payload (${payload.length / 2}B)` : 'empty payload'
+    vectors.push({
+      id: `messaging.brc31.authrite-signature.${id++}`,
+      description: `general message: key${si + 1} signs ${payloadDescription} to key${ri + 1}`,
+      input: {
+        root_key: KEYS[si].scalar,
+        method: 'createSignature',
+        args: {
+          data: payload,
           protocolID: [2, 'authrite message signature'],
           keyID,
           counterparty: KEYS[ri].pubkey
-        })
-        vectors.push({
-          id: `messaging.brc31.authrite-signature.${id++}`,
-          description: `general message: key${si + 1} signs ${payload.length > 0 ? `payload (${payload.length / 2}B)` : 'empty payload'} to key${ri + 1}`,
-          input: {
-            root_key: KEYS[si].scalar,
-            method: 'createSignature',
-            args: {
-              data: payload,
-              protocolID: [2, 'authrite message signature'],
-              keyID,
-              counterparty: KEYS[ri].pubkey
-            }
-          },
-          expected: { signature: Buffer.from(signResult.signature).toString('hex') },
-          tags: ['brc-31', 'brc-43', 'general-message']
-        })
-      }
-    }
+        }
+      },
+      expected: { signature: Buffer.from(signResult.signature).toString('hex') },
+      tags: ['brc-31', 'brc-43', 'general-message']
+    })
   }
 
   // Invalid signature cases
@@ -502,42 +501,43 @@ async function generateEciesVectors() {
   }
 
   // Document error cases
-  vectors.push({
-    id: `sdk.crypto.ecies.${id++}`,
-    description: 'ECIES decrypt with wrong recipient key — error expected',
-    input: {
-      sender_key: KEYS[0].scalar,
-      recipient_key: KEYS[2].scalar, // WRONG key
-      plaintext: Buffer.from('test message').toString('hex'),
-      protocolID: [0, 'ECIES'],
-      keyID: '1',
-      counterparty_pub: KEYS[1].pubkey, // encrypted to key2
-      _note: 'decrypt with key3 instead of key2 must fail'
+  vectors.push(
+    {
+      id: `sdk.crypto.ecies.${id++}`,
+      description: 'ECIES decrypt with wrong recipient key — error expected',
+      input: {
+        sender_key: KEYS[0].scalar,
+        recipient_key: KEYS[2].scalar, // WRONG key
+        plaintext: Buffer.from('test message').toString('hex'),
+        protocolID: [0, 'ECIES'],
+        keyID: '1',
+        counterparty_pub: KEYS[1].pubkey, // encrypted to key2
+        _note: 'decrypt with key3 instead of key2 must fail'
+      },
+      expected: {
+        error: true
+      },
+      tags: ['ecies', 'error', 'wrong-key']
     },
-    expected: {
-      error: true
-    },
-    tags: ['ecies', 'error', 'wrong-key']
-  })
-
-  vectors.push({
-    id: `sdk.crypto.ecies.${id++}`,
-    description: 'ECIES decrypt tampered ciphertext — error expected',
-    input: {
-      sender_key: KEYS[0].scalar,
-      recipient_key: KEYS[1].scalar,
-      plaintext: Buffer.from('integrity check').toString('hex'),
-      protocolID: [0, 'ECIES'],
-      keyID: '1',
-      counterparty_pub: KEYS[1].pubkey,
-      _note: 'HMAC check fails on tampered ciphertext',
-      _tamper: 'flip_last_byte'
-    },
-    expected: {
-      error: true
-    },
-    tags: ['ecies', 'error', 'tampered-ciphertext']
-  })
+    {
+      id: `sdk.crypto.ecies.${id++}`,
+      description: 'ECIES decrypt tampered ciphertext — error expected',
+      input: {
+        sender_key: KEYS[0].scalar,
+        recipient_key: KEYS[1].scalar,
+        plaintext: Buffer.from('integrity check').toString('hex'),
+        protocolID: [0, 'ECIES'],
+        keyID: '1',
+        counterparty_pub: KEYS[1].pubkey,
+        _note: 'HMAC check fails on tampered ciphertext',
+        _tamper: 'flip_last_byte'
+      },
+      expected: {
+        error: true
+      },
+      tags: ['ecies', 'error', 'tampered-ciphertext']
+    }
+  )
 
   // Self-encryption
   for (const msg of messages.slice(0, 2)) {

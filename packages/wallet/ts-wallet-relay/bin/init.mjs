@@ -69,14 +69,12 @@ function copyDir(src, dest, created) {
     const destPath = path.join(dest, entry.name)
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath, created)
+    } else if (fs.existsSync(destPath)) {
+      console.warn(`  ⚠  skipped (already exists): ${path.relative(targetRoot, destPath)}`)
     } else {
-      if (fs.existsSync(destPath)) {
-        console.warn(`  ⚠  skipped (already exists): ${path.relative(targetRoot, destPath)}`)
-      } else {
-        fs.mkdirSync(path.dirname(destPath), { recursive: true })
-        fs.copyFileSync(srcPath, destPath)
-        created.push(path.relative(targetRoot, destPath))
-      }
+      fs.mkdirSync(path.dirname(destPath), { recursive: true })
+      fs.copyFileSync(srcPath, destPath)
+      created.push(path.relative(targetRoot, destPath))
     }
   }
 }

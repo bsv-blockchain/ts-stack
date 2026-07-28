@@ -6,6 +6,9 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Harden storage, action-batch, remoting, WAB, authentication, chaintracker,
+  and monitor implementation paths while preserving persisted schemas,
+  positional call compatibility, and public wallet/storage contracts.
 - Refresh compatible rate-limit, MySQL, and React Native build dependencies;
   consolidate entropy, Merkle-path, and action-batch iteration without
   changing persisted data, generated paths, or public wallet contracts.

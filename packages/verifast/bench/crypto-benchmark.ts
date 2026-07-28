@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     }))
     unregisterAsyncCryptoBackend(parallelVerifier)
     const sdkBatch = await measure(async () => {
-      for (let index = 0; index < batchItems.length; index++) {
+      for (const _batchItem of batchItems) {
         if (!ECDSA.verify(digestNumber, signature, publicKey)) {
           throw new Error('SDK rejected benchmark signature')
         }

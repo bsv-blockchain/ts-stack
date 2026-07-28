@@ -25,7 +25,9 @@ export class TaskCheckForProofs extends WalletMonitorTask {
    * An external service such as the chaintracks new block header
    * listener can set this true to cause
    */
-  static checkNow = false
+  private static checkNowRequested = false
+  static get checkNow (): boolean { return this.checkNowRequested }
+  static set checkNow (value: boolean) { this.checkNowRequested = value }
 
   constructor(
     monitor: Monitor,

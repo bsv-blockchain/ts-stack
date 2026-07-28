@@ -70,12 +70,12 @@ export class WebSocketRelay {
   private validateDesktopToken: TokenValidator | null = null
   private onDisconnectCb: DisconnectHandler | null = null
   private onMobileConnectCb: ConnectHandler | null = null
-  private isOriginAllowed: ((origin: string) => boolean) | null = null
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private readonly isOriginAllowed: ((origin: string) => boolean) | null
+  private readonly heartbeatTimer: ReturnType<typeof setInterval>
   private readonly server: Server
   private readonly path: string
-  private upgradeListener: ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | null =
-    null
+  private readonly upgradeListener:
+    ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | null = null
 
   constructor(server: Server, options?: WebSocketRelayOptions) {
     // `allowedOrigins` (new) wins over `allowedOrigin` (legacy) when both set.

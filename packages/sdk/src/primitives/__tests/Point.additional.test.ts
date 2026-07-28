@@ -217,6 +217,32 @@ describe('Point – additional coverage', () => {
     })
   })
 
+  describe('precomputation helpers', () => {
+    it('builds doubles from both the original and accumulated point', () => {
+      const point = new Point(G.getX(), G.getY())
+      const getDoubles = (
+        point as unknown as {
+          _getDoubles: (step?: number, power?: number) => {
+            step: number
+            points: Point[]
+          }
+        }
+      )._getDoubles.bind(point)
+
+      const doubles = getDoubles(1, 2)
+      expect(doubles.step).toBe(1)
+      expect(doubles.points).toHaveLength(3)
+      expect(doubles.points[0].eq(point)).toBe(true)
+      expect(doubles.points[1].eq(point.dbl())).toBe(true)
+      expect(doubles.points[2].eq(point.dbl().dbl())).toBe(true)
+
+      expect(getDoubles()).toEqual({
+        step: 1,
+        points: [point]
+      })
+    })
+  })
+
   // --------------------------------------------------------------------------
   // encode
   // --------------------------------------------------------------------------

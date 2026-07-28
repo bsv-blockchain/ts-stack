@@ -56,18 +56,30 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
   private readonly authSessionTtlMs: number
 
   constructor (
-    adminOriginator: string,
-    walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>,
-    interactor: UMPTokenInteractor | undefined = undefined,
-    recoveryKeySaver: (key: number[]) => Promise<true>,
-    passwordRetriever: (
-      reason: string,
-      test: (passwordCandidate: string) => boolean | Promise<boolean>
-    ) => Promise<string>,
-    wabClient: WABClient,
-    authMethod?: AuthMethodInteractor,
-    stateSnapshot?: number[],
-    options: WalletAuthenticationManagerOptions = {}
+    ...[
+      adminOriginator,
+      walletBuilder,
+      interactor,
+      recoveryKeySaver,
+      passwordRetriever,
+      wabClient,
+      authMethod,
+      stateSnapshot,
+      options = {}
+    ]: [
+      adminOriginator: string,
+      walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>,
+      interactor: UMPTokenInteractor | undefined,
+      recoveryKeySaver: (key: number[]) => Promise<true>,
+      passwordRetriever: (
+        reason: string,
+        test: (passwordCandidate: string) => boolean | Promise<boolean>
+      ) => Promise<string>,
+      wabClient: WABClient,
+      authMethod?: AuthMethodInteractor,
+      stateSnapshot?: number[],
+      options?: WalletAuthenticationManagerOptions
+    ]
   ) {
     super(
       adminOriginator,
@@ -394,7 +406,7 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     const normalizedRight = right.toLowerCase()
     let difference = 0
     for (let i = 0; i < normalizedLeft.length; i++) {
-      difference |= normalizedLeft.charCodeAt(i) ^ normalizedRight.charCodeAt(i)
+      difference |= normalizedLeft.codePointAt(i)! ^ normalizedRight.codePointAt(i)!
     }
     return difference === 0
   }

@@ -47,7 +47,7 @@ jobs:
           --summary-file "$GITHUB_STEP_SUMMARY"
 
   sonar-zero-findings:
-    name: SonarCloud zero findings
+    name: Quality gate — zero new Sonar findings
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -61,7 +61,7 @@ jobs:
         with:
           node-version: 24.x
 
-      - name: Require the exact Sonar analysis to contain zero findings
+      - name: Require the exact Sonar analysis to contain no new findings
         run: >-
           node scripts/sonar-pr-gate.mjs
           --project bsv-blockchain_ts-stack
@@ -1044,7 +1044,7 @@ jobs:
             exit 1
           fi
           if [[ "$SONAR_RESULT" != "success" && "$SONAR_RESULT" != "skipped" ]]; then
-            echo "::error::SonarCloud zero-findings gate failed: sonar=$SONAR_RESULT"
+            echo "::error::Repository quality gate failed: exact-head Sonar analysis must contain zero new findings; sonar=$SONAR_RESULT"
             exit 1
           fi
           if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then

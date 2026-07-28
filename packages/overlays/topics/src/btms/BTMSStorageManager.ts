@@ -17,15 +17,13 @@ export class BTMSStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
-        await Promise.all([
-          this.records.createIndex({ assetId: 1 }),
-          this.records.createIndex({ ownerKey: 1 }),
-          this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
-        ])
-      })()
-    }
+    this.indexInit ??= (async () => {
+      await Promise.all([
+        this.records.createIndex({ assetId: 1 }),
+        this.records.createIndex({ ownerKey: 1 }),
+        this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
+      ])
+    })()
     return await this.indexInit
   }
 

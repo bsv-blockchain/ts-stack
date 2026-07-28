@@ -44,6 +44,7 @@ export function WalletActions({ session, onRequest }: Readonly<Props>) {
 
       {actions.map(({ method, label, params }) => (
         <button
+          type="button"
           key={method}
           disabled={!connected}
           onClick={() => onRequest(method, params)}

@@ -117,9 +117,7 @@ export class SessionManager {
       const s = this.sessionNonceToSession.get(nonce)
       if (s == null) continue
       // We can prefer authenticated sessions
-      if (best == null) {
-        best = s
-      } else if ((s.lastUpdate ?? 0) > (best.lastUpdate ?? 0)) {
+      if (best == null || (s.lastUpdate ?? 0) > (best.lastUpdate ?? 0)) {
         best = s
       }
     }

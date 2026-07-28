@@ -71,13 +71,38 @@ const MAX_ERROR_LENGTH = 2048
 const MAX_STACK_LENGTH = 8192
 let fallbackCorrelationSequence = 0
 
-const SENSITIVE_ATTRIBUTE_NAME =
-  /(?:password|passphrase|private.?key|presentation.?key|recovery.?key|snapshot|mnemonic|seed|secret|shamir|share|ciphertext|plaintext|auth.?token|access.?token|refresh.?token|bearer|otp|one.?time|pin)/i
+const SENSITIVE_TERMS = [
+  'password',
+  'passphrase',
+  'privatekey',
+  'presentationkey',
+  'recoverykey',
+  'snapshot',
+  'mnemonic',
+  'seed',
+  'secret',
+  'shamir',
+  'share',
+  'ciphertext',
+  'plaintext',
+  'authtoken',
+  'accesstoken',
+  'refreshtoken',
+  'bearer',
+  'otp',
+  'onetime',
+  'pin'
+] as const
 
-const SENSITIVE_LABEL =
-  /((?:password|passphrase|private[_ -]?key|presentation[_ -]?key|recovery[_ -]?key|snapshot|mnemonic|seed|secret|shamir|share|ciphertext|plaintext|auth[_ -]?token|access[_ -]?token|refresh[_ -]?token|otp|pin)\s*(?:"|'|=|:)\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]*)/gi
+const SENSITIVE_LABEL_PATTERNS = SENSITIVE_TERMS.map(term => {
+  const flexibleTerm = term.replace(/key|token|time/g, match => `[_ -]?${match}`)
+  return new RegExp(
+    String.raw`(${flexibleTerm}\s*["'=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)`,
+    'gi'
+  )
+})
 
-const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
+const BEARER_TOKEN = /\bBearer\s+[a-z0-9._~+/=-]+/gi
 const WIF_PRIVATE_KEY = /\b[KL][1-9A-HJ-NP-Za-km-z]{50,51}\b/g
 const EXTENDED_PRIVATE_KEY = /\b(?:xprv|tprv)[1-9A-HJ-NP-Za-km-z]+\b/g
 const HEX_256_BIT_VALUE = /\b[0-9a-fA-F]{64}\b/g
@@ -108,9 +133,12 @@ export function sanitizeTelemetryText (value: string, maxLength: number = MAX_ER
   // Bound sanitizer work before applying regular expressions. Any suffix past
   // this window cannot reach the emitted value, even after redaction.
   const bounded = value.slice(0, Math.max(maxLength * 2, maxLength + 256))
-  return truncate(
+  const labelsRedacted = SENSITIVE_LABEL_PATTERNS.reduce(
+    (sanitized, pattern) => sanitized.replace(pattern, '$1[REDACTED]'),
     bounded
-      .replace(SENSITIVE_LABEL, '$1[REDACTED]')
+  )
+  return truncate(
+    labelsRedacted
       .replace(BEARER_TOKEN, 'Bearer [REDACTED]')
       .replace(WIF_PRIVATE_KEY, REDACTED)
       .replace(EXTENDED_PRIVATE_KEY, REDACTED)
@@ -132,7 +160,8 @@ function sanitizeCorrelationId (value: unknown): string | undefined {
 }
 
 function sanitizeAttributeValue (name: string, value: unknown): TelemetryAttributeValue | undefined {
-  if (SENSITIVE_ATTRIBUTE_NAME.test(name)) return REDACTED
+  const normalizedName = name.toLowerCase().replaceAll(/[_ .-]/g, '')
+  if (SENSITIVE_TERMS.some(term => normalizedName.includes(term))) return REDACTED
   if (typeof value === 'string') return sanitizeTelemetryText(value, MAX_ATTRIBUTE_LENGTH)
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
   if (typeof value === 'boolean') return value

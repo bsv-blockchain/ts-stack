@@ -52,10 +52,7 @@ export default class Signature {
     }
 
     class Position {
-      place: number
-      constructor () {
-        this.place = 0
-      }
+      place = 0
     }
     data = toArray(data, enc)
 

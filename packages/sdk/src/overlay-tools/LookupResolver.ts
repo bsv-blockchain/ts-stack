@@ -227,7 +227,7 @@ function isOutputListAnswer(value: unknown): value is LookupAnswer {
 function isFreeformAnswer(value: unknown): value is LookupFreeformAnswer {
   if (typeof value !== 'object' || value === null) return false
   const answer = value as Record<string, unknown>
-  return answer.type === 'freeform' && Object.prototype.hasOwnProperty.call(answer, 'result')
+  return answer.type === 'freeform' && Object.hasOwn(answer, 'result')
 }
 
 /** A wall-clock deadline that rejects after `timeoutMs`, optionally aborting a controller. */

@@ -64,8 +64,7 @@ export class TOTP {
 
     const counters = [counter]
     for (let i = 1; i <= _options.skew; i++) {
-      counters.push(counter + i)
-      counters.push(counter - i)
+      counters.push(counter + i, counter - i)
     }
 
     for (const c of counters) {

@@ -965,7 +965,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           ...u
         }
         const uid = await (store.put as (v: unknown) => Promise<IDBValidKey>)(v)
-        if (uid !== i) throw new WERR_INTERNAL(`updated id ${String(uid)} does not match original ${String(id)}`)
+        if (uid !== i) {
+          const uidText = typeof uid === 'object' ? JSON.stringify(uid) : String(uid)
+          throw new WERR_INTERNAL(`updated id ${uidText} does not match original ${String(id)}`)
+        }
         updated++
       }
     } finally {

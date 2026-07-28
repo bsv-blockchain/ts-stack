@@ -108,13 +108,16 @@ class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
 /**
  * Configuration options that map to Engine constructor parameters.
  */
+export type SyncConfigurationEntry = string[] | 'SHIP' | false
+export type SyncConfigurationMap = Record<string, SyncConfigurationEntry>
+
 export interface EngineConfig {
   chainTracker?: ChainTracker | 'scripts only'
   shipTrackers?: string[]
   slapTrackers?: string[]
   broadcaster?: Broadcaster
   advertiser?: Advertiser
-  syncConfiguration?: Record<string, string[] | 'SHIP' | false>
+  syncConfiguration?: SyncConfigurationMap
   logTime?: boolean
   logPrefix?: string
   throwOnBroadcastFailure?: boolean
@@ -943,11 +946,11 @@ export default class OverlayExpress {
   }
 
   /** Build the sync config based on enableGASPSync and engineConfig. */
-  private buildSyncConfig (): Record<string, string[] | 'SHIP' | false> {
+  private buildSyncConfig (): SyncConfigurationMap {
     if (this.enableGASPSync) {
       return this.engineConfig.syncConfiguration ?? {}
     }
-    const syncConfig: Record<string, string[] | 'SHIP' | false> = {}
+    const syncConfig: SyncConfigurationMap = {}
     for (const name of Object.keys(this.managers)) {
       syncConfig[name] = false
     }

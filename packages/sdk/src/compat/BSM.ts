@@ -9,12 +9,9 @@ import Signature from '../primitives/Signature.js'
 const prefix = 'Bitcoin Signed Message:\n'
 
 /**
- * Generates a SHA256 double-hash of the prefixed message.
- * @deprecated Replaced by BRC-77 which uses a more secure and private method for message signing.
- * @param messageBuf The message buffer to be hashed.
- * @returns The double-hash of the prefixed message as a number array.
+ * Internal implementation shared by the legacy BSM compatibility exports.
  */
-export const magicHash = (messageBuf: number[]): number[] => {
+const computeMagicHash = (messageBuf: number[]): number[] => {
   const bw = new Writer()
   bw.writeVarIntNum(prefix.length)
   bw.write(toArray(prefix, 'utf8'))
@@ -24,6 +21,12 @@ export const magicHash = (messageBuf: number[]): number[] => {
   const hashBuf = Hash.hash256(buf)
   return hashBuf
 }
+
+/**
+ * Generates a SHA256 double-hash of the prefixed message.
+ * @deprecated Replaced by BRC-77 which uses a more secure and private method for message signing.
+ */
+export const magicHash = (messageBuf: number[]): number[] => computeMagicHash(messageBuf)
 
 /**
  * Signs a BSM message using the given private key.
@@ -38,7 +41,7 @@ export const sign = (
   privateKey: PrivateKey,
   mode: 'raw' | 'base64' = 'base64'
 ): Signature | string => {
-  const hashBuf = magicHash(message)
+  const hashBuf = computeMagicHash(message)
   const sig = ECDSA.sign(new BigNumber(hashBuf), privateKey, true)
   if (mode === 'raw') {
     return sig
@@ -61,6 +64,6 @@ export const verify = (
   sig: Signature,
   pubKey: PublicKey
 ): boolean => {
-  const hashBuf = magicHash(message)
+  const hashBuf = computeMagicHash(message)
   return ECDSA.verify(new BigNumber(hashBuf), sig, pubKey)
 }

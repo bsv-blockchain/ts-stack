@@ -29,15 +29,27 @@ export class VerifiableCertificate extends Certificate {
   decryptedFields?: Record<CertificateFieldNameUnder50Bytes, Base64String>
 
   constructor(
-    type: Base64String,
-    serialNumber: Base64String,
-    subject: PubKeyHex,
-    certifier: PubKeyHex,
-    revocationOutpoint: OutpointString,
-    fields: Record<CertificateFieldNameUnder50Bytes, string>,
-    keyring: Record<CertificateFieldNameUnder50Bytes, string>,
-    signature?: HexString,
-    decryptedFields?: Record<CertificateFieldNameUnder50Bytes, Base64String>
+    ...[
+      type,
+      serialNumber,
+      subject,
+      certifier,
+      revocationOutpoint,
+      fields,
+      keyring,
+      signature,
+      decryptedFields
+    ]: [
+      type: Base64String,
+      serialNumber: Base64String,
+      subject: PubKeyHex,
+      certifier: PubKeyHex,
+      revocationOutpoint: OutpointString,
+      fields: Record<CertificateFieldNameUnder50Bytes, string>,
+      keyring: Record<CertificateFieldNameUnder50Bytes, string>,
+      signature?: HexString,
+      decryptedFields?: Record<CertificateFieldNameUnder50Bytes, Base64String>
+    ]
   ) {
     super(
       type,

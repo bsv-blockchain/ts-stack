@@ -13,7 +13,7 @@ import { createCredentialMethods } from './modules/credentials'
 // BrowserWallet extends WalletCore with WalletClient
 // ============================================================================
 
-class _BrowserWallet extends WalletCore {
+class BrowserWalletCore extends WalletCore {
   private readonly client: WalletClient
 
   constructor(client: WalletClient, identityKey: string, defaults?: Partial<WalletDefaults>) {
@@ -30,7 +30,7 @@ class _BrowserWallet extends WalletCore {
 // Composed BrowserWallet type (base + all modules)
 // ============================================================================
 
-export type BrowserWallet = _BrowserWallet &
+export type BrowserWallet = BrowserWalletCore &
   ReturnType<typeof createTokenMethods> &
   ReturnType<typeof createInscriptionMethods> &
   ReturnType<typeof createMessageBoxMethods> &
@@ -46,7 +46,7 @@ export type BrowserWallet = _BrowserWallet &
 export async function createWallet(defaults?: Partial<WalletDefaults>): Promise<BrowserWallet> {
   const client = new WalletClient('auto', 'simple')
   const { publicKey } = await client.getPublicKey({ identityKey: true })
-  const wallet = new _BrowserWallet(client, publicKey, defaults)
+  const wallet = new BrowserWalletCore(client, publicKey, defaults)
 
   Object.assign(wallet, createTokenMethods(wallet))
   Object.assign(wallet, createInscriptionMethods(wallet))

@@ -640,19 +640,20 @@ type QRPairingCodeProps = {
   pairingUri: string
   onPress?: (pairingUri: string) => void
   imageProps?: React.ImgHTMLAttributes<HTMLImageElement>
-} & Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'>
+} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'type'>
 ```
 
-| Prop          | Type                                        | Description                                                                                                                          |
-| ------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `qrDataUrl`   | `string`                                    | Base64 data URL of the QR image. Returned by `WalletRelayService.createSession()`.                                                   |
-| `pairingUri`  | `string`                                    | The `wallet://pair?…` URI. Used as the deeplink target when tapped.                                                                  |
-| `onPress`     | `(uri: string) => void`                     | Override the deeplink action. Defaults to `window.location.href = pairingUri`. Pass `(uri) => Linking.openURL(uri)` in React Native. |
-| `imageProps`  | `React.ImgHTMLAttributes<HTMLImageElement>` | Props forwarded to the inner `<img>` (e.g. `alt`, `style`, `className`). Ignored when `children` is provided.                        |
-| `children`    | `ReactNode`                                 | Replace the default `<img>` entirely. Use this to plug in a custom QR renderer.                                                      |
-| `...divProps` | `React.HTMLAttributes<HTMLDivElement>`      | Any other props (`className`, `style`, `data-*`, `aria-*`, etc.) are spread onto the wrapper `<div>`.                                |
+| Prop             | Type                                            | Description                                                                                                                          |
+| ---------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `qrDataUrl`      | `string`                                        | Base64 data URL of the QR image. Returned by `WalletRelayService.createSession()`.                                                   |
+| `pairingUri`     | `string`                                        | The `wallet://pair?…` URI. Used as the deeplink target when tapped.                                                                  |
+| `onPress`        | `(uri: string) => void`                         | Override the deeplink action. Defaults to `window.location.href = pairingUri`. Pass `(uri) => Linking.openURL(uri)` in React Native. |
+| `imageProps`     | `React.ImgHTMLAttributes<HTMLImageElement>`     | Props forwarded to the inner `<img>` (e.g. `alt`, `style`, `className`). Ignored when `children` is provided.                        |
+| `children`       | `ReactNode`                                     | Replace the default `<img>` entirely. Use this to plug in a custom QR renderer.                                                      |
+| `...buttonProps` | `React.ButtonHTMLAttributes<HTMLButtonElement>` | Any other props (`className`, `style`, `data-*`, `aria-*`, etc.) are spread onto the wrapper `<button>`.                             |
 
-The wrapper always has `role="button"` and `tabIndex={0}`. Enter and Space keys trigger the same action as a click.
+The wrapper is a native `<button type="button">`, so browsers provide keyboard
+and assistive-technology behavior without a synthetic role or key handler.
 
 #### Examples
 

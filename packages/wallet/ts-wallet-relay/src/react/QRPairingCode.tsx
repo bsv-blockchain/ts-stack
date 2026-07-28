@@ -27,7 +27,7 @@ export type QRPairingCodeProps = {
    * Ignored when `children` is provided.
    */
   imageProps?: React.ImgHTMLAttributes<HTMLImageElement>
-} & Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick'>
+} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'type'>
 
 /**
  * Renders a tappable QR code for the BSV wallet pairing flow.
@@ -70,22 +70,15 @@ export function QRPairingCode({
   onPress,
   imageProps,
   children,
-  ...divProps
+  ...buttonProps
 }: QRPairingCodeProps) {
   const { open } = useQRPairing(pairingUri, {
     openUrl: onPress ? uri => onPress(uri) : undefined
   })
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      open()
-    }
-  }
-
   return (
-    <div role="button" tabIndex={0} {...divProps} onClick={open} onKeyDown={handleKeyDown}>
+    <button type="button" {...buttonProps} onClick={open}>
       {children ?? <img src={qrDataUrl} alt="Scan with BSV wallet" {...imageProps} />}
-    </div>
+    </button>
   )
 }

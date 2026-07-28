@@ -799,7 +799,7 @@ tx.addInput(i)
 ```
 
 ```ts
-export default function fromUtxo(utxo: jsonUtxo, unlockingScriptTemplate: {
+export default function fromUtxo(utxo: JsonUtxo, unlockingScriptTemplate: {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
     estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>;
 }): TransactionInput 
@@ -810,7 +810,7 @@ See also: [Transaction](./transaction.md#class-transaction), [TransactionInput](
 Argument Details
 
 + **utxo**
-  + : jsonUtxo
+  + : JsonUtxo
 + **unlockingScriptTemplate**
   + : { sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>, estimateLength: (tx: Transaction, inputIndex: number) => Promise<number> }
 

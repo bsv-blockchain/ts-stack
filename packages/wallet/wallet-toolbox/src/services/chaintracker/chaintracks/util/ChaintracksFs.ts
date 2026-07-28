@@ -85,16 +85,24 @@ export class ChaintracksReadableFile implements ChaintracksReadableFileApi {
   }
 }
 
-export class ChaintracksWritableFile implements ChaintracksWritableFileApi {
-  path: string
-  parsedPath: Path.ParsedPath
-  f: fs.FileHandle
+abstract class ChaintracksFolderAwareFile extends ChaintracksReadableFile {
   foldersEnsured: boolean = false
 
+  protected constructor(path: string, f: fs.FileHandle) {
+    super(path, f)
+  }
+
+  async ensureFoldersExist(): Promise<void> {
+    if (!this.foldersEnsured) {
+      await ChaintracksFsStatics.ensureFoldersExist(this.path)
+      this.foldersEnsured = true
+    }
+  }
+}
+
+export class ChaintracksWritableFile extends ChaintracksFolderAwareFile implements ChaintracksWritableFileApi {
   private constructor(path: string, f: fs.FileHandle) {
-    this.path = path
-    this.f = f
-    this.parsedPath = Path.parse(path)
+    super(path, f)
   }
 
   static async openAsWritable(path: string): Promise<ChaintracksWritableFile> {
@@ -103,26 +111,13 @@ export class ChaintracksWritableFile implements ChaintracksWritableFileApi {
     return file
   }
 
-  async close(): Promise<void> {
-    await this.f.close()
-  }
-
-  async ensureFoldersExist(): Promise<void> {
-    if (!this.foldersEnsured) {
-      await ChaintracksFsStatics.ensureFoldersExist(this.path)
-      this.foldersEnsured = true
-    }
-  }
-
   async append(_data: Uint8Array): Promise<void> {
     await this.ensureFoldersExist()
     throw new Error('Method not implemented.')
   }
 }
 
-export class ChaintracksAppendableFile extends ChaintracksReadableFile implements ChaintracksAppendableFileApi {
-  foldersEnsured: boolean = false
-
+export class ChaintracksAppendableFile extends ChaintracksFolderAwareFile implements ChaintracksAppendableFileApi {
   private constructor(path: string, f: fs.FileHandle) {
     super(path, f)
   }
@@ -131,13 +126,6 @@ export class ChaintracksAppendableFile extends ChaintracksReadableFile implement
     const f = await fs.open(path, 'a+')
     const file = new ChaintracksAppendableFile(path, f)
     return file
-  }
-
-  async ensureFoldersExist(): Promise<void> {
-    if (!this.foldersEnsured) {
-      await ChaintracksFsStatics.ensureFoldersExist(this.path)
-      this.foldersEnsured = true
-    }
   }
 
   async append(data: Uint8Array): Promise<void> {

@@ -212,7 +212,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
       for (let i = 0; i < this.chunkPropNames.length; i++) {
         const chunkEnc = (this as any)[this.chunkPropNames[i]] as Uint8Array
         const chunkPad = (this as any)[this.chunkPadPropNames[i]] as Uint8Array
-        if (chunkEnc == null || chunkEnc.length !== chunkPad?.length) {
+        if (chunkEnc?.length == null || chunkEnc.length !== chunkPad?.length) {
           return null
         }
         const rawChunk = this.xorBytes(chunkEnc, chunkPad)

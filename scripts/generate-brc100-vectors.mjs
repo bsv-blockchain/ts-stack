@@ -54,43 +54,44 @@ function makeVector(id, description, input, expected, tags = []) {
   return { id, description, input, expected, tags }
 }
 
+function cartesianProduct(...dimensions) {
+  return dimensions.reduce(
+    (rows, values) => rows.flatMap(row => values.map(value => [...row, value])),
+    [[]]
+  )
+}
+
 async function generateGetPublicKeyVectors() {
   const vectors = []
   let n = 1
-  for (const root of ROOT_KEYS) {
+  const cases = cartesianProduct(ROOT_KEYS, PROTOCOLS, KEY_IDS, COUNTERPARTIES, [false, true])
+
+  for (const [root, proto, kid, cp, priv] of cases) {
     const w = makeWallet(root)
-    for (const proto of PROTOCOLS) {
-      for (const kid of KEY_IDS) {
-        for (const cp of COUNTERPARTIES) {
-          for (const priv of [false, true]) {
-            const args = { protocolID: proto, keyID: kid, counterparty: cp, privileged: priv }
-            try {
-              const res = await w.getPublicKey(args)
-              vectors.push(
-                makeVector(
-                  `wallet.brc100.getpublickey.${n++}`,
-                  `getPublicKey protocol=${proto} keyID=${kid} counterparty=${cp} privileged=${priv}`,
-                  { root_key: root, args },
-                  { publicKey: res.publicKey },
-                  ['brc-100', 'getPublicKey', priv ? 'privileged' : 'standard']
-                )
-              )
-            } catch (e) {
-              vectors.push(
-                makeVector(
-                  `wallet.brc100.getpublickey.${n++}`,
-                  `getPublicKey error case`,
-                  { root_key: root, args },
-                  { error: true, message: e.message },
-                  ['brc-100', 'getPublicKey', 'error']
-                )
-              )
-            }
-            if (vectors.length > 200) return vectors // cap per method for speed
-          }
-        }
-      }
+    const args = { protocolID: proto, keyID: kid, counterparty: cp, privileged: priv }
+    try {
+      const res = await w.getPublicKey(args)
+      vectors.push(
+        makeVector(
+          `wallet.brc100.getpublickey.${n++}`,
+          `getPublicKey protocol=${proto} keyID=${kid} counterparty=${cp} privileged=${priv}`,
+          { root_key: root, args },
+          { publicKey: res.publicKey },
+          ['brc-100', 'getPublicKey', priv ? 'privileged' : 'standard']
+        )
+      )
+    } catch (e) {
+      vectors.push(
+        makeVector(
+          `wallet.brc100.getpublickey.${n++}`,
+          `getPublicKey error case`,
+          { root_key: root, args },
+          { error: true, message: e.message },
+          ['brc-100', 'getPublicKey', 'error']
+        )
+      )
     }
+    if (vectors.length > 200) return vectors // cap per method for speed
   }
   return vectors
 }
@@ -101,39 +102,40 @@ async function generateGetPublicKeyVectors() {
 async function generateCryptoVectors(method, fnName, extraArgs = {}) {
   const vectors = []
   let n = 1
-  for (const root of ROOT_KEYS.slice(0, 2)) {
+  const cases = cartesianProduct(
+    ROOT_KEYS.slice(0, 2),
+    PROTOCOLS.slice(0, 3),
+    KEY_IDS.slice(0, 3),
+    COUNTERPARTIES.slice(0, 2)
+  )
+
+  for (const [root, proto, kid, cp] of cases) {
     const w = makeWallet(root)
-    for (const proto of PROTOCOLS.slice(0, 3)) {
-      for (const kid of KEY_IDS.slice(0, 3)) {
-        for (const cp of COUNTERPARTIES.slice(0, 2)) {
-          const data = 'test data for ' + fnName
-          const args = { protocolID: proto, keyID: kid, counterparty: cp, data, ...extraArgs }
-          try {
-            const res = await w[fnName](args)
-            vectors.push(
-              makeVector(
-                `wallet.brc100.${method.toLowerCase()}.${n++}`,
-                `${fnName} ${proto}/${kid}/${cp}`,
-                { root_key: root, args },
-                res,
-                ['brc-100', method]
-              )
-            )
-          } catch (e) {
-            vectors.push(
-              makeVector(
-                `wallet.brc100.${method.toLowerCase()}.${n++}`,
-                `${fnName} error`,
-                { root_key: root, args },
-                { error: true, message: String(e.message || e) },
-                ['brc-100', method, 'error']
-              )
-            )
-          }
-          if (vectors.length > 150) break
-        }
-      }
+    const data = 'test data for ' + fnName
+    const args = { protocolID: proto, keyID: kid, counterparty: cp, data, ...extraArgs }
+    try {
+      const res = await w[fnName](args)
+      vectors.push(
+        makeVector(
+          `wallet.brc100.${method.toLowerCase()}.${n++}`,
+          `${fnName} ${proto}/${kid}/${cp}`,
+          { root_key: root, args },
+          res,
+          ['brc-100', method]
+        )
+      )
+    } catch (e) {
+      vectors.push(
+        makeVector(
+          `wallet.brc100.${method.toLowerCase()}.${n++}`,
+          `${fnName} error`,
+          { root_key: root, args },
+          { error: true, message: String(e.message || e) },
+          ['brc-100', method, 'error']
+        )
+      )
     }
+    if (vectors.length > 150) break
   }
   return vectors
 }

@@ -1,4 +1,3 @@
-/* eslint-disable */
 import generalGuide from './generalGuide.md.js'
 
 export interface UIConfig {
@@ -22,7 +21,7 @@ export interface UIConfig {
   adminIdentityKey?: string
 }
 
-export default (config: UIConfig = {}): string => {
+export default function makeUserInterface (config: UIConfig = {}): string {
   const {
     host = '',
     faviconUrl = 'https://bsvblockchain.org/favicon.ico',
