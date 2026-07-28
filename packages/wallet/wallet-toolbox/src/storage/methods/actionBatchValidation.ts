@@ -373,7 +373,7 @@ export async function validateManifestActions(
     }
     for (const planned of action.plan.inputs) {
       const input = tx.inputs[planned.vin]
-      if (input?.sourceTXID !== planned.sourceTxid || input.sourceOutputIndex !== planned.sourceVout) {
+      if (input == null || input.sourceTXID !== planned.sourceTxid || input.sourceOutputIndex !== planned.sourceVout) {
         throw new WERR_INVALID_PARAMETER('inputs', 'match planned transaction outpoints')
       }
       const source = await requireSourceOutput(storage, beef, planned.sourceTxid, planned.sourceVout)

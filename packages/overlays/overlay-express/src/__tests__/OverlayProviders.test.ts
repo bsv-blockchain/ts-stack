@@ -121,6 +121,7 @@ describe('Overlay transaction providers', () => {
     await expect(chaintracks.currentHeight()).resolves.toBe(900000)
     await expect(chaintracks.isValidRootForHeight('bb'.repeat(32), 900000)).resolves.toBe(true)
     await expect(chaintracks.isValidRootForHeight('cc'.repeat(32), 900000)).resolves.toBe(false)
+    await expect(chaintracks.isValidRootForHeight('bb'.repeat(32), 900001)).resolves.toBe(false)
     expect(chaintracks.reorgStreamUrl()).toBe('https://arcade.example/chaintracks/v2/reorg/stream')
   })
 })

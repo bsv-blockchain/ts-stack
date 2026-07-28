@@ -158,23 +158,18 @@ export class MockServices implements WalletServices {
   private async loadSourceTransaction (sourceTxid: string): Promise<BsvTransaction | undefined> {
     const sourceTxRow = await this.storage.getTransaction(sourceTxid)
     if (sourceTxRow == null) return undefined
-    let raw: number[]
-    if (sourceTxRow.rawTx instanceof Buffer) {
-      raw = Array.from(sourceTxRow.rawTx)
-    } else if (Array.isArray(sourceTxRow.rawTx)) {
-      raw = sourceTxRow.rawTx
-    } else {
-      raw = Array.from(sourceTxRow.rawTx as Uint8Array)
-    }
+    const raw = sourceTxRow.rawTx instanceof Buffer
+      ? Array.from(sourceTxRow.rawTx)
+      : Array.isArray(sourceTxRow.rawTx) ? sourceTxRow.rawTx : Array.from(sourceTxRow.rawTx as Uint8Array)
     return BsvTransaction.fromBinary(raw)
   }
 
   private async populateMerklePaths (tx: BsvTransaction): Promise<void> {
     for (const input of tx.inputs) {
-      if (input.sourceTransaction?.merklePath != null || input.sourceTransaction == null) continue
+      if ((input.sourceTransaction == null) || (input.sourceTransaction.merklePath != null)) continue
       const stxid = input.sourceTransaction.id('hex')
       const stx = await this.storage.getTransaction(stxid)
-      if (stx?.blockHeight == null) continue
+      if ((stx == null) || stx.blockHeight === null) continue
       const txsInBlock = await this.storage.getTransactionsInBlock(stx.blockHeight)
       const stxids = txsInBlock.map(t => t.txid)
       const idx = stxids.indexOf(stxid)
@@ -193,9 +188,7 @@ export class MockServices implements WalletServices {
 
   private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
     for (const input of tx.inputs) {
-      const sourceTxid = input.sourceTXID != null && input.sourceTXID !== ''
-        ? input.sourceTXID
-        : (input.sourceTransaction?.id('hex') ?? '')
+      const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
       await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
     }
   }
@@ -303,7 +296,7 @@ export class MockServices implements WalletServices {
 
   async getMerklePath (txid: string): Promise<GetMerklePathResult> {
     const tx = await this.storage.getTransaction(txid)
-    if (tx?.blockHeight == null) return {}
+    if ((tx == null) || tx.blockHeight === null) return {}
 
     const txsInBlock = await this.storage.getTransactionsInBlock(tx.blockHeight)
     const txids = txsInBlock.map(t => t.txid)

@@ -15,7 +15,8 @@ export class IdentityStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
         await Promise.all([
           this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
           this.records.createIndex({ 'certificate.serialNumber': 1 }),
@@ -27,7 +28,8 @@ export class IdentityStorageManager {
           this.records.createIndex({ 'certificate.fields.userName': 1, 'certificate.certifier': 1 }),
           this.records.createIndex({ searchableAttributes: 'text' })
         ])
-    })()
+      })()
+    }
     return await this.indexInit
   }
 

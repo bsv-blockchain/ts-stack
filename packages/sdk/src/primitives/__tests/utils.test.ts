@@ -25,10 +25,13 @@ describe('utils', () => {
     expect(toSafeString(42)).toBe('42')
     expect(toSafeString(42n)).toBe('42')
     expect(toSafeString(true)).toBe('true')
+    expect(toSafeString(false)).toBe('false')
     expect(toSafeString(Symbol('marker'))).toBe('marker')
+    expect(toSafeString(Symbol())).toBe('Symbol()')
     expect(toSafeString(new Error('failure'))).toBe('failure')
     expect(toSafeString({ message: 'structured failure' })).toBe('structured failure')
     expect(toSafeString({ code: 7 })).toBe('{"code":7}')
+    expect(toSafeString(() => {})).toBe('Unknown value')
 
     const circular: Record<string, unknown> = {}
     circular.self = circular

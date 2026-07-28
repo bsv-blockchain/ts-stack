@@ -270,7 +270,7 @@ export function mockUnderlyingWallet (): jest.Mocked<any> {
 
     createAction: jest.fn(async x => {
       const tx = mockAtomicBEEF(mockCreateActionTransaction(x))
-      if (x.options?.signAndProcess === true) {
+      if (x.options != null && x.options.signAndProcess === true) {
         return {
           tx
         }

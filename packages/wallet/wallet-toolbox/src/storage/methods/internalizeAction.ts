@@ -550,7 +550,7 @@ class InternalizeActionContext {
           status: 'completed'
         })
         const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
-        if (req?.status === 'nosend') {
+        if (req != null && req.status === 'nosend') {
           req.addHistoryNote({ what: 'internalizeAction-bumpRetire', userId: this.userId })
           req.provenTxId = proven.provenTxId
           req.status = 'completed'
@@ -559,7 +559,7 @@ class InternalizeActionContext {
       } else {
         await this.storage.updateTransaction(transactionId, { status: 'unproven' })
         const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
-        if (req?.status === 'nosend') {
+        if (req != null && req.status === 'nosend') {
           req.addHistoryNote({ what: 'internalizeAction-nosendRetire', userId: this.userId })
           req.status = 'unmined'
           await req.updateStorageDynamicProperties(this.storage)

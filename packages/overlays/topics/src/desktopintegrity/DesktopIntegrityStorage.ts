@@ -10,9 +10,11 @@ export class DesktopIntegrityStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
         await this.records.createIndex({ fileHash: 1 }, { name: 'fileHashIndex' })
-    })()
+      })()
+    }
     return await this.indexInit
   }
 

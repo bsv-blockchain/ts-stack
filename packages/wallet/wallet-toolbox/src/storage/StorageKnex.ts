@@ -1461,7 +1461,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       byTag[outputTag.tag] = outputTag
     }
     for (const tag of uniqueTags) {
-      byTag[tag] ??= await this.findOrInsertOutputTag(userId, tag, trx)
+      if (byTag[tag] == null) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
     }
     return byTag
   }

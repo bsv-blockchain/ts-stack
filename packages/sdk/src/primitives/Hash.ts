@@ -769,7 +769,9 @@ export class SHA1 extends BaseHash {
     const W = this.W
 
     // Default start to 0
-    start ??= 0
+    if (start === undefined) {
+      start = 0
+    }
 
     let i: number
     for (i = 0; i < 16; i++) {

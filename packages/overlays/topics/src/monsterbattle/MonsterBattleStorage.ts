@@ -10,9 +10,11 @@ export class MonsterBattleStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    this.indexInit ??= (async () => {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
         await this.records.createIndex({ txid: 1 })
-    })()
+      })()
+    }
     return await this.indexInit
   }
 
