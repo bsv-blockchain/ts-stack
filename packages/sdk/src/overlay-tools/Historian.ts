@@ -100,6 +100,59 @@ export class Historian<T, C = unknown> {
     return `${this.interpreterVersion}|${txid}|${ctxKey}`
   }
 
+  private cachedHistory(startTransaction: Transaction, context?: C): T[] | undefined {
+    if (this.historyCache == null) return undefined
+    const cacheKey = this.historyKey(startTransaction, context)
+    const cached = this.historyCache.get(cacheKey)
+    if (cached == null) return undefined
+    if (this.debug) console.log('[Historian] History cache hit:', cacheKey)
+    return cached.slice()
+  }
+
+  private async interpretOutputs(
+    transaction: Transaction,
+    context: C | undefined,
+    history: T[]
+  ): Promise<void> {
+    for (let outputIndex = 0; outputIndex < transaction.outputs.length; outputIndex++) {
+      try {
+        const interpretedValue = await Promise.resolve(
+          this.interpreter(transaction, outputIndex, context)
+        )
+        if (interpretedValue === undefined) continue
+        history.push(interpretedValue)
+        if (this.debug) console.log('[Historian] Added value to history:', interpretedValue)
+      } catch (error) {
+        if (this.debug) {
+          console.log(`[Historian] Failed to interpret output ${outputIndex}:`, error)
+        }
+      }
+    }
+  }
+
+  private async traverseHistory(
+    transaction: Transaction,
+    context: C | undefined,
+    visited: Set<string>,
+    history: T[]
+  ): Promise<void> {
+    const txid = transaction.id('hex')
+    if (visited.has(txid)) {
+      if (this.debug) console.log(`[Historian] Skipping already visited transaction: ${txid}`)
+      return
+    }
+    visited.add(txid)
+    if (this.debug) console.log(`[Historian] Processing transaction: ${txid}`)
+    await this.interpretOutputs(transaction, context, history)
+    for (const input of transaction.inputs) {
+      if (input.sourceTransaction != null) {
+        await this.traverseHistory(input.sourceTransaction, context, visited, history)
+      } else if (this.debug) {
+        console.log('[Historian] Input missing sourceTransaction, skipping')
+      }
+    }
+  }
+
   /**
    * Build history by traversing input chain from a starting transaction
    * Returns values in chronological order (oldest first)
@@ -112,72 +165,13 @@ export class Historian<T, C = unknown> {
    * @param context - The context to pass to the interpreter
    * @returns Array of interpreted values in chronological order
    */
-  async buildHistory (startTransaction: Transaction, context?: C): Promise<T[]> {
-    // --- minimal cache fast path ---
-    if (this.historyCache != null) {
-      const cacheKey = this.historyKey(startTransaction, context)
-      if (this.historyCache.has(cacheKey)) {
-        const cached = this.historyCache.get(cacheKey)
-        if (cached != null) {
-          if (this.debug) console.log('[Historian] History cache hit:', cacheKey)
-          // Return a shallow copy to avoid external mutation of the cached array
-          return cached.slice()
-        }
-      }
-    }
+  async buildHistory(startTransaction: Transaction, context?: C): Promise<T[]> {
+    const cached = this.cachedHistory(startTransaction, context)
+    if (cached !== undefined) return cached
 
     const history: T[] = []
     const visited = new Set<string>()
-
-    // Recursively traverse input transactions to build history
-    const traverseHistory = async (transaction: Transaction): Promise<void> => {
-      const txid = transaction.id('hex')
-
-      // Prevent infinite loops
-      if (visited.has(txid)) {
-        if (this.debug) {
-          console.log(`[Historian] Skipping already visited transaction: ${txid}`)
-        }
-        return
-      }
-      visited.add(txid)
-
-      if (this.debug) {
-        console.log(`[Historian] Processing transaction: ${txid}`)
-      }
-
-      // Check all outputs in this transaction for interpretable values
-      for (let outputIndex = 0; outputIndex < transaction.outputs.length; outputIndex++) {
-        try {
-          // Try to interpret this output
-          const interpretedValue = await Promise.resolve(this.interpreter(transaction, outputIndex, context))
-
-          if (interpretedValue !== undefined) {
-            history.push(interpretedValue)
-            if (this.debug) {
-              console.log('[Historian] Added value to history:', interpretedValue)
-            }
-          }
-        } catch (error) {
-          if (this.debug) {
-            console.log(`[Historian] Failed to interpret output ${outputIndex}:`, error)
-          }
-          // Skip outputs that can't be interpreted
-        }
-      }
-
-      // Recursively traverse input transactions
-      for (const input of transaction.inputs) {
-        if (input.sourceTransaction != null) {
-          await traverseHistory(input.sourceTransaction)
-        } else if (this.debug) {
-          console.log('[Historian] Input missing sourceTransaction, skipping')
-        }
-      }
-    }
-
-    // Start traversal from the provided transaction
-    await traverseHistory(startTransaction)
+    await this.traverseHistory(startTransaction, context, visited, history)
 
     // History is built in reverse chronological order during traversal,
     // so we reverse it to return oldest-first

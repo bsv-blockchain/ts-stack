@@ -395,6 +395,66 @@ export class AuthFetch {
     return this.certificatesReceived.splice(0)
   }
 
+  private writeOptionalText(writer: Writer, value: string): void {
+    if (value.length === 0) {
+      writer.writeVarIntNum(-1)
+      return
+    }
+    const bytes = Utils.toArray(value)
+    writer.writeVarIntNum(bytes.length)
+    writer.write(bytes)
+  }
+
+  private includedRequestHeaders(headers: Record<string, string>): Array<[string, string]> {
+    const includedHeaders: Array<[string, string]> = []
+    for (const [key, originalValue] of Object.entries(headers)) {
+      const normalizedKey = key.toLowerCase()
+      let value = originalValue
+      if (normalizedKey.startsWith('x-bsv-') || normalizedKey === 'authorization') {
+        if (normalizedKey.startsWith('x-bsv-auth')) {
+          throw new Error('No BSV auth headers allowed here!')
+        }
+      } else if (normalizedKey.startsWith('content-type')) {
+        value = value.split(';')[0].trim()
+      } else {
+        throw new Error(
+          'Unsupported header in the simplified fetch implementation. Only content-type, authorization, and x-bsv-* headers are supported.'
+        )
+      }
+      includedHeaders.push([normalizedKey, value])
+    }
+    return includedHeaders.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+  }
+
+  private writeRequestHeaders(writer: Writer, headers: Array<[string, string]>): void {
+    writer.writeVarIntNum(headers.length)
+    for (const [key, value] of headers) {
+      const keyBytes = Utils.toArray(key, 'utf8')
+      const valueBytes = Utils.toArray(value, 'utf8')
+      writer.writeVarIntNum(keyBytes.length)
+      writer.write(keyBytes)
+      writer.writeVarIntNum(valueBytes.length)
+      writer.write(valueBytes)
+    }
+  }
+
+  private defaultRequestBody(method: string, body: any, headers: Array<[string, string]>): any {
+    const methodsWithBody = ['POST', 'PUT', 'PATCH', 'DELETE']
+    if (!methodsWithBody.includes(method.toUpperCase()) || body !== undefined) return body
+    const contentType = headers.find(([key]) => key === 'content-type')?.[1]
+    return contentType?.includes('application/json') === true ? '{}' : ''
+  }
+
+  private async writeRequestBody(writer: Writer, body: any): Promise<void> {
+    if (!body) {
+      writer.writeVarIntNum(-1)
+      return
+    }
+    const bytes = await this.normalizeBodyToNumberArray(body)
+    writer.writeVarIntNum(bytes.length)
+    writer.write(bytes)
+  }
+
   /**
    * Serializes the HTTP request to be sent over the Transport.
    *
@@ -422,91 +482,21 @@ export class AuthFetch {
     // Method
     writer.write(Utils.toArray(method))
 
-    // Handle pathname (e.g. /path/to/resource)
-    if (parsedUrl.pathname.length > 0) {
-      // Pathname length
-      const pathnameAsArray = Utils.toArray(parsedUrl.pathname)
-      writer.writeVarIntNum(pathnameAsArray.length)
-      // Pathname
-      writer.write(pathnameAsArray)
-    } else {
-      writer.writeVarIntNum(-1)
-    }
-
-    // Handle search params (e.g. ?q=hello)
-    if (parsedUrl.search.length > 0) {
-      // search length
-      const searchAsArray = Utils.toArray(parsedUrl.search)
-      writer.writeVarIntNum(searchAsArray.length)
-      // search
-      writer.write(searchAsArray)
-    } else {
-      writer.writeVarIntNum(-1)
-    }
+    this.writeOptionalText(writer, parsedUrl.pathname)
+    this.writeOptionalText(writer, parsedUrl.search)
 
     // Construct headers to send / sign:
     // Ensures clients only provided supported HTTP request headers
     // - Include custom headers prefixed with x-bsv (excluding those starting with x-bsv-auth)
     // - Include a normalized version of the content-type header
     // - Include the authorization header
-    const includedHeaders: Array<[string, string]> = []
-    for (let [k, v] of Object.entries(headers)) {
-      k = k.toLowerCase() // We will always sign lower-case header keys
-      if (k.startsWith('x-bsv-') || k === 'authorization') {
-        if (k.startsWith('x-bsv-auth')) {
-          throw new Error('No BSV auth headers allowed here!')
-        }
-        includedHeaders.push([k, v])
-      } else if (k.startsWith('content-type')) {
-        // Normalize the Content-Type header by removing any parameters (e.g., "; charset=utf-8")
-        v = v.split(';')[0].trim()
-        includedHeaders.push([k, v])
-      } else {
-        throw new Error(
-          'Unsupported header in the simplified fetch implementation. Only content-type, authorization, and x-bsv-* headers are supported.'
-        )
-      }
-    }
-
-    // Sort the headers by key to ensure a consistent order for signing and verification.
-    includedHeaders.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-
-    // nHeaders
-    writer.writeVarIntNum(includedHeaders.length)
-    for (const [headerKey, headerValue] of includedHeaders) {
-      // headerKeyLength
-      const headerKeyAsArray = Utils.toArray(headerKey, 'utf8')
-      writer.writeVarIntNum(headerKeyAsArray.length)
-      // headerKey
-      writer.write(headerKeyAsArray)
-      // headerValueLength
-      const headerValueAsArray = Utils.toArray(headerValue, 'utf8')
-      writer.writeVarIntNum(headerValueAsArray.length)
-      // headerValue
-      writer.write(headerValueAsArray)
-    }
+    const includedHeaders = this.includedRequestHeaders(headers)
+    this.writeRequestHeaders(writer, includedHeaders)
 
     // If method typically carries a body and body is undefined, default it
     // This prevents signature verification errors due to mismatch default body types with express
-    const methodsThatTypicallyHaveBody = ['POST', 'PUT', 'PATCH', 'DELETE']
-    if (methodsThatTypicallyHaveBody.includes(method.toUpperCase()) && body === undefined) {
-      // Check if content-type is application/json
-      const contentTypeHeader = includedHeaders.find(([k]) => k === 'content-type')
-      if (contentTypeHeader?.[1].includes('application/json') === true) {
-        body = '{}'
-      } else {
-        body = ''
-      }
-    }
-
-    // Handle body
-    if (body) {
-      const reqBody = await this.normalizeBodyToNumberArray(body) // Use the utility function
-      writer.writeVarIntNum(reqBody.length)
-      writer.write(reqBody)
-    } else {
-      writer.writeVarIntNum(-1) // No body
-    }
+    body = this.defaultRequestBody(method, body, includedHeaders)
+    await this.writeRequestBody(writer, body)
     return writer
   }
 

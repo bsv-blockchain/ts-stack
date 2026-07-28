@@ -68,6 +68,12 @@ import {
   ISSUE_MARKER
 } from './constants.js'
 
+type UtxoVerificationResult = {
+  utxo: BTMSTokenOutput
+  found: boolean
+  beef?: Beef
+}
+
 /**
  * BTMS - Basic Token Management System
  *
@@ -1827,6 +1833,49 @@ export class BTMS {
     return decoded.amount
   }
 
+  private async verifySelectedUtxos(
+    selected: BTMSTokenOutput[]
+  ): Promise<UtxoVerificationResult[]> {
+    return await Promise.all(
+      selected.map(async utxo => {
+        const { found, beef } = await this.lookupTokenOnOverlay(utxo.txid, utxo.outputIndex, true)
+        return found ? { utxo, found, beef } : { utxo, found: false, beef: undefined }
+      })
+    )
+  }
+
+  private async missingUtxoBeefByOutpoint(
+    invalidUtxos: BTMSTokenOutput[],
+    assetId: string | undefined
+  ): Promise<Map<string, BTMSTokenOutput>> {
+    const needsBeef = invalidUtxos.some(utxo => !utxo.beef)
+    if (!needsBeef || !assetId) return new Map()
+    const { tokens } = await this.getSpendableTokens(assetId, true)
+    return new Map(tokens.map(utxo => [utxo.outpoint, utxo]))
+  }
+
+  private async rebroadcastMissingUtxos(
+    invalidUtxos: BTMSTokenOutput[],
+    assetId: string | undefined
+  ): Promise<UtxoVerificationResult[]> {
+    const beefByOutpoint = await this.missingUtxoBeefByOutpoint(invalidUtxos, assetId)
+    return await Promise.all(
+      invalidUtxos.map(async original => {
+        const utxo = beefByOutpoint.get(original.outpoint) ?? original
+        return { utxo, ...(await this.tryRebroadcastUtxo(utxo)) }
+      })
+    )
+  }
+
+  private mergeVerificationBeefs(
+    verificationResults: UtxoVerificationResult[],
+    inputBeef: Beef
+  ): void {
+    for (const result of verificationResults) {
+      if (result.beef) inputBeef.mergeBeef(result.beef)
+    }
+  }
+
   /**
    * Select and verify UTXOs on the overlay.
    *
@@ -1856,17 +1905,7 @@ export class BTMS {
         return { selected: [], totalInput: 0, inputBeef }
       }
 
-      // Verify only the selected UTXOs on overlay
-      type VerificationResult = { utxo: BTMSTokenOutput; found: boolean; beef?: Beef }
-      const verificationPromises = selected.map(async (utxo): Promise<VerificationResult> => {
-        const { found, beef } = await this.lookupTokenOnOverlay(utxo.txid, utxo.outputIndex, true)
-        if (found) {
-          return { utxo, found, beef }
-        }
-        return { utxo, found: false, beef: undefined }
-      })
-
-      const verificationResults = await Promise.all(verificationPromises)
+      const verificationResults = await this.verifySelectedUtxos(selected)
 
       // Separate valid and invalid UTXOs
       let validResults = verificationResults.filter(r => r.found)
@@ -1874,24 +1913,9 @@ export class BTMS {
 
       // Re-broadcast missing UTXOs only if we need to fetch BEEF
       if (invalidUtxos.length > 0) {
-        const needsBeef = invalidUtxos.some(utxo => !utxo.beef)
-        const assetId = selected[0]?.token.assetId
-        const beefMap =
-          needsBeef && assetId
-            ? new Map(
-                (await this.getSpendableTokens(assetId, true)).tokens.map(utxo => [
-                  utxo.outpoint,
-                  utxo
-                ])
-              )
-            : new Map<string, BTMSTokenOutput>()
-        const invalidWithBeef = invalidUtxos.map(utxo => beefMap.get(utxo.outpoint) ?? utxo)
-
-        const rebroadcastResults: VerificationResult[] = await Promise.all(
-          invalidWithBeef.map(async (utxo): Promise<VerificationResult> => {
-            const result = await this.tryRebroadcastUtxo(utxo)
-            return { utxo, ...result }
-          })
+        const rebroadcastResults = await this.rebroadcastMissingUtxos(
+          invalidUtxos,
+          selected[0]?.token.assetId
         )
 
         validResults = [...validResults, ...rebroadcastResults.filter(r => r.found)]
@@ -1899,11 +1923,7 @@ export class BTMS {
       }
 
       // Merge BEEF from valid UTXOs
-      for (const result of validResults) {
-        if (result.beef) {
-          inputBeef.mergeBeef(result.beef)
-        }
-      }
+      this.mergeVerificationBeefs(validResults, inputBeef)
 
       // If all selected UTXOs are valid, we're done
       if (invalidUtxos.length === 0) {

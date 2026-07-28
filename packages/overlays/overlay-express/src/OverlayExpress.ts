@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { type Request, type Response } from 'express'
 import bodyParser from 'body-parser'
 import {
   Engine,
@@ -1421,6 +1421,77 @@ export default class OverlayExpress {
     )
   }
 
+  private arcCallbackRequestToken(req: Request): string | undefined {
+    const authorization = req.headers.authorization
+    const headerToken = Array.isArray(authorization) ? authorization[0] : authorization
+    if (typeof headerToken === 'string' && headerToken.startsWith('Bearer ')) {
+      return headerToken.slice('Bearer '.length)
+    }
+    return headerToken
+  }
+
+  private arcCallbackAuthorized(req: Request): boolean {
+    if (typeof this.arcCallbackToken !== 'string' || this.arcCallbackToken.length === 0) {
+      return true
+    }
+    const callbackHeader = req.headers['x-callback-token']
+    const callbackToken = Array.isArray(callbackHeader) ? callbackHeader[0] : callbackHeader
+    return (
+      this.arcCallbackRequestToken(req) === this.arcCallbackToken ||
+      callbackToken === this.arcCallbackToken
+    )
+  }
+
+  private async processArcIngest(engine: Engine, req: Request, res: Response): Promise<Response> {
+    if (!this.arcCallbackAuthorized(req)) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized callback' })
+    }
+    const {
+      txid,
+      merklePath: merklePathHex,
+      blockHeight,
+      txStatus,
+      extraInfo,
+      competingTxs,
+      topic
+    } = req.body
+    if (typeof txid !== 'string' || txid === '') {
+      throw new PublicRequestError('Provider callback is missing txid')
+    }
+    if (isTerminalArcStatus(txStatus, extraInfo)) {
+      const report = await (engine as BASMCapableEngine).evictAppliedTransaction(txid, {
+        topic: typeof topic === 'string' ? topic : undefined,
+        reason: `${txStatus ?? ''} ${extraInfo ?? ''}`.trim()
+      })
+      this.logger.warn({
+        operation: 'overlay.provider_callback',
+        outcome: 'terminal_evicted',
+        txid,
+        txStatus,
+        competingTxs,
+        report
+      })
+      return res.status(200).json({
+        status: 'success',
+        message: 'Terminal transaction status processed',
+        data: { ...report, txStatus, competingTxs }
+      })
+    }
+    if (typeof merklePathHex !== 'string' || merklePathHex === '') {
+      return res
+        .status(202)
+        .json({ status: 'success', message: 'Transaction status received without proof' })
+    }
+    await engine.handleNewMerkleProof(txid, MerklePath.fromHex(merklePathHex), blockHeight)
+    this.logger.log({
+      operation: 'overlay.provider_callback',
+      outcome: 'proof_ingested',
+      txid,
+      blockHeight
+    })
+    return res.status(200).json({ status: 'success', message: 'Transaction status updated' })
+  }
+
   /**
    * Installs middleware that verbosely logs incoming requests and outgoing responses.
    */
@@ -1771,57 +1842,7 @@ export default class OverlayExpress {
       this.app.post('/arc-ingest', (req, res) => {
         ; (async () => {
           try {
-            if (typeof this.arcCallbackToken === 'string' && this.arcCallbackToken.length > 0) {
-              const authorization = req.headers.authorization
-              const headerToken = Array.isArray(authorization) ? authorization[0] : authorization
-              const xCallbackToken = req.headers['x-callback-token']
-              const callbackToken = Array.isArray(xCallbackToken) ? xCallbackToken[0] : xCallbackToken
-              const bearerToken = typeof headerToken === 'string' && headerToken.startsWith('Bearer ')
-                ? headerToken.slice('Bearer '.length)
-                : headerToken
-              if (bearerToken !== this.arcCallbackToken && callbackToken !== this.arcCallbackToken) {
-                return res.status(401).json({ status: 'error', message: 'Unauthorized callback' })
-              }
-            }
-            const { txid, merklePath: merklePathHex, blockHeight, txStatus, extraInfo, competingTxs, topic } = req.body
-            if (typeof txid !== 'string' || txid === '') {
-              throw new PublicRequestError('Provider callback is missing txid')
-            }
-            if (isTerminalArcStatus(txStatus, extraInfo)) {
-              const report = await (engine as BASMCapableEngine).evictAppliedTransaction(txid, {
-                topic: typeof topic === 'string' ? topic : undefined,
-                reason: `${txStatus ?? ''} ${extraInfo ?? ''}`.trim()
-              })
-              this.logger.warn({
-                operation: 'overlay.provider_callback',
-                outcome: 'terminal_evicted',
-                txid,
-                txStatus,
-                competingTxs,
-                report
-              })
-              return res.status(200).json({
-                status: 'success',
-                message: 'Terminal transaction status processed',
-                data: {
-                  ...report,
-                  txStatus,
-                  competingTxs
-                }
-              })
-            }
-            if (typeof merklePathHex !== 'string' || merklePathHex === '') {
-              return res.status(202).json({ status: 'success', message: 'Transaction status received without proof' })
-            }
-            const merklePath = MerklePath.fromHex(merklePathHex)
-            await engine.handleNewMerkleProof(txid, merklePath, blockHeight)
-            this.logger.log({
-              operation: 'overlay.provider_callback',
-              outcome: 'proof_ingested',
-              txid,
-              blockHeight
-            })
-            return res.status(200).json({ status: 'success', message: 'Transaction status updated' })
+            return await this.processArcIngest(engine, req, res)
           } catch (error) {
             this.logger.error(chalk.red(`Error in /arc-ingest: error=${serializeErrorForLog(error)}`))
             return res.status(400).json({

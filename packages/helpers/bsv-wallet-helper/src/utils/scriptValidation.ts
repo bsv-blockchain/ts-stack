@@ -427,6 +427,41 @@ export interface InscriptionData {
   contentType: string // MIME type
 }
 
+function requiredInscriptionData(
+  chunks: Script['chunks'],
+  index: number,
+  description: string
+): number[] {
+  const data = chunks[index]?.data
+  if (data == null || data.length === 0) {
+    throw new Error(`extractInscriptionData: Missing ${description} at chunk ${index}`)
+  }
+  return data
+}
+
+function inscriptionContentType(chunks: Script['chunks']): string {
+  const data = requiredInscriptionData(chunks, 6, 'content type data')
+  return Utils.toUTF8(data)
+}
+
+function inscriptionDataB64(chunks: Script['chunks'], index: number): string {
+  return Buffer.from(requiredInscriptionData(chunks, index, 'inscription data')).toString('base64')
+}
+
+function parseFullInscription(chunks: Script['chunks']): InscriptionData {
+  return {
+    contentType: inscriptionContentType(chunks),
+    dataB64: inscriptionDataB64(chunks, 8)
+  }
+}
+
+function parseShortInscription(chunks: Script['chunks']): InscriptionData {
+  return {
+    contentType: 'application/octet-stream',
+    dataB64: inscriptionDataB64(chunks, 6)
+  }
+}
+
 /**
  * Extracts inscription data from a BSV-20 Ordinal script.
  *
@@ -500,47 +535,15 @@ export function extractInscriptionData(input: ScriptInput): InscriptionData | nu
     throw new Error('extractInscriptionData: Malformed ordinal script - missing OP_ENDIF')
   }
 
-  let contentType: string
-  let dataB64: string
-
   if (endifIndex === 9) {
-    // Full format with content type (OP_ENDIF at position 9)
-    const contentTypeChunk = chunks[6]
-    if (contentTypeChunk?.data == null || contentTypeChunk.data.length === 0) {
-      throw new Error('extractInscriptionData: Missing content type data at chunk 6')
-    }
-
-    try {
-      contentType = Utils.toUTF8(contentTypeChunk.data)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`extractInscriptionData: Invalid UTF-8 in content type: ${message}`)
-    }
-
-    // Extract data (chunk 8)
-    const dataChunk = chunks[8]
-    if (dataChunk?.data == null || dataChunk.data.length === 0) {
-      throw new Error('extractInscriptionData: Missing inscription data at chunk 8')
-    }
-    dataB64 = Buffer.from(dataChunk.data).toString('base64')
-  } else if (endifIndex === 7) {
-    // Short format without content type (OP_ENDIF at position 7)
-    const dataChunk = chunks[6]
-    if (dataChunk?.data == null || dataChunk.data.length === 0) {
-      throw new Error('extractInscriptionData: Missing inscription data at chunk 6')
-    }
-    contentType = 'application/octet-stream' // Default when not specified
-    dataB64 = Buffer.from(dataChunk.data).toString('base64')
-  } else {
-    throw new Error(
-      `extractInscriptionData: Unexpected OP_ENDIF position at index ${endifIndex}. Expected 7 (without content type) or 9 (with content type)`
-    )
+    return parseFullInscription(chunks)
   }
-
-  return {
-    dataB64,
-    contentType
+  if (endifIndex === 7) {
+    return parseShortInscription(chunks)
   }
+  throw new Error(
+    `extractInscriptionData: Unexpected OP_ENDIF position at index ${endifIndex}. Expected 7 (without content type) or 9 (with content type)`
+  )
 }
 
 /**

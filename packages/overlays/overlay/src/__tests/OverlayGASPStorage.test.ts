@@ -161,6 +161,108 @@ describe('OverlayGASPStorage', () => {
     })
   })
 
+  describe('validateGraphAnchor', () => {
+    const rootGraphID = 'root-txid.0'
+    const rootNode: GraphNode = {
+      txid: 'root-txid',
+      graphID: rootGraphID,
+      rawTx: 'root-raw-tx',
+      outputIndex: 0,
+      children: []
+    }
+
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
+    it('submits historical transactions in order with admitted previous-coin indexes', async () => {
+      overlayStorage.temporaryGraphNodeRefs[rootGraphID] = rootNode
+      const anchorBEEF = [9]
+      const parentBEEF = [1]
+      const rootBEEF = [2]
+      const verify = jest.fn().mockResolvedValue(true)
+      const parentTx = {
+        inputs: [],
+        id: jest.fn().mockReturnValue('parent-txid')
+      }
+      const rootTx = {
+        inputs: [{ sourceTXID: 'parent-txid', sourceOutputIndex: 0 }],
+        id: jest.fn().mockReturnValue('root-txid')
+      }
+      jest
+        .spyOn(Transaction, 'fromBEEF')
+        .mockReturnValueOnce({ verify } as unknown as Transaction)
+        .mockReturnValueOnce(parentTx as unknown as Transaction)
+        .mockReturnValueOnce(rootTx as unknown as Transaction)
+      jest.spyOn(overlayStorage as any, 'getBEEFForNode').mockReturnValue(anchorBEEF)
+      jest
+        .spyOn(overlayStorage as any, 'computeOrderedBEEFsForGraph')
+        .mockReturnValue([parentBEEF, rootBEEF])
+      const identifyAdmissibleOutputs = jest
+        .fn()
+        .mockResolvedValueOnce({ outputsToAdmit: [0] })
+        .mockResolvedValueOnce({ outputsToAdmit: [0] })
+      mockEngine.managers['test-topic'] = { identifyAdmissibleOutputs }
+      mockEngine.chainTracker = { name: 'test-chain-tracker' }
+
+      await expect(overlayStorage.validateGraphAnchor(rootGraphID)).resolves.toBeUndefined()
+
+      expect(verify).toHaveBeenCalledWith(mockEngine.chainTracker)
+      expect(identifyAdmissibleOutputs).toHaveBeenNthCalledWith(
+        1,
+        parentBEEF,
+        [],
+        undefined,
+        'historical-tx'
+      )
+      expect(identifyAdmissibleOutputs).toHaveBeenNthCalledWith(
+        2,
+        rootBEEF,
+        [0],
+        undefined,
+        'historical-tx'
+      )
+    })
+
+    it('rejects a Bitcoin-invalid graph before topical admittance', async () => {
+      overlayStorage.temporaryGraphNodeRefs[rootGraphID] = rootNode
+      jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
+        verify: jest.fn().mockResolvedValue(false)
+      } as unknown as Transaction)
+      jest.spyOn(overlayStorage as any, 'getBEEFForNode').mockReturnValue([9])
+      const identifyAdmissibleOutputs = jest.fn()
+      mockEngine.managers['test-topic'] = { identifyAdmissibleOutputs }
+
+      await expect(overlayStorage.validateGraphAnchor(rootGraphID)).rejects.toThrow(
+        'The graph is not well-anchored according to the rules of Bitcoin.'
+      )
+      expect(identifyAdmissibleOutputs).not.toHaveBeenCalled()
+    })
+
+    it('rejects a graph whose root output is not topically admitted', async () => {
+      overlayStorage.temporaryGraphNodeRefs[rootGraphID] = rootNode
+      const rootBEEF = [2]
+      jest
+        .spyOn(Transaction, 'fromBEEF')
+        .mockReturnValueOnce({
+          verify: jest.fn().mockResolvedValue(true)
+        } as unknown as Transaction)
+        .mockReturnValueOnce({
+          inputs: [],
+          id: jest.fn().mockReturnValue('root-txid')
+        } as unknown as Transaction)
+      jest.spyOn(overlayStorage as any, 'getBEEFForNode').mockReturnValue([9])
+      jest.spyOn(overlayStorage as any, 'computeOrderedBEEFsForGraph').mockReturnValue([rootBEEF])
+      mockEngine.managers['test-topic'] = {
+        identifyAdmissibleOutputs: jest.fn().mockResolvedValue({ outputsToAdmit: [] })
+      }
+
+      await expect(overlayStorage.validateGraphAnchor(rootGraphID)).rejects.toThrow(
+        'This graph did not result in topical admittance of the root node. Rejecting.'
+      )
+    })
+  })
+
   describe('discardGraph', () => {
     it('should discard the graph and its nodes', async () => {
       const graphNode1: GraphNode = {

@@ -6,59 +6,61 @@ import Point from '../primitives/Point.js'
 import * as Hash from '../primitives/Hash.js'
 import { toArray, toHex, encode } from '../primitives/utils.js'
 
+function expandEncryptionKey(key: number[], sbox: Uint32Array): number[] {
+  const keyLen = key.length
+  const encKey = key.slice()
+  let rcon = 1
+  for (let i = keyLen; i < 4 * keyLen + 28; i++) {
+    let word = encKey[i - 1]
+    if (i % keyLen === 0 || (keyLen === 8 && i % keyLen === 4)) {
+      word =
+        (sbox[word >>> 24] << 24) ^
+        (sbox[(word >> 16) & 255] << 16) ^
+        (sbox[(word >> 8) & 255] << 8) ^
+        sbox[word & 255]
+      if (i % keyLen === 0) {
+        word = (word << 8) ^ (word >>> 24) ^ (rcon << 24)
+        rcon = (rcon << 1) ^ ((rcon >> 7) * 283)
+      }
+    }
+    encKey[i] = encKey[i - keyLen] ^ word
+  }
+  return encKey
+}
+
+function expandDecryptionKey(
+  encKey: number[],
+  sbox: Uint32Array,
+  decTable: Uint32Array[]
+): number[] {
+  const decKey: number[] = []
+  for (let j = 0, i = encKey.length; i > 0; j++, i--) {
+    const word = encKey[(j & 3) === 0 ? i - 4 : i]
+    decKey[j] =
+      i <= 4 || j < 4
+        ? word
+        : decTable[0][sbox[word >>> 24]] ^
+          decTable[1][sbox[(word >> 16) & 255]] ^
+          decTable[2][sbox[(word >> 8) & 255]] ^
+          decTable[3][sbox[word & 255]]
+  }
+  return decKey
+}
+
 function AES(key): void {
   if (this._tables[0][0][0] === 0) this._precompute()
 
-  let tmp
   const sbox = this._tables[0][4]
   const decTable = this._tables[1]
   const keyLen = key.length
-  let rcon = 1
 
   if (keyLen !== 4 && keyLen !== 6 && keyLen !== 8) {
     throw new Error('invalid aes key size')
   }
 
-  const encKey = key.slice(0)
-  const decKey = []
+  const encKey = expandEncryptionKey(key, sbox)
+  const decKey = expandDecryptionKey(encKey, sbox, decTable)
   this._key = [encKey, decKey]
-
-  // schedule encryption keys
-  let i: number
-  for (i = keyLen; i < 4 * keyLen + 28; i++) {
-    tmp = encKey[i - 1]
-
-    // apply sbox
-    if (i % keyLen === 0 || (keyLen === 8 && i % keyLen === 4)) {
-      tmp =
-        (sbox[tmp >>> 24] << 24) ^
-        (sbox[(tmp >> 16) & 255] << 16) ^
-        (sbox[(tmp >> 8) & 255] << 8) ^
-        sbox[tmp & 255]
-
-      // shift rows and add rcon
-      if (i % keyLen === 0) {
-        tmp = (tmp << 8) ^ (tmp >>> 24) ^ (rcon << 24)
-        rcon = (rcon << 1) ^ ((rcon >> 7) * 283)
-      }
-    }
-
-    encKey[i] = encKey[i - keyLen] ^ tmp
-  }
-
-  // schedule decryption keys
-  for (let j = 0; i > 0; j++, i--) {
-    tmp = encKey[(j & 3) === 0 ? i - 4 : i]
-    if (i <= 4 || j < 4) {
-      decKey[j] = tmp
-    } else {
-      decKey[j] =
-        decTable[0][sbox[tmp >>> 24]] ^
-        decTable[1][sbox[(tmp >> 16) & 255]] ^
-        decTable[2][sbox[(tmp >> 8) & 255]] ^
-        decTable[3][sbox[tmp & 255]]
-    }
-  }
 }
 
 AES.prototype = {

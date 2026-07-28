@@ -465,6 +465,28 @@ export default class Spend {
     )
   }
 
+  private enforceSignatureHashType(sig: TransactionSignature): void {
+    if (!this.shouldEnforceStrictEncoding()) return
+    if (!this.isDefinedHashType(sig.scope)) {
+      this.scriptEvaluationError('The signature hash type is invalid.')
+    }
+    const usesChronicle = (sig.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0
+    if (usesChronicle && !this.isAfterChronicle()) {
+      this.scriptEvaluationError('The signature hash type is invalid before Chronicle.')
+    }
+  }
+
+  private enforceSignatureForkId(sig: TransactionSignature): void {
+    if (!this.hasExplicitFlags()) return
+    const hasForkId = (sig.scope & TransactionSignature.SIGHASH_FORKID) !== 0
+    if (this.hasFlag('SIGHASH_FORKID') && !hasForkId) {
+      this.scriptEvaluationError('The signature must use SIGHASH_FORKID.')
+    }
+    if (!this.hasFlag('SIGHASH_FORKID') && !this.isAfterGenesis() && hasForkId) {
+      this.scriptEvaluationError('The signature must not use SIGHASH_FORKID.')
+    }
+  }
+
   private checkSignatureEncoding(buf: Readonly<number[]>): boolean {
     if (buf.length === 0) return true
 
@@ -475,29 +497,8 @@ export default class Spend {
     }
     try {
       const sig = TransactionSignature.fromChecksigFormat(buf as number[]) // This can throw for stricter DER rules
-      if (this.shouldEnforceStrictEncoding() && !this.isDefinedHashType(sig.scope)) {
-        this.scriptEvaluationError('The signature hash type is invalid.')
-        return false
-      }
-      if (
-        this.shouldEnforceStrictEncoding() &&
-        (sig.scope & TransactionSignature.SIGHASH_CHRONICLE) !== 0 &&
-        !this.isAfterChronicle()
-      ) {
-        this.scriptEvaluationError('The signature hash type is invalid before Chronicle.')
-        return false
-      }
-      const hasForkId = (sig.scope & TransactionSignature.SIGHASH_FORKID) !== 0
-      if (this.hasExplicitFlags()) {
-        if (this.hasFlag('SIGHASH_FORKID') && !hasForkId) {
-          this.scriptEvaluationError('The signature must use SIGHASH_FORKID.')
-          return false
-        }
-        if (!this.hasFlag('SIGHASH_FORKID') && !this.isAfterGenesis() && hasForkId) {
-          this.scriptEvaluationError('The signature must not use SIGHASH_FORKID.')
-          return false
-        }
-      }
+      this.enforceSignatureHashType(sig)
+      this.enforceSignatureForkId(sig)
       if (this.shouldEnforceLowS() && !sig.hasLowS()) {
         this.scriptEvaluationError('The signature must have a low S value.')
         return false

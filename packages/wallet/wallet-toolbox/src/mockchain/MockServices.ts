@@ -112,23 +112,46 @@ export class MockServices implements WalletServices {
     await this.spendInputs(tx, txid)
   }
 
-  private async validateTxInputs (tx: BsvTransaction): Promise<void> {
+  private sourceTxid(input: BsvTransaction['inputs'][number]): string | undefined {
+    if (input.sourceTXID != null && input.sourceTXID !== '') return input.sourceTXID
+    return input.sourceTransaction?.id('hex')
+  }
+
+  private async validateTxInput(
+    input: BsvTransaction['inputs'][number],
+    index: number,
+    currentHeight: number
+  ): Promise<void> {
+    const sourceTxid = this.sourceTxid(input)
+    if (sourceTxid == null || sourceTxid === '') {
+      throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${index}`)
+    }
+    const utxo = await this.storage.getUtxo(sourceTxid, input.sourceOutputIndex)
+    if (utxo == null) {
+      throw new WERR_INVALID_PARAMETER(
+        'input',
+        `reference a known UTXO. Input ${index}: ${sourceTxid}.${input.sourceOutputIndex} not found`
+      )
+    }
+    if (utxo.spentByTxid != null && utxo.spentByTxid !== '') {
+      throw new WERR_INVALID_PARAMETER(
+        'input',
+        `not be already spent. Input ${index}: ${sourceTxid}.${input.sourceOutputIndex} spent by ${utxo.spentByTxid}`
+      )
+    }
+    if (utxo.isCoinbase && utxo.blockHeight !== null && currentHeight - utxo.blockHeight < 100) {
+      throw new WERR_INVALID_PARAMETER(
+        'input',
+        `not spend immature coinbase. Input ${index}: coinbase at height ${utxo.blockHeight}, current height ${currentHeight}, need 100 confirmations`
+      )
+    }
+    input.sourceTransaction ??= await this.loadSourceTransaction(sourceTxid)
+  }
+
+  private async validateTxInputs(tx: BsvTransaction): Promise<void> {
     const currentHeight = await this.tracker.currentHeight()
     for (let i = 0; i < tx.inputs.length; i++) {
-      const input = tx.inputs[i]
-      const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
-      if (sourceTxid == null || sourceTxid === '') throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${i}`)
-
-      const utxo = await this.storage.getUtxo(sourceTxid, input.sourceOutputIndex)
-      if (utxo == null) throw new WERR_INVALID_PARAMETER('input', `reference a known UTXO. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} not found`)
-      if (utxo.spentByTxid != null && utxo.spentByTxid !== '') throw new WERR_INVALID_PARAMETER('input', `not be already spent. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} spent by ${utxo.spentByTxid}`)
-      if (utxo.isCoinbase && utxo.blockHeight !== null && currentHeight - utxo.blockHeight < 100) {
-        throw new WERR_INVALID_PARAMETER('input', `not spend immature coinbase. Input ${i}: coinbase at height ${utxo.blockHeight}, current height ${currentHeight}, need 100 confirmations`)
-      }
-
-      if (input.sourceTransaction == null) {
-        input.sourceTransaction = await this.loadSourceTransaction(sourceTxid)
-      }
+      await this.validateTxInput(tx.inputs[i], i, currentHeight)
     }
   }
 
@@ -431,47 +454,37 @@ export class MockServices implements WalletServices {
     return nLockTime < height
   }
 
-  async getBeefForTxid (txid: string): Promise<Beef> {
-    const beef = new Beef()
+  private rawTransactionBytes(row: { rawTx: Buffer | number[] | Uint8Array }): number[] {
+    if (row.rawTx instanceof Buffer) return Array.from(row.rawTx)
+    return Array.isArray(row.rawTx) ? row.rawTx : Array.from(row.rawTx)
+  }
 
-    const addTx = async (tid: string, alreadyAdded: Set<string>): Promise<void> => {
-      if (alreadyAdded.has(tid)) return
-      alreadyAdded.add(tid)
-
-      const txRow = await this.storage.getTransaction(tid)
-      if (txRow == null) return
-
-      let rawTx: number[]
-      if (txRow.rawTx instanceof Buffer) {
-        rawTx = Array.from(txRow.rawTx)
-      } else if (Array.isArray(txRow.rawTx)) {
-        rawTx = txRow.rawTx
-      } else {
-        rawTx = Array.from(txRow.rawTx as Uint8Array)
+  private async addTxToBeef(beef: Beef, tid: string, alreadyAdded: Set<string>): Promise<void> {
+    if (alreadyAdded.has(tid)) return
+    alreadyAdded.add(tid)
+    const txRow = await this.storage.getTransaction(tid)
+    if (txRow == null) return
+    const rawTx = this.rawTransactionBytes(txRow)
+    if (txRow.blockHeight !== null) {
+      const pathResult = await this.getMerklePath(tid)
+      if (pathResult.merklePath != null) {
+        beef.mergeRawTx(rawTx, beef.mergeBump(pathResult.merklePath))
+        return
       }
-
-      if (txRow.blockHeight !== null) {
-        // Mined: add with merkle path
-        const pathResult = await this.getMerklePath(tid)
-        if (pathResult.merklePath != null) {
-          const bumpIndex = beef.mergeBump(pathResult.merklePath)
-          beef.mergeRawTx(rawTx, bumpIndex)
-          return
-        }
-      }
-
-      // Unmined or no path: recursively add source transactions
-      const tx = BsvTransaction.fromBinary(rawTx)
-      for (const input of tx.inputs) {
-        const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
-        if (sourceTxid != null && sourceTxid !== '' && sourceTxid !== '00'.repeat(32)) {
-          await addTx(sourceTxid, alreadyAdded)
-        }
-      }
-      beef.mergeRawTx(rawTx)
     }
+    const tx = BsvTransaction.fromBinary(rawTx)
+    for (const input of tx.inputs) {
+      const sourceTxid = this.sourceTxid(input)
+      if (sourceTxid != null && sourceTxid !== '' && sourceTxid !== '00'.repeat(32)) {
+        await this.addTxToBeef(beef, sourceTxid, alreadyAdded)
+      }
+    }
+    beef.mergeRawTx(rawTx)
+  }
 
-    await addTx(txid, new Set())
+  async getBeefForTxid(txid: string): Promise<Beef> {
+    const beef = new Beef()
+    await this.addTxToBeef(beef, txid, new Set())
     return beef
   }
 

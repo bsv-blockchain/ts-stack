@@ -224,6 +224,31 @@ export class OverlayGASPStorage implements GASPStorage {
     }
   }
 
+  private previousCoinIndexes(tx: Transaction, coins: Set<string>): number[] {
+    const previousCoins: number[] = []
+    for (const [inputIndex, input] of tx.inputs.entries()) {
+      const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+      if (sourceTXID == null || sourceTXID === '') continue
+      if (coins.has(`${sourceTXID}.${input.sourceOutputIndex}`)) {
+        previousCoins.push(Number(inputIndex))
+      }
+    }
+    return previousCoins
+  }
+
+  private async admitHistoricalBEEF(beef: number[], coins: Set<string>): Promise<void> {
+    const tx = Transaction.fromBEEF(beef)
+    const admittanceInstructions = await this.engine.managers[this.topic].identifyAdmissibleOutputs(
+      beef,
+      this.previousCoinIndexes(tx, coins),
+      undefined,
+      'historical-tx'
+    )
+    for (const outputIndex of admittanceInstructions.outputsToAdmit) {
+      coins.add(`${tx.id('hex')}.${outputIndex}`)
+    }
+  }
+
   /**
     * Checks whether the given graph, in its current state, makes reference only to transactions that are proven in the blockchain, or already known by the recipient to be valid.
     * Additionally, in a breadth-first manner (ensuring that all inputs for any given node are processed before nodes that spend them), it ensures that the root node remains valid according to the rules of the overlay's topic manager,
@@ -256,28 +281,7 @@ export class OverlayGASPStorage implements GASPStorage {
       // Submit all historical BEEFs in order through the topic manager, tracking what would be retained until we submit the root node last.
       // If, at the end, the root node is admitted, we have a valid overlay-specific graph.
       for (const beef of beefs) {
-        // For any input to this transaction, see if it's a valid coin that's admitted. If so, it's a previous coin.
-        const previousCoins: number[] = []
-        const tx = Transaction.fromBEEF(beef)
-        for (const [inputIndex, input] of tx.inputs.entries()) {
-          const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-          if (sourceTXID != null && sourceTXID !== '') {
-            const coin = `${sourceTXID}.${input.sourceOutputIndex}`
-            if (coins.has(coin)) {
-              previousCoins.push(Number(inputIndex))
-            }
-          }
-        }
-        const admittanceInstructions = await this.engine.managers[this.topic].identifyAdmissibleOutputs(
-          beef,
-          previousCoins,
-          undefined,
-          'historical-tx'
-        )
-        // Every admitted output is now a coin.
-        for (const outputIndex of admittanceInstructions.outputsToAdmit) {
-          coins.add(`${tx.id('hex')}.${outputIndex}`)
-        }
+        await this.admitHistoricalBEEF(beef, coins)
       }
       // After sending through all the graph's BEEFs...
       // If the root node is now a coin, we have acceptance by the overlay.

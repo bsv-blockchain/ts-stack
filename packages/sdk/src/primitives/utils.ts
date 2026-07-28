@@ -114,27 +114,33 @@ export const hexToUint8Array = (msg: string): Uint8Array => {
   return out
 }
 
+const normalizeBase64 = (msg: string): string => {
+  if (typeof msg !== 'string') throw new TypeError('msg must be a string')
+  const normalized = msg
+    .trim()
+    .replaceAll(/[\r\n\t\f\v ]+/g, '')
+    .replaceAll('-', '+')
+    .replaceAll('_', '/')
+  const padIndex = normalized.indexOf('=')
+  if (padIndex === -1) return normalized
+  const pad = normalized.slice(padIndex)
+  if (!/^={1,2}$/.test(pad) || normalized.slice(0, padIndex).includes('=')) {
+    throw new Error('Invalid base64 padding')
+  }
+  return normalized.slice(0, padIndex)
+}
+
+const base64CharacterValue = (codePoint: number, index: number): number => {
+  if (codePoint >= 65 && codePoint <= 90) return codePoint - 65
+  if (codePoint >= 97 && codePoint <= 122) return codePoint - 97 + 26
+  if (codePoint >= 48 && codePoint <= 57) return codePoint - 48 + 52
+  if (codePoint === 43) return 62
+  if (codePoint === 47) return 63
+  throw new Error(`Invalid base64 character at index ${index}`)
+}
+
 export function base64ToArray(msg: string): number[] {
-  if (typeof msg !== 'string') {
-    throw new TypeError('msg must be a string')
-  }
-
-  // cleanse string
-  let s = msg.trim().replaceAll(/[\r\n\t\f\v ]+/g, '')
-  s = s.replaceAll('-', '+').replaceAll('_', '/')
-
-  // ensure padding is correct
-  const padIndex = s.indexOf('=')
-  if (padIndex !== -1) {
-    const pad = s.slice(padIndex)
-    if (!/^={1,2}$/.test(pad)) {
-      throw new Error('Invalid base64 padding')
-    }
-    if (s.slice(0, padIndex).includes('=')) {
-      throw new Error('Invalid base64 padding')
-    }
-    s = s.slice(0, padIndex)
-  }
+  const s = normalizeBase64(msg)
 
   const result: number[] = []
   let bitBuffer = 0
@@ -142,21 +148,7 @@ export function base64ToArray(msg: string): number[] {
 
   for (let i = 0; i < s.length; i++) {
     const c = s.codePointAt(i) as number
-    // using ascii map values rather than indexOf
-    let v = -1
-    if (c >= 65 && c <= 90) {
-      v = c - 65 // A-Z
-    } else if (c >= 97 && c <= 122) {
-      v = c - 97 + 26 // a-z
-    } else if (c >= 48 && c <= 57) {
-      v = c - 48 + 52 // 0-9
-    } else if (c === 43) {
-      v = 62 // +
-    } else if (c === 47) {
-      v = 63 // /
-    } else {
-      throw new Error(`Invalid base64 character at index ${i}`)
-    }
+    const v = base64CharacterValue(c, i)
     bitBuffer = (bitBuffer << 6) | v
     bitCount += 6
 
