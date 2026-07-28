@@ -1,4 +1,21 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+
+function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker, endMarker) {
+  const lines = readFileSync(resolve(repositoryRoot, packageDirectory, filePath), 'utf8').split(
+    '\n'
+  )
+  const startIndex = lines.findIndex(line => line.includes(startMarker))
+  const endIndex = lines.findIndex((line, index) => index > startIndex && line.includes(endMarker))
+
+  if (startIndex === -1 || endIndex === -1) {
+    throw new Error(
+      `Unable to resolve mutation range in ${filePath}: ${startMarker} .. ${endMarker}`
+    )
+  }
+
+  return `${filePath}:${startIndex + 1}-${endIndex}`
+}
 
 function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelated = false } = {}) {
   return {
@@ -40,7 +57,15 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/sdk',
       manifest: 'packages/sdk/package.json',
       propertyTest: 'packages/sdk/src/primitives/__tests/utils.property.test.ts',
-      mutate: ['src/primitives/utils.ts:255-370'],
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/primitives/utils.ts',
+          'const lz = str.match(',
+          'type WriterChunk'
+        )
+      ],
       ...jestTarget('jest.config.js', ['<rootDir>/src/primitives/__tests/utils.property.test.ts'], {
         esm: true
       })
