@@ -85,6 +85,9 @@ jobs:
       - name: Reject high and critical dependency advisories
         run: pnpm audit:security
 
+      - name: Enforce the service operations contract
+        run: pnpm ops:check
+
       - name: Check cross-package version references
         # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
         # downstream deps can't reference the new versions until publish) will always

@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import YAML from 'yaml'
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUTPUT_PATH = join(ROOT, 'docs/reference/service-operations.md')
@@ -20,10 +19,12 @@ const podSpec = document => {
   return undefined
 }
 
-const yamlDocuments = async path =>
-  YAML.parseAllDocuments(await readFile(path, 'utf8'))
+const yamlDocuments = async path => {
+  const { default: YAML } = await import('yaml')
+  return YAML.parseAllDocuments(await readFile(path, 'utf8'))
     .map(document => document.toJSON())
     .filter(document => document != null)
+}
 
 const workloadDocuments = async path =>
   (await yamlDocuments(path)).filter(document => podSpec(document) !== undefined)
