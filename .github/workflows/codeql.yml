@@ -19,10 +19,6 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # Keep default setup authoritative while this workflow is reviewed. The
-    # repository variable is enabled only after merge, immediately before
-    # default setup is disabled and this workflow is dispatched on main.
-    if: vars.CODEQL_ADVANCED_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
