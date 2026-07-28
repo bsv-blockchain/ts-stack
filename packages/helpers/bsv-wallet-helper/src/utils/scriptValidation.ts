@@ -441,12 +441,7 @@ function requiredInscriptionData(
 
 function inscriptionContentType(chunks: Script['chunks']): string {
   const data = requiredInscriptionData(chunks, 6, 'content type data')
-  try {
-    return Utils.toUTF8(data)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`extractInscriptionData: Invalid UTF-8 in content type: ${message}`)
-  }
+  return Utils.toUTF8(data)
 }
 
 function inscriptionDataB64(chunks: Script['chunks'], index: number): string {

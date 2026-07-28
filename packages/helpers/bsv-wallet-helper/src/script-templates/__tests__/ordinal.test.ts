@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@jest/globals'
 import {
+  LockingScript,
   PrivateKey,
   Transaction,
   Script,
@@ -7,7 +8,7 @@ import {
   WalletProtocol,
   WalletCounterparty
 } from '@bsv/sdk'
-import OrdP2PKH, { Inscription, MAP } from '../ordinal'
+import OrdP2PKH, { applyInscription, Inscription, MAP } from '../ordinal'
 import { makeMockWallet } from '../../utils/mockWallet'
 
 // Transaction.fee() with no args resolves to the SDK's LivePolicy, which fetches the live ARC
@@ -136,6 +137,107 @@ describe('OrdP2PKH locking script', () => {
       await expect(
         ordP2pkh.lock({ publicKey: publicKeyHex, metadata: invalidMetaData })
       ).rejects.toThrow('metadata.type is required and must be a string')
+    })
+
+    test('should support every direct locking target', async () => {
+      const publicKey = new PrivateKey(9).toPublicKey()
+      const ordP2pkh = new OrdP2PKH()
+
+      const byHash = await ordP2pkh.lock({ pubkeyhash: publicKey.toHash() as number[] })
+      const byAddress = await ordP2pkh.lock({ address: publicKey.toAddress().toString() })
+
+      expect(byHash.toHex()).toBe(byAddress.toHex())
+    })
+
+    test('should reject every malformed inscription and metadata shape', async () => {
+      const publicKey = new PrivateKey(10).toPublicKey().toString()
+      const ordP2pkh = new OrdP2PKH()
+      const scenarios: Array<{ params: any; message: string }> = [
+        {
+          params: { publicKey, inscription: null },
+          message: 'inscription must be an object with dataB64 and contentType properties'
+        },
+        {
+          params: { publicKey, inscription: 1 },
+          message: 'inscription must be an object with dataB64 and contentType properties'
+        },
+        {
+          params: { publicKey, inscription: {} },
+          message: 'inscription.dataB64 is required and must be a base64 string'
+        },
+        {
+          params: { publicKey, inscription: { dataB64: 1, contentType: 'text/plain' } },
+          message: 'inscription.dataB64 is required and must be a base64 string'
+        },
+        {
+          params: { publicKey, inscription: { dataB64: 'eA==' } },
+          message: 'inscription.contentType is required and must be a string (MIME type)'
+        },
+        {
+          params: { publicKey, inscription: { dataB64: 'eA==', contentType: 1 } },
+          message: 'inscription.contentType is required and must be a string (MIME type)'
+        },
+        {
+          params: { publicKey, metadata: null },
+          message: 'metadata must be an object'
+        },
+        {
+          params: { publicKey, metadata: 1 },
+          message: 'metadata must be an object'
+        },
+        {
+          params: { publicKey, metadata: { type: 'profile' } },
+          message: 'metadata.app is required and must be a string'
+        },
+        {
+          params: { publicKey, metadata: { app: 1, type: 'profile' } },
+          message: 'metadata.app is required and must be a string'
+        },
+        {
+          params: { publicKey, metadata: { app: 'testapp' } },
+          message: 'metadata.type is required and must be a string'
+        },
+        {
+          params: { publicKey, metadata: { app: 'testapp', type: 1 } },
+          message: 'metadata.type is required and must be a string'
+        }
+      ]
+
+      for (const scenario of scenarios) {
+        await expect(ordP2pkh.lock(scenario.params)).rejects.toThrow(scenario.message)
+      }
+      await expect(ordP2pkh.lock({} as any)).rejects.toThrow(
+        'One of pubkeyhash, address, publicKey, or walletParams is required'
+      )
+    })
+
+    test('should reject malformed direct envelopes and preserve separator and MAP command semantics', () => {
+      const lockingScript = LockingScript.fromASM('OP_TRUE')
+
+      expect(() =>
+        applyInscription(lockingScript, { dataB64: '====', contentType: 'text/plain' })
+      ).toThrow('Invalid file data')
+      expect(() => applyInscription(lockingScript, { dataB64: 'eA==', contentType: '' })).toThrow(
+        'Invalid media type'
+      )
+      expect(() => applyInscription(lockingScript, undefined, { app: 'testapp' } as MAP)).toThrow(
+        'MAP.app and MAP.type are required fields'
+      )
+
+      const decorated = applyInscription(
+        lockingScript,
+        { dataB64: 'eA==', contentType: 'text/plain' },
+        { app: 'testapp', type: 'profile', cmd: 'SET' },
+        true
+      )
+      expect(decorated.toASM()).toContain('OP_CODESEPARATOR')
+      expect(decorated.toASM()).toContain('OP_RETURN')
+
+      const metadataOnly = applyInscription(LockingScript.fromASM(''), undefined, {
+        app: 'testapp',
+        type: 'profile'
+      })
+      expect(metadataOnly.toASM()).toContain('OP_RETURN')
     })
   })
 

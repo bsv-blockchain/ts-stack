@@ -2,12 +2,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import OverlayExpress from '../OverlayExpress.js'
 import Knex from 'knex'
 import { MongoClient } from 'mongodb'
-import {
-  TopicManager,
-  LookupService,
-  serializeErrorForLog,
-  serializeLogValue
-} from '@bsv/overlay'
+import { TopicManager, LookupService, serializeErrorForLog, serializeLogValue } from '@bsv/overlay'
 import { ChainTracker } from '@bsv/sdk'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
@@ -23,10 +18,13 @@ jest.mock('@bsv/auth-express-middleware', () => ({
 }))
 
 /** Creates a mock MongoDB Db object with a collection stub that supports BanService */
-function createMockDbValue (): Record<string, any> {
+function createMockDbValue(): Record<string, any> {
   const mockCollection = {
     createIndex: jest.fn<any>().mockResolvedValue(undefined),
-    find: jest.fn<any>().mockReturnValue({ sort: jest.fn<any>().mockReturnValue({ toArray: jest.fn<any>().mockResolvedValue([]) }), toArray: jest.fn<any>().mockResolvedValue([]) }),
+    find: jest.fn<any>().mockReturnValue({
+      sort: jest.fn<any>().mockReturnValue({ toArray: jest.fn<any>().mockResolvedValue([]) }),
+      toArray: jest.fn<any>().mockResolvedValue([])
+    }),
     findOne: jest.fn<any>().mockResolvedValue(null),
     updateOne: jest.fn<any>().mockResolvedValue({}),
     deleteOne: jest.fn<any>().mockResolvedValue({}),
@@ -51,25 +49,21 @@ describe('OverlayExpress', () => {
         return '"[Unserializable value]"'
       }
     })
-    jest.mocked(serializeErrorForLog).mockImplementation(error =>
-      serializeLogValue(error instanceof Error
-        ? { name: error.name, message: error.message, stack: error.stack }
-        : error)
-    )
-    overlayExpress = new OverlayExpress(
-      'TestService',
-      'test-private-key-123',
-      'test.example.com'
-    )
+    jest
+      .mocked(serializeErrorForLog)
+      .mockImplementation(error =>
+        serializeLogValue(
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : error
+        )
+      )
+    overlayExpress = new OverlayExpress('TestService', 'test-private-key-123', 'test.example.com')
   })
 
   describe('constructor', () => {
     it('should create instance with required parameters', () => {
-      const instance = new OverlayExpress(
-        'MyService',
-        'private-key',
-        'example.com'
-      )
+      const instance = new OverlayExpress('MyService', 'private-key', 'example.com')
 
       expect(instance.name).toBe('MyService')
       expect(instance.privateKey).toBe('private-key')
@@ -78,11 +72,7 @@ describe('OverlayExpress', () => {
     })
 
     it('should generate random admin token if not provided', () => {
-      const instance = new OverlayExpress(
-        'MyService',
-        'private-key',
-        'example.com'
-      )
+      const instance = new OverlayExpress('MyService', 'private-key', 'example.com')
 
       const token = instance.getAdminToken()
       expect(token).toBeDefined()
@@ -92,12 +82,7 @@ describe('OverlayExpress', () => {
 
     it('should use provided admin token', () => {
       const customToken = 'my-custom-token-123'
-      const instance = new OverlayExpress(
-        'MyService',
-        'private-key',
-        'example.com',
-        customToken
-      )
+      const instance = new OverlayExpress('MyService', 'private-key', 'example.com', customToken)
 
       expect(instance.getAdminToken()).toBe(customToken)
     })
@@ -191,9 +176,7 @@ describe('OverlayExpress', () => {
         allowedOrigins: ['https://wallet.example']
       })
 
-      expect(overlayExpress.edgePolicyConfig.allowedOrigins).toEqual([
-        'https://wallet.example'
-      ])
+      expect(overlayExpress.edgePolicyConfig.allowedOrigins).toEqual(['https://wallet.example'])
     })
 
     it('merges partial HTTP and browser-header policy without erasing defaults', () => {
@@ -232,9 +215,7 @@ describe('OverlayExpress', () => {
       expect(instance.formatBodyForLog(Buffer.from('secret'), 'Body:')).toContain(
         'binary body (6 bytes)'
       )
-      expect(instance.formatBodyForLog('secret', 'Body:')).toContain(
-        'string body (6 bytes)'
-      )
+      expect(instance.formatBodyForLog('secret', 'Body:')).toContain('string body (6 bytes)')
       expect(instance.formatBodyForLog(['secret'], 'Body:')).toContain(
         'structured body (1 top-level item(s))'
       )
@@ -292,7 +273,8 @@ describe('OverlayExpress', () => {
       middleware(request, response, jest.fn())
       finishHandler?.()
 
-      const messages = logger.log.mock.calls.flat()
+      const messages = logger.log.mock.calls
+        .flat()
         .filter((value): value is string => typeof value === 'string')
       expect(messages.join(' ')).toContain('\\r\\nFORGED')
       expect(messages.every(message => !/[\r\n\u2028\u2029]/.test(message))).toBe(true)
@@ -529,8 +511,9 @@ describe('OverlayExpress', () => {
       })
 
       // @ts-expect-error - Mock factory function
-      expect(() => freshInstance.configureLookupServiceWithKnex('test', mockFactory))
-        .toThrow('You must configure your SQL database')
+      expect(() => freshInstance.configureLookupServiceWithKnex('test', mockFactory)).toThrow(
+        'You must configure your SQL database'
+      )
     })
   })
 
@@ -566,8 +549,9 @@ describe('OverlayExpress', () => {
       const mockFactory = jest.fn().mockReturnValue(mockLookupService)
 
       // @ts-expect-error - Mock factory function
-      expect(() => freshInstance.configureLookupServiceWithMongo('test', mockFactory))
-        .toThrow('You must configure your MongoDB connection')
+      expect(() => freshInstance.configureLookupServiceWithMongo('test', mockFactory)).toThrow(
+        'You must configure your MongoDB connection'
+      )
     })
   })
 
@@ -730,9 +714,7 @@ describe('OverlayExpress', () => {
         throw new Error('Knex error')
       })
 
-      await expect(
-        freshInstance.configureKnex({ client: 'mysql2' })
-      ).rejects.toThrow('Knex error')
+      await expect(freshInstance.configureKnex({ client: 'mysql2' })).rejects.toThrow('Knex error')
     })
 
     it('should handle MongoDB connection errors', async () => {
@@ -742,19 +724,15 @@ describe('OverlayExpress', () => {
         connect: jest.fn().mockRejectedValue(new Error('Connection failed'))
       }))
 
-      await expect(
-        freshInstance.configureMongo('mongodb://localhost:27017')
-      ).rejects.toThrow('Connection failed')
+      await expect(freshInstance.configureMongo('mongodb://localhost:27017')).rejects.toThrow(
+        'Connection failed'
+      )
     })
   })
 
   describe('integration scenarios', () => {
     it('should allow full configuration workflow', async () => {
-      const instance = new OverlayExpress(
-        'FullTest',
-        'private-key',
-        'example.com'
-      )
+      const instance = new OverlayExpress('FullTest', 'private-key', 'example.com')
 
       instance.configurePort(8080)
       instance.configureNetwork('test')
@@ -861,8 +839,9 @@ describe('OverlayExpress', () => {
         refreshUnprovenTransactionProofs: jest.fn().mockResolvedValue({}),
         // @ts-expect-error - Mock return values
         maintainUnprovenTransactions: jest.fn().mockResolvedValue({}),
-        // @ts-expect-error - Mock return values
-        evictAppliedTransaction: jest.fn().mockResolvedValue({ evictedTransactions: 1, evictedOutputs: 1 }),
+        evictAppliedTransaction: jest
+          .fn<any>()
+          .mockResolvedValue({ evictedTransactions: 1, evictedOutputs: 1 }),
         lookupServices: {},
         advertiser: {
           // @ts-expect-error - Mock return values
@@ -893,7 +872,7 @@ describe('OverlayExpress', () => {
       const mockKnex = {
         raw: jest.fn(),
         migrate: {
-        // @ts-expect-error - Mock return value
+          // @ts-expect-error - Mock return value
           latest: jest.fn().mockResolvedValue([])
         }
       }
@@ -909,19 +888,19 @@ describe('OverlayExpress', () => {
       const freshInstance = new OverlayExpress('Test', 'key', 'example.com')
       freshInstance.engine = mockEngine
 
-      await expect(freshInstance.start()).rejects.toThrow(
-        'You must configure your SQL database'
-      )
+      await expect(freshInstance.start()).rejects.toThrow('You must configure your SQL database')
     })
 
     it('should set up Express middleware', async () => {
       const useSpy = jest.spyOn(instance.app, 'use')
       const getSpy = jest.spyOn(instance.app, 'get')
       const postSpy = jest.spyOn(instance.app, 'post')
-      const listenSpy = jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
-        callback()
-        return {} as any
-      })
+      const listenSpy = jest
+        .spyOn(instance.app, 'listen')
+        .mockImplementation((port: any, callback: any) => {
+          callback()
+          return {} as any
+        })
 
       await instance.start()
 
@@ -948,11 +927,13 @@ describe('OverlayExpress', () => {
 
       await instance.start()
 
-      expect(createAuthMiddleware).toHaveBeenCalledWith(expect.objectContaining({
-        wallet: instance.serverWallet,
-        sessionManager,
-        allowUnauthenticated: true
-      }))
+      expect(createAuthMiddleware).toHaveBeenCalledWith(
+        expect.objectContaining({
+          wallet: instance.serverWallet,
+          sessionManager,
+          allowUnauthenticated: true
+        })
+      )
     })
 
     it('does not expose internal engine errors in public responses', async () => {
@@ -999,10 +980,13 @@ describe('OverlayExpress', () => {
           status: jest.fn().mockReturnThis(),
           json: jest.fn().mockReturnThis()
         }
-        handler?.({
-          headers: { 'x-topics': topicsHeader },
-          body: Buffer.from([1, 2, 3])
-        }, res)
+        handler?.(
+          {
+            headers: { 'x-topics': topicsHeader },
+            body: Buffer.from([1, 2, 3])
+          },
+          res
+        )
         await new Promise(resolve => setImmediate(resolve))
       }
 
@@ -1048,7 +1032,7 @@ describe('OverlayExpress', () => {
       ['tm_foo,', 'an empty comma-separated topic'],
       ['["tm_foo"', 'malformed JSON'],
       ['["tm_foo",42]', 'a JSON array containing a non-string topic']
-    ])('returns a clean 400 when X-Topics is %s (%s)', async (topicsHeader) => {
+    ])('returns a clean 400 when X-Topics is %s (%s)', async topicsHeader => {
       const postSpy = jest.spyOn(instance.app, 'post')
       jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
         callback()
@@ -1063,10 +1047,13 @@ describe('OverlayExpress', () => {
         status: jest.fn().mockReturnThis(),
         json: jest.fn().mockReturnThis()
       }
-      handler?.({
-        headers: { 'x-topics': topicsHeader },
-        body: Buffer.from([1, 2, 3])
-      }, res)
+      handler?.(
+        {
+          headers: { 'x-topics': topicsHeader },
+          body: Buffer.from([1, 2, 3])
+        },
+        res
+      )
       await new Promise(resolve => setImmediate(resolve))
 
       expect(res.status).toHaveBeenCalledWith(400)
@@ -1152,18 +1139,20 @@ describe('OverlayExpress', () => {
       await new Promise(resolve => setImmediate(resolve))
 
       expect(res.status).toHaveBeenCalledWith(200)
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        status: 'ok',
-        ready: true,
-        service: expect.objectContaining({
-          name: 'TestServer'
-        }),
-        checks: expect.arrayContaining([
-          expect.objectContaining({ name: 'engine', status: 'ok' }),
-          expect.objectContaining({ name: 'knex', status: 'ok' }),
-          expect.objectContaining({ name: 'mongo', status: 'ok' })
-        ])
-      }))
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'ok',
+          ready: true,
+          service: expect.objectContaining({
+            name: 'TestServer'
+          }),
+          checks: expect.arrayContaining([
+            expect.objectContaining({ name: 'engine', status: 'ok' }),
+            expect.objectContaining({ name: 'knex', status: 'ok' }),
+            expect.objectContaining({ name: 'mongo', status: 'ok' })
+          ])
+        })
+      )
     })
 
     it('should register admin routes', async () => {
@@ -1242,7 +1231,9 @@ describe('OverlayExpress', () => {
         return res
       }
       // Flush the async IIFE inside the /arc-ingest handler.
-      const flush = async (): Promise<void> => { await new Promise(resolve => setImmediate(resolve)) }
+      const flush = async (): Promise<void> => {
+        await new Promise(resolve => setImmediate(resolve))
+      }
       const proofCallbackBody = {
         txid: '11'.repeat(32),
         merklePath: '00',
@@ -1311,6 +1302,40 @@ describe('OverlayExpress', () => {
         expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
       })
 
+      it('accepts callback tokens from array-valued headers', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const bearerRes = mockRes()
+        const callbackRes = mockRes()
+
+        handler(
+          { headers: { authorization: ['Bearer secret-token'] }, body: proofCallbackBody },
+          bearerRes
+        )
+        handler(
+          { headers: { 'x-callback-token': ['secret-token'] }, body: proofCallbackBody },
+          callbackRes
+        )
+        await flush()
+
+        expect(bearerRes.status).not.toHaveBeenCalledWith(401)
+        expect(callbackRes.status).not.toHaveBeenCalledWith(401)
+      })
+
+      it('accepts the configured token as an unprefixed authorization header', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: { authorization: 'secret-token' }, body: proofCallbackBody }, res)
+        await flush()
+
+        expect(res.status).not.toHaveBeenCalledWith(401)
+        expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
+      })
+
       it('does not enforce a token when none is configured', async () => {
         instance.configureArcApiKey('test-arc-key')
         const handler = await captureArcIngestHandler()
@@ -1323,20 +1348,50 @@ describe('OverlayExpress', () => {
         expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
       })
 
+      it('returns a public validation error when the callback has no txid', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: {}, body: {} }, res)
+        await flush()
+
+        expect(res.status).toHaveBeenCalledWith(400)
+        expect(res.json).toHaveBeenCalledWith({
+          status: 'error',
+          message: 'Provider callback is missing txid'
+        })
+      })
+
+      it('accepts a non-terminal status update without a Merkle proof', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: {}, body: { txid: '11'.repeat(32), txStatus: 'SEEN_ON_NETWORK' } }, res)
+        await flush()
+
+        expect(res.status).toHaveBeenCalledWith(202)
+        expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
+      })
+
       it('evicts a transaction when a provider reports a terminal double-spend status', async () => {
         instance.configureArcApiKey('test-arc-key')
         instance.configureArcCallbackToken('secret-token')
         const handler = await captureArcIngestHandler()
         const res = mockRes()
 
-        handler({
-          headers: { authorization: 'Bearer secret-token' },
-          body: {
-            txid: '11'.repeat(32),
-            txStatus: 'DOUBLE_SPEND_ATTEMPTED',
-            competingTxs: ['22'.repeat(32)]
-          }
-        }, res)
+        handler(
+          {
+            headers: { authorization: 'Bearer secret-token' },
+            body: {
+              txid: '11'.repeat(32),
+              txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+              competingTxs: ['22'.repeat(32)]
+            }
+          },
+          res
+        )
         await flush()
 
         expect(mockEngine.evictAppliedTransaction).toHaveBeenCalledWith('11'.repeat(32), {
@@ -1344,6 +1399,31 @@ describe('OverlayExpress', () => {
           reason: 'DOUBLE_SPEND_ATTEMPTED'
         })
         expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
+      })
+
+      it('evicts an orphan reported through extraInfo and preserves its topic', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler(
+          {
+            headers: {},
+            body: {
+              txid: '33'.repeat(32),
+              extraInfo: 'orphaned by competing transaction',
+              topic: 'tm_test'
+            }
+          },
+          res
+        )
+        await flush()
+
+        expect(mockEngine.evictAppliedTransaction).toHaveBeenCalledWith('33'.repeat(32), {
+          topic: 'tm_test',
+          reason: 'orphaned by competing transaction'
+        })
+        expect(res.status).toHaveBeenCalledWith(200)
       })
     })
 
@@ -1463,10 +1543,12 @@ describe('OverlayExpress', () => {
 
     it('should listen on configured port', async () => {
       instance.configurePort(8080)
-      const listenSpy = jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
-        callback()
-        return {} as any
-      })
+      const listenSpy = jest
+        .spyOn(instance.app, 'listen')
+        .mockImplementation((port: any, callback: any) => {
+          callback()
+          return {} as any
+        })
 
       await instance.start()
 
