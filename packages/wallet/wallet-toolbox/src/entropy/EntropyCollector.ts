@@ -123,19 +123,23 @@ export class EntropyCollector {
 
     // Add mouse positions
     for (const pos of this.rawEntropy.mousePositions) {
-      // Use lower bits of coordinates (more random due to jitter)
-      dataPoints.push(pos.x & 0xff)
-      dataPoints.push(pos.y & 0xff)
-      // Include fractional timing (microsecond precision)
-      dataPoints.push(Math.floor(pos.time * 1000) & 0xff)
-      dataPoints.push(Math.floor(pos.time * 1000000) & 0xff)
+      dataPoints.push(
+        // Use lower bits of coordinates (more random due to jitter).
+        pos.x & 0xff,
+        pos.y & 0xff,
+        // Include fractional timing (microsecond precision).
+        Math.floor(pos.time * 1000) & 0xff,
+        Math.floor(pos.time * 1000000) & 0xff
+      )
     }
 
     // Add timing deltas (high entropy source)
     for (const delta of this.rawEntropy.timingDeltas) {
       // Timing deltas converted to bytes
-      dataPoints.push(Math.floor(delta * 1000) & 0xff)
-      dataPoints.push(Math.floor(delta * 1000000) & 0xff)
+      dataPoints.push(
+        Math.floor(delta * 1000) & 0xff,
+        Math.floor(delta * 1000000) & 0xff
+      )
     }
 
     // Hash to compress and whiten the entropy

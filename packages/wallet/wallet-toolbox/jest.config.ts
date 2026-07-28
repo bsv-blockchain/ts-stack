@@ -36,6 +36,11 @@ const getJestConfig = async (): Promise<Config> => {
       '^@bsv/sdk$': '<rootDir>/../../sdk/mod.ts',
       '^(\\.{1,2}/.*)\\.js$': '$1'
     },
+    // SQLite-backed tests create multi-gigabyte fixture sets. Purge stale
+    // artifacts before a run and remove the completed run's artifacts after
+    // every Jest invocation so local worktrees cannot accumulate them.
+    globalSetup: '<rootDir>/test/utils/cleanupTestDatabases.js',
+    globalTeardown: '<rootDir>/test/utils/cleanupTestDatabases.js',
     testTimeout: 30000
   }
 }

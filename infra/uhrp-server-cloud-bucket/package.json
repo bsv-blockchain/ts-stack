@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -54,7 +54,7 @@
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "pino": "^10.3.1",
     "prettyjson": "^1.2.5",
     "semver": "^7.8.5"

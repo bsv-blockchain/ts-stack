@@ -599,8 +599,7 @@ async function persistOutputs (
   const { action, tx, rawTx } = validated
   const offsets = parseTxScriptOffsets(rawTx)
   const rows: TableOutput[] = []
-  for (let index = 0; index < action.plan.outputs.length; index++) {
-    const planned = action.plan.outputs[index]
+  for (const planned of action.plan.outputs) {
     const output = tx.outputs[planned.vout]
     const isChange = planned.providedBy === 'storage' && planned.purpose === 'change'
     const isCommission = planned.providedBy === 'storage' &&

@@ -264,11 +264,12 @@ export default class HD {
       throw new TypeError('i must be a number')
     }
 
-    const ibc: number[] = []
-    ibc.push((i >> 24) & 0xff)
-    ibc.push((i >> 16) & 0xff)
-    ibc.push((i >> 8) & 0xff)
-    ibc.push(i & 0xff)
+    const ibc: number[] = [
+      (i >> 24) & 0xff,
+      (i >> 16) & 0xff,
+      (i >> 8) & 0xff,
+      i & 0xff
+    ]
     const ib = [...ibc]
 
     const usePrivate = (i & 0x80000000) !== 0

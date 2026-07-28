@@ -39,21 +39,21 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/gasp`                       | `1.3.1`      | `1.3.1`  | none      | [API and usage](../packages/overlays/gasp.md)                         | No migration is pending for the current source version.                                                                                       |
 | `@bsv/message-box-client`         | `2.2.2`      | `2.2.4`  | patch     | [API and usage](../packages/messaging/message-box-client.md)          | No consumer migration is required; Message Box protocol and client entry points are unchanged.                                                |
 | `@bsv/overlay`                    | `2.2.1`      | `2.2.3`  | patch     | [API and usage](../packages/overlays/overlay.md)                      | No consumer migration is required; existing imports remain valid and the documented storage subpath is restored.                              |
-| `@bsv/overlay-discovery-services` | `2.1.1`      | `2.1.3`  | patch     | [API and usage](../packages/overlays/overlay-discovery-services.md)   | No consumer migration is required; discovery records and public network behavior are unchanged.                                               |
+| `@bsv/overlay-discovery-services` | `2.1.1`      | `2.1.4`  | patch     | [API and usage](../packages/overlays/overlay-discovery-services.md)   | No consumer migration is required; discovery records and public network behavior are unchanged.                                               |
 | `@bsv/overlay-express`            | `2.4.2`      | `2.4.6`  | patch     | [API and usage](../packages/overlays/overlay-express.md)              | No consumer migration is required; wildcard credential-free public access remains the default and runtimes may opt into the new close method. |
 | `@bsv/overlay-topics`             | `1.6.1`      | `1.6.5`  | patch     | [API and usage](../packages/overlays/overlay-topics.md)               | No consumer migration is required; topic IDs, lookup contracts, and persisted formats are unchanged.                                          |
 | `@bsv/paymail`                    | `2.4.2`      | `2.4.3`  | patch     | [API and usage](../packages/messaging/paymail.md)                     | No consumer migration is required; existing Paymail client APIs and protocol semantics are retained.                                          |
 | `@bsv/payment-express-middleware` | `2.1.1`      | `2.1.2`  | patch     | [API and usage](../packages/middleware/payment-express-middleware.md) | No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported.                                                      |
-| `@bsv/sdk`                        | `2.2.0`      | `2.2.7`  | patch     | [API and usage](../packages/sdk/bsv-sdk.md)                           | No consumer migration is required; the source candidate preserves the 2.x public API and supported import forms.                              |
+| `@bsv/sdk`                        | `2.2.0`      | `2.2.8`  | patch     | [API and usage](../packages/sdk/bsv-sdk.md)                           | No consumer migration is required; the source candidate preserves the 2.x public API and supported import forms.                              |
 | `@bsv/simple`                     | `0.4.1`      | `0.4.4`  | patch     | [API and usage](../packages/helpers/simple.md)                        | No consumer migration is required; the browser and server entry points remain compatible.                                                     |
-| `@bsv/templates`                  | `1.9.1`      | `1.9.1`  | none      | [API and usage](../packages/helpers/templates.md)                     | No migration is pending for the current source version.                                                                                       |
-| `@bsv/teranode-listener`          | `1.1.1`      | `1.1.1`  | none      | [API and usage](../packages/network/teranode-listener.md)             | No migration is pending for the current source version.                                                                                       |
-| `@bsv/verifast`                   | `0.3.0`      | `0.3.0`  | none      | [API and usage](../packages/sdk/verifast.md)                          | No migration is pending for the current source version.                                                                                       |
+| `@bsv/templates`                  | `1.9.1`      | `1.9.2`  | patch     | [API and usage](../packages/helpers/templates.md)                     | No consumer migration is required; template APIs and generated script semantics are unchanged.                                                |
+| `@bsv/teranode-listener`          | `1.1.1`      | `1.1.2`  | patch     | [API and usage](../packages/network/teranode-listener.md)             | No consumer migration is required; listener APIs, topics, and network configuration are unchanged.                                            |
+| `@bsv/verifast`                   | `0.3.0`      | `0.3.1`  | patch     | [API and usage](../packages/sdk/verifast.md)                          | No consumer migration is required; valid verification results and worker protocols are unchanged.                                             |
 | `@bsv/wallet-helper`              | `0.1.1`      | `0.1.3`  | patch     | [API and usage](../packages/helpers/wallet-helper.md)                 | No consumer migration is required; fluent builder APIs and transaction semantics are unchanged.                                               |
 | `@bsv/wallet-relay`               | `0.2.2`      | `0.2.3`  | patch     | [API and usage](../packages/wallet/wallet-relay.md)                   | No consumer migration is required; relay protocol and CLI entry points are unchanged.                                                         |
-| `@bsv/wallet-toolbox`             | `2.4.4`      | `2.4.10` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required; persisted schemas and the 2.x wallet and storage interfaces remain compatible.                             |
-| `@bsv/wallet-toolbox-client`      | `2.4.4`      | `2.4.10` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No consumer migration is required; client entry points and remote storage contracts remain compatible.                                        |
-| `@bsv/wallet-toolbox-mobile`      | `2.4.4`      | `2.4.10` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No consumer migration is required; React Native and mobile bridge contracts remain compatible.                                                |
+| `@bsv/wallet-toolbox`             | `2.4.4`      | `2.4.11` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required; persisted schemas and the 2.x wallet and storage interfaces remain compatible.                             |
+| `@bsv/wallet-toolbox-client`      | `2.4.4`      | `2.4.11` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No consumer migration is required; client entry points and remote storage contracts remain compatible.                                        |
+| `@bsv/wallet-toolbox-mobile`      | `2.4.4`      | `2.4.11` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No consumer migration is required; React Native and mobile bridge contracts remain compatible.                                                |
 | `create-bsv-app`                  | `1.0.2`      | `1.0.2`  | none      | [API and usage](../packages/helpers/create-bsv-app.md)                | No migration is pending for the current source version.                                                                                       |
 
 `none` means the source manifest matches the recorded npm baseline. Any other
@@ -236,7 +236,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/overlays/overlay-discovery-services.md](../packages/overlays/overlay-discovery-services.md)
 - Source: [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services)
-- Release note: Hardens discovery URI and registry validation and reduces production complexity without changing SHIP or SLAP contracts.
+- Release note: Hardens discovery URI, registry and lookup validation, preserves the historical lookup error class, and reduces production duplication.
 - Migration: No consumer migration is required; discovery records and public network behavior are unchanged.
 
 | Public subpath | Runtime target(s)                              | Declaration target(s)                                |
@@ -303,7 +303,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/sdk/bsv-sdk.md](../packages/sdk/bsv-sdk.md)
 - Source: [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
-- Release note: Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, and production maintainability remediation.
+- Release note: Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, and behavior-preserving production maintainability remediation.
 - Migration: No consumer migration is required; the source candidate preserves the 2.x public API and supported import forms.
 
 | Public subpath                  | Runtime target(s)                                                                                          | Declaration target(s)                                                                                            |
@@ -375,8 +375,8 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/helpers/templates.md](../packages/helpers/templates.md)
 - Source: [packages/helpers/ts-templates](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates)
-- Release note: The source manifest matches the published package; no unpublished release candidate exists.
-- Migration: No migration is pending for the current source version.
+- Release note: Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence.
+- Migration: No consumer migration is required; template APIs and generated script semantics are unchanged.
 
 | Public subpath | Runtime target(s)                       | Declaration target(s)                       |
 | -------------- | --------------------------------------- | ------------------------------------------- |
@@ -387,8 +387,8 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/network/teranode-listener.md](../packages/network/teranode-listener.md)
 - Source: [packages/network/ts-p2p](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p)
-- Release note: The source manifest matches the published package; no unpublished release candidate exists.
-- Migration: No migration is pending for the current source version.
+- Release note: Refreshes the compatible libp2p transport, discovery, identification, DHT, peer-ID, ping, and private-network dependency set.
+- Migration: No consumer migration is required; listener APIs, topics, and network configuration are unchanged.
 
 | Public subpath   | Runtime target(s)                      | Declaration target(s) |
 | ---------------- | -------------------------------------- | --------------------- |
@@ -399,8 +399,8 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/sdk/verifast.md](../packages/sdk/verifast.md)
 - Source: [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast)
-- Release note: The source manifest matches the published package; no unpublished release candidate exists.
-- Migration: No migration is pending for the current source version.
+- Release note: Uses precise worker result type errors and refreshes the compatible browser verification test client.
+- Migration: No consumer migration is required; valid verification results and worker protocols are unchanged.
 
 | Public subpath             | Runtime target(s)                                                                           | Declaration target(s)                                                |
 | -------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -441,7 +441,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Adds atomic action-batch transport, storage and proof resilience, security hardening, strict package contracts, and broad production maintainability improvements.
+- Release note: Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, and broad production maintainability improvements.
 - Migration: No consumer migration is required; persisted schemas and the 2.x wallet and storage interfaces remain compatible.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |
@@ -455,7 +455,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-client.md](../packages/wallet/wallet-toolbox-client.md)
 - Source: [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client)
-- Release note: Carries the lockstep Wallet Toolbox client candidate with transport, validation, package, and declaration hardening.
+- Release note: Carries the lockstep Wallet Toolbox client candidate with transport, validation, dependency, package, and declaration hardening.
 - Migration: No consumer migration is required; client entry points and remote storage contracts remain compatible.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
@@ -467,7 +467,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-mobile.md](../packages/wallet/wallet-toolbox-mobile.md)
 - Source: [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile)
-- Release note: Carries the lockstep Wallet Toolbox mobile candidate with platform, package, declaration, and transport hardening.
+- Release note: Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, package, declaration, and transport hardening.
 - Migration: No consumer migration is required; React Native and mobile bridge contracts remain compatible.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |

@@ -19,9 +19,9 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
     throw new Error('PRICE_PER_GB_MO is undefined')
   }
 
-  const pricePerGBMonth = parseFloat(PRICE_PER_GB_MO)
-  if (isNaN(pricePerGBMonth)) {
-    throw new Error('PRICE_PER_GB_MO must be a valid number')
+  const pricePerGBMonth = Number.parseFloat(PRICE_PER_GB_MO)
+  if (Number.isNaN(pricePerGBMonth)) {
+    throw new TypeError('PRICE_PER_GB_MO must be a valid number')
   }
 
   // File size is in bytes, convert to gigabytes
@@ -39,8 +39,14 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
     const { data } = await axios.get(
       'https://api.whatsonchain.com/v1/bsv/main/exchangerate'
     )
-    if (typeof data !== 'object' || isNaN(data.rate)) {
-      throw new Error('Invalid rate response')
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      typeof data.rate !== 'number' ||
+      !Number.isFinite(data.rate) ||
+      data.rate <= 0
+    ) {
+      throw new TypeError('Invalid rate response')
     }
     exchangeRate = data.rate
   } catch (e) {
@@ -52,7 +58,7 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
   const exchangeRateInSatoshis = 1 / (exchangeRate / 100000000)
 
   // Account for server overhead in our prices, so there is a minimum of 10 satoshis
-  let satPrice = Math.max(10, Math.floor(usdPrice * exchangeRateInSatoshis));
+  const satPrice = Math.max(10, Math.floor(usdPrice * exchangeRateInSatoshis))
   return satPrice
 }
 

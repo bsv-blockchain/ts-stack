@@ -14,7 +14,8 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
-- (Include changes here.)
+- Consolidate MultiPushDrop script-chunk assembly without changing the
+  generated locking script.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)

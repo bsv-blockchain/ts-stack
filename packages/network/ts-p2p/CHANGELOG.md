@@ -13,7 +13,8 @@ All notable changes to this project will be documented in this file. The format 
 - Optional typed decoder for the two-layer JSON wire format. New `decodeMessage()` / `tryDecodeMessage()` helpers and topic payload interfaces (`MessageEnvelope`, `BlockMessage`, `SubtreeMessage`, `RejectedTxMessage`, `NodeStatusMessage`, `FeePolicy`). Set `decodeMessages: true` on the listener to receive a typed `DecodedMessage` instead of raw `Uint8Array`. Backward compatible (defaults to off).
 
 ### Changed
-- (Detail modifications that are non-breaking but relevant to the end-users.)
+- Refresh the compatible libp2p transport, discovery, identification, DHT,
+  peer-ID, ping, and private-network maintenance releases.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)

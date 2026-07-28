@@ -156,11 +156,13 @@ export default class PushDrop implements ScriptTemplate {
     }, this.originator)
     const lockChunks: Array<{ op: number, data?: number[] }> = []
     const pushDropChunks: Array<{ op: number, data?: number[] }> = []
-    lockChunks.push({
-      op: publicKey.length / 2,
-      data: Utils.toArray(publicKey, 'hex')
-    })
-    lockChunks.push({ op: OP.OP_CHECKSIG })
+    lockChunks.push(
+      {
+        op: publicKey.length / 2,
+        data: Utils.toArray(publicKey, 'hex')
+      },
+      { op: OP.OP_CHECKSIG }
+    )
     if (includeSignature) {
       const dataToSign = fields.flat()
       const { signature } = await this.wallet.createSignature({

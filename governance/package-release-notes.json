@@ -105,7 +105,7 @@
       "name": "@bsv/overlay-discovery-services",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Hardens discovery URI and registry validation and reduces production complexity without changing SHIP or SLAP contracts.",
+      "summary": "Hardens discovery URI, registry and lookup validation, preserves the historical lookup error class, and reduces production duplication.",
       "migration": "No consumer migration is required; discovery records and public network behavior are unchanged."
     },
     {
@@ -140,7 +140,7 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, and production maintainability remediation.",
+      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, and behavior-preserving production maintainability remediation.",
       "migration": "No consumer migration is required; the source candidate preserves the 2.x public API and supported import forms."
     },
     {
@@ -153,23 +153,23 @@
     {
       "name": "@bsv/templates",
       "publishedVersion": "1.9.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence.",
+      "migration": "No consumer migration is required; template APIs and generated script semantics are unchanged."
     },
     {
       "name": "@bsv/teranode-listener",
       "publishedVersion": "1.1.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Refreshes the compatible libp2p transport, discovery, identification, DHT, peer-ID, ping, and private-network dependency set.",
+      "migration": "No consumer migration is required; listener APIs, topics, and network configuration are unchanged."
     },
     {
       "name": "@bsv/verifast",
       "publishedVersion": "0.3.0",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Uses precise worker result type errors and refreshes the compatible browser verification test client.",
+      "migration": "No consumer migration is required; valid verification results and worker protocols are unchanged."
     },
     {
       "name": "@bsv/wallet-helper",
@@ -189,21 +189,21 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, strict package contracts, and broad production maintainability improvements.",
+      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, and broad production maintainability improvements.",
       "migration": "No consumer migration is required; persisted schemas and the 2.x wallet and storage interfaces remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox client candidate with transport, validation, package, and declaration hardening.",
+      "summary": "Carries the lockstep Wallet Toolbox client candidate with transport, validation, dependency, package, and declaration hardening.",
       "migration": "No consumer migration is required; client entry points and remote storage contracts remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with platform, package, declaration, and transport hardening.",
+      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, package, declaration, and transport hardening.",
       "migration": "No consumer migration is required; React Native and mobile bridge contracts remain compatible."
     },
     {

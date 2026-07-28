@@ -125,7 +125,7 @@ const isUiRuntime = (): boolean => {
   if (typeof globalThis === 'undefined') return false
   const g = globalThis as any
   // React Native exposes __DEV__/navigator.product; browsers expose window/document.
-  if (typeof g.window !== 'undefined' && typeof g.document !== 'undefined') return true
+  if (g.window !== undefined && g.document !== undefined) return true
   if (typeof g.navigator?.product === 'string' && g.navigator.product === 'ReactNative') return true
   return false
 }

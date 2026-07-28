@@ -235,6 +235,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Consolidate script-template and TOTP array construction and simplify
+  transaction dependency traversal without changing serialized output,
+  traversal order, or public APIs.
 - Pre-size Wallet Wire frames and keep large BRC-100 binary arguments/results
   as `Uint8Array` views through processor/transceiver handoff. The optional
   compact-byte substrate avoids redundant response writers and aggregate

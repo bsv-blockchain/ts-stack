@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-mobile",
-  "version": "2.4.10",
+  "version": "2.4.11",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -80,7 +80,7 @@
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@bsv/sdk": "workspace:^",
-    "@react-native/babel-preset": "0.86.1",
+    "@react-native/babel-preset": "0.86.2",
     "@vitest/coverage-v8": "4.1.10",
     "@types/node": "^26.1.1",
     "hermes-compiler": "260318099.0.1",

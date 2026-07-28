@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '1.9.1'
+version: '1.9.2'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_updated: '2026-07-28'
+last_verified: '2026-07-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'

@@ -65,7 +65,8 @@ export class SLAPLookupService implements LookupService {
 
     if (question.query === 'findAll') return await this.storage.findAll()
     if (typeof question.query !== 'object') {
-      throw new TypeError(
+      // Keep the historical concrete Error class: consumers may branch on it.
+      throw new Error( // NOSONAR -- compatibility requires Error rather than TypeError
         'Invalid query format. Query must be "findAll" string or an object with valid parameters.'
       )
     }

@@ -163,18 +163,21 @@ export class MultiPushDrop implements ScriptTemplate {
       })
     }
 
-    // Pick the value on the stack that's right before the locking script.
-    // This should be the index of the key to use in the unlock.
-    lockPart.push(createMinimallyEncodedScriptChunk([nPublicKeys]), { op: OP.OP_PICK })
-
-    // Now we use the index to get the actual key.
-    lockPart.push({ op: OP.OP_PICK })
-
-    // We pull the signature from the bottom of the stack, no matter the number of keys.
-    lockPart.push({ op: OP.OP_DEPTH }, { op: OP.OP_1SUB }, { op: OP.OP_PICK })
-
-    // We swap the signature and public key so they're in the correct order, then CHECKSIGVERIFY
-    lockPart.push({ op: OP.OP_SWAP }, { op: OP.OP_CHECKSIGVERIFY })
+    lockPart.push(
+      // Pick the value on the stack that's right before the locking script.
+      // This should be the index of the key to use in the unlock.
+      createMinimallyEncodedScriptChunk([nPublicKeys]),
+      { op: OP.OP_PICK },
+      // Now use the index to get the actual key.
+      { op: OP.OP_PICK },
+      // Pull the signature from the bottom of the stack, regardless of key count.
+      { op: OP.OP_DEPTH },
+      { op: OP.OP_1SUB },
+      { op: OP.OP_PICK },
+      // Put signature and key in CHECKSIGVERIFY order.
+      { op: OP.OP_SWAP },
+      { op: OP.OP_CHECKSIGVERIFY }
+    )
 
     // Construct PushDrop Part for fields
     const pushDropPart: Array<{ op: number; data?: number[] }> = []

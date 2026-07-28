@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.4.10'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '2.4.11'
+last_updated: '2026-07-28'
+last_verified: '2026-07-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
