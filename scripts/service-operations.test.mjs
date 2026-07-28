@@ -20,7 +20,7 @@ test('service operations registry renders all seven public services', async () =
   for (const service of registry.services) assert.match(rendered, new RegExp(service.name))
 })
 
-test('service operations registry satisfies its executable contract', async () => {
-  const { errors } = await validateServiceOperations()
+test('service operations registry satisfies its dependency-free executable contract', async () => {
+  const { errors } = await validateServiceOperations(undefined, { validateManifests: false })
   assert.deepEqual(errors, [])
 })

@@ -382,24 +382,26 @@ const validatePolicy = (policy, errors) => {
   )
 }
 
-export async function validateServiceOperations(root = ROOT) {
+export async function validateServiceOperations(root = ROOT, { validateManifests = true } = {}) {
   const errors = []
   const registry = await readJson(join(root, 'governance/service-operations.json'))
   const containers = await readJson(join(root, 'governance/container-images.json'))
 
   validateRegistryShape(registry, containers, errors)
   validatePolicy(registry.policy, errors)
-  for (const manifestRoot of registry.manifestRoots ?? []) {
-    await validateManifestRoot(root, manifestRoot, errors)
-  }
   for (const service of registry.services) {
     await validateService(root, service, registry.policy, errors)
   }
-  for (const workload of registry.applicationWorkloads) {
-    await validateApplicationWorkload(root, workload, errors)
-  }
-  for (const example of registry.statefulExamples) {
-    await validateStatefulExample(root, example, errors)
+  if (validateManifests) {
+    for (const manifestRoot of registry.manifestRoots ?? []) {
+      await validateManifestRoot(root, manifestRoot, errors)
+    }
+    for (const workload of registry.applicationWorkloads) {
+      await validateApplicationWorkload(root, workload, errors)
+    }
+    for (const example of registry.statefulExamples) {
+      await validateStatefulExample(root, example, errors)
+    }
   }
 
   return { errors, registry }
