@@ -74,7 +74,11 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)
   assert.match(workflow, /^  workflow_dispatch:$/m)
   assert.match(workflow, /^    name: Analyze \(\$\{\{ matrix\.language \}\}\)$/m)
-  assert.match(workflow, /^    if: vars\.CODEQL_ADVANCED_ENABLED == 'true'$/m)
+  assert.doesNotMatch(
+    workflow,
+    /CODEQL_ADVANCED_ENABLED/,
+    'advanced CodeQL must not depend on a repository variable that is unavailable to fork PRs'
+  )
   assert.match(workflow, /^      security-events: write$/m)
   assert.match(workflow, /^          build-mode: none$/m)
   assert.match(workflow, /^          config-file: \.\/\.github\/codeql\/codeql-config\.yml$/m)

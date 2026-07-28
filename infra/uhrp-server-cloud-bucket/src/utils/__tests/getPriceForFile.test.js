@@ -44,6 +44,25 @@ describe('getPriceForFile', () => {
       'Exchange rate failed, using fallback rate'
     )
   })
+  it.each([
+    [{ rate: '200' }, 'string'],
+    [{ rate: Number.NaN }, 'NaN'],
+    [{ rate: Number.POSITIVE_INFINITY }, 'infinite'],
+    [{ rate: 0 }, 'zero'],
+    [{ rate: -1 }, 'negative']
+  ])('rejects a %s exchange rate and uses the safe fallback (%s)', async (data) => {
+    axios.get.mockReturnValue({ data })
+
+    await expect(getPriceForFile(valid)).resolves.toEqual(5645333)
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'price.exchange_rate',
+        fallback_rate: 30,
+        err: expect.any(TypeError)
+      }),
+      'Exchange rate failed, using fallback rate'
+    )
+  })
   it('Works with different exchange rates', async () => {
     // As the exchange rate increases, number of satoshis decreases as they are more valuable
     axios.get.mockReturnValue({ data: { rate: 300 } })

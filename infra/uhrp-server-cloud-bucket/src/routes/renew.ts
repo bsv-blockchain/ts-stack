@@ -67,7 +67,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
     const newCustomTimeIso = new Date(newExpiryTimeSeconds * 1000).toISOString()
 
-    const fileSizeNum = parseInt(size, 10) || 0
+    const fileSizeNum = Number.parseInt(size, 10) || 0
     let amount = 0
     if (fileSizeNum > 0) {
       amount = await getPriceForFile({
@@ -105,7 +105,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       const expiryTag = out.tags.find(t => t.startsWith('expiry_time_'))
       if (!expiryTag) continue
 
-      const expiryNum = parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+      const expiryNum = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
 
       if (expiryNum > maxpiry) {
         maxpiry = expiryNum
@@ -145,14 +145,16 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     )
 
     // Creating new tags
-    const newTags = []
+    const newTags: string[] = []
     if (prevAdvertisement.tags) {
       const uploaderTag = prevAdvertisement.tags.find(t => t.startsWith('uploader_identity_key_'))
       if (uploaderTag) newTags.push(uploaderTag)
     }
-    newTags.push(`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`)
-    newTags.push(`object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`)
-    newTags.push(`expiry_time_${newExpiryTimeSeconds}`)
+    newTags.push(
+      `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+      `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
+      `expiry_time_${newExpiryTimeSeconds}`
+    )
 
     const { signableTransaction } = await wallet.createAction({
       inputBEEF: BEEF,

@@ -99,16 +99,13 @@ export function computeMerklePath(txids: string[], targetIndex: number, blockHei
       if (siblingIndex >= levelTxids.length) {
         // Odd number of items, sibling is a duplicate
         const siblingLeaf: Leaf = { offset: siblingIndex, duplicate: true }
-        path[0].push(targetLeaf)
-        path[0].push(siblingLeaf)
+        path[0].push(targetLeaf, siblingLeaf)
       } else {
         const siblingLeaf: Leaf = { offset: siblingIndex, hash: levelTxids[siblingIndex] }
         if (isOdd) {
-          path[0].push(siblingLeaf)
-          path[0].push(targetLeaf)
+          path[0].push(siblingLeaf, targetLeaf)
         } else {
-          path[0].push(targetLeaf)
-          path[0].push(siblingLeaf)
+          path[0].push(targetLeaf, siblingLeaf)
         }
       }
     } else if (siblingIndex >= levelTxids.length) {

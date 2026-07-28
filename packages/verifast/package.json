@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -92,7 +92,7 @@
     "@types/node": "^26.1.1",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
-    "puppeteer-core": "^25.3.0",
+    "puppeteer-core": "^25.4.0",
     "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
     "tsx": "^4.23.1",

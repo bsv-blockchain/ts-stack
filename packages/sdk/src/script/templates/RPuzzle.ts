@@ -59,9 +59,11 @@ export default class RPuzzle implements ScriptTemplate {
         op: OP['OP_' + this.type]
       })
     }
-    chunks.push({ op: value.length, data: value })
-    chunks.push({ op: OP.OP_EQUALVERIFY })
-    chunks.push({ op: OP.OP_CHECKSIG })
+    chunks.push(
+      { op: value.length, data: value },
+      { op: OP.OP_EQUALVERIFY },
+      { op: OP.OP_CHECKSIG }
+    )
     return new LockingScript(chunks)
   }
 

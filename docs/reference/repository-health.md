@@ -2,9 +2,9 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.3.0'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '1.3.1'
+last_updated: '2026-07-28'
+last_verified: '2026-07-28'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -69,9 +69,14 @@ locked generator, and checked-in output are verified by codegen CI instead of
 being misrepresented as authored Python in CodeQL. A repository-control test
 rejects any loss of the authored languages, events, permissions, query
 coverage, or required check names.
-`CODEQL_ADVANCED_ENABLED` is the repository-level cutover gate: keep it `true`
-after advanced setup is activated. It exists only to prevent default and
-advanced analysis from uploading concurrently during the migration PR.
+The advanced workflow is unconditional for each configured event. Do not gate
+it on repository variables: those variables are unavailable to fork-origin
+pull-request jobs, which would silently skip analysis of external contributions.
+The repository-owned `SonarCloud zero findings` job waits for SonarCloud to
+report the exact pull-request head, then requires both the configured quality
+gate and zero open/confirmed issues and zero unreviewed security hotspots. The
+existing required `merge-gate` depends on that job. A green aggregate Sonar
+quality rating alone is therefore not sufficient merge evidence.
 
 `governance/repository-health/exceptions.json` is the only registry for temporary
 exceptions. Its schema is in `exception.schema.json`. Every entry requires an
@@ -173,7 +178,8 @@ checks:
 7. generated stack/conformance facts, all 30 public package README contracts,
    and one current consolidated package page per public package are current;
    and
-8. the health implementation’s unit tests pass.
+8. the health implementation’s unit tests pass; and
+9. the exact SonarCloud pull-request analysis has no unresolved findings.
 
 Affected package changes also select their matching mutation targets. The
 parallel mutation lane restores the shared workspace build, executes only the

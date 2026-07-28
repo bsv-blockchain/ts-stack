@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.4.10",
+  "version": "2.4.11",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -79,11 +79,11 @@
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "hash-wasm": "^4.12.0",
     "idb": "^8.0.3",
     "knex": "^3.3.0",
-    "mysql2": "^3.23.1",
+    "mysql2": "^3.23.2",
     "ws": "^8.21.1"
   },
   "devDependencies": {

@@ -2,26 +2,10 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction } from '@bsv/sdk'
 import SLAPTopicDocs from './SLAPTopic.docs.js'
 import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
-
-function hasPreviousCoins(previousCoins: number[] | undefined): boolean {
-  return previousCoins !== undefined && previousCoins.length > 0
-}
-
-function logSLAPSummary(outputsToAdmit: number[], previousCoins: number[]): void {
-  if (outputsToAdmit.length > 0) {
-    console.log(
-      `👏 Admitted ${outputsToAdmit.length} SLAP ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`
-    )
-  }
-  if (hasPreviousCoins(previousCoins)) {
-    console.log(
-      `✋ Consumed ${previousCoins.length} previous SLAP ${previousCoins.length === 1 ? 'coin' : 'coins'}!`
-    )
-  }
-  if (outputsToAdmit.length === 0 && !hasPreviousCoins(previousCoins)) {
-    console.warn('😕 No SLAP outputs admitted and no previous SLAP coins consumed.')
-  }
-}
+import {
+  logDiscoveryIdentificationError,
+  logDiscoverySummary
+} from '../utils/discoveryTopicLogging.js'
 
 /**
  * 🤚 SLAP Topic Manager
@@ -55,12 +39,10 @@ export class SLAPTopicManager implements TopicManager {
       }
     } catch (error) {
       // Only log an error if no outputs were admitted and no previous coins consumed
-      if (outputsToAdmit.length === 0 && !hasPreviousCoins(previousCoins)) {
-        console.error('🤚 Error identifying admissible outputs:', error)
-      }
+      logDiscoveryIdentificationError('SLAP', outputsToAdmit, previousCoins, error)
     }
 
-    logSLAPSummary(outputsToAdmit, previousCoins)
+    logDiscoverySummary('SLAP', outputsToAdmit, previousCoins)
 
     return {
       outputsToAdmit,

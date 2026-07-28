@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Refresh compatible rate-limit, MySQL, and React Native build dependencies;
+  consolidate entropy, Merkle-path, and action-batch iteration without
+  changing persisted data, generated paths, or public wallet contracts.
+- Remove generated SQLite test databases before and after every Jest run so
+  repeated local validation cannot silently consume unbounded disk space.
 - Ship the Express declaration dependency required by the public storage
   server, edge-policy, and rate-limit declarations. Validate authenticated
   storage identities explicitly and normalize multi-value Express 5 headers

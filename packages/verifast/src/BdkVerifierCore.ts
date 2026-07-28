@@ -467,7 +467,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
         )
         return results.flatMap((result, index) => {
           if (!(result instanceof Int32Array)) {
-            throw new Error('BDK script worker returned an invalid result type')
+            throw new TypeError('BDK script worker returned an invalid result type')
           }
           return decodeResults(result, chunks[index].length)
         })
@@ -634,7 +634,7 @@ export default class BdkVerifierCore implements BdkVerifierInterface, AsyncCrypt
         )
         return results.flatMap((result, index) => {
           if (!(result instanceof Int32Array)) {
-            throw new Error('BDK Spend worker returned an invalid result type')
+            throw new TypeError('BDK Spend worker returned an invalid result type')
           }
           return decodeResults(result, chunks[index].length)
         })

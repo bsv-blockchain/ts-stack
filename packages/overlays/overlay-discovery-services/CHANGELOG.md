@@ -13,7 +13,9 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
-- (Detail modifications that are non-breaking but relevant to the end-users.)
+- Preserve the historical plain `Error` contract for malformed lookup queries
+  while validating every optional topics-array element.
+- Share SHIP/SLAP admittance logging without changing emitted messages.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)
@@ -22,7 +24,7 @@ All notable changes to this project will be documented in this file. The format 
 - (Indicate features or capabilities that were taken out of the project.)
 
 ### Fixed
-- (Document bugs that were fixed since the last release.)
+- Describe the accepted zero lookup limit accurately.
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
@@ -35,4 +37,3 @@ All notable changes to this project will be documented in this file. The format 
 - Updated dependencies
 
 ---
-

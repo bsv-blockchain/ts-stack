@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.16",
+  "version": "1.1.17",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -86,10 +86,10 @@
     "body-parser": "^2.3.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.6.1",
     "firebase-admin": "^14.2.0",
     "knex": "^3.3.0",
-    "mysql2": "^3.23.1",
+    "mysql2": "^3.23.2",
     "pino": "^10.3.1",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"

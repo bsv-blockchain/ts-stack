@@ -1316,8 +1316,8 @@ export default class Transaction {
       scheduledTxids.add(txid)
       stack.push({ tx: frame.tx, expanded: true })
       if (frame.tx.merklePath == null) {
-        for (let i = 0; i < frame.tx.inputs.length; i++) {
-          const source = frame.tx.inputs[i].sourceTransaction
+        for (const input of frame.tx.inputs) {
+          const source = input.sourceTransaction
           if (source != null) stack.push({ tx: source, expanded: false })
           else if (allowPartial === false)
             throw new Error('A required source transaction is missing!')
