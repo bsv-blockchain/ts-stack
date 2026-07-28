@@ -33,6 +33,32 @@ const toHex = (str: string) => {
   return Utils.toHex(Utils.toArray(str))
 }
 
+function validateInscription(inscription: Inscription | undefined): void {
+  if (inscription === undefined) return
+  if (typeof inscription !== 'object' || inscription === null) {
+    throw new Error('inscription must be an object with dataB64 and contentType properties')
+  }
+  if (!inscription.dataB64 || typeof inscription.dataB64 !== 'string') {
+    throw new Error('inscription.dataB64 is required and must be a base64 string')
+  }
+  if (!inscription.contentType || typeof inscription.contentType !== 'string') {
+    throw new Error('inscription.contentType is required and must be a string (MIME type)')
+  }
+}
+
+function validateMetadata(metadata: MAP | undefined): void {
+  if (metadata === undefined) return
+  if (typeof metadata !== 'object' || metadata === null) {
+    throw new Error('metadata must be an object')
+  }
+  if (!metadata.app || typeof metadata.app !== 'string') {
+    throw new Error('metadata.app is required and must be a string')
+  }
+  if (!metadata.type || typeof metadata.type !== 'string') {
+    throw new Error('metadata.type is required and must be a string')
+  }
+}
+
 /**
  * OrdP2PKH (1Sat Ordinal + Pay To Public Key Hash) class implementing ScriptTemplate.
  *
@@ -49,6 +75,15 @@ export default class OrdP2PKH implements ScriptTemplate {
    */
   constructor(wallet?: WalletInterface) {
     this.p2pkh = new P2PKH(wallet)
+  }
+
+  private async baseLockingScript(params: OrdinalLockParams): Promise<LockingScript> {
+    if ('pubkeyhash' in params) return await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash })
+    if ('address' in params) return await this.p2pkh.lock({ address: params.address })
+    if ('publicKey' in params) return await this.p2pkh.lock({ publicKey: params.publicKey })
+    if ('walletParams' in params)
+      return await this.p2pkh.lock({ walletParams: params.walletParams })
+    throw new Error('One of pubkeyhash, address, publicKey, or walletParams is required')
   }
 
   /**
@@ -79,48 +114,9 @@ export default class OrdP2PKH implements ScriptTemplate {
       throw new Error('One of pubkeyhash, publicKey, or walletParams is required')
     }
 
-    // Validate inscription structure if provided
-    if (params.inscription !== undefined) {
-      if (typeof params.inscription !== 'object' || params.inscription === null) {
-        throw new Error('inscription must be an object with dataB64 and contentType properties')
-      }
-      if (!params.inscription.dataB64 || typeof params.inscription.dataB64 !== 'string') {
-        throw new Error('inscription.dataB64 is required and must be a base64 string')
-      }
-      if (!params.inscription.contentType || typeof params.inscription.contentType !== 'string') {
-        throw new Error('inscription.contentType is required and must be a string (MIME type)')
-      }
-    }
-
-    // Validate MAP metadata structure if provided
-    if (params.metadata !== undefined) {
-      if (typeof params.metadata !== 'object' || params.metadata === null) {
-        throw new Error('metadata must be an object')
-      }
-      if (!params.metadata.app || typeof params.metadata.app !== 'string') {
-        throw new Error('metadata.app is required and must be a string')
-      }
-      if (!params.metadata.type || typeof params.metadata.type !== 'string') {
-        throw new Error('metadata.type is required and must be a string')
-      }
-    }
-
-    let lockingScript: LockingScript
-
-    // Determine which parameter was provided and delegate to p2pkh
-    if ('pubkeyhash' in params) {
-      lockingScript = await this.p2pkh.lock({ pubkeyhash: params.pubkeyhash })
-    } else if ('address' in params) {
-      lockingScript = await this.p2pkh.lock({ address: params.address })
-    } else if ('publicKey' in params) {
-      lockingScript = await this.p2pkh.lock({ publicKey: params.publicKey })
-    } else if ('walletParams' in params) {
-      lockingScript = await this.p2pkh.lock({ walletParams: params.walletParams })
-    } else {
-      throw new Error('One of pubkeyhash, address, publicKey, or walletParams is required')
-    }
-
-    // Apply ordinal inscription and MAP metadata
+    validateInscription(params.inscription)
+    validateMetadata(params.metadata)
+    const lockingScript = await this.baseLockingScript(params)
     return applyInscription(lockingScript, params.inscription, params.metadata)
   }
 
@@ -145,6 +141,27 @@ export default class OrdP2PKH implements ScriptTemplate {
   }
 }
 
+function ordinalEnvelope(inscription: Inscription | undefined): string {
+  if (inscription?.dataB64 === undefined || inscription?.contentType === undefined) return ''
+  const fileHex = Buffer.from(inscription.dataB64, 'base64').toString('hex').trim()
+  if (!fileHex) throw new Error('Invalid file data')
+  const fileMediaType = toHex(inscription.contentType)
+  if (!fileMediaType) throw new Error('Invalid media type')
+  return `OP_0 OP_IF ${toHex('ord')} OP_1 ${fileMediaType} OP_0 ${fileHex} OP_ENDIF`
+}
+
+function appendMapMetadata(scriptAsm: string, metaData: MAP | undefined): string {
+  if (metaData != null && (!metaData.app || !metaData.type)) {
+    throw new Error('MAP.app and MAP.type are required fields')
+  }
+  if (!metaData?.app || !metaData?.type) return scriptAsm
+  let result = `${scriptAsm ? scriptAsm + ' ' : ''}OP_RETURN ${toHex(ORDINAL_MAP_PREFIX)} ${toHex('SET')}`
+  for (const [key, value] of Object.entries(metaData)) {
+    if (key !== 'cmd') result += ` ${toHex(key)} ${toHex(value)}`
+  }
+  return result
+}
+
 /**
  * Applies ordinal inscription and MAP metadata to a P2PKH locking script.
  *
@@ -160,48 +177,9 @@ export const applyInscription = (
   metaData?: MAP,
   withSeparator = false
 ): LockingScript => {
-  let ordAsm = ''
-
-  // Create ordinal envelope if inscription data is provided
-  if (inscription?.dataB64 !== undefined && inscription?.contentType !== undefined) {
-    const ordHex = toHex('ord')
-    const fsBuffer = Buffer.from(inscription.dataB64, 'base64')
-    const fileHex = fsBuffer.toString('hex').trim()
-    if (!fileHex) {
-      throw new Error('Invalid file data')
-    }
-    const fileMediaType = toHex(inscription.contentType)
-    if (!fileMediaType) {
-      throw new Error('Invalid media type')
-    }
-    ordAsm = `OP_0 OP_IF ${ordHex} OP_1 ${fileMediaType} OP_0 ${fileHex} OP_ENDIF`
-  }
-
-  // Combine ordinal envelope with P2PKH locking script
-  let inscriptionAsmPrefix = ''
-  if (ordAsm) {
-    inscriptionAsmPrefix = ordAsm + ' ' + (withSeparator ? 'OP_CODESEPARATOR ' : '')
-  }
-  let inscriptionAsm = inscriptionAsmPrefix + lockingScript.toASM()
-
-  // Validate and append MAP metadata if provided
-  if (metaData != null && (!metaData.app || !metaData.type)) {
-    throw new Error('MAP.app and MAP.type are required fields')
-  }
-
-  if (metaData?.app && metaData?.type) {
-    const mapPrefixHex = toHex(ORDINAL_MAP_PREFIX)
-    const mapCmdValue = toHex('SET')
-    const mapPrefix =
-      (inscriptionAsm ? inscriptionAsm + ' ' : '') + 'OP_RETURN ' + mapPrefixHex + ' ' + mapCmdValue
-    inscriptionAsm = mapPrefix
-
-    for (const [key, value] of Object.entries(metaData)) {
-      if (key !== 'cmd') {
-        inscriptionAsm = inscriptionAsm + ' ' + toHex(key) + ' ' + toHex(value)
-      }
-    }
-  }
-
-  return LockingScript.fromASM(inscriptionAsm)
+  const envelope = ordinalEnvelope(inscription)
+  const separator = envelope !== '' && withSeparator ? 'OP_CODESEPARATOR ' : ''
+  const prefix = envelope !== '' ? `${envelope} ` : ''
+  const scriptAsm = `${prefix}${separator}${lockingScript.toASM()}`
+  return LockingScript.fromASM(appendMapMetadata(scriptAsm, metaData))
 }

@@ -247,6 +247,29 @@ export default class MerklePath {
     return leaf.offset
   }
 
+  private static hashPair(left: string | undefined, right: string | undefined): string {
+    return toHex(hash256(toArray((left ?? '') + (right ?? ''), 'hex').reverse()).reverse())
+  }
+
+  private nextRootHash(
+    workingHash: string,
+    index: number,
+    height: number,
+    maxOffset: number
+  ): string {
+    const offset = (index >> height) ^ 1
+    const leaf = this.findOrComputeLeaf(height, offset)
+    if (leaf == null) {
+      const isLastOddNode = this.path.length === 1 && index >> height === maxOffset >> height
+      if (isLastOddNode) return MerklePath.hashPair(workingHash, workingHash)
+      throw new Error(`Missing hash for index ${index} at height ${height}`)
+    }
+    if (leaf.duplicate === true) return MerklePath.hashPair(workingHash, workingHash)
+    return offset % 2 === 1
+      ? MerklePath.hashPair(leaf.hash, workingHash)
+      : MerklePath.hashPair(workingHash, leaf.hash)
+  }
+
   /**
    * Computes the Merkle root from the provided transaction ID.
    *
@@ -267,8 +290,6 @@ export default class MerklePath {
       throw new TypeError('Transaction ID is undefined')
     }
     const index = this.indexOf(txid)
-    // Calculate the root using the index as a way to determine which direction to concatenate.
-    const hash = (m: string): string => toHex(hash256(toArray(m, 'hex').reverse()).reverse())
     let workingHash = txid
 
     // special case for blocks with only one transaction
@@ -281,23 +302,7 @@ export default class MerklePath {
     const treeHeight = Math.max(this.path.length, 32 - Math.clz32(maxOffset))
 
     for (let height = 0; height < treeHeight; height++) {
-      const offset = (index >> height) ^ 1
-      const leaf = this.findOrComputeLeaf(height, offset)
-      if (typeof leaf !== 'object') {
-        // For single-level paths (all txids at level 0), the sibling may be beyond the tree
-        // because this is the last odd node at this height. Bitcoin Merkle duplicates it.
-        if (this.path.length === 1 && index >> height === maxOffset >> height) {
-          workingHash = hash((workingHash ?? '') + (workingHash ?? ''))
-          continue
-        }
-        throw new Error(`Missing hash for index ${index} at height ${height}`)
-      } else if (leaf.duplicate === true) {
-        workingHash = hash((workingHash ?? '') + (workingHash ?? ''))
-      } else if (offset % 2 === 1) {
-        workingHash = hash((leaf.hash ?? '') + (workingHash ?? ''))
-      } else {
-        workingHash = hash((workingHash ?? '') + (leaf.hash ?? ''))
-      }
+      workingHash = this.nextRootHash(workingHash, index, height, maxOffset)
     }
     return workingHash
   }

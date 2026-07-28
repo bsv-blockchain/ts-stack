@@ -115,6 +115,50 @@ function validateActionInputs(action: ActionBatchCommitAction): void {
   }
 }
 
+function requestedOutputMatches(
+  requested: ActionBatchCommitAction['metadata']['outputs'][number],
+  planned: ActionBatchCommitAction['plan']['outputs'][number]
+): boolean {
+  const satoshisMatch = requested.satoshis === maxPossibleSatoshis || requested.satoshis === planned.satoshis
+  return (
+    planned.providedBy === 'you' &&
+    satoshisMatch &&
+    requested.lockingScript === planned.lockingScript &&
+    requested.outputDescription === planned.outputDescription &&
+    requested.basket === planned.basket &&
+    requested.customInstructions === planned.customInstructions &&
+    sameStrings(requested.tags, planned.tags)
+  )
+}
+
+function validateAdditionalPlannedOutput(
+  action: ActionBatchCommitAction,
+  planned: ActionBatchCommitAction['plan']['outputs'][number]
+): void {
+  const isChange = planned.providedBy === 'storage' && planned.purpose === 'change'
+  const isCommission =
+    planned.providedBy === 'storage' &&
+    (planned.purpose === 'storage-commission' || planned.purpose === 'service-charge')
+  if (!isChange && !isCommission) {
+    throw new WERR_INVALID_PARAMETER('plan.outputs', 'only requested, change, or commission outputs')
+  }
+  if (
+    isChange &&
+    (planned.basket !== 'default' ||
+      planned.tags.length !== 0 ||
+      planned.outputDescription !== '' ||
+      planned.customInstructions != null ||
+      planned.lockingScript !== '' ||
+      planned.derivationSuffix == null ||
+      action.plan.derivationPrefix.length === 0)
+  ) {
+    throw new WERR_INVALID_PARAMETER('plan.outputs', 'canonical wallet-managed change metadata')
+  }
+  if (isCommission && (planned.basket != null || planned.tags.length !== 0 || planned.customInstructions != null)) {
+    throw new WERR_INVALID_PARAMETER('plan.outputs', 'canonical storage commission metadata')
+  }
+}
+
 function validateActionOutputs(action: ActionBatchCommitAction): void {
   if (action.metadata.outputs.length > action.plan.outputs.length) {
     throw new WERR_INVALID_PARAMETER('metadata.outputs', 'align with planned outputs')
@@ -125,42 +169,12 @@ function validateActionOutputs(action: ActionBatchCommitAction): void {
     if (planned == null) {
       throw new WERR_INVALID_PARAMETER('metadata.outputs', 'match planned requested outputs')
     }
-    const satoshisMatch = requested.satoshis === maxPossibleSatoshis || requested.satoshis === planned.satoshis
-    if (
-      planned.providedBy !== 'you' ||
-      !satoshisMatch ||
-      requested.lockingScript !== planned.lockingScript ||
-      requested.outputDescription !== planned.outputDescription ||
-      requested.basket !== planned.basket ||
-      requested.customInstructions !== planned.customInstructions ||
-      !sameStrings(requested.tags, planned.tags)
-    ) {
+    if (!requestedOutputMatches(requested, planned)) {
       throw new WERR_INVALID_PARAMETER('metadata.outputs', 'match planned requested outputs')
     }
   }
   for (const planned of action.plan.outputs.slice(action.metadata.outputs.length)) {
-    const isChange = planned.providedBy === 'storage' && planned.purpose === 'change'
-    const isCommission =
-      planned.providedBy === 'storage' &&
-      (planned.purpose === 'storage-commission' || planned.purpose === 'service-charge')
-    if (!isChange && !isCommission) {
-      throw new WERR_INVALID_PARAMETER('plan.outputs', 'only requested, change, or commission outputs')
-    }
-    if (
-      isChange &&
-      (planned.basket !== 'default' ||
-        planned.tags.length !== 0 ||
-        planned.outputDescription !== '' ||
-        planned.customInstructions != null ||
-        planned.lockingScript !== '' ||
-        planned.derivationSuffix == null ||
-        action.plan.derivationPrefix.length === 0)
-    ) {
-      throw new WERR_INVALID_PARAMETER('plan.outputs', 'canonical wallet-managed change metadata')
-    }
-    if (isCommission && (planned.basket != null || planned.tags.length !== 0 || planned.customInstructions != null)) {
-      throw new WERR_INVALID_PARAMETER('plan.outputs', 'canonical storage commission metadata')
-    }
+    validateAdditionalPlannedOutput(action, planned)
   }
 }
 

@@ -208,6 +208,46 @@ export default class LocalKVStore {
     return spends
   }
 
+  private async removeOutputs(
+    key: string,
+    outputs: WalletOutput[],
+    inputBEEF: number[] | Uint8Array | undefined,
+    totalOutputs: number
+  ): Promise<string> {
+    const pushdrop = new PushDrop(this.wallet, this.originator)
+    try {
+      const inputs = this.getInputs(outputs)
+      const { signableTransaction } = await this.wallet.createAction(
+        {
+          description: `Remove ${key} in ${this.context}`,
+          inputBEEF,
+          inputs,
+          options: {
+            acceptDelayedBroadcast: this.acceptDelayedBroadcast
+          }
+        },
+        this.originator
+      )
+      if (typeof signableTransaction !== 'object') {
+        throw new TypeError('Wallet did not return a signable transaction when expected.')
+      }
+      const spends = await this.getSpends(key, outputs, pushdrop, signableTransaction.tx)
+      const { txid } = await this.wallet.signAction(
+        {
+          reference: signableTransaction.reference,
+          spends
+        },
+        this.originator
+      )
+      if (txid === undefined) throw new Error('signAction must return a valid txid')
+      return txid
+    } catch (error) {
+      throw new Error(
+        `There are ${totalOutputs} outputs with tag ${key} that cannot be unlocked. Original error: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
   /**
    * Sets or updates the value associated with a given key atomically.
    * If the key already exists (one or more outputs found), it spends the existing output(s)
@@ -317,30 +357,7 @@ export default class LocalKVStore {
       for (; ;) {
         const { outputs, BEEF: inputBEEF, totalOutputs } = await this.getOutputs(key)
         if (outputs.length > 0) {
-          const pushdrop = new PushDrop(this.wallet, this.originator)
-          try {
-            const inputs = this.getInputs(outputs)
-            const { signableTransaction } = await this.wallet.createAction({
-              description: `Remove ${key} in ${this.context}`,
-              inputBEEF,
-              inputs,
-              options: {
-                acceptDelayedBroadcast: this.acceptDelayedBroadcast
-              }
-            }, this.originator)
-            if (typeof signableTransaction !== 'object') {
-              throw new TypeError('Wallet did not return a signable transaction when expected.')
-            }
-            const spends = await this.getSpends(key, outputs, pushdrop, signableTransaction.tx)
-            const { txid } = await this.wallet.signAction({
-              reference: signableTransaction.reference,
-              spends
-            }, this.originator)
-            if (txid === undefined) { throw new Error('signAction must return a valid txid') }
-            txids.push(txid)
-          } catch (error) {
-            throw new Error(`There are ${totalOutputs} outputs with tag ${key} that cannot be unlocked. Original error: ${error instanceof Error ? error.message : String(error)}`)
-          }
+          txids.push(await this.removeOutputs(key, outputs, inputBEEF, totalOutputs))
         }
         if (outputs.length === totalOutputs) { break }
       }

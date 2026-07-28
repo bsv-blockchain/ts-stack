@@ -15,6 +15,25 @@ interface BeefTxSerializationState {
   txid: string | undefined
 }
 
+interface BeefBumpLeafSerializationState {
+  ref: MerklePath['path'][number][number]
+  offset: number
+  hash: string | undefined
+  txid: boolean | undefined
+  duplicate: boolean | undefined
+}
+
+interface BeefBumpLevelSerializationState {
+  ref: MerklePath['path'][number]
+  leaves: BeefBumpLeafSerializationState[]
+}
+
+interface BeefBumpSerializationState {
+  ref: MerklePath
+  blockHeight: number
+  levels: BeefBumpLevelSerializationState[]
+}
+
 /*
  * BEEF standard: BRC-62: Background Evaluation Extended Format (BEEF) Transactions
  * https://github.com/bsv-blockchain/BRCs/blob/master/transactions/0062.md
@@ -87,20 +106,7 @@ export class Beef {
   private rawCacheTxs?: BeefTxSerializationState[]
 
   private rawCacheBumps?: MerklePath[]
-  private bumpState?: Array<{
-    ref: MerklePath
-    blockHeight: number
-    levels: Array<{
-      ref: MerklePath['path'][number]
-      leaves: Array<{
-        ref: MerklePath['path'][number][number]
-        offset: number
-        hash: string | undefined
-        txid: boolean | undefined
-        duplicate: boolean | undefined
-      }>
-    }>
-  }>
+  private bumpState?: BeefBumpSerializationState[]
 
   private needsSort: boolean = true
 
@@ -174,34 +180,44 @@ export class Beef {
     }))
   }
 
-  private bumpStateMatches (): boolean {
+  private bumpLeafStateMatches(
+    leaf: MerklePath['path'][number][number],
+    state: BeefBumpLeafSerializationState
+  ): boolean {
+    return (
+      state.ref === leaf &&
+      state.offset === leaf.offset &&
+      state.hash === leaf.hash &&
+      state.txid === leaf.txid &&
+      state.duplicate === leaf.duplicate
+    )
+  }
+
+  private bumpLevelStateMatches(
+    level: MerklePath['path'][number],
+    state: BeefBumpLevelSerializationState
+  ): boolean {
+    return (
+      state.ref === level &&
+      state.leaves.length === level.length &&
+      level.every((leaf, index) => this.bumpLeafStateMatches(leaf, state.leaves[index]))
+    )
+  }
+
+  private singleBumpStateMatches(bump: MerklePath, state: BeefBumpSerializationState): boolean {
+    return (
+      state.ref === bump &&
+      state.blockHeight === bump.blockHeight &&
+      state.levels.length === bump.path.length &&
+      bump.path.every((level, index) => this.bumpLevelStateMatches(level, state.levels[index]))
+    )
+  }
+
+  private bumpStateMatches(): boolean {
     if (this.bumpState == null || this.bumpState.length !== this.bumps.length) return false
-    for (let i = 0; i < this.bumps.length; i++) {
-      const bump = this.bumps[i]
-      const state = this.bumpState[i]
-      if (
-        state.ref !== bump ||
-        state.blockHeight !== bump.blockHeight ||
-        state.levels.length !== bump.path.length
-      ) return false
-      for (let levelIndex = 0; levelIndex < bump.path.length; levelIndex++) {
-        const level = bump.path[levelIndex]
-        const levelState = state.levels[levelIndex]
-        if (levelState.ref !== level || levelState.leaves.length !== level.length) return false
-        for (let leafIndex = 0; leafIndex < level.length; leafIndex++) {
-          const leaf = level[leafIndex]
-          const leafState = levelState.leaves[leafIndex]
-          if (
-            leafState.ref !== leaf ||
-            leafState.offset !== leaf.offset ||
-            leafState.hash !== leaf.hash ||
-            leafState.txid !== leaf.txid ||
-            leafState.duplicate !== leaf.duplicate
-          ) return false
-        }
-      }
-    }
-    return true
+    return this.bumps.every((bump, index) =>
+      this.singleBumpStateMatches(bump, this.bumpState![index])
+    )
   }
 
   private synchronizeNestedBumpMutations (): void {
@@ -663,6 +679,21 @@ export class Beef {
     return newTx
   }
 
+  private mergeTransactionEntry(current: Transaction): BeefTx {
+    const bumpIndex = current.merklePath == null ? undefined : this.mergeBump(current.merklePath)
+    const newTx = new BeefTx(current, bumpIndex)
+    this.replaceOrAppendTx(newTx)
+    this.tryToValidateBumpIndex(newTx)
+    return newTx
+  }
+
+  private queueSourceTransactions(current: Transaction, stack: Transaction[]): void {
+    for (let i = current.inputs.length - 1; i >= 0; i--) {
+      const source = current.inputs[i].sourceTransaction
+      if (source != null) stack.push(source)
+    }
+  }
+
   /**
    * Merge a `Transaction` and any referenced `merklePath` and `sourceTransaction`, recursifely.
    *
@@ -688,17 +719,9 @@ export class Beef {
       const txid = current.id('hex')
       if (visited.has(txid)) continue
       visited.add(txid)
-      const bumpIndex = current.merklePath == null ? undefined : this.mergeBump(current.merklePath)
-      const newTx = new BeefTx(current, bumpIndex)
-      this.replaceOrAppendTx(newTx)
-      this.tryToValidateBumpIndex(newTx)
+      const newTx = this.mergeTransactionEntry(current)
       if (txid === rootTxid) root = newTx
-      if (newTx.bumpIndex === undefined) {
-        for (let i = current.inputs.length - 1; i >= 0; i--) {
-          const source = current.inputs[i].sourceTransaction
-          if (source != null) stack.push(source)
-        }
-      }
+      if (newTx.bumpIndex === undefined) this.queueSourceTransactions(current, stack)
     }
     if (root == null) throw new Error('Failed to merge root transaction')
     return root

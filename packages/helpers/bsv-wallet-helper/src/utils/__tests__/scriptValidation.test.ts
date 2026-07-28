@@ -736,6 +736,63 @@ describe('Script Validation Functions', () => {
       )
     })
 
+    it('should throw when the full format has no content type data', () => {
+      const data = Utils.toArray('Hello World')
+      const malformed = new LockingScript([
+        { op: 0x00 },
+        { op: 0x63 },
+        { op: 3, data: Utils.toArray('ord') },
+        { op: 0x51 },
+        { op: 18, data: Utils.toArray('application/bsv-20') },
+        { op: 0x00 },
+        { op: 0x00 },
+        { op: 0x00 },
+        { op: data.length, data },
+        { op: 0x68 }
+      ])
+
+      expect(() => extractInscriptionData(malformed)).toThrow(
+        'extractInscriptionData: Missing content type data at chunk 6'
+      )
+    })
+
+    it('should throw when the full format has no inscription data', () => {
+      const contentType = Utils.toArray('text/plain')
+      const malformed = new LockingScript([
+        { op: 0x00 },
+        { op: 0x63 },
+        { op: 3, data: Utils.toArray('ord') },
+        { op: 0x51 },
+        { op: 18, data: Utils.toArray('application/bsv-20') },
+        { op: 0x00 },
+        { op: contentType.length, data: contentType },
+        { op: 0x00 },
+        { op: 0x00 },
+        { op: 0x68 }
+      ])
+
+      expect(() => extractInscriptionData(malformed)).toThrow(
+        'extractInscriptionData: Missing inscription data at chunk 8'
+      )
+    })
+
+    it('should throw when the short format has no inscription data', () => {
+      const malformed = new LockingScript([
+        { op: 0x00 },
+        { op: 0x63 },
+        { op: 3, data: Utils.toArray('ord') },
+        { op: 0x51 },
+        { op: 18, data: Utils.toArray('application/bsv-20') },
+        { op: 0x00 },
+        { op: 0x00 },
+        { op: 0x68 }
+      ])
+
+      expect(() => extractInscriptionData(malformed)).toThrow(
+        'extractInscriptionData: Missing inscription data at chunk 6'
+      )
+    })
+
     it('should throw error for invalid input', () => {
       expect(() => extractInscriptionData(null as any)).toThrow(
         'extractInscriptionData: Input cannot be null or undefined'

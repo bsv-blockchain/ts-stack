@@ -166,6 +166,45 @@ export const jpNeg = (P: JacobianPointBI): JacobianPointBI => {
   return { X: P.X, Y: P_BIGINT - P.Y, Z: P.Z }
 }
 
+const wnafTable = (window: number, P0: { x: bigint; y: bigint }): JacobianPointBI[] => {
+  const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`
+  const cached = WNAF_TABLE_CACHE.get(key)
+  if (cached !== undefined) return cached
+
+  const table = Array.from<unknown, JacobianPointBI>({ length: 1 << (window - 1) }, () => ({
+    X: BI_ZERO,
+    Y: BI_ONE,
+    Z: BI_ZERO
+  }))
+  const point: JacobianPointBI = { X: P0.x, Y: P0.y, Z: BI_ONE }
+  table[0] = point
+  const doubled = jpDouble(point)
+  for (let i = 1; i < table.length; i++) {
+    table[i] = jpAdd(table[i - 1], doubled)
+  }
+  WNAF_TABLE_CACHE.set(key, table)
+  return table
+}
+
+const wnafDigits = (scalar: bigint, window: number): number[] => {
+  const digits: number[] = []
+  const windowSize = 1n << BigInt(window)
+  const halfWindow = windowSize >> 1n
+  let remaining = scalar
+  while (remaining > 0n) {
+    if ((remaining & BI_ONE) === BI_ZERO) {
+      digits.push(0)
+    } else {
+      let digit = remaining & (windowSize - 1n)
+      if (digit > halfWindow) digit -= windowSize
+      digits.push(Number(digit))
+      remaining -= digit
+    }
+    remaining >>= BI_ONE
+  }
+  return digits
+}
+
 // Fast windowed-NAF scalar multiplication (default window = 5) in Jacobian
 // coordinates.  Returns Q = k * P0 as a JacobianPoint.
 export const scalarMultiplyWNAF = (
@@ -173,38 +212,8 @@ export const scalarMultiplyWNAF = (
   P0: { x: bigint; y: bigint },
   window: number = 5
 ): JacobianPointBI => {
-  const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`
-  let tbl = WNAF_TABLE_CACHE.get(key)
-  if (tbl === undefined) {
-    // Convert affine to Jacobian and pre-compute odd multiples
-    const tblSize = 1 << (window - 1) // e.g. w=5 → 16 entries
-    tbl = Array.from({ length: tblSize })
-    const P: JacobianPointBI = { X: P0.x, Y: P0.y, Z: BI_ONE }
-    tbl[0] = P
-    const twoP = jpDouble(P)
-    for (let i = 1; i < tblSize; i++) {
-      tbl[i] = jpAdd(tbl[i - 1], twoP)
-    }
-    WNAF_TABLE_CACHE.set(key, tbl)
-  }
-
-  // Build wNAF representation of k
-  const wnaf: number[] = []
-  const wBig = 1n << BigInt(window)
-  const wHalf = wBig >> 1n
-  let kTmp = k
-  while (kTmp > 0n) {
-    if ((kTmp & BI_ONE) === BI_ZERO) {
-      wnaf.push(0)
-      kTmp >>= BI_ONE
-    } else {
-      let z = kTmp & (wBig - 1n) // kTmp mod 2^w
-      if (z > wHalf) z -= wBig // make it odd & within (-2^{w-1}, 2^{w-1})
-      wnaf.push(Number(z))
-      kTmp -= z
-      kTmp >>= BI_ONE
-    }
-  }
+  const table = wnafTable(window, P0)
+  const wnaf = wnafDigits(k, window)
 
   // Accumulate from MSB to LSB
   let Q: JacobianPointBI = { X: BI_ZERO, Y: BI_ONE, Z: BI_ZERO } // infinity
@@ -213,7 +222,7 @@ export const scalarMultiplyWNAF = (
     const di = wnaf[i]
     if (di !== 0) {
       const idx = Math.abs(di) >> 1 // (|di|-1)/2  because di is odd
-      const addend = di > 0 ? tbl[idx] : jpNeg(tbl[idx])
+      const addend = di > 0 ? table[idx] : jpNeg(table[idx])
       Q = jpAdd(Q, addend)
     }
   }

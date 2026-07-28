@@ -623,19 +623,23 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
    * Helper to force uniform behavior across database engines.
    * Use to process all individual records with time stamps retreived from database.
    */
-  validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[], booleanFields?: string[]): T {
-    entity.created_at = this.validateDate(entity.created_at)
-    entity.updated_at = this.validateDate(entity.updated_at)
+  private normalizeDateFields<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): void {
     if (dateFields != null) {
-      for (const df of dateFields) {
-        if (entity[df]) entity[df] = this.validateDate(entity[df])
+      for (const field of dateFields) {
+        if (entity[field]) entity[field] = this.validateDate(entity[field])
       }
     }
+  }
+
+  private normalizeBooleanFields<T extends EntityTimeStamp>(entity: T, booleanFields?: string[]): void {
     if (booleanFields != null) {
-      for (const df of booleanFields) {
-        if (entity[df] !== undefined) entity[df] = !!entity[df]
+      for (const field of booleanFields) {
+        if (entity[field] !== undefined) entity[field] = !!entity[field]
       }
     }
+  }
+
+  private normalizeNullableAndBufferFields<T extends EntityTimeStamp>(entity: T): void {
     for (const key of Object.keys(entity)) {
       const val = entity[key]
       if (val === null) {
@@ -644,6 +648,14 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
         entity[key] = Array.from(val)
       }
     }
+  }
+
+  validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[], booleanFields?: string[]): T {
+    entity.created_at = this.validateDate(entity.created_at)
+    entity.updated_at = this.validateDate(entity.updated_at)
+    this.normalizeDateFields(entity, dateFields)
+    this.normalizeBooleanFields(entity, booleanFields)
+    this.normalizeNullableAndBufferFields(entity)
     return entity
   }
 

@@ -32,7 +32,7 @@ import { BTMSToken } from '../BTMSToken.js'
 // eslint-disable-next-line import/first
 import { BTMS_LABEL_PREFIX, BTMS_BASKET, ISSUE_MARKER } from '../constants.js'
 // eslint-disable-next-line import/first
-import { PrivateKey, ProtoWallet, Transaction } from '@bsv/sdk'
+import { Beef, PrivateKey, ProtoWallet, Transaction } from '@bsv/sdk'
 // eslint-disable-next-line import/first
 import type {
   WalletInterface,
@@ -1029,6 +1029,111 @@ describe('BTMS', () => {
       } finally {
         ;(btms as any).selectAndVerifyUTXOs = originalSelectAndVerify
       }
+    })
+  })
+
+  describe('selectAndVerifyUTXOs overlay verification', () => {
+    const ASSET_ID = `${MOCK_TXID}.0`
+
+    function createUtxo(amount: number, marker: string, beef?: number[]): any {
+      return {
+        outpoint: `${marker.repeat(64)}.0`,
+        txid: marker.repeat(64),
+        outputIndex: 0,
+        satoshis: 1,
+        lockingScript: 'mock-script',
+        customInstructions: JSON.stringify({
+          derivationPrefix: `prefix-${marker}`,
+          derivationSuffix: `suffix-${marker}`
+        }),
+        token: {
+          valid: true as const,
+          assetId: ASSET_ID,
+          amount,
+          metadata: { name: 'GOLD' },
+          lockingPublicKey: MOCK_IDENTITY_KEY
+        },
+        spendable: true,
+        beef
+      }
+    }
+
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
+    it('returns an empty selection without overlay calls when funds are insufficient', async () => {
+      const btms = new BTMS({ wallet: createMockWallet() })
+      const lookup = jest.fn()
+      ;(btms as any).lookupTokenOnOverlay = lookup
+
+      const result = await btms.selectAndVerifyUTXOs([createUtxo(20, 'a')], 21)
+
+      expect(result.selected).toEqual([])
+      expect(result.totalInput).toBe(0)
+      expect(lookup).not.toHaveBeenCalled()
+    })
+
+    it('preserves selection order and merges proofs for valid selected outputs', async () => {
+      const btms = new BTMS({ wallet: createMockWallet() })
+      const larger = createUtxo(30, 'a')
+      const smaller = createUtxo(20, 'b')
+      const proof = new Beef()
+      const lookup = jest
+        .fn()
+        .mockResolvedValueOnce({ found: true, beef: proof })
+        .mockResolvedValueOnce({ found: true })
+      ;(btms as any).lookupTokenOnOverlay = lookup
+      const mergeBeef = jest.spyOn(Beef.prototype, 'mergeBeef')
+
+      const result = await btms.selectAndVerifyUTXOs([smaller, larger], 40)
+
+      expect(result.selected).toEqual([larger, smaller])
+      expect(result.totalInput).toBe(50)
+      expect(lookup).toHaveBeenNthCalledWith(1, larger.txid, larger.outputIndex, true)
+      expect(lookup).toHaveBeenNthCalledWith(2, smaller.txid, smaller.outputIndex, true)
+      expect(mergeBeef).toHaveBeenCalledWith(proof)
+    })
+
+    it('removes outputs that remain missing and retries selection with the remainder', async () => {
+      const btms = new BTMS({ wallet: createMockWallet() })
+      const missing = createUtxo(60, 'a')
+      const valid = createUtxo(40, 'b')
+      const lookup = jest
+        .fn()
+        .mockResolvedValueOnce({ found: false })
+        .mockResolvedValueOnce({ found: true })
+      ;(btms as any).lookupTokenOnOverlay = lookup
+      btms.getSpendableTokens = jest.fn().mockResolvedValue({ tokens: [] })
+      ;(btms as any).tryRebroadcastUtxo = jest.fn().mockResolvedValue({ found: false })
+
+      const result = await btms.selectAndVerifyUTXOs([valid, missing], 40)
+
+      expect(result.selected).toEqual([valid])
+      expect(result.totalInput).toBe(40)
+      expect(btms.getSpendableTokens).toHaveBeenCalledWith(ASSET_ID, true)
+      expect((btms as any).tryRebroadcastUtxo).toHaveBeenCalledWith(missing)
+    })
+
+    it('uses a fetched proof when rebroadcast recovers a selected output', async () => {
+      const btms = new BTMS({ wallet: createMockWallet() })
+      const selected = createUtxo(50, 'a')
+      const selectedWithBeef = createUtxo(50, 'a', [1, 2, 3])
+      const rebroadcastProof = new Beef()
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: false })
+      btms.getSpendableTokens = jest.fn().mockResolvedValue({ tokens: [selectedWithBeef] })
+      ;(btms as any).tryRebroadcastUtxo = jest.fn().mockResolvedValue({
+        found: true,
+        beef: rebroadcastProof
+      })
+      const mergeBeef = jest.spyOn(Beef.prototype, 'mergeBeef')
+
+      const result = await btms.selectAndVerifyUTXOs([selected], 50)
+
+      expect(result.selected).toEqual([selectedWithBeef])
+      expect(result.totalInput).toBe(50)
+      expect((btms as any).tryRebroadcastUtxo).toHaveBeenCalledWith(selectedWithBeef)
+      expect(mergeBeef).toHaveBeenCalledWith(rebroadcastProof)
     })
   })
 

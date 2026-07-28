@@ -595,6 +595,28 @@ export class IdentityClient {
     return value !== undefined && value !== null && value !== ''
   }
 
+  private static genericIdentityName(decryptedFields: Record<string, any>): string {
+    const fullName = [decryptedFields.firstName, decryptedFields.lastName]
+      .filter(IdentityClient.hasValue)
+      .join(' ')
+    return (
+      [decryptedFields.name, decryptedFields.userName, fullName, decryptedFields.email].find(
+        IdentityClient.hasValue
+      ) ?? defaultIdentity.name
+    )
+  }
+
+  private static genericIdentityAvatar(decryptedFields: Record<string, any>): string {
+    return (
+      [
+        decryptedFields.profilePhoto,
+        decryptedFields.avatar,
+        decryptedFields.icon,
+        decryptedFields.photo
+      ].find(IdentityClient.hasValue) ?? defaultIdentity.avatarURL
+    )
+  }
+
   /**
    * Try to parse identity information from unknown certificate types
    * by checking common field names
@@ -610,44 +632,8 @@ export class IdentityClient {
     badgeIconURL: string
     badgeClickURL: string
   } {
-    // Try to construct a name from common field patterns
-    const firstName = decryptedFields.firstName
-    const lastName = decryptedFields.lastName
-    let fullName: string | undefined
-    if (IdentityClient.hasValue(firstName) && IdentityClient.hasValue(lastName)) {
-      fullName = `${firstName} ${lastName}`
-    } else if (IdentityClient.hasValue(firstName)) {
-      fullName = firstName
-    } else if (IdentityClient.hasValue(lastName)) {
-      fullName = lastName
-    }
-
-    let name: string | undefined
-    if (IdentityClient.hasValue(decryptedFields.name)) {
-      name = decryptedFields.name
-    } else if (IdentityClient.hasValue(decryptedFields.userName)) {
-      name = decryptedFields.userName
-    } else if (fullName !== undefined) {
-      name = fullName
-    } else if (IdentityClient.hasValue(decryptedFields.email)) {
-      name = decryptedFields.email
-    } else {
-      name = defaultIdentity.name
-    }
-
-    // Try to find an avatar/photo from common field names
-    let avatarURL: string | undefined
-    if (IdentityClient.hasValue(decryptedFields.profilePhoto)) {
-      avatarURL = decryptedFields.profilePhoto
-    } else if (IdentityClient.hasValue(decryptedFields.avatar)) {
-      avatarURL = decryptedFields.avatar
-    } else if (IdentityClient.hasValue(decryptedFields.icon)) {
-      avatarURL = decryptedFields.icon
-    } else if (IdentityClient.hasValue(decryptedFields.photo)) {
-      avatarURL = decryptedFields.photo
-    } else {
-      avatarURL = defaultIdentity.avatarURL
-    }
+    const name = IdentityClient.genericIdentityName(decryptedFields)
+    const avatarURL = IdentityClient.genericIdentityAvatar(decryptedFields)
 
     // Generate badge information
     const badgeLabel = IdentityClient.hasValue(certifierInfo?.name)

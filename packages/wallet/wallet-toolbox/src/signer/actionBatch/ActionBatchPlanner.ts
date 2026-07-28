@@ -294,26 +294,69 @@ function makeChangeOutputs(
   }))
 }
 
-export async function planAction(
-  state: ActionBatchPlannerState,
-  args: Validation.ValidCreateActionArgs
-): Promise<ActionBatchPlannedAction> {
-  const seenOutpoints = new Set<string>()
-  for (const outpoint of [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange]) {
+function validateActionOutpoints(state: ActionBatchPlannerState, args: Validation.ValidCreateActionArgs): void {
+  const seen = new Set<string>()
+  const outpoints = [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange]
+  for (const outpoint of outpoints) {
     const key = `${outpoint.txid}.${outpoint.vout}`
-    if (seenOutpoints.has(key)) {
+    if (seen.has(key)) {
       throw new WERR_INVALID_PARAMETER('inputs', `unique inputs; ${key} is repeated`)
     }
     if (state.consumed.has(key)) {
       throw new WERR_INVALID_PARAMETER('inputs', `unspent inputs; ${key} is already consumed by this action batch`)
     }
-    seenOutpoints.add(key)
+    seen.add(key)
   }
+}
+
+function resolveExplicitInputs(
+  state: ActionBatchPlannerState,
+  args: Validation.ValidCreateActionArgs
+): PlannerOutput[] {
   const explicit = args.inputs.map(input => resolveInputOutput(state, input.outpoint))
-  for (const output of explicit) {
-    if (output.change)
-      throw new WERR_INVALID_PARAMETER('inputs', 'unmanaged inputs; use noSendChange for managed change')
+  if (explicit.some(output => output.change)) {
+    throw new WERR_INVALID_PARAMETER('inputs', 'unmanaged inputs; use noSendChange for managed change')
   }
+  return explicit
+}
+
+function addStorageCommission(
+  state: ActionBatchPlannerState,
+  outputs: StorageCreateTransactionSdkOutput[]
+): string | undefined {
+  if (state.begin.commissionSatoshis <= 0 || state.begin.commissionPubKeyHex == null) {
+    return undefined
+  }
+  const commission = createStorageServiceChargeScript(state.begin.commissionPubKeyHex)
+  outputs.push({
+    vout: outputs.length,
+    satoshis: state.begin.commissionSatoshis,
+    lockingScript: commission.script,
+    providedBy: 'storage',
+    purpose: 'storage-commission',
+    outputDescription: 'Storage Service Charge',
+    tags: []
+  })
+  return commission.keyOffset
+}
+
+function applyFundingAdjustment(
+  outputs: StorageCreateTransactionSdkOutput[],
+  adjustment: { fixedOutputIndex: number; satoshis: number } | undefined
+): void {
+  if (adjustment == null) return
+  if (outputs[adjustment.fixedOutputIndex]?.satoshis !== maxPossibleSatoshis) {
+    throw new WERR_INTERNAL()
+  }
+  outputs[adjustment.fixedOutputIndex].satoshis = adjustment.satoshis
+}
+
+export async function planAction(
+  state: ActionBatchPlannerState,
+  args: Validation.ValidCreateActionArgs
+): Promise<ActionBatchPlannedAction> {
+  validateActionOutpoints(state, args)
+  const explicit = resolveExplicitInputs(state, args)
   const noSendChange = args.options.noSendChange.map(outpoint =>
     requireManagedChange(resolveInputOutput(state, outpoint), `noSendChange ${outpoint.txid}.${outpoint.vout}`)
   )
@@ -321,25 +364,8 @@ export async function planAction(
   const derivationRandom = repeatableRandom(args.randomVals)
   const derivationPrefix = randomDerivation(16, derivationRandom)
   const outputs = requestedOutputs(args)
-  let commissionKeyOffset: string | undefined
-  if (state.begin.commissionSatoshis > 0 && state.begin.commissionPubKeyHex != null) {
-    const commission = createStorageServiceChargeScript(state.begin.commissionPubKeyHex)
-    commissionKeyOffset = commission.keyOffset
-    outputs.push({
-      vout: outputs.length,
-      satoshis: state.begin.commissionSatoshis,
-      lockingScript: commission.script,
-      providedBy: 'storage',
-      purpose: 'storage-commission',
-      outputDescription: 'Storage Service Charge',
-      tags: []
-    })
-  }
-  if (funding.maxPossibleSatoshisAdjustment != null) {
-    const adjustment = funding.maxPossibleSatoshisAdjustment
-    if (outputs[adjustment.fixedOutputIndex]?.satoshis !== maxPossibleSatoshis) throw new WERR_INTERNAL()
-    outputs[adjustment.fixedOutputIndex].satoshis = adjustment.satoshis
-  }
+  const commissionKeyOffset = addStorageCommission(state, outputs)
+  applyFundingAdjustment(outputs, funding.maxPossibleSatoshisAdjustment)
   const fixedOutputCount = outputs.length
   outputs.push(
     ...makeChangeOutputs(state, fixedOutputCount, funding.changeSatoshis, derivationPrefix, derivationRandom)
