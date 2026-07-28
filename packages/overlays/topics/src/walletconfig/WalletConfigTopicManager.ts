@@ -1,6 +1,6 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { KeyDeriver, LockingScript, ProtoWallet, PushDrop, Transaction, Utils } from '@bsv/sdk'
-import { assertTransactionInputsAndOutputs } from '../shared/assertTransactionShape.js'
+import { KeyDeriver, LockingScript, ProtoWallet, PushDrop, Utils } from '@bsv/sdk'
+import { identifyPushDropOutputs } from '../shared/identifyPushDropOutputs.js'
 
 async function validateWalletConfigOutput(lockingScript: LockingScript): Promise<void> {
   const { lockingPublicKey, fields } = PushDrop.decode(lockingScript)
@@ -50,33 +50,14 @@ export default class WalletConfigTopicManager implements TopicManager {
     beef: number[],
     previousCoins: number[]
   ): Promise<AdmittanceInstructions> {
-    const outputsToAdmit: number[] = []
-    try {
-      const parsedTransaction = Transaction.fromBEEF(beef)
-      assertTransactionInputsAndOutputs(parsedTransaction)
-
-      for (const [i, output] of parsedTransaction.outputs.entries()) {
-        try {
-          await validateWalletConfigOutput(output.lockingScript)
-          outputsToAdmit.push(i)
-        } catch (error) {
-          console.error('Error validating output:', error)
-          continue
-        }
+    return identifyPushDropOutputs({
+      beef,
+      previousCoins,
+      validateOutput: validateWalletConfigOutput,
+      onRejectedOutput: (_outputIndex, error) => {
+        console.error('Error validating output:', error)
       }
-
-      if (outputsToAdmit.length === 0) throw new Error('No outputs admitted!')
-      return { outputsToAdmit, coinsToRetain: [] }
-    } catch (error) {
-      if (
-        outputsToAdmit.length === 0 &&
-        (previousCoins === undefined || previousCoins.length === 0)
-      ) {
-        console.error('Error identifying admissible outputs:', error)
-      }
-    }
-
-    return { outputsToAdmit, coinsToRetain: [] }
+    })
   }
 
   async getDocumentation(): Promise<string> {

@@ -1,6 +1,6 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { KeyDeriver, LockingScript, ProtoWallet, PushDrop, Transaction, Utils } from '@bsv/sdk'
-import { assertTransactionInputsAndOutputs } from '../shared/assertTransactionShape.js'
+import { KeyDeriver, LockingScript, ProtoWallet, PushDrop, Utils } from '@bsv/sdk'
+import { identifyPushDropOutputs } from '../shared/identifyPushDropOutputs.js'
 
 async function validateBasketMapOutput(lockingScript: LockingScript): Promise<void> {
   const { lockingPublicKey, fields } = PushDrop.decode(lockingScript)
@@ -47,35 +47,14 @@ export default class BasketMapTopicManager implements TopicManager {
     beef: number[],
     previousCoins: number[]
   ): Promise<AdmittanceInstructions> {
-    const outputsToAdmit: number[] = []
-    try {
-      const parsedTransaction = Transaction.fromBEEF(beef)
-      assertTransactionInputsAndOutputs(parsedTransaction)
-
-      for (const [i, output] of parsedTransaction.outputs.entries()) {
-        try {
-          await validateBasketMapOutput(output.lockingScript)
-          outputsToAdmit.push(i)
-        } catch (error) {
-          // Output does not meet BasketMap protocol requirements; skip it
-          console.debug(`[BasketMapTopicManager] Skipping output ${i}: ${error}`)
-          continue
-        }
+    return identifyPushDropOutputs({
+      beef,
+      previousCoins,
+      validateOutput: validateBasketMapOutput,
+      onRejectedOutput: (outputIndex, error) => {
+        console.debug(`[BasketMapTopicManager] Skipping output ${outputIndex}: ${error}`)
       }
-
-      if (outputsToAdmit.length === 0) throw new Error('No outputs admitted!')
-
-      return { outputsToAdmit, coinsToRetain: [] }
-    } catch (error) {
-      if (
-        outputsToAdmit.length === 0 &&
-        (previousCoins === undefined || previousCoins.length === 0)
-      ) {
-        console.error('Error identifying admissible outputs:', error)
-      }
-    }
-
-    return { outputsToAdmit, coinsToRetain: [] }
+    })
   }
 
   async getDocumentation(): Promise<string> {

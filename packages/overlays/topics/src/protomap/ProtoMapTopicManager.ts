@@ -5,11 +5,10 @@ import {
   ProtoWallet,
   PushDrop,
   SecurityLevel,
-  Transaction,
   Utils,
   WalletProtocol
 } from '@bsv/sdk'
-import { assertTransactionInputsAndOutputs } from '../shared/assertTransactionShape.js'
+import { identifyPushDropOutputs } from '../shared/identifyPushDropOutputs.js'
 
 export function deserializeWalletProtocol(str: string): WalletProtocol {
   const parsed = JSON.parse(str)
@@ -80,35 +79,14 @@ export default class ProtoMapTopicManager implements TopicManager {
     beef: number[],
     previousCoins: number[]
   ): Promise<AdmittanceInstructions> {
-    const outputsToAdmit: number[] = []
-    try {
-      const parsedTransaction = Transaction.fromBEEF(beef)
-      assertTransactionInputsAndOutputs(parsedTransaction)
-
-      for (const [i, output] of parsedTransaction.outputs.entries()) {
-        try {
-          await validateProtoMapOutput(output.lockingScript)
-          outputsToAdmit.push(i)
-        } catch (error) {
-          // Output does not meet ProtoMap protocol requirements; skip it
-          console.debug(`[ProtoMapTopicManager] Skipping output ${i}: ${error}`)
-          continue
-        }
+    return identifyPushDropOutputs({
+      beef,
+      previousCoins,
+      validateOutput: validateProtoMapOutput,
+      onRejectedOutput: (outputIndex, error) => {
+        console.debug(`[ProtoMapTopicManager] Skipping output ${outputIndex}: ${error}`)
       }
-
-      if (outputsToAdmit.length === 0) throw new Error('No outputs admitted!')
-
-      return { outputsToAdmit, coinsToRetain: [] }
-    } catch (error) {
-      if (
-        outputsToAdmit.length === 0 &&
-        (previousCoins === undefined || previousCoins.length === 0)
-      ) {
-        console.error('Error identifying admissible outputs:', error)
-      }
-    }
-
-    return { outputsToAdmit, coinsToRetain: [] }
+    })
   }
 
   async getDocumentation(): Promise<string> {

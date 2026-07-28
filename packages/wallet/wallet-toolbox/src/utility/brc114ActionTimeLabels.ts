@@ -13,7 +13,7 @@ const TO_PREFIX = 'action time to '
 function parseActionTimeBound(label: string, prefix: string, bound: 'from' | 'to'): number {
   const value = label.slice(prefix.length)
   const invalid = `valid. Invalid action time ${bound} timestamp value.`
-  if (!/^[0-9]+$/.test(value)) throw new WERR_INVALID_PARAMETER('labels', invalid)
+  if (!/^\d+$/.test(value)) throw new WERR_INVALID_PARAMETER('labels', invalid)
   const timestamp = Number(value)
   if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
     throw new WERR_INVALID_PARAMETER('labels', invalid)

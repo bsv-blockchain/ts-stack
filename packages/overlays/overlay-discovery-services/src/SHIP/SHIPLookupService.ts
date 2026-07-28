@@ -64,7 +64,7 @@ export class SHIPLookupService implements LookupService {
 
     if (question.query === 'findAll') return await this.storage.findAll()
     if (typeof question.query !== 'object') {
-      throw new Error(
+      throw new TypeError(
         'Invalid query format. Query must be "findAll" string or an object with valid parameters.'
       )
     }
