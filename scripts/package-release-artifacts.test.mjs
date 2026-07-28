@@ -1,14 +1,22 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
 import {
+  canonicalizePackedManifest,
   createLicenseInventory,
   deterministicUuid,
   mergeCycloneDxDocuments,
+  prepareSbomManifest,
+  removeInjectedRootDependencies,
+  removeLocalFileReferences,
   topologicallyOrderProjects,
-  validateRelativeArtifactPath
+  validateBuildRuntime,
+  validateRelativeArtifactPath,
+  validateStagedLockfile
 } from './package-release-artifacts.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
@@ -44,6 +52,205 @@ test('package order respects internal runtime and peer dependencies with determi
   )
 })
 
+test('packed manifest canonicalization sorts dependency maps without changing export order', () => {
+  const manifest = {
+    name: '@example-local/canonical-wave21',
+    exports: {
+      '.': {
+        browser: './browser.js',
+        import: './index.js',
+        require: './index.cjs'
+      }
+    },
+    dependencies: { zebra: '^1.0.0', alpha: '^1.0.0' },
+    devDependencies: { delta: '^1.0.0', beta: '^1.0.0' },
+    peerDependenciesMeta: { zebra: { optional: true }, alpha: { optional: false } }
+  }
+  const canonical = canonicalizePackedManifest(manifest)
+
+  assert.deepEqual(Object.keys(canonical.dependencies), ['alpha', 'zebra'])
+  assert.deepEqual(Object.keys(canonical.devDependencies), ['beta', 'delta'])
+  assert.deepEqual(Object.keys(canonical.peerDependenciesMeta), ['alpha', 'zebra'])
+  assert.deepEqual(Object.keys(canonical.exports['.']), ['browser', 'import', 'require'])
+  assert.deepEqual(Object.keys(manifest.dependencies), ['zebra', 'alpha'])
+})
+
+test('SBOM preparation resolves the complete staged runtime and peer closure locally', () => {
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-stack-sbom-closure-'))
+  const names = {
+    root: '@example-local/root-wave21',
+    middle: '@example-local/middle-wave21',
+    leaf: '@example-local/leaf-wave21',
+    sdk: '@example-local/sdk-wave21'
+  }
+  const rootManifest = {
+    name: names.root,
+    version: '1.0.0',
+    dependencies: { [names.middle]: '^1.0.0' }
+  }
+  const projects = [
+    {
+      name: names.middle,
+      manifest: {
+        name: names.middle,
+        version: '1.0.0',
+        dependencies: { [names.leaf]: '^1.0.0' },
+        peerDependencies: { [names.sdk]: '^1.0.0' }
+      }
+    },
+    { name: names.leaf, manifest: { name: names.leaf, version: '1.0.0' } },
+    { name: names.sdk, manifest: { name: names.sdk, version: '1.0.0' } }
+  ]
+
+  try {
+    const stagedByName = new Map()
+    for (const project of projects) {
+      const packageDirectory = path.join(temporaryDirectory, project.name.split('/').at(-1))
+      fs.mkdirSync(packageDirectory, { recursive: true })
+      fs.writeFileSync(
+        path.join(packageDirectory, 'package.json'),
+        `${JSON.stringify(project.manifest, null, 2)}\n`
+      )
+      stagedByName.set(project.name, {
+        project,
+        tarballPath: packageDirectory
+      })
+    }
+
+    const prepared = prepareSbomManifest(rootManifest, stagedByName)
+    assert.deepEqual(prepared.injectedNames, [names.leaf, names.sdk])
+    assert.deepEqual(prepared.stagedNames, [names.leaf, names.middle, names.sdk])
+    assert.equal(
+      prepared.manifest.dependencies[names.middle],
+      `file:${stagedByName.get(names.middle).tarballPath}`
+    )
+    assert.equal(
+      prepared.manifest.dependencies[names.leaf],
+      `file:${stagedByName.get(names.leaf).tarballPath}`
+    )
+    assert.equal(
+      prepared.manifest.dependencies[names.sdk],
+      `file:${stagedByName.get(names.sdk).tarballPath}`
+    )
+
+    const rootDirectory = path.join(temporaryDirectory, 'root')
+    fs.mkdirSync(rootDirectory)
+    fs.writeFileSync(
+      path.join(rootDirectory, 'package.json'),
+      `${JSON.stringify(prepared.manifest, null, 2)}\n`
+    )
+    execFileSync(
+      'npm',
+      [
+        'install',
+        '--package-lock-only',
+        '--ignore-scripts',
+        '--omit=dev',
+        '--no-audit',
+        '--no-fund',
+        '--offline'
+      ],
+      { cwd: rootDirectory, stdio: 'pipe' }
+    )
+    const lock = JSON.parse(fs.readFileSync(path.join(rootDirectory, 'package-lock.json'), 'utf8'))
+    assert.doesNotThrow(() => validateStagedLockfile(lock, stagedByName, prepared.stagedNames))
+    for (const name of Object.values(names).filter(name => name !== names.root)) {
+      assert.ok(lock.packages[`node_modules/${name}`], `${name} must resolve from a local package`)
+    }
+  } finally {
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true })
+  }
+})
+
+test('SBOM lockfile validation rejects registry fallback for a staged package', () => {
+  const name = '@example-local/staged-wave21'
+  const stagedByName = new Map([
+    [
+      name,
+      {
+        project: { manifest: { name, version: '1.0.0' } },
+        tarballPath: '/tmp/staged-wave21.tgz'
+      }
+    ]
+  ])
+  assert.throws(
+    () =>
+      validateStagedLockfile(
+        {
+          packages: {
+            [`node_modules/${name}`]: {
+              version: '1.0.0',
+              resolved: 'https://registry.npmjs.org/staged-wave21/-/staged-wave21-1.0.0.tgz'
+            }
+          }
+        },
+        stagedByName,
+        [name]
+      ),
+    /resolved outside its staged tarball/
+  )
+  assert.throws(
+    () => validateStagedLockfile({ packages: {} }, stagedByName, [name]),
+    /missing from the staged package lockfile/
+  )
+})
+
+test('SBOM normalization removes local paths without changing portable references', () => {
+  assert.deepEqual(
+    removeLocalFileReferences([
+      {
+        name: '@example-local/staged-wave21',
+        externalReferences: [
+          { type: 'distribution', url: 'file:/tmp/staged-wave21.tgz' },
+          { type: 'vcs', url: 'https://github.com/example/staged-wave21' }
+        ]
+      },
+      {
+        name: 'only-local',
+        externalReferences: [{ type: 'distribution', url: 'file:../only-local.tgz' }]
+      }
+    ]),
+    [
+      {
+        name: '@example-local/staged-wave21',
+        externalReferences: [{ type: 'vcs', url: 'https://github.com/example/staged-wave21' }]
+      },
+      { name: 'only-local' }
+    ]
+  )
+})
+
+test('resolver-only closure dependencies are removed from the SBOM root relationship', () => {
+  const dependencies = [
+    {
+      ref: '@example-local/root@1.0.0',
+      dependsOn: [
+        '@example-local/middle@1.0.0',
+        '@example-local/leaf@1.0.0',
+        '@example-local/sdk@1.0.0',
+        'external@2.0.0'
+      ]
+    },
+    {
+      ref: '@example-local/middle@1.0.0',
+      dependsOn: ['@example-local/leaf@1.0.0', '@example-local/sdk@1.0.0']
+    }
+  ]
+  const filtered = removeInjectedRootDependencies(
+    dependencies,
+    '@example-local/root@1.0.0',
+    new Set(['@example-local/leaf@1.0.0', '@example-local/sdk@1.0.0'])
+  )
+
+  assert.deepEqual(filtered, [
+    {
+      ref: '@example-local/root@1.0.0',
+      dependsOn: ['@example-local/middle@1.0.0', 'external@2.0.0']
+    },
+    dependencies[1]
+  ])
+})
+
 test('artifact paths cannot be absolute, ambiguous, or escaping', () => {
   assert.equal(
     validateRelativeArtifactPath('packages/bsv-sdk-1.0.0.tgz'),
@@ -59,6 +266,30 @@ test('artifact paths cannot be absolute, ambiguous, or escaping', () => {
   ]) {
     assert.throws(() => validateRelativeArtifactPath(invalid), /invalid release artifact path/)
   }
+})
+
+test('release staging requires the exact governed build runtime', () => {
+  const policy = {
+    buildRuntime: {
+      node: '24.18.0',
+      npmMinimum: '11.5.1',
+      pnpm: '10.33.2'
+    }
+  }
+  const governed = { node: 'v24.18.0', npm: '11.16.0', pnpm: '10.33.2' }
+  assert.doesNotThrow(() => validateBuildRuntime(governed, policy))
+  assert.throws(
+    () => validateBuildRuntime({ ...governed, node: 'v24.14.0' }, policy),
+    /Node\.js v24\.14\.0 does not match release policy v24\.18\.0/
+  )
+  assert.throws(
+    () => validateBuildRuntime({ ...governed, npm: '11.5.0' }, policy),
+    /below trusted publishing minimum/
+  )
+  assert.throws(
+    () => validateBuildRuntime({ ...governed, pnpm: '10.33.1' }, policy),
+    /does not match release policy/
+  )
 })
 
 test('aggregate CycloneDX retains package roots and dependency relationships', () => {
@@ -160,6 +391,20 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
     npmMinimum: '11.5.1',
     pnpm: '10.33.2'
   })
+  assert.deepEqual(policy.artifacts.canonicalManifestDependencyFields, [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+    'peerDependenciesMeta'
+  ])
+  assert.deepEqual(policy.sbom.coordinatedCandidates, {
+    resolver: 'staged tarball runtime and peer dependency closure',
+    runtimeFields: ['dependencies', 'optionalDependencies', 'peerDependencies'],
+    registryFallbackForStagedCandidates: false,
+    preserveOriginalRootRelationships: true
+  })
+  assert.equal(policy.sbom.localFilesystemReferences, false)
   assert.deepEqual(policy.scanGate.targets, ['vulnerabilities', 'licenses'])
   assert.deepEqual(policy.scanGate.severities, ['HIGH', 'CRITICAL'])
   assert.equal(policy.scanGate.ignoreUnfixed, false)

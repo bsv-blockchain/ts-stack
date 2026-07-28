@@ -29,13 +29,35 @@ The uncredentialed `prepare` job:
 
 1. resolves the governed, public packages whose checked-in versions are not
    already present on npm;
-2. packs each selected package once with lifecycle scripts disabled;
+2. materializes each package's publishable file set with lifecycle scripts
+   disabled, canonicalizes dependency-map ordering after resolving workspace
+   versions, and packs the immutable candidate once from that isolated snapshot;
 3. records SHA-256, SHA-512 integrity, size, source commit, package
    identity, and topological publication order in `manifest.json`;
 4. generates a production-dependency CycloneDX 1.5 SBOM for every exact
    tarball and an aggregate release SBOM;
 5. creates a complete production-license inventory and rejects missing or
    high/critical restricted license declarations.
+
+When several unpublished first-party candidates are staged together, SBOM
+generation resolves their complete staged runtime and peer-dependency closure
+from the local exact tarballs. It does not fall through to npm for a version
+that is present in the candidate set. Resolver-only top-level dependencies are
+removed from the final SBOM root relationship, so the evidence retains the
+package manifest's original direct dependency and peer relationships. This
+temporary resolution never rewrites or repacks the immutable publication
+tarballs. Local resolver paths are removed from the final SBOM; package purls,
+cryptographic hashes, licenses, and dependency relationships remain, without
+leaking a runner-specific filesystem location.
+
+Staging validates the exact governed Node.js and pnpm versions, plus the minimum
+npm version, before creating the output directory or packing any candidate.
+The final candidate uses the exact governed pnpm version. Canonicalization sorts
+only dependency and peer-metadata maps; it preserves order-sensitive fields
+such as conditional exports and verifies that the publishable file set does not
+change. The transient workspace snapshot is deleted before evidence is
+generated. Together these controls prevent asynchronous workspace-version
+resolution from producing different bytes for equivalent package manifests.
 
 The protected `publish` job downloads that immutable candidate, runs no package
 build or lifecycle code, and:

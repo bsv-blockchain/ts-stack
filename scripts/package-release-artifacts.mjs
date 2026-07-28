@@ -27,6 +27,13 @@ const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 const REGISTRY_RETRY_ATTEMPTS = 20
 const REGISTRY_RETRY_DELAY_MS = 15_000
 const URL_NAMESPACE_UUID = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
+const PACKED_MANIFEST_DEPENDENCY_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+  'peerDependenciesMeta'
+]
 const execFileAsync = promisify(execFile)
 const registryLicenseCache = new Map()
 const run = createCommandRunner({
@@ -324,35 +331,106 @@ function validatePackResult(packResult, project) {
   if (errors.length > 0) throw new Error(`${project.name}: ${errors.join('; ')}`)
 }
 
-async function stageTarball(project, packagesDirectory) {
-  const { stdout } = await run(
-    'pnpm',
-    ['pack', '--json', '--pack-destination', packagesDirectory],
-    {
-      cwd: project.directory,
-      env: { ...process.env, npm_config_ignore_scripts: 'true' }
+export function canonicalizePackedManifest(manifest) {
+  const canonical = structuredClone(manifest)
+  for (const field of PACKED_MANIFEST_DEPENDENCY_FIELDS) {
+    const entries = Object.entries(canonical[field] ?? {})
+    if (entries.length > 0) {
+      canonical[field] = Object.fromEntries(
+        entries.toSorted(([left], [right]) => compareStrings(left, right))
+      )
     }
-  )
+  }
+  return canonical
+}
+
+function packedFilePaths(packResult) {
+  return (packResult.files ?? []).map(file => file.path).toSorted(compareStrings)
+}
+
+async function packDirectory(directory, destination, project) {
+  const { stdout } = await run('pnpm', ['pack', '--json', '--pack-destination', destination], {
+    cwd: directory,
+    env: { ...process.env, npm_config_ignore_scripts: 'true' }
+  })
   const packResult = parseJson(stdout, `pnpm pack result for ${project.name}`)
   validatePackResult(packResult, project)
-  const tarballPath = path.resolve(packResult.filename)
-  if (path.dirname(tarballPath) !== packagesDirectory) {
-    throw new Error(`${project.name} packed outside ${packagesDirectory}`)
+  const tarballPath = path.resolve(directory, packResult.filename)
+  if (path.dirname(tarballPath) !== destination) {
+    throw new Error(`${project.name} packed outside ${destination}`)
   }
-  const digests = await fileDigests(tarballPath)
-  if (packResult.integrity && packResult.integrity !== digests.integrity) {
-    throw new Error(`${project.name} pack metadata does not match the staged tarball`)
-  }
-  return {
-    project,
-    tarballPath,
-    tarball: posixPath(path.relative(path.dirname(packagesDirectory), tarballPath)),
-    ...digests
+  return { packResult, tarballPath }
+}
+
+async function stageTarball(project, packagesDirectory) {
+  const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-npm-pack-'))
+  try {
+    const provisionalDirectory = path.join(temporaryDirectory, 'provisional')
+    const extractedDirectory = path.join(temporaryDirectory, 'extracted')
+    await Promise.all([
+      fs.mkdir(provisionalDirectory, { recursive: true }),
+      fs.mkdir(extractedDirectory, { recursive: true })
+    ])
+    const provisional = await packDirectory(project.directory, provisionalDirectory, project)
+    await run('tar', ['-xzf', provisional.tarballPath, '-C', extractedDirectory], {
+      cwd: REPOSITORY_ROOT
+    })
+    const packageDirectory = path.join(extractedDirectory, 'package')
+    const manifestPath = path.join(packageDirectory, 'package.json')
+    await writeJson(manifestPath, canonicalizePackedManifest(await readJson(manifestPath)))
+    const staged = await packDirectory(packageDirectory, packagesDirectory, project)
+    if (
+      JSON.stringify(packedFilePaths(staged.packResult)) !==
+      JSON.stringify(packedFilePaths(provisional.packResult))
+    ) {
+      throw new Error(`${project.name} canonical staging changed the publishable file set`)
+    }
+    const digests = await fileDigests(staged.tarballPath)
+    if (staged.packResult.integrity && staged.packResult.integrity !== digests.integrity) {
+      throw new Error(`${project.name} pack metadata does not match the staged tarball`)
+    }
+    return {
+      project,
+      tarballPath: staged.tarballPath,
+      tarball: posixPath(path.relative(path.dirname(packagesDirectory), staged.tarballPath)),
+      ...digests
+    }
+  } finally {
+    await fs.rm(temporaryDirectory, { recursive: true, force: true })
   }
 }
 
-function rewriteSelectedDependencies(manifest, stagedByName) {
+function runtimeDependencyNames(manifest) {
+  return [
+    ...new Set(
+      ['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap(field =>
+        Object.keys(manifest[field] ?? {})
+      )
+    )
+  ].toSorted(compareStrings)
+}
+
+function stagedRuntimeClosure(manifest, stagedByName) {
+  const queued = runtimeDependencyNames(manifest)
+  const visited = new Set()
+  const closure = new Set()
+  while (queued.length > 0) {
+    const name = queued.shift()
+    if (visited.has(name)) continue
+    visited.add(name)
+    if (name === manifest.name) continue
+    const staged = stagedByName.get(name)
+    if (!staged) continue
+    closure.add(name)
+    queued.push(...runtimeDependencyNames(staged.project.manifest))
+    queued.sort(compareStrings)
+  }
+  return [...closure].toSorted(compareStrings)
+}
+
+export function prepareSbomManifest(manifest, stagedByName) {
   const rewritten = structuredClone(manifest)
+  const directRuntimeNames = new Set(runtimeDependencyNames(manifest))
   for (const field of ['dependencies', 'optionalDependencies']) {
     if (!rewritten[field]) continue
     for (const name of Object.keys(rewritten[field])) {
@@ -369,9 +447,46 @@ function rewriteSelectedDependencies(manifest, stagedByName) {
     const staged = stagedByName.get(name)
     rewritten[field][name] = staged ? `file:${staged.tarballPath}` : range
   }
+  const stagedClosure = stagedRuntimeClosure(manifest, stagedByName)
+  const injectedNames = stagedClosure.filter(name => !directRuntimeNames.has(name))
+  for (const name of injectedNames) {
+    rewritten.dependencies ??= {}
+    rewritten.dependencies[name] = `file:${stagedByName.get(name).tarballPath}`
+  }
   delete rewritten.devDependencies
   delete rewritten.scripts
-  return rewritten
+  return { manifest: rewritten, injectedNames, stagedNames: stagedClosure }
+}
+
+function lockfilePackageName(location) {
+  return location.match(/(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)$/)?.[1]
+}
+
+export function validateStagedLockfile(lockfile, stagedByName, stagedNames) {
+  const expected = new Set(stagedNames)
+  const locallyResolved = new Set()
+  for (const [location, installed] of Object.entries(lockfile.packages ?? {})) {
+    const name = lockfilePackageName(location)
+    if (!expected.has(name)) continue
+    const staged = stagedByName.get(name)
+    const linkedPackage =
+      installed.link === true && typeof installed.resolved === 'string'
+        ? lockfile.packages?.[installed.resolved]
+        : undefined
+    const installedVersion = linkedPackage?.version ?? installed.version
+    const resolvedLocally =
+      Boolean(linkedPackage) ||
+      (typeof installed.resolved === 'string' && installed.resolved.startsWith('file:'))
+    if (installedVersion !== staged.project.manifest.version || !resolvedLocally) {
+      throw new Error(`${name} resolved outside its staged tarball at ${location}`)
+    }
+    locallyResolved.add(name)
+  }
+  for (const name of expected) {
+    if (!locallyResolved.has(name)) {
+      throw new Error(`${name} is missing from the staged package lockfile`)
+    }
+  }
 }
 
 function normalizeRootComponent(component, record, manifest) {
@@ -419,6 +534,20 @@ function normalizeBomDependencyRefs(bom, originalRootRef, normalizedRootRef) {
   }))
 }
 
+export function removeInjectedRootDependencies(dependencies, rootRef, injectedReferences) {
+  if (injectedReferences.size === 0) return dependencies
+  return dependencies.map(dependency =>
+    dependency.ref === rootRef
+      ? {
+          ...dependency,
+          dependsOn: (dependency.dependsOn ?? []).filter(
+            reference => !injectedReferences.has(reference)
+          )
+        }
+      : dependency
+  )
+}
+
 function normalizeGovernedComponentLicenses(components, governedNames, internalLicense) {
   return components.map(component =>
     governedNames.has(component.name)
@@ -428,6 +557,20 @@ function normalizeGovernedComponentLicenses(components, governedNames, internalL
         }
       : component
   )
+}
+
+export function removeLocalFileReferences(components) {
+  return components.map(component => {
+    const existingReferences = component.externalReferences ?? []
+    const externalReferences = existingReferences.filter(
+      reference => typeof reference.url !== 'string' || !reference.url.startsWith('file:')
+    )
+    if (externalReferences.length === existingReferences.length) return component
+    const sanitized = { ...component }
+    if (externalReferences.length > 0) sanitized.externalReferences = externalReferences
+    else delete sanitized.externalReferences
+    return sanitized
+  })
 }
 
 function normalizedRegistryLicenses(metadata) {
@@ -515,7 +658,8 @@ async function generatePackageSbom(
       )
     }
 
-    await writeJson(manifestPath, rewriteSelectedDependencies(manifest, stagedByName))
+    const preparedManifest = prepareSbomManifest(manifest, stagedByName)
+    await writeJson(manifestPath, preparedManifest.manifest)
     await run(
       'npm',
       [
@@ -527,6 +671,11 @@ async function generatePackageSbom(
         '--no-fund'
       ],
       { cwd: packageDirectory }
+    )
+    validateStagedLockfile(
+      await readJson(path.join(packageDirectory, 'package-lock.json')),
+      stagedByName,
+      preparedManifest.stagedNames
     )
     const { stdout } = await run(
       'npm',
@@ -545,10 +694,19 @@ async function generatePackageSbom(
     }
     const originalRootRef = bom.metadata?.component?.['bom-ref']
     const rootComponent = normalizeRootComponent(bom.metadata?.component ?? {}, record, manifest)
-    const normalizedComponents = normalizeGovernedComponentLicenses(
-      bom.components ?? [],
-      governedNames,
-      internalLicense
+    const normalizedComponents = removeLocalFileReferences(
+      normalizeGovernedComponentLicenses(bom.components ?? [], governedNames, internalLicense)
+    )
+    const injectedNames = new Set(preparedManifest.injectedNames)
+    const injectedReferences = new Set(
+      normalizedComponents
+        .filter(
+          component =>
+            injectedNames.has(component.name) &&
+            component.version === stagedByName.get(component.name)?.project.manifest.version
+        )
+        .map(component => component['bom-ref'])
+        .filter(Boolean)
     )
     const normalized = {
       ...bom,
@@ -561,7 +719,11 @@ async function generatePackageSbom(
         component: rootComponent
       },
       components: await supplementRegistryLicenses(normalizedComponents),
-      dependencies: normalizeBomDependencyRefs(bom, originalRootRef, rootComponent['bom-ref'])
+      dependencies: removeInjectedRootDependencies(
+        normalizeBomDependencyRefs(bom, originalRootRef, rootComponent['bom-ref']),
+        rootComponent['bom-ref'],
+        injectedReferences
+      )
     }
     const sbomPath = path.join(sbomDirectory, `${packageSlug(record.project.name)}.cdx.json`)
     await writeJson(sbomPath, normalized)
@@ -726,24 +888,31 @@ export function mergeCycloneDxDocuments(records, source) {
   }
 }
 
-async function sourceMetadata() {
-  const [{ stdout: commit }, { stdout: created }, { stdout: npm }, { stdout: pnpm }, policy] =
+export function validateBuildRuntime(source, policy) {
+  if (source.node !== `v${policy.buildRuntime.node}`) {
+    throw new Error(
+      `Node.js ${source.node} does not match release policy v${policy.buildRuntime.node}`
+    )
+  }
+  if (!versionAtLeast(source.npm, policy.buildRuntime.npmMinimum)) {
+    throw new Error(
+      `npm ${source.npm} is below trusted publishing minimum ${policy.buildRuntime.npmMinimum}`
+    )
+  }
+  if (source.pnpm !== policy.buildRuntime.pnpm) {
+    throw new Error(`pnpm ${source.pnpm} does not match release policy ${policy.buildRuntime.pnpm}`)
+  }
+}
+
+async function sourceMetadata(policy) {
+  const [{ stdout: commit }, { stdout: created }, { stdout: npm }, { stdout: pnpm }] =
     await Promise.all([
       run('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT }),
       run('git', ['show', '-s', '--format=%cI', 'HEAD'], { cwd: REPOSITORY_ROOT }),
       run('npm', ['--version'], { cwd: REPOSITORY_ROOT }),
-      run('pnpm', ['--version'], { cwd: REPOSITORY_ROOT }),
-      readJson(POLICY_PATH)
+      run('pnpm', ['--version'], { cwd: REPOSITORY_ROOT })
     ])
-  if (!versionAtLeast(npm.trim(), policy.buildRuntime.npmMinimum)) {
-    throw new Error(
-      `npm ${npm.trim()} is below trusted publishing minimum ${policy.buildRuntime.npmMinimum}`
-    )
-  }
-  if (pnpm.trim() !== policy.buildRuntime.pnpm) {
-    throw new Error(`pnpm ${pnpm.trim()} does not match release policy ${policy.buildRuntime.pnpm}`)
-  }
-  return {
+  const source = {
     repository: EXPECTED_REPOSITORY,
     commit: commit.trim(),
     created: created.trim(),
@@ -751,6 +920,8 @@ async function sourceMetadata() {
     npm: npm.trim(),
     pnpm: pnpm.trim()
   }
+  validateBuildRuntime(source, policy)
+  return source
 }
 
 function manifestPackage(record) {
@@ -782,9 +953,9 @@ async function stageArtifacts(arguments_) {
   if (filter && requested.length > 0) {
     throw new Error('--filter and --package cannot be used together')
   }
-  await ensureEmptyOutputDirectory(outputDirectory)
-
   const [governed, policy] = await Promise.all([loadGovernedProjects(), readJson(POLICY_PATH)])
+  const source = await sourceMetadata(policy)
+  await ensureEmptyOutputDirectory(outputDirectory)
   const governedNames = new Set(governed.map(project => project.name))
   let candidates
   if (requested.length > 0) {
@@ -810,7 +981,6 @@ async function stageArtifacts(arguments_) {
     stagedTarballs.push(await stageTarball(project, packagesDirectory))
   }
   const stagedByName = new Map(stagedTarballs.map(record => [record.project.name, record]))
-  const source = await sourceMetadata()
   const records = await mapWithConcurrency(stagedTarballs, 4, record =>
     generatePackageSbom(
       record,
@@ -933,13 +1103,7 @@ function validateManifestEnvelope(manifest, currentCommit, policy) {
       `release source ${manifest.source.commit} does not match checked-out commit ${currentCommit}`
     )
   }
-  if (
-    manifest.source.node !== `v${policy.buildRuntime.node}` ||
-    manifest.source.pnpm !== policy.buildRuntime.pnpm ||
-    !versionAtLeast(manifest.source.npm, policy.buildRuntime.npmMinimum)
-  ) {
-    throw new Error('release artifact build runtime does not match policy')
-  }
+  validateBuildRuntime(manifest.source, policy)
 }
 
 function addUniqueValue(values, value, description) {

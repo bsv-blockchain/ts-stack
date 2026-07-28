@@ -4,7 +4,7 @@ title: Messaging
 kind: reference
 last_updated: "2026-04-28"
 version: "n/a"
-last_verified: "2026-04-28"
+last_verified: "2026-07-27"
 review_cadence_days: 90
 status: stable
 tags: [packages, messaging]
