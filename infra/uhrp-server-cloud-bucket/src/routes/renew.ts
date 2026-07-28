@@ -38,25 +38,27 @@ interface AdvertisementOutput {
 
 async function calculateRenewalAmount(size: string, additionalMinutes: number): Promise<number> {
   const fileSize = Number.parseInt(size, 10) || 0
-  if (fileSize <= 0) return 0
-  return await getPriceForFile({ fileSize, retentionPeriod: additionalMinutes })
+  return fileSize > 0
+    ? await getPriceForFile({ fileSize, retentionPeriod: additionalMinutes })
+    : 0
 }
 
 function findFarthestAdvertisement(
   outputs: AdvertisementOutput[]
 ): AdvertisementOutput | undefined {
-  let farthestAdvertisement: AdvertisementOutput | undefined
-  let farthestExpiry = 0
-
-  for (const output of outputs) {
-    const expiryTag = output.tags?.find(tag => tag.startsWith('expiry_time_'))
-    if (expiryTag == null) continue
-    const expiry = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-    if (expiry <= farthestExpiry) continue
-    farthestExpiry = expiry
-    farthestAdvertisement = output
-  }
-  return farthestAdvertisement
+  return outputs
+    .map(advertisement => {
+      const expiryTag = advertisement.tags?.find(tag => tag.startsWith('expiry_time_'))
+      const expiry =
+        expiryTag == null
+          ? 0
+          : Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+      return { advertisement, expiry }
+    })
+    .reduce<{ advertisement?: AdvertisementOutput; expiry: number }>(
+      (farthest, candidate) => (candidate.expiry > farthest.expiry ? candidate : farthest),
+      { expiry: 0 }
+    ).advertisement
 }
 
 function buildRenewalTags(
@@ -65,16 +67,15 @@ function buildRenewalTags(
   objectIdentifier: string,
   expiryTime: number
 ): string[] {
-  const tags = [
+  const uploaderTags =
+    previousAdvertisement.tags
+      ?.filter(tag => tag.startsWith('uploader_identity_key_'))
+      .slice(0, 1) ?? []
+  return uploaderTags.concat(
     `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
     `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
     `expiry_time_${expiryTime}`
-  ]
-  const uploaderTag = previousAdvertisement.tags?.find(tag =>
-    tag.startsWith('uploader_identity_key_')
   )
-  if (uploaderTag != null) tags.unshift(uploaderTag)
-  return tags
 }
 
 const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => {
