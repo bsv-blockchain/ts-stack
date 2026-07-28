@@ -8,9 +8,9 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 80
-    targetPort: 8080
-    name: http
+    - port: 80
+      targetPort: 8080
+      name: http
   selector:
     app: wallet-infra
 ---
@@ -32,25 +32,58 @@ spec:
         app: wallet-infra
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
       containers:
-      - name: wallet-infra
-        image: your-registry/wallet-infra:2.0.1 # Replace with your container registry path and version
-        ports:
-        - containerPort: 8080
-        envFrom:
-        - configMapRef:
-            name: wallet-config
-        - secretRef:
-            name: wallet-secrets
-        resources:
-          requests:
-            cpu: 200m
-            memory: 256Mi
-            ephemeral-storage: "1Gi"
-          limits:
-            cpu: 500m
-            memory: 512Mi
-            ephemeral-storage: "2Gi"
+        - name: wallet-infra
+          image: ghcr.io/bsv-blockchain/wallet-infra:v2.0.13@sha256:373b7a1011ac5e822a8221cc01d50754458c0675413df2013206f6a5ea45a412
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: wallet-config
+            - secretRef:
+                name: wallet-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+              ephemeral-storage: '1Gi'
+            limits:
+              cpu: 500m
+              memory: 512Mi
+              ephemeral-storage: '2Gi'
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsUser: 1000
+            runAsGroup: 1000
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -58,22 +91,22 @@ metadata:
   name: wallet-ingress
 
   annotations:
-    alb.ingress.kubernetes.io/scheme: "internet-facing"
-    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/scheme: 'internet-facing'
+    alb.ingress.kubernetes.io/target-type: 'ip'
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
     # Add your SSL certificate configuration here
-    external-dns.alpha.kubernetes.io/hostname: "store.example.com"
+    external-dns.alpha.kubernetes.io/hostname: 'store.example.com'
 spec:
   ingressClassName: alb
   rules:
-  - host: store.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: wallet-infra
-            port:
-              number: 80
+    - host: store.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-infra
+                port:
+                  number: 80

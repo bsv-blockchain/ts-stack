@@ -35,4 +35,7 @@ USER node
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD ["node", "-e", "const port=process.env.HTTP_PORT||'8080';fetch(`http://127.0.0.1:${port}/`).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+
 CMD ["node", "--import", "./out/src/telemetry.js", "out/src/index.js"]

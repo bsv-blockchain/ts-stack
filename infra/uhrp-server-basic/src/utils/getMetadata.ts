@@ -1,13 +1,12 @@
 import { getWallet } from './walletSingleton'
 import { Utils } from '@bsv/sdk'
 
-
 interface FileMetadata {
   objectIdentifier: string
   name: string
   size: string
   contentType: string
-  expiryTime: number  // minutes since the Unix epoch
+  expiryTime: number // minutes since the Unix epoch
 }
 
 /**
@@ -18,11 +17,19 @@ interface FileMetadata {
  * @returns {Promise<FileMetadata>} An object containing file info.
  * @throws If no matching advertisement is found or GCS metadata fails.
  */
-export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, limit?: number, offset?: number): Promise<FileMetadata> {
+export async function getMetadata(
+  uhrpUrl: string,
+  uploaderIdentityKey: string,
+  limit?: number,
+  offset?: number
+): Promise<FileMetadata> {
   const wallet = await getWallet()
   const { outputs } = await wallet.listOutputs({
     basket: 'uhrp advertisements',
-    tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`, `uploader_identity_key_${uploaderIdentityKey}`],
+    tags: [
+      `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+      `uploader_identity_key_${uploaderIdentityKey}`
+    ],
     tagQueryMode: 'all',
     includeTags: true,
     limit: limit ?? 200,
@@ -42,11 +49,13 @@ export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, 
     const contentTypeTag = out.tags.find(t => t.startsWith('content_type_'))
     if (!objectIdTag || !expiryTag || !nameTag || !sizeTag || !contentTypeTag) continue
 
-    const expiryNum = parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+    const expiryNum = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
 
     if (expiryNum > maxpiry) {
       maxpiry = expiryNum
-      objectIdentifier = Utils.toUTF8(Utils.toArray(objectIdTag.substring('object_identifier_'.length), 'hex'))
+      objectIdentifier = Utils.toUTF8(
+        Utils.toArray(objectIdTag.substring('object_identifier_'.length), 'hex')
+      )
       name = nameTag
       size = sizeTag
       contentType = contentTypeTag
@@ -54,7 +63,9 @@ export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, 
   }
 
   if (!objectIdentifier || !name || !size || !contentType) {
-    throw new Error(`No advertisement found for uhrpUrl: ${uhrpUrl} uploaderIdentityKey: ${uploaderIdentityKey}`)
+    throw new Error(
+      `No advertisement found for uhrpUrl: ${uhrpUrl} uploaderIdentityKey: ${uploaderIdentityKey}`
+    )
   }
 
   if (Date.now() > maxpiry * 1000) {

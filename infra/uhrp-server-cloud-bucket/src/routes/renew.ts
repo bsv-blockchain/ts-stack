@@ -31,6 +31,21 @@ interface RenewResponse {
   description?: string
 }
 
+const latestAdvertisement = <T extends { tags?: string[] }>(outputs: T[]): T | undefined => {
+  let latest: T | undefined
+  let latestExpiry = 0
+  for (const output of outputs) {
+    const expiryTag = output.tags?.find(tag => tag.startsWith('expiry_time_'))
+    if (expiryTag == null) continue
+    const expiry = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+    if (expiry > latestExpiry) {
+      latestExpiry = expiry
+      latest = output
+    }
+  }
+  return latest
+}
+
 const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => {
   try {
     const { identityKey } = req.auth
@@ -64,10 +79,10 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     } = await getMetadata(uhrpUrl, identityKey, limit, offset)
 
     // Convert to MS to create an ISO string
-    const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
+    const newExpiryTimeSeconds = prevExpiryTime + additionalMinutes * 60
     const newCustomTimeIso = new Date(newExpiryTimeSeconds * 1000).toISOString()
 
-    const fileSizeNum = parseInt(size, 10) || 0
+    const fileSizeNum = Number.parseInt(size, 10) || 0
     let amount = 0
     if (fileSizeNum > 0) {
       amount = await getPriceForFile({
@@ -78,9 +93,12 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
 
     // When multiple advertisements match, renew the one with the farthest expiry.
     const wallet = await getWallet()
-    const { outputs, BEEF, } = await wallet.listOutputs({
+    const { outputs, BEEF } = await wallet.listOutputs({
       basket: 'uhrp advertisements',
-      tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`, `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`],
+      tags: [
+        `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+        `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`
+      ],
       tagQueryMode: 'all',
       includeTags: true,
       include: 'entire transactions',
@@ -96,22 +114,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       })
     }
 
-    // Finding the maxpiry file with the same url
-    let prevAdvertisement
-    // Farthest expiration time given in seconds
-    let maxpiry = 0
-    for (const out of outputs) {
-      if (!out.tags) continue
-      const expiryTag = out.tags.find(t => t.startsWith('expiry_time_'))
-      if (!expiryTag) continue
-
-      const expiryNum = parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-
-      if (expiryNum > maxpiry) {
-        maxpiry = expiryNum
-        prevAdvertisement = out
-      }
-    }
+    const prevAdvertisement = latestAdvertisement(outputs)
 
     if (!prevAdvertisement || !BEEF) {
       return res.status(404).json({
@@ -150,24 +153,30 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       const uploaderTag = prevAdvertisement.tags.find(t => t.startsWith('uploader_identity_key_'))
       if (uploaderTag) newTags.push(uploaderTag)
     }
-    newTags.push(`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`)
-    newTags.push(`object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`)
-    newTags.push(`expiry_time_${newExpiryTimeSeconds}`)
+    newTags.push(
+      `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
+      `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
+      `expiry_time_${newExpiryTimeSeconds}`
+    )
 
     const { signableTransaction } = await wallet.createAction({
       inputBEEF: BEEF,
-      inputs: [{
-        outpoint: prevAdvertisement.outpoint,
-        unlockingScriptLength: 74,
-        inputDescription: 'Redeeming old advertisement'
-      }],
-      outputs: [{
-        lockingScript: newLockingScript.toHex(),
-        satoshis: 1,
-        basket: 'uhrp advertisements',
-        outputDescription: 'UHRP advertisement token (renewed)',
-        tags: newTags
-      }],
+      inputs: [
+        {
+          outpoint: prevAdvertisement.outpoint,
+          unlockingScriptLength: 74,
+          inputDescription: 'Redeeming old advertisement'
+        }
+      ],
+      outputs: [
+        {
+          lockingScript: newLockingScript.toHex(),
+          satoshis: 1,
+          basket: 'uhrp advertisements',
+          outputDescription: 'UHRP advertisement token (renewed)',
+          tags: newTags
+        }
+      ],
       description: `Renew advertisement for uhrpUrl ${uhrpUrl}`,
       options: {
         randomizeOutputs: false
@@ -187,8 +196,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     const unlockingScript = await unlocker.sign(partialTx, 0)
     const { tx, txid } = await wallet.signAction({
       reference: signableTransaction.reference,
-      spends:
-      {
+      spends: {
         0: {
           unlockingScript: unlockingScript.toHex()
         }
@@ -208,7 +216,9 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
 
     // Setting the new expiry time in the actual database
-    await storage.bucket(GCP_BUCKET_NAME).file(`cdn/${objectIdentifier}`)
+    await storage
+      .bucket(GCP_BUCKET_NAME)
+      .file(`cdn/${objectIdentifier}`)
       .setMetadata({ customTime: newCustomTimeIso })
 
     return res.status(200).json({
@@ -230,7 +240,8 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
 export default {
   type: 'post',
   path: '/renew',
-  summary: 'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
+  summary:
+    'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
   parameters: {
     uhrpUrl: 'The UHRP URL (e.g. "uhrp://somehash")',
     additionalMinutes: 'Number of minutes to extend'

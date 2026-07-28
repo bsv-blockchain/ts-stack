@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: overlay-config
+data:
+  node-name: replace-with-node-name
+  hosting-url: https://overlay.example.com
+  wallet-storage-url: https://storage.example.com
+  network: main
+  gasp-enabled: 'true'

@@ -26,26 +26,52 @@ spec:
       containers:
         - env:
             - name: MONGO_INITDB_ROOT_PASSWORD
-              value: example
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-database-secrets
+                  key: mongo-root-password
             - name: MONGO_INITDB_ROOT_USERNAME
-              value: root
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-database-secrets
+                  key: mongo-root-user
           image: mongo:6.0.28@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
           name: mongo
           ports:
             - containerPort: 27017
+              name: mongodb
               protocol: TCP
+          startupProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - db.adminCommand('ping')
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 30
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
               ephemeral-storage: 1Gi
             limits:
+              cpu: '1'
               memory: 512Mi
               ephemeral-storage: 2Gi
           volumeMounts:
             - mountPath: /data/db
               name: mongo-data
       restartPolicy: Always
+      terminationGracePeriodSeconds: 60
       volumes:
         - name: mongo-data
           persistentVolumeClaim:

@@ -58,6 +58,9 @@ USER node
 # 3012 - CDN Server (bulk headers)
 EXPOSE 3011 3012
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["node", "-e", "const port=process.env.PORT||'3011';fetch(`http://127.0.0.1:${port}/getInfo`).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+
 # Run the application with the OpenTelemetry bootstrap preloaded so
 # auto-instrumentation patches modules before app code is imported.
 CMD ["node", "--require", "./dist/telemetry.js", "dist/server.js"]

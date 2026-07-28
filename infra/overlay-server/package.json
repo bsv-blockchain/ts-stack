@@ -1,7 +1,7 @@
 {
   "name": "@bsv/overlay-express-examples",
   "private": true,
-  "version": "2.1.18",
+  "version": "2.1.19",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"

@@ -16,30 +16,88 @@ spec:
         service: web
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
       containers:
-        # General image from infra-release.yaml (GHCR). Pin to a released v* tag.
+        # General image from infra-release.yaml (GHCR). Keep tag and digest together.
         - image: ghcr.io/bsv-blockchain/wab:v1.4.10@sha256:b770900fcdfd151eca342d0e3d9b1ed49dc987f961b68d38e112f136d1fe10e5
+          imagePullPolicy: IfNotPresent
           env:
-          - name: DB_CLIENT
-            value: mysql2
-          - name: DB_USER
-            value: exampleuser
-          - name: DB_PASS
-            value: examplepass
-          - name: DB_NAME
-            value: exampledb
-          - name: DB_HOST
-            value: mysql
+            - name: DB_CLIENT
+              valueFrom:
+                configMapKeyRef:
+                  name: wab-config
+                  key: db-client
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: wab-config
+                  key: db-user
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: wab-secrets
+                  key: db-password
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: wab-config
+                  key: db-name
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: wab-config
+                  key: db-host
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: wab-config
+                  key: db-port
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: '8080'
           name: web
           ports:
             - containerPort: 8080
+              name: http
               protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /info
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /info
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /info
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
               ephemeral-storage: 1Gi
             limits:
+              cpu: '1'
               memory: 512Mi
               ephemeral-storage: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsUser: 1000
+            runAsGroup: 1000
       restartPolicy: Always

@@ -1,5 +1,11 @@
 # Governance
 
+> **Historical planning record — superseded.** This document describes an
+> unadopted cross-language governance model and references files and roles that
+> are not current repository policy. Use [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324),
+> `docs/about/contributing.md`, the `governance/` registries, and enforced
+> repository rules as the current sources of truth.
+
 ## Mission
 
 Make the BSV Distributed Applications Stack — across TypeScript, Go, Python, and Rust — easier to maintain, cleaner to read, measurably faster, demonstrably more secure, and boringly reliable. TypeScript is the canonical reference. Specs are the contract.

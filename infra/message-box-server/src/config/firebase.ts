@@ -4,17 +4,73 @@ import {
   getApp,
   cert,
   applicationDefault,
-  type App
+  type App,
+  type Credential
 } from 'firebase-admin/app'
 import { getMessaging, type Messaging, type Message } from 'firebase-admin/messaging'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import * as path from 'node:path'
+import { readFileSync } from 'node:fs'
 import dotenv from 'dotenv'
 import { log } from '../utils/logger.js'
 
 dotenv.config()
 
 let firebaseApp: App | null = null
+
+function credentialFromJson(rawCredential: string, source: string): Credential {
+  try {
+    const serviceAccount: unknown = JSON.parse(rawCredential)
+    if (serviceAccount == null || typeof serviceAccount !== 'object') {
+      throw new TypeError('Parsed service account is not a valid object')
+    }
+    const values = serviceAccount as Record<string, unknown>
+    for (const field of ['private_key', 'client_email', 'project_id']) {
+      if (typeof values[field] !== 'string' || values[field] === '') {
+        throw new TypeError(
+          'Service account missing required fields (private_key, client_email, project_id)'
+        )
+      }
+    }
+    return cert({
+      privateKey: values.private_key as string,
+      clientEmail: values.client_email as string,
+      projectId: values.project_id as string
+    })
+  } catch (error) {
+    throw new TypeError(
+      `Failed to parse Firebase service account from ${source}: ${error instanceof Error ? error.message : 'Invalid JSON'}`,
+      { cause: error }
+    )
+  }
+}
+
+function resolveFirebaseCredential(): Credential {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  if (serviceAccountJson != null && serviceAccountJson !== '') {
+    log.info(
+      { operation: 'firebase.init', credential_source: 'env' },
+      'Using Firebase service account from environment variable'
+    )
+    return credentialFromJson(serviceAccountJson, 'FIREBASE_SERVICE_ACCOUNT_JSON')
+  }
+
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+  if (serviceAccountPath != null && serviceAccountPath !== '') {
+    log.info(
+      { operation: 'firebase.init', credential_source: 'file' },
+      'Using Firebase service account key file'
+    )
+    const absolutePath = path.resolve(process.cwd(), serviceAccountPath)
+    return credentialFromJson(readFileSync(absolutePath, 'utf8'), absolutePath)
+  }
+
+  log.info(
+    { operation: 'firebase.init', credential_source: 'default' },
+    'Using Firebase default credentials'
+  )
+  return applicationDefault()
+}
 
 /**
  * Initialize Firebase Admin SDK.
@@ -38,86 +94,13 @@ export function initializeFirebase(): App | null {
   }
 
   try {
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
     const projectId = process.env.FIREBASE_PROJECT_ID
 
     if (projectId == null || projectId === '') {
-      throw new Error('FIREBASE_PROJECT_ID environment variable is required')
+      throw new TypeError('FIREBASE_PROJECT_ID environment variable is required')
     }
 
-    let firebaseCredential: any // Will be assigned based on auth method
-
-    if (serviceAccountJson != null && serviceAccountJson !== '') {
-      log.info(
-        { operation: 'firebase.init', credential_source: 'env' },
-        'Using Firebase service account from environment variable'
-      )
-      try {
-        log.debug(
-          { operation: 'firebase.init', service_account_json_length: serviceAccountJson.length },
-          'Service account JSON length'
-        )
-
-        // Debug credential functions
-        log.debug(
-          { operation: 'firebase.init', cert_function_type: typeof cert },
-          'cert function type'
-        )
-        log.debug(
-          {
-            operation: 'firebase.init',
-            application_default_function_type: typeof applicationDefault
-          },
-          'applicationDefault function type'
-        )
-
-        const serviceAccount = JSON.parse(serviceAccountJson)
-        log.debug(
-          { operation: 'firebase.init', service_account_keys: Object.keys(serviceAccount ?? {}) },
-          'Parsed service account keys'
-        )
-
-        if (serviceAccount == null || typeof serviceAccount !== 'object') {
-          throw new Error('Parsed service account is not a valid object')
-        }
-
-        if (
-          serviceAccount.private_key == null ||
-          serviceAccount.client_email == null ||
-          serviceAccount.project_id == null
-        ) {
-          throw new Error(
-            'Service account missing required fields (private_key, client_email, project_id)'
-          )
-        }
-
-        firebaseCredential = cert(serviceAccount)
-        log.info({ operation: 'firebase.init' }, 'Firebase credential created successfully')
-      } catch (parseError) {
-        log.error(
-          { operation: 'firebase.init', outcome: 'error', err: parseError },
-          'Firebase service account parsing failed'
-        )
-        throw new Error(
-          `Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`
-        )
-      }
-    } else if (serviceAccountPath != null && serviceAccountPath !== '') {
-      log.info(
-        { operation: 'firebase.init', credential_source: 'file' },
-        'Using Firebase service account key file'
-      )
-      const absolutePath = path.resolve(process.cwd(), serviceAccountPath)
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      firebaseCredential = cert(require(absolutePath))
-    } else {
-      log.info(
-        { operation: 'firebase.init', credential_source: 'default' },
-        'Using Firebase default credentials'
-      )
-      firebaseCredential = applicationDefault()
-    }
+    const firebaseCredential = resolveFirebaseCredential()
 
     // Check if Firebase app is already initialized
     if (getApps().length === 0) {

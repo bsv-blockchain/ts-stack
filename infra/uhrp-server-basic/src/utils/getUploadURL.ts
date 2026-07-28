@@ -15,12 +15,12 @@ interface UploadResponse {
   requiredHeaders: Record<string, string>
 }
 
-export default async ({
+export default async function getUploadURL({
   size,
   expiryTime,
   objectIdentifier,
   uploaderIdentityKey
-}: UploadParams): Promise<UploadResponse> => {
+}: UploadParams): Promise<UploadResponse> {
   const wallet = await getWallet()
   const customTime = new Date((expiryTime + 300) * 1000).toISOString()
 

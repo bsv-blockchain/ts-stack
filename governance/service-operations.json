@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-28",
+  "owner": "ts-stack-maintainers",
+  "manifestRoots": [
+    "infra/overlay-server/deploy",
+    "infra/wab/deploy",
+    "infra/wallet-infra/guides/kube_samples"
+  ],
+  "services": [
+    {
+      "name": "chaintracks-server",
+      "path": "infra/chaintracks-server",
+      "port": "PORT (default 3011; CDN is port + 1)",
+      "livenessPath": "/getInfo",
+      "readinessPath": "/getInfo",
+      "state": "Bulk-header files under BULK_HEADERS_PATH; upstream headers are reproducible.",
+      "migration": "No schema migration. Validate the retained header corpus before rollout.",
+      "backup": "Snapshot BULK_HEADERS_PATH or repopulate it from a verified source CDN.",
+      "operatorGuide": "docs/infrastructure/chaintracks-server.md",
+      "publicProtocol": true
+    },
+    {
+      "name": "message-box-server",
+      "path": "infra/message-box-server",
+      "port": "PORT, then HTTP_PORT (default 8080)",
+      "livenessPath": "/health",
+      "readinessPath": "/ready",
+      "state": "Knex database plus optional Firebase device registrations.",
+      "migration": "Migrations complete before listen; back up and verify the target schema first.",
+      "backup": "Use the selected database engine's consistent snapshot and restore procedure.",
+      "operatorGuide": "infra/message-box-server/DEPLOYING.md",
+      "publicProtocol": true
+    },
+    {
+      "name": "overlay-server",
+      "path": "infra/overlay-server",
+      "port": "8080",
+      "livenessPath": "/health/live",
+      "readinessPath": "/health/ready",
+      "state": "Knex transaction state and MongoDB lookup-service state.",
+      "migration": "Overlay migrations complete before listen; preserve both stores as one release boundary.",
+      "backup": "Take coordinated MySQL and MongoDB backups before schema or image changes.",
+      "operatorGuide": "infra/overlay-server/deploy/README.md",
+      "publicProtocol": true
+    },
+    {
+      "name": "uhrp-server-basic",
+      "path": "infra/uhrp-server-basic",
+      "port": "HTTP_PORT (default 8080)",
+      "livenessPath": "/health",
+      "readinessPath": "/ready",
+      "state": "Local files and metadata under the configured public storage directory.",
+      "migration": "No schema migration; preserve file and metadata consistency.",
+      "backup": "Snapshot the complete storage directory and verify hashes before restore.",
+      "operatorGuide": "docs/infrastructure/uhrp-server-basic.md",
+      "publicProtocol": true
+    },
+    {
+      "name": "uhrp-server-cloud-bucket",
+      "path": "infra/uhrp-server-cloud-bucket",
+      "port": "HTTP_PORT (default 8080)",
+      "livenessPath": "/health",
+      "readinessPath": "/ready",
+      "state": "Cloud bucket objects and provider metadata.",
+      "migration": "No local schema migration; validate provider configuration before listen.",
+      "backup": "Use provider versioning/replication and verify object hashes and retention policy.",
+      "operatorGuide": "docs/infrastructure/uhrp-server-cloud-bucket.md",
+      "publicProtocol": true
+    },
+    {
+      "name": "wab",
+      "path": "infra/wab",
+      "port": "PORT (default 8080)",
+      "livenessPath": "/info",
+      "readinessPath": "/info",
+      "state": "Authentication, identity-link, share, deletion-intent, and faucet database tables.",
+      "migration": "Migrations complete before listen; verify rollback compatibility before rollout.",
+      "backup": "Take an encrypted database snapshot and test identity/share recovery without logging secrets.",
+      "operatorGuide": "infra/wab/deploy/README.md",
+      "publicProtocol": true
+    },
+    {
+      "name": "wallet-infra",
+      "path": "infra/wallet-infra",
+      "port": "HTTP_PORT (default 8081; samples set 8080 without nginx)",
+      "livenessPath": "/",
+      "readinessPath": "/",
+      "state": "Wallet Storage database, monitor state, transactions, outputs, baskets, and certificates.",
+      "migration": "Storage migration and availability checks complete before the server starts.",
+      "backup": "Take and verify a consistent database backup before every schema or image change.",
+      "operatorGuide": "infra/wallet-infra/guides/kube_samples/README.md",
+      "publicProtocol": true
+    }
+  ],
+  "applicationWorkloads": [
+    {
+      "service": "overlay-server",
+      "manifest": "infra/overlay-server/deploy/app-deployment.yaml",
+      "container": "overlay"
+    },
+    {
+      "service": "wab",
+      "manifest": "infra/wab/deploy/web-deployment.yaml",
+      "container": "web"
+    },
+    {
+      "service": "wallet-infra",
+      "manifest": "infra/wallet-infra/guides/kube_samples/wallet.yaml",
+      "container": "wallet-infra"
+    }
+  ]
+}

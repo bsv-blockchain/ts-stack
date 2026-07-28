@@ -32,6 +32,9 @@ USER node
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["node", "-e", "const port=process.env.HTTP_PORT||'8080';fetch(`http://127.0.0.1:${port}/ready`).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+
 # Preload the OpenTelemetry bootstrap so auto-instrumentation patches modules
 # before app code is imported.
 CMD ["node", "--require", "./out/src/telemetry.js", "out/src/index.js"]

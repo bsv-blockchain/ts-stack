@@ -1,6 +1,11 @@
 # QUICK_OVERLAYS — fast, non-blocking identity & overlay lookups
 
-Status: proposal. Owner: tbd. Target packages: `@bsv/sdk`, `@bsv/wallet-toolbox`, `@bsv/wallet-toolbox-mobile`, `@bsv/overlays/topics`, downstream apps (bsv-browser).
+> **Unapproved proposal.** This is not current behavior or an implementation
+> instruction. Before use it requires a current issue, fresh measurements on
+> supported runtimes, public API and cache-consistency review, privacy/security
+> analysis, compatibility tests, and maintainer approval.
+
+Status: proposal. Owner: TBD. Target packages: `@bsv/sdk`, `@bsv/wallet-toolbox`, `@bsv/wallet-toolbox-mobile`, `@bsv/overlays/topics`, downstream apps (bsv-browser).
 
 ## TL;DR
 

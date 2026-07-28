@@ -12,6 +12,13 @@ import { CDN_ROOT } from './cdnObjectPath'
 const mimeTypeCache = new Map<string, string>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes in milliseconds
 const cacheTimestamps = new Map<string, number>()
+const FILE_SIGNATURES = [
+  { bytes: [0xff, 0xd8, 0xff], mimeType: 'image/jpeg' },
+  { bytes: [0x89, 0x50, 0x4e, 0x47], mimeType: 'image/png' },
+  { bytes: [0x47, 0x49, 0x46], mimeType: 'image/gif' },
+  { bytes: [0x25, 0x50, 0x44, 0x46], mimeType: 'application/pdf' },
+  { bytes: [0x50, 0x4b], mimeType: 'application/zip' }
+] as const
 
 /**
  * Get MIME type from UHRP advertisement tags
@@ -21,8 +28,8 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
   const cacheKey = objectIdentifier
   const cachedMimeType = mimeTypeCache.get(cacheKey)
   const cacheTime = cacheTimestamps.get(cacheKey)
-  
-  if (cachedMimeType && cacheTime && (Date.now() - cacheTime) < CACHE_TTL) {
+
+  if (cachedMimeType && cacheTime && Date.now() - cacheTime < CACHE_TTL) {
     return cachedMimeType
   }
 
@@ -45,10 +52,10 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
 
       const contentTypeTag = output.tags.find(t => t.startsWith('content_type_'))
       const expiryTag = output.tags.find(t => t.startsWith('expiry_time_'))
-      
+
       if (contentTypeTag && expiryTag) {
         const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-        
+
         // Only consider non-expired advertisements
         if (expiryTime > Date.now() / 1000 && expiryTime > maxExpiry) {
           maxExpiry = expiryTime
@@ -65,7 +72,10 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
 
     return mimeType
   } catch (error) {
-    log.error({ operation: 'mime.detect', outcome: 'error', source: 'advertisement', err: error }, 'Error fetching MIME type from advertisement')
+    log.error(
+      { operation: 'mime.detect', outcome: 'error', source: 'advertisement', err: error },
+      'Error fetching MIME type from advertisement'
+    )
     return null
   }
 }
@@ -73,46 +83,38 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
 /**
  * Detect MIME type from file content using magic bytes (simple detection)
  */
+function detectBinaryMimeType(buffer: Buffer): string | undefined {
+  return FILE_SIGNATURES.find(signature =>
+    signature.bytes.every((byte, index) => buffer[index] === byte)
+  )?.mimeType
+}
+
+function isJson(text: string): boolean {
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function detectMimeTypeFromContent(filePath: string): string {
   try {
     const buffer = fs.readFileSync(filePath, { encoding: null })
-    const firstBytes = buffer.slice(0, 16)
+    const binaryMimeType = detectBinaryMimeType(buffer)
+    if (binaryMimeType != null) return binaryMimeType
 
-    // Check for common file signatures (magic bytes)
-    if (firstBytes[0] === 0xFF && firstBytes[1] === 0xD8 && firstBytes[2] === 0xFF) {
-      return 'image/jpeg'
-    }
-    if (firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47) {
-      return 'image/png'
-    }
-    if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
-      return 'image/gif'
-    }
-    if (firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46) {
-      return 'application/pdf'
-    }
-    if (firstBytes[0] === 0x50 && firstBytes[1] === 0x4B) {
-      return 'application/zip'
-    }
-    
-    // Check if it's text-based content
     const textSample = buffer.slice(0, 512).toString('utf8', 0, Math.min(512, buffer.length))
-    if (/^[\x20-\x7E\s]*$/.test(textSample)) {
-      if (textSample.trim().startsWith('<!DOCTYPE html') || textSample.trim().startsWith('<html')) {
-        return 'text/html'
-      }
-      if (textSample.trim().startsWith('{') || textSample.trim().startsWith('[')) {
-        try {
-          JSON.parse(textSample.trim())
-          return 'application/json'
-        } catch {
-          // Not valid JSON
-        }
-      }
-      return 'text/plain'
-    }
+    if (!/^[\x21-\x7E\s]*$/.test(textSample)) return 'application/octet-stream'
 
-    return 'application/octet-stream'
+    const trimmedSample = textSample.trim()
+    if (trimmedSample.startsWith('<!DOCTYPE html') || trimmedSample.startsWith('<html')) {
+      return 'text/html'
+    }
+    if ((trimmedSample.startsWith('{') || trimmedSample.startsWith('[')) && isJson(trimmedSample))
+      return 'application/json'
+
+    return 'text/plain'
   } catch {
     return 'application/octet-stream'
   }
@@ -147,7 +149,7 @@ export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: N
   }
 
   const objectIdentifier = req.path.substring('/cdn/'.length)
-  
+
   // Skip if no object identifier
   if (!objectIdentifier) {
     return next()
@@ -161,22 +163,25 @@ export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: N
   try {
     // Try to get MIME type from UHRP advertisement
     let mimeType = await getMimeTypeFromAdvertisement(objectIdentifier)
-    
+
     // If not found in advertisement, try to detect from content
     if (!mimeType || mimeType === 'application/octet-stream') {
       mimeType = detectMimeTypeFromContent(filePath)
     }
-    
+
     // Set the content type header
     res.setHeader('Content-Type', mimeType || 'application/octet-stream')
-    
+
     res.sendFile(filePath, error => {
       if (error != null) {
         next()
       }
     })
   } catch (error) {
-    log.error({ operation: 'mime.middleware', outcome: 'error', err: error }, 'Error in CDN MIME type middleware')
+    log.error(
+      { operation: 'mime.middleware', outcome: 'error', err: error },
+      'Error in CDN MIME type middleware'
+    )
     next()
   }
 }

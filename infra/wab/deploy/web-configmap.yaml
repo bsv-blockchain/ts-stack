@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wab-config
+data:
+  db-client: mysql2
+  db-user: wab
+  db-name: wab
+  db-host: mysql
+  db-port: '3306'

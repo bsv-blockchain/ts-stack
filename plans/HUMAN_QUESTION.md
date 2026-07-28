@@ -1,5 +1,10 @@
 # Questions for Human Review on ts-stack Documentation
 
+> **Resolved archive.** The answers below informed the documentation repair
+> program. They are preserved as decision history and are not an active task
+> list. Current facts are generated or verified by repository CI and remaining
+> work is tracked in [#324](https://github.com/bsv-blockchain/ts-stack/issues/324).
+
 ## Package Organization and Counts
 - The top-level README.md claims 35 packages + conformance across 7 domains, with a detailed map. docs/packages/index.md claims 27 production-ready. Which count and structure should be canonical? Should we consolidate into one source of truth?
 Consolidate into one source of truth. 27 seems right, because we condensed overlay topics into one package.

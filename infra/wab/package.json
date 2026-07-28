@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wab-server",
   "private": true,
-  "version": "1.4.11",
+  "version": "1.4.12",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"

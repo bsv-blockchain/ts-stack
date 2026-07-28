@@ -31,7 +31,7 @@ export async function up(knex: Knex): Promise<void> {
 
   // Insert default server fees for different message box types
   const existingFees = await knex('server_fees').select('message_box')
-  const existingMessageBoxes = existingFees.map(fee => fee.message_box)
+  const existingMessageBoxes = new Set(existingFees.map(fee => fee.message_box))
 
   const defaultFees = [
     {
@@ -55,7 +55,7 @@ export async function up(knex: Knex): Promise<void> {
   ]
 
   // Only insert fees for message boxes that don't already exist
-  const feesToInsert = defaultFees.filter(fee => !existingMessageBoxes.includes(fee.message_box))
+  const feesToInsert = defaultFees.filter(fee => !existingMessageBoxes.has(fee.message_box))
 
   if (feesToInsert.length > 0) {
     await knex('server_fees').insert(feesToInsert)

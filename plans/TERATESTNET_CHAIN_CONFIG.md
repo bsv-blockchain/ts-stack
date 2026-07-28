@@ -1,5 +1,11 @@
 # Teratestnet (TTN) Chain Config
 
+> **Unapproved proposal.** This document is not an instruction to rename a
+> public chain identifier. Implementation requires a current issue, inventory
+> against the latest code and deployed consumers, backward-compatibility and
+> migration design, conformance fixtures, release notes, and maintainer
+> approval.
+
 Goal: make the TeraTestNet network work across the stack. The canonical chain identifier is
 **`ttn`** (renamed from the current `'teratest'` — see rename section). TeraTestNet is the full
 display name. Most code paths fall back to testnet behavior.
