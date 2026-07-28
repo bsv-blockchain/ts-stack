@@ -11,10 +11,29 @@ const DIGEST_IMAGE = /@sha256:[0-9a-f]{64}$/
 const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const STATEFUL_CLASS_ANNOTATION = 'ts-stack.bsvblockchain.org/workload-class'
 const STATEFUL_CLASS = 'example-not-production'
-const SECRET_NAME =
-  /(password|private.?key|encryption.?key|secret|token|api.?key|credential|creds|service.?account|knex.?url|mongo.?url|db.?pass|connection)/i
+const SECRET_NAME_TOKENS = [
+  'password',
+  'privatekey',
+  'encryptionkey',
+  'secret',
+  'token',
+  'apikey',
+  'credential',
+  'creds',
+  'serviceaccount',
+  'knexurl',
+  'mongourl',
+  'dbpass',
+  'connection'
+]
 
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'))
+const isSecretName = name => {
+  const normalized = String(name ?? '')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]/g, '')
+  return SECRET_NAME_TOKENS.some(token => normalized.includes(token))
+}
 
 const podSpec = document => {
   if (document.kind === 'Deployment') return document.spec?.template?.spec
@@ -48,7 +67,7 @@ const validateContainer = (container, prefix, errors) => {
   }
   for (const environment of container.env ?? []) {
     if (
-      SECRET_NAME.test(environment.name ?? '') &&
+      isSecretName(environment.name) &&
       typeof environment.value === 'string' &&
       environment.value !== ''
     ) {
@@ -83,7 +102,7 @@ const validatePublicEdge = (policy, errors) => {
 
 const validateConfigMap = (document, manifestName, errors) => {
   for (const [name, value] of Object.entries(document.data ?? {})) {
-    if (SECRET_NAME.test(name) && typeof value === 'string' && value !== '') {
+    if (isSecretName(name) && typeof value === 'string' && value !== '') {
       errors.push(`${manifestName} ${name} must not contain secret material`)
     }
   }
@@ -163,7 +182,14 @@ const validateEnvironmentGroup = (values, prefix, errors) => {
 
 const documentedEnvironment = document => {
   const names = new Set()
-  for (const match of document.matchAll(/^\s*#?\s*([A-Z][A-Z0-9_]*)=/gm)) names.add(match[1])
+  for (const rawLine of document.split(/\r?\n/)) {
+    let line = rawLine.trimStart()
+    if (line.startsWith('#')) line = line.slice(1).trimStart()
+    const separator = line.indexOf('=')
+    if (separator <= 0) continue
+    const name = line.slice(0, separator)
+    if (ENVIRONMENT_NAME.test(name)) names.add(name)
+  }
   return names
 }
 
@@ -185,7 +211,7 @@ const validateServiceEnvironment = async (root, service, telemetryPolicy, prefix
   const classified = new Set([...required, ...optional, ...telemetryPolicy.environment])
   for (const secret of configuration.secrets) {
     if (!classified.has(secret)) errors.push(`${prefix} secret ${secret} is not classified`)
-    if (!SECRET_NAME.test(secret) && !telemetryPolicy.secretEnvironment.includes(secret)) {
+    if (!isSecretName(secret) && !telemetryPolicy.secretEnvironment.includes(secret)) {
       errors.push(`${prefix} secret ${secret} does not look secret-bearing`)
     }
   }

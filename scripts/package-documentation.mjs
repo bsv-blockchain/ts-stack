@@ -166,6 +166,16 @@ export async function loadPackageDocumentation(root = ROOT) {
 }
 
 const docsLink = path => `../${path.slice('docs/'.length)}`
+const codeTargets = targets =>
+  targets.map(target => `\`${escapeCell(target)}\``).join('<br>') || '—'
+const exportRow = entry =>
+  `| \`${escapeCell(entry.subpath)}\` | ${codeTargets(entry.runtime)} | ` +
+  `${codeTargets(entry.declarations)} |`
+const binDescription = bin => {
+  if (bin === undefined) return ''
+  const target = typeof bin === 'string' ? bin : JSON.stringify(bin)
+  return `\nCLI entry points: \`${escapeCell(target)}\`.\n`
+}
 
 export function renderPackageDocumentation({ lastReviewed, packages }) {
   const summaryRows = packages
@@ -179,25 +189,8 @@ export function renderPackageDocumentation({ lastReviewed, packages }) {
   const details = packages
     .map(pkg => {
       const exportRows =
-        pkg.entries.length === 0
-          ? '| — | — | — |'
-          : pkg.entries
-              .map(
-                entry =>
-                  `| \`${escapeCell(entry.subpath)}\` | ` +
-                  `${entry.runtime.map(target => `\`${escapeCell(target)}\``).join('<br>') || '—'} | ` +
-                  `${
-                    entry.declarations.map(target => `\`${escapeCell(target)}\``).join('<br>') ||
-                    '—'
-                  } |`
-              )
-              .join('\n')
-      const bin =
-        pkg.bin === undefined
-          ? ''
-          : `\nCLI entry points: \`${escapeCell(
-              typeof pkg.bin === 'string' ? pkg.bin : JSON.stringify(pkg.bin)
-            )}\`.\n`
+        pkg.entries.length === 0 ? '| — | — | — |' : pkg.entries.map(exportRow).join('\n')
+      const bin = binDescription(pkg.bin)
       return `## ${pkg.name}
 
 - Package documentation: [${pkg.docsPath}](${docsLink(pkg.docsPath)})

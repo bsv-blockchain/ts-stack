@@ -14,6 +14,7 @@ import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
 import { spawn, type ChildProcess } from 'node:child_process'
+import type { Server } from 'node:http'
 import packageJson from '../package.json' with { type: 'json' }
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { log } from './logger.js'
@@ -23,6 +24,14 @@ dotenv.config()
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)
 let shutdownPromise: Promise<void> | undefined
+
+const closeHttpServer = async (server: Server): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error?: Error) =>
+      error === undefined ? resolve() : reject(error)
+    )
+  })
+}
 
 // Load environment variables
 const {
@@ -268,11 +277,7 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
         )
         context.monitor.stopTasks()
         nginxProcess?.kill('SIGTERM')
-        await new Promise<void>((resolve, reject) => {
-          context.server.server.close((error?: Error) =>
-            error === undefined ? resolve() : reject(error)
-          )
-        })
+        await closeHttpServer(context.server.server as Server)
         await context.wallet.destroy()
         log.info(
           { operation: 'shutdown', outcome: 'ok', signal },
