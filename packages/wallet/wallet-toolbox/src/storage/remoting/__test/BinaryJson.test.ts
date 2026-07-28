@@ -98,6 +98,14 @@ describe('binary JSON-RPC encoding', () => {
   it('rejects malformed base64 tags instead of silently corrupting bytes', () => {
     expect(() => decodeBinaryJsonValue({ $bsvBinary: BINARY_ENCODING, data: '!!!=' })).toThrow('Invalid base64')
     expect(() => parseJsonRpc(`{"bytes":{"$bsvBinary":"${BINARY_ENCODING}","data":"A==="}}`, true)).toThrow('Invalid base64')
+    expect(() => decodeBinaryJsonValue({ $bsvBinary: BINARY_ENCODING, data: 'A' })).toThrow(
+      'Invalid base64'
+    )
+  })
+
+  it('leaves primitive values untouched during iterative decoding', () => {
+    expect(decodeBinaryJsonValue(null)).toBeNull()
+    expect(decodeBinaryJsonValue('plain')).toBe('plain')
   })
 
   it('decodes deeply nested values without recursive stack overflow', () => {

@@ -4,6 +4,21 @@ import { SHIPLookupService } from '../SHIP/SHIPLookupService.js'
 import { SHIPTopicManager } from '../SHIP/SHIPTopicManager.js'
 import { SLAPLookupService } from '../SLAP/SLAPLookupService.js'
 import { SLAPTopicManager } from '../SLAP/SLAPTopicManager.js'
+import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
+
+async function makeCustomAdvertisementScript(
+  protocol: 'SHIP' | 'SLAP',
+  fields: number[][]
+) {
+  const wallet = new ProtoWallet(new PrivateKey(42))
+  return await new PushDrop(wallet as unknown as WalletInterface).lock(
+    fields,
+    [2, protocol === 'SHIP' ? 'service host interconnect' : 'service lookup availability'],
+    '1',
+    'anyone',
+    true
+  )
+}
 
 async function makeAdvertisementScript(
   protocol: 'SHIP' | 'SLAP',
@@ -12,18 +27,12 @@ async function makeAdvertisementScript(
 ) {
   const wallet = new ProtoWallet(new PrivateKey(42))
   const { publicKey: identityKey } = await wallet.getPublicKey({ identityKey: true })
-  return await new PushDrop(wallet as unknown as WalletInterface).lock(
-    [
-      Utils.toArray(protocol, 'utf8'),
-      Utils.toArray(identityKey, 'hex'),
-      Utils.toArray(domain, 'utf8'),
-      Utils.toArray(advertisedName, 'utf8')
-    ],
-    [2, protocol === 'SHIP' ? 'service host interconnect' : 'service lookup availability'],
-    '1',
-    'anyone',
-    true
-  )
+  return await makeCustomAdvertisementScript(protocol, [
+    Utils.toArray(protocol, 'utf8'),
+    Utils.toArray(identityKey, 'hex'),
+    Utils.toArray(domain, 'utf8'),
+    Utils.toArray(advertisedName, 'utf8')
+  ])
 }
 
 function makeBEEF(
@@ -94,6 +103,43 @@ describe('discovery topic managers', () => {
     await expect(slap.getDocumentation()).resolves.toContain('SLAP')
     await expect(ship.getMetaData()).resolves.toMatchObject({ name: 'SHIP Topic Manager' })
     await expect(slap.getMetaData()).resolves.toMatchObject({ name: 'SLAP Topic Manager' })
+  })
+
+  it('rejects malformed discovery envelopes before signature verification', async () => {
+    const wallet = new ProtoWallet(new PrivateKey(42))
+    const { publicKey: identityKey } = await wallet.getPublicKey({ identityKey: true })
+    const identity = Utils.toArray(identityKey, 'hex')
+    const validDomain = Utils.toArray('https://example.com', 'utf8')
+    const validName = Utils.toArray('tm_example', 'utf8')
+    const cases = [
+      await makeCustomAdvertisementScript('SHIP', [
+        Utils.toArray('SHIP', 'utf8'),
+        identity,
+        validDomain
+      ]),
+      await makeCustomAdvertisementScript('SHIP', [
+        Utils.toArray('SLAP', 'utf8'),
+        identity,
+        validDomain,
+        validName
+      ]),
+      await makeCustomAdvertisementScript('SHIP', [
+        Utils.toArray('SHIP', 'utf8'),
+        identity,
+        Utils.toArray('javascript:alert(1)', 'utf8'),
+        validName
+      ]),
+      await makeCustomAdvertisementScript('SHIP', [
+        Utils.toArray('SHIP', 'utf8'),
+        identity,
+        validDomain,
+        Utils.toArray('tm_Invalid', 'utf8')
+      ])
+    ]
+
+    await expect(
+      Promise.all(cases.map(async script => await isAdmissibleDiscoveryOutput(script, 'SHIP')))
+    ).resolves.toEqual([false, false, false, false])
   })
 })
 

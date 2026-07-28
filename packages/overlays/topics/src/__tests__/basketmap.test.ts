@@ -24,6 +24,7 @@
  *   - Locking key = anyoneWallet.getPublicKey({counterparty: registryOperator, protocolID, keyID})
  */
 
+import { jest } from '@jest/globals'
 import { LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils, ProtoWallet, WalletProtocol } from '@bsv/sdk'
 import BasketMapTopicManager from '../basketmap/BasketMapTopicManager.js'
 
@@ -83,7 +84,10 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
 const PROTOCOL_ID: WalletProtocol = [1, 'basketmap']
 const KEY_ID = '1'
 
-async function buildValidBasketMapScript(registryPrivKey: PrivateKey): Promise<LockingScript> {
+async function buildValidBasketMapScript(
+  registryPrivKey: PrivateKey,
+  lockingPublicKey?: PublicKey
+): Promise<LockingScript> {
   const registryOperator = registryPrivKey.toPublicKey().toString()
 
   const dataFields = [
@@ -111,7 +115,7 @@ async function buildValidBasketMapScript(registryPrivKey: PrivateKey): Promise<L
     keyID: KEY_ID,
     counterparty: registryOperator
   })
-  const lockingPubKey = PublicKey.fromString(lockingPubKeyHex)
+  const lockingPubKey = lockingPublicKey ?? PublicKey.fromString(lockingPubKeyHex)
 
   return buildPushDropScript(lockingPubKey, [...dataFields, Array.from(signature)])
 }
@@ -186,6 +190,33 @@ describe('BasketMapTopicManager', () => {
     expect(result.outputsToAdmit).not.toContain(0)
   })
 
+  it('rejects a validly signed token whose locking key is not linked to the registry', async () => {
+    const registryPrivKey = PrivateKey.fromRandom()
+    const wrongLockingKey = PrivateKey.fromRandom().toPublicKey()
+    const lockingScript = await buildValidBasketMapScript(registryPrivKey, wrongLockingKey)
+    const tx = buildTxWithInput([lockingScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('rejects a linked token when signature verification returns false', async () => {
+    const registryPrivKey = PrivateKey.fromRandom()
+    const lockingScript = await buildValidBasketMapScript(registryPrivKey)
+    const verifySignature = jest
+      .spyOn(ProtoWallet.prototype, 'verifySignature')
+      .mockResolvedValueOnce({ valid: false })
+    const tx = buildTxWithInput([lockingScript])
+
+    try {
+      const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+      expect(result.outputsToAdmit).toEqual([])
+    } finally {
+      verifySignature.mockRestore()
+    }
+  })
+
   it('returns empty results for malformed BEEF', async () => {
     const result = await manager.identifyAdmissibleOutputs([0x00, 0x01], [])
     expect(result.outputsToAdmit).toEqual([])
@@ -200,6 +231,36 @@ describe('BasketMapTopicManager', () => {
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('returns empty when parsed transaction outputs are missing', async () => {
+    const fromBEEF = jest.spyOn(Transaction, 'fromBEEF').mockReturnValueOnce({
+      inputs: [{}],
+      outputs: []
+    } as unknown as Transaction)
+
+    try {
+      await expect(manager.identifyAdmissibleOutputs([], [])).resolves.toEqual({
+        outputsToAdmit: [],
+        coinsToRetain: []
+      })
+    } finally {
+      fromBEEF.mockRestore()
+    }
+  })
+
+  it('suppresses malformed-BEEF error logging when previous coins are retained upstream', async () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(manager.identifyAdmissibleOutputs([0, 1], [7])).resolves.toEqual({
+        outputsToAdmit: [],
+        coinsToRetain: []
+      })
+      expect(error).not.toHaveBeenCalled()
+    } finally {
+      error.mockRestore()
+    }
   })
 
   it('getDocumentation returns a string', async () => {

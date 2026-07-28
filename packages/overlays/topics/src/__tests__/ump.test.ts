@@ -143,6 +143,58 @@ describe('UMPTopicManager', () => {
     expect(result.outputsToAdmit).toContain(0)
   })
 
+  it('admits a valid v3 PushDrop with the version marker at field[12]', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    fields.push([0x01, 0x02])
+    fields.push([3])
+    fields.push(Array.from(new TextEncoder().encode('pbkdf2-sha512')))
+    fields.push(Array.from(new TextEncoder().encode(JSON.stringify({ iterations: 2 }))))
+    const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
+    const tx = buildTxWithInput([lockingScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(result.outputsToAdmit).toContain(0)
+  })
+
+  it('rejects a v3-shaped PushDrop with an unsupported version byte', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    fields.push([2])
+    fields.push(Array.from(new TextEncoder().encode('argon2id')))
+    fields.push(Array.from(new TextEncoder().encode(JSON.stringify({ iterations: 3 }))))
+    const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
+    const tx = buildTxWithInput([lockingScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('rejects a v3 PushDrop with a missing kdfAlgorithm', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    fields.push([3])
+    fields.push([])
+    fields.push(Array.from(new TextEncoder().encode(JSON.stringify({ iterations: 3 }))))
+    const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
+    const tx = buildTxWithInput([lockingScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('rejects a v3 PushDrop with missing kdfParams', async () => {
+    const key = PrivateKey.fromRandom()
+    const fields = makeFields(11)
+    fields.push([3])
+    fields.push(Array.from(new TextEncoder().encode('argon2id')))
+    const lockingScript = buildPushDropScript(key.toPublicKey(), fields)
+    const tx = buildTxWithInput([lockingScript])
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
   it('rejects a v3 PushDrop with unsupported kdfAlgorithm', async () => {
     const key = PrivateKey.fromRandom()
     const fields = makeFields(11)
