@@ -59,7 +59,7 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
         : ''
 
       const expiryTime = expiryTimeTag
-        ? Number.parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
+        ? parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
         : 0
 
       if (Date.now() > expiryTime * 1000) {
@@ -89,13 +89,13 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
 export default {
   type: 'get',
   path: '/list',
-  summary:
-    "Lists all UHRP files (advertisements) matching the user's identityKey in transaction tags.",
+  summary: 'Lists all UHRP files (advertisements) matching the user\'s identityKey in transaction tags.',
   parameters: {},
   exampleResponse: {
     status: 'success',
     uploads: [
       {
+
         uhrpUrl: 'uhrp://abcd1234...',
         expiryTime: 1691234567
       }

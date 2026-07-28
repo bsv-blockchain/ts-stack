@@ -14,17 +14,14 @@ interface PriceCalculationParams {
  * @param {PriceCalculationParams} params - Parameters for price calculation.
  * @returns {Promise<number>} - The price in satoshis.
  */
-const getPriceForFile = async ({
-  retentionPeriod,
-  fileSize
-}: PriceCalculationParams): Promise<number> => {
+const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationParams): Promise<number> => {
   if (!PRICE_PER_GB_MO) {
     throw new Error('PRICE_PER_GB_MO is undefined')
   }
 
-  const pricePerGBMonth = Number.parseFloat(PRICE_PER_GB_MO)
-  if (Number.isNaN(pricePerGBMonth)) {
-    throw new TypeError('PRICE_PER_GB_MO must be a valid number')
+  const pricePerGBMonth = parseFloat(PRICE_PER_GB_MO)
+  if (isNaN(pricePerGBMonth)) {
+    throw new Error('PRICE_PER_GB_MO must be a valid number')
   }
 
   // File size is in bytes, convert to gigabytes
@@ -39,29 +36,23 @@ const getPriceForFile = async ({
   // Get the exchange rate
   let exchangeRate: number
   try {
-    const { data } = await axios.get('https://api.whatsonchain.com/v1/bsv/main/exchangerate')
-    if (
-      data == null ||
-      typeof data !== 'object' ||
-      typeof data.rate !== 'number' ||
-      !Number.isFinite(data.rate)
-    ) {
-      throw new TypeError('Invalid rate response')
+    const { data } = await axios.get(
+      'https://api.whatsonchain.com/v1/bsv/main/exchangerate'
+    )
+    if (typeof data !== 'object' || isNaN(data.rate)) {
+      throw new Error('Invalid rate response')
     }
     exchangeRate = data.rate
   } catch (e) {
     exchangeRate = 30
-    log.error(
-      { operation: 'price.exchange_rate', outcome: 'error', fallback_rate: 30, err: e },
-      'Exchange rate failed, using fallback rate'
-    )
+    log.error({ operation: 'price.exchange_rate', outcome: 'error', fallback_rate: 30, err: e }, 'Exchange rate failed, using fallback rate')
   }
 
   // Exchange rate is in BSV, convert to satoshis
   const exchangeRateInSatoshis = 1 / (exchangeRate / 100000000)
 
   // Account for server overhead in our prices, so there is a minimum of 10 satoshis
-  const satPrice = Math.max(10, Math.floor(usdPrice * exchangeRateInSatoshis))
+  let satPrice = Math.max(10, Math.floor(usdPrice * exchangeRateInSatoshis));
   return satPrice
 }
 

@@ -25,12 +25,12 @@ interface ListResponse {
 
 const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
   if (!req.auth.identityKey || req.auth.identityKey === 'unknown') {
-    return res.status(400).json({
-      status: 'error',
-      code: 'ERR_MISSING_IDENTITY_KEY',
-      description: 'Missing authfetch identityKey.'
-    })
-  }
+      return res.status(400).json({
+        status: 'error',
+        code: 'ERR_MISSING_IDENTITY_KEY',
+        description: 'Missing authfetch identityKey.'
+      })
+    }
   try {
     const identityKey = req.auth.identityKey
     if (!identityKey) {
@@ -66,7 +66,7 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
         : ''
 
       const expiryTime = expiryTimeTag
-        ? Number.parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
+        ? parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
         : 0
 
       if (Date.now() > expiryTime * 1000) {
@@ -84,10 +84,7 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
       uploads: result
     })
   } catch (error) {
-    log.error(
-      { operation: 'list.handle', outcome: 'error', err: error },
-      'Error listing advertisements'
-    )
+    log.error({ operation: 'list.handle', outcome: 'error', err: error }, 'Error listing advertisements')
     return res.status(500).json({
       status: 'error',
       code: 'ERR_LIST',
@@ -99,13 +96,13 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
 export default {
   type: 'get',
   path: '/list',
-  summary:
-    "Lists all UHRP files (advertisements) matching the user's identityKey in transaction tags.",
+  summary: 'Lists all UHRP files (advertisements) matching the user\'s identityKey in transaction tags.',
   parameters: {},
   exampleResponse: {
     status: 'success',
     uploads: [
       {
+
         uhrpUrl: 'uhrp://abcd1234...',
         expiryTime: 1691234567
       }

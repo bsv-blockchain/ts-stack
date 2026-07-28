@@ -5,20 +5,26 @@ export interface ServiceHealth {
   register: (app: Express) => void
 }
 
-export const createServiceHealth = (): ServiceHealth => {
-  let ready = false
+class CloudServiceHealth implements ServiceHealth {
+  private ready = false
 
-  return {
-    markReady: () => {
-      ready = true
-    },
-    register: app => {
-      app.get('/health', (_req: Request, res: Response) => {
-        res.status(200).json({ status: 'ok', live: true })
-      })
-      app.get('/ready', (_req: Request, res: Response) => {
-        res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'starting', ready })
-      })
-    }
+  public readonly markReady = (): void => {
+    this.ready = true
+  }
+
+  public readonly register = (app: Express): void => {
+    app.get('/health', this.reportLiveness)
+    app.get('/ready', this.reportReadiness)
+  }
+
+  private readonly reportLiveness = (_req: Request, res: Response): void => {
+    res.status(200).json({ status: 'ok', live: true })
+  }
+
+  private readonly reportReadiness = (_req: Request, res: Response): void => {
+    const status = this.ready ? 'ready' : 'starting'
+    res.status(this.ready ? 200 : 503).json({ status, ready: this.ready })
   }
 }
+
+export const createServiceHealth = (): ServiceHealth => new CloudServiceHealth()
