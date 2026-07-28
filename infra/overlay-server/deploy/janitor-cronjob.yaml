@@ -8,7 +8,7 @@ metadata:
     io.kompose.service: janitor
   name: janitor
 spec:
-  schedule: "0 0 * * *"
+  schedule: '0 0 * * *'
   jobTemplate:
     spec:
       template:
@@ -16,15 +16,40 @@ spec:
           labels:
             io.kompose.service: janitor
         spec:
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: janitor
               image: curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
               env:
                 - name: ADMIN_TOKEN
-                  value: ""
+                  valueFrom:
+                    secretKeyRef:
+                      name: overlay-secrets
+                      key: admin-token
               command:
                 - /bin/sh
                 - -c
                 - |
-                  curl -X POST -H "Authorization: Bearer ${ADMIN_TOKEN}" http://app:3000/admin/janitor
+                  curl --fail --show-error --silent -X POST \
+                    -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+                    http://app:8080/admin/janitor
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsUser: 100
+                runAsGroup: 101
           restartPolicy: OnFailure

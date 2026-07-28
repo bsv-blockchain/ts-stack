@@ -21,38 +21,105 @@ spec:
         io.kompose.service: app
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
       containers:
-        - args:
-            - npm
-            - run
-            - start
-          env:
+        - env:
+            - name: NODE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: node-name
+            - name: HOSTING_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: hosting-url
+            - name: WALLET_STORAGE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: wallet-storage-url
+            - name: NETWORK
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: network
+            - name: GASP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: gasp-enabled
             - name: KNEX_URL
               valueFrom:
                 secretKeyRef:
                   name: overlay-secrets
                   key: knex-url
             - name: MONGO_URL
-              value: mongodb://root:example@mongodb:27017
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: mongo-url
             - name: SERVER_PRIVATE_KEY
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: server-private-key
             - name: ARC_API_KEY
-              value: ""
-            - name: HOSTING_URL
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: arc-api-key
             - name: ADMIN_TOKEN
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: admin-token
           image: ghcr.io/bsv-blockchain/overlay-server:v2.1.18@sha256:11e6c1ba404fec9c4ad300e5c3e0e21dce3f1ceddbba733c7ecce57801645fa9
+          imagePullPolicy: IfNotPresent
           name: overlay
           ports:
-            - containerPort: 3000
+            - containerPort: 8080
+              name: http
               protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
               ephemeral-storage: 1Gi
             limits:
+              cpu: '1'
               memory: 512Mi
               ephemeral-storage: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsUser: 1000
+            runAsGroup: 1000
       restartPolicy: Always

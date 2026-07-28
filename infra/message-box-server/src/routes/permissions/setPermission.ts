@@ -15,6 +15,32 @@ export interface SetPermissionRequestType extends AuthRequest {
   }
 }
 
+const validRecipientFee = (recipientFee: number): boolean =>
+  Number.isSafeInteger(recipientFee) && recipientFee >= -1 && recipientFee <= MAX_RECIPIENT_FEE
+
+const validMessageBox = (messageBox: unknown): messageBox is string =>
+  typeof messageBox === 'string' &&
+  messageBox.trim() !== '' &&
+  Buffer.byteLength(messageBox.trim(), 'utf8') <= MAX_PERMISSION_MESSAGE_BOX_BYTES
+
+function permissionDescription(
+  sender: string | undefined,
+  messageBox: string,
+  recipientFee: number
+): string {
+  const isBoxWide = sender == null
+  const senderText = sender ?? 'all senders'
+  const actionText = isBoxWide ? 'Box-wide default for' : 'Messages from'
+
+  if (recipientFee === -1) {
+    return `${actionText} ${senderText} to ${messageBox} ${isBoxWide ? 'is' : 'are'} now blocked.`
+  }
+  if (recipientFee === 0) {
+    return `${actionText} ${senderText} to ${messageBox} ${isBoxWide ? 'is' : 'are'} now always allowed.`
+  }
+  return `${actionText} ${senderText} to ${messageBox} now require${isBoxWide ? 's' : ''} ${recipientFee} satoshis.`
+}
+
 /**
  * @swagger
  * /permissions/set:
@@ -98,11 +124,7 @@ export default {
       }
 
       // Validate recipientFee value
-      if (
-        !Number.isSafeInteger(recipientFee) ||
-        recipientFee < -1 ||
-        recipientFee > MAX_RECIPIENT_FEE
-      ) {
+      if (!validRecipientFee(recipientFee)) {
         Logger.log('[DEBUG] Invalid recipientFee value - must be integer')
         return res.status(400).json({
           status: 'error',
@@ -112,11 +134,7 @@ export default {
       }
 
       // Validate messageBox value
-      if (
-        typeof messageBox !== 'string' ||
-        messageBox.trim() === '' ||
-        Buffer.byteLength(messageBox.trim(), 'utf8') > MAX_PERMISSION_MESSAGE_BOX_BYTES
-      ) {
+      if (!validMessageBox(messageBox)) {
         Logger.log('[DEBUG] Invalid messageBox value')
         return res.status(400).json({
           status: 'error',
@@ -141,26 +159,13 @@ export default {
         })
       }
 
-      const isBoxWide = sender == null
       Logger.log(
         `[DEBUG] Successfully updated message permission: ${sender ?? 'BOX-WIDE'} -> ${recipient} (${messageBox}), fee: ${recipientFee}`
       )
 
-      let description: string
-      const senderText = isBoxWide ? 'all senders' : sender
-      const actionText = isBoxWide ? 'Box-wide default for' : 'Messages from'
-
-      if (recipientFee === -1) {
-        description = `${actionText} ${senderText} to ${messageBox} ${isBoxWide ? 'is' : 'are'} now blocked.`
-      } else if (recipientFee === 0) {
-        description = `${actionText} ${senderText} to ${messageBox} ${isBoxWide ? 'is' : 'are'} now always allowed.`
-      } else {
-        description = `${actionText} ${senderText} to ${messageBox} now require${isBoxWide ? 's' : ''} ${recipientFee} satoshis.`
-      }
-
       return res.status(200).json({
         status: 'success',
-        description
+        description: permissionDescription(sender, messageBox, recipientFee)
       })
     } catch (error) {
       Logger.error('[ERROR] Internal Server Error in set permission:', error)

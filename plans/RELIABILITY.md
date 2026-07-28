@@ -1,6 +1,14 @@
 # Reliability Levels
 
-Every package in ts-stack carries a Reliability Level (RL) in its `BASELINE.md`. RL is a statement of current state, not a target.
+> **Historical planning model — not current package status.** The repository
+> does not presently assign authoritative RL values to every package. Use
+> generated health/facts reports, CI, package documentation, and
+> [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324) for
+> current evidence and remaining work. RL labels below remain a useful proposed
+> vocabulary only.
+
+The proposed model assigned every package a Reliability Level (RL) in a
+`BASELINE.md`. An RL would describe current evidence, not a target.
 
 | Level | Name | Definition |
 |-------|------|------------|

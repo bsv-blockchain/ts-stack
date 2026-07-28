@@ -23,6 +23,7 @@ Quick reference material for API details and protocol indices.
 - **[Licensing policy](./licensing.md)** — Uniform Open BSV License Version 6 declarations, package files, and drift controls
 - **[npm package supply chain](./npm-package-supply-chain.md)** — Pack-once candidates, SBOMs, attestations, OIDC publication, and registry verification
 - **[Release and operations guide](./release-operations.md)** — Scope, preflight, publication, deployment, failure handling, and rollback
+- **[Service operations contract](./service-operations.md)** — Generated health, readiness, state, migration, backup, and workload-hardening contracts
 - **[Repository health controls](./repository-health.md)** — Machine-readable project, package, documentation, test, and exception governance
 - **[Test quality governance](./test-quality-governance.md)** — Required, manual, live, property, mutation, and conformance test ownership
 - **[July 2026 modernization release](./release-2026-07-25.md)** — Package versions, compatibility notes, and verification scope

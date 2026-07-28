@@ -20,7 +20,7 @@
     "check-versions": "node scripts/check-versions.mjs",
     "typescript:check": "node scripts/typescript-toolchain.mjs",
     "health:baseline": "node scripts/repository-health.mjs --update-contract-baseline",
-    "health:check": "node --test scripts/*.test.mjs && pnpm docs:facts:check && node scripts/typescript-toolchain.mjs && node scripts/package-license-policy.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
+    "health:check": "node --test scripts/*.test.mjs && pnpm docs:facts:check && pnpm ops:check && node scripts/typescript-toolchain.mjs && node scripts/package-license-policy.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
     "health:report": "node scripts/repository-health.mjs --format markdown",
     "test:governance": "node scripts/test-governance.mjs",
     "build:property": "pnpm -r --filter '!@bsv/ts-stack' --filter '!docs-site' --filter '!example-paymail' run build",
@@ -30,13 +30,15 @@
     "codegen": "node scripts/generate-openapi-types.mjs",
     "codegen:check": "node scripts/generate-openapi-types.mjs --check",
     "conformance": "node conformance/runner/src/runner.js",
-    "docs:facts": "node scripts/generate-parity-matrix.mjs && node scripts/generate-stack-facts.mjs",
+    "docs:facts": "node scripts/generate-parity-matrix.mjs && node scripts/generate-stack-facts.mjs && pnpm ops:docs",
     "docs:facts:check": "node scripts/generate-parity-matrix.mjs --check && node scripts/generate-stack-facts.mjs --check && node scripts/documentation-policy.mjs",
     "docs:examples": "node scripts/check-documentation-examples.mjs",
     "docs:asyncapi": "node scripts/generate-asyncapi-html.mjs",
     "docs:dev": "pnpm --filter docs-site dev",
     "docs:build": "pnpm docs:facts:check && pnpm --filter docs-site build",
-    "docs:preview": "pnpm --filter docs-site preview"
+    "docs:preview": "pnpm --filter docs-site preview",
+    "ops:docs": "node scripts/service-operations.mjs",
+    "ops:check": "node scripts/service-operations.mjs --check"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",

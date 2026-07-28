@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"

@@ -23,6 +23,7 @@ import {
   readBodyLimitBytes,
   securityHeaders
 } from './security/edgePolicy'
+import { createServiceHealth } from './serviceHealth'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
@@ -40,6 +41,7 @@ const authenticatedRateLimit = rateLimit(rateLimitOptions(
 ))
 
 const app = express()
+const serviceHealth = createServiceHealth()
 app.disable('x-powered-by')
 configureTrustProxy(app)
 app.use(securityHeaders({ environmentPrefix: 'UHRP' }))
@@ -48,6 +50,7 @@ app.use(corsPolicy({
   methods: ['GET', 'POST', 'OPTIONS']
 }))
 app.use(concurrencyLimit('UHRP', 200))
+serviceHealth.register(app)
 app.use(preAuthRateLimit)
 app.use(bodyparser.json({
   limit: readBodyLimitBytes('UHRP_JSON', 256 * 1024),
@@ -179,6 +182,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       })
     })
 
+    serviceHealth.markReady()
     const server = app.listen(HTTP_PORT, () => {
       const identityKey = PrivateKey
         .fromString(SERVER_PRIVATE_KEY).toPublicKey().toString()

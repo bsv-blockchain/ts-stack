@@ -1,5 +1,10 @@
 # Security Policy
 
+> **Historical duplicate — superseded.** The current disclosure and security
+> policy is [`.github/SECURITY.md`](../.github/SECURITY.md), supported by
+> `docs/infrastructure/service-edge-security.md`, governance registries, and
+> enforced security workflows. Do not maintain this planning copy as policy.
+
 ## Supported Versions
 
 | Package tier | Supported |

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-lite",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
