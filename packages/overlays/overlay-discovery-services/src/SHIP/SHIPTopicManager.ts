@@ -1,9 +1,27 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction, PushDrop, Utils } from '@bsv/sdk'
-import { isTokenSignatureCorrectlyLinked } from '../utils/isTokenSignatureCorrectlyLinked.js'
-import { isAdvertisableURI } from '../utils/isAdvertisableURI.js'
+import { Transaction } from '@bsv/sdk'
 import SHIPTopicDocs from './SHIPTopic.docs.js'
-import { isValidTopicOrServiceName } from '../utils/isValidTopicOrServiceName.js'
+import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
+
+function hasPreviousCoins(previousCoins: number[] | undefined): boolean {
+  return previousCoins !== undefined && previousCoins.length > 0
+}
+
+function logSHIPSummary(outputsToAdmit: number[], previousCoins: number[]): void {
+  if (outputsToAdmit.length > 0) {
+    console.log(
+      `🛳️ Ahoy! Admitted ${outputsToAdmit.length} SHIP ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`
+    )
+  }
+  if (hasPreviousCoins(previousCoins)) {
+    console.log(
+      `🚢 Consumed ${previousCoins.length} previous SHIP ${previousCoins.length === 1 ? 'coin' : 'coins'}!`
+    )
+  }
+  if (outputsToAdmit.length === 0 && !hasPreviousCoins(previousCoins)) {
+    console.warn('⚓ No SHIP outputs admitted and no previous SHIP coins consumed.')
+  }
+}
 
 /**
  * 🚢 SHIP Topic Manager
@@ -19,51 +37,30 @@ export class SHIPTopicManager implements TopicManager {
    * @param previousCoins - The previous coins to consider.
    * @returns A promise that resolves with the admittance instructions.
    */
-  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs(
+    beef: number[],
+    previousCoins: number[]
+  ): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     try {
       const parsedTransaction = Transaction.fromBEEF(beef)
 
       for (const [i, output] of parsedTransaction.outputs.entries()) {
         try {
-          const result = PushDrop.decode(output.lockingScript)
-          if (result.fields.length !== 5) continue // SHIP tokens have 5 fields
-
-          const shipIdentifier = Utils.toUTF8(result.fields[0])
-          if (shipIdentifier !== 'SHIP') continue // SHIP identifier must be present
-
-          const advertisedURI = Utils.toUTF8(result.fields[2])
-          if (!isAdvertisableURI(advertisedURI)) continue // Advertised URI must be acceptable
-
-          const topic = Utils.toUTF8(result.fields[3])
-          if (!isValidTopicOrServiceName(topic)) continue // Topic or service name must be valid
-          if (!topic.startsWith('tm_')) continue // SHIP only accepts "tm_" (topic manager) advertisements
-          if (!(await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, result.fields))) continue // Signatures must be properly linked
-
-          outputsToAdmit.push(i)
+          if (await isAdmissibleDiscoveryOutput(output.lockingScript, 'SHIP'))
+            outputsToAdmit.push(i)
         } catch {
           // It's common for other outputs to be invalid SHIP advertisements; skip silently
-          continue
         }
       }
     } catch (error) {
       // Only log an error if no outputs were admitted and no previous coins consumed
-      if (outputsToAdmit.length === 0 && (!previousCoins || previousCoins.length === 0)) {
+      if (outputsToAdmit.length === 0 && !hasPreviousCoins(previousCoins)) {
         console.error('⛴️ Error identifying admissible outputs:', error)
       }
     }
 
-    if (outputsToAdmit.length > 0) {
-      console.log(`🛳️ Ahoy! Admitted ${outputsToAdmit.length} SHIP ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`)
-    }
-
-    if (previousCoins && previousCoins.length > 0) {
-      console.log(`🚢 Consumed ${previousCoins.length} previous SHIP ${previousCoins.length === 1 ? 'coin' : 'coins'}!`)
-    }
-
-    if (outputsToAdmit.length === 0 && (!previousCoins || previousCoins.length === 0)) {
-      console.warn('⚓ No SHIP outputs admitted and no previous SHIP coins consumed.')
-    }
+    logSHIPSummary(outputsToAdmit, previousCoins)
 
     return {
       outputsToAdmit,
@@ -75,7 +72,7 @@ export class SHIPTopicManager implements TopicManager {
    * Returns documentation specific to the SHIP topic manager.
    * @returns A promise that resolves to the documentation string.
    */
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return SHIPTopicDocs
   }
 
@@ -83,7 +80,7 @@ export class SHIPTopicManager implements TopicManager {
    * Returns metadata associated with this topic manager.
    * @returns A promise that resolves to an object containing metadata.
    */
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

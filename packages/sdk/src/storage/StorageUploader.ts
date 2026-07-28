@@ -65,7 +65,7 @@ export interface HostScopeOptions {
 
 export interface EstimateCostResult {
   /** Cheapest-first quotes from configured providers. */
-  quotes: Array<{ host: string, amount: number }>
+  quotes: Array<{ host: string; amount: number }>
   resilienceLevel: number
   /** Sum of the cheapest `resilienceLevel` amounts (or all collected, if below threshold). */
   totalForResilience: number
@@ -83,7 +83,12 @@ export class RenewResiliencyError extends Error {
   readonly requiredSuccesses: number
   readonly successCount: number
 
-  constructor (message: string, results: RenewPerHostResult[], requiredSuccesses: number, successCount: number) {
+  constructor(
+    message: string,
+    results: RenewPerHostResult[],
+    requiredSuccesses: number,
+    successCount: number
+  ) {
     super(message)
     this.name = 'RenewResiliencyError'
     this.results = results
@@ -97,6 +102,20 @@ interface ProviderQuote {
   amount: number
 }
 
+interface ListUploadsSuccess {
+  ok: true
+  host: string
+  data: any
+}
+
+interface ListUploadsFailure {
+  ok: false
+  host: string
+  error: Error
+}
+
+type ListUploadsOutcome = ListUploadsSuccess | ListUploadsFailure
+
 /**
  * Client for publishing, finding, listing, and renewing UHRP-hosted files
  * across one or more storage providers.
@@ -108,8 +127,9 @@ export class StorageUploader {
   /** Primary host used for non-upload operations. */
   private readonly baseURL: string
 
-  constructor (config: UploaderConfig) {
-    const legacySingleHost = config.storageURLs === undefined && typeof config.storageURL === 'string'
+  constructor(config: UploaderConfig) {
+    const legacySingleHost =
+      config.storageURLs === undefined && typeof config.storageURL === 'string'
 
     let hosts: string[]
     if (config.storageURLs !== undefined) {
@@ -136,7 +156,7 @@ export class StorageUploader {
   }
 
   /** Returns `null` when the provider is unreachable or errors out. */
-  private async getQuote (
+  private async getQuote(
     host: string,
     fileSize: number,
     retentionPeriod: number
@@ -148,7 +168,7 @@ export class StorageUploader {
         body: JSON.stringify({ fileSize, retentionPeriod })
       })
       if (!response.ok) return null
-      const data = await response.json() as { quote?: number, status?: string }
+      const data = (await response.json()) as { quote?: number; status?: string }
       if (data.status === 'error' || typeof data.quote !== 'number') return null
       return { host, amount: data.quote }
     } catch {
@@ -157,15 +177,15 @@ export class StorageUploader {
   }
 
   /** Drives the authenticated `/upload` route; `AuthFetch` handles the 402 payment flow. */
-  private async getUploadURL (
+  private async getUploadURL(
     host: string,
     fileSize: number,
     retentionPeriod: number
   ): Promise<{
-      uploadURL: string
-      requiredHeaders: Record<string, string>
-      amount?: number
-    }> {
+    uploadURL: string
+    requiredHeaders: Record<string, string>
+    amount?: number
+  }> {
     const response = await this.authFetch.fetch(`${host}/upload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -174,7 +194,7 @@ export class StorageUploader {
     if (!response.ok) {
       throw new Error(`Upload info request failed: HTTP ${response.status}`)
     }
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       status: string
       uploadURL: string
       amount?: number
@@ -190,7 +210,7 @@ export class StorageUploader {
     }
   }
 
-  private async putFile (
+  private async putFile(
     uploadURL: string,
     data: Uint8Array,
     contentType: string,
@@ -214,7 +234,7 @@ export class StorageUploader {
    * remaining quotes still needed so we never over-query once the quote
    * budget is satisfied.
    */
-  private async collectQuotes (
+  private async collectQuotes(
     fileSize: number,
     retentionPeriod: number,
     maxNeeded: number
@@ -242,7 +262,7 @@ export class StorageUploader {
    * providers and returns the cheapest-first quote list plus the aggregate
    * cost `publishFile` would pay. No provider is billed.
    */
-  public async estimateCost (params: {
+  public async estimateCost(params: {
     fileSize: number
     retentionPeriod: number
   }): Promise<EstimateCostResult> {
@@ -267,7 +287,7 @@ export class StorageUploader {
    * through to the next-cheapest quote if a paid upload fails. Throws when
    * the resilience threshold cannot be met.
    */
-  public async publishFile (params: {
+  public async publishFile(params: {
     file: UploadableFile
     retentionPeriod: number
   }): Promise<UploadFileResult> {
@@ -280,13 +300,13 @@ export class StorageUploader {
     if (!estimate.meetsResilienceThreshold) {
       throw new Error(
         `Resiliency threshold of ${this.resilienceLevel} could not be met: ` +
-        `only ${estimate.quotes.length} of ${this.hosts.length} provider(s) responded with quotes.`
+          `only ${estimate.quotes.length} of ${this.hosts.length} provider(s) responded with quotes.`
       )
     }
 
     const uhrpURL = StorageUtils.getURLForFile(data)
     const hostedBy: string[] = []
-    const failures: Array<{ host: string, error: string }> = []
+    const failures: Array<{ host: string; error: string }> = []
 
     for (const quote of estimate.quotes) {
       if (hostedBy.length >= this.resilienceLevel) break
@@ -307,7 +327,7 @@ export class StorageUploader {
       const detail = failures.map(f => `${f.host}: ${f.error}`).join('; ')
       throw new Error(
         `Resiliency threshold of ${this.resilienceLevel} could not be met: ` +
-        `only ${hostedBy.length} upload(s) succeeded. Failures — ${detail}`
+          `only ${hostedBy.length} upload(s) succeeded. Failures — ${detail}`
       )
     }
 
@@ -318,7 +338,7 @@ export class StorageUploader {
     }
   }
 
-  private async findFileAtHost (host: string, uhrpUrl: string): Promise<FindFileData> {
+  private async findFileAtHost(host: string, uhrpUrl: string): Promise<FindFileData> {
     const url = new URL(`${host}/find`)
     url.searchParams.set('uhrpUrl', uhrpUrl)
 
@@ -329,9 +349,9 @@ export class StorageUploader {
       throw new Error(`findFile request failed: HTTP ${response.status}`)
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       status: string
-      data: { name: string, size: string, mimeType: string, expiryTime: number }
+      data: { name: string; size: string; mimeType: string; expiryTime: number }
       code?: string
       description?: string
     }
@@ -344,11 +364,11 @@ export class StorageUploader {
     return data.data
   }
 
-  private async renewFileAtHost (
+  private async renewFileAtHost(
     host: string,
     uhrpUrl: string,
     additionalMinutes: number
-  ): Promise<{ status: string, prevExpiryTime?: number, newExpiryTime?: number, amount?: number }> {
+  ): Promise<{ status: string; prevExpiryTime?: number; newExpiryTime?: number; amount?: number }> {
     const response = await this.authFetch.fetch(`${host}/renew`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -358,7 +378,7 @@ export class StorageUploader {
       throw new Error(`renewFile request failed: HTTP ${response.status}`)
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       status: string
       prevExpiryTime?: number
       newExpiryTime?: number
@@ -382,14 +402,14 @@ export class StorageUploader {
   }
 
   /** Intersects `hostedBy` with the configured host set; throws when empty. */
-  private resolveTargets (hostedBy?: string[]): string[] {
+  private resolveTargets(hostedBy?: string[]): string[] {
     if (hostedBy === undefined) return this.hosts
     const configured = new Set(this.hosts)
     const intersection = hostedBy.filter(h => configured.has(h))
     if (intersection.length === 0) {
       throw new Error(
         'hostedBy did not intersect any configured provider. ' +
-        'Provide hosts that were also passed to the StorageUploader constructor.'
+          'Provide hosts that were also passed to the StorageUploader constructor.'
       )
     }
     return intersection
@@ -401,7 +421,7 @@ export class StorageUploader {
    * longest remaining expiry. Single-host configurations preserve the
    * legacy error-message contract verbatim.
    */
-  public async findFile (uhrpUrl: string, options: HostScopeOptions = {}): Promise<FindFileData> {
+  public async findFile(uhrpUrl: string, options: HostScopeOptions = {}): Promise<FindFileData> {
     const targets = this.resolveTargets(options.hostedBy)
 
     const outcomes = await Promise.all(
@@ -414,9 +434,9 @@ export class StorageUploader {
       })
     )
 
-    const successes = outcomes.flatMap(o => o.ok ? [o] : [])
+    const successes = outcomes.flatMap(o => (o.ok ? [o] : []))
     if (successes.length === 0) {
-      const failures = outcomes.flatMap(o => o.ok ? [] : [o])
+      const failures = outcomes.flatMap(o => (o.ok ? [] : [o]))
       if (targets.length === 1) throw failures[0].error
       const detail = failures.map(f => `${f.host}: ${f.error.message}`).join('; ')
       throw new Error(`findFile: no configured host reported this UHRP URL — ${detail}`)
@@ -434,57 +454,73 @@ export class StorageUploader {
     }
   }
 
+  private async listUploadsAtTargets(targets: string[]): Promise<ListUploadsOutcome[]> {
+    return await Promise.all(
+      targets.map(async host => {
+        try {
+          return { ok: true, host, data: await this.listUploadsAtHost(host) } as const
+        } catch (error) {
+          return { ok: false, host, error: error as Error } as const
+        }
+      })
+    )
+  }
+
+  private requireListUploadSuccesses(
+    outcomes: ListUploadsOutcome[],
+    targetCount: number
+  ): ListUploadsSuccess[] {
+    const successes = outcomes.filter((outcome): outcome is ListUploadsSuccess => outcome.ok)
+    if (successes.length > 0) return successes
+
+    const failures = outcomes.filter((outcome): outcome is ListUploadsFailure => !outcome.ok)
+    if (targetCount === 1) throw failures[0].error
+    const detail = failures.map(failure => `${failure.host}: ${failure.error.message}`).join('; ')
+    throw new Error(`listUploads: no configured host returned a listing — ${detail}`)
+  }
+
+  private mergeUploadListings(
+    successes: ListUploadsSuccess[]
+  ): Array<{ uhrpUrl: string; expiryTime: number; hostedBy: string[] }> {
+    const merged = new Map<string, { uhrpUrl: string; expiryTime: number; hostedBy: string[] }>()
+    for (const { host, data } of successes) {
+      if (!Array.isArray(data)) continue
+      for (const entry of data) this.mergeUploadEntry(merged, host, entry)
+    }
+    return Array.from(merged.values())
+  }
+
+  private mergeUploadEntry(
+    merged: Map<string, { uhrpUrl: string; expiryTime: number; hostedBy: string[] }>,
+    host: string,
+    entry: any
+  ): void {
+    const key = entry?.uhrpUrl
+    if (typeof key !== 'string') return
+    const rawExpiry = Number(entry.expiryTime)
+    const expiry = Number.isFinite(rawExpiry) ? rawExpiry : 0
+    const existing = merged.get(key)
+    if (existing === undefined) {
+      merged.set(key, { uhrpUrl: key, expiryTime: expiry, hostedBy: [host] })
+      return
+    }
+    existing.expiryTime = Math.max(existing.expiryTime, expiry)
+    if (!existing.hostedBy.includes(host)) existing.hostedBy.push(host)
+  }
+
   /**
    * Unions `/list` output across configured hosts, merging duplicate UHRP
    * URLs by the longest expiry observed. One failing host does not hide
    * the rest. Single-host configurations preserve the legacy error contract.
    */
-  public async listUploads (options: HostScopeOptions = {}): Promise<any> {
+  public async listUploads(options: HostScopeOptions = {}): Promise<any> {
     const targets = this.resolveTargets(options.hostedBy)
-
-    const outcomes = await Promise.all(
-      targets.map(async host => {
-        try {
-          return { ok: true, host, data: await this.listUploadsAtHost(host) } as const
-        } catch (e) {
-          return { ok: false, host, error: e as Error } as const
-        }
-      })
-    )
-
-    const successes = outcomes.flatMap(o => o.ok ? [o] : [])
-    if (successes.length === 0) {
-      const failures = outcomes.flatMap(o => o.ok ? [] : [o])
-      if (targets.length === 1) throw failures[0].error
-      const detail = failures.map(f => `${f.host}: ${f.error.message}`).join('; ')
-      throw new Error(`listUploads: no configured host returned a listing — ${detail}`)
-    }
-
-    if (targets.length === 1) {
-      return successes[0].data
-    }
-
-    const merged = new Map<string, { uhrpUrl: string, expiryTime: number, hostedBy: string[] }>()
-    for (const { host, data } of successes) {
-      if (!Array.isArray(data)) continue
-      for (const entry of data) {
-        const key = entry?.uhrpUrl
-        if (typeof key !== 'string') continue
-        const rawExpiry = Number(entry.expiryTime)
-        const expiry = Number.isFinite(rawExpiry) ? rawExpiry : 0
-        const existing = merged.get(key)
-        if (existing === undefined) {
-          merged.set(key, { uhrpUrl: key, expiryTime: expiry, hostedBy: [host] })
-        } else {
-          existing.expiryTime = Math.max(existing.expiryTime, expiry)
-          if (!existing.hostedBy.includes(host)) existing.hostedBy.push(host)
-        }
-      }
-    }
-    return Array.from(merged.values())
+    const outcomes = await this.listUploadsAtTargets(targets)
+    const successes = this.requireListUploadSuccesses(outcomes, targets.length)
+    return targets.length === 1 ? successes[0].data : this.mergeUploadListings(successes)
   }
 
-  private async listUploadsAtHost (host: string): Promise<any> {
+  private async listUploadsAtHost(host: string): Promise<any> {
     const response = await this.authFetch.fetch(`${host}/list`, { method: 'GET' })
     if (!response.ok) {
       throw new Error(`listUploads request failed: HTTP ${response.status}`)
@@ -492,8 +528,8 @@ export class StorageUploader {
 
     const data = await response.json()
     if (data.status === 'error') {
-      const errCode = data.code as string ?? 'unknown-code'
-      const errDesc = data.description as string ?? 'no-description'
+      const errCode = (data.code as string) ?? 'unknown-code'
+      const errDesc = (data.description as string) ?? 'no-description'
       throw new Error(`listUploads returned an error: ${errCode} - ${errDesc}`)
     }
     return data.uploads
@@ -506,7 +542,7 @@ export class StorageUploader {
    * {@link RenewResiliencyError} when successful renewals fall below the
    * resilience threshold.
    */
-  public async renewFile (
+  public async renewFile(
     uhrpUrl: string,
     additionalMinutes: number,
     options: HostScopeOptions = {}
@@ -524,7 +560,7 @@ export class StorageUploader {
       }
     }
 
-    const perHost: Array<{ result: RenewPerHostResult, raw?: Error }> = await Promise.all(
+    const perHost: Array<{ result: RenewPerHostResult; raw?: Error }> = await Promise.all(
       targets.map(async host => {
         try {
           const data = await this.renewFileAtHost(host, uhrpUrl, additionalMinutes)

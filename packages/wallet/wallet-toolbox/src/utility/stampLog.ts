@@ -4,7 +4,7 @@
  * @param lineToAdd Content to add to line.
  * @returns undefined or log extended by time stamped `lineToAdd` and new line.
  */
-export function stampLog (log: string | undefined | { log?: string }, lineToAdd: string): string | undefined {
+export function stampLog(log: string | undefined | { log?: string }, lineToAdd: string): string | undefined {
   const add = `${new Date().toISOString()} ${lineToAdd}\n`
   if (typeof log === 'object' && typeof log.log === 'string') {
     log.log = log.log + add
@@ -14,6 +14,60 @@ export function stampLog (log: string | undefined | { log?: string }, lineToAdd:
   return undefined
 }
 
+interface StampLogEntry {
+  when: number
+  rest: string
+  delta: number
+  newClock: boolean
+}
+
+function parseStampLog(log: string): { data: StampLogEntry[]; newClocks: number[] } {
+  const data: StampLogEntry[] = []
+  const newClocks: number[] = []
+  let last = 0
+  for (const line of log.split('\n')) {
+    const spaceAt = line.indexOf(' ')
+    if (spaceAt < 0) continue
+    const when = new Date(line.substring(0, spaceAt)).getTime()
+    const rest = line.substring(spaceAt + 1)
+    const delta = when - (last !== 0 ? last : when)
+    const newClock = rest.includes('**NETWORK**')
+    if (newClock) newClocks.push(data.length)
+    data.push({ when, rest, delta, newClock })
+    last = when
+  }
+  return { data, newClocks }
+}
+
+function adjustNetworkDeltas(data: StampLogEntry[], newClocks: number[], total: number): void {
+  if (newClocks.length % 2 !== 0) return
+
+  let network = total
+  let lastNewClock = 0
+  for (const newClock of newClocks) {
+    network -= data[newClock - 1].when - data[lastNewClock].when
+    lastNewClock = newClock
+  }
+  network -= data[data.length - 1].when - data[lastNewClock].when
+
+  let networks = newClocks.length
+  for (const newClock of newClocks) {
+    const delta = networks > 1 ? Math.floor(network / networks) : network
+    data[newClock].delta = delta
+    network -= delta
+    networks--
+  }
+}
+
+function formatStampLog(data: StampLogEntry[], total: number): string {
+  let formatted = `${new Date(data[0].when).toISOString()} Total = ${total} msecs\n`
+  for (const entry of data) {
+    const delta = entry.delta.toString()
+    formatted += `${' '.repeat(8 - delta.length)}${delta} ${entry.rest}\n`
+  }
+  return formatted
+}
+
 /**
  * Replaces individual timestamps with delta msecs.
  * Looks for two network crossings and adjusts clock for clock skew if found.
@@ -21,52 +75,10 @@ export function stampLog (log: string | undefined | { log?: string }, lineToAdd:
  * @param log Each logged event starts with ISO time stamp, space, rest of line, terminated by `\n`.
  * @returns reformated multi-line event log
  */
-export function stampLogFormat (log?: string): string {
+export function stampLogFormat(log?: string): string {
   if (typeof log !== 'string') return ''
-  const logLines = log.split('\n')
-  const data: Array<{
-    when: number
-    rest: string
-    delta: number
-    newClock: boolean
-  }> = []
-  let last = 0
-  const newClocks: number[] = []
-  for (const line of logLines) {
-    const spaceAt = line.indexOf(' ')
-    if (spaceAt > -1) {
-      const when = new Date(line.substring(0, spaceAt)).getTime()
-      const rest = line.substring(spaceAt + 1)
-      const delta = when - (last !== 0 ? last : when)
-      const newClock = rest.includes('**NETWORK**')
-      if (newClock) newClocks.push(data.length)
-      data.push({ when, rest, delta, newClock })
-      last = when
-    }
-  }
+  const { data, newClocks } = parseStampLog(log)
   const total = data[data.length - 1].when - data[0].when
-  if (newClocks.length % 2 === 0) {
-    // Adjust for paired network crossing times and clock skew between clocks.
-    let network = total
-    let lastNewClock = 0
-    for (const newClock of newClocks) {
-      network -= data[newClock - 1].when - data[lastNewClock].when
-      lastNewClock = newClock
-    }
-    network -= data[data.length - 1].when - data[lastNewClock].when
-    let networks = newClocks.length
-    for (const newClock of newClocks) {
-      const n = networks > 1 ? Math.floor(network / networks) : network
-      data[newClock].delta = n
-      network -= n
-      networks--
-    }
-  }
-  let log2 = `${new Date(data[0].when).toISOString()} Total = ${total} msecs\n`
-  for (const d of data) {
-    let df = d.delta.toString()
-    df = `${' '.repeat(8 - df.length)}${df}`
-    log2 += `${df} ${d.rest}\n`
-  }
-  return log2
+  adjustNetworkDeltas(data, newClocks, total)
+  return formatStampLog(data, total)
 }
