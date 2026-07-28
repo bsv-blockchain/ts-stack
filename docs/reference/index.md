@@ -22,6 +22,7 @@ Quick reference material for API details and protocol indices.
 - **[Generated stack facts](./stack-facts.md)** — Current source versions, runtime profiles, release routes, infrastructure manifests, and conformance totals
 - **[Licensing policy](./licensing.md)** — Uniform Open BSV License Version 6 declarations, package files, and drift controls
 - **[npm package supply chain](./npm-package-supply-chain.md)** — Pack-once candidates, SBOMs, attestations, OIDC publication, and registry verification
+- **[Package API, declarations, and migrations](./package-api-migrations.md)** — Generated entry points, declaration targets, source candidates, release notes, and migration guidance for all 30 public packages
 - **[Release and operations guide](./release-operations.md)** — Scope, preflight, publication, deployment, failure handling, and rollback
 - **[Service operations contract](./service-operations.md)** — Generated health, readiness, state, migration, backup, and workload-hardening contracts
 - **[Repository health controls](./repository-health.md)** — Machine-readable project, package, documentation, test, and exception governance

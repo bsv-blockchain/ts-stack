@@ -46,6 +46,7 @@ export class AuthSocketServer {
    */
   private readonly peers = new Map<string, PeerInfo>()
   private readonly connectionCallbacks: Array<(socket: AuthSocket) => void> = []
+  private closePromise?: Promise<void>
 
   /**
    * @param httpServer - The underlying HTTP server
@@ -115,6 +116,18 @@ export class AuthSocketServer {
       })
     })
     return selected
+  }
+
+  /**
+   * Stops accepting connections, disconnects active sockets, and closes the
+   * attached HTTP server. Repeated calls share the same shutdown operation.
+   */
+  public close(): Promise<void> {
+    this.closePromise ??= this.realIo.close().then(() => {
+      this.peers.clear()
+      this.connectionCallbacks.length = 0
+    })
+    return this.closePromise
   }
 
   /**

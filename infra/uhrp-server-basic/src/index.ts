@@ -4,12 +4,13 @@ import bodyparser from 'body-parser'
 import { PrivateKey } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { getWallet } from './utils/walletSingleton'
+import { destroyWallet, getWallet } from './utils/walletSingleton'
 import routes from './routes'
 import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
 import { cdnMimeTypeMiddleware } from './utils/mimeTypeMiddleware'
 import path from 'node:path'
+import type { Server } from 'node:http'
 import { log } from './logger'
 import { rateLimit } from 'express-rate-limit'
 import {
@@ -29,6 +30,12 @@ import { createServiceHealth } from './serviceHealth'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
+
+const closeHttpServer = async (server: Server): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    server.close(error => error == null ? resolve() : reject(error))
+  })
+}
 
 const preAuthRateLimit = rateLimit(rateLimitOptions(
   'UHRP_PRE_AUTH_RATE_LIMIT',
@@ -187,6 +194,23 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       socketTimeoutMs: 5 * 60 * 1000,
       maxRequestsPerSocket: 1_000
     })
+
+    let shutdownPromise: Promise<void> | undefined
+    const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+      shutdownPromise ??= (async () => {
+        serviceHealth.markNotReady()
+        log.info({ operation: 'shutdown', signal }, 'UHRP basic shutdown started')
+        await closeHttpServer(server)
+        await destroyWallet()
+        log.info({ operation: 'shutdown', outcome: 'ok', signal }, 'UHRP basic shutdown complete')
+      })().catch(error => {
+        process.exitCode = 1
+        log.error({ operation: 'shutdown', outcome: 'error', signal, err: error }, 'UHRP basic shutdown failed')
+      })
+      return shutdownPromise
+    }
+    process.once('SIGTERM', () => void shutdown('SIGTERM'))
+    process.once('SIGINT', () => void shutdown('SIGINT'))
 
   })().catch((error) => {
     log.error({ operation: 'bootstrap', outcome: 'error', err: error }, 'UHRP Storage Server failed to start')

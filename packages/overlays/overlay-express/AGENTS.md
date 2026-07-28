@@ -25,7 +25,8 @@ From `mod.ts`:
     - `configureJanitor(config)` — Configure health check janitor
     - `configureHealth(config)` — Set health endpoint context
     - `registerHealthCheck(check)` — Register custom health checks
-  - Lifecycle: `start()` → starts Express server
+  - Lifecycle: `start()` starts Express; idempotent `close()` stops HTTP,
+    background synchronization, Knex, and MongoDB
   - Admin: `getAdminToken()` — retrieve auto-generated or custom admin token
 
 - **`BanService`** — Manages blocked/banned outputs

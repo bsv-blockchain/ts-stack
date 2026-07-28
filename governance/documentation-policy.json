@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "ts-stack-maintainers",
-  "lastReviewed": "2026-07-27",
+  "lastReviewed": "2026-07-28",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "publicPackageReadme": {
     "requiredSections": ["installation", "usage", "license"],
@@ -14,6 +14,8 @@
     "repositoryAuthority": "https://github.com/bsv-blockchain/ts-stack/tree/main/<project-path>",
     "forbidSourceCommitSnapshots": true,
     "privateProjectsAdvertiseNpm": false,
+    "releaseNoteAuthority": "governance/package-release-notes.json",
+    "generatedApiMigrationLedger": "docs/reference/package-api-migrations.md",
     "rationale": "Every public package needs a current, discoverable package page; consolidated source links and generated versions prevent retired repositories or point-in-time commits from becoming current authority."
   },
   "support": {

@@ -3,10 +3,10 @@ id: pkg-authsocket
 title: '@bsv/authsocket'
 kind: package
 domain: messaging
-version: '2.1.1'
+version: '2.1.2'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_updated: '2026-07-28'
+last_verified: '2026-07-28'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/authsocket'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket'
@@ -59,6 +59,7 @@ server.listen(3000)
 - **Certificate exchange** — Support for requesting and verifying certificates during handshake
 - **Message signing** — Every message auto-signed with server wallet; every inbound message verified
 - **Automatic re-dispatch** — Special `'authMessage'` channel for BRC-103 frames; user code sees normal Socket.IO events
+- **Graceful lifecycle** — Idempotent `close()` disconnects clients and closes the attached HTTP server
 
 ## Common patterns
 
@@ -87,6 +88,17 @@ io.on('connection', async socket => {
   await socket.emit('response', { authenticated: true })
 })
 ```
+
+### Graceful shutdown
+
+```typescript
+process.once('SIGTERM', () => {
+  void io.close()
+})
+```
+
+`close()` is idempotent. Socket.IO disconnects active clients before closing
+the HTTP server supplied to `AuthSocketServer`.
 
 ### Receiving authenticated messages
 

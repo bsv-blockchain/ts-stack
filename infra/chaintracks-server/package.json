@@ -1,6 +1,6 @@
 {
   "name": "chaintracks-server",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -16,10 +16,10 @@
   "scripts": {
     "build": "tsc",
     "lint": "oxlint src --deny-warnings",
-    "start": "node dist/server.js",
-    "start:test": "CHAIN=test node dist/server.js",
-    "start:custom": "node dist/server-custom.js",
-    "start:prefix": "node dist/server-with-prefix.js",
+    "start": "node --require ./dist/telemetry.js dist/server.js",
+    "start:test": "CHAIN=test node --require ./dist/telemetry.js dist/server.js",
+    "start:custom": "node --require ./dist/telemetry.js dist/server-custom.js",
+    "start:prefix": "node --require ./dist/telemetry.js dist/server-with-prefix.js",
     "dev": "ts-node src/server.ts",
     "dev:test": "CHAIN=test ts-node src/server.ts",
     "clean": "rm -rf dist"
@@ -43,7 +43,6 @@
     "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
-    "@opentelemetry/instrumentation": "^0.221.0",
     "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-logs": "^0.221.0",

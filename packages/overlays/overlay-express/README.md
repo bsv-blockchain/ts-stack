@@ -115,6 +115,14 @@ const main = async () => {
   // Lastly, configure the engine and start the server!
   await server.configureEngine()
   await server.start()
+
+  // Stop accepting work, stop background synchronization, and close the SQL
+  // and MongoDB clients during process or embedding-runtime shutdown.
+  const shutdown = async () => {
+    await server.close()
+  }
+  process.once('SIGTERM', () => void shutdown())
+  process.once('SIGINT', () => void shutdown())
 }
 
 // Happy hacking :)
@@ -146,6 +154,9 @@ CSP applies to documents served by this process; it does not grant or deny API
 callers. Configure UI CSP and API CORS independently. Credentialed cross-origin
 requests require exact allowed origins and must never be combined with a
 wildcard origin.
+
+Call `await server.close()` during shutdown. It is idempotent and closes the
+HTTP listener, BASM maintenance timers, the reorg stream, Knex, and MongoDB.
 
 Janitor outbound checks accept only public HTTPS targets on the standard port
 and do not follow redirects by default. `allowPrivateHosts: true` exists only

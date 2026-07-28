@@ -138,12 +138,44 @@ export async function startStandalone(): Promise<void> {
   })
 }
 
+let shutdownPromise: Promise<void> | undefined
+
+export function shutdownStandalone(signal: NodeJS.Signals): Promise<void> {
+  shutdownPromise ??= (async () => {
+    log.info({ operation: 'server.shutdown', signal }, 'MessageBox shutdown started')
+    await new Promise<void>((resolve, reject) => {
+      http.close(error => (error == null ? resolve() : reject(error)))
+    })
+    await knex.destroy()
+    log.info(
+      { operation: 'server.shutdown', outcome: 'ok', signal },
+      'MessageBox shutdown complete'
+    )
+  })().catch(error => {
+    process.exitCode = 1
+    log.error(
+      { operation: 'server.shutdown', outcome: 'error', signal, err: error },
+      'MessageBox shutdown failed'
+    )
+  })
+  return shutdownPromise
+}
+
 // Migrations, wallet/auth setup, and WebSocket policy must all be ready before
 // the service accepts traffic. A failed prerequisite is a failed process, not
 // a partially healthy server.
 if (NODE_ENV !== 'test') {
   try {
     await startStandalone()
+    if (ENABLE_WEBSOCKETS.toLowerCase() === 'true') {
+      log.warn(
+        { operation: 'server.shutdown', outcome: 'release-ordered' },
+        'Graceful signal handling requires the unpublished AuthSocket close lifecycle'
+      )
+    } else {
+      process.once('SIGTERM', () => void shutdownStandalone('SIGTERM'))
+      process.once('SIGINT', () => void shutdownStandalone('SIGINT'))
+    }
   } catch (error) {
     log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
     try {

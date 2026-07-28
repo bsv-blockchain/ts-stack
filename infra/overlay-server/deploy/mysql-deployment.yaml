@@ -4,6 +4,7 @@ metadata:
   annotations:
     kompose.cmd: kompose convert -o deploy/
     kompose.version: 1.34.0 (cbf2835db)
+    ts-stack.bsvblockchain.org/workload-class: example-not-production
   labels:
     io.kompose.service: mysql
   name: mysql

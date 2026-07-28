@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -43,7 +43,6 @@
     "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
-    "@opentelemetry/instrumentation": "^0.221.0",
     "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-logs": "^0.221.0",
@@ -61,8 +60,9 @@
     "semver": "^7.8.5"
   },
   "scripts": {
-    "start": "ts-node src/index.ts",
-    "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register src/index.ts\"",
+    "start": "ts-node -r ./src/telemetry.ts src/index.ts",
+    "start:prod": "node --require ./out/src/telemetry.js --max-http-header-size=512000 out/src/index.js",
+    "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register -r ./src/telemetry.ts src/index.ts\"",
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",

@@ -15,6 +15,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  annotations:
+    ts-stack.bsvblockchain.org/workload-class: example-not-production
 
 spec:
   selector:

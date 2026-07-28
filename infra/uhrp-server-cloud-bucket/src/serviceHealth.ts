@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express'
 
 export interface ServiceHealth {
   markReady: () => void
+  markNotReady: () => void
   register: (app: Express) => void
 }
 
@@ -10,6 +11,10 @@ class CloudServiceHealth implements ServiceHealth {
 
   public readonly markReady = (): void => {
     this.ready = true
+  }
+
+  public readonly markNotReady = (): void => {
+    this.ready = false
   }
 
   public readonly register = (app: Express): void => {

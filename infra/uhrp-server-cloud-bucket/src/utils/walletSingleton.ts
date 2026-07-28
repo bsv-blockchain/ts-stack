@@ -5,7 +5,7 @@ const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const WALLET_STORAGE_URL = process.env.WALLET_STORAGE_URL as string
 const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
 
-let walletInstance: WalletInterface | null = null
+let walletInstance: Wallet | null = null
 
 export async function getWallet(): Promise<WalletInterface> {
     if (!walletInstance) {
@@ -18,7 +18,12 @@ export async function getWallet(): Promise<WalletInterface> {
         const client = new StorageClient(wallet, WALLET_STORAGE_URL);
         await client.makeAvailable();
         await storageManager.addWalletStorageProvider(client);
-        return wallet;
+        walletInstance = wallet;
     }
     return walletInstance
+}
+
+export async function destroyWallet(): Promise<void> {
+    await walletInstance?.destroy()
+    walletInstance = null
 }

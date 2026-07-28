@@ -4,7 +4,7 @@ import bodyparser from 'body-parser'
 import { PrivateKey } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { getWallet } from './utils/walletSingleton'
+import { destroyWallet, getWallet } from './utils/walletSingleton'
 import routes from './routes'
 import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
@@ -198,6 +198,32 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
       socketTimeoutMs: 60_000,
       maxRequestsPerSocket: 1_000
     })
+
+    let stopping: Promise<void> | undefined
+    const stopCloudService = (signal: NodeJS.Signals): Promise<void> => {
+      stopping ??= new Promise<void>((resolve, reject) => {
+        serviceHealth.markNotReady()
+        log.info({ operation: 'shutdown', signal }, 'UHRP cloud-bucket shutdown started')
+        server.close(error => error == null ? resolve() : reject(error))
+      })
+        .then(async () => {
+          await destroyWallet()
+          log.info(
+            { operation: 'shutdown', outcome: 'ok', signal },
+            'UHRP cloud-bucket shutdown complete'
+          )
+        })
+        .catch(error => {
+          process.exitCode = 1
+          log.error(
+            { operation: 'shutdown', outcome: 'error', signal, err: error },
+            'UHRP cloud-bucket shutdown failed'
+          )
+        })
+      return stopping
+    }
+    process.once('SIGTERM', () => void stopCloudService('SIGTERM'))
+    process.once('SIGINT', () => void stopCloudService('SIGINT'))
 
   })().catch((error) => {
     log.error({ operation: 'bootstrap', outcome: 'error', err: error }, 'UHRP Storage Server failed to start')

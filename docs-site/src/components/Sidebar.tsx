@@ -3,7 +3,7 @@ import { NAV, type NavItem } from '../lib/nav'
 import '../styles/sidebar.css'
 
 interface Props {
-  className?: string
+  readonly className?: string
 }
 
 export default function Sidebar({ className }: Readonly<Props>) {
@@ -31,7 +31,7 @@ export default function Sidebar({ className }: Readonly<Props>) {
   )
 }
 
-function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
+function SidebarItem({ item, pathname }: { readonly item: NavItem; readonly pathname: string }) {
   const hasChildren = item.items && item.items.length > 0
   const isParentActive = hasChildren && pathname.startsWith(item.href.replace(/\/$/, ''))
 

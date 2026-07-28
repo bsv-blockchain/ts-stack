@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.15",
+  "version": "1.1.16",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -24,7 +24,7 @@
   },
   "type": "module",
   "scripts": {
-    "start": "node out/src/index.js",
+    "start": "node --import ./out/src/telemetry.js out/src/index.js",
     "dev": "nodemon --inspect --watch .env --watch src --exec tsx src/index.ts",
     "build": "tsc",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs",

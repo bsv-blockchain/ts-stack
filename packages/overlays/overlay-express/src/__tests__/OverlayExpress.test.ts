@@ -97,6 +97,70 @@ describe('OverlayExpress', () => {
     })
   })
 
+  describe('close', () => {
+    it('closes runtime resources once when shutdown is requested repeatedly', async () => {
+      const closeHttp = jest.fn((callback: (error?: Error) => void) => callback())
+      const destroyKnex = jest.fn<() => Promise<void>>().mockResolvedValue()
+      const closeMongo = jest.fn<() => Promise<void>>().mockResolvedValue()
+      Object.assign(overlayExpress, {
+        server: { close: closeHttp },
+        knex: { destroy: destroyKnex },
+        mongoClient: { close: closeMongo },
+        mongoDb: { databaseName: 'test' },
+        isListening: true
+      })
+
+      await Promise.all([overlayExpress.close(), overlayExpress.close()])
+
+      expect(closeHttp).toHaveBeenCalledTimes(1)
+      expect(destroyKnex).toHaveBeenCalledTimes(1)
+      expect(closeMongo).toHaveBeenCalledTimes(1)
+      expect(overlayExpress.isListening).toBe(false)
+      expect(overlayExpress.server).toBeUndefined()
+      expect(overlayExpress.knex).toBeUndefined()
+      expect(overlayExpress.mongoClient).toBeUndefined()
+      expect(overlayExpress.mongoDb).toBeUndefined()
+    })
+
+    it('stops background work when no server or database clients are configured', async () => {
+      const basmTimer = setInterval(() => {}, 60_000)
+      const maintenanceTimer = setInterval(() => {}, 60_000)
+      const stopReorg = jest.fn()
+      const lifecycle = overlayExpress as unknown as {
+        basmBlockPollTimer?: ReturnType<typeof setInterval>
+        unprovenMaintenanceTimer?: ReturnType<typeof setInterval>
+        reorgAdapter?: { stop: () => void }
+      }
+      Object.assign(lifecycle, {
+        basmBlockPollTimer: basmTimer,
+        unprovenMaintenanceTimer: maintenanceTimer,
+        reorgAdapter: { stop: stopReorg }
+      })
+
+      await overlayExpress.close()
+
+      expect(stopReorg).toHaveBeenCalledTimes(1)
+      expect(lifecycle.basmBlockPollTimer).toBeUndefined()
+      expect(lifecycle.unprovenMaintenanceTimer).toBeUndefined()
+      expect(lifecycle.reorgAdapter).toBeUndefined()
+    })
+
+    it('rejects shutdown when the HTTP server cannot close', async () => {
+      const closeError = new Error('HTTP close failed')
+      const closeHttp = jest.fn((callback: (error?: Error) => void) => callback(closeError))
+      Object.assign(overlayExpress, {
+        server: { close: closeHttp },
+        isListening: true
+      })
+
+      await expect(overlayExpress.close()).rejects.toBe(closeError)
+
+      expect(closeHttp).toHaveBeenCalledTimes(1)
+      expect(overlayExpress.isListening).toBe(false)
+      expect(overlayExpress.server).toBeUndefined()
+    })
+  })
+
   describe('getAdminToken', () => {
     it('should return the admin token', () => {
       const token = overlayExpress.getAdminToken()

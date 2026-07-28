@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.14",
+  "version": "2.0.15",
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
@@ -39,7 +39,7 @@
     "LICENSE.txt"
   ],
   "scripts": {
-    "start": "node out/src/index.js",
+    "start": "node --import ./out/src/telemetry.js out/src/index.js",
     "lint": "oxlint src --deny-warnings",
     "format": "prettier --write 'src/**/*.ts' --log-level silent",
     "format:check": "prettier --check 'src/**/*.ts'",
@@ -64,7 +64,6 @@
     "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
-    "@opentelemetry/instrumentation": "^0.221.0",
     "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
     "@opentelemetry/resources": "^2.10.0",
     "@opentelemetry/sdk-logs": "^0.221.0",

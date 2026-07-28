@@ -86,13 +86,25 @@ version and publish a corrected version.
 
 Package documentation frontmatter versions describe the package version
 verified by that page. Cross-stack version and support facts come from the
-generated page. A package change updates:
+generated pages. The [Package API, Declarations, and Migration
+Ledger](../reference/package-api-migrations.md) is the uniform release-note
+authority for all 30 public packages, including packages that retain an
+additional historical `CHANGELOG.md`.
+
+A package change updates:
 
 - its README and API/reference docs when the consumer contract changes;
-- a migration note for any incompatible behavior;
-- a changelog when that package already maintains one; and
-- the pull request and release evidence needed to explain the change when it
-  does not maintain a standalone changelog.
+- its exact entry in `governance/package-release-notes.json`, including the
+  source-versus-published boundary, SemVer impact, summary, and migration
+  decision;
+- a migration note with before/after examples for incompatible behavior;
+- a package-local changelog when that package already maintains one; and
+- the pull request and release evidence needed to explain the change.
+
+`pnpm docs:packages:check` rejects missing packages, version/release-type
+disagreement, missing API pages, and stale generated output. After an authorized
+publication, the release-sync change advances the recorded published baseline;
+merging a candidate record never publishes it.
 
 Do not promise a GitHub Release, npm dist-tag, changelog format, cadence, or
 support window that the workflow does not actually enforce.
