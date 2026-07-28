@@ -8,6 +8,24 @@ export interface StopListenerToken {
   stop: (() => void) | undefined
 }
 
+function createStopHandler (
+  markOk: () => void,
+  isOpen: () => boolean,
+  markClosed: () => void,
+  close: () => void,
+  markDone: () => void
+): () => void {
+  return () => {
+    markOk()
+    if (isOpen()) {
+      markClosed()
+      close()
+    } else {
+      markDone()
+    }
+  }
+}
+
 async function getWhatsOnChainTipHeight(chain: Chain = 'main', apiKey?: string): Promise<number> {
   const config = apiKey ? { apiKey } : {}
   const woc = new WhatsOnChain(chain, config)
@@ -26,14 +44,16 @@ async function getWhatsOnChainTipHeight(chain: Chain = 'main', apiKey?: string):
  * @returns true on normal completion, false if should restart if no error received.
  */
 export async function WocHeadersBulkListener(
-  fromHeight: number,
-  toHeight: number,
-  enqueue: (header: BlockHeader) => void,
-  error: (code: number, message: string) => boolean,
-  stop: StopListenerToken,
-  chain: Chain,
-  logger: (...args: any[]) => void = () => {},
-  idleWait = 5000
+  ...[fromHeight, toHeight, enqueue, error, stop, chain, logger = () => {}, idleWait = 5000]: [
+    fromHeight: number,
+    toHeight: number,
+    enqueue: (header: BlockHeader) => void,
+    error: (code: number, message: string) => boolean,
+    stop: StopListenerToken,
+    chain: Chain,
+    logger?: (...args: any[]) => void,
+    idleWait?: number
+  ]
 ): Promise<boolean> {
   // logger(`WocHeadersBulkListener from ${fromHeight} to ${toHeight} on ${chain} chain`)
 
@@ -43,15 +63,13 @@ export async function WocHeadersBulkListener(
   let ok = false
   let wsIsOpen = false
 
-  function stopNow(): void {
-    ok = true
-    if (wsIsOpen) {
-      wsIsOpen = false
-      ws.close()
-    } else done = true
-  }
-
-  stop.stop = stopNow
+  stop.stop = createStopHandler(
+    () => { ok = true },
+    () => wsIsOpen,
+    () => { wsIsOpen = false },
+    () => ws.close(),
+    () => { done = true }
+  )
 
   let webSocketUrl: string
   switch (chain) {
@@ -270,15 +288,13 @@ export async function WocHeadersLiveListener(
 
   let msecsWithoutPing = 0
 
-  function stopNow(): void {
-    ok = true
-    if (wsIsOpen) {
-      wsIsOpen = false
-      ws.close()
-    } else done = true
-  }
-
-  stop.stop = stopNow
+  stop.stop = createStopHandler(
+    () => { ok = true },
+    () => wsIsOpen,
+    () => { wsIsOpen = false },
+    () => ws.close(),
+    () => { done = true }
+  )
 
   let webSocketUrl: string
   switch (chain) {

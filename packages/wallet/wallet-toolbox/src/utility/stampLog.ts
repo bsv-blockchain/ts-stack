@@ -48,7 +48,7 @@ function adjustNetworkDeltas(data: StampLogEntry[], newClocks: number[], total: 
     network -= data[newClock - 1].when - data[lastNewClock].when
     lastNewClock = newClock
   }
-  network -= data[data.length - 1].when - data[lastNewClock].when
+  network -= data.at(-1)!.when - data[lastNewClock].when
 
   let networks = newClocks.length
   for (const newClock of newClocks) {
@@ -78,7 +78,7 @@ function formatStampLog(data: StampLogEntry[], total: number): string {
 export function stampLogFormat(log?: string): string {
   if (typeof log !== 'string') return ''
   const { data, newClocks } = parseStampLog(log)
-  const total = data[data.length - 1].when - data[0].when
+  const total = data.at(-1)!.when - data[0].when
   adjustNetworkDeltas(data, newClocks, total)
   return formatStampLog(data, total)
 }

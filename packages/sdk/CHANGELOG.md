@@ -227,13 +227,20 @@ All notable changes to this project will be documented in this file. The format 
 - Add `LookupResolver.queryDetailed()` and per-outcome host-settlement counts
   so security-sensitive callers can distinguish authoritative empty answers
   from partial availability.
+
+### Changed
+
+- Harden UTF-8, binary JSON, secret-redaction, cryptographic compatibility, and
+  optional-state handling while preserving the existing SDK 2.x wire and call
+  contracts.
+- Simplify certificate, primitive, remittance, transaction, and wallet-wire
+  implementation paths and improve benchmark/conformance generator
+  maintainability without changing generated vectors.
 - Release prep for `2.1.8`: transaction, BEEF, signature-hash, and deep-graph
   performance improvements described below.
 - Add explicit zero-copy `Uint8Array` transaction/BEEF parsing APIs, lazy raw-transaction
   materialization, and `Transaction.toBEEFBytes()` for correctly typed BEEF output.
 - Add a reproducible multi-megabyte transaction pipeline benchmark.
-
-### Changed
 
 - Consolidate script-template and TOTP array construction and simplify
   transaction dependency traversal without changing serialized output,

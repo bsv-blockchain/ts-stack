@@ -35,7 +35,9 @@ export class TaskPurge extends WalletMonitorTask {
   /**
    * Set to true to trigger running this task
    */
-  static checkNow = false
+  private static checkNowRequested = false
+  static get checkNow (): boolean { return this.checkNowRequested }
+  static set checkNow (value: boolean) { this.checkNowRequested = value }
 
   constructor (
     monitor: Monitor,

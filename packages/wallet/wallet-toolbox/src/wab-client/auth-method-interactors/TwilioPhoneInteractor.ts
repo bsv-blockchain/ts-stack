@@ -14,7 +14,7 @@ export class TwilioPhoneInteractor extends AuthMethodInteractor {
       throw new TypeError('TwilioPhone authentication requires phoneNumber.')
     }
     const normalized = phoneNumber.trim()
-    if (!/^\+[1-9][0-9]{7,14}$/.test(normalized)) {
+    if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
       throw new TypeError('phoneNumber must use canonical E.164 format.')
     }
     return {

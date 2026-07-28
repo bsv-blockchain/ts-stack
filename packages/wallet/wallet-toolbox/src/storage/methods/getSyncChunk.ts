@@ -262,7 +262,7 @@ export async function getSyncChunk (storage: StorageReader, args: RequestSyncChu
     }
   }
 
-  for (; !done;) {
+  while (!done) {
     for (const c of chunkers) {
       await addItems(c)
     }

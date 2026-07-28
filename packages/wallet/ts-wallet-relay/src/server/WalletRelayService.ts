@@ -147,13 +147,13 @@ export class WalletRelayService {
   private readonly mobileAuthTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Resolved options — always defined after construction
-  private wallet: WalletLike
-  private relayUrl: string
-  private origin: string
-  private schema: string
-  private signQrCodes: boolean
+  private readonly wallet: WalletLike
+  private readonly relayUrl: string
+  private readonly origin: string
+  private readonly schema: string
+  private readonly signQrCodes: boolean
   /** Compiled allowlist used for both per-session origin claims and WS upgrades. */
-  private isOriginAllowed: ((origin: string) => boolean) | null
+  private readonly isOriginAllowed: ((origin: string) => boolean) | null
 
   constructor(private readonly opts: WalletRelayServiceOptions) {
     this.wallet = opts.wallet

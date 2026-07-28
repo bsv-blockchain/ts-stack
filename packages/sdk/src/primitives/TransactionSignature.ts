@@ -401,7 +401,7 @@ export default class TransactionSignature extends Signature {
       return new TransactionSignature(r, s, scope)
     }
     const scope = buf.at(-1)
-    const derbuf = buf.slice(0, buf.length - 1)
+    const derbuf = buf.slice(0, -1)
     const tempSig = Signature.fromDER(derbuf)
     return new TransactionSignature(tempSig.r, tempSig.s, scope)
   }

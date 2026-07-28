@@ -81,6 +81,7 @@ export const biModPow = (base: bigint, exp: bigint): bigint => {
 }
 
 export const P_PLUS1_DIV4 = (P_BIGINT + 1n) >> 2n
+type PointInput = BigNumber | number | number[] | string
 
 export const biModSqrt = (a: bigint): bigint | null => {
   const r = biModPow(a, P_PLUS1_DIV4)
@@ -92,7 +93,7 @@ export const biModSqrt = (a: bigint): bigint | null => {
   return r
 }
 
-const toBigInt = (x: BigNumber | number | number[] | string): bigint => {
+const toBigInt = (x: PointInput): bigint => {
   if (BigNumber.isBN(x)) return BigInt('0x' + (x as BigNumber).toString(16))
   if (typeof x === 'string') return BigInt('0x' + x)
   if (Array.isArray(x)) return BigInt('0x' + toHex(x))
@@ -352,7 +353,7 @@ export default class Point extends BasePoint {
    * const xCoordinate = new BigNumber('10');
    * const point = Point.fromX(xCoordinate, true);
    */
-  static fromX(x: BigNumber | number | number[] | string, odd: boolean): Point {
+  static fromX(x: PointInput, odd: boolean): Point {
     let xBigInt = toBigInt(x)
     xBigInt = biMod(xBigInt)
 
@@ -441,8 +442,8 @@ export default class Point extends BasePoint {
    * new Point(null, null); // Generates Infinity point.
    */
   constructor(
-    x: BigNumber | number | number[] | string | null,
-    y: BigNumber | number | number[] | string | null,
+    x: PointInput | null,
+    y: PointInput | null,
     isRed: boolean = true
   ) {
     super('affine')
@@ -752,7 +753,7 @@ export default class Point extends BasePoint {
    * const p = new Point(1, 2);
    * const result = p.mul(2); // this doubles the Point
    */
-  mul(k: BigNumber | number | number[] | string): Point {
+  mul(k: PointInput): Point {
     if (!BigNumber.isBN(k)) {
       k = new BigNumber(k as number, 16)
     }
@@ -805,7 +806,7 @@ export default class Point extends BasePoint {
     return result
   }
 
-  mulCT(k: BigNumber | number | number[] | string): Point {
+  mulCT(k: PointInput): Point {
     if (!BigNumber.isBN(k)) {
       k = new BigNumber(k as any, 16)
     }
@@ -967,12 +968,11 @@ export default class Point extends BasePoint {
    * const doubledPoint = p.dblp(10); // returns the point after "doubled" 10 times
    */
   dblp(k: number): Point {
-    /* eslint-disable @typescript-eslint/no-this-alias */
-    let r: Point = this
+    let r: Point | undefined
     for (let i = 0; i < k; i++) {
-      r = r.dbl()
+      r = (r ?? this).dbl()
     }
-    return r
+    return r ?? this
   }
 
   /**
@@ -1274,11 +1274,10 @@ export default class Point extends BasePoint {
     }
 
     const doubles = [this]
-    /* eslint-disable @typescript-eslint/no-this-alias */
-    let acc: Point = this
+    let acc: Point | undefined
     for (let i = 0; i < (power ?? 0); i += step ?? 1) {
       for (let j = 0; j < (step ?? 1); j++) {
-        acc = acc.dbl()
+        acc = (acc ?? this).dbl()
       }
       doubles.push(acc as this)
     }

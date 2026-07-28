@@ -16,7 +16,7 @@ import { ErrorCodeString10To40Bytes, ErrorDescriptionString20To200Bytes, WalletE
  */
 export class WalletError extends Error implements WalletErrorObject {
   // Facilitates detection of Error objects from non-error return values.
-  isError: true = true
+  isError = true as const
 
   constructor (
     name: string,

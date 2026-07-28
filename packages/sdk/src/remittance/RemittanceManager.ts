@@ -376,7 +376,7 @@ export class RemittanceManager {
   saveState (): RemittanceManagerState {
     return {
       v: 1,
-      threads: JSON.parse(JSON.stringify(this.threads)) as Thread[],
+      threads: structuredClone(this.threads),
       defaultPaymentOptionId: this.defaultPaymentOptionId
     }
   }

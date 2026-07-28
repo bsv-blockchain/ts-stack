@@ -4,7 +4,9 @@ import { MockServices } from '../../mockchain/MockServices'
 
 export class TaskMineBlock extends WalletMonitorTask {
   static readonly taskName = 'MineBlock'
-  static mineNow = false
+  private static mineNowRequested = false
+  static get mineNow (): boolean { return this.mineNowRequested }
+  static set mineNow (value: boolean) { this.mineNowRequested = value }
 
   constructor (
     monitor: Monitor,

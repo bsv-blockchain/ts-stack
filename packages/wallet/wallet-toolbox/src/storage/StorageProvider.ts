@@ -875,14 +875,25 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async getValidBeefForTxid(
-    txid: string,
-    mergeToBeef?: Beef,
-    trustSelf?: TrustSelf,
-    knownTxids?: string[],
-    trx?: TrxToken,
-    requiredLevels?: number,
-    chainTracker?: ChainTracker,
-    skipInvalidProofs?: boolean
+    ...[
+      txid,
+      mergeToBeef,
+      trustSelf,
+      knownTxids,
+      trx,
+      requiredLevels,
+      chainTracker,
+      skipInvalidProofs
+    ]: [
+      txid: string,
+      mergeToBeef?: Beef,
+      trustSelf?: TrustSelf,
+      knownTxids?: string[],
+      trx?: TrxToken,
+      requiredLevels?: number,
+      chainTracker?: ChainTracker,
+      skipInvalidProofs?: boolean
+    ]
   ): Promise<Beef | undefined> {
     const beef = mergeToBeef ?? new Beef()
     const r = await this.getProvenOrRawTx(txid, trx)

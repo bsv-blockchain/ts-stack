@@ -3,7 +3,7 @@ import { WalletStorageManager } from '../storage/WalletStorageManager'
 import { Chain } from '../sdk/types'
 
 export class WalletSigner {
-  isWalletSigner: true = true
+  isWalletSigner = true as const
 
   chain: Chain
   keyDeriver: KeyDeriverApi

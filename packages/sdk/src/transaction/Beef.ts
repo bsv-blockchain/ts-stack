@@ -1261,8 +1261,7 @@ export class Beef {
 
     const ready = queue.filter(tx => indegree.get(tx.txid) === 0)
     const processed = new Set<string>()
-    for (let i = 0; i < ready.length; i++) {
-      const tx = ready[i]
+    for (const tx of ready) {
       if (processed.has(tx.txid)) continue
       processed.add(tx.txid)
       for (const dependent of dependents.get(tx.txid) ?? []) {

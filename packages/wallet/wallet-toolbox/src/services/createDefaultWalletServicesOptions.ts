@@ -6,27 +6,41 @@ import { ChaintracksServiceClient } from './chaintracker/chaintracks/Chaintracks
 import { tstnArcadeUrl, tstnChaintracksUrl } from './networkConfig'
 
 export function createDefaultWalletServicesOptions (
-  chain: Chain,
-  arcCallbackUrl?: string,
-  arcCallbackToken?: string,
-  taalArcApiKey?: string,
-  gorillaPoolArcApiKey?: string,
-  bitailsApiKey?: string,
-  deploymentId?: string,
-  chaintracks?: ChaintracksClientApi,
-  /**
-   * Optional Arcade endpoint. When provided (or when a default exists for the chain via
-   * `arcadeDefaultUrl`), Arcade is registered as the primary broadcaster ahead of ARC.
-   * Pass an empty string to explicitly disable the per-chain default.
-   */
-  arcadeUrl?: string,
-  /** Server-level API key (Bearer) for the Arcade endpoint, if it requires auth. */
-  arcadeApiKey?: string,
-  /**
-   * Stable SSE callback token. Must match the Monitor's `callbackToken` so Arcade routes
-   * each broadcast transaction's status events to this wallet's `/events` subscription.
-   */
-  arcadeCallbackToken?: string
+  ...[
+    chain,
+    arcCallbackUrl,
+    arcCallbackToken,
+    taalArcApiKey,
+    gorillaPoolArcApiKey,
+    bitailsApiKey,
+    deploymentId,
+    chaintracks,
+    arcadeUrl,
+    arcadeApiKey,
+    arcadeCallbackToken
+  ]: [
+    chain: Chain,
+    arcCallbackUrl?: string,
+    arcCallbackToken?: string,
+    taalArcApiKey?: string,
+    gorillaPoolArcApiKey?: string,
+    bitailsApiKey?: string,
+    deploymentId?: string,
+    chaintracks?: ChaintracksClientApi,
+    /**
+     * Optional Arcade endpoint. When provided (or when a default exists for the chain via
+     * `arcadeDefaultUrl`), Arcade is registered as the primary broadcaster ahead of ARC.
+     * Pass an empty string to explicitly disable the per-chain default.
+     */
+    arcadeUrl?: string,
+    /** Server-level API key (Bearer) for the Arcade endpoint, if it requires auth. */
+    arcadeApiKey?: string,
+    /**
+     * Stable SSE callback token. Must match the Monitor's `callbackToken` so Arcade routes
+     * each broadcast transaction's status events to this wallet's `/events` subscription.
+     */
+    arcadeCallbackToken?: string
+  ]
 ): WalletServicesOptions {
   if (chain === 'mock') {
     throw new Error('createDefaultWalletServicesOptions does not support \'mock\' chain. Use MockServices directly.')

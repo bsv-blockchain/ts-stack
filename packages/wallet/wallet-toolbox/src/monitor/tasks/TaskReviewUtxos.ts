@@ -12,7 +12,9 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 export class TaskReviewUtxos extends WalletMonitorTask {
   static readonly taskName = 'ReviewUtxos'
 
-  static checkNow = false
+  private static checkNowRequested = false
+  static get checkNow (): boolean { return this.checkNowRequested }
+  static set checkNow (value: boolean) { this.checkNowRequested = value }
 
   constructor (
     monitor: Monitor,

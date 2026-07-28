@@ -220,14 +220,25 @@ export class GASP implements GASPRemote {
    * @param sequential Whether to run tasks sequentially (avoid Promise.all) or in parallel
    */
   constructor(
-    storage: GASPStorage,
-    remote: GASPRemote,
-    lastInteraction = 0,
-    logPrefix = '[GASP] ',
-    log = false,
-    unidirectional = false,
-    logLevel: LogLevel = LogLevel.INFO,
-    sequential = false
+    ...[
+      storage,
+      remote,
+      lastInteraction = 0,
+      logPrefix = '[GASP] ',
+      log = false,
+      unidirectional = false,
+      logLevel = LogLevel.INFO,
+      sequential = false
+    ]: [
+      storage: GASPStorage,
+      remote: GASPRemote,
+      lastInteraction?: number,
+      logPrefix?: string,
+      log?: boolean,
+      unidirectional?: boolean,
+      logLevel?: LogLevel,
+      sequential?: boolean
+    ]
   ) {
     this.storage = storage
     this.remote = remote

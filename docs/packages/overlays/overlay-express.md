@@ -4,7 +4,7 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.4.6'
+version: '2.4.7'
 last_updated: '2026-07-28'
 last_verified: '2026-07-28'
 review_cadence_days: 30

@@ -3,7 +3,7 @@ import TransactionInput from '../transaction/TransactionInput.js'
 import LockingScript from '../script/LockingScript.js'
 import UnlockingScript from '../script/UnlockingScript.js'
 
-interface jsonUtxo {
+interface JsonUtxo {
   txid: string
   vout: number
   satoshis: number
@@ -32,12 +32,12 @@ interface jsonUtxo {
  *
  * tx.addInput(i)
  *
- * @param utxo: jsonUtxo
+ * @param utxo: JsonUtxo
  * @param unlockingScriptTemplate: { sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>, estimateLength: (tx: Transaction, inputIndex: number) => Promise<number> }
  * @returns
  */
 export default function fromUtxo(
-  utxo: jsonUtxo,
+  utxo: JsonUtxo,
   unlockingScriptTemplate: {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
     estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>

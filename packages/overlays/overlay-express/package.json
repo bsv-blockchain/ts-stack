@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.4.6",
+  "version": "2.4.7",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

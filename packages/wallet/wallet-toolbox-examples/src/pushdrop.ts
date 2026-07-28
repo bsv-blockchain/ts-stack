@@ -108,14 +108,16 @@ export async function mintAndRedeemPushDropToken() {
  * @publicbody
  */
 export async function mintPushDropToken(
-  setup: SetupWallet,
-  satoshis: number,
-  args: PushDropArgs,
-  options?: CreateActionOptions,
-  description?: string,
-  labels?: string[],
-  outputDescription?: string,
-  tags?: string[]
+  ...[setup, satoshis, args, options, description, labels, outputDescription, tags]: [
+    setup: SetupWallet,
+    satoshis: number,
+    args: PushDropArgs,
+    options?: CreateActionOptions,
+    description?: string,
+    labels?: string[],
+    outputDescription?: string,
+    tags?: string[]
+  ]
 ): Promise<PushDropToken> {
   const t = new PushDrop(setup.wallet)
 

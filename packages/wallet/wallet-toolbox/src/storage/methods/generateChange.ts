@@ -467,7 +467,22 @@ export function validateGenerateChangeSdkResult(
 
 function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknown) {
   let s = JSON.stringify(params)
-  const euStr = eu != null ? ` error: ${String(eu)}` : ''
+  let euStr = ''
+  if (eu instanceof Error) {
+    euStr = ` error: ${eu.stack ?? eu.message}`
+  } else if (eu != null) {
+    let detail: string
+    if (typeof eu === 'object') {
+      try {
+        detail = JSON.stringify(eu)
+      } catch {
+        detail = Object.prototype.toString.call(eu)
+      }
+    } else {
+      detail = String(eu)
+    }
+    euStr = ` error: ${detail}`
+  }
   console.log(`generateChangeSdk params length ${s.length}${euStr}`)
   let i = -1
   const maxlen = 99900

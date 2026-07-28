@@ -17,7 +17,7 @@ function toBase64(bytes: Uint8Array): string {
     let binary = ''
     const chunkSize = 0x8000
     for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)))
+      binary += String.fromCodePoint(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)))
     }
     return globalThis.btoa(binary)
   }
@@ -84,7 +84,7 @@ function fromBase64(base64: string): Uint8Array {
     const binary = globalThis.atob(base64)
     // Uint8Array.from performs the conversion in the native collection
     // primitive and avoids an attacker-controlled JavaScript loop bound.
-    return Uint8Array.from(binary, character => character.charCodeAt(0))
+    return Uint8Array.from(binary, character => character.codePointAt(0)!)
   }
   return decodeBase64WithoutPlatformSupport(base64, padding)
 }
@@ -209,10 +209,20 @@ export function decodeBinaryJsonValue(value: unknown): unknown {
   return decoded
 }
 
+const JSON_RPC_REPLACERS = new Map<boolean, typeof binaryJsonReplacer | typeof legacyBinaryJsonReplacer>([
+  [true, binaryJsonReplacer],
+  [false, legacyBinaryJsonReplacer]
+])
+
 export function stringifyJsonRpc(value: unknown, binary: boolean): string {
-  return JSON.stringify(value, binary ? binaryJsonReplacer : legacyBinaryJsonReplacer)
+  return JSON.stringify(value, JSON_RPC_REPLACERS.get(binary))
 }
 
+const JSON_RPC_REVIVERS = new Map<boolean, typeof binaryJsonReviver | undefined>([
+  [true, binaryJsonReviver],
+  [false, undefined]
+])
+
 export function parseJsonRpc(text: string, binary: boolean = false): any {
-  return binary ? JSON.parse(text, binaryJsonReviver) : JSON.parse(text)
+  return JSON.parse(text, JSON_RPC_REVIVERS.get(binary))
 }

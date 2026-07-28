@@ -178,7 +178,7 @@ async function tryDirectResolver(
 }
 
 /** Find the latest chain-state custom-instructions entry for a given DID. */
-function findLatestChainStateForDID(outputs: any[], didString: string): any | null {
+function findLatestChainStateForDID(outputs: any[], didString: string): any {
   let latestCI: any = null
   for (const output of outputs) {
     if ((output as any).customInstructions == null) continue

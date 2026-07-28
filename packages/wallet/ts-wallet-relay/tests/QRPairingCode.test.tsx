@@ -33,7 +33,7 @@ describe('QRPairingCode', () => {
     expect(img).toHaveClass('qr-image')
   })
 
-  it('spreads extra props onto the wrapper div (className, style, aria-label)', () => {
+  it('spreads extra props onto the wrapper button (className, style, aria-label)', () => {
     render(
       <QRPairingCode
         qrDataUrl={MOCK_DATA_URL}
@@ -72,41 +72,14 @@ describe('QRPairingCode', () => {
     expect(onPress).toHaveBeenCalledWith(MOCK_PAIRING_URI)
   })
 
-  it('calls onPress on Enter keydown', () => {
-    const onPress = jest.fn()
-    render(
-      <QRPairingCode
-        qrDataUrl={MOCK_DATA_URL}
-        pairingUri={MOCK_PAIRING_URI}
-        onPress={onPress}
-        data-testid="qr"
-      />
-    )
-    fireEvent.keyDown(screen.getByTestId('qr'), { key: 'Enter' })
-    expect(onPress).toHaveBeenCalledWith(MOCK_PAIRING_URI)
-  })
-
-  it('calls onPress on Space keydown', () => {
-    const onPress = jest.fn()
-    render(
-      <QRPairingCode
-        qrDataUrl={MOCK_DATA_URL}
-        pairingUri={MOCK_PAIRING_URI}
-        onPress={onPress}
-        data-testid="qr"
-      />
-    )
-    fireEvent.keyDown(screen.getByTestId('qr'), { key: ' ' })
-    expect(onPress).toHaveBeenCalledWith(MOCK_PAIRING_URI)
-  })
-
-  it('has role="button" and tabIndex=0 for accessibility', () => {
+  it('uses native button semantics for keyboard and assistive-technology support', () => {
     render(
       <QRPairingCode qrDataUrl={MOCK_DATA_URL} pairingUri={MOCK_PAIRING_URI} data-testid="qr" />
     )
     const wrapper = screen.getByTestId('qr')
-    expect(wrapper).toHaveAttribute('role', 'button')
-    expect(wrapper).toHaveAttribute('tabindex', '0')
+    expect(wrapper.tagName).toBe('BUTTON')
+    expect(wrapper).toHaveAttribute('type', 'button')
+    expect(wrapper).toBeEnabled()
   })
 })
 

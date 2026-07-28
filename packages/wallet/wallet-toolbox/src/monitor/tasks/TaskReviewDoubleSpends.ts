@@ -20,7 +20,9 @@ interface ReviewDoubleSpendsCheckpoint {
 export class TaskReviewDoubleSpends extends WalletMonitorTask {
   static readonly taskName = 'ReviewDoubleSpends'
 
-  static checkNow = false
+  private static checkNowRequested = false
+  static get checkNow (): boolean { return this.checkNowRequested }
+  static set checkNow (value: boolean) { this.checkNowRequested = value }
 
   triggerNextMsecs: number
 

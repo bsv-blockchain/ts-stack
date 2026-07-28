@@ -13,7 +13,7 @@ import { createWallet, type BrowserWallet } from '@bsv/simple/browser'
 ## Type Definition
 
 ```typescript
-type BrowserWallet = _BrowserWallet
+type BrowserWallet = BrowserWalletCore
   & ReturnType<typeof createTokenMethods>
   & ReturnType<typeof createInscriptionMethods>
   & ReturnType<typeof createMessageBoxMethods>
@@ -38,7 +38,7 @@ Factory function that creates a fully-composed `BrowserWallet`.
 **What happens:**
 1. Creates a `WalletClient` (prompts user to connect via MetaNet Client or browser extension)
 2. Retrieves the user's identity key
-3. Instantiates `_BrowserWallet` (extends `WalletCore`)
+3. Instantiates `BrowserWalletCore` (extends `WalletCore`)
 4. Mixes in all module methods: tokens, inscriptions, messagebox, certification, overlay, DID, credentials
 
 **Example:**

@@ -79,7 +79,8 @@ Pull requests and releases enforce, as applicable:
 - governed property tests and mutation targets for implementation trust
   boundaries, with replayable seeds and scheduled long campaigns;
 - CodeQL security-extended analysis, secret scanning, OpenSSF Scorecard, and
-  Sonar semantic review with an exact-head, zero-unresolved-findings merge gate;
+  Sonar semantic review with an exact-head, zero-new-findings merge gate that
+  cannot be bypassed by accepting or marking a new issue false-positive;
 - runtime input validation, request/body/rate bounds, replay protection, and
   synchronized service edge policies;
 - digest-pinned Linux/amd64 images, Trivy gates, SPDX SBOMs, SLSA provenance,

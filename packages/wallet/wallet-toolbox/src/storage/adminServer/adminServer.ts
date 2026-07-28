@@ -57,8 +57,21 @@ interface ReqRow {
   inputBeefHex?: string
 }
 
+function formatAdminValue (value: unknown): string {
+  if (value == null) return ''
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return Object.prototype.toString.call(value)
+    }
+  }
+  return String(value)
+}
+
 function asNumber (value: unknown, fallback: number): number {
-  const parsed = Number.parseInt(String(value ?? ''), 10)
+  const parsed = Number.parseInt(formatAdminValue(value), 10)
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
@@ -151,12 +164,12 @@ function prettyJson (value?: string): string | undefined {
 }
 
 function alignLeft (value: unknown, width: number): string {
-  const text = String(value)
+  const text = formatAdminValue(value)
   return text.length > width ? `${text.slice(0, width - 1)}…` : text.padEnd(width)
 }
 
 function alignRight (value: unknown, width: number): string {
-  const text = String(value)
+  const text = formatAdminValue(value)
   return text.length > width ? `…${text.slice(-width + 1)}` : text.padStart(width)
 }
 
@@ -164,7 +177,7 @@ function toAdminStatsLog (stats: AdminStatsLike): string {
   const row = (label: string, day: unknown, week: unknown, month: unknown, total: unknown) =>
     `  ${alignLeft(label, 13)} ${alignRight(day ?? '', 18)} ${alignRight(week ?? '', 18)} ${alignRight(month ?? '', 18)} ${alignRight(total ?? '', 18)}\n`
 
-  let log = `StorageAdminStats: ${String(stats.when ?? '')} ${String(stats.requestedBy ?? '')}\n`
+  let log = `StorageAdminStats: ${formatAdminValue(stats.when)} ${formatAdminValue(stats.requestedBy)}\n`
   log += `  ${alignLeft('', 13)} ${alignRight('Day', 18)} ${alignRight('Week', 18)} ${alignRight('Month', 18)} ${alignRight('Total', 18)}\n`
   log += row('users', stats.usersDay, stats.usersWeek, stats.usersMonth, stats.usersTotal)
   log += row(

@@ -20,6 +20,8 @@ import * as sdk from '../sdk/index'
 import { validateSecondsSinceEpoch, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { getSyncChunk } from './methods/getSyncChunk'
 
+type StorageDate = Date | string
+
 /**
  * The `StorageReader` abstract class is the base of the concrete wallet storage provider classes.
  *
@@ -111,9 +113,9 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * @param date
    * @returns
    */
-  validateEntityDate (date: Date | string | number): Date | string {
+  validateEntityDate (date: Date | string | number): StorageDate {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
-    let r: Date | string = this.validateDate(date)
+    let r: StorageDate = this.validateDate(date)
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':
@@ -136,9 +138,9 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   validateOptionalEntityDate (
     date: Date | string | number | null | undefined,
     useNowAsDefault?: boolean
-  ): Date | string | undefined {
+  ): StorageDate | undefined {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
-    let r: Date | string | undefined = this.validateOptionalDate(date)
+    let r: StorageDate | undefined = this.validateOptionalDate(date)
     if ((r == null) && (useNowAsDefault === true)) r = new Date()
     switch (this.dbtype) {
       case 'IndexedDB':

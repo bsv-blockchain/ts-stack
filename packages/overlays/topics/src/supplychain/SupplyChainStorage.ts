@@ -10,11 +10,9 @@ export class SupplyChainStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
-        await this.records.createIndex({ 'offChainValues.chainId': 1 }, { name: 'offChainValuesIndex' })
-      })()
-    }
+    this.indexInit ??= (async () => {
+      await this.records.createIndex({ 'offChainValues.chainId': 1 }, { name: 'offChainValuesIndex' })
+    })()
     return await this.indexInit
   }
 

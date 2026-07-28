@@ -37,7 +37,7 @@ class Rand {
     }
 
     // Try self.crypto (Web Workers and Service Workers)
-    if (typeof globalThis.self !== 'undefined' && typeof globalThis.self.crypto?.getRandomValues === 'function') {
+    if (globalThis.self !== undefined && typeof globalThis.self.crypto?.getRandomValues === 'function') {
       this._rand = (n) => {
         return this.getRandomValues(globalThis.self, n)
       }
@@ -45,7 +45,7 @@ class Rand {
     }
 
     // Try window.crypto (browsers)
-    if (typeof globalThis.window !== 'undefined' && typeof (globalThis.window as any).crypto?.getRandomValues === 'function') {
+    if (globalThis.window !== undefined && typeof (globalThis.window as any).crypto?.getRandomValues === 'function') {
       this._rand = (n) => {
         return this.getRandomValues(globalThis.window, n)
       }

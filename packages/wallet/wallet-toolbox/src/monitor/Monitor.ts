@@ -140,9 +140,7 @@ export class Monitor {
    * and you need subscriptions to be active before the first task loop runs.
    */
   get ready (): Promise<void> {
-    if (this._readyInit === undefined) {
-      this._readyInit = this._init()
-    }
+    this._readyInit ??= this._init()
     return this._readyInit
   }
 

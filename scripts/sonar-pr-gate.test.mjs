@@ -140,11 +140,16 @@ test('the gate waits for the exact PR head before evaluating findings', async ()
   assert.match(logs[0], /last observed a{40}/)
 })
 
-test('a passing Sonar quality gate cannot hide new issues', async () => {
-  const { fetchImpl } = sonarFetch({ quality: 'OK', issues: 2 })
+test('a passing Sonar quality gate cannot hide a new issue finding', async () => {
+  const { fetchImpl, calls } = sonarFetch({ quality: 'OK', issues: 2 })
   await assert.rejects(
     enforceSonarPullRequestGate(options(), { fetchImpl, log: () => {} }),
-    /2 open or confirmed issue\(s\), expected 0/
+    /2 new issue finding\(s\), expected 0/
+  )
+  const issueRequest = calls.find(url => url.pathname === '/api/issues/search')
+  assert.equal(
+    issueRequest.searchParams.get('issueStatuses'),
+    'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
   )
 })
 
@@ -166,7 +171,10 @@ test('the gate requires both the quality policy and zero findings', async () => 
 
 test('CI makes the zero-findings job part of the existing merge gate', () => {
   const workflow = readFileSync(join(REPOSITORY_ROOT, '.github/workflows/ci.yml'), 'utf8')
-  assert.match(workflow, /^  sonar-zero-findings:\n    name: SonarCloud zero findings$/m)
+  assert.match(
+    workflow,
+    /^  sonar-zero-findings:\n    name: Quality gate — zero new Sonar findings$/m
+  )
   assert.match(workflow, /^      - sonar-zero-findings$/m)
   assert.match(workflow, /SONAR_RESULT: \$\{\{ needs\.sonar-zero-findings\.result \}\}/)
 })

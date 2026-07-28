@@ -11,6 +11,28 @@ import { HeightRange } from '../util/HeightRange'
 export type ErrorHandler = (code: number, message: string) => boolean
 export type EnqueueHandler = (header: BlockHeader) => void
 
+function parseFileLink (
+  file: string
+): { range: { fromHeight: number, toHeight: number } | 'latest', sourceUrl: string, fileName: string } | undefined {
+  const url = new URL(file)
+  const parts = url.pathname.split('/')
+  const fileName = parts.pop()
+  if (!fileName) return undefined
+  const sourceUrl = `${url.protocol}//${url.hostname}${parts.join('/')}`
+  const bits = fileName.split('_')
+  if (bits.length === 1 && bits[0] === 'latest') {
+    return { range: 'latest', sourceUrl, fileName }
+  }
+  if (bits.length === 3) {
+    const fromHeight = Number.parseInt(bits[0], 10)
+    const toHeight = Number.parseInt(bits[1], 10)
+    if (Number.isInteger(fromHeight) && Number.isInteger(toHeight)) {
+      return { range: { fromHeight, toHeight }, sourceUrl, fileName }
+    }
+  }
+  return undefined
+}
+
 export interface WhatsOnChainServicesOptions {
   /**
    * Which chain is being tracked: main, test, or stn.
@@ -141,28 +163,6 @@ export class WhatsOnChainServices {
       }
     }
     return r
-
-    function parseFileLink (
-      file: string
-    ): { range: { fromHeight: number, toHeight: number } | 'latest', sourceUrl: string, fileName: string } | undefined {
-      const url = new URL(file)
-      const parts = url.pathname.split('/')
-      const fileName = parts.pop()
-      if (!fileName) return undefined // no file name, invalid link
-      const sourceUrl = `${url.protocol}//${url.hostname}${parts.join('/')}`
-      const bits = fileName.split('_')
-      if (bits.length === 1 && bits[0] === 'latest') {
-        return { range: 'latest', sourceUrl, fileName }
-      }
-      if (bits.length === 3) {
-        const fromHeight = Number.parseInt(bits[0], 10)
-        const toHeight = Number.parseInt(bits[1], 10)
-        if (Number.isInteger(fromHeight) && Number.isInteger(toHeight)) {
-          return { range: { fromHeight, toHeight }, sourceUrl, fileName }
-        }
-      }
-      return undefined
-    }
   }
 }
 

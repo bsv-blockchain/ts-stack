@@ -179,6 +179,13 @@ Package-level docs start at [`docs/packages/index.md`](docs/packages/index.md). 
 
 ## Quality Gates
 
+For this repository, **quality gate passed** means that every required check
+has passed on the current pull-request head, including the repository-owned
+exact-head Sonar check with zero new issue findings and zero unreviewed
+security hotspots. SonarCloud's aggregate `Quality Gate passed` verdict alone
+does not authorize a merge; accepted or false-positive reclassification of a
+new issue does not satisfy the repository gate.
+
 The main CI workflow performs one frozen install and full package build, then
 runs non-coverage tests and the SDK, DID, wallet-toolbox, VeriFast, and other
 affected coverage suites in parallel. Wallet-toolbox coverage is split into

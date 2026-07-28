@@ -954,13 +954,15 @@ export default class WalletWireTransceiver implements WalletInterface {
     return { valid: true }
   }
 
+  private static readonly OPTIONAL_BOOLEAN_WIRE_VALUES = new Map<boolean | undefined, number>([
+    [true, 1],
+    [false, 0],
+    [undefined, -1]
+  ])
+
   /** Writes an optional boolean as Int8: 1/0 if present, -1 if absent. */
   private writeOptionalBool (writer: Utils.WriterUint8Array, val: boolean | undefined): void {
-    if (typeof val === 'boolean') {
-      writer.writeInt8(val ? 1 : 0)
-    } else {
-      writer.writeInt8(-1)
-    }
+    writer.writeInt8(WalletWireTransceiver.OPTIONAL_BOOLEAN_WIRE_VALUES.get(val)!)
   }
 
   /** Writes an optional number as VarInt: the value if present, -1 if absent. */

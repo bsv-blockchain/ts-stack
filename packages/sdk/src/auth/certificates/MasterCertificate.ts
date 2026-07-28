@@ -37,14 +37,25 @@ export class MasterCertificate extends Certificate {
   masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
 
   constructor(
-    type: Base64String,
-    serialNumber: Base64String,
-    subject: PubKeyHex,
-    certifier: PubKeyHex,
-    revocationOutpoint: OutpointString,
-    fields: Record<CertificateFieldNameUnder50Bytes, Base64String>,
-    masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>,
-    signature?: HexString
+    ...[
+      type,
+      serialNumber,
+      subject,
+      certifier,
+      revocationOutpoint,
+      fields,
+      masterKeyring,
+      signature
+    ]: [
+      type: Base64String,
+      serialNumber: Base64String,
+      subject: PubKeyHex,
+      certifier: PubKeyHex,
+      revocationOutpoint: OutpointString,
+      fields: Record<CertificateFieldNameUnder50Bytes, Base64String>,
+      masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>,
+      signature?: HexString
+    ]
   ) {
     super(
       type,
@@ -146,15 +157,27 @@ export class MasterCertificate extends Certificate {
    *   - The decrypted master field key fails to decrypt the corresponding field (indicating an invalid key).
    */
   static async createKeyringForVerifier(
-    subjectWallet: ProtoWallet,
-    certifier: WalletCounterparty,
-    verifier: WalletCounterparty,
-    fields: Record<CertificateFieldNameUnder50Bytes, Base64String>,
-    fieldsToReveal: string[],
-    masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>,
-    serialNumber: Base64String,
-    privileged?: boolean,
-    privilegedReason?: string
+    ...[
+      subjectWallet,
+      certifier,
+      verifier,
+      fields,
+      fieldsToReveal,
+      masterKeyring,
+      serialNumber,
+      privileged,
+      privilegedReason
+    ]: [
+      subjectWallet: ProtoWallet,
+      certifier: WalletCounterparty,
+      verifier: WalletCounterparty,
+      fields: Record<CertificateFieldNameUnder50Bytes, Base64String>,
+      fieldsToReveal: string[],
+      masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>,
+      serialNumber: Base64String,
+      privileged?: boolean,
+      privilegedReason?: string
+    ]
   ): Promise<Record<CertificateFieldNameUnder50Bytes, string>> {
     if (!Array.isArray(fieldsToReveal)) {
       throw new TypeError('fieldsToReveal must be an array of strings')

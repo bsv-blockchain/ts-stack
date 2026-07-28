@@ -58,7 +58,9 @@ export class TaskCheckNoSends extends WalletMonitorTask {
    * An external service such as the chaintracks new block header
    * listener can set this true to cause
    */
-  static checkNow = false
+  private static checkNowRequested = false
+  static get checkNow (): boolean { return this.checkNowRequested }
+  static set checkNow (value: boolean) { this.checkNowRequested = value }
 
   /**
    * Aging-schedule constants for the `checkNow` path. Rows below `tier0FreshSkipMsecs`

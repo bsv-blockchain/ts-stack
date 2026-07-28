@@ -439,7 +439,7 @@ export class BulkFileDataManager {
   private async validateBfdData (bfd: BulkFileData, expectedFileHash: string): Promise<void> {
     await this.ensureData(bfd)
 
-    if ((bfd.data == null) || bfd.data.length !== bfd.count * 80) {
+    if (bfd.data?.length !== bfd.count * 80) {
       throw new WERR_INVALID_PARAMETER(
         'file.data',
         `bulk file ${bfd.fileName} data length ${bfd.data?.length} does not match expected count ${bfd.count}`
@@ -590,7 +590,7 @@ export class BulkFileDataManager {
     } else {
       // Update targets the second-to-last file — must be CDN replacing CDN, last must be incremental.
       const lbf2 = this.getLastBfd(2)
-      if ((lbf2 == null) || hbf.firstHeight !== lbf2.firstHeight) throw new WERR_INVALID_PARAMETER('file', 'an update to last or second to last file')
+      if (lbf2?.firstHeight !== hbf.firstHeight) throw new WERR_INVALID_PARAMETER('file', 'an update to last or second to last file')
       if (!isBdfCdn(update) || !isBdfCdn(lbf2) || update.count <= lbf2.count) throw new WERR_INVALID_PARAMETER('file', 'a CDN file update with more headers than the current CDN file')
       if (!isBdfIncremental(lbf)) throw new WERR_INVALID_PARAMETER('file', 'a CDN file update followed by an incremental file')
       if (!update.fileId) update.fileId = lbf2.fileId

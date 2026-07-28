@@ -220,8 +220,7 @@ export default class HD {
 
     const e = path.split('/')
 
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    let bip32: HD = this
+    let bip32: HD | undefined
     for (const [i, c] of e.entries()) {
       if (i === 0) { // Since `i` is now a number, compare it to 0
         if (c !== 'm') {
@@ -247,10 +246,10 @@ export default class HD {
         childIndex += 0x80000000
       }
 
-      bip32 = bip32.deriveChild(childIndex)
+      bip32 = (bip32 ?? this).deriveChild(childIndex)
     }
 
-    return bip32
+    return bip32 ?? this
   }
 
   /**

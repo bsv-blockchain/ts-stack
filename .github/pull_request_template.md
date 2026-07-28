@@ -33,7 +33,9 @@ through the release workflow after approval):
 - [ ] Changelog, runtime relevance, peer compatibility, transitive graph, and
       audit results were reviewed
 - [ ] CodeQL/negative tests cover any changed trust boundary
-- [ ] SonarCloud reports zero open/confirmed PR issues and zero unreviewed hotspots
+- [ ] The exact-head repository quality gate reports zero new Sonar findings
+      (including accepted or false-positive issue states) and zero unreviewed hotspots;
+      Sonar's aggregate `Quality Gate passed` verdict alone is not merge evidence
 - [ ] No new override, advisory dismissal, quality suppression, or skipped test
 - [ ] Any temporary exception is registered with owner, evidence, review date,
       and removal condition

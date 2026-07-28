@@ -14,7 +14,7 @@ export async function updateChaintracksFiatExchangeRates (
   const data = await response.json()
   const r = { status: response.status, data }
 
-  if (r.status !== 200 || !r.data || r.data.status != 'success') {
+  if (r.status !== 200 || r.data?.status !== 'success') {
     throw new WERR_BAD_REQUEST(`${url} returned status ${r.status}`)
   }
 

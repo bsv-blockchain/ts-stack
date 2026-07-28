@@ -34,10 +34,10 @@ import { createDIDMethods } from '../modules/did'
 import { createCredentialMethods } from '../modules/credentials'
 
 // ============================================================================
-// _ServerWallet extends WalletCore with wallet-toolbox
+// ServerWalletCore extends WalletCore with wallet-toolbox
 // ============================================================================
 
-class _ServerWallet extends WalletCore {
+class ServerWalletCore extends WalletCore {
   private readonly client: ToolboxWallet
 
   constructor(client: ToolboxWallet, identityKey: string, defaults?: Partial<WalletDefaults>) {
@@ -84,7 +84,7 @@ class _ServerWallet extends WalletCore {
 // Composed ServerWallet type
 // ============================================================================
 
-export type ServerWallet = _ServerWallet &
+export type ServerWallet = ServerWalletCore &
   ReturnType<typeof createTokenMethods> &
   ReturnType<typeof createInscriptionMethods> &
   ReturnType<typeof createMessageBoxMethods> &
@@ -114,7 +114,7 @@ export namespace ServerWallet {
     await storageClient.makeAvailable()
     await storageManager.addWalletStorageProvider(storageClient)
 
-    const wallet = new _ServerWallet(toolboxWallet, identityKey, {
+    const wallet = new ServerWalletCore(toolboxWallet, identityKey, {
       network: config.network ?? 'main'
     })
 

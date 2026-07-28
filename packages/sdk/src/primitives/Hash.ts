@@ -40,7 +40,7 @@ const assert = (expression: unknown, message: string = 'Hash assertion failed'):
  * }
  */
 abstract class BaseHash {
-  pending: number[] | null
+  pending: number[] | null = null
   pendingTotal: number
   blockSize: number
   outSize: number
@@ -51,7 +51,6 @@ abstract class BaseHash {
   hmacStrength: number
 
   constructor(blockSize: number, outSize: number, hmacStrength: number, padLength: number) {
-    this.pending = null
     this.pendingTotal = 0
     this.blockSize = blockSize
     this.outSize = outSize
@@ -204,16 +203,6 @@ abstract class BaseHash {
   }
 }
 
-function isSurrogatePair(msg: string, i: number): boolean {
-  if ((msg.charCodeAt(i) & 0xfc00) !== 0xd800) {
-    return false
-  }
-  if (i < 0 || i + 1 >= msg.length) {
-    return false
-  }
-  return (msg.charCodeAt(i + 1) & 0xfc00) === 0xdc00
-}
-
 /**
  * Encode a single UTF-16 code unit (and possibly its surrogate partner)
  * into UTF-8 bytes, appending them to `out`.
@@ -227,7 +216,8 @@ function isSurrogatePair(msg: string, i: number): boolean {
  * https://github.com/google/closure-library/blob/master/LICENSE
  */
 function appendUtf8CodeUnit(msg: string, i: number, out: number[]): number {
-  let c = msg.charCodeAt(i)
+  const c = msg.codePointAt(i)
+  if (c === undefined) return i
   if (c < 128) {
     out.push(c)
     return i
@@ -236,8 +226,7 @@ function appendUtf8CodeUnit(msg: string, i: number, out: number[]): number {
     out.push((c >> 6) | 192, (c & 63) | 128)
     return i
   }
-  if (isSurrogatePair(msg, i)) {
-    c = 0x10000 + ((c & 0x03ff) << 10) + (msg.charCodeAt(i + 1) & 0x03ff)
+  if (c > 0xffff) {
     out.push((c >> 18) | 240, ((c >> 12) & 63) | 128, ((c >> 6) & 63) | 128, (c & 63) | 128)
     return i + 1
   }
@@ -1274,12 +1263,8 @@ function utf8ToBytes(str: string): Uint8Array {
   return new Uint8Array(new TextEncoder().encode(str))
 }
 type Input = string | Uint8Array
-type KDFInput = string | Uint8Array
-function kdfInputToBytes(data: KDFInput): Uint8Array {
-  if (typeof data === 'string') data = utf8ToBytes(data)
-  abytes(data)
-  return data
-}
+type KDFInput = Input
+const kdfInputToBytes = toBytes
 interface IHash {
   (data: Uint8Array): Uint8Array
   blockLen: number
@@ -1441,7 +1426,7 @@ abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
   }
 
   _cloneInto(to?: T): T {
-    to ||= new (this.constructor as any)() as T
+    to ??= new (this.constructor as any)() as T
     to.set(...this.get())
     const { blockLen, buffer, length, finished, destroyed, pos } = this
     to.destroyed = destroyed
@@ -1511,14 +1496,16 @@ class FastSHA256 extends HashMD<FastSHA256> {
   }
 
   protected set(
-    A: number,
-    B: number,
-    C: number,
-    D: number,
-    E: number,
-    F: number,
-    G: number,
-    H: number
+    ...[A, B, C, D, E, F, G, H]: [
+      A: number,
+      B: number,
+      C: number,
+      D: number,
+      E: number,
+      F: number,
+      G: number,
+      H: number
+    ]
   ): void {
     // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
     this.A = A | 0
@@ -1722,22 +1709,24 @@ class FastSHA512 extends HashMD<FastSHA512> {
   }
 
   protected set(
-    Ah: number,
-    Al: number,
-    Bh: number,
-    Bl: number,
-    Ch: number,
-    Cl: number,
-    Dh: number,
-    Dl: number,
-    Eh: number,
-    El: number,
-    Fh: number,
-    Fl: number,
-    Gh: number,
-    Gl: number,
-    Hh: number,
-    Hl: number
+    ...[Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl]: [
+      Ah: number,
+      Al: number,
+      Bh: number,
+      Bl: number,
+      Ch: number,
+      Cl: number,
+      Dh: number,
+      Dl: number,
+      Eh: number,
+      El: number,
+      Fh: number,
+      Fl: number,
+      Gh: number,
+      Gl: number,
+      Hh: number,
+      Hl: number
+    ]
   ): void {
     // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
     this.Ah = Ah | 0
@@ -1919,7 +1908,7 @@ class HMAC<T extends Hash<T>> extends Hash<HMAC<T>> {
   }
 
   _cloneInto(to?: HMAC<T>): HMAC<T> {
-    to ||= Object.create(Object.getPrototypeOf(this), {})
+    to ??= Object.create(Object.getPrototypeOf(this), {})
     const { oHash, iHash, finished, destroyed, blockLen, outputLen } = this
     to = to as this
     to.finished = finished
@@ -1951,7 +1940,7 @@ function pbkdf2Core(
   opts: { c: number; dkLen?: number }
 ): Uint8Array {
   ahash(hash)
-  const { c, dkLen } = Object.assign({ dkLen: 32 }, opts)
+  const { c, dkLen = 32 } = { ...opts }
   anumber(c)
   anumber(dkLen)
   if (c < 1) throw new Error('iterations (c) should be >= 1')

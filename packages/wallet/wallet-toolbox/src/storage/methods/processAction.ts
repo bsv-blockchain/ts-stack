@@ -210,7 +210,7 @@ export async function shareReqsWithWorld(
 
   if (r == null && txids.length < 1) return { swr, ndr }
 
-  r ||= isDelayed
+  r ??= isDelayed
     ? await getReqDetailsForDelayedShare(storage, txids)
     : await storage.getReqsAndBeefToShareWithWorld(txids, [])
 
@@ -218,7 +218,7 @@ export async function shareReqsWithWorld(
   classifyReqDetails(r.details, swr, readyToSendReqs)
 
   const readyToSendReqIds = readyToSendReqs.map(r => r.id)
-  const transactionIds = readyToSendReqs.map(r => r.notify.transactionIds || []).flat()
+  const transactionIds = readyToSendReqs.flatMap(r => r.notify.transactionIds || [])
 
   const batch = txids.length > 1 ? randomBytesBase64(16) : undefined
   if (isDelayed) {

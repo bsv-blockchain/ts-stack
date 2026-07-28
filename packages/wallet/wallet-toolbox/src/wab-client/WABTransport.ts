@@ -115,7 +115,11 @@ function normalizeServerUrl (serverUrl: string): URL {
     )
   }
 
-  parsed.pathname = parsed.pathname.replace(/\/+$/, '')
+  let pathname = parsed.pathname
+  while (pathname.endsWith('/')) {
+    pathname = pathname.slice(0, -1)
+  }
+  parsed.pathname = pathname
   return parsed
 }
 
@@ -172,7 +176,7 @@ export class WABTransport {
 
   constructor (serverUrl: string, options: WABTransportOptions = {}) {
     const parsed = normalizeServerUrl(serverUrl)
-    this.serverUrl = `${parsed.origin}${parsed.pathname}`
+    this.serverUrl = `${parsed.origin}${parsed.pathname === '/' ? '' : parsed.pathname}`
     this.serverOrigin = parsed.origin
     const fetchClient = options.fetch ?? defaultFetch
     if (typeof fetchClient !== 'function') {
@@ -278,8 +282,8 @@ export class WABTransport {
       throw error
     }
 
-    const requestPromise = new Promise<Response>((resolve) => {
-      resolve(this.fetchClient(`${this.serverUrl}${path}`, {
+    const requestPromise = Promise.resolve().then(() =>
+      this.fetchClient(`${this.serverUrl}${path}`, {
         method,
         headers: {
           Accept: 'application/json',
@@ -291,8 +295,8 @@ export class WABTransport {
         credentials: 'omit',
         redirect: 'error',
         referrerPolicy: 'no-referrer'
-      }))
-    })
+      })
+    )
     requestPromise.catch(() => { /* timeout may settle the public request first */ })
 
     const timeoutPromise = new Promise<never>((_resolve, reject) => {

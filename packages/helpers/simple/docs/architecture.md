@@ -13,8 +13,8 @@ The library uses a mixin pattern to compose wallet functionality:
 
 ```
 WalletCore (abstract base)
-  ├── _BrowserWallet (wraps WalletClient)
-  └── _ServerWallet  (wraps ToolboxWallet)
+  ├── BrowserWalletCore (wraps WalletClient)
+  └── ServerWalletCore  (wraps ToolboxWallet)
 
 Modules (mixed in via Object.assign):
   ├── tokens        → createToken, listTokenDetails, sendToken, redeemToken, ...
@@ -29,7 +29,7 @@ Modules (mixed in via Object.assign):
 When you call `createWallet()`, the library:
 
 1. Creates a `WalletClient` and connects to the browser extension
-2. Instantiates `_BrowserWallet` (which extends `WalletCore`)
+2. Instantiates `BrowserWalletCore` (which extends `WalletCore`)
 3. Calls each module factory (`createTokenMethods(wallet)`, `createInscriptionMethods(wallet)`, etc.)
 4. Merges all returned methods onto the wallet object via `Object.assign()`
 5. Returns the composed wallet with the union type `BrowserWallet`

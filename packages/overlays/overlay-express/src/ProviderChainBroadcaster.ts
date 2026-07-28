@@ -54,6 +54,7 @@ export class ProviderChainBroadcaster implements Broadcaster {
 
   async broadcast (tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> {
     const failures: Array<{ provider: string, failure: BroadcastFailure }> = []
+    let lastFailure: { provider: string, failure: BroadcastFailure } | undefined
 
     for (const provider of this.providers) {
       let response: BroadcastResponse | BroadcastFailure
@@ -75,14 +76,17 @@ export class ProviderChainBroadcaster implements Broadcaster {
         }
       }
 
-      failures.push({ provider: provider.name, failure: response })
+      lastFailure = { provider: provider.name, failure: response }
+      failures.push(lastFailure)
       if (isTerminalBroadcastFailure(response)) {
         return annotateFailure(response, provider.name, failures)
       }
     }
 
-    const last = failures[failures.length - 1]
-    return annotateFailure(last.failure, last.provider, failures)
+    if (lastFailure === undefined) {
+      throw new Error('ProviderChainBroadcaster exhausted no providers')
+    }
+    return annotateFailure(lastFailure.failure, lastFailure.provider, failures)
   }
 }
 

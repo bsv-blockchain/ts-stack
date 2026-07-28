@@ -102,7 +102,7 @@ export default class BigNumber {
    *
    * @property red
    */
-  public red: ReductionContext | null
+  public red: ReductionContext | null = null
 
   /**
    * Negative flag. Indicates whether the big number is a negative number.
@@ -243,7 +243,6 @@ export default class BigNumber {
     base: number | 'be' | 'le' | 'hex' = 10,
     endian: 'be' | 'le' = 'be'
   ) {
-    this.red = null
     number ??= 0
 
     if (typeof number === 'bigint') {
@@ -654,7 +653,7 @@ export default class BigNumber {
     let position = isLE ? 0 : res.length - 1
     const increment = isLE ? 1 : -1
 
-    for (let k = 0; k < res.length; ++k) {
+    for (const _byte of res) {
       if (tempMag === 0n && position >= 0 && position < res.length) {
         res[position] = 0
       } else if (position >= 0 && position < res.length) {

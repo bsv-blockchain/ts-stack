@@ -158,9 +158,14 @@ export class MockServices implements WalletServices {
   private async loadSourceTransaction (sourceTxid: string): Promise<BsvTransaction | undefined> {
     const sourceTxRow = await this.storage.getTransaction(sourceTxid)
     if (sourceTxRow == null) return undefined
-    const raw = sourceTxRow.rawTx instanceof Buffer
-      ? Array.from(sourceTxRow.rawTx)
-      : Array.isArray(sourceTxRow.rawTx) ? sourceTxRow.rawTx : Array.from(sourceTxRow.rawTx as Uint8Array)
+    let raw: number[]
+    if (sourceTxRow.rawTx instanceof Buffer) {
+      raw = Array.from(sourceTxRow.rawTx)
+    } else if (Array.isArray(sourceTxRow.rawTx)) {
+      raw = sourceTxRow.rawTx
+    } else {
+      raw = Array.from(sourceTxRow.rawTx as Uint8Array)
+    }
     return BsvTransaction.fromBinary(raw)
   }
 
@@ -188,7 +193,10 @@ export class MockServices implements WalletServices {
 
   private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
     for (const input of tx.inputs) {
-      const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
+      let sourceTxid = input.sourceTXID ?? ''
+      if (sourceTxid === '') {
+        sourceTxid = input.sourceTransaction?.id('hex') ?? ''
+      }
       await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
     }
   }
@@ -296,7 +304,7 @@ export class MockServices implements WalletServices {
 
   async getMerklePath (txid: string): Promise<GetMerklePathResult> {
     const tx = await this.storage.getTransaction(txid)
-    if ((tx == null) || tx.blockHeight === null) return {}
+    if (tx?.blockHeight == null) return {}
 
     const txsInBlock = await this.storage.getTransactionsInBlock(tx.blockHeight)
     const txids = txsInBlock.map(t => t.txid)
@@ -408,9 +416,8 @@ export class MockServices implements WalletServices {
     return 50
   }
 
-  async getFiatExchangeRate (currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> {
-    const baseCurrency = base ?? 'USD'
-    return mockFiatRatesByUsd[currency] / mockFiatRatesByUsd[baseCurrency]
+  async getFiatExchangeRate (currency: FiatCurrencyCode, base: FiatCurrencyCode = 'USD'): Promise<number> {
+    return mockFiatRatesByUsd[currency] / mockFiatRatesByUsd[base]
   }
 
   async getFiatExchangeRates (targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {

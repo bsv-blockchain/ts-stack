@@ -19,7 +19,7 @@ import { ServerWallet } from '@bsv/simple/server'
 ## Type Definition
 
 ```typescript
-type ServerWallet = _ServerWallet
+type ServerWallet = ServerWalletCore
   & ReturnType<typeof createTokenMethods>
   & ReturnType<typeof createInscriptionMethods>
   & ReturnType<typeof createMessageBoxMethods>

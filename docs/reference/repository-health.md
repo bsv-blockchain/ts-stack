@@ -2,7 +2,7 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.3.1'
+version: '1.3.2'
 last_updated: '2026-07-28'
 last_verified: '2026-07-28'
 review_cadence_days: 30
@@ -72,11 +72,18 @@ coverage, or required check names.
 The advanced workflow is unconditional for each configured event. Do not gate
 it on repository variables: those variables are unavailable to fork-origin
 pull-request jobs, which would silently skip analysis of external contributions.
-The repository-owned `SonarCloud zero findings` job waits for SonarCloud to
-report the exact pull-request head, then requires both the configured quality
-gate and zero open/confirmed issues and zero unreviewed security hotspots. The
-existing required `merge-gate` depends on that job. A green aggregate Sonar
-quality rating alone is therefore not sufficient merge evidence.
+The repository-owned `Quality gate — zero new Sonar findings` job waits for
+SonarCloud to report the exact pull-request head. It then requires both the
+configured Sonar quality-gate verdict and zero new issue records in `OPEN`,
+`CONFIRMED`, `ACCEPTED`, or `FALSE_POSITIVE` state, plus zero unreviewed
+security hotspots. Including accepted and false-positive states prevents
+reclassification from being used as a merge bypass. The existing required
+`merge-gate` depends on this job.
+
+In this repository, **quality gate passed** means that strict repository-owned
+check passed on the current head SHA as part of the full required CI set.
+SonarCloud's green aggregate `Quality Gate passed` verdict is an advisory input
+to that decision, never sufficient merge evidence by itself.
 
 `governance/repository-health/exceptions.json` is the only registry for temporary
 exceptions. Its schema is in `exception.schema.json`. Every entry requires an
@@ -179,7 +186,9 @@ checks:
    and one current consolidated package page per public package are current;
    and
 8. the health implementation’s unit tests pass; and
-9. the exact SonarCloud pull-request analysis has no unresolved findings.
+9. the exact SonarCloud pull-request analysis has no new issue findings or
+   unreviewed security hotspots, including findings reclassified as accepted
+   or false-positive.
 
 Affected package changes also select their matching mutation targets. The
 parallel mutation lane restores the shared workspace build, executes only the

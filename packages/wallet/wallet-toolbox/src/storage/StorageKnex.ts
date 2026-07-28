@@ -85,7 +85,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   protected override supportsActionBatchPersistence (): boolean { return true }
 
   async readSettings (): Promise<TableSettings> {
-    return this.validateEntity(verifyOne(await this.toDb(undefined)<TableSettings>('settings')))
+    return this.validateEntity(verifyOne(await this.toDb()<TableSettings>('settings')))
   }
 
   override async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
@@ -1017,7 +1017,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async findMonitorEvents (args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
     const q = this.findMonitorEventsQuery(args)
     const r = await q
-    return this.validateEntities(r, ['when'], undefined)
+    return this.validateEntities(r, ['when'])
   }
 
   async getCount<T extends object>(q: Knex.QueryBuilder<T, T[]>): Promise<number> {
@@ -1461,7 +1461,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       byTag[outputTag.tag] = outputTag
     }
     for (const tag of uniqueTags) {
-      if (byTag[tag] == null) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
+      byTag[tag] ??= await this.findOrInsertOutputTag(userId, tag, trx)
     }
     return byTag
   }

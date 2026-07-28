@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-27",
+  "lastReviewed": "2026-07-28",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -200,6 +200,73 @@
       "created": "2026-07-27",
       "reviewBy": "2026-10-25",
       "removeWhen": "Remove when the analyzer distinguishes documented public protocol aliases, or when an SDK major version can adopt a compatibility-preserving nominal representation with generated documentation and packed-consumer proof."
+    },
+    {
+      "id": "sdk-wallet-error-protocol-identifiers",
+      "category": "quality-rule",
+      "target": "typescript:S101 on protocol-defined WERR_* error classes",
+      "owner": "ts-stack-maintainers",
+      "reason": "The WERR_* identifiers are the stable BRC-100 wallet error vocabulary used in declarations, instanceof checks, serialized error names, HTTP mappings, tests, documentation, and downstream integrations. Renaming the classes would change a public compatibility contract solely to satisfy a generic class-name style rule.",
+      "evidence": [
+        "packages/sdk/src/wallet/WERR_*.ts",
+        "packages/wallet/wallet-toolbox/src/sdk/WERR_errors.ts",
+        "packages/sdk/src/wallet/__tests__/WERR.test.ts",
+        "packages/wallet/wallet-toolbox/src/sdk/WalletError.ts",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-28",
+      "reviewBy": "2026-10-26",
+      "removeWhen": "Remove when the analyzer supports a naming convention exception for protocol-defined public identifiers, or during a coordinated major-version migration that preserves serialized names, declarations, instanceof behavior, HTTP mappings, documentation, and downstream compatibility."
+    },
+    {
+      "id": "sdk-curve-singleton-constructor",
+      "category": "quality-rule",
+      "target": "typescript:S6635 and typescript:S7740 in packages/sdk/src/primitives/Curve.ts",
+      "owner": "ts-stack-maintainers",
+      "reason": "Curve construction intentionally returns and initializes the module singleton so repeated new Curve() calls across cryptographic operations share the expensive secp256k1 parameters and precomputation tables. Removing the constructor return or its assignment would change established identity and performance semantics throughout the SDK.",
+      "evidence": [
+        "packages/sdk/src/primitives/Curve.ts",
+        "packages/sdk/src/primitives/ECDSA.ts",
+        "packages/sdk/src/primitives/BasePoint.ts",
+        "packages/sdk/src/primitives/__tests__/Curve.unit.test.ts",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-28",
+      "reviewBy": "2026-10-26",
+      "removeWhen": "Remove after a benchmarked major-version design replaces new Curve() singleton semantics with an explicit factory or immutable shared constants and the complete cryptographic, transaction, browser, packed-consumer, and performance suites prove parity."
+    },
+    {
+      "id": "sdk-consensus-opcode-dispatch-switch",
+      "category": "quality-rule",
+      "target": "typescript:S1479 and typescript:S3776 in packages/sdk/src/script/Spend.ts",
+      "owner": "ts-stack-maintainers",
+      "reason": "The large switch is the auditable one-to-one dispatch table for Bitcoin Script opcodes. Artificially splitting consensus execution across threshold-sized switches or indirect dynamic dispatch would make opcode coverage and fallthrough behavior harder to review while adding risk to consensus-critical code without reducing runtime complexity.",
+      "evidence": [
+        "packages/sdk/src/script/Spend.ts",
+        "packages/sdk/src/script/__tests__/Spend.test.ts",
+        "conformance/vectors/script",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-28",
+      "reviewBy": "2026-10-26",
+      "removeWhen": "Remove when the analyzer exempts exhaustive protocol dispatch or a separately reviewed generated opcode table improves auditability and passes every script vector, differential, mutation, fuzz, transaction, browser, and packed-consumer check."
+    },
+    {
+      "id": "sdk-wallet-wire-protocol-dispatch",
+      "category": "quality-rule",
+      "target": "typescript:S3776 in packages/sdk/src/wallet/substrates/WalletWireProcessor.ts",
+      "owner": "ts-stack-maintainers",
+      "reason": "The processor is the exhaustive, auditable request decoder for the BRC-100 wallet wire protocol. Its branches correspond directly to named wire calls and their distinct argument/result codecs; splitting the dispatch solely to satisfy a generic cognitive-complexity threshold would scatter protocol coverage and make binary compatibility harder to review.",
+      "evidence": [
+        "packages/sdk/src/wallet/substrates/WalletWireProcessor.ts",
+        "packages/sdk/src/wallet/substrates/WalletWireTransceiver.ts",
+        "packages/sdk/src/wallet/substrates/__tests__/WalletWire.test.ts",
+        "conformance/vectors/wallet",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-28",
+      "reviewBy": "2026-10-26",
+      "removeWhen": "Remove when a generated or table-driven BRC-100 codec makes every request and response mapping more auditable and passes wire round-trip, cross-runtime conformance, packed-consumer, browser, mobile, fuzz, and compatibility tests."
     }
   ]
 }

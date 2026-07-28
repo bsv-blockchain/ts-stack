@@ -99,7 +99,7 @@ export async function listActions (
   const limit = vargs.limit
   const offset = vargs.offset
 
-  const k = storage.toDb(undefined)
+  const k = storage.toDb()
 
   const r: ListActionsResult = {
     totalActions: 0,

@@ -1,6 +1,4 @@
-import type { RemittanceOptionId, Termination } from '../types.js'
-
-import type { ModuleContext } from '../types.js'
+import type { ModuleContext, RemittanceOptionId, Termination } from '../types.js'
 import type { RemittanceModule } from '../RemittanceModule.js'
 import type {
   WalletInterface,
@@ -158,7 +156,10 @@ export class Brc29RemittanceModule
     this.outputDescription = cfg.outputDescription ?? 'Payment for remittance invoice'
     this.refundFeeSatoshis = cfg.refundFeeSatoshis ?? 1000
     this.minRefundSatoshis = cfg.minRefundSatoshis ?? 1000
-    if (cfg.internalizeProtocol === 'basket insertion') {
+    const legacyInternalizeProtocol = (
+      cfg as { internalizeProtocol?: 'wallet payment' | 'basket insertion' }
+    ).internalizeProtocol
+    if (legacyInternalizeProtocol === 'basket insertion') {
       throw new TypeError(
         'BRC-29 settlements cannot be internalized as basket insertions. ' +
         'Use wallet payment for spendable wallet balance, or implement a separate custom-output protocol with insertionRemittance.'
