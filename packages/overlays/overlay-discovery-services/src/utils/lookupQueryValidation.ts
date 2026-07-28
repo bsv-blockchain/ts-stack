@@ -7,7 +7,7 @@ export interface PaginationQuery {
 export function validatePaginationQuery(query: PaginationQuery): void {
   const { limit, skip, sortOrder } = query
   if (limit !== undefined && (typeof limit !== 'number' || limit < 0)) {
-    throw new Error('query.limit must be a positive number if provided')
+    throw new Error('query.limit must be a non-negative number if provided')
   }
   if (skip !== undefined && (typeof skip !== 'number' || skip < 0)) {
     throw new Error('query.skip must be a non-negative number if provided')
@@ -24,7 +24,8 @@ export function validateOptionalString(value: unknown, path: string): void {
 }
 
 export function validateOptionalStringArray(value: unknown, path: string): void {
-  if (value !== undefined && !Array.isArray(value)) {
+  if (value === undefined) return
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
     throw new Error(`${path} must be an array of strings if provided`)
   }
 }

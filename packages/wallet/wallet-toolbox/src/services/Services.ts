@@ -90,7 +90,12 @@ export class Services implements WalletServices {
     }
 
     const hasBitails = this.chain === 'main' || this.chain === 'test'
+
+    // tstn runs only Arcade + ChainTracks; it has no WhatsOnChain / block-explorer service, so
+    // WhatsOnChain is not registered as a provider on tstn. The WhatsOnChain-only lookups (raw
+    // tx, utxo status, txid status, script-hash history) therefore have no provider on tstn.
     const hasWhatsOnChain = this.chain !== 'tstn'
+
     if (hasBitails) {
       this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
     }

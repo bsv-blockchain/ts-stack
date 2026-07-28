@@ -196,10 +196,39 @@ describe('SHIP lookup service', () => {
     [{ service: 'ls_ship', query: { sortOrder: 'sideways' } }, 'query.sortOrder'],
     [{ service: 'ls_ship', query: { domain: 1 } }, 'query.domain'],
     [{ service: 'ls_ship', query: { topics: 'tm_a' } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: [1, 2] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: [null] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_a', 2] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { identityKey: 1 } }, 'query.identityKey']
   ])('rejects invalid lookup question %#', async (question, message) => {
     const { service } = makeService()
     await expect(service.lookup(question as never)).rejects.toThrow(message)
+  })
+
+  it('accepts a limit of zero and reports the bound accurately when negative', async () => {
+    const { service, storage } = makeService()
+
+    await service.lookup({ service: 'ls_ship', query: { findAll: true, limit: 0 } } as never)
+    expect(storage.findAll).toHaveBeenLastCalledWith(0, undefined, undefined)
+
+    await expect(
+      service.lookup({ service: 'ls_ship', query: { limit: -1 } } as never)
+    ).rejects.toThrow('query.limit must be a non-negative number if provided')
+  })
+
+  it('throws a plain Error for a non-object query', async () => {
+    const { service } = makeService()
+    const error = await service
+      .lookup({ service: 'ls_ship', query: 7 } as never)
+      .then(
+        () => undefined,
+        (thrown: unknown) => thrown
+      )
+
+    // Callers branching on the error class must keep seeing Error, not TypeError.
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).constructor).toBe(Error)
+    expect((error as Error).name).toBe('Error')
   })
 
   it('stores and removes SHIP records for matching callbacks', async () => {
@@ -329,6 +358,20 @@ describe('SLAP lookup service', () => {
   ])('rejects invalid lookup question %#', async (question, message) => {
     const { service } = makeService()
     await expect(service.lookup(question as never)).rejects.toThrow(message)
+  })
+
+  it('throws a plain Error for a non-object query', async () => {
+    const { service } = makeService()
+    const error = await service
+      .lookup({ service: 'ls_slap', query: 7 } as never)
+      .then(
+        () => undefined,
+        (thrown: unknown) => thrown
+      )
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).constructor).toBe(Error)
+    expect((error as Error).name).toBe('Error')
   })
 
   it('stores and removes SLAP records for matching callbacks', async () => {
