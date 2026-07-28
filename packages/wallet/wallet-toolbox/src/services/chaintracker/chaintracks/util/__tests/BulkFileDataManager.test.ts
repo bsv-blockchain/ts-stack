@@ -66,7 +66,7 @@ describe('BulkFileDataManager tests', () => {
     expect(manager.chain).toBe(chain)
     expect(manager.maxPerFile).toBe(100000)
     expect(manager.maxRetained).toBe(2)
-    expect(manager.fromKnownSourceUrl).toBe('https://cdn.projectbabbage.com/blockheaders')
+    expect(manager.fromKnownSourceUrl).toBe('https://chaintracks-cdn-us-1.bsvb.tech')
     const files = await manager.getBulkFiles()
     expect(files.length).toBeGreaterThan(7)
     const range = await manager.getHeightRange()

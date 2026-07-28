@@ -34,18 +34,21 @@ export function createDefaultWalletServicesOptions (
 
   deploymentId ||= `wallet-toolbox-${randomBytesHex(16)}`
 
-  // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
+  // ChainTracks is derived from the per-chain Arcade host (`<arcade>/chaintracks/v1`) for
+  // every public network; tstn resolves its private endpoint from the environment.
   let chaintracksUrl: string
-  if (chain === 'ttn') {
-    chaintracksUrl = 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/v1'
-  } else if (chain === 'tstn') {
+  if (chain === 'tstn') {
     chaintracksUrl = tstnChaintracksUrl()
   } else {
-    chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
+    const arcadeHost = arcadeDefaultUrl(chain)
+    if (arcadeHost == null || arcadeHost === '') {
+      throw new Error(`chain '${chain}' has no Arcade host to derive a ChainTracks URL from`)
+    }
+    chaintracksUrl = `${arcadeHost.replace(/\/+$/, '')}/chaintracks/v1`
   }
-  // The mainnet endpoint is always used since these are fiat exchange rates,
-  // independent of the chain being used.
-  const chaintracksFiatExchangeRatesUrl = 'https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates'
+  // Fiat exchange rates have no supported default endpoint. Operators that need them must
+  // supply `chaintracksFiatExchangeRatesUrl` (or an `exchangeratesapiKey`) explicitly.
+  const chaintracksFiatExchangeRatesUrl: string | undefined = undefined
 
   chaintracks ||= new ChaintracksServiceClient(chain, chaintracksUrl)
 
@@ -116,7 +119,8 @@ export function createDefaultWalletServicesOptions (
 
 /**
  * Default Arcade (bsv-blockchain/arcade) endpoint per chain.
- * Returns undefined when no public default is known for the chain (e.g. testnet not yet deployed).
+ * Returns undefined only when no default is known for the chain: `tstn` until
+ * `TSTN_ARCADE_URL` is supplied at runtime, and `mock`.
  */
 export function arcadeDefaultUrl (chain: Chain): string | undefined {
   switch (chain) {
@@ -128,8 +132,7 @@ export function arcadeDefaultUrl (chain: Chain): string | undefined {
       // Private per-deployment endpoint supplied via TSTN_ARCADE_URL (undefined when unset).
       return tstnArcadeUrl()
     case 'test':
-      // No public testnet Arcade endpoint deployed yet.
-      return undefined
+      return 'https://arcade-v2-testnet-us-1.bsvblockchain.tech'
     case 'mock':
       return undefined
   }
@@ -153,4 +156,24 @@ export function arcDefaultUrl (chain: Chain): string {
 
 export function arcGorillaPoolUrl (chain: Chain): string | undefined {
   return chain === 'main' ? 'https://arc.gorillapool.io' : undefined
+}
+
+/**
+ * Default wallet-storage (`StorageClient`) endpoint per chain.
+ * Returns undefined for chains without a public default: `tstn` is private/per-deployment,
+ * and `mock`. Callers must then supply an explicit storage URL.
+ */
+export function defaultStorageUrl (chain: Chain): string | undefined {
+  switch (chain) {
+    case 'main':
+      return 'https://store-us-1.bsvb.tech'
+    case 'test':
+      return 'https://store-testnet-us-1.bsvb.tech'
+    case 'ttn':
+      return 'https://store-ttn-us-1.bsvb.tech'
+    case 'tstn':
+      return undefined
+    case 'mock':
+      return undefined
+  }
 }

@@ -20,6 +20,7 @@ import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from '.
 import { Chain } from './sdk/types'
 import { randomBytesHex, verifyTruthy } from './utility/utilityHelpers'
 import { WERR_INVALID_OPERATION } from './sdk/WERR_errors'
+import { defaultStorageUrl } from './services/createDefaultWalletServicesOptions'
 import { WalletStorageManager } from './storage/WalletStorageManager'
 import { Services } from './services/Services'
 import { Monitor } from './monitor/Monitor'
@@ -198,7 +199,10 @@ DEV_KEYS = '{
     scriptVerifier?: SpendVerifierInterface
   }): Promise<Wallet> {
     const chain = args.chain
-    const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
+    const endpointUrl = args.storageUrl || defaultStorageUrl(chain)
+    if (endpointUrl == null) {
+      throw new WERR_INVALID_OPERATION(`chain '${chain}' has no default wallet-storage URL; provide storageUrl explicitly`)
+    }
     const rootKey = PrivateKey.fromHex(args.rootKeyHex)
     const keyDeriver = new CachedKeyDeriver(rootKey)
     const storage = new WalletStorageManager(keyDeriver.identityKey)
@@ -225,8 +229,12 @@ DEV_KEYS = '{
   static async createWalletClient(args: SetupWalletClientArgs): Promise<SetupWalletClient> {
     const wo = await Setup.createWallet(args)
 
-    const endpointUrl =
-      args.endpointUrl || `https://${args.env.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
+    const endpointUrl = args.endpointUrl || defaultStorageUrl(args.env.chain)
+    if (endpointUrl == null) {
+      throw new WERR_INVALID_OPERATION(
+        `chain '${args.env.chain}' has no default wallet-storage URL; provide endpointUrl explicitly`
+      )
+    }
 
     const client = new StorageClient(wo.wallet, endpointUrl)
     await wo.storage.addWalletStorageProvider(client)

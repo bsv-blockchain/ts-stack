@@ -15,7 +15,7 @@ export async function createKnexChaintracks (
   maxPerFile: number = 100000,
   maxRetained: number = 2,
   fetch?: ChaintracksFetchApi,
-  cdnUrl: string = 'https://cdn.projectbabbage.com/blockheaders/',
+  cdnUrl: string = 'https://chaintracks-cdn-us-1.bsvb.tech/',
   liveHeightThreshold: number = 2000,
   reorgHeightThreshold: number = 400,
   bulkMigrationChunkSize: number = 500,
