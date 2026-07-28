@@ -376,7 +376,8 @@ export function isHexString(s: string): boolean {
 /**
  * DescriptionString5to2000Bytes alias type (documented).
  */
-export type DescriptionString5to2000Bytes = string
+// Validation result vocabulary mirrors the public BRC-100 constraints.
+export type DescriptionString5to2000Bytes = string // NOSONAR
 
 export interface ValidWalletSignerArgs {
   // Optional logger instance for this request

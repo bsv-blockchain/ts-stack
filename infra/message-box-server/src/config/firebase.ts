@@ -8,7 +8,7 @@ import {
 } from 'firebase-admin/app'
 import { getMessaging, type Messaging, type Message } from 'firebase-admin/messaging'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
-import * as path from 'path'
+import * as path from 'node:path'
 import dotenv from 'dotenv'
 import { log } from '../utils/logger.js'
 

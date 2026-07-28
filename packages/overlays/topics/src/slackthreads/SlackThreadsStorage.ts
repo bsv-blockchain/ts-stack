@@ -10,11 +10,9 @@ export class SlackThreadsStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
+    this.indexInit ??= (async () => {
         await this.records.createIndex({ threadHash: 1 }, { name: 'threadHashIndex' })
-      })()
-    }
+    })()
     return await this.indexInit
   }
 

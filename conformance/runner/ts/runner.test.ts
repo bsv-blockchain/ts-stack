@@ -15,9 +15,9 @@
  */
 
 import { describe, test } from '@jest/globals'
-import { readdirSync, statSync, readFileSync } from 'fs'
-import { join, extname, basename } from 'path'
-import { fileURLToPath } from 'url'
+import { readdirSync, statSync, readFileSync } from 'node:fs'
+import { join, extname, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { registerGovernedSkip } from './governedSkip.js'
 import { routeForCategory } from './registry.js'
 

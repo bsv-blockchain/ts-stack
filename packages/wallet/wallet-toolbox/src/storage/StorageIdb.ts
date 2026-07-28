@@ -17,7 +17,7 @@ import {
   upgradeAllStoresV1,
   upgradeActionBatchStoresV2
 } from './idbHelpers'
-import { ListActionsResult, ListOutputsResult, Validation } from '@bsv/sdk'
+import { ListActionsResult, ListOutputsResult, Utils, Validation } from '@bsv/sdk'
 import {
   TableCertificate,
   TableCertificateField,
@@ -965,7 +965,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           ...u
         }
         const uid = await (store.put as (v: unknown) => Promise<IDBValidKey>)(v)
-        if (uid !== i) throw new WERR_INTERNAL(`updated id ${String(uid)} does not match original ${String(id)}`)
+        if (uid !== i) {
+          throw new WERR_INTERNAL(
+            `updated id ${Utils.toSafeString(uid)} does not match original ${id.toString()}`
+          )
+        }
         updated++
       }
     } finally {

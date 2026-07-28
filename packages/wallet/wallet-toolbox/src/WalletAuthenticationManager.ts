@@ -373,10 +373,11 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     ) {
       throw new WABAccountContinuityError('WAB returned contradictory account-continuity statuses.')
     }
-    const explicitStatus = rawAccountStatus ??
-      (typeof rawExistingUser === 'boolean'
-        ? (rawExistingUser ? 'existing-user' : 'new-user')
-        : undefined)
+    let compatibilityStatus: 'existing-user' | 'new-user' | undefined
+    if (typeof rawExistingUser === 'boolean') {
+      compatibilityStatus = rawExistingUser ? 'existing-user' : 'new-user'
+    }
+    const explicitStatus = rawAccountStatus ?? compatibilityStatus
 
     if (
       (explicitStatus === 'new-user' && !keyMatchesTemporary) ||

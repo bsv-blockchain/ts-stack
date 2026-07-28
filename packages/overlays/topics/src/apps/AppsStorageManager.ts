@@ -11,16 +11,14 @@ export class AppsStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
+    this.indexInit ??= (async () => {
         await this.records.createIndex({
           'metadata.name': 'text',
           'metadata.description': 'text',
           'metadata.tags': 'text',
           'metadata.domain': 'text'
         })
-      })()
-    }
+    })()
     return await this.indexInit
   }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from 'fs/promises'
-import path from 'path'
+import { readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 
 const THRESHOLD = 0.05
 
@@ -111,7 +111,12 @@ async function main () {
         }
       }
 
-      rows.push(`| ${label} | ${metric} | ${formatMs(prVal)} | ${formatMs(baseVal)} | ${delta == null ? '—' : `${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ms`} | ${changeBadge(change)} |`)
+      let deltaDisplay = '—'
+      if (delta != null) {
+        const sign = delta >= 0 ? '+' : ''
+        deltaDisplay = `${sign}${delta.toFixed(2)} ms`
+      }
+      rows.push(`| ${label} | ${metric} | ${formatMs(prVal)} | ${formatMs(baseVal)} | ${deltaDisplay} | ${changeBadge(change)} |`)
     }
   }
 
@@ -149,7 +154,9 @@ async function main () {
   }
 }
 
-main().catch((err) => {
+try {
+  await main()
+} catch (err) {
   console.error(err)
-  process.exit(1)
-})
+  process.exitCode = 1
+}

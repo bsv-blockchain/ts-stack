@@ -12,9 +12,9 @@
  * Default reports-dir: <repo-root>/conformance/reports
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, '..', '..', '..')
@@ -95,7 +95,7 @@ function gauge(rate, label) {
 
 /** Build the per-category table HTML for a report. */
 function categoryTable(report, title) {
-  if (!report || !report.categories || report.categories.length === 0) {
+  if (!report?.categories?.length) {
     return `<p class="missing">No category data for ${title}.</p>`
   }
   const sorted = [...report.categories].sort((a, b) => a.category.localeCompare(b.category))

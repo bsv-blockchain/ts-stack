@@ -25,8 +25,7 @@ function isNonEmptyString (value: unknown): value is string {
  * BRC-29 payments record the sender's identity key.
  */
 export function isManagedChangeOutput (output: TableOutput | undefined): output is TableOutput {
-  return output != null &&
-    output.type === managedChangeOutputFields.type &&
+  return output?.type === managedChangeOutputFields.type &&
     output.change === managedChangeOutputFields.change &&
     output.providedBy === managedChangeOutputFields.providedBy &&
     output.purpose === managedChangeOutputFields.purpose &&

@@ -11,7 +11,9 @@ import { HexString, OutpointString, PubKeyHex, Base64String, WalletInterface } f
 
 export type ThreadId = Base64String
 export type RemittanceOptionId = Base64String
-export type UnixMillis = number
+// Named protocol unit retained at the public boundary; replacing it with
+// number would discard the time-unit contract from declarations and docs.
+export type UnixMillis = number // NOSONAR
 
 /**
  * Remittance thread state machine.

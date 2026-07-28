@@ -404,9 +404,7 @@ async function resolveChainOnWoC(txid: string): Promise<DIDResolutionResult> {
 
     // Follow the chain to the next spending tx
     let nextTxid = await fetchNextTxidViaSpend(currentTxid, wocFetch)
-    if (nextTxid == null) {
-      nextTxid = await fetchNextTxidViaHistory(txData, visited, wocFetch)
-    }
+    nextTxid ??= await fetchNextTxidViaHistory(txData, visited, wocFetch)
     if (nextTxid == null) break
     currentTxid = nextTxid
   }

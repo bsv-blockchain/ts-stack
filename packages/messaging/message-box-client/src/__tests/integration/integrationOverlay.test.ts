@@ -1,7 +1,7 @@
 /* eslint-env jest */
 import { MessageBoxClient } from '../../MessageBoxClient.js'
 import { WalletClient } from '@bsv/sdk'
-import { webcrypto } from 'crypto'
+import { webcrypto } from 'node:crypto'
 
 ;(global as any).self = { crypto: webcrypto }
 

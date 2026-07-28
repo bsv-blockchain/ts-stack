@@ -74,9 +74,7 @@ export const transformVerifiableCertificatesWithTrust = (
     }
 
     // Group certificates by subject.
-    if (identityGroups[subject] == null) {
-      identityGroups[subject] = { totalTrust: 0, members: [] }
-    }
+    identityGroups[subject] ??= { totalTrust: 0, members: [] }
     identityGroups[subject].totalTrust += certifierInfo.trust
     identityGroups[subject].members.push(extendedCert)
   })

@@ -2,7 +2,7 @@
  * Upgrade-routing tests for WebSocketRelay: coexistence with other WS services
  * on the same HTTP server, noServer mode, custom path, and listener cleanup.
  */
-import http from 'http'
+import http from 'node:http'
 import { WebSocketServer, WebSocket } from 'ws'
 import { WebSocketRelay } from '../src/server/WebSocketRelay.js'
 

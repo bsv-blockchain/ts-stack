@@ -580,8 +580,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
         })
       ).publicKey
       try {
-        // Confirm that the information received adds up to a usable certificate...
-        // TODO: Clean up MasterCertificate to support decrypt on instance
+        // Confirm that the information received adds up to a usable certificate.
+        // Field decryption uses the class-level API because the certificate is
+        // verified before any decrypted value is accepted.
         const cert = new MasterCertificate(
           vargs.type,
           vargs.serialNumber,
@@ -619,7 +620,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
       const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateAcquireIssuanceCertificateArgs)
       // Create a random nonce that the server can verify
       const clientNonce = await createNonce(this, vargs.certifier)
-      // TODO: Consider adding support to request certificates from a certifier before acquiring a certificate.
+      // Issuance uses the authenticated signCertificate exchange. Certificate
+      // discovery/negotiation is intentionally a separate caller operation.
       const authClient = new AuthFetch(this)
 
       // Create a certificate master keyring

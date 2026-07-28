@@ -40,9 +40,7 @@ export class SimpleWalletManager implements WalletInterface {
    * Await `ready` before calling wallet methods after constructing with a snapshot.
    */
   get ready (): Promise<void> {
-    if (this._readyInit === undefined) {
-      this._readyInit = this._init()
-    }
+    this._readyInit ??= this._init()
     return this._readyInit
   }
 

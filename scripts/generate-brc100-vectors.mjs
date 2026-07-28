@@ -6,8 +6,8 @@
  * Run: node scripts/generate-brc100-vectors.mjs
  */
 
-import { writeFileSync, mkdirSync } from 'fs'
-import { join } from 'path'
+import { writeFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   PrivateKey,
   ProtoWallet,
@@ -292,4 +292,9 @@ async function main() {
   console.log('Update META.json and runner.test.ts next.')
 }
 
-main().catch(console.error)
+try {
+  await main()
+} catch (error) {
+  console.error(error)
+  process.exitCode = 1
+}

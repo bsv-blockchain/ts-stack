@@ -314,11 +314,15 @@ export class WABTransport {
       response = await Promise.race([requestPromise, timeoutPromise])
     } catch (error) {
       if (timer !== undefined) clearTimeout(timer)
+      const failureCode = timedOut ? 'WAB_TIMEOUT' : 'WAB_NETWORK_ERROR'
+      const failureMessage = timedOut
+        ? 'WAB request timed out.'
+        : 'WAB request failed before receiving a response.'
       const normalized = error instanceof WABClientError
         ? error
         : new WABClientError(
-          timedOut ? 'WAB_TIMEOUT' : 'WAB_NETWORK_ERROR',
-          timedOut ? 'WAB request timed out.' : 'WAB request failed before receiving a response.',
+          failureCode,
+          failureMessage,
           true,
           undefined,
           { ...requestContext, cause: error }
@@ -360,11 +364,15 @@ export class WABTransport {
         timeoutPromise
       ])
     } catch (error) {
+      const failureCode = timedOut ? 'WAB_TIMEOUT' : 'WAB_INVALID_RESPONSE'
+      const failureMessage = timedOut
+        ? 'WAB request timed out.'
+        : 'WAB response could not be read.'
       const normalized = error instanceof WABClientError
         ? error
         : new WABClientError(
-          timedOut ? 'WAB_TIMEOUT' : 'WAB_INVALID_RESPONSE',
-          timedOut ? 'WAB request timed out.' : 'WAB response could not be read.',
+          failureCode,
+          failureMessage,
           true,
           response.status,
           { ...responseContext, cause: error }

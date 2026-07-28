@@ -12,11 +12,9 @@ export class DIDStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
+    this.indexInit ??= (async () => {
         await this.records.createIndex({ searchableAttributes: 'text' })
-      })()
-    }
+    })()
     return await this.indexInit
   }
 

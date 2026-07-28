@@ -31,7 +31,7 @@ import { rateLimit } from 'express-rate-limit'
 import { setupSwagger } from './swagger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import { registerMessageBoxPreAuthRoutes, registerMessageBoxPostAuthRoutes } from './compose.js'
-import * as crypto from 'crypto'
+import * as crypto from 'node:crypto'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy.js'
 import {
   bodyParserErrorHandler,
@@ -191,12 +191,9 @@ export async function useRoutes(): Promise<void> {
     app,
     {
       wallet: _wallet,
-      calculateRequestPrice: async req => {
-        if (req.url.includes('/sendMessage')) {
-          // TODO: Configure a custom price calculation as needed.
-        }
-        return 0
-      }
+      // Message delivery is free unless an embedding operator injects a price
+      // calculator through the composable context.
+      calculateRequestPrice: () => 0
     },
     ROUTING_PREFIX
   )

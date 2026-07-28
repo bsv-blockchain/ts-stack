@@ -1,4 +1,4 @@
-import { Random, Validation, WalletLoggerInterface } from '@bsv/sdk'
+import { Random, Utils, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -467,7 +467,7 @@ export function validateGenerateChangeSdkResult(
 
 function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknown) {
   let s = JSON.stringify(params)
-  const euStr = eu != null ? ` error: ${String(eu)}` : ''
+  const euStr = eu != null ? ` error: ${Utils.toSafeString(eu)}` : ''
   console.log(`generateChangeSdk params length ${s.length}${euStr}`)
   let i = -1
   const maxlen = 99900

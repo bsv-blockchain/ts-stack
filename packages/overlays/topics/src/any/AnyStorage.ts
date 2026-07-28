@@ -11,11 +11,9 @@ export class AnyStorage {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
+    this.indexInit ??= (async () => {
         await this.records.createIndex({ txid: 1 }, { name: 'txidIndex' })
-      })()
-    }
+    })()
     return await this.indexInit
   }
 

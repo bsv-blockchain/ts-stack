@@ -1,7 +1,7 @@
 import { ListActionsArgs } from '@bsv/sdk'
 import { sdk } from '../../../src/index.client'
 import { _tu, expectToThrowWERR, TestWalletProviderNoSetup } from '../../utils/TestUtilsWalletStorage'
-import path from 'path'
+import path from 'node:path'
 import 'fake-indexeddb/auto'
 
 function makeTimeLabel(ms: number) {

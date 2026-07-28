@@ -1,4 +1,4 @@
-const crypto = require('crypto')
+const crypto = require('node:crypto')
 const { StorageUtils } = require('@bsv/sdk')
 const { Storage } = require('@google-cloud/storage')
 const axios = require('axios')

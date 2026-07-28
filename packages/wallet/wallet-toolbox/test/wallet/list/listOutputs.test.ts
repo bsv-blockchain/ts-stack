@@ -7,7 +7,7 @@ import {
   WalletOutput
 } from '@bsv/sdk'
 import { _tu, TestWalletProviderNoSetup } from '../../utils/TestUtilsWalletStorage'
-import path from 'path'
+import path from 'node:path'
 
 import 'fake-indexeddb/auto'
 

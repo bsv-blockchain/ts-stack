@@ -29,8 +29,8 @@ export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, 
     tags: [`uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`, `uploader_identity_key_${uploaderIdentityKey}`],
     tagQueryMode: 'all',
     includeTags: true,
-    limit: limit !== undefined ? limit : 200,
-    offset: offset !== undefined ? offset : 0
+    limit: limit ?? 200,
+    offset: offset ?? 0
   })
 
   let objectIdentifier

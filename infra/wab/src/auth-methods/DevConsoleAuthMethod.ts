@@ -1,5 +1,5 @@
 import { AuthMethod, AuthPayload, AuthResult } from "./AuthMethod";
-import { randomInt } from "crypto";
+import { randomInt } from "node:crypto";
 import { log } from "../logger";
 
 /**

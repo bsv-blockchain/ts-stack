@@ -1,6 +1,6 @@
 /* eslint-env jest */
 import * as hash from '../../primitives/Hash'
-import * as crypto from 'crypto'
+import * as crypto from 'node:crypto'
 import PBKDF2Vectors from './PBKDF2.vectors'
 import { toArray, toHex } from '../../primitives/utils'
 import { SHA1 } from '../..//primitives/Hash'

@@ -27,12 +27,14 @@ export async function getBeefForTransaction(
   txid: string,
   options: StorageGetBeefOptions
 ): Promise<Beef> {
-  const beef =
-    options.mergeToBeef instanceof Beef
-      ? options.mergeToBeef
-      : options.mergeToBeef != null
-        ? Beef.fromBinary(options.mergeToBeef)
-        : new Beef()
+  let beef: Beef
+  if (options.mergeToBeef instanceof Beef) {
+    beef = options.mergeToBeef
+  } else if (options.mergeToBeef != null) {
+    beef = Beef.fromBinary(options.mergeToBeef)
+  } else {
+    beef = new Beef()
+  }
 
   const knownTxids = new Set(options.knownTxids ?? [])
   const scheduled = new Set<string>([txid])

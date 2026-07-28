@@ -12,9 +12,9 @@
  *   node conformance/runner/scripts/recount-meta.mjs
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
-import { join, extname, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
+import { join, extname, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // scripts/ → runner/ → conformance/

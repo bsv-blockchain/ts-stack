@@ -6,7 +6,7 @@
  * service API and the HTTP routes.
  */
 
-import http from 'http'
+import http from 'node:http'
 import express from 'express'
 import { WebSocket } from 'ws'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'

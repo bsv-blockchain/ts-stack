@@ -609,12 +609,18 @@ async function persistOutputs (
     const lockingScript = offset.length <= storage.getSettings().maxOutputScript || isCommission
       ? output.lockingScript.toBinary()
       : undefined
+    let basketId: number | undefined
+    if (isChange) {
+      basketId = baskets.default?.basketId
+    } else if (planned.basket != null) {
+      basketId = baskets[planned.basket].basketId
+    }
     const now = new Date()
     const row: TableOutput = {
       outputId: 0,
       userId,
       transactionId,
-      basketId: isChange ? baskets.default?.basketId : (planned.basket == null ? undefined : baskets[planned.basket].basketId),
+      basketId,
       spendable: !isCommission,
       change: isChange,
       outputDescription: planned.outputDescription,

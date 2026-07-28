@@ -141,14 +141,14 @@ export default class MerklePath {
     this.path = path
 
     // store all of the legal offsets which we expect given the txid indices.
-    const legalOffsets = Array.from({ length: this.path.length })
+    const legalOffsets: Array<Set<number>> = Array.from({ length: this.path.length })
       .fill(0)
-      .map(() => new Set())
+      .map(() => new Set<number>())
     this.path.forEach((leaves, height) => {
       if (leaves.length === 0 && height === 0) {
         throw new Error(`Empty level at height: ${height}`)
       }
-      const offsetsAtThisHeight = new Set()
+      const offsetsAtThisHeight = new Set<number>()
       leaves.forEach(leaf => {
         if (offsetsAtThisHeight.has(leaf.offset)) {
           throw new Error(`Duplicate offset: ${leaf.offset}, at height: ${height}`)
@@ -162,7 +162,7 @@ export default class MerklePath {
           }
         } else if (legalOffsetsOnly && !legalOffsets[height].has(leaf.offset)) {
           throw new Error(
-            `Invalid offset: ${leaf.offset}, at height: ${height}, with legal offsets: ${Array.from(legalOffsets[height]).join(', ')}`
+            `Invalid offset: ${leaf.offset}, at height: ${height}, with legal offsets: ${Array.from(legalOffsets[height], offset => offset.toString()).join(', ')}`
           )
         }
       })

@@ -18,4 +18,4 @@ const main = async () => {
 }
 
 // Happy hacking :)
-main()
+await main()

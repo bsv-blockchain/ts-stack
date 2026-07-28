@@ -81,7 +81,7 @@ function checkScriptFormat (script: Script) {
 
     const formatMiddle = new Script(chunks.slice(7, 10)).toHex()
     if (formatMiddle !== TEMPLATES.formatMiddle) throw new Error('Malformed formatMiddle')
-    if (!chunks[10].data || chunks[10].data.length !== 20) throw new Error('Invalid pubkey hash data length')
+    if (chunks[10].data?.length !== 20) throw new Error('Invalid pubkey hash data length')
 
     const formatEnd = new Script(chunks.slice(11, 13)).toHex()
     if (formatEnd !== TEMPLATES.formatEnd) throw new Error('Malformed formatEnd')

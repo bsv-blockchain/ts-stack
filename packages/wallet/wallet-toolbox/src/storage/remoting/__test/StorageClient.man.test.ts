@@ -16,7 +16,7 @@ import { Setup } from '../../../Setup'
 import { StorageKnex } from '../../StorageKnex'
 import { WalletStorageManager } from '../../WalletStorageManager'
 import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { get } from 'http'
+import { get } from 'node:http'
 
 describe('StorageClient to tagged revision manual tests', () => {
   jest.setTimeout(99999999)

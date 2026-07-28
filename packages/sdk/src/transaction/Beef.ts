@@ -214,7 +214,7 @@ export class Beef {
   }
 
   private bumpStateMatches(): boolean {
-    if (this.bumpState == null || this.bumpState.length !== this.bumps.length) return false
+    if (this.bumpState?.length !== this.bumps.length) return false
     return this.bumps.every((bump, index) =>
       this.singleBumpStateMatches(bump, this.bumpState![index])
     )
@@ -536,7 +536,7 @@ export class Beef {
    */
   findTransactionForSigning (txid: string): Transaction | undefined {
     const beefTx = this.findTxid(txid)
-    if ((beefTx == null) || (beefTx.tx == null)) return undefined // Ensure beefTx.tx exists before using it
+    if (beefTx?.tx == null) return undefined // Ensure beefTx.tx exists before using it
 
     for (const i of beefTx.tx.inputs) {
       if (i.sourceTransaction == null) {
@@ -560,7 +560,7 @@ export class Beef {
    */
   findAtomicTransaction (txid: string): Transaction | undefined {
     const beefTx = this.findTxid(txid)
-    if ((beefTx == null) || (beefTx.tx == null)) return undefined // Ensure beefTx.tx exists before using it
+    if (beefTx?.tx == null) return undefined // Ensure beefTx.tx exists before using it
 
     this.addInputProof(beefTx.tx)
 

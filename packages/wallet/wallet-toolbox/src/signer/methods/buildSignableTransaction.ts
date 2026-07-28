@@ -129,8 +129,8 @@ export function buildSignableTransaction(
       const inputToAdd: TransactionInput = {
         sourceTXID: argsInput.outpoint.txid,
         sourceOutputIndex: argsInput.outpoint.vout,
-        // Include the source transaction for access to the outputs locking script and output satoshis for user side fee calculation.
-        // TODO: Make this conditional to improve performance when user can supply locking scripts themselves.
+        // The source transaction is required here: the user-side fee model needs
+        // the source output's locking script and satoshi value.
         sourceTransaction,
         unlockingScript: unlock,
         sequence: argsInput.sequenceNumber
@@ -154,15 +154,16 @@ export function buildSignableTransaction(
         lockingScript: storageInput.sourceLockingScript
       })
 
+      let sourceTransaction: Transaction | undefined
+      if (storageInput.sourceTransaction != null) {
+        sourceTransaction = storageInput.sourceTransaction instanceof Uint8Array
+          ? Transaction.fromBinaryView(storageInput.sourceTransaction)
+          : Transaction.fromBinary(storageInput.sourceTransaction)
+      }
       const inputToAdd: TransactionInput = {
         sourceTXID: storageInput.sourceTxid,
         sourceOutputIndex: storageInput.sourceVout,
-        sourceTransaction:
-          storageInput.sourceTransaction != null
-            ? storageInput.sourceTransaction instanceof Uint8Array
-              ? Transaction.fromBinaryView(storageInput.sourceTransaction)
-              : Transaction.fromBinary(storageInput.sourceTransaction)
-            : undefined,
+        sourceTransaction,
         unlockingScript: new Script(),
         sequence: 0xffffffff
       }

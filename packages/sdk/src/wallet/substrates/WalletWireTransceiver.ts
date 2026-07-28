@@ -1026,7 +1026,12 @@ export default class WalletWireTransceiver implements WalletInterface {
     for (let i = 0; i < len; i++) {
       const txid = Utils.toHex(reader.read(32))
       const code = reader.readInt8()
-      const status: SendWithResultStatus = code === 2 ? 'sending' : code === 3 ? 'failed' : 'unproven'
+      let status: SendWithResultStatus = 'unproven'
+      if (code === 2) {
+        status = 'sending'
+      } else if (code === 3) {
+        status = 'failed'
+      }
       results.push({ txid, status })
     }
     return results

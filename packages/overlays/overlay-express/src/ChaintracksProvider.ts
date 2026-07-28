@@ -47,7 +47,7 @@ export class ChaintracksProvider implements ChainTracker {
 
   async isValidRootForHeight (root: string, height: number): Promise<boolean> {
     const header = await this.findHeaderForHeight(height)
-    return header !== undefined && header.merkleRoot === root
+    return header?.merkleRoot === root
   }
 
   async findHeaderForHeight (height: number): Promise<ChaintracksHeader | undefined> {

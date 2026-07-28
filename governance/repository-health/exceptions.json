@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-26",
+  "lastReviewed": "2026-07-27",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -183,6 +183,23 @@
       "created": "2026-07-24",
       "reviewBy": "2026-08-24",
       "removeWhen": "The Sonar backlog wave proves precise source, test, generated, vendored, and coverage boundaries and removes broad exclusions without hiding real findings."
+    },
+    {
+      "id": "sdk-semantic-wire-type-aliases",
+      "category": "quality-rule",
+      "target": "typescript:S6564 on documented primitive aliases in SDK Wallet.interfaces.ts, remittance/types.ts, and wallet/validationHelpers.ts",
+      "owner": "ts-stack-maintainers",
+      "reason": "These aliases are the named BRC-100 and remittance wire vocabulary. Their exported names and JSDoc constraints carry defaults, units, ranges, encodings, and generated-documentation anchors that a bare boolean, number, or string cannot express. Removing them would degrade a stable public declaration and documentation contract without changing runtime or TypeScript assignability.",
+      "evidence": [
+        "packages/sdk/src/wallet/Wallet.interfaces.ts",
+        "packages/sdk/src/remittance/types.ts",
+        "packages/sdk/src/wallet/validationHelpers.ts",
+        "packages/sdk/docs/reference/wallet.md",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-27",
+      "reviewBy": "2026-10-25",
+      "removeWhen": "Remove when the analyzer distinguishes documented public protocol aliases, or when an SDK major version can adopt a compatibility-preserving nominal representation with generated documentation and packed-consumer proof."
     }
   ]
 }

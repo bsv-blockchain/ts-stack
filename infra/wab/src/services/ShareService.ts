@@ -6,7 +6,7 @@
  * Includes rate limiting and access logging for security.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { db } from "../db/knex";
 import { ShamirShareEntity, ShareAccessLogEntity, RateLimitConfig } from "../types";
 

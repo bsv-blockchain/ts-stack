@@ -7,9 +7,9 @@ import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import rehypeShiki from '@shikijs/rehype'
-import { createReadStream, cpSync, existsSync, statSync } from 'fs'
-import { resolve, dirname, extname, join, relative } from 'path'
-import { fileURLToPath } from 'url'
+import { createReadStream, cpSync, existsSync, statSync } from 'node:fs'
+import { resolve, dirname, extname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const BASE = '/ts-stack/'
@@ -28,11 +28,12 @@ const assetMimeTypes: Record<string, string> = {
 
 function docsAssetPathFromUrl(url: string | undefined) {
   const pathname = (url ?? '').split('?')[0]
-  const assetPath = pathname.startsWith(`${BASE}assets/`)
-    ? pathname.slice(BASE.length)
-    : pathname.startsWith('/assets/')
-      ? pathname.slice(1)
-      : null
+  let assetPath: string | null = null
+  if (pathname.startsWith(`${BASE}assets/`)) {
+    assetPath = pathname.slice(BASE.length)
+  } else if (pathname.startsWith('/assets/')) {
+    assetPath = pathname.slice(1)
+  }
 
   if (!assetPath?.match(/^assets\/(?:diagrams|images)\//)) return null
   return decodeURIComponent(assetPath.slice('assets/'.length))
@@ -114,11 +115,14 @@ function routeForMarkdownFile(file: string, suffix: string) {
 
 function resolveDocsHrefPath(pathname: string, sourceFile: string) {
   const normalized = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
-  const targetPath = pathname.startsWith('/docs/')
-    ? resolve(DOCS_ROOT, pathname.slice('/docs/'.length))
-    : pathname.startsWith('/')
-      ? resolve(DOCS_ROOT, pathname.slice(1))
-      : resolve(dirname(sourceFile), normalized)
+  let targetPath: string
+  if (pathname.startsWith('/docs/')) {
+    targetPath = resolve(DOCS_ROOT, pathname.slice('/docs/'.length))
+  } else if (pathname.startsWith('/')) {
+    targetPath = resolve(DOCS_ROOT, pathname.slice(1))
+  } else {
+    targetPath = resolve(dirname(sourceFile), normalized)
+  }
 
   if (pathname.endsWith('.md')) return targetPath
 
@@ -308,18 +312,23 @@ export default defineConfig({
                 }
               ]
             }),
-            asyncApiEmbed: (_state: unknown, node: Record<string, unknown>) => ({
-              type: 'element',
-              tagName: 'iframe',
-              properties: {
-                src: `${BASE}assets/asyncapi/${node.slug}/index.html`,
-                style:
-                  'width: 100%; min-height: 900px; border: none; background: #011627; border-radius: 8px;',
-                title: `AsyncAPI Specification (${node.slug})`,
-                loading: 'lazy'
-              },
-              children: []
-            })
+            asyncApiEmbed: (_state: unknown, node: Record<string, unknown>) => {
+              if (typeof node.slug !== 'string') {
+                throw new TypeError('asyncApiEmbed requires a string slug')
+              }
+              return {
+                type: 'element',
+                tagName: 'iframe',
+                properties: {
+                  src: `${BASE}assets/asyncapi/${node.slug}/index.html`,
+                  style:
+                    'width: 100%; min-height: 900px; border: none; background: #011627; border-radius: 8px;',
+                  title: `AsyncAPI Specification (${node.slug})`,
+                  loading: 'lazy'
+                },
+                children: []
+              }
+            }
           }
         },
         rehypePlugins: [

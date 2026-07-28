@@ -3,7 +3,7 @@ import Transaction from '../../../transaction/Transaction'
 import { NodejsHttpClient } from '../../../transaction/http/NodejsHttpClient'
 import { FetchHttpClient } from '../../../transaction/http/FetchHttpClient'
 import { HttpClientRequestOptions } from '../../http'
-import { RequestOptions } from 'https'
+import { RequestOptions } from 'node:https'
 
 // Mock Transaction
 jest.mock('../../../transaction/Transaction', () => {

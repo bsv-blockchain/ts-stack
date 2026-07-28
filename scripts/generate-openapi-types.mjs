@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { inspect } from 'node:util'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const GO_TOOLS = resolve(ROOT, 'tools/codegen')
@@ -159,7 +160,7 @@ try {
   if (CHECK) verifyGeneratedFiles()
   else updateGeneratedFiles()
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error))
+  console.error(error instanceof Error ? error.message : inspect(error))
   process.exitCode = 1
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true })

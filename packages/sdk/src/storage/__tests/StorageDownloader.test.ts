@@ -5,7 +5,7 @@ import Transaction from '../../transaction/Transaction.js'
 import PushDrop from '../../script/templates/PushDrop.js'
 import { PublicKey } from '../../primitives/index.js'
 import { Utils } from '../../primitives/index.js'
-import { ReadableStream } from 'stream/web'
+import { ReadableStream } from 'node:stream/web'
 
 beforeEach(() => {
   jest.restoreAllMocks()

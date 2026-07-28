@@ -21,7 +21,7 @@ import type { CommsLayer } from './CommsLayer.js'
 import type { IdentityLayer } from './IdentityLayer.js'
 import type { RemittanceModule } from './RemittanceModule.js'
 import { OriginatorDomainNameStringUnder250Bytes, PubKeyHex, WalletInterface } from '../wallet/Wallet.interfaces.js'
-import { toBase64 } from '../primitives/utils.js'
+import { toBase64, toSafeString } from '../primitives/utils.js'
 import Random from '../primitives/Random.js'
 
 export const DEFAULT_REMITTANCE_MESSAGEBOX = 'remittance_inbox'
@@ -1297,7 +1297,7 @@ export class RemittanceManager {
 
       default: {
         const kind = (env as { kind?: unknown }).kind
-        throw new Error(`Unknown envelope kind: ${String(kind)}`)
+        throw new Error(`Unknown envelope kind: ${toSafeString(kind)}`)
       }
     }
   }
