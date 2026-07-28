@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import { access } from 'node:fs/promises'
-import { writeFile } from 'node:fs/promises'
+import { access, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
