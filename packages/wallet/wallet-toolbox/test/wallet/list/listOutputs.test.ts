@@ -219,7 +219,7 @@ describe('listOutputs test', () => {
         basket: 'admin foo'
       }
       const r = await wallet.listOutputs(args)
-      expect(r.totalOutputs === 0)
+      expect(r.totalOutputs).toBe(0)
     }
   })
 

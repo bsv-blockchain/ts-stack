@@ -1408,17 +1408,6 @@ describe('Transaction', () => {
     })
   })
 
-  describe('addP2PKHOutput', () => {
-    it('should create an output on the current transaction using an address hash or string', async () => {
-      const tx = new Transaction()
-      tx.addInput({
-        sourceTXID: '00'.repeat(32),
-        sourceOutputIndex: 0,
-        unlockingScriptTemplate: new P2PKH().unlock(testPrivateKey)
-      })
-    })
-  })
-
   describe('preventResourceExhaustion', () => {
     it('should run script evaluation but error out as soon as the memory usage exceeds the limit', async () => {
       const sourceTransaction = new Transaction()

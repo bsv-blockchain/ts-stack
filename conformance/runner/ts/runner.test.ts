@@ -14,7 +14,7 @@
  * are executed and their dispatcher runs; only metadata-declared gaps are skipped.
  */
 
-import { describe, test } from '@jest/globals'
+import { describe, expect, test } from '@jest/globals'
 import { readdirSync, statSync, readFileSync } from 'node:fs'
 import { join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,10 +73,10 @@ for (const filePath of vectorFiles) {
   let vf: VectorFile
   try {
     vf = JSON.parse(readFileSync(filePath, 'utf-8')) as VectorFile
-  } catch (e) {
+  } catch {
     describe(filePath, () => {
       test('parse JSON', () => {
-        throw new Error(`Failed to parse: ${String(e)}`)
+        expect(() => JSON.parse(readFileSync(filePath, 'utf-8'))).not.toThrow()
       })
     })
     continue
@@ -112,7 +112,7 @@ for (const filePath of vectorFiles) {
       if (route === null) {
         if (parityClass === 'required') {
           test(vectorId, () => {
-            throw new Error(`no dispatcher registered for category '${cat}' (${vf.id ?? filePath})`)
+            expect(route).not.toBeNull()
           })
         } else {
           registerGovernedSkip(
@@ -126,7 +126,11 @@ for (const filePath of vectorFiles) {
       // Dispatch
       test(vectorId, async () => {
         try {
-          await route.dispatch(cat, input, expected)
+          const dispatchResult = await route.dispatch(cat, input, expected)
+          // Dispatchers report every vector mismatch by throwing. Make their
+          // successful void completion an explicit runner-level assertion so
+          // a vector can never pass merely because Jest saw no matcher.
+          expect(dispatchResult).toBeUndefined()
         } catch (err) {
           if (isNotImplemented(err)) {
             // A dispatcher cannot discover a skip after Jest has started the

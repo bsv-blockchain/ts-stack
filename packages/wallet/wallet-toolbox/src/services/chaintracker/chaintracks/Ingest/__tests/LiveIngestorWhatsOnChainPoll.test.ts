@@ -67,6 +67,7 @@ describe('LiveIngestorWhatsOnChainPoll tests', () => {
     }
     ingestor.stopListening()
     await p
+    expect(count).toBeGreaterThan(0)
   })
 })
 

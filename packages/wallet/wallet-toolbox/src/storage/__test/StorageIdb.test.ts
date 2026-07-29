@@ -151,14 +151,18 @@ describe('StorageIdb tests', () => {
     await store.migrate(store.dbName, PrivateKey.fromRandom().toHex())
     await store.makeAvailable()
     await wallet.storage.addWalletStorageProvider(store)
-    await wallet.storage.setActive(stores[0].storageIdentityKey, s => {
+    expect(wallet.storage.getStores()).toHaveLength(stores.length + 1)
+    const setActiveLog = await wallet.storage.setActive(stores[0].storageIdentityKey, s => {
       console.log(s)
       return s
     })
-    await wallet.storage.updateBackups(undefined, s => {
+    const backupLog = await wallet.storage.updateBackups(undefined, s => {
       console.log(s)
       return s
     })
+    expect(wallet.storage.getActiveStore()).toBe(stores[0].storageIdentityKey)
+    expect(setActiveLog).toContain('unchanged')
+    expect(backupLog).toContain('BACKUP CURRENT ACTIVE')
     await wallet.destroy()
   })
 })

@@ -109,7 +109,9 @@ describe('Monitor tests', () => {
         })
         TaskPurge.checkNow = true
         monitor._tasks.push(task)
-        await monitor.runTask('Purge')
+        const log = await monitor.runTask('Purge')
+        expect(TaskPurge.checkNow).toBe(false)
+        expect(typeof log).toBe('string')
       }
     }
     for (const ctx of ctxs) {
@@ -655,7 +657,22 @@ describe('Monitor tests', () => {
       const task = new TaskReviewStatus(monitor, 1, 1000 * 5)
       monitor._tasks.push(task)
       const log = await monitor.runTask('ReviewStatus')
-      //console.log(log)
+      const invalidTransactions = await storage.findTransactions({
+        partial: { txid: reqs[0].txid }
+      })
+      const restoredTransaction = verifyOne(
+        await storage.findTransactions({
+          partial: { transactionId: 23 }
+        })
+      )
+
+      expect(crus).toBe(1)
+      expect(ctus).toBe(1)
+      expect(invalidTransactions.length).toBeGreaterThan(0)
+      expect(invalidTransactions.every(tx => tx.status === 'failed')).toBe(true)
+      expect(restoredTransaction.status).toBe('completed')
+      expect(restoredTransaction.provenTxId).toBeDefined()
+      expect(log).toContain("transactions updated with provenTxId and status of 'completed'")
     }
 
     for (const ctx of ctxs) {

@@ -7,7 +7,7 @@ describe('pushdrop example tests', () => {
 
   test('0 pushdrop', async () => {
     if (Setup.noEnv('main')) return
-    await transferPushDrop()
+    await expect(transferPushDrop()).resolves.toBeUndefined()
   })
 })
 

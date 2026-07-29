@@ -197,8 +197,9 @@ describe('BanAwareLookupWrapper', () => {
       const wrappedWithout = { ...mockWrapped, outputSpent: undefined } as any
       const w = new BanAwareLookupWrapper(wrappedWithout, mockBanService, 'SHIP', mockLogger)
 
-      // Should not throw
-      await w.outputSpent({ txid: 't', outputIndex: 0, topic: 'x' } as any)
+      await expect(
+        w.outputSpent({ txid: 't', outputIndex: 0, topic: 'x' } as any)
+      ).resolves.toBeUndefined()
     })
   })
 
@@ -213,7 +214,9 @@ describe('BanAwareLookupWrapper', () => {
       const wrappedWithout = { ...mockWrapped, outputNoLongerRetainedInHistory: undefined } as any
       const w = new BanAwareLookupWrapper(wrappedWithout, mockBanService, 'SLAP', mockLogger)
 
-      await w.outputNoLongerRetainedInHistory('txid', 0, 'topic')
+      await expect(
+        w.outputNoLongerRetainedInHistory('txid', 0, 'topic')
+      ).resolves.toBeUndefined()
     })
   })
 

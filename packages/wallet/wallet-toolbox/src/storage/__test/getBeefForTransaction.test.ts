@@ -249,7 +249,7 @@ describe('getBeefForTransaction tests', () => {
     const ps = new ProtoStorage('main')
     const txid = '4cefbe79926d6ef2cc727d8faccac186d9bb141f170411dd75bc6329f428f5a4'
     const beef = await ps.getBeefForTxid(txid)
-    expect(beef.bumps.length > 0)
+    expect(beef.bumps.length).toBeGreaterThan(0)
     console.log(beef.toLogString())
     const hex = Utils.toHex(beef.toBinaryAtomic(txid))
     console.log(hex)

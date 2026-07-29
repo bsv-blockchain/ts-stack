@@ -1640,10 +1640,6 @@ describe('BSV Overlay Services Engine', () => {
       })
     })
     describe('getUTXOHistory', () => {
-      it('Returns the given output if there is no history selector', async () => {
-        // Already tested above
-        return true
-      })
       it('Invokes the history selector function with the correct data', async () => {
         const mockedHistorySelector = jest.fn(async (_beef, _outputIndex, currentDepth) => {
           if (currentDepth !== 2) {
