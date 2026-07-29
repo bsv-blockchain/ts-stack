@@ -20,6 +20,7 @@ describe('extracted Wallet Toolbox operator behavior', () => {
       await expect(prepareSqliteDestination(existing, true)).resolves.toBeUndefined()
       await expect(prepareSqliteDestination(missing, false)).resolves.toBeUndefined()
       expect((await fs.stat(path.dirname(missing))).isDirectory()).toBe(true)
+      await expect(prepareSqliteDestination('', false)).resolves.toBeUndefined()
     } finally {
       await fs.rm(directory, { force: true, recursive: true })
     }
@@ -277,5 +278,369 @@ describe('extracted Wallet Toolbox operator behavior', () => {
     })
     expect(request.addNotifyTransactionId).toHaveBeenCalledWith(20)
     expect(request.updateStorage).toHaveBeenCalledWith(storage)
+  })
+
+  test('classifies non-repairable and already tracked stale transactions without mutation', async () => {
+    const transaction = {
+      transactionId: 21,
+      txid: '12'.repeat(32),
+      updated_at: new Date('2025-06-01T00:00:00.000Z')
+    }
+    const cutoff = new Date('2026-01-01T00:00:00.000Z')
+    const storage = {
+      findProvenTxReqs: jest.fn().mockResolvedValue([{ status: 'completed' }]),
+      getProvenOrReq: jest.fn().mockResolvedValue({}),
+      updateTransactionStatus: jest.fn()
+    }
+    const common = {
+      storage: storage as never,
+      services: {} as never,
+      runtime: {} as never,
+      sdk: {} as never,
+      transaction: transaction as never,
+      cutoff
+    }
+
+    await expect(
+      reconcileTransaction({
+        ...common,
+        transaction: {
+          ...transaction,
+          updated_at: new Date('2026-02-01T00:00:00.000Z')
+        } as never,
+        chainStatus: 'unknown',
+        repair: true
+      })
+    ).resolves.toEqual({ eligible: false, outcome: 'none' })
+    await expect(reconcileTransaction({ ...common, chainStatus: 'unknown', repair: false })).resolves.toEqual({
+      eligible: true,
+      outcome: 'none'
+    })
+    await expect(reconcileTransaction({ ...common, chainStatus: 'rejected', repair: true })).resolves.toEqual({
+      eligible: true,
+      outcome: 'none'
+    })
+    await expect(reconcileTransaction({ ...common, chainStatus: 'mined', repair: true })).resolves.toEqual({
+      eligible: true,
+      outcome: 'already-tracked'
+    })
+    expect(storage.updateTransactionStatus).not.toHaveBeenCalled()
+
+    storage.findProvenTxReqs.mockResolvedValue([])
+    storage.getProvenOrReq.mockResolvedValue({ proven: { provenTxId: 1 } })
+    await expect(reconcileTransaction({ ...common, chainStatus: 'mined', repair: true })).resolves.toEqual({
+      eligible: true,
+      outcome: 'already-tracked'
+    })
+  })
+
+  test('rejects unverifiable mined transaction bytes and verifies repair persistence', async () => {
+    const txid = '13'.repeat(32)
+    const transaction = {
+      transactionId: 22,
+      txid,
+      updated_at: new Date('2025-06-01T00:00:00.000Z')
+    }
+    const storage = {
+      findProvenTxReqs: jest.fn().mockResolvedValue([]),
+      getProvenOrReq: jest.fn().mockResolvedValue({}),
+      findTransactionById: jest.fn().mockResolvedValue({ status: 'sending' }),
+      updateTransactionStatus: jest.fn().mockResolvedValue(1)
+    }
+    const services = {
+      getRawTx: jest.fn().mockResolvedValue({})
+    }
+    const runtime = {
+      doubleSha256BE: jest.fn().mockReturnValue([0])
+    }
+    const sdk = {
+      Utils: {
+        toHex: jest.fn().mockReturnValue('not-the-expected-txid')
+      }
+    }
+    const common = {
+      storage: storage as never,
+      services: services as never,
+      runtime: runtime as never,
+      sdk: sdk as never,
+      transaction: transaction as never,
+      cutoff: new Date('2026-01-01T00:00:00.000Z')
+    }
+
+    await expect(reconcileTransaction({ ...common, chainStatus: 'mined', repair: true })).resolves.toEqual({
+      eligible: true,
+      outcome: 'unresolved-raw-transaction'
+    })
+    services.getRawTx.mockResolvedValue({ rawTx: [1, 2, 3] })
+    await expect(reconcileTransaction({ ...common, chainStatus: 'mined', repair: true })).resolves.toEqual({
+      eligible: true,
+      outcome: 'unresolved-raw-transaction'
+    })
+
+    await expect(reconcileTransaction({ ...common, chainStatus: 'unknown', repair: true })).rejects.toThrow(
+      'Stale transaction did not persist with failed status'
+    )
+  })
+
+  test('fails closed when a mined-transaction proof request cannot be verified after writing', async () => {
+    const txid = '14'.repeat(32)
+    const request = {
+      addNotifyTransactionId: jest.fn(),
+      updateStorage: jest.fn().mockResolvedValue(undefined)
+    }
+    const storage = {
+      findProvenTxReqs: jest.fn().mockResolvedValue([]),
+      getProvenOrReq: jest.fn().mockResolvedValue({})
+    }
+    const runtime = {
+      doubleSha256BE: jest.fn().mockReturnValue([1]),
+      EntityProvenTxReq: {
+        fromTxid: jest.fn().mockReturnValue(request)
+      }
+    }
+    const sdk = {
+      Beef: jest.fn().mockImplementation(() => ({ toBinary: () => [2] })),
+      Utils: { toHex: jest.fn().mockReturnValue(txid) }
+    }
+    const transaction = {
+      rawTx: [1, 2, 3],
+      transactionId: 23,
+      txid,
+      updated_at: new Date('2025-06-01T00:00:00.000Z')
+    }
+
+    await expect(
+      reconcileTransaction({
+        storage: storage as never,
+        services: {} as never,
+        runtime: runtime as never,
+        sdk: sdk as never,
+        transaction: transaction as never,
+        chainStatus: 'mined',
+        cutoff: new Date('2026-01-01T00:00:00.000Z'),
+        repair: false
+      })
+    ).resolves.toEqual({ eligible: true, outcome: 'none' })
+    await expect(
+      reconcileTransaction({
+        storage: storage as never,
+        services: {} as never,
+        runtime: runtime as never,
+        sdk: sdk as never,
+        transaction: transaction as never,
+        chainStatus: 'mined',
+        cutoff: new Date('2026-01-01T00:00:00.000Z'),
+        repair: true
+      })
+    ).rejects.toThrow('did not create an unmined proof request')
+  })
+
+  test('classifies invalid, ignored, existing, and missing-proof exports before internalization', async () => {
+    const txid = '15'.repeat(32)
+    const sourceUser = { identityKey: `02${'10'.repeat(32)}`, userId: 2 }
+    const destinationUser = { identityKey: `03${'20'.repeat(32)}`, userId: 3 }
+    const validInstructions = JSON.stringify({
+      type: 'BRC29',
+      derivationPrefix: 'prefix',
+      derivationSuffix: 'suffix',
+      payee: destinationUser.identityKey
+    })
+    const storage = {
+      findOutputById: jest.fn(),
+      findOutputs: jest.fn(),
+      findProvenTxReqs: jest.fn()
+    }
+
+    storage.findOutputById.mockResolvedValue(undefined)
+    await expect(
+      reviewExportOutput(storage as never, 1, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('invalid-instructions')
+    storage.findOutputById.mockResolvedValue({ txid, vout: 0 })
+    await expect(
+      reviewExportOutput(storage as never, 2, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('invalid-instructions')
+    storage.findOutputById.mockResolvedValue({
+      txid,
+      vout: 0,
+      customInstructions: JSON.stringify({
+        type: 'BRC29',
+        derivationPrefix: '',
+        derivationSuffix: 'suffix',
+        payee: destinationUser.identityKey
+      })
+    })
+    await expect(
+      reviewExportOutput(storage as never, 3, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('invalid-instructions')
+    storage.findOutputById.mockResolvedValue({
+      txid,
+      vout: 0,
+      customInstructions: JSON.stringify({
+        type: 'BRC29',
+        derivationPrefix: 'prefix',
+        derivationSuffix: 'suffix',
+        payee: 'another-wallet'
+      })
+    })
+    await expect(
+      reviewExportOutput(storage as never, 4, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('ignored')
+
+    storage.findOutputById.mockResolvedValue({ txid, vout: 0, customInstructions: validInstructions })
+    storage.findOutputs.mockResolvedValue([{ outputId: 99 }])
+    await expect(
+      reviewExportOutput(storage as never, 5, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('already-present')
+    storage.findOutputs.mockResolvedValue([])
+    storage.findProvenTxReqs.mockResolvedValue([])
+    await expect(
+      reviewExportOutput(storage as never, 6, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('missing-proof')
+    storage.findProvenTxReqs.mockResolvedValue([{ provenTxReqId: 1 }])
+    await expect(
+      reviewExportOutput(storage as never, 7, sourceUser as never, [destinationUser] as never, false)
+    ).resolves.toBe('candidate')
+  })
+
+  test('fails closed when internalization does not return and persist the exact output', async () => {
+    const txid = '16'.repeat(32)
+    const sourceUser = { identityKey: `02${'10'.repeat(32)}`, userId: 2 }
+    const destinationUser = { identityKey: `03${'20'.repeat(32)}`, userId: 3 }
+    const output = {
+      txid,
+      vout: 1,
+      customInstructions: JSON.stringify({
+        type: 'BRC29',
+        derivationPrefix: 'prefix',
+        derivationSuffix: 'suffix',
+        payee: destinationUser.identityKey
+      })
+    }
+    const storage = {
+      findOutputById: jest.fn().mockResolvedValue(output),
+      findOutputs: jest.fn().mockResolvedValueOnce([]),
+      findProvenTxReqs: jest.fn().mockResolvedValue([{ provenTxReqId: 1 }]),
+      getBeefForTransaction: jest.fn().mockResolvedValue({
+        toBinaryAtomic: jest.fn().mockReturnValue([1, 2])
+      }),
+      internalizeAction: jest.fn().mockResolvedValue({ txid: 'different-txid' })
+    }
+
+    await expect(
+      reviewExportOutput(storage as never, 8, sourceUser as never, [destinationUser] as never, true)
+    ).rejects.toThrow('did not return expected txid')
+
+    storage.findOutputs.mockReset().mockResolvedValueOnce([]).mockResolvedValueOnce([])
+    storage.internalizeAction.mockResolvedValue({ txid })
+    await expect(
+      reviewExportOutput(storage as never, 8, sourceUser as never, [destinationUser] as never, true)
+    ).rejects.toThrow('did not persist exactly once')
+  })
+
+  test('classifies unavailable, spent, and non-persisting custom outputs safely', async () => {
+    const txid = '17'.repeat(32)
+    const storage = {
+      findOutputById: jest.fn(),
+      getRawTxOfKnownValidTransaction: jest.fn(),
+      updateOutput: jest.fn().mockResolvedValue(1)
+    }
+    const services = {
+      getUtxoStatus: jest.fn(),
+      hashOutputScript: jest.fn().mockReturnValue('script-hash')
+    }
+
+    storage.findOutputById.mockResolvedValue(undefined)
+    await expect(reviewCustomOutput(storage as never, services as never, () => '51', 1, false)).resolves.toEqual({
+      outcome: 'unavailable-script',
+      recoveredScript: false
+    })
+    storage.findOutputById.mockResolvedValue({ outputId: 2, txid, vout: 0, lockingScript: [] })
+    storage.getRawTxOfKnownValidTransaction.mockResolvedValue(undefined)
+    await expect(reviewCustomOutput(storage as never, services as never, () => '51', 2, false)).resolves.toEqual({
+      outcome: 'unavailable-script',
+      recoveredScript: false
+    })
+
+    storage.findOutputById.mockResolvedValue({ outputId: 3, txid, vout: 0, lockingScript: [0x51] })
+    services.getUtxoStatus.mockResolvedValue({ status: 'error', isUtxo: true })
+    await expect(reviewCustomOutput(storage as never, services as never, () => '51', 3, false)).resolves.toEqual({
+      outcome: 'not-utxo',
+      recoveredScript: false
+    })
+    services.getUtxoStatus.mockResolvedValue({ status: 'success', isUtxo: false })
+    await expect(reviewCustomOutput(storage as never, services as never, () => '51', 3, false)).resolves.toEqual({
+      outcome: 'not-utxo',
+      recoveredScript: false
+    })
+
+    services.getUtxoStatus.mockResolvedValue({ status: 'success', isUtxo: true })
+    storage.findOutputById
+      .mockReset()
+      .mockResolvedValueOnce({ outputId: 4, txid, vout: 0, lockingScript: [0x51] })
+      .mockResolvedValueOnce({ outputId: 4, txid, vout: 0, spendable: false })
+    await expect(reviewCustomOutput(storage as never, services as never, () => '51', 4, true)).rejects.toThrow(
+      'did not persist as spendable'
+    )
+  })
+
+  test('accepts exact stored proofs and rejects invalid or non-persisting repairs', async () => {
+    const txid = '18'.repeat(32)
+    const externalPath = {
+      blockHeight: 100,
+      computeRoot: jest.fn().mockReturnValue('root'),
+      path: [[{ hash: txid, offset: 2 }]],
+      toBinary: jest.fn().mockReturnValue([1, 2])
+    }
+    const services = {
+      getMerklePath: jest.fn().mockResolvedValue({
+        header: { hash: 'block', height: 100, merkleRoot: 'root' },
+        merklePath: externalPath
+      })
+    }
+    const transaction = {
+      provenTxId: 55,
+      txid,
+      merklePath: [1, 2],
+      merkleRoot: 'root',
+      height: 100,
+      blockHash: 'block',
+      index: 2
+    }
+    const sdk = {
+      MerklePath: {
+        fromBinary: jest.fn().mockReturnValue({
+          blockHeight: 100,
+          computeRoot: jest.fn().mockReturnValue('root')
+        })
+      },
+      Utils: {
+        toHex: (value: number[]) => Buffer.from(value).toString('hex')
+      }
+    }
+    const storage = {
+      updateProvenTx: jest.fn().mockResolvedValue(1),
+      findProvenTxById: jest.fn()
+    }
+
+    await expect(
+      reviewProvenTransaction(storage as never, services as never, sdk as never, transaction as never, false)
+    ).resolves.toBe('matched')
+
+    services.getMerklePath.mockResolvedValue({
+      header: { hash: 'block', height: 99, merkleRoot: 'root' },
+      merklePath: externalPath
+    })
+    await expect(
+      reviewProvenTransaction(storage as never, services as never, sdk as never, transaction as never, false)
+    ).rejects.toThrow('failed internal validation')
+
+    services.getMerklePath.mockResolvedValue({
+      header: { hash: 'new-block', height: 100, merkleRoot: 'root' },
+      merklePath: externalPath
+    })
+    storage.findProvenTxById.mockResolvedValue(undefined)
+    await expect(
+      reviewProvenTransaction(storage as never, services as never, sdk as never, transaction as never, true)
+    ).rejects.toThrow('did not persist exactly')
   })
 })

@@ -103,6 +103,30 @@ describe('proof-history review', () => {
     ).toEqual({ arc: 'success' })
   })
 
+  test('ignores unrelated provider notes and preserves stronger outcomes', () => {
+    expect(
+      reviewProofHistory(
+        JSON.stringify({
+          notes: [
+            { name: 'WoCpostRawTx', what: 'postRawTxError', status: 400 },
+            { name: 'WoCpostBeef', what: 'postBeefSuccess' },
+            { name: 'WoCpostBeef', what: 'postBeefError' },
+            { name: 'ARCv1tx', what: 'postRawTxSuccess', txStatus: 'ANNOUNCED_TO_NETWORK' },
+            { name: 'ARCv1tx', what: 'postRawTxSuccess', txStatus: 'REQUESTED_BY_NETWORK' },
+            { name: 'ARCv1tx', what: 'postRawTxSuccess', txStatus: 'REJECTED' },
+            { name: 'BitailsPostRawTx', what: 'postRawsError', code: -1 },
+            { name: 'BitailsPostRawTx', what: 'unrelated', code: 500 },
+            { name: 'unrelated-provider', what: 'postRawsSuccess' }
+          ]
+        })
+      ).providerOutcomes
+    ).toEqual({
+      whatsOnChain: 'success',
+      arc: 'success',
+      bitails: 'serviceError'
+    })
+  })
+
   test('classifies completed and failed transition combinations', () => {
     const completed = reviewProofHistory(
       JSON.stringify({

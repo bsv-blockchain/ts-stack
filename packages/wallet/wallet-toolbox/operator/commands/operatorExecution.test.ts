@@ -151,15 +151,7 @@ function operatorPlan(command: string, parameters: OperatorPlan['parameters']): 
 
 function queryReturning<T>(rows: T[]): Record<string, jest.Mock> {
   const query: Record<string, jest.Mock> = {}
-  for (const method of [
-    'join',
-    'limit',
-    'orderBy',
-    'select',
-    'where',
-    'whereNotNull',
-    'whereNull'
-  ]) {
+  for (const method of ['join', 'limit', 'orderBy', 'select', 'where', 'whereNotNull', 'whereNull']) {
     query[method] = jest.fn().mockReturnValue(query)
   }
   query.select.mockResolvedValue(rows)
@@ -542,10 +534,7 @@ describe('extracted operator command execution', () => {
       previousStatus: 'sending',
       finalStatus: 'failed'
     })
-    expect(storage.abortAction).toHaveBeenCalledWith(
-      { userId: 42, identityKey: '' },
-      { reference: 'action-reference' }
-    )
+    expect(storage.abortAction).toHaveBeenCalledWith({ userId: 42, identityKey: '' }, { reference: 'action-reference' })
     expect(storage.destroy).toHaveBeenCalledTimes(1)
   })
 
@@ -1304,6 +1293,1078 @@ describe('extracted operator command execution', () => {
       updated: 1
     })
     expect(storage.updateProvenTxReq).toHaveBeenCalledWith(71, { status: 'unfail' })
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('refuses unsafe or empty Chaintracks export destinations', async () => {
+    const nonEmpty = await fs.mkdtemp(path.join(os.tmpdir(), 'chaintracks-nonempty-'))
+    const empty = await fs.mkdtemp(path.join(os.tmpdir(), 'chaintracks-empty-'))
+    const chaintracks = {
+      destroy: jest.fn().mockResolvedValue(undefined),
+      exportBulkHeaders: jest.fn().mockResolvedValue(undefined),
+      findChainTipHeader: jest.fn().mockResolvedValue({ hash: 'tip-hash', height: 1 }),
+      makeAvailable: jest.fn().mockResolvedValue(undefined)
+    }
+    mockState.chaintracksFactory.mockReturnValue(chaintracks)
+    try {
+      await fs.writeFile(path.join(nonEmpty, 'existing.json'), '{}')
+      await expect(
+        chaintracksExportCommand.execute(
+          new Map(),
+          operatorPlan('chaintracks-export', {
+            chain: 'test',
+            output: nonEmpty,
+            headersPerFile: 1_000,
+            cdnBaseUrl: 'https://headers.example.test'
+          })
+        )
+      ).rejects.toThrow('Refusing to write into non-empty output directory')
+      expect(mockState.chaintracksFactory).not.toHaveBeenCalled()
+
+      await expect(
+        chaintracksExportCommand.execute(
+          new Map(),
+          operatorPlan('chaintracks-export', {
+            chain: 'test',
+            output: empty,
+            headersPerFile: 1_000,
+            cdnBaseUrl: 'https://headers.example.test'
+          })
+        )
+      ).rejects.toThrow('without producing an artifact')
+      expect(chaintracks.destroy).toHaveBeenCalledTimes(1)
+    } finally {
+      await fs.rm(nonEmpty, { force: true, recursive: true })
+      await fs.rm(empty, { force: true, recursive: true })
+    }
+  })
+
+  test('fails an inconsistent IndexedDB Chaintracks observation and still closes it', async () => {
+    const chaintracks = {
+      destroy: jest.fn().mockResolvedValue(undefined),
+      findChainTipHash: jest.fn().mockResolvedValue('different-tip'),
+      findChainTipHeader: jest.fn().mockResolvedValue({ hash: 'tip-hash', height: 123 }),
+      findHeaderForBlockHash: jest.fn().mockResolvedValue({ hash: 'tip-hash' }),
+      findLiveHeaderForBlockHash: jest.fn().mockResolvedValue({ hash: 'tip-hash', chainWork: 'work' }),
+      findHeaderForHeight: jest.fn().mockResolvedValue({ hash: 'tip-hash' }),
+      findChainWorkForBlockHash: jest.fn().mockResolvedValue('work'),
+      isListening: jest.fn().mockResolvedValue(true),
+      subscribeHeaders: jest.fn().mockResolvedValue(undefined),
+      unsubscribe: jest.fn()
+    }
+    mockState.createIdbChaintracks.mockResolvedValue({
+      available: Promise.resolve(),
+      chaintracks
+    })
+
+    await expect(
+      chaintracksIdbObserveCommand.execute(
+        new Map(),
+        operatorPlan('chaintracks-idb-observe', {
+          chain: 'test',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC_KEY',
+          observeSeconds: 0
+        })
+      )
+    ).rejects.toThrow('inconsistent tip data')
+    expect(chaintracks.unsubscribe).not.toHaveBeenCalled()
+    expect(chaintracks.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('refuses an existing Dojo SQLite target and enforces the sync chunk bound', async () => {
+    process.env.TEST_DOJO_CONNECTION = 'source'
+    process.env.TEST_IDENTITY = 'identity'
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'dojo-guard-'))
+    const existing = path.join(directory, 'existing.sqlite')
+    try {
+      await fs.writeFile(existing, 'existing database')
+      await expect(
+        dojoImportCommand.execute(
+          new Map(),
+          operatorPlan('dojo-import', {
+            chain: 'test',
+            sourceEnvironment: 'TEST_DOJO_CONNECTION',
+            identityKeyEnvironment: 'TEST_IDENTITY',
+            destinationKind: 'sqlite',
+            destination: existing,
+            databaseName: 'dojo-test',
+            dropExisting: false,
+            maxChunks: 1
+          })
+        )
+      ).rejects.toThrow('without "--drop-existing"')
+      expect(mockState.storageFactory).not.toHaveBeenCalled()
+
+      const writer = createStorage()
+      const reader = {
+        destroy: jest.fn().mockResolvedValue(undefined),
+        getSettings: jest.fn().mockResolvedValue({ storageIdentityKey: 'source-key' }),
+        getSyncChunk: jest.fn().mockResolvedValue({ rows: [] })
+      }
+      const syncState = {
+        makeRequestSyncChunkArgs: jest.fn().mockReturnValue({ cursor: 0 }),
+        processSyncChunk: jest.fn().mockResolvedValue({ done: false, inserts: 1, updates: 0 })
+      }
+      mockState.storageFactory.mockReturnValue(writer)
+      mockState.dojoReaderFactory.mockReturnValue(reader)
+      mockState.entitySyncStateFromStorage.mockResolvedValue(syncState)
+      await expect(
+        dojoImportCommand.execute(
+          new Map(),
+          operatorPlan('dojo-import', {
+            chain: 'test',
+            sourceEnvironment: 'TEST_DOJO_CONNECTION',
+            identityKeyEnvironment: 'TEST_IDENTITY',
+            destinationKind: 'sqlite',
+            destination: path.join(directory, 'new.sqlite'),
+            databaseName: 'dojo-test',
+            dropExisting: false,
+            maxChunks: 1
+          })
+        )
+      ).rejects.toThrow('exceeded the configured 1 chunk limit')
+      expect(reader.destroy).toHaveBeenCalledTimes(1)
+      expect(writer.destroy).toHaveBeenCalledTimes(1)
+    } finally {
+      await fs.rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  test('runs daemon mode until SIGINT and performs orderly shutdown', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    process.env.TEST_TAAL = 'taal-key'
+    const monitor = {
+      runOnce: jest.fn(),
+      startTasks: jest.fn().mockResolvedValue(undefined),
+      stopTasks: jest.fn()
+    }
+    const daemon = {
+      createSetup: jest.fn().mockImplementation(async function (this: MockState) {
+        this.setup = { monitor }
+      }),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      setup: undefined
+    }
+    const chaintracks = {
+      destroy: jest.fn().mockResolvedValue(undefined)
+    }
+    mockState.monitorDaemonFactory.mockReturnValue(daemon)
+    mockState.chaintracksFactory.mockReturnValue(chaintracks)
+
+    const execution = monitorDaemonCommand.execute(
+      new Map(),
+      operatorPlan('monitor-daemon', {
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        taalApiKeyEnvironment: 'TEST_TAAL',
+        whatsonchainApiKeyEnvironment: 'TEST_WOC',
+        bitailsApiKeyEnvironment: 'TEST_BITAILS',
+        startupTaskMode: 'none',
+        runMode: 'daemon'
+      })
+    )
+    await new Promise(resolve => setImmediate(resolve))
+    process.emit('SIGINT')
+    const evidence = await execution
+
+    expect(evidence.result).toMatchObject({
+      runMode: 'daemon',
+      shutdownSignal: 'SIGINT'
+    })
+    expect(monitor.startTasks).toHaveBeenCalledTimes(1)
+    expect(monitor.stopTasks).toHaveBeenCalledTimes(1)
+    expect(daemon.destroy).toHaveBeenCalledTimes(1)
+    expect(chaintracks.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('closes storage-client wallets after balance and create-result failures', async () => {
+    process.env.TEST_ROOT_KEY = '11'.repeat(32)
+    const plan = operatorPlan('storage-client-exercise', {
+      chain: 'test',
+      endpoint: 'https://storage.example.test',
+      rootKeyEnvironment: 'TEST_ROOT_KEY',
+      basket: 'operator-test',
+      iterations: 1,
+      concurrency: 1,
+      satoshis: 1,
+      waitMilliseconds: 0
+    })
+    const lowBalanceWallet = {
+      balance: jest.fn().mockResolvedValue(0),
+      createAction: jest.fn(),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      listOutputs: jest.fn().mockResolvedValue({ totalOutputs: 0, outputs: [] })
+    }
+    mockState.createWalletClient.mockResolvedValue(lowBalanceWallet)
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'Wallet balance is insufficient'
+    )
+    expect(lowBalanceWallet.destroy).toHaveBeenCalledTimes(1)
+
+    const missingTxidWallet = {
+      balance: jest.fn().mockResolvedValue(100_000),
+      createAction: jest.fn().mockResolvedValue({}),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      listOutputs: jest.fn().mockResolvedValue({ totalOutputs: 0, outputs: [] })
+    }
+    mockState.createWalletClient.mockResolvedValue(missingTxidWallet)
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'createAction omitted a transaction ID'
+    )
+    expect(missingTxidWallet.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('fails closed across exact wallet-abort confirmation boundaries', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const plan = operatorPlan('wallet-abort-action', {
+      chain: 'test',
+      databaseEnvironment: 'TEST_DATABASE',
+      userId: 42,
+      reference: 'action-reference'
+    })
+    const noMatch = createStorage({
+      findTransactions: jest.fn().mockResolvedValue([])
+    })
+    mockState.storageFactory.mockReturnValue(noMatch)
+    await expect(walletAbortActionCommand.execute(new Map(), plan)).rejects.toThrow('Expected exactly one transaction')
+    expect(noMatch.destroy).toHaveBeenCalledTimes(1)
+
+    const notAborted = createStorage({
+      abortAction: jest.fn().mockResolvedValue({ aborted: false }),
+      findTransactions: jest
+        .fn()
+        .mockResolvedValueOnce([{ transactionId: 9, status: 'sending' }])
+        .mockResolvedValueOnce([])
+    })
+    mockState.storageFactory.mockReturnValue(notAborted)
+    await expect(walletAbortActionCommand.execute(new Map(), plan)).rejects.toThrow(
+      'did not confirm that the action was aborted'
+    )
+    expect(notAborted.destroy).toHaveBeenCalledTimes(1)
+
+    const notPersisted = createStorage({
+      abortAction: jest.fn().mockResolvedValue({ aborted: true }),
+      findTransactions: jest
+        .fn()
+        .mockResolvedValueOnce([{ transactionId: 10, status: 'sending' }])
+        .mockResolvedValueOnce([]),
+      findTransactionById: jest.fn().mockResolvedValue(undefined)
+    })
+    mockState.storageFactory.mockReturnValue(notPersisted)
+    await expect(walletAbortActionCommand.execute(new Map(), plan)).rejects.toThrow(
+      'did not persist with failed status'
+    )
+    expect(notPersisted.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('releases invalid outputs only when exact persistence is verified', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const outpoint = `${'dd'.repeat(32)}.2`
+    const storage = createStorage({
+      findUsers: jest.fn().mockResolvedValue([{ userId: 81 }]),
+      listOutputs: jest.fn().mockResolvedValue({
+        totalOutputs: 1,
+        outputs: [{ outpoint, satoshis: 7 }]
+      }),
+      findOutputs: jest.fn().mockResolvedValue([
+        {
+          spendable: false
+        }
+      ])
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+    mockState.parseWalletOutpoint.mockReturnValue({ txid: 'dd'.repeat(32), vout: 2 })
+
+    const evidence = await walletReviewOutputsCommand.execute(
+      new Map(),
+      operatorPlan('wallet-review-outputs', {
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        whatsonchainApiKeyEnvironment: 'TEST_WOC',
+        userIds: '81',
+        scope: 'all',
+        release: true
+      })
+    )
+    expect(evidence.result).toMatchObject({
+      release: true,
+      invalidOutputs: 1,
+      invalidSatoshis: 7
+    })
+    expect(storage.listOutputs).toHaveBeenCalledWith(
+      { userId: 81, identityKey: '' },
+      expect.objectContaining({ tags: ['release', 'all'] })
+    )
+
+    storage.findOutputs.mockResolvedValue([])
+    await expect(
+      walletReviewOutputsCommand.execute(
+        new Map(),
+        operatorPlan('wallet-review-outputs', {
+          chain: 'test',
+          databaseEnvironment: 'TEST_DATABASE',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC',
+          userIds: '81',
+          scope: 'all',
+          release: true
+        })
+      )
+    ).rejects.toThrow('did not persist as unspendable')
+  })
+
+  test('filters incomplete proof requests and verifies every unfail write', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const storage = createStorage({
+      findProvenTxReqs: jest.fn().mockResolvedValue([
+        {
+          provenTxReqId: 91,
+          txid: undefined,
+          rawTx: undefined
+        },
+        {
+          provenTxReqId: 92,
+          txid: 'ee'.repeat(32),
+          rawTx: [1]
+        }
+      ]),
+      findProvenTxReqById: jest.fn().mockResolvedValue({ status: 'invalid' }),
+      updateProvenTxReq: jest.fn().mockResolvedValue(1)
+    })
+    const services = createServices({
+      getStatusForTxids: jest.fn().mockResolvedValue({
+        results: [{ status: 'mined' }]
+      })
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+    mockState.servicesFactory.mockReturnValue(services)
+
+    await expect(
+      walletReviewProofRequestsCommand.execute(
+        new Map(),
+        operatorPlan('wallet-review-proof-requests', {
+          chain: 'test',
+          databaseEnvironment: 'TEST_DATABASE',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC',
+          status: 'invalid',
+          offset: 0,
+          pageSize: 3,
+          maxRecords: 3,
+          unfail: true
+        })
+      )
+    ).rejects.toThrow('did not persist as unfail')
+    expect(storage.updateProvenTxReq).toHaveBeenCalledWith(92, { status: 'unfail' })
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('fails closed at every storage-client signing boundary and always destroys the wallet', async () => {
+    process.env.TEST_ROOT_KEY = '11'.repeat(32)
+    const plan = operatorPlan('storage-client-exercise', {
+      chain: 'test',
+      endpoint: 'https://storage.example.test',
+      rootKeyEnvironment: 'TEST_ROOT_KEY',
+      basket: 'operator-test',
+      iterations: 1,
+      concurrency: 1,
+      satoshis: 1,
+      waitMilliseconds: 0
+    })
+    const output = {
+      outpoint: `${'aa'.repeat(32)}.0`,
+      satoshis: 1
+    }
+    const wallet = (secondCreate: unknown, secondOutputs: MockState, signResult: unknown = { txid: 'signed' }) => ({
+      balance: jest.fn().mockResolvedValue(100_000),
+      createAction: jest.fn().mockResolvedValueOnce({ txid: 'created' }).mockResolvedValueOnce(secondCreate),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      listOutputs: jest
+        .fn()
+        .mockResolvedValueOnce({ totalOutputs: 0, outputs: [] })
+        .mockResolvedValueOnce(secondOutputs),
+      signAction: jest.fn().mockResolvedValue(signResult)
+    })
+
+    const missingBeef = wallet({}, { totalOutputs: 1, outputs: [output] })
+    mockState.createWalletClient.mockResolvedValue(missingBeef)
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'could not retrieve the requested output set and BEEF'
+    )
+    expect(missingBeef.destroy).toHaveBeenCalledTimes(1)
+
+    const missingSignable = wallet({}, { totalOutputs: 1, BEEF: [1], outputs: [output] })
+    mockState.createWalletClient.mockResolvedValue(missingSignable)
+    mockState.beefFromBinary.mockReset().mockReturnValue({
+      toBinaryAtomic: jest.fn().mockReturnValue([1])
+    })
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'did not return a signable transaction'
+    )
+    expect(missingSignable.destroy).toHaveBeenCalledTimes(1)
+
+    const signable = {
+      signableTransaction: {
+        reference: 'reference',
+        tx: [2]
+      }
+    }
+    const malformed = wallet(signable, { totalOutputs: 1, BEEF: [1], outputs: [output] })
+    mockState.createWalletClient.mockResolvedValue(malformed)
+    mockState.beefFromBinary
+      .mockReset()
+      .mockReturnValueOnce({ toBinaryAtomic: jest.fn().mockReturnValue([1]) })
+      .mockReturnValueOnce({ txs: [{ tx: undefined }] })
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'signable transaction has an unexpected shape'
+    )
+    expect(malformed.destroy).toHaveBeenCalledTimes(1)
+
+    const unsignedTransaction = {
+      inputs: [{ unlockingScript: undefined }],
+      sign: jest.fn().mockResolvedValue(undefined)
+    }
+    const unsigned = wallet(signable, { totalOutputs: 1, BEEF: [1], outputs: [output] })
+    mockState.createWalletClient.mockResolvedValue(unsigned)
+    mockState.beefFromBinary
+      .mockReset()
+      .mockReturnValueOnce({ toBinaryAtomic: jest.fn().mockReturnValue([1]) })
+      .mockReturnValueOnce({ txs: [{ tx: unsignedTransaction }] })
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'did not produce an unlocking script'
+    )
+    expect(unsigned.destroy).toHaveBeenCalledTimes(1)
+
+    const signedTransaction = {
+      inputs: [
+        {
+          unlockingScript: {
+            toHex: jest.fn().mockReturnValue('unlocking-script')
+          }
+        }
+      ],
+      sign: jest.fn().mockResolvedValue(undefined)
+    }
+    const noSignedTxid = wallet(signable, { totalOutputs: 1, BEEF: [1], outputs: [output] }, {})
+    mockState.createWalletClient.mockResolvedValue(noSignedTxid)
+    mockState.beefFromBinary
+      .mockReset()
+      .mockReturnValueOnce({ toBinaryAtomic: jest.fn().mockReturnValue([1]) })
+      .mockReturnValueOnce({ txs: [{ tx: signedTransaction }] })
+    await expect(storageClientExerciseCommand.execute(new Map(), plan)).rejects.toThrow(
+      'signAction omitted a transaction ID'
+    )
+    expect(noSignedTxid.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('accounts for every export-review outcome including exact internalization', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const sourceUser = { userId: 101, identityKey: `02${'10'.repeat(32)}` }
+    const destinationUser = { userId: 102, identityKey: `03${'20'.repeat(32)}` }
+    const txids = {
+      existing: '10'.repeat(32),
+      internalized: '20'.repeat(32),
+      missing: '30'.repeat(32),
+      ignored: '40'.repeat(32)
+    }
+    const instructions = (payee: string) =>
+      JSON.stringify({
+        type: 'BRC29',
+        derivationPrefix: 'prefix',
+        derivationSuffix: 'suffix',
+        payee
+      })
+    const rows = Object.values(txids).map((_, index) => ({ outputId: index + 1 }))
+    const query = queryReturning(rows)
+    const storage = createStorage({
+      findUsers: jest.fn().mockImplementation(async ({ partial }: MockState) => {
+        if (partial.userId === sourceUser.userId) return [sourceUser]
+        if (partial.userId === destinationUser.userId) return [destinationUser]
+        return []
+      }),
+      findOutputById: jest.fn().mockImplementation(async (id: number) => {
+        const txid = Object.values(txids)[id - 1]
+        return {
+          outputId: id,
+          txid,
+          vout: id,
+          customInstructions: instructions(id === 4 ? 'another-wallet' : destinationUser.identityKey)
+        }
+      }),
+      findOutputs: jest.fn().mockImplementation(async ({ partial }: MockState) => {
+        if (partial.txid === txids.existing) return [{ outputId: 500 }]
+        if (partial.txid === txids.internalized && storage.internalizeAction.mock.calls.length > 0) {
+          return [{ outputId: 501 }]
+        }
+        return []
+      }),
+      findProvenTxReqs: jest
+        .fn()
+        .mockImplementation(async ({ partial }: MockState) =>
+          partial.txid === txids.internalized ? [{ provenTxReqId: 1 }] : []
+        ),
+      getBeefForTransaction: jest.fn().mockResolvedValue({
+        toBinaryAtomic: jest.fn().mockReturnValue([1, 2, 3])
+      }),
+      internalizeAction: jest.fn().mockResolvedValue({ txid: txids.internalized }),
+      toDb: jest.fn().mockReturnValue(jest.fn().mockReturnValue(query))
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+
+    const evidence = await walletReinternalizeExportsCommand.execute(
+      new Map(),
+      operatorPlan('wallet-reinternalize-exports', {
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        fromUserId: sourceUser.userId,
+        toUserIds: String(destinationUser.userId),
+        afterOutputId: 0,
+        pageSize: 10,
+        maxRecords: 10,
+        internalize: true
+      })
+    )
+    expect(evidence.result).toMatchObject({
+      reviewed: 4,
+      alreadyPresent: 1,
+      candidates: 1,
+      internalized: 1,
+      missingProofs: 1
+    })
+    expect(storage.internalizeAction).toHaveBeenCalledTimes(1)
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('accounts for recovered, unavailable, spent, and restored custom outputs', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const txid = '50'.repeat(32)
+    const query = queryReturning([{ outputId: 1 }, { outputId: 2 }, { outputId: 3 }])
+    const storage = createStorage({
+      findOutputById: jest.fn().mockImplementation(async (id: number, _trx: unknown, noScript?: boolean) => {
+        if (id === 1) return undefined
+        if (id === 2) {
+          return {
+            outputId: 2,
+            txid,
+            vout: 2,
+            lockingScript: [],
+            scriptOffset: 0,
+            scriptLength: 1
+          }
+        }
+        if (noScript === true) return { outputId: 3, txid, vout: 3, spendable: true }
+        return { outputId: 3, txid, vout: 3, lockingScript: [0x51] }
+      }),
+      getRawTxOfKnownValidTransaction: jest.fn().mockResolvedValue([0x51]),
+      updateOutput: jest.fn().mockResolvedValue(1),
+      toDb: jest.fn().mockReturnValue(jest.fn().mockReturnValue(query))
+    })
+    const services = createServices({
+      getUtxoStatus: jest
+        .fn()
+        .mockResolvedValueOnce({ status: 'success', isUtxo: false })
+        .mockResolvedValueOnce({ status: 'success', isUtxo: true })
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+    mockState.servicesFactory.mockReturnValue(services)
+
+    const evidence = await walletReviewCustomOutputsCommand.execute(
+      new Map(),
+      operatorPlan('wallet-review-custom-outputs', {
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        whatsonchainApiKeyEnvironment: 'TEST_WOC',
+        afterOutputId: 0,
+        pageSize: 10,
+        maxRecords: 10,
+        restore: true
+      })
+    )
+    expect(evidence.result).toMatchObject({
+      reviewed: 3,
+      recoveredScripts: 1,
+      unavailableScripts: 1,
+      verifiedUtxos: 1,
+      restored: 1
+    })
+    expect(storage.updateOutput).toHaveBeenCalledWith(3, { spendable: true })
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('rejects malformed and unverifiable diagnostic transaction inputs at exact boundaries', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'wallet-diagnostics-guards-'))
+    const input = path.join(directory, 'raw.hex')
+    const sourceTxid = '60'.repeat(32)
+    const execute = async (maxRecords = 10) =>
+      await walletDiagnosticsCommand.execute(
+        new Map(),
+        operatorPlan('wallet-diagnostics', {
+          chain: 'test',
+          databaseEnvironment: 'UNUSED_DATABASE',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC',
+          report: 'input-utxos',
+          userId: 0,
+          txids: '',
+          rawTransactionFile: input,
+          maxRecords
+        })
+      )
+    try {
+      await fs.writeFile(input, 'not hexadecimal')
+      await expect(execute()).rejects.toThrow('even-length hexadecimal transaction')
+
+      await fs.writeFile(input, '00')
+      mockState.transactionFromHex.mockReturnValue({
+        inputs: [{ sourceTXID: sourceTxid }, { sourceTXID: sourceTxid }]
+      })
+      await expect(execute(1)).rejects.toThrow('exceeding --max-records 1')
+
+      mockState.transactionFromHex.mockReturnValue({
+        inputs: [{ sourceTXID: undefined, sourceOutputIndex: 0 }]
+      })
+      await expect(execute()).rejects.toThrow('missing its source transaction ID')
+
+      mockState.transactionFromHex.mockReturnValue({
+        inputs: [{ sourceTXID: sourceTxid, sourceOutputIndex: 0 }]
+      })
+      mockState.servicesFactory.mockReturnValue(
+        createServices({
+          getRawTx: jest.fn().mockResolvedValue({})
+        })
+      )
+      await expect(execute()).rejects.toThrow(`Source transaction ${sourceTxid} was not available`)
+
+      mockState.servicesFactory.mockReturnValue(
+        createServices({
+          getRawTx: jest.fn().mockResolvedValue({ rawTx: [1, 2, 3] })
+        })
+      )
+      mockState.transactionFromBinary.mockReturnValue({ outputs: [] })
+      await expect(execute()).rejects.toThrow(`Source output ${sourceTxid}.0 was not available`)
+    } finally {
+      await fs.rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  test('rejects invalid and oversized proof-history artifacts before analysis', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'proof-history-guards-'))
+    const input = path.join(directory, 'proof-history.json')
+    const execute = async (maxRecords: number) =>
+      await walletProofHistoryCommand.execute(
+        new Map(),
+        operatorPlan('wallet-proof-history', {
+          mode: 'analyze',
+          chain: 'test',
+          input,
+          maxRecords
+        })
+      )
+    try {
+      await fs.writeFile(input, JSON.stringify({ schemaVersion: 2, records: [] }))
+      await expect(execute(10)).rejects.toThrow('does not match schema version 1')
+
+      await fs.writeFile(
+        input,
+        JSON.stringify({
+          schemaVersion: 1,
+          exportedAt: '2026-07-29T00:00:00.000Z',
+          records: [
+            {
+              provenTxReqId: 1,
+              txid: '70'.repeat(32),
+              status: 'completed',
+              history: '{}'
+            },
+            {
+              provenTxReqId: 2,
+              txid: '71'.repeat(32),
+              status: 'completed',
+              history: '{}'
+            }
+          ]
+        })
+      )
+      await expect(execute(1)).rejects.toThrow('exceeding --max-records 1')
+    } finally {
+      await fs.rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  test('classifies proof verification retrieval and script exceptions without escaping', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const txids = ['80'.repeat(32), '81'.repeat(32), '82'.repeat(32)]
+    const sourceTxid = '83'.repeat(32)
+    const storage = createStorage({
+      findProvenTxReqById: jest.fn().mockImplementation(async (id: number) => ({
+        provenTxReqId: id,
+        txid: txids[id - 1],
+        rawTx: [id]
+      })),
+      getBeefForTransaction: jest.fn().mockRejectedValue(new Error('source unavailable'))
+    })
+    const missingSourceId = {
+      findAtomicTransaction: jest.fn().mockReturnValue({
+        verify: jest.fn().mockResolvedValue(true)
+      }),
+      findTxid: jest.fn().mockReturnValue({
+        tx: { inputs: [{ sourceTXID: undefined }] }
+      }),
+      mergeBeef: jest.fn(),
+      mergeRawTx: jest.fn()
+    }
+    const retrievalFailure = {
+      findAtomicTransaction: jest.fn(),
+      findTxid: jest.fn().mockImplementation((txid: string) =>
+        txid === txids[1]
+          ? {
+              tx: { inputs: [{ sourceTXID: sourceTxid }] }
+            }
+          : undefined
+      ),
+      mergeBeef: jest.fn(),
+      mergeRawTx: jest.fn()
+    }
+    const scriptException = {
+      findAtomicTransaction: jest.fn().mockReturnValue({
+        verify: jest.fn().mockRejectedValue(new Error('script exception'))
+      }),
+      findTxid: jest.fn().mockImplementation((txid: string) =>
+        txid === txids[2]
+          ? {
+              tx: { inputs: [{ sourceTXID: sourceTxid }] }
+            }
+          : { tx: { inputs: [] } }
+      ),
+      mergeBeef: jest.fn(),
+      mergeRawTx: jest.fn()
+    }
+    mockState.beefFactory
+      .mockReturnValueOnce(missingSourceId)
+      .mockReturnValueOnce(retrievalFailure)
+      .mockReturnValueOnce(scriptException)
+    mockState.storageFactory.mockReturnValue(storage)
+
+    const evidence = await walletProofHistoryCommand.execute(
+      new Map(),
+      operatorPlan('wallet-proof-history', {
+        mode: 'verify',
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        whatsonchainApiKeyEnvironment: 'TEST_WOC',
+        requestIds: '1,2,3'
+      })
+    )
+    expect(evidence.result).toMatchObject({
+      verified: 1,
+      missingInputs: 1,
+      scriptFailures: 1
+    })
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('fails a legacy fixture copy when the selected user is not present after sync', async () => {
+    process.env.TEST_SOURCE = 'source'
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'wallet-legacy-missing-user-'))
+    const source = createStorage()
+    const destination = createStorage({
+      findUserByIdentityKey: jest.fn().mockResolvedValue(undefined)
+    })
+    mockState.storageFactory.mockReturnValueOnce(source).mockReturnValueOnce(destination)
+    mockState.walletStorageManagerFactory.mockReturnValue({
+      makeAvailable: jest.fn().mockResolvedValue(undefined),
+      syncFromReader: jest.fn().mockResolvedValue({ inserts: 0, updates: 0 })
+    })
+    try {
+      await expect(
+        walletLegacyFixtureCommand.execute(
+          new Map(),
+          operatorPlan('wallet-legacy-fixture', {
+            mode: 'copy',
+            identityKey: `02${'44'.repeat(32)}`,
+            sourceEnvironment: 'TEST_SOURCE',
+            destinationEnvironment: '',
+            destinationSqlite: path.join(directory, 'fixture.sqlite'),
+            dropExisting: false,
+            storageName: 'legacy-fixture'
+          })
+        )
+      ).rejects.toThrow('without the selected destination user')
+      expect(source.destroy).toHaveBeenCalledTimes(1)
+      expect(destination.destroy).toHaveBeenCalledTimes(1)
+    } finally {
+      await fs.rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  test('records a verified export candidate without internalizing it', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const sourceUser = { userId: 111, identityKey: `02${'11'.repeat(32)}` }
+    const destinationUser = { userId: 112, identityKey: `03${'22'.repeat(32)}` }
+    const txid = '90'.repeat(32)
+    const query = queryReturning([{ outputId: 1 }])
+    const storage = createStorage({
+      findUsers: jest
+        .fn()
+        .mockImplementation(async ({ partial }: MockState) =>
+          partial.userId === sourceUser.userId ? [sourceUser] : [destinationUser]
+        ),
+      findOutputById: jest.fn().mockResolvedValue({
+        outputId: 1,
+        txid,
+        vout: 0,
+        customInstructions: JSON.stringify({
+          type: 'BRC29',
+          derivationPrefix: 'prefix',
+          derivationSuffix: 'suffix',
+          payee: destinationUser.identityKey
+        })
+      }),
+      findOutputs: jest.fn().mockResolvedValue([]),
+      findProvenTxReqs: jest.fn().mockResolvedValue([{ provenTxReqId: 1 }]),
+      toDb: jest.fn().mockReturnValue(jest.fn().mockReturnValue(query))
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+
+    const evidence = await walletReinternalizeExportsCommand.execute(
+      new Map(),
+      operatorPlan('wallet-reinternalize-exports', {
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        fromUserId: sourceUser.userId,
+        toUserIds: String(destinationUser.userId),
+        afterOutputId: 0,
+        pageSize: 10,
+        maxRecords: 10,
+        internalize: false
+      })
+    )
+    expect(evidence.result).toMatchObject({
+      reviewed: 1,
+      candidates: 1,
+      internalized: 0
+    })
+    expect(storage.internalizeAction).not.toHaveBeenCalled()
+  })
+
+  test('rejects missing output-review users before querying outputs', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const storage = createStorage({
+      findUsers: jest.fn().mockResolvedValue([])
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+
+    await expect(
+      walletReviewOutputsCommand.execute(
+        new Map(),
+        operatorPlan('wallet-review-outputs', {
+          chain: 'test',
+          databaseEnvironment: 'TEST_DATABASE',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC',
+          userIds: '121',
+          scope: 'change',
+          release: false
+        })
+      )
+    ).rejects.toThrow('Expected exactly one wallet user')
+    expect(storage.listOutputs).not.toHaveBeenCalled()
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('rejects incomplete monitor setup and closes every allocated resource', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const daemon = {
+      createSetup: jest.fn().mockResolvedValue(undefined),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      setup: undefined
+    }
+    const chaintracks = {
+      destroy: jest.fn().mockResolvedValue(undefined)
+    }
+    mockState.monitorDaemonFactory.mockReturnValue(daemon)
+    mockState.chaintracksFactory.mockReturnValue(chaintracks)
+
+    await expect(
+      monitorDaemonCommand.execute(
+        new Map(),
+        operatorPlan('monitor-daemon', {
+          chain: 'test',
+          databaseEnvironment: 'TEST_DATABASE',
+          taalApiKeyEnvironment: 'TEST_TAAL',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC',
+          bitailsApiKeyEnvironment: 'TEST_BITAILS',
+          startupTaskMode: 'none',
+          runMode: 'once'
+        })
+      )
+    ).rejects.toThrow('did not create a monitor')
+    expect(daemon.destroy).toHaveBeenCalledTimes(1)
+    expect(chaintracks.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('rejects unsuccessful chain-service reconciliation and closes storage', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const txid = '91'.repeat(32)
+    const storage = createStorage({
+      findTransactions: jest.fn().mockResolvedValue([
+        {
+          transactionId: 131,
+          txid,
+          status: 'sending',
+          updated_at: new Date('2020-01-01T00:00:00.000Z')
+        }
+      ])
+    })
+    const services = createServices({
+      getStatusForTxids: jest.fn().mockResolvedValue({
+        status: 'error',
+        results: []
+      })
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+    mockState.servicesFactory.mockReturnValue(services)
+
+    await expect(
+      walletReconcileStuckCommand.execute(
+        new Map(),
+        operatorPlan('wallet-reconcile-stuck', {
+          chain: 'test',
+          databaseEnvironment: 'TEST_DATABASE',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC',
+          status: 'sending',
+          olderThanHours: 24,
+          maxRecords: 10,
+          exactTransaction: false,
+          transactionId: 0,
+          repair: false
+        })
+      )
+    ).rejects.toThrow('did not return a successful status review')
+    expect(storage.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('honors a bounded IndexedDB observation interval before teardown', async () => {
+    jest.useFakeTimers()
+    const chaintracks = {
+      destroy: jest.fn().mockResolvedValue(undefined),
+      findChainTipHash: jest.fn().mockResolvedValue('tip-hash'),
+      findChainTipHeader: jest.fn().mockResolvedValue({ hash: 'tip-hash', height: 123 }),
+      findHeaderForBlockHash: jest.fn().mockResolvedValue({ hash: 'tip-hash' }),
+      findLiveHeaderForBlockHash: jest.fn().mockResolvedValue({ hash: 'tip-hash', chainWork: 'work' }),
+      findHeaderForHeight: jest.fn().mockResolvedValue({ hash: 'tip-hash' }),
+      findChainWorkForBlockHash: jest.fn().mockResolvedValue('work'),
+      getInfo: jest.fn().mockResolvedValue({ storage: 'idb', heightBulk: 100, heightLive: 123 }),
+      isListening: jest.fn().mockResolvedValue(true),
+      subscribeHeaders: jest.fn().mockResolvedValue('subscription'),
+      unsubscribe: jest.fn().mockResolvedValue(undefined)
+    }
+    mockState.createIdbChaintracks.mockResolvedValue({
+      available: Promise.resolve(),
+      chaintracks
+    })
+    try {
+      const execution = chaintracksIdbObserveCommand.execute(
+        new Map(),
+        operatorPlan('chaintracks-idb-observe', {
+          chain: 'test',
+          whatsonchainApiKeyEnvironment: 'TEST_WOC_KEY',
+          observeSeconds: 1
+        })
+      )
+      await jest.runAllTimersAsync()
+      await expect(execution).resolves.toMatchObject({
+        result: {
+          observeSeconds: 1
+        }
+      })
+      expect(chaintracks.unsubscribe).toHaveBeenCalledWith('subscription')
+      expect(chaintracks.destroy).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  test('detects a signable transaction that disappears before signing', async () => {
+    process.env.TEST_ROOT_KEY = '11'.repeat(32)
+    let reads = 0
+    const action = {
+      get signableTransaction() {
+        reads++
+        return reads === 1
+          ? {
+              reference: 'reference',
+              tx: [2]
+            }
+          : undefined
+      }
+    }
+    const wallet = {
+      balance: jest.fn().mockResolvedValue(100_000),
+      createAction: jest.fn().mockResolvedValueOnce({ txid: 'created' }).mockResolvedValueOnce(action),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      listOutputs: jest
+        .fn()
+        .mockResolvedValueOnce({ totalOutputs: 0, outputs: [] })
+        .mockResolvedValueOnce({
+          totalOutputs: 1,
+          BEEF: [1],
+          outputs: [{ outpoint: `${'aa'.repeat(32)}.0`, satoshis: 1 }]
+        })
+    }
+    mockState.createWalletClient.mockResolvedValue(wallet)
+    mockState.beefFromBinary.mockReturnValue({
+      toBinaryAtomic: jest.fn().mockReturnValue([1])
+    })
+
+    await expect(
+      storageClientExerciseCommand.execute(
+        new Map(),
+        operatorPlan('storage-client-exercise', {
+          chain: 'test',
+          endpoint: 'https://storage.example.test',
+          rootKeyEnvironment: 'TEST_ROOT_KEY',
+          basket: 'operator-test',
+          iterations: 1,
+          concurrency: 1,
+          satoshis: 1,
+          waitMilliseconds: 0
+        })
+      )
+    ).rejects.toThrow('disappeared before signing')
+    expect(wallet.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('treats an atomically unavailable proof as missing inputs', async () => {
+    process.env.TEST_DATABASE = 'mysql'
+    const txid = '92'.repeat(32)
+    const storage = createStorage({
+      findProvenTxReqById: jest.fn().mockResolvedValue({
+        provenTxReqId: 141,
+        txid,
+        rawTx: [1]
+      })
+    })
+    mockState.beefFactory.mockReturnValue({
+      findAtomicTransaction: jest.fn().mockReturnValue(undefined),
+      findTxid: jest.fn().mockReturnValue({
+        tx: { inputs: [] }
+      }),
+      mergeBeef: jest.fn(),
+      mergeRawTx: jest.fn()
+    })
+    mockState.storageFactory.mockReturnValue(storage)
+
+    const evidence = await walletProofHistoryCommand.execute(
+      new Map(),
+      operatorPlan('wallet-proof-history', {
+        mode: 'verify',
+        chain: 'test',
+        databaseEnvironment: 'TEST_DATABASE',
+        whatsonchainApiKeyEnvironment: 'TEST_WOC',
+        requestIds: '141'
+      })
+    )
+    expect(evidence.result).toMatchObject({
+      missingInputs: 1,
+      verified: 0
+    })
     expect(storage.destroy).toHaveBeenCalledTimes(1)
   })
 })

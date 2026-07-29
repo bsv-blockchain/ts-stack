@@ -19,10 +19,17 @@ import { walletReviewOutputsCommand } from './commands/walletReviewOutputs'
 import { walletReviewProofRequestsCommand } from './commands/walletReviewProofRequests'
 import { OperatorCommand } from './contracts'
 import {
+  authorizePlan,
   assertExecutionAuthorized,
+  booleanOption,
+  environmentName,
   explicitOutputPath,
+  optionInteger,
+  optionString,
   parseOperatorArguments,
+  parseChain,
   readBoundedRegularFile,
+  requiredEnvironment,
   runOperatorCommand
 } from './safety'
 
@@ -65,6 +72,76 @@ describe('Wallet Toolbox operator safety', () => {
     expect(() => parseOperatorArguments(['one', '--apply', '--apply'])).toThrow(
       'Operator option "--apply" was provided more than once'
     )
+    expect(() => parseOperatorArguments(['one', '--=value'])).toThrow('Operator option names cannot be empty')
+    expect(() => parseOperatorArguments(['one', '--output='])).toThrow('Operator option "--output" requires a value')
+  })
+
+  test('validates reusable chain, environment, boolean, string, and integer options', () => {
+    expect(parseChain('test')).toBe('test')
+    expect(parseChain('main')).toBe('main')
+    expect(() => parseChain('stn')).toThrow('"--chain" must be "main" or "test"')
+
+    expect(environmentName('TEST_DATABASE_URL', 'database-env')).toBe('TEST_DATABASE_URL')
+    expect(() => environmentName('test-database', 'database-env')).toThrow(
+      '"--database-env" must name an uppercase environment variable'
+    )
+
+    expect(booleanOption(new Map([['repair', true]]), 'repair')).toBe(true)
+    expect(booleanOption(new Map(), 'repair')).toBe(false)
+    expect(() => booleanOption(new Map([['repair', 'yes']]), 'repair')).toThrow('"--repair" does not accept a value')
+
+    expect(optionString(new Map(), 'status', 'sending')).toBe('sending')
+    expect(() => optionString(new Map(), 'status')).toThrow('"--status" requires a non-empty value')
+    expect(() => optionString(new Map([['status', true]]), 'status')).toThrow('"--status" requires a non-empty value')
+    expect(() => optionString(new Map([['status', '  ']]), 'status')).toThrow('"--status" requires a non-empty value')
+
+    expect(optionInteger(new Map(), 'max-records', 10, { min: 1, max: 100 })).toBe(10)
+    expect(optionInteger(new Map([['max-records', '25']]), 'max-records', 10, { min: 1, max: 100 })).toBe(25)
+    for (const invalid of ['not-a-number', '1.5', '0', '101']) {
+      expect(() =>
+        optionInteger(new Map([['max-records', invalid]]), 'max-records', 10, {
+          min: 1,
+          max: 100
+        })
+      ).toThrow('"--max-records" must be an integer from 1 through 100')
+    }
+  })
+
+  test('requires non-empty named environment values', () => {
+    const original = process.env.TEST_OPERATOR_REQUIRED
+    try {
+      delete process.env.TEST_OPERATOR_REQUIRED
+      expect(() => requiredEnvironment('TEST_OPERATOR_REQUIRED')).toThrow(
+        'Required environment variable "TEST_OPERATOR_REQUIRED" is not set'
+      )
+      process.env.TEST_OPERATOR_REQUIRED = ''
+      expect(() => requiredEnvironment('TEST_OPERATOR_REQUIRED')).toThrow(
+        'Required environment variable "TEST_OPERATOR_REQUIRED" is not set'
+      )
+      process.env.TEST_OPERATOR_REQUIRED = 'configured'
+      expect(requiredEnvironment('TEST_OPERATOR_REQUIRED')).toBe('configured')
+    } finally {
+      if (original === undefined) delete process.env.TEST_OPERATOR_REQUIRED
+      else process.env.TEST_OPERATOR_REQUIRED = original
+    }
+  })
+
+  test('rejects a command that returns a plan for another command', () => {
+    expect(() =>
+      authorizePlan(
+        {
+          ...command,
+          plan: () => ({
+            command: 'different-command',
+            description: 'Mismatched plan',
+            effect: 'read-only',
+            requiresProductionApproval: false,
+            parameters: {}
+          })
+        },
+        new Map()
+      )
+    ).toThrow('Operator command "example" returned a mismatched plan')
   })
 
   test('rejects broad output targets', () => {
@@ -189,6 +266,26 @@ describe('Wallet Toolbox operator safety', () => {
         result: { ok: true }
       }
     })
+  })
+
+  test('reports non-Error execution failures without leaking or throwing', async () => {
+    const stderr: string[] = []
+    const failingCommand: OperatorCommand = {
+      ...command,
+      execute: jest.fn().mockRejectedValue('bounded operator failure')
+    }
+
+    await expect(
+      runOperatorCommand(
+        ['example', '--output', './artifacts', '--apply', '--confirm', 'example'],
+        new Map([['example', failingCommand]]),
+        {
+          stdout: jest.fn(),
+          stderr: value => stderr.push(value)
+        }
+      )
+    ).resolves.toBe(1)
+    expect(stderr).toEqual(['bounded operator failure'])
   })
 
   test('rejects unknown commands before planning', async () => {
@@ -739,5 +836,191 @@ describe('Wallet Toolbox operator safety', () => {
         ])
       )
     ).toThrow('"--observe-seconds" must be an integer')
+  })
+
+  test('rejects malformed operator-specific modes, identifiers, paths, and scopes', () => {
+    expect(() =>
+      monitorDaemonCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['startup-task-mode', 'sometimes']
+        ])
+      )
+    ).toThrow('"--startup-task-mode" must be')
+    expect(() =>
+      monitorDaemonCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['mode', 'background']
+        ])
+      )
+    ).toThrow('"--mode" must be "daemon" or "once"')
+    expect(() =>
+      walletAbortActionCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['user-id', '1'],
+          ['reference', 'contains whitespace']
+        ])
+      )
+    ).toThrow('"--reference" must be a non-whitespace wallet reference')
+    expect(() =>
+      walletDiagnosticsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['report', 'everything']
+        ])
+      )
+    ).toThrow('"--report" must be')
+    expect(() =>
+      walletDiagnosticsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['report', 'merged-beef'],
+          ['txids', 'not-a-txid']
+        ])
+      )
+    ).toThrow('"--txids" must contain')
+    expect(
+      walletDiagnosticsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['report', 'input-utxos'],
+          ['raw-transaction-file', './transaction.hex']
+        ])
+      )
+    ).toMatchObject({
+      parameters: {
+        report: 'input-utxos',
+        rawTransactionFile: path.resolve('./transaction.hex')
+      }
+    })
+    expect(() =>
+      walletLegacyFixtureCommand.plan(
+        new Map([
+          ['mode', 'archive'],
+          ['identity-key', `02${'11'.repeat(32)}`]
+        ])
+      )
+    ).toThrow('"--mode" must be "copy" or "purge"')
+    expect(() =>
+      walletLegacyFixtureCommand.plan(
+        new Map([
+          ['mode', 'copy'],
+          ['identity-key', 'not-a-key'],
+          ['source-env', 'TEST_SOURCE'],
+          ['destination-sqlite', './fixture.sqlite']
+        ])
+      )
+    ).toThrow('"--identity-key" must be a compressed public identity key')
+    expect(() =>
+      walletLegacyFixtureCommand.plan(
+        new Map([
+          ['mode', 'copy'],
+          ['identity-key', `02${'11'.repeat(32)}`],
+          ['source-env', 'TEST_SOURCE'],
+          ['destination-sqlite', './fixture.db']
+        ])
+      )
+    ).toThrow('"--destination-sqlite" must identify a SQLite file')
+    expect(() =>
+      walletLegacyFixtureCommand.plan(
+        new Map([
+          ['mode', 'copy'],
+          ['identity-key', `02${'11'.repeat(32)}`],
+          ['source-env', 'TEST_SOURCE'],
+          ['destination-sqlite', './fixture.sqlite'],
+          ['storage-name', 'x'.repeat(129)]
+        ])
+      )
+    ).toThrow('"--storage-name" must be at most 128 characters')
+    expect(() =>
+      walletProofHistoryCommand.plan(
+        new Map([
+          ['mode', 'inspect'],
+          ['chain', 'test']
+        ])
+      )
+    ).toThrow('"--mode" must be "analyze", "export", or "verify"')
+    expect(() =>
+      walletProofHistoryCommand.plan(
+        new Map([
+          ['mode', 'analyze'],
+          ['chain', 'test'],
+          ['input', './history.txt']
+        ])
+      )
+    ).toThrow('"--input" must identify a JSON file')
+    expect(() =>
+      walletProofHistoryCommand.plan(
+        new Map([
+          ['mode', 'verify'],
+          ['chain', 'test'],
+          ['request-ids', '1,1']
+        ])
+      )
+    ).toThrow('"--request-ids" must contain')
+    expect(() =>
+      walletProofHistoryCommand.plan(
+        new Map([
+          ['mode', 'verify'],
+          ['chain', 'test'],
+          ['request-ids', '1'],
+          ['page-size', '10']
+        ])
+      )
+    ).toThrow('"--min-request-id" and "--page-size" are valid only in export mode')
+    expect(() =>
+      walletReviewOutputsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['user-ids', '1,1']
+        ])
+      )
+    ).toThrow('"--user-ids" must contain')
+    expect(() =>
+      walletReviewOutputsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['user-ids', '1'],
+          ['scope', 'unknown']
+        ])
+      )
+    ).toThrow('"--scope" must be "change" or "all"')
+    expect(() =>
+      walletReviewProofRequestsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['status', 'failed']
+        ])
+      )
+    ).toThrow('"--status" must be "doubleSpend" or "invalid"')
+    expect(() =>
+      walletReconcileStuckCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['status', 'completed']
+        ])
+      )
+    ).toThrow('"--status" must be "sending" or "unproven"')
+    expect(() =>
+      walletReinternalizeExportsCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['from-user-id', '2'],
+          ['to-user-ids', '0']
+        ])
+      )
+    ).toThrow('"--to-user-ids" must contain')
+    expect(() =>
+      storageClientExerciseCommand.plan(
+        new Map([
+          ['chain', 'test'],
+          ['endpoint', 'https://storage.example.test'],
+          ['root-key-env', 'TEST_STORAGE_ROOT_KEY'],
+          ['basket', 'contains whitespace']
+        ])
+      )
+    ).toThrow('"--basket" must be a 1 through 64 character safe basket name')
   })
 })
