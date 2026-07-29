@@ -30,6 +30,26 @@ describe('WAB transport hardening', () => {
     expect(nestedFetch).toHaveBeenCalledWith('https://wab.example/customer/info', expect.any(Object))
   })
 
+  it.each([
+    'https://wab.example',
+    'https://wab.example/',
+    'https://wab.example///'
+  ])('never duplicates the path separator for auth requests to %s', async serverUrl => {
+    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const client = new WABClient(serverUrl, { fetch: fetchClient })
+
+    await client.startAuthMethod(
+      new TwilioPhoneInteractor(),
+      'a'.repeat(64),
+      { phoneNumber: '+15555550123' }
+    )
+
+    expect(fetchClient).toHaveBeenCalledWith(
+      'https://wab.example/auth/start',
+      expect.any(Object)
+    )
+  })
+
   it('requires canonical E.164 phone identity before sending authentication', async () => {
     const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
