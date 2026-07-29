@@ -8,6 +8,8 @@ build/
 coverage/
 .nyc_output/
 .stryker-tmp/
+.operator-build/
+operator-artifacts/
 artifacts/mutation/
 *.log
 .DS_Store

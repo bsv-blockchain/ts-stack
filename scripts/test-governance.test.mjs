@@ -10,11 +10,19 @@ import {
   classifyManualFile,
   evaluateTestGovernance,
   findDirectSkips,
-  findEmptyTests
+  findEmptyTests,
+  findUnboundedLoops
 } from './test-governance.mjs'
 
 const policyPath = path.join(REPOSITORY_ROOT, 'governance/test-quality/policy.json')
 const policy = JSON.parse(fs.readFileSync(policyPath, 'utf8'))
+const walletManualSuiteInventoryPath = path.join(
+  REPOSITORY_ROOT,
+  'governance/test-quality/wallet-toolbox-manual-suites.json'
+)
+const walletManualSuiteInventory = JSON.parse(
+  fs.readFileSync(walletManualSuiteInventoryPath, 'utf8')
+)
 
 test('current required, manual, live, resource, and conformance tests are governed', () => {
   const result = evaluateTestGovernance({
@@ -29,7 +37,8 @@ test('current required, manual, live, resource, and conformance tests are govern
   assert.equal(result.summary.propertyExcludedPackages, 8)
   assert.equal(result.summary.propertyClassifiedPackages, 33)
   assert.equal(result.summary.mutationTargets, 25)
-  assert.equal(result.summary.manualAndLiveFiles, 40)
+  assert.equal(result.summary.manualAndLiveFiles, 32)
+  assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
   assert.equal(result.summary.conformanceSkips, 211)
 })
@@ -87,12 +96,36 @@ test('assertion-free empty test bodies are rejected without flagging real bodies
   ])
 })
 
+test('unbounded-loop detection ignores comments and accepts bounded loops', () => {
+  const source = [
+    '// for (;;) {}',
+    '/* while (true) {} */',
+    'for (; index < limit; index++) {}',
+    'while (remaining > 0) { remaining-- }',
+    'for (;;) { await work() }',
+    'while (true) { await work() }'
+  ].join('\n')
+
+  assert.deepEqual(findUnboundedLoops(source), [5, 6])
+})
+
 test('manual classification requires one matching policy rule', () => {
   const file = 'packages/wallet/wallet-toolbox/test/Wallet/example.man.test.ts'
   assert.deepEqual(
     classifyManualFile(file, policy.manualRules).map(rule => rule.policy),
     ['wallet-operator']
   )
+})
+
+test('every Wallet Toolbox manual suite has an exact disposition', () => {
+  const changedInventory = structuredClone(walletManualSuiteInventory)
+  changedInventory.suites.pop()
+  const result = evaluateTestGovernance({
+    policy,
+    walletManualSuiteInventory: changedInventory,
+    today: '2026-07-29'
+  })
+  assert.match(result.errors.join('\n'), /lacks an exact wallet manual suite disposition/)
 })
 
 test('governed test runner rejects traversal and wrong test modes', () => {

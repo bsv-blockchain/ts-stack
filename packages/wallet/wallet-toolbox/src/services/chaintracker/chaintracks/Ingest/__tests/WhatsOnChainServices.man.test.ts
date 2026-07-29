@@ -24,6 +24,9 @@ describe('WhatsOnChainServices tests', () => {
       capturedLogs.push(args.map(String).join(' '))
     })
   })
+  afterAll(() => {
+    logSpy.mockRestore()
+  })
 
   test('getHeaderByHash', async () => {
     const header = await woc.getHeaderByHash('000000000000000001b3e99847d57ff3e0bfc4222cea5c29f10bf24387a250a2')
@@ -36,7 +39,7 @@ describe('WhatsOnChainServices tests', () => {
   })
 
   const stopOldListenersToken: StopListenerToken = { stop: undefined }
-  function stopOldListener () {
+  function stopOldListener() {
     stopOldListenersToken.stop?.()
   }
 
@@ -46,7 +49,7 @@ describe('WhatsOnChainServices tests', () => {
     expect(height > 600000).toBe(true)
 
     const headersOld: BlockHeader[] = []
-    const errorsOld: Array<{ code: number, message: string }> = []
+    const errorsOld: Array<{ code: number; message: string }> = []
     const okOld = await WocHeadersBulkListener(
       height - 4,
       height,
@@ -73,7 +76,7 @@ describe('WhatsOnChainServices tests', () => {
     // Comment out this line to just wait for next new header...
     // setTimeout(() => woc.stopNewListener(), 5000)
     const headersNew: BlockHeader[] = []
-    const errorsNew: Array<{ code: number, message: string }> = []
+    const errorsNew: Array<{ code: number; message: string }> = []
     const eh: EnqueueHandler = h => {
       headersNew.push(h)
       if (headersNew.length >= 1) stopNewListenersToken.stop?.()
@@ -98,6 +101,10 @@ describe('WhatsOnChainServices tests', () => {
     const latest = await fetch.download('https://api.whatsonchain.com/v1/bsv/main/block/headers/latest?count=1')
     const bh = deserializeBlockHeader(latest, 0, 0)
     console.log(`latest hash: ${bh.hash} at ${new Date().toISOString()}`)
+    expect(bytes.length).toBeGreaterThanOrEqual(80)
+    expect(bytes.length % 80).toBe(0)
+    expect(latest).toHaveLength(80)
+    expect(bh.hash).toMatch(/^[0-9a-f]{64}$/)
     //  await wait(60 * 1000)
     // }
   })
@@ -114,6 +121,13 @@ describe('WhatsOnChainServices tests', () => {
       log += `${h.height} ${h.hash} ${h.confirmations} ${h.nTx}\n`
     }
     console.log(`${new Date().toISOString()}\n${log}`)
+    expect(headers.length).toBeGreaterThan(0)
+    for (const header of headers) {
+      expect(header.height).toBeGreaterThanOrEqual(0)
+      expect(header.hash).toMatch(/^[0-9a-f]{64}$/)
+      expect(header.confirmations).toBeGreaterThanOrEqual(0)
+      expect(header.nTx).toBeGreaterThanOrEqual(0)
+    }
     // await wait(60 * 1000)
     // }
   })

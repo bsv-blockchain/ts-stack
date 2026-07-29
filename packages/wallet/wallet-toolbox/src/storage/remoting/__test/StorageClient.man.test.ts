@@ -1,13 +1,4 @@
-import {
-  Beef,
-  CachedKeyDeriver,
-  CreateActionResult,
-  P2PKH,
-  PrivateKey,
-  SignActionArgs,
-  SignActionResult,
-  Validation
-} from '@bsv/sdk'
+import { Beef, CachedKeyDeriver, P2PKH, PrivateKey, SignActionArgs } from '@bsv/sdk'
 import { _tu } from '../../../../test/utils/TestUtilsWalletStorage'
 import { wait } from '../../../utility/utilityHelpers'
 import { Services } from '../../../services/Services'
@@ -16,7 +7,6 @@ import { Setup } from '../../../Setup'
 import { StorageKnex } from '../../StorageKnex'
 import { WalletStorageManager } from '../../WalletStorageManager'
 import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { get } from 'node:http'
 
 describe('StorageClient to tagged revision manual tests', () => {
   jest.setTimeout(99999999)
@@ -65,7 +55,7 @@ describe('StorageClient to tagged revision manual tests', () => {
         console.log(`Created outpoint: ${car.txid}:0`)
       } else {
         const o = outputs.outputs[0]
-        if (o && o.outpoint && (outputs.BEEF != null)) {
+        if (o && o.outpoint && outputs.BEEF != null) {
           // Consume the first output found...
           const unlock = _tu.getUnlockP2PKH(k, o.satoshis)
           const unlockingScriptLength = await unlock.estimateLength()
@@ -115,155 +105,6 @@ describe('StorageClient to tagged revision manual tests', () => {
     await s.wallet.destroy()
   })
 
-  test('1 async createAction signAction', async () => {
-    if (_tu.noEnv('main')) return
-    const env = _tu.getEnv('main')
-    const tag = 'v1-0-155---' // revision tags must be followed by '---' as a GCR service URL prefix.
-    // const endpointUrl = `https://${tag}prod-storage-921101068003.us-west1.run.app`
-    const endpointUrl = 'https://storage.babbage.systems'
-    const s = await _tu.createTestWalletWithStorageClient({
-      rootKeyHex: env.devKeys[env.identityKey],
-      endpointUrl,
-      chain: 'main'
-    })
-
-    const testCode = 'xyzzy43'
-    const k = s.wallet.keyDeriver.derivePrivateKey([0, testCode], '1', 'self')
-    const address = k.toPublicKey().toAddress()
-    const p2pkh = new P2PKH()
-    const lock = p2pkh.lock(address)
-
-    const count = 8
-    const acceptDelayedBroadcast = false
-    const satoshis = 1
-
-    let reps = 0
-
-    for (;;) {
-      reps++
-      console.log(`Async createAction/signAction iteration ${reps}`)
-      let outputs = await s.wallet.listOutputs({ basket: testCode, include: 'entire transactions', limit: count })
-
-      const missing = count - outputs.totalOutputs
-
-      const balance = await s.wallet.balance()
-      if (balance < missing * 10000) {
-        console.warn(`balance ${balance} is less than needed ${missing * 10000} to run the test, skipping...`)
-        return
-      }
-
-      if (missing > 0) {
-        const createPromises: Array<Promise<CreateActionResult>> = []
-
-        for (let i = 0; i < missing; i++) {
-          // Create an output in the testCode basket if it doesn't exist
-          const car = s.wallet.createAction({
-            labels: [testCode],
-            description: `create ${testCode}`,
-            outputs: [
-              {
-                basket: testCode,
-                lockingScript: lock.toHex(),
-                satoshis,
-                outputDescription: testCode,
-                tags: [testCode]
-              }
-            ],
-            options: {
-              randomizeOutputs: false,
-              acceptDelayedBroadcast
-            }
-          })
-          createPromises.push(car)
-        }
-
-        const createResults = await Promise.all(createPromises)
-        console.log(`${createPromises.length} createPromises resulting in ${createResults.length} createResults`)
-        for (const car of createResults) {
-          expect(car.txid).toBeTruthy()
-          console.log(`Created outpoint: ${car.txid}:0`)
-        }
-        outputs = await s.wallet.listOutputs({ basket: testCode, include: 'entire transactions', limit: count })
-      }
-
-      const consumeCreatePromises: Array<Promise<CreateActionResult>> = []
-      const beef = Beef.fromBinary(outputs.BEEF!)
-
-      for (let i = 0; i < count; i++) {
-        const o = outputs.outputs[i]
-        if (o && o.outpoint && (outputs.BEEF != null)) {
-          // Consume the first output found...
-          const unlock = _tu.getUnlockP2PKH(k, satoshis)
-          const unlockingScriptLength = await unlock.estimateLength()
-          // Create an output in the testCode basket if it doesn't exist
-          const po = Validation.parseWalletOutpoint(o.outpoint) // just to verify it parses before we use it
-          const inputBEEF = beef.toBinaryAtomic(po.txid)
-          const cas = s.wallet.createAction({
-            labels: [testCode],
-            description: `consume ${testCode}`,
-            inputBEEF,
-            inputs: [
-              {
-                unlockingScriptLength,
-                outpoint: o.outpoint,
-                inputDescription: `consume ${testCode}`
-              }
-            ],
-            options: {
-              randomizeOutputs: false,
-              acceptDelayedBroadcast
-            }
-          })
-          consumeCreatePromises.push(cas)
-        }
-      }
-
-      const consumeCreateResults = await Promise.all(consumeCreatePromises)
-      console.log(
-        `${consumeCreatePromises.length} consumeCreatePromises resulting in ${consumeCreateResults.length} consumeCreateResults`
-      )
-
-      const consumeSignPromises: Array<Promise<SignActionResult>> = []
-
-      for (const cas of consumeCreateResults) {
-        expect(cas.signableTransaction).toBeTruthy()
-        if (cas.signableTransaction != null) {
-          const st = cas.signableTransaction
-          expect(st.reference).toBeTruthy()
-          const atomicBeef = Beef.fromBinary(st.tx)
-          const tx = atomicBeef.txs[atomicBeef.txs.length - 1].tx!
-          const unlock = _tu.getUnlockP2PKH(k, satoshis)
-          tx.inputs[0].unlockingScriptTemplate = unlock
-          await tx.sign()
-          const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
-          const signArgs: SignActionArgs = {
-            reference: st.reference,
-            spends: { 0: { unlockingScript } },
-            options: {
-              returnTXIDOnly: true,
-              noSend: false,
-              acceptDelayedBroadcast
-            }
-          }
-          const sr = s.wallet.signAction(signArgs)
-          consumeSignPromises.push(sr)
-        }
-      }
-
-      const consumeSignResults = await Promise.all(consumeSignPromises)
-      console.log(
-        `${consumeSignPromises.length} consumeSignPromises resulting in ${consumeSignResults.length} consumeSignResults`
-      )
-
-      for (const sr of consumeSignResults) {
-        expect(sr.txid).toBeTruthy()
-        console.log(`Consumed outpoint in ${sr.txid}`)
-      }
-
-      await wait(15000)
-    }
-  })
-
   test('2 makeAvailable', async () => {
     if (_tu.noEnv('main')) return
     const env = _tu.getEnv('main')
@@ -276,7 +117,10 @@ describe('StorageClient to tagged revision manual tests', () => {
       chain: 'main'
     })
 
-    await s.storage.makeAvailable()
+    const settings = await s.storage.makeAvailable()
+    expect(settings.storageIdentityKey).toMatch(/^[0-9a-f]{66}$/)
+    expect(s.storage.isAvailable()).toBe(true)
+    expect(s.storage.getActiveStore()).toBe(settings.storageIdentityKey)
 
     await s.wallet.destroy()
   })
