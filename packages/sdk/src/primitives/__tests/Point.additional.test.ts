@@ -222,7 +222,10 @@ describe('Point – additional coverage', () => {
       const point = new Point(G.getX(), G.getY())
       const getDoubles = (
         point as unknown as {
-          _getDoubles: (step?: number, power?: number) => {
+          _getDoubles: (
+            step?: number,
+            power?: number
+          ) => {
             step: number
             points: Point[]
           }
@@ -524,6 +527,54 @@ describe('Point – additional coverage', () => {
       const json = g.toJSON()
       // Even without precomputed being set externally, should return at least 2 elements
       expect(json.length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  describe('windowed multiplication compatibility', () => {
+    const combine = (
+      points: Point[],
+      wndWidth: number[]
+    ): { max: number; naf: number[][]; wnd: Point[][] } => {
+      const naf: number[][] = [[], []]
+      const wnd: Point[][] = [[], []]
+      const max = (G as any)._combineWnafPair(0, 1, {
+        points,
+        coeffs: [new BigNumber(3), new BigNumber(5)],
+        wndWidth,
+        wnd,
+        naf,
+        currentMax: 0
+      })
+      return { max, naf, wnd }
+    }
+
+    it('preserves independent NAF windows when either width is not one', () => {
+      const result = combine([G, G.mul(new BigNumber(2))], [2, 3])
+
+      expect(result.max).toBeGreaterThan(0)
+      expect(result.naf[0].length).toBeGreaterThan(0)
+      expect(result.naf[1].length).toBeGreaterThan(0)
+    })
+
+    it.each([
+      ['equal y coordinates', () => [G, G] as Point[]],
+      ['opposite y coordinates', () => [G, G.neg()] as Point[]],
+      ['unrelated y coordinates', () => [G, G.mul(new BigNumber(2))] as Point[]]
+    ])('preserves the combined JSF table for %s', (_case, makePoints) => {
+      const result = combine(makePoints(), [1, 1])
+
+      expect(result.max).toBeGreaterThan(0)
+      expect(result.wnd[0]).toHaveLength(4)
+      expect(result.naf[0]).toHaveLength(result.max)
+      expect(result.naf[1]).toHaveLength(result.max)
+    })
+
+    it('preserves zero-run collection at both terminal boundaries', () => {
+      const terminal = (G as any)._collectWnafStep(1, 1, [[0, 0]], [])
+      const active = (G as any)._collectWnafStep(0, 1, [[1]], [])
+
+      expect(terminal).toEqual({ index: -1, doubles: 2 })
+      expect(active).toEqual({ index: 0, doubles: 1 })
     })
   })
 })

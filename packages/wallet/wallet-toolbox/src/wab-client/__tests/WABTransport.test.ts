@@ -1,19 +1,12 @@
 import { TelemetryEvent, WalletInterface } from '@bsv/sdk'
 import { UMPTokenInteractor } from '../../CWIStyleWalletManager'
-import {
-  WABAccountContinuityError,
-  WalletAuthenticationManager
-} from '../../WalletAuthenticationManager'
+import { WABAccountContinuityError, WalletAuthenticationManager } from '../../WalletAuthenticationManager'
 import { WABClient } from '../WABClient'
 import { WABClientError } from '../WABTransport'
 import { DevConsoleInteractor } from '../auth-method-interactors/DevConsoleInteractor'
 import { TwilioPhoneInteractor } from '../auth-method-interactors/TwilioPhoneInteractor'
 
-function jsonResponse (
-  value: unknown,
-  status: number = 200,
-  headers: Record<string, string> = {}
-): Response {
+function jsonResponse(value: unknown, status: number = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(value), {
     status,
     headers: { 'Content-Type': 'application/json', ...headers }
@@ -30,17 +23,11 @@ describe('WAB transport hardening', () => {
   it('normalizes root and repeated trailing slashes without hanging or duplicating separators', async () => {
     const rootFetch = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
     await new WABClient('https://wab.example/', { fetch: rootFetch }).getInfo()
-    expect(rootFetch).toHaveBeenCalledWith(
-      'https://wab.example/info',
-      expect.any(Object)
-    )
+    expect(rootFetch).toHaveBeenCalledWith('https://wab.example/info', expect.any(Object))
 
     const nestedFetch = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
     await new WABClient('https://wab.example/customer///', { fetch: nestedFetch }).getInfo()
-    expect(nestedFetch).toHaveBeenCalledWith(
-      'https://wab.example/customer/info',
-      expect.any(Object)
-    )
+    expect(nestedFetch).toHaveBeenCalledWith('https://wab.example/customer/info', expect.any(Object))
   })
 
   it('requires canonical E.164 phone identity before sending authentication', async () => {
@@ -48,18 +35,14 @@ describe('WAB transport hardening', () => {
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
     const twilio = new TwilioPhoneInteractor()
 
-    await expect(client.startAuthMethod(
-      twilio,
-      'a'.repeat(64),
-      { phoneNumber: '(555) 555-0123' }
-    )).rejects.toThrow('canonical E.164')
+    await expect(client.startAuthMethod(twilio, 'a'.repeat(64), { phoneNumber: '(555) 555-0123' })).rejects.toThrow(
+      'canonical E.164'
+    )
     expect(fetchClient).not.toHaveBeenCalled()
 
-    await expect(client.startAuthMethod(
-      twilio,
-      'a'.repeat(64),
-      { phoneNumber: ' +15555550123 ' }
-    )).resolves.toMatchObject({ success: true })
+    await expect(
+      client.startAuthMethod(twilio, 'a'.repeat(64), { phoneNumber: ' +15555550123 ' })
+    ).resolves.toMatchObject({ success: true })
     const sent = JSON.parse(String(fetchClient.mock.calls[0][1]?.body)) as {
       payload: { phoneNumber: string }
     }
@@ -100,11 +83,9 @@ describe('WAB transport hardening', () => {
       fetch: fetchClient,
       maxRequestBytes: 64
     })
-    await expect(oversizedRequest.startShareAuth(
-      'DevConsole',
-      'a'.repeat(64),
-      { diagnostic: 'x'.repeat(200) }
-    )).rejects.toMatchObject({
+    await expect(
+      oversizedRequest.startShareAuth('DevConsole', 'a'.repeat(64), { diagnostic: 'x'.repeat(200) })
+    ).rejects.toMatchObject({
       code: 'WAB_REQUEST_TOO_LARGE',
       retryable: false
     })
@@ -141,6 +122,63 @@ describe('WAB transport hardening', () => {
       code: 'WAB_TIMEOUT',
       message: 'WAB request timed out.',
       retryable: true
+    })
+  })
+
+  it('rejects every non-serializable request and malformed response form', async () => {
+    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const client = new WABClient('https://wab.example', { fetch: fetchClient })
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+
+    await expect(
+      client.transport.request('/test', {
+        operation: 'circular-request',
+        body: circular
+      })
+    ).rejects.toMatchObject({
+      code: 'WAB_INVALID_REQUEST',
+      retryable: false
+    })
+    await expect(
+      client.transport.request('/test', {
+        operation: 'undefined-request',
+        body: (() => undefined) as unknown
+      })
+    ).rejects.toMatchObject({
+      code: 'WAB_INVALID_REQUEST',
+      retryable: false
+    })
+    expect(fetchClient).not.toHaveBeenCalled()
+
+    const malformedJson = new WABClient('https://wab.example', {
+      fetch: jest.fn(
+        async () =>
+          new Response('{not-json', {
+            headers: { 'Content-Type': 'application/json' }
+          })
+      ) as typeof fetch
+    })
+    await expect(malformedJson.getInfo()).rejects.toMatchObject({
+      code: 'WAB_INVALID_RESPONSE',
+      message: 'WAB response was not valid JSON.'
+    })
+
+    const failedBody = new WABClient('https://wab.example', {
+      fetch: jest.fn(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start: controller => {
+                controller.error(new Error('body read failed'))
+              }
+            })
+          )
+      ) as typeof fetch
+    })
+    await expect(failedBody.getInfo()).rejects.toMatchObject({
+      code: 'WAB_INVALID_RESPONSE',
+      message: 'WAB response could not be read.'
     })
   })
 
@@ -183,14 +221,10 @@ describe('WAB transport hardening', () => {
     const fetchClient = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const headers = init?.headers as Record<string, string>
       requestCorrelationId = headers['X-Correlation-ID']
-      return jsonResponse(
-        { error: { code: 'WAB_ROUTE_NOT_FOUND' } },
-        404,
-        {
-          'X-WAB-Service': 'wab-server',
-          'X-Correlation-ID': requestCorrelationId
-        }
-      )
+      return jsonResponse({ error: { code: 'WAB_ROUTE_NOT_FOUND' } }, 404, {
+        'X-WAB-Service': 'wab-server',
+        'X-Correlation-ID': requestCorrelationId
+      })
     }) as typeof fetch
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
 
@@ -260,10 +294,12 @@ describe('WAB transport hardening', () => {
     )
 
     await manager.startAuth({ phoneNumber: secretPhone })
-    await expect(manager.completeAuth({
-      phoneNumber: secretPhone,
-      otp: secretOtp
-    })).rejects.toBeInstanceOf(WABAccountContinuityError)
+    await expect(
+      manager.completeAuth({
+        phoneNumber: secretPhone,
+        otp: secretOtp
+      })
+    ).rejects.toBeInstanceOf(WABAccountContinuityError)
 
     expect(manager.authenticationFlow).toBe('unknown')
     expect(temporaryPresentationKey).toMatch(/^[0-9a-f]{64}$/)
@@ -280,10 +316,7 @@ describe('WAB transport hardening', () => {
   it('rejects contradictory WAB account-continuity signals before UMP lookup', async () => {
     const wabClient = {
       startAuthMethod: jest.fn(async () => ({ success: true })),
-      completeAuthMethod: jest.fn(async (
-        _method: unknown,
-        temporaryPresentationKey: string
-      ) => ({
+      completeAuthMethod: jest.fn(async (_method: unknown, temporaryPresentationKey: string) => ({
         success: true,
         presentationKey: `${temporaryPresentationKey[0] === '0' ? '1' : '0'}${temporaryPresentationKey.slice(1)}`,
         accountStatus: 'existing-user',
@@ -330,20 +363,18 @@ describe('WAB transport hardening', () => {
     const inferAccountStatus = (
       manager as unknown as {
         inferAccountStatus: (
-          result: { presentationKey: string, existingUser?: boolean },
+          result: { presentationKey: string; existingUser?: boolean },
           temporaryPresentationKey: string
         ) => 'new-user' | 'existing-user'
       }
     ).inferAccountStatus.bind(manager)
     const temporaryPresentationKey = 'a'.repeat(64)
 
-    expect(inferAccountStatus(
-      { presentationKey: 'b'.repeat(64), existingUser: true },
-      temporaryPresentationKey
-    )).toBe('existing-user')
-    expect(inferAccountStatus(
-      { presentationKey: temporaryPresentationKey, existingUser: false },
-      temporaryPresentationKey
-    )).toBe('new-user')
+    expect(inferAccountStatus({ presentationKey: 'b'.repeat(64), existingUser: true }, temporaryPresentationKey)).toBe(
+      'existing-user'
+    )
+    expect(
+      inferAccountStatus({ presentationKey: temporaryPresentationKey, existingUser: false }, temporaryPresentationKey)
+    ).toBe('new-user')
   })
 })

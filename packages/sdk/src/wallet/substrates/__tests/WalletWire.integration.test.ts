@@ -26,10 +26,7 @@ describe('WalletWire Integration Tests', () => {
   })
 
   it('preserves multi-megabyte typed BEEF across createAction without boxed arrays', async () => {
-    const inputBEEF = Uint8Array.from(
-      { length: 4 * 1024 * 1024 },
-      (_, index) => index % 251
-    )
+    const inputBEEF = Uint8Array.from({ length: 4 * 1024 * 1024 }, (_, index) => index % 251)
     let received: Uint8Array | undefined
     const processor = new WalletWireProcessor({
       createAction: async args => {
@@ -55,6 +52,37 @@ describe('WalletWire Integration Tests', () => {
     expect(received).toEqual(inputBEEF)
     expect(result.signableTransaction?.tx).toBeInstanceOf(Uint8Array)
     expect(result.signableTransaction?.tx).toEqual(inputBEEF)
+  })
+
+  it('round-trips authentication and network metadata operations', async () => {
+    const isAuthenticated = jest.fn(async () => ({ authenticated: false }))
+    const waitForAuthentication = jest.fn(async () => ({ authenticated: true }))
+    const getNetwork = jest.fn(async () => ({ network: 'testnet' as const }))
+    const getVersion = jest.fn(async () => ({ version: 'compatibility-test' }))
+    const wallet = new WalletWireTransceiver(
+      new WalletWireProcessor({
+        isAuthenticated,
+        waitForAuthentication,
+        getNetwork,
+        getVersion
+      } as unknown as WalletInterface)
+    )
+
+    await expect(wallet.isAuthenticated({})).resolves.toEqual({
+      authenticated: false
+    })
+    await expect(wallet.waitForAuthentication({})).resolves.toEqual({
+      authenticated: true
+    })
+    await expect(wallet.getNetwork({})).resolves.toEqual({
+      network: 'testnet'
+    })
+    await expect(wallet.getVersion({})).resolves.toEqual({
+      version: 'compatibility-test'
+    })
+    for (const method of [isAuthenticated, waitForAuthentication, getNetwork, getVersion]) {
+      expect(method).toHaveBeenCalledWith({}, '')
+    }
   })
 
   /**
@@ -120,16 +148,14 @@ describe('WalletWire Integration Tests', () => {
       const { valid } = await wallet.verifySignature({
         data: Utils.toArray('BRC-3 Compliance Validated!', 'utf8'),
         signature: [
-          48, 68, 2, 32, 43, 34, 58, 156, 219, 32, 50, 70, 29, 240, 155, 137,
-          88, 60, 200, 95, 243, 198, 201, 21, 56, 82, 141, 112, 69, 196, 170,
-          73, 156, 6, 44, 48, 2, 32, 118, 125, 254, 201, 44, 87, 177, 170, 93,
-          11, 193, 134, 18, 70, 9, 31, 234, 27, 170, 177, 54, 96, 181, 140, 166,
-          196, 144, 14, 230, 118, 106, 105
+          48, 68, 2, 32, 43, 34, 58, 156, 219, 32, 50, 70, 29, 240, 155, 137, 88, 60, 200, 95, 243,
+          198, 201, 21, 56, 82, 141, 112, 69, 196, 170, 73, 156, 6, 44, 48, 2, 32, 118, 125, 254,
+          201, 44, 87, 177, 170, 93, 11, 193, 134, 18, 70, 9, 31, 234, 27, 170, 177, 54, 96, 181,
+          140, 166, 196, 144, 14, 230, 118, 106, 105
         ],
         protocolID: [2, 'BRC3 Test'],
         keyID: '42',
-        counterparty:
-          '0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1'
+        counterparty: '0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1'
       })
       expect(valid).toBe(true)
     })
@@ -147,14 +173,12 @@ describe('WalletWire Integration Tests', () => {
       const { valid } = await wallet.verifyHmac({
         data: Utils.toArray('BRC-2 HMAC Compliance Validated!', 'utf8'),
         hmac: [
-          81, 240, 18, 153, 163, 45, 174, 85, 9, 246, 142, 125, 209, 133, 82,
-          76, 254, 103, 46, 182, 86, 59, 219, 61, 126, 30, 176, 232, 233, 100,
-          234, 14
+          81, 240, 18, 153, 163, 45, 174, 85, 9, 246, 142, 125, 209, 133, 82, 76, 254, 103, 46, 182,
+          86, 59, 219, 61, 126, 30, 176, 232, 233, 100, 234, 14
         ],
         protocolID: [2, 'BRC2 Test'],
         keyID: '42',
-        counterparty:
-          '0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1'
+        counterparty: '0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1'
       })
       expect(valid).toBe(true)
     })
@@ -171,21 +195,17 @@ describe('WalletWire Integration Tests', () => {
       )
       const { plaintext } = await wallet.decrypt({
         ciphertext: [
-          252, 203, 216, 184, 29, 161, 223, 212, 16, 193, 94, 99, 31, 140, 99,
-          43, 61, 236, 184, 67, 54, 105, 199, 47, 11, 19, 184, 127, 2, 165, 125,
-          9, 188, 195, 196, 39, 120, 130, 213, 95, 186, 89, 64, 28, 1, 80, 20,
-          213, 159, 133, 98, 253, 128, 105, 113, 247, 197, 152, 236, 64, 166,
-          207, 113, 134, 65, 38, 58, 24, 127, 145, 140, 206, 47, 70, 146, 84,
-          186, 72, 95, 35, 154, 112, 178, 55, 72, 124
+          252, 203, 216, 184, 29, 161, 223, 212, 16, 193, 94, 99, 31, 140, 99, 43, 61, 236, 184, 67,
+          54, 105, 199, 47, 11, 19, 184, 127, 2, 165, 125, 9, 188, 195, 196, 39, 120, 130, 213, 95,
+          186, 89, 64, 28, 1, 80, 20, 213, 159, 133, 98, 253, 128, 105, 113, 247, 197, 152, 236, 64,
+          166, 207, 113, 134, 65, 38, 58, 24, 127, 145, 140, 206, 47, 70, 146, 84, 186, 72, 95, 35,
+          154, 112, 178, 55, 72, 124
         ],
         protocolID: [2, 'BRC2 Test'],
         keyID: '42',
-        counterparty:
-          '0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1'
+        counterparty: '0294c479f762f6baa97fbcd4393564c1d7bd8336ebd15928135bbcf575cd1a71a1'
       })
-      expect(Utils.toUTF8(plaintext)).toEqual(
-        'BRC-2 Encryption Compliance Validated!'
-      )
+      expect(Utils.toUTF8(plaintext)).toEqual('BRC-2 Encryption Compliance Validated!')
     })
     it('Encrypts messages decryptable by the counterparty', async () => {
       const userKey = PrivateKey.fromRandom()
@@ -272,13 +292,12 @@ describe('WalletWire Integration Tests', () => {
         keyID: '4',
         counterparty: counterpartyKey.toPublicKey().toString()
       })
-      const { publicKey: derivedByCounterparty } =
-        await counterparty.getPublicKey({
-          protocolID: [2, 'tests'],
-          keyID: '4',
-          counterparty: userKey.toPublicKey().toString(),
-          forSelf: true
-        })
+      const { publicKey: derivedByCounterparty } = await counterparty.getPublicKey({
+        protocolID: [2, 'tests'],
+        keyID: '4',
+        counterparty: userKey.toPublicKey().toString(),
+        forSelf: true
+      })
       expect(derivedForCounterparty).toEqual(derivedByCounterparty)
     })
     it('Signs messages verifiable by the counterparty', async () => {
@@ -637,27 +656,18 @@ describe('WalletWire Integration Tests', () => {
       // Verifier decrypts the encrypted linkage
       const { plaintext: linkage } = await verifierWallet.decrypt({
         ciphertext: revelation.encryptedLinkage,
-        protocolID: [
-          2,
-          `specific linkage revelation ${protocolID[0]} ${protocolID[1]}`
-        ],
+        protocolID: [2, `specific linkage revelation ${protocolID[0]} ${protocolID[1]}`],
         keyID,
         counterparty: proverKey.toPublicKey().toString()
       })
 
       // Compute expected linkage
-      const sharedSecret = proverKey
-        .deriveSharedSecret(counterpartyKey.toPublicKey())
-        .encode(true)
+      const sharedSecret = proverKey.deriveSharedSecret(counterpartyKey.toPublicKey()).encode(true)
 
       // Function to compute the invoice number
       const computeInvoiceNumber = function (protocolID: [number, string], keyID: string): string {
         const securityLevel = protocolID[0]
-        if (
-          !Number.isInteger(securityLevel) ||
-          securityLevel < 0 ||
-          securityLevel > 2
-        ) {
+        if (!Number.isInteger(securityLevel) || securityLevel < 0 || securityLevel > 2) {
           throw new Error('Protocol security level must be 0, 1, or 2')
         }
         const protocolName = protocolID[1].toLowerCase().trim()
@@ -674,14 +684,10 @@ describe('WalletWire Integration Tests', () => {
           throw new Error('Protocol names must be 5 characters or more')
         }
         if (protocolName.includes('  ')) {
-          throw new Error(
-            'Protocol names cannot contain multiple consecutive spaces ("  ")'
-          )
+          throw new Error('Protocol names cannot contain multiple consecutive spaces ("  ")')
         }
         if (!/^[a-z0-9 ]+$/g.test(protocolName)) {
-          throw new Error(
-            'Protocol names can only contain letters, numbers and spaces'
-          )
+          throw new Error('Protocol names can only contain letters, numbers and spaces')
         }
         if (protocolName.endsWith(' protocol')) {
           throw new Error('No need to end your protocol name with " protocol"')
@@ -706,9 +712,7 @@ describe('WalletWire Integration Tests', () => {
   }
 
   // Mock implementation for methods not supported by CompletedProtoWallet
-  const mockUnsupportedMethods = (
-    methods: Partial<CompletedProtoWallet>
-  ): CompletedProtoWallet => {
+  const mockUnsupportedMethods = (methods: Partial<CompletedProtoWallet>): CompletedProtoWallet => {
     // @ts-expect-error
     const result: CompletedProtoWallet = {
       ...methods
@@ -833,9 +837,7 @@ describe('WalletWire Integration Tests', () => {
       const createActionMock = jest.fn().mockResolvedValue({
         txid: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806',
         tx: [1, 2, 3, 4],
-        noSendChange: [
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0'
-        ],
+        noSendChange: ['deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0'],
         sendWithResults: [
           {
             txid: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806',
@@ -865,15 +867,13 @@ describe('WalletWire Integration Tests', () => {
         description: 'Test action with all options',
         inputs: [
           {
-            outpoint:
-              'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+            outpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
             unlockingScript: '51',
             inputDescription: 'Already unlocked input',
             sequenceNumber: 0xffffffff
           },
           {
-            outpoint:
-              'feedface20248806feedface20248806feedface20248806feedface20248806.1',
+            outpoint: 'feedface20248806feedface20248806feedface20248806feedface20248806.1',
             unlockingScriptLength: 108,
             inputDescription: 'Input to unlock later'
           }
@@ -893,17 +893,11 @@ describe('WalletWire Integration Tests', () => {
           signAndProcess: false,
           acceptDelayedBroadcast: false,
           trustSelf: 'known' as 'known',
-          knownTxids: [
-            'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'
-          ],
+          knownTxids: ['deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'],
           returnTXIDOnly: false,
           noSend: true,
-          noSendChange: [
-            'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0'
-          ],
-          sendWith: [
-            'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'
-          ],
+          noSendChange: ['deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0'],
+          sendWith: ['deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'],
           randomizeOutputs: false
         }
       }
@@ -933,11 +927,23 @@ describe('WalletWire Integration Tests', () => {
       )
     })
 
+    it('preserves an explicitly present options object with defaulted fields', async () => {
+      const createActionMock = jest.fn().mockResolvedValue({})
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({ createAction: createActionMock })
+      )
+      const args = {
+        description: 'Exercise explicit option defaults',
+        options: {}
+      }
+
+      await expect(wallet.createAction(args)).resolves.toEqual({})
+      expect(createActionMock).toHaveBeenCalledWith(args, '')
+    })
+
     it('should throw an error with invalid inputs', async () => {
       // Mock the createAction method to throw an error
-      const createActionMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid inputs'))
+      const createActionMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           createAction: createActionMock
@@ -980,9 +986,7 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error with invalid inputs', async () => {
       // Mock the signAction method to throw an error
-      const signActionMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid inputs'))
+      const signActionMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           signAction: signActionMock
@@ -1029,9 +1033,7 @@ describe('WalletWire Integration Tests', () => {
           acceptDelayedBroadcast: false,
           returnTXIDOnly: false,
           noSend: true,
-          sendWith: [
-            'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'
-          ]
+          sendWith: ['deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806']
         }
       }
 
@@ -1055,6 +1057,23 @@ describe('WalletWire Integration Tests', () => {
       })
       expect(signActionMock).toHaveBeenCalledWith(args, '')
     })
+
+    it('preserves an explicitly present signing options object with defaults', async () => {
+      const signActionMock = jest.fn().mockResolvedValue({})
+      const wallet = createTestWalletWire(mockUnsupportedMethods({ signAction: signActionMock }))
+      const args = {
+        spends: {
+          0: {
+            unlockingScript: '51'
+          }
+        },
+        reference: Utils.toBase64([4, 5, 6]),
+        options: {}
+      }
+
+      await expect(wallet.signAction(args)).resolves.toEqual({})
+      expect(signActionMock).toHaveBeenCalledWith(args, '')
+    })
   })
 
   describe('abortAction', () => {
@@ -1076,9 +1095,7 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error with invalid reference', async () => {
       // Mock the abortAction method to throw an error
-      const abortActionMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid reference'))
+      const abortActionMock = jest.fn().mockRejectedValue(new Error('Invalid reference'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           abortAction: abortActionMock
@@ -1086,9 +1103,7 @@ describe('WalletWire Integration Tests', () => {
       )
       const reference = ''
       const args = { reference }
-      await expect(wallet.abortAction(args)).rejects.toThrow(
-        'Invalid reference'
-      )
+      await expect(wallet.abortAction(args)).rejects.toThrow('Invalid reference')
       expect(abortActionMock).toHaveBeenCalledWith(args, '')
     })
   })
@@ -1272,11 +1287,34 @@ describe('WalletWire Integration Tests', () => {
       expect(listActionsMock).toHaveBeenCalledWith(args, '')
     })
 
+    it('preserves alternate query mode, false includes, and omitted pagination', async () => {
+      const listActionsMock = jest.fn().mockResolvedValue({
+        totalActions: 0,
+        actions: []
+      })
+      const wallet = createTestWalletWire(mockUnsupportedMethods({ listActions: listActionsMock }))
+      const args = {
+        labels: [],
+        labelQueryMode: 'any' as const,
+        includeLabels: false,
+        includeInputs: false,
+        includeInputSourceLockingScripts: false,
+        includeInputUnlockingScripts: false,
+        includeOutputs: false,
+        includeOutputLockingScripts: false,
+        seekPermission: true
+      }
+
+      await expect(wallet.listActions(args)).resolves.toEqual({
+        totalActions: 0,
+        actions: []
+      })
+      expect(listActionsMock).toHaveBeenCalledWith(args, '')
+    })
+
     it('should throw an error with invalid inputs', async () => {
       // Mock the listActions method to throw an error
-      const listActionsMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid inputs'))
+      const listActionsMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           listActions: listActionsMock
@@ -1293,9 +1331,7 @@ describe('WalletWire Integration Tests', () => {
   describe('internalizeAction', () => {
     it('should internalize an action with valid inputs', async () => {
       // Mock the internalizeAction method
-      const internalizeActionMock = jest
-        .fn()
-        .mockResolvedValue({ accepted: true })
+      const internalizeActionMock = jest.fn().mockResolvedValue({ accepted: true })
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           internalizeAction: internalizeActionMock
@@ -1328,9 +1364,7 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error with invalid inputs', async () => {
       // Mock the internalizeAction method to throw an error
-      const internalizeActionMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid inputs'))
+      const internalizeActionMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           internalizeAction: internalizeActionMock
@@ -1341,9 +1375,7 @@ describe('WalletWire Integration Tests', () => {
         outputs: [],
         description: 'Test internalize action'
       }
-      await expect(wallet.internalizeAction(args)).rejects.toThrow(
-        'Invalid inputs'
-      )
+      await expect(wallet.internalizeAction(args)).rejects.toThrow('Invalid inputs')
       expect(internalizeActionMock).toHaveBeenCalledWith(
         { ...args, tx: Uint8Array.from(args.tx) },
         ''
@@ -1351,9 +1383,7 @@ describe('WalletWire Integration Tests', () => {
     })
     it('should internalize an action with "basket insertion" protocol', async () => {
       // Mock the internalizeAction method
-      const internalizeActionMock = jest
-        .fn()
-        .mockResolvedValue({ accepted: true })
+      const internalizeActionMock = jest.fn().mockResolvedValue({ accepted: true })
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           internalizeAction: internalizeActionMock
@@ -1383,6 +1413,36 @@ describe('WalletWire Integration Tests', () => {
         ''
       )
     })
+
+    it('preserves empty basket metadata and optional permission fields', async () => {
+      const internalizeActionMock = jest.fn().mockResolvedValue({ accepted: true })
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({ internalizeAction: internalizeActionMock })
+      )
+      const args = {
+        tx: [0],
+        outputs: [
+          {
+            outputIndex: 0,
+            protocol: 'basket insertion' as const,
+            insertionRemittance: {
+              basket: 'test-basket',
+              tags: []
+            }
+          }
+        ],
+        description: 'Exercise empty basket metadata',
+        seekPermission: false
+      }
+
+      await expect(wallet.internalizeAction(args)).resolves.toEqual({
+        accepted: true
+      })
+      expect(internalizeActionMock).toHaveBeenCalledWith(
+        { ...args, tx: Uint8Array.from(args.tx) },
+        ''
+      )
+    })
   })
 
   describe('listOutputs', () => {
@@ -1392,8 +1452,7 @@ describe('WalletWire Integration Tests', () => {
         totalOutputs: 1,
         outputs: [
           {
-            outpoint:
-              'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+            outpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
             satoshis: 1000,
             lockingScript: '00',
             spendable: true,
@@ -1424,9 +1483,7 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error with invalid inputs', async () => {
       // Mock the listOutputs method to throw an error
-      const listOutputsMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid inputs'))
+      const listOutputsMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           listOutputs: listOutputsMock
@@ -1445,8 +1502,7 @@ describe('WalletWire Integration Tests', () => {
         BEEF: [1, 2, 3, 4],
         outputs: [
           {
-            outpoint:
-              'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+            outpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
             satoshis: 1000,
             spendable: true
           }
@@ -1475,13 +1531,51 @@ describe('WalletWire Integration Tests', () => {
       expect(result.outputs[0]).not.toHaveProperty('labels')
       expect(listOutputsMock).toHaveBeenCalledWith(args, '')
     })
+
+    it('preserves every list-output query encoding and include mode', async () => {
+      const listOutputsMock = jest.fn().mockResolvedValue({
+        totalOutputs: 0,
+        outputs: []
+      })
+      const wallet = createTestWalletWire(mockUnsupportedMethods({ listOutputs: listOutputsMock }))
+      const allArgs = {
+        basket: 'test-basket',
+        tags: ['one', 'two'],
+        tagQueryMode: 'all' as const,
+        include: 'locking scripts' as const,
+        includeCustomInstructions: true,
+        includeTags: true,
+        includeLabels: false,
+        limit: 25,
+        offset: 3,
+        seekPermission: true
+      }
+      const anyArgs = {
+        ...allArgs,
+        tagQueryMode: 'any' as const,
+        include: 'entire transactions' as const,
+        includeCustomInstructions: false,
+        includeTags: false,
+        includeLabels: true,
+        seekPermission: false
+      }
+
+      await expect(wallet.listOutputs(allArgs)).resolves.toEqual({
+        totalOutputs: 0,
+        outputs: []
+      })
+      await expect(wallet.listOutputs(anyArgs)).resolves.toEqual({
+        totalOutputs: 0,
+        outputs: []
+      })
+      expect(listOutputsMock).toHaveBeenNthCalledWith(1, allArgs, '')
+      expect(listOutputsMock).toHaveBeenNthCalledWith(2, anyArgs, '')
+    })
   })
 
   describe('getPublicKey', () => {
     it('should get the identity public key', async () => {
-      const wallet = createTestWalletWire(
-        new CompletedProtoWallet(PrivateKey.fromRandom())
-      )
+      const wallet = createTestWalletWire(new CompletedProtoWallet(PrivateKey.fromRandom()))
       const result = await wallet.getPublicKey({ identityKey: true })
       expect(result).toHaveProperty('publicKey')
       expect(typeof result.publicKey).toBe('string')
@@ -1504,9 +1598,7 @@ describe('WalletWire Integration Tests', () => {
     })
 
     it('should get the public key with counterparty "anyone"', async () => {
-      const wallet = createTestWalletWire(
-        new CompletedProtoWallet(PrivateKey.fromRandom())
-      )
+      const wallet = createTestWalletWire(new CompletedProtoWallet(PrivateKey.fromRandom()))
       const args = {
         protocolID: [1, 'testprotocol'] as [0 | 1 | 2, string],
         keyID: 'testkeyid',
@@ -1519,9 +1611,7 @@ describe('WalletWire Integration Tests', () => {
     })
 
     it('should get the public key with missing optional parameters', async () => {
-      const wallet = createTestWalletWire(
-        new CompletedProtoWallet(PrivateKey.fromRandom())
-      )
+      const wallet = createTestWalletWire(new CompletedProtoWallet(PrivateKey.fromRandom()))
       const args = {
         protocolID: [0, 'minimalprotocol'] as [0 | 1 | 2, string],
         keyID: 'minimalkeyid'
@@ -1539,9 +1629,7 @@ describe('WalletWire Integration Tests', () => {
       const userKey = PrivateKey.fromRandom()
       const counterpartyKey = PrivateKey.fromRandom()
       const userWallet = createTestWalletWire(new CompletedProtoWallet(userKey))
-      const counterpartyWallet = createTestWalletWire(
-        new CompletedProtoWallet(counterpartyKey)
-      )
+      const counterpartyWallet = createTestWalletWire(new CompletedProtoWallet(counterpartyKey))
 
       const plaintext = sampleData
       const encryptArgs = {
@@ -1568,9 +1656,7 @@ describe('WalletWire Integration Tests', () => {
     it('should throw an error for invalid decryption inputs', async () => {
       const userKey = PrivateKey.fromRandom()
       const counterpartyKey = PrivateKey.fromRandom()
-      const counterpartyWallet = createTestWalletWire(
-        new CompletedProtoWallet(counterpartyKey)
-      )
+      const counterpartyWallet = createTestWalletWire(new CompletedProtoWallet(counterpartyKey))
 
       const decryptArgs = {
         ciphertext: [0x00],
@@ -1587,9 +1673,7 @@ describe('WalletWire Integration Tests', () => {
       const userKey = PrivateKey.fromRandom()
       const counterpartyKey = PrivateKey.fromRandom()
       const userWallet = createTestWalletWire(new CompletedProtoWallet(userKey))
-      const counterpartyWallet = createTestWalletWire(
-        new CompletedProtoWallet(counterpartyKey)
-      )
+      const counterpartyWallet = createTestWalletWire(new CompletedProtoWallet(counterpartyKey))
 
       const data = sampleData
       const createHmacArgs = {
@@ -1609,8 +1693,7 @@ describe('WalletWire Integration Tests', () => {
         keyID: 'test-key-id',
         counterparty: userKey.toPublicKey().toString()
       }
-      const verifyHmacResult =
-        await counterpartyWallet.verifyHmac(verifyHmacArgs)
+      const verifyHmacResult = await counterpartyWallet.verifyHmac(verifyHmacArgs)
       expect(verifyHmacResult).toEqual({ valid: true })
     })
 
@@ -1627,9 +1710,7 @@ describe('WalletWire Integration Tests', () => {
         keyID: 'test-key-id',
         counterparty: userKey.toPublicKey().toString()
       }
-      await expect(
-        counterpartyWallet.verifyHmac(verifyHmacArgs)
-      ).rejects.toThrow()
+      await expect(counterpartyWallet.verifyHmac(verifyHmacArgs)).rejects.toThrow()
     })
   })
 
@@ -1638,9 +1719,7 @@ describe('WalletWire Integration Tests', () => {
       const userKey = PrivateKey.fromRandom()
       const counterpartyKey = PrivateKey.fromRandom()
       const userWallet = createTestWalletWire(new CompletedProtoWallet(userKey))
-      const counterpartyWallet = createTestWalletWire(
-        new CompletedProtoWallet(counterpartyKey)
-      )
+      const counterpartyWallet = createTestWalletWire(new CompletedProtoWallet(counterpartyKey))
 
       const data = sampleData
       const createSignatureArgs = {
@@ -1649,8 +1728,7 @@ describe('WalletWire Integration Tests', () => {
         keyID: 'test-key-id',
         counterparty: counterpartyKey.toPublicKey().toString()
       }
-      const createSignatureResult =
-        await userWallet.createSignature(createSignatureArgs)
+      const createSignatureResult = await userWallet.createSignature(createSignatureArgs)
       expect(createSignatureResult).toHaveProperty('signature')
       expect(createSignatureResult.signature.length).toBeGreaterThan(0)
 
@@ -1661,8 +1739,7 @@ describe('WalletWire Integration Tests', () => {
         keyID: 'test-key-id',
         counterparty: userKey.toPublicKey().toString()
       }
-      const verifySignatureResult =
-        await counterpartyWallet.verifySignature(verifySignatureArgs)
+      const verifySignatureResult = await counterpartyWallet.verifySignature(verifySignatureArgs)
       expect(verifySignatureResult).toEqual({ valid: true })
     })
 
@@ -1679,9 +1756,7 @@ describe('WalletWire Integration Tests', () => {
         keyID: 'test-key-id',
         counterparty: userKey.toPublicKey().toString()
       }
-      await expect(
-        counterpartyWallet.verifySignature(verifySignatureArgs)
-      ).rejects.toThrow()
+      await expect(counterpartyWallet.verifySignature(verifySignatureArgs)).rejects.toThrow()
     })
   })
 
@@ -1691,12 +1766,8 @@ describe('WalletWire Integration Tests', () => {
       const counterpartyKey = PrivateKey.fromRandom()
       const verifierKey = PrivateKey.fromRandom()
 
-      const proverWallet = createTestWalletWire(
-        new CompletedProtoWallet(proverKey)
-      )
-      const verifierWallet = createTestWalletWire(
-        new CompletedProtoWallet(verifierKey)
-      )
+      const proverWallet = createTestWalletWire(new CompletedProtoWallet(proverKey))
+      const verifierWallet = createTestWalletWire(new CompletedProtoWallet(verifierKey))
 
       const args = {
         counterparty: counterpartyKey.toPublicKey().toString(),
@@ -1708,10 +1779,7 @@ describe('WalletWire Integration Tests', () => {
 
       const decryptArgs = {
         ciphertext: revelation.encryptedLinkage,
-        protocolID: [2, 'counterparty linkage revelation'] as [
-          0 | 1 | 2,
-          string
-        ],
+        protocolID: [2, 'counterparty linkage revelation'] as [0 | 1 | 2, string],
         keyID: revelation.revelationTime,
         counterparty: proverKey.toPublicKey().toString()
       }
@@ -1732,8 +1800,7 @@ describe('WalletWire Integration Tests', () => {
         subject: '02' + 'a'.repeat(64),
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
         certifier: '02' + 'b'.repeat(64),
-        revocationOutpoint:
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         fields: {
@@ -1756,8 +1823,7 @@ describe('WalletWire Integration Tests', () => {
           field2: 'value2'
         },
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
-        revocationOutpoint:
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         keyringRevealer: 'certifier',
@@ -1780,8 +1846,7 @@ describe('WalletWire Integration Tests', () => {
         subject: '02' + 'a'.repeat(64),
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
         certifier: '02' + 'b'.repeat(64),
-        revocationOutpoint:
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         fields: {
@@ -1804,8 +1869,7 @@ describe('WalletWire Integration Tests', () => {
           field2: 'value2'
         },
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
-        revocationOutpoint:
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         keyringRevealer: 'certifier' as 'certifier',
@@ -1832,8 +1896,7 @@ describe('WalletWire Integration Tests', () => {
         subject: '02' + 'a'.repeat(64),
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
         certifier: '02' + 'b'.repeat(64),
-        revocationOutpoint:
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         fields: {
@@ -1857,8 +1920,7 @@ describe('WalletWire Integration Tests', () => {
           field2: 'value2'
         },
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
-        revocationOutpoint:
-          'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         keyringRevealer: keyringRevealerPubKey,
@@ -1885,8 +1947,7 @@ describe('WalletWire Integration Tests', () => {
         subject: '02' + 'd'.repeat(64),
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
         certifier: '02' + 'b'.repeat(64),
-        revocationOutpoint:
-          'cafebabedeadbeefcafebabedeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
+        revocationOutpoint: 'cafebabedeadbeefcafebabedeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         fields: {
@@ -1928,8 +1989,7 @@ describe('WalletWire Integration Tests', () => {
         subject: '02' + 'e'.repeat(64),
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
         certifier: '02' + 'b'.repeat(64),
-        revocationOutpoint:
-          'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',
+        revocationOutpoint: 'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         fields: {
@@ -1950,8 +2010,7 @@ describe('WalletWire Integration Tests', () => {
           field5: 'value5'
         },
         serialNumber: Utils.toBase64(new Array(32).fill(2)),
-        revocationOutpoint:
-          'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',
+        revocationOutpoint: 'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
         keyringRevealer: 'certifier' as 'certifier',
@@ -2010,6 +2069,43 @@ describe('WalletWire Integration Tests', () => {
       expect(Array.isArray(result.certificates)).toBe(true)
       expect(listCertificatesMock).toHaveBeenCalledWith(args, '')
     })
+
+    it('preserves omitted pagination and certificate keyrings', async () => {
+      const certificate = {
+        type: Utils.toBase64(new Array(32).fill(1)),
+        subject: '02' + 'a'.repeat(64),
+        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        certifier: '02' + 'b'.repeat(64),
+        revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+        signature:
+          '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
+        fields: { name: 'Alice' },
+        keyring: {
+          name: Utils.toBase64([1, 2, 3])
+        },
+        verifier: '02' + 'c'.repeat(64)
+      }
+      const listCertificatesMock = jest.fn().mockResolvedValue({
+        totalCertificates: 1,
+        certificates: [certificate]
+      })
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({ listCertificates: listCertificatesMock })
+      )
+      const args = {
+        certifiers: [certificate.certifier],
+        types: [certificate.type]
+      }
+
+      const result = await wallet.listCertificates(args)
+
+      expect(result.totalCertificates).toBe(1)
+      expect(result.certificates[0]).toMatchObject({
+        ...certificate,
+        verifier: Utils.toUTF8(Utils.toArray(certificate.verifier, 'hex'))
+      })
+      expect(listCertificatesMock).toHaveBeenCalledWith(args, '')
+    })
     it('should list certificates with multiple fields in each certificate', async () => {
       // Mock the listCertificates method
       const listCertificatesMock = jest.fn().mockResolvedValue({
@@ -2054,10 +2150,7 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certifiers: ['02' + 'b'.repeat(64)],
-        types: [
-          Utils.toBase64(new Array(32).fill(1)),
-          Utils.toBase64(new Array(32).fill(2))
-        ],
+        types: [Utils.toBase64(new Array(32).fill(1)), Utils.toBase64(new Array(32).fill(2))],
         limit: 10,
         offset: 0
       }
@@ -2138,8 +2231,7 @@ describe('WalletWire Integration Tests', () => {
           subject: '02' + 'a'.repeat(64),
           serialNumber: Utils.toBase64(new Array(32).fill(2)),
           certifier: '02' + 'b'.repeat(64),
-          revocationOutpoint:
-            'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+          revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
           signature:
             '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
           fields: {
@@ -2174,8 +2266,7 @@ describe('WalletWire Integration Tests', () => {
           subject: '02' + 'a'.repeat(64),
           serialNumber: Utils.toBase64(new Array(32).fill(2)),
           certifier: '02' + 'b'.repeat(64),
-          revocationOutpoint:
-            'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.0',
+          revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.0',
           signature:
             '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
           fields: {
@@ -2189,10 +2280,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.proveCertificate(args)
       expect(result).toHaveProperty('keyringForVerifier')
-      expect(Object.keys(result.keyringForVerifier)).toEqual([
-        'field1',
-        'field2'
-      ])
+      expect(Object.keys(result.keyringForVerifier)).toEqual(['field1', 'field2'])
       expect(proveCertificateMock).toHaveBeenCalledWith(args, '')
     })
 
@@ -2213,8 +2301,7 @@ describe('WalletWire Integration Tests', () => {
           subject: '02' + 'a'.repeat(64),
           serialNumber: Utils.toBase64(new Array(32).fill(2)),
           certifier: '02' + 'b'.repeat(64),
-          revocationOutpoint:
-            'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe.1',
+          revocationOutpoint: 'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe.1',
           signature:
             '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
           fields: {
@@ -2235,9 +2322,7 @@ describe('WalletWire Integration Tests', () => {
   describe('relinquishCertificate', () => {
     it('should relinquish a certificate with valid inputs', async () => {
       // Mock the relinquishCertificate method
-      const relinquishCertificateMock = jest
-        .fn()
-        .mockResolvedValue({ relinquished: true })
+      const relinquishCertificateMock = jest.fn().mockResolvedValue({ relinquished: true })
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           relinquishCertificate: relinquishCertificateMock
@@ -2274,9 +2359,7 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error when getHeight fails', async () => {
       // Mock the getHeight method to throw an error
-      const getHeightMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Failed to get height'))
+      const getHeightMock = jest.fn().mockRejectedValue(new Error('Failed to get height'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           getHeight: getHeightMock
@@ -2307,18 +2390,14 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error when getHeaderForHeight fails', async () => {
       // Mock the getHeaderForHeight method to throw an error
-      const getHeaderForHeightMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Failed to get header'))
+      const getHeaderForHeightMock = jest.fn().mockRejectedValue(new Error('Failed to get header'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           getHeaderForHeight: getHeaderForHeightMock
         })
       )
       const args = { height: -1 } // Invalid height
-      await expect(wallet.getHeaderForHeight(args)).rejects.toThrow(
-        'Failed to get header'
-      )
+      await expect(wallet.getHeaderForHeight(args)).rejects.toThrow('Failed to get header')
       expect(getHeaderForHeightMock).toHaveBeenCalledWith(args, '')
     })
   })
@@ -2488,10 +2567,7 @@ describe('WalletWire Integration Tests', () => {
     it.each([
       ['__proto__', 'Unsafe attributes key: __proto__'],
       ['', 'Invalid attributes key length: expected 1–50 bytes, received 0'],
-      [
-        'a'.repeat(51),
-        'Invalid attributes key length: expected 1–50 bytes, received 51'
-      ]
+      ['a'.repeat(51), 'Invalid attributes key length: expected 1–50 bytes, received 51']
     ])('rejects an unsafe wire attribute key', async (fieldName, message) => {
       const discoverByAttributesMock = jest.fn()
       const wallet = createTestWalletWire(
@@ -2501,9 +2577,7 @@ describe('WalletWire Integration Tests', () => {
       )
       const attributes = Object.fromEntries([[fieldName, 'value']])
 
-      await expect(
-        wallet.discoverByAttributes({ attributes })
-      ).rejects.toThrow(message)
+      await expect(wallet.discoverByAttributes({ attributes })).rejects.toThrow(message)
       expect(discoverByAttributesMock).not.toHaveBeenCalled()
     })
 
@@ -2555,9 +2629,7 @@ describe('WalletWire Integration Tests', () => {
 
     it('should throw an error with invalid inputs', async () => {
       // Mock the discoverByAttributes method to throw an error
-      const discoverByAttributesMock = jest
-        .fn()
-        .mockRejectedValue(new Error('Invalid inputs'))
+      const discoverByAttributesMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))
       const wallet = createTestWalletWire(
         mockUnsupportedMethods({
           discoverByAttributes: discoverByAttributesMock
@@ -2566,9 +2638,7 @@ describe('WalletWire Integration Tests', () => {
       const args = {
         attributes: {}
       }
-      await expect(wallet.discoverByAttributes(args)).rejects.toThrow(
-        'Invalid inputs'
-      )
+      await expect(wallet.discoverByAttributes(args)).rejects.toThrow('Invalid inputs')
       expect(discoverByAttributesMock).toHaveBeenCalledWith(args, '')
     })
     it('should discover certificates matching provided attributes', async () => {
@@ -2618,9 +2688,7 @@ describe('WalletWire Integration Tests', () => {
       expect(result).toHaveProperty('totalCertificates', 1)
       expect(result.certificates.length).toBe(1)
       expect(result.certificates[0].certifierInfo.name).toBe('Certifier Three')
-      expect(result.certificates[0].decryptedFields.fieldY).toBe(
-        'decryptedValueY'
-      )
+      expect(result.certificates[0].decryptedFields.fieldY).toBe('decryptedValueY')
       expect(discoverByAttributesMock).toHaveBeenCalledWith(args, '')
     })
 

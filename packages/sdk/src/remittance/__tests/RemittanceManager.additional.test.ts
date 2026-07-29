@@ -14,43 +14,52 @@ class MessageBus {
   private messages: PeerMessage[] = []
   private nextId = 1
 
-  send (sender: PubKeyHex, recipient: PubKeyHex, messageBox: string, body: string): string {
+  send(sender: PubKeyHex, recipient: PubKeyHex, messageBox: string, body: string): string {
     const messageId = `msg-${this.nextId++}`
     this.messages.push({ messageId, sender, recipient, messageBox, body })
     return messageId
   }
 
-  list (recipient: PubKeyHex, messageBox: string): PeerMessage[] {
-    return this.messages.filter((m) => m.recipient === recipient && m.messageBox === messageBox)
+  list(recipient: PubKeyHex, messageBox: string): PeerMessage[] {
+    return this.messages.filter(m => m.recipient === recipient && m.messageBox === messageBox)
   }
 
-  ack (recipient: PubKeyHex, messageIds: string[]): void {
+  ack(recipient: PubKeyHex, messageIds: string[]): void {
     this.messages = this.messages.filter(
-      (m) => m.recipient !== recipient || !messageIds.includes(m.messageId)
+      m => m.recipient !== recipient || !messageIds.includes(m.messageId)
     )
   }
 
-  all (): PeerMessage[] { return [...this.messages] }
+  all(): PeerMessage[] {
+    return [...this.messages]
+  }
 }
 
 class TestComms implements CommsLayer {
-  constructor (private readonly owner: PubKeyHex, private readonly bus: MessageBus) {}
+  constructor(
+    private readonly owner: PubKeyHex,
+    private readonly bus: MessageBus
+  ) {}
 
-  async sendMessage (args: { recipient: PubKeyHex; messageBox: string; body: string }): Promise<string> {
+  async sendMessage(args: {
+    recipient: PubKeyHex
+    messageBox: string
+    body: string
+  }): Promise<string> {
     return this.bus.send(this.owner, args.recipient, args.messageBox, args.body)
   }
 
-  async listMessages (args: { messageBox: string; host?: string }): Promise<PeerMessage[]> {
+  async listMessages(args: { messageBox: string; host?: string }): Promise<PeerMessage[]> {
     return this.bus.list(this.owner, args.messageBox)
   }
 
-  async acknowledgeMessage (args: { messageIds: string[] }): Promise<void> {
+  async acknowledgeMessage(args: { messageIds: string[] }): Promise<void> {
     this.bus.ack(this.owner, args.messageIds)
   }
 }
 
 const makeWallet = (identityKey: PubKeyHex): WalletInterface =>
-  ({ getPublicKey: async () => ({ publicKey: identityKey }) } as unknown as WalletInterface)
+  ({ getPublicKey: async () => ({ publicKey: identityKey }) }) as unknown as WalletInterface
 
 const makeInvoiceInput = (overrides: Partial<ComposeInvoiceInput> = {}): ComposeInvoiceInput => ({
   lineItems: [],
@@ -60,16 +69,19 @@ const makeInvoiceInput = (overrides: Partial<ComposeInvoiceInput> = {}): Compose
   ...overrides
 })
 
-const parseEnvelope = (msg: PeerMessage): RemittanceEnvelope => JSON.parse(msg.body) as RemittanceEnvelope
+const parseEnvelope = (msg: PeerMessage): RemittanceEnvelope =>
+  JSON.parse(msg.body) as RemittanceEnvelope
 
 const makeThreadIdFactory = (): (() => ThreadId) => {
   let i = 0
   return () => `thread-${++i}` as ThreadId
 }
 
-const tick = async (): Promise<void> => await new Promise((resolve) => setTimeout(resolve, 0))
+const tick = async (): Promise<void> => await new Promise(resolve => setTimeout(resolve, 0))
 
-const makeModule = (overrides: Partial<RemittanceModule<any, any, any>> = {}): RemittanceModule<any, any, any> => ({
+const makeModule = (
+  overrides: Partial<RemittanceModule<any, any, any>> = {}
+): RemittanceModule<any, any, any> => ({
   id: 'test-module',
   name: 'Test Module',
   allowUnsolicitedSettlements: false,
@@ -90,16 +102,18 @@ const makeIdentityLayer = (): IdentityLayer => ({
     response: {
       kind: 'identityVerificationResponse',
       threadId,
-      certificates: [{
-        type: 'YmFzaWM=',
-        certifier: 'certifier-key',
-        subject: 'subject-key',
-        fields: { name: 'QWxpY2U=' },
-        signature: 'deadbeef',
-        serialNumber: 'c2VyaWFs',
-        revocationOutpoint: 'outpoint',
-        keyringForVerifier: { name: 'a2V5' }
-      }]
+      certificates: [
+        {
+          type: 'YmFzaWM=',
+          certifier: 'certifier-key',
+          subject: 'subject-key',
+          fields: { name: 'QWxpY2U=' },
+          signature: 'deadbeef',
+          serialNumber: 'c2VyaWFs',
+          revocationOutpoint: 'outpoint',
+          keyringForVerifier: { name: 'a2V5' }
+        }
+      ]
     }
   }),
   assessReceivedCertificateSufficiency: async (_cp, _received, threadId) => ({
@@ -179,7 +193,9 @@ describe('RemittanceManager additional coverage', () => {
         makeWallet('k1'),
         new TestComms('k1', bus)
       )
-      expect(() => manager.loadState({ v: 2 as any, threads: [] })).toThrow('Unsupported RemittanceManagerState version')
+      expect(() => manager.loadState({ v: 2 as any, threads: [] })).toThrow(
+        'Unsupported RemittanceManagerState version'
+      )
     })
 
     it('loadState restores threads', async () => {
@@ -265,12 +281,20 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ id: 'selected-mod', buildSettlement })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -384,9 +408,9 @@ describe('RemittanceManager additional coverage', () => {
       )
 
       const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
-      await expect(
-        maker.sendInvoiceForThread(handle.threadId, makeInvoiceInput())
-      ).rejects.toThrow('Thread already has an invoice')
+      await expect(maker.sendInvoiceForThread(handle.threadId, makeInvoiceInput())).rejects.toThrow(
+        'Thread already has an invoice'
+      )
     })
 
     it('throws when thread is in error state', async () => {
@@ -404,9 +428,9 @@ describe('RemittanceManager additional coverage', () => {
       // Force error state
       thread.flags.error = true
 
-      await expect(
-        maker.sendInvoiceForThread(handle.threadId, makeInvoiceInput())
-      ).rejects.toThrow('Thread is in error state')
+      await expect(maker.sendInvoiceForThread(handle.threadId, makeInvoiceInput())).rejects.toThrow(
+        'Thread is in error state'
+      )
     })
   })
 
@@ -416,15 +440,20 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ allowUnsolicitedSettlements: true })
 
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
 
-      const handle = await taker.sendUnsolicitedSettlement('maker-key', { moduleId: mod.id, option: {} })
-      await expect(
-        taker.pay(handle.threadId)
-      ).rejects.toThrow('Thread has no invoice to pay')
+      const handle = await taker.sendUnsolicitedSettlement('maker-key', {
+        moduleId: mod.id,
+        option: {}
+      })
+      await expect(taker.pay(handle.threadId)).rejects.toThrow('Thread has no invoice to pay')
     })
 
     it('throws when invoice is expired', async () => {
@@ -479,7 +508,11 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -488,7 +521,9 @@ describe('RemittanceManager additional coverage', () => {
       await taker.syncThreads()
       const takerThread = taker.threads[0]
 
-      await expect(taker.pay(takerThread.threadId)).rejects.toThrow('No remittance options available on invoice')
+      await expect(taker.pay(takerThread.threadId)).rejects.toThrow(
+        'No remittance options available on invoice'
+      )
     })
 
     it('throws when trying to pay a thread already in error state', async () => {
@@ -501,7 +536,11 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -520,12 +559,20 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ allowUnsolicitedSettlements: false })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false, autoIssueReceipt: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false, autoIssueReceipt: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -549,7 +596,11 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -610,7 +661,10 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await taker.sendUnsolicitedSettlement('maker-key', { moduleId: 'term-mod', option: {} })
+      const handle = await taker.sendUnsolicitedSettlement('maker-key', {
+        moduleId: 'term-mod',
+        option: {}
+      })
       const thread = taker.getThreadOrThrow(handle.threadId)
       expect(thread.state).toBe('terminated')
     })
@@ -629,7 +683,12 @@ describe('RemittanceManager additional coverage', () => {
       // Send an unparseable message
       bus.send('k2', 'k1', DEFAULT_REMITTANCE_MESSAGEBOX, 'not json at all')
       bus.send('k2', 'k1', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify({ v: 1, kind: 'invoice' })) // missing threadId
-      bus.send('k2', 'k1', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify({ v: 2, kind: 'invoice', threadId: 't', id: 'i' })) // wrong version
+      bus.send(
+        'k2',
+        'k1',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify({ v: 2, kind: 'invoice', threadId: 't', id: 'i' })
+      ) // wrong version
 
       await manager.syncThreads()
       expect(manager.threads).toHaveLength(0)
@@ -676,7 +735,11 @@ describe('RemittanceManager additional coverage', () => {
         {
           remittanceModules: [mod],
           identityLayer,
-          options: { identityOptions: { makerRequestIdentity: 'beforeInvoicing' }, identityTimeoutMs: 100, identityPollIntervalMs: 5 },
+          options: {
+            identityOptions: { makerRequestIdentity: 'beforeInvoicing' },
+            identityTimeoutMs: 100,
+            identityPollIntervalMs: 5
+          },
           threadIdFactory: makeThreadIdFactory()
         },
         makeWallet('sender-key'),
@@ -703,7 +766,12 @@ describe('RemittanceManager additional coverage', () => {
           request: { types: { basic: ['name'] }, certifiers: ['c'] }
         }
       }
-      bus.send('sender-key', 'receiver-key', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify(identityRequestEnv))
+      bus.send(
+        'sender-key',
+        'receiver-key',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify(identityRequestEnv)
+      )
 
       await receiver.syncThreads()
       // Should have sent a termination back
@@ -734,7 +802,12 @@ describe('RemittanceManager additional coverage', () => {
           certificates: []
         }
       }
-      bus.send('sender-key', 'receiver-key', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify(identityResponseEnv))
+      bus.send(
+        'sender-key',
+        'receiver-key',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify(identityResponseEnv)
+      )
 
       await receiver.syncThreads()
       const termMsgs = bus.list('sender-key', DEFAULT_REMITTANCE_MESSAGEBOX)
@@ -747,7 +820,11 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ id: 'known-mod' })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
@@ -769,7 +846,12 @@ describe('RemittanceManager additional coverage', () => {
         }
       }
 
-      bus.send('taker-key', 'maker-key', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify(settlementEnv))
+      bus.send(
+        'taker-key',
+        'maker-key',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify(settlementEnv)
+      )
       await maker.syncThreads()
 
       const termMsgs = bus.list('taker-key', DEFAULT_REMITTANCE_MESSAGEBOX)
@@ -783,7 +865,11 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ id: 'no-unsolicited', allowUnsolicitedSettlements: false })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
@@ -805,7 +891,12 @@ describe('RemittanceManager additional coverage', () => {
         }
       }
 
-      bus.send('taker-key', 'maker-key', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify(settlementEnv))
+      bus.send(
+        'taker-key',
+        'maker-key',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify(settlementEnv)
+      )
       await maker.syncThreads()
 
       const termMsgs = bus.list('taker-key', DEFAULT_REMITTANCE_MESSAGEBOX)
@@ -822,12 +913,20 @@ describe('RemittanceManager additional coverage', () => {
       })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: true, autoIssueReceipt: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: true, autoIssueReceipt: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -851,7 +950,12 @@ describe('RemittanceManager additional coverage', () => {
         createdAt: 1,
         payload: { code: 'rejected', message: 'Payment rejected' }
       }
-      bus.send('maker-key', 'taker-key', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify(terminationEnv))
+      bus.send(
+        'maker-key',
+        'taker-key',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify(terminationEnv)
+      )
       await taker.syncThreads()
 
       expect(processTermination).toHaveBeenCalled()
@@ -892,7 +996,7 @@ describe('RemittanceManager additional coverage', () => {
       const manager = new RemittanceManager(
         {
           remittanceModules: [mod],
-          onEvent: (e) => events.push(e.type),
+          onEvent: e => events.push(e.type),
           threadIdFactory: makeThreadIdFactory()
         },
         makeWallet('k1'),
@@ -915,7 +1019,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('k1', bus)
       )
 
-      const dispose = manager.onEvent((e) => events.push(e.type))
+      const dispose = manager.onEvent(e => events.push(e.type))
       dispose()
 
       await manager.sendInvoice('k2', makeInvoiceInput())
@@ -1000,7 +1104,9 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('k1', bus) // TestComms does not implement listenForLiveMessages
       )
 
-      await expect(manager.startListening()).rejects.toThrow('CommsLayer does not support live message listening')
+      await expect(manager.startListening()).rejects.toThrow(
+        'CommsLayer does not support live message listening'
+      )
     })
   })
 
@@ -1009,7 +1115,9 @@ describe('RemittanceManager additional coverage', () => {
       const bus = new MessageBus()
       const mod = makeModule()
 
-      const sendLiveMessage = jest.fn(async () => { throw new Error('live failed') })
+      const sendLiveMessage = jest.fn(async () => {
+        throw new Error('live failed')
+      })
       const sendMessage = jest.fn(async () => 'msg-123')
       const listMessages = jest.fn(async () => [])
       const acknowledgeMessage = jest.fn(async () => undefined)
@@ -1035,7 +1143,11 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ allowUnsolicitedSettlements: false })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
@@ -1075,12 +1187,20 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule({ allowUnsolicitedSettlements: false })
 
       const maker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: true, autoIssueReceipt: true }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: true, autoIssueReceipt: true },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('maker-key'),
         new TestComms('maker-key', bus)
       )
       const taker = new RemittanceManager(
-        { remittanceModules: [mod], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+        {
+          remittanceModules: [mod],
+          options: { receiptProvided: false },
+          threadIdFactory: makeThreadIdFactory()
+        },
         makeWallet('taker-key'),
         new TestComms('taker-key', bus)
       )
@@ -1205,7 +1325,10 @@ describe('RemittanceManager additional coverage', () => {
       )
 
       await manager.sendInvoice('k2', makeInvoiceInput())
-      expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ messageBox: customBox }), undefined)
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ messageBox: customBox }),
+        undefined
+      )
     })
   })
 
@@ -1216,11 +1339,12 @@ describe('RemittanceManager additional coverage', () => {
 
       const rejectingIdentityLayer: IdentityLayer = {
         ...makeIdentityLayer(),
-        assessReceivedCertificateSufficiency: async () => ({
-          code: 'cert.insufficient',
-          message: 'Certs not sufficient',
-          details: {}
-        } as any)
+        assessReceivedCertificateSufficiency: async () =>
+          ({
+            code: 'cert.insufficient',
+            message: 'Certs not sufficient',
+            details: {}
+          }) as any
       }
 
       const maker = new RemittanceManager(
@@ -1241,7 +1365,11 @@ describe('RemittanceManager additional coverage', () => {
         {
           remittanceModules: [mod],
           identityLayer: makeIdentityLayer(),
-          options: { identityOptions: { makerRequestIdentity: 'beforeInvoicing' }, identityTimeoutMs: 200, identityPollIntervalMs: 5 },
+          options: {
+            identityOptions: { makerRequestIdentity: 'beforeInvoicing' },
+            identityTimeoutMs: 200,
+            identityPollIntervalMs: 5
+          },
           threadIdFactory: makeThreadIdFactory()
         },
         makeWallet('taker-key'),
@@ -1268,5 +1396,243 @@ describe('RemittanceManager additional coverage', () => {
       // sendInvoice should timeout because identity was rejected
       await expect(sendPromise).rejects.toThrow()
     })
+  })
+
+  describe('refactored inbound decision compatibility', () => {
+    const makeInboundManager = (
+      bus: MessageBus,
+      moduleOverrides: Partial<RemittanceModule<any, any, any>> = {},
+      configOverrides: Record<string, unknown> = {}
+    ): RemittanceManager =>
+      new RemittanceManager(
+        {
+          remittanceModules: [
+            makeModule({
+              id: 'inbound-module',
+              allowUnsolicitedSettlements: true,
+              ...moduleOverrides
+            })
+          ],
+          threadIdFactory: makeThreadIdFactory(),
+          ...configOverrides
+        },
+        makeWallet('receiver-key'),
+        new TestComms('receiver-key', bus)
+      )
+
+    const sendInbound = (
+      bus: MessageBus,
+      kind: RemittanceEnvelope['kind'],
+      payload: unknown,
+      threadId: ThreadId
+    ): void => {
+      bus.send(
+        'sender-key',
+        'receiver-key',
+        DEFAULT_REMITTANCE_MESSAGEBOX,
+        JSON.stringify({
+          v: 1,
+          id: `envelope-${threadId}`,
+          kind,
+          threadId,
+          createdAt: 1,
+          payload
+        })
+      )
+    }
+
+    it.each([
+      ['never', 'never', undefined],
+      ['beforeInvoicing', 'never', 'maker'],
+      ['never', 'beforeSettlement', 'taker'],
+      ['beforeInvoicing', 'beforeInvoicing', undefined],
+      ['beforeInvoicing', 'beforeSettlement', 'maker'],
+      ['beforeSettlement', 'beforeInvoicing', 'taker']
+    ] as const)(
+      'preserves requester-role inference for maker=%s and taker=%s',
+      (makerRequestIdentity, takerRequestIdentity, expectedRole) => {
+        const manager = makeInboundManager(
+          new MessageBus(),
+          {},
+          {
+            options: {
+              identityOptions: {
+                makerRequestIdentity,
+                takerRequestIdentity
+              }
+            }
+          }
+        )
+
+        expect((manager as any).identityRequesterRole()).toBe(expectedRole)
+      }
+    )
+
+    it.each([
+      ['identityVerificationRequest', 'Identity verification request payload missing data'],
+      ['identityVerificationResponse', 'Identity verification response payload missing data'],
+      [
+        'identityVerificationAcknowledgment',
+        'Identity verification acknowledgment payload missing data'
+      ],
+      ['invoice', 'Invoice payload missing invoice data'],
+      ['settlement', 'Settlement payload missing settlement data'],
+      ['receipt', 'Receipt payload missing receipt data'],
+      ['termination', 'Termination payload missing data']
+    ] as const)('retains the %s malformed-payload failure', async (kind, message) => {
+      const bus = new MessageBus()
+      const manager = makeInboundManager(
+        bus,
+        {},
+        {
+          identityLayer: makeIdentityLayer()
+        }
+      )
+      const threadId = `malformed-${kind}` as ThreadId
+
+      sendInbound(bus, kind, 'invalid-payload', threadId)
+      await manager.syncThreads()
+
+      const thread = manager.getThreadOrThrow(threadId)
+      expect(thread.state).toBe('errored')
+      expect(thread.lastError?.message).toBe(message)
+    })
+
+    it('honors an identity-layer request termination without sending a response', async () => {
+      const bus = new MessageBus()
+      const identityLayer: IdentityLayer = {
+        ...makeIdentityLayer(),
+        respondToRequest: async () => ({
+          action: 'terminate',
+          termination: {
+            code: 'identity.declined',
+            message: 'Identity request declined',
+            details: { reason: 'policy' }
+          }
+        })
+      }
+      const manager = makeInboundManager(bus, {}, { identityLayer })
+      const threadId = 'identity-request-terminated' as ThreadId
+
+      sendInbound(
+        bus,
+        'identityVerificationRequest',
+        {
+          kind: 'identityVerificationRequest',
+          threadId,
+          request: { types: {}, certifiers: [] }
+        },
+        threadId
+      )
+      await manager.syncThreads()
+
+      const response = parseEnvelope(bus.list('sender-key', DEFAULT_REMITTANCE_MESSAGEBOX)[0])
+      expect(response).toMatchObject({
+        kind: 'termination',
+        payload: {
+          code: 'identity.declined',
+          message: 'Identity request declined',
+          details: { reason: 'policy' }
+        }
+      })
+      expect(manager.getThreadOrThrow(threadId).state).toBe('terminated')
+    })
+
+    it('retains the error for an unknown identity assessment decision', async () => {
+      const bus = new MessageBus()
+      const identityLayer: IdentityLayer = {
+        ...makeIdentityLayer(),
+        assessReceivedCertificateSufficiency: async () => ({ kind: 'unsupported-decision' }) as any
+      }
+      const manager = makeInboundManager(bus, {}, { identityLayer })
+      const handle = await manager.sendInvoice('sender-key', makeInvoiceInput())
+      const thread = manager.getThreadOrThrow(handle.threadId)
+      const envelope = {
+        v: 1,
+        id: 'identity-unknown-decision-envelope',
+        kind: 'identityVerificationResponse',
+        threadId: handle.threadId,
+        createdAt: 1,
+        payload: {
+          kind: 'identityVerificationResponse',
+          threadId: handle.threadId,
+          certificates: []
+        }
+      } as RemittanceEnvelope
+      const message: PeerMessage = {
+        messageId: 'identity-unknown-decision-message',
+        sender: 'sender-key',
+        recipient: 'receiver-key',
+        messageBox: DEFAULT_REMITTANCE_MESSAGEBOX,
+        body: JSON.stringify(envelope)
+      }
+
+      await expect(
+        (manager as any).applyIdentityVerificationResponse(thread, envelope, message)
+      ).rejects.toThrow('Unknown identity verification decision')
+    })
+
+    it.each([
+      [
+        'terminate',
+        async () => ({
+          action: 'terminate',
+          termination: {
+            code: 'settlement.declined',
+            message: 'Settlement declined',
+            details: { reason: 'policy' }
+          }
+        }),
+        'terminated',
+        'Settlement declined'
+      ],
+      [
+        'unknown',
+        async () => ({ action: 'unsupported' }),
+        'errored',
+        'Unknown settlement acceptance action'
+      ],
+      [
+        'non-error rejection',
+        async () => await Promise.reject('provider unavailable'),
+        'errored',
+        'provider unavailable'
+      ]
+    ] as const)(
+      'preserves the %s settlement acceptance outcome',
+      async (_case, acceptSettlement, expectedState, expectedMessage) => {
+        const bus = new MessageBus()
+        const manager = makeInboundManager(bus, {
+          acceptSettlement: acceptSettlement as any
+        })
+        const threadId = `settlement-${_case}` as ThreadId
+
+        sendInbound(
+          bus,
+          'settlement',
+          {
+            kind: 'settlement',
+            threadId,
+            moduleId: 'inbound-module',
+            optionId: 'inbound-option',
+            sender: 'sender-key',
+            createdAt: 1,
+            artifact: { reference: _case }
+          },
+          threadId
+        )
+        await manager.syncThreads()
+
+        const thread = manager.getThreadOrThrow(threadId)
+        expect(thread.state).toBe(expectedState)
+        expect(
+          thread.lastError?.message ??
+            (
+              parseEnvelope(bus.list('sender-key', DEFAULT_REMITTANCE_MESSAGEBOX)[0])
+                .payload as Termination
+            ).message
+        ).toContain(expectedMessage)
+      }
+    )
   })
 })
