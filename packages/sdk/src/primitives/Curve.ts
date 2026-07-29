@@ -9,6 +9,26 @@ import { toArray } from './utils.js'
 // So far, this assumption has proven to be valid.
 let globalCurve: Curve
 
+function normalizedMod4 (value: BigNumber, carry: number): number {
+  const mod4 = (value.andln(3) + carry) & 3
+  return mod4 === 3 ? -1 : mod4
+}
+
+function jsfDigit (
+  value: BigNumber,
+  carry: number,
+  mod4: number,
+  otherMod4: number
+): number {
+  if ((mod4 & 1) === 0) return 0
+  const mod8 = (value.andln(7) + carry) & 7
+  return (mod8 === 3 || mod8 === 5) && otherMod4 === 2 ? -mod4 : mod4
+}
+
+function nextJsfCarry (carry: number, digit: number): number {
+  return 2 * carry === digit + 1 ? 1 - carry : carry
+}
+
 export default class Curve {
   p: BigNumber
   red: ReductionContext
@@ -78,47 +98,17 @@ export default class Curve {
     let d2 = 0
     while (k1.cmpn(-d1) > 0 || k2.cmpn(-d2) > 0) {
       // First phase
-      let m14 = (k1.andln(3) + d1) & 3
-      let m24 = (k2.andln(3) + d2) & 3
-      if (m14 === 3) {
-        m14 = -1
-      }
-      if (m24 === 3) {
-        m24 = -1
-      }
-      let u1: number
-      if ((m14 & 1) === 0) {
-        u1 = 0
-      } else {
-        const m8 = (k1.andln(7) + d1) & 7
-        if ((m8 === 3 || m8 === 5) && m24 === 2) {
-          u1 = -m14
-        } else {
-          u1 = m14
-        }
-      }
+      const m14 = normalizedMod4(k1, d1)
+      const m24 = normalizedMod4(k2, d2)
+      const u1 = jsfDigit(k1, d1, m14, m24)
       jsf[0].push(u1)
 
-      let u2: number
-      if ((m24 & 1) === 0) {
-        u2 = 0
-      } else {
-        const m8 = (k2.andln(7) + d2) & 7
-        if ((m8 === 3 || m8 === 5) && m14 === 2) {
-          u2 = -m24
-        } else {
-          u2 = m24
-        }
-      }
+      const u2 = jsfDigit(k2, d2, m24, m14)
       jsf[1].push(u2)
 
       // Second phase
-      if (2 * d1 === u1 + 1) {
-        d1 = 1 - d1
-      }
-      if (2 * d2 === u2 + 1) {
-        d2 = 1 - d2
-      }
+      d1 = nextJsfCarry(d1, u1)
+      d2 = nextJsfCarry(d2, u2)
       k1.iushrn(1)
       k2.iushrn(1)
     }
@@ -1019,81 +1009,65 @@ export default class Curve {
       return
     }
 
-    // Compute beta and lambda, that lambda * P = (beta * Px; Py)
-    let beta: BigNumber
-    let lambda: BigNumber
-
-    if (conf.beta === undefined) {
-      const betas = this._getEndoRoots(this.p)
-      if (betas === null) {
-        throw new Error('Failed to get endomorphism roots for beta.')
-      }
-      // Choose the smallest beta
-      beta = betas[0].cmp(betas[1]) < 0 ? betas[0] : betas[1]
-      beta = beta.toRed(this.red)
-    } else {
-      beta = new BigNumber(conf.beta, 16).toRed(this.red)
-    }
-
-    if (conf.lambda === undefined) {
-      // Choose the lambda that matches selected beta
-      const lambdas = this._getEndoRoots(this.n)
-      if (lambdas === null) {
-        throw new Error('Failed to get endomorphism roots for lambda.')
-      }
-
-      if (this.g == null) {
-        throw new Error('Curve generator point (g) is not defined.')
-      }
-
-      const gMulX = this.g.mul(lambdas[0])?.x
-      const gXRedMulBeta = this.g.x == null ? undefined : this.g.x.redMul(beta)
-
-      if (gMulX != null && gXRedMulBeta != null && gMulX.cmp(gXRedMulBeta) === 0) {
-        lambda = lambdas[0]
-      } else {
-        lambda = lambdas[1]
-
-        if (this.g == null) {
-          throw new Error('Curve generator point (g) is not defined.')
-        }
-
-        const gMulX = this.g.mul(lambda)?.x
-        const gXRedMulBeta = this.g.x == null ? undefined : this.g.x.redMul(beta)
-
-        if (gMulX == null || gXRedMulBeta == null) {
-          throw new Error(
-            'Lambda computation failed: g.mul(lambda).x or g.x.redMul(beta) is undefined.'
-          )
-        }
-
-        Curve.assert(
-          gMulX.cmp(gXRedMulBeta) === 0,
-          'Lambda selection does not match computed beta.'
-        )
-      }
-    } else {
-      lambda = new BigNumber(conf.lambda, 16)
-    }
-
-    // Get basis vectors, used for balanced length-two representation
-    let basis: Array<{ a: BigNumber; b: BigNumber }>
-    if (typeof conf.basis === 'object' && conf.basis !== null) {
-      basis = conf.basis.map(function (vec) {
-        return {
-          a: new BigNumber(vec.a, 16),
-          b: new BigNumber(vec.b, 16)
-        }
-      })
-    } else {
-      basis = this._getEndoBasis(lambda)
-    }
-
+    const beta = this._resolveEndomorphismBeta(conf)
+    const lambda = this._resolveEndomorphismLambda(conf, beta)
     return {
       beta,
       lambda,
-      basis
+      basis: this._resolveEndomorphismBasis(conf, lambda)
     }
+  }
+
+  private _resolveEndomorphismBeta (conf): BigNumber {
+    if (conf.beta !== undefined) return new BigNumber(conf.beta, 16).toRed(this.red)
+    const betas = this._getEndoRoots(this.p)
+    if (betas == null) throw new Error('Failed to get endomorphism roots for beta.')
+    const beta = betas[0].cmp(betas[1]) < 0 ? betas[0] : betas[1]
+    return beta.toRed(this.red)
+  }
+
+  private _endomorphismLambdaMatches (
+    lambda: BigNumber,
+    beta: BigNumber,
+    requireCoordinates = false
+  ): boolean {
+    if (this.g == null) throw new Error('Curve generator point (g) is not defined.')
+    const gMulX = this.g.mul(lambda)?.x
+    const gXRedMulBeta = this.g.x == null ? undefined : this.g.x.redMul(beta)
+    if (gMulX == null || gXRedMulBeta == null) {
+      if (requireCoordinates) {
+        throw new Error(
+          'Lambda computation failed: g.mul(lambda).x or g.x.redMul(beta) is undefined.'
+        )
+      }
+      return false
+    }
+    return gMulX.cmp(gXRedMulBeta) === 0
+  }
+
+  private _resolveEndomorphismLambda (conf, beta: BigNumber): BigNumber {
+    if (conf.lambda !== undefined) return new BigNumber(conf.lambda, 16)
+    const lambdas = this._getEndoRoots(this.n)
+    if (lambdas == null) throw new Error('Failed to get endomorphism roots for lambda.')
+    if (this._endomorphismLambdaMatches(lambdas[0], beta)) return lambdas[0]
+    Curve.assert(
+      this._endomorphismLambdaMatches(lambdas[1], beta, true),
+      'Lambda selection does not match computed beta.'
+    )
+    return lambdas[1]
+  }
+
+  private _resolveEndomorphismBasis (
+    conf,
+    lambda: BigNumber
+  ): Array<{ a: BigNumber; b: BigNumber }> {
+    if (typeof conf.basis !== 'object' || conf.basis === null) {
+      return this._getEndoBasis(lambda)
+    }
+    return conf.basis.map(vec => ({
+      a: new BigNumber(vec.a, 16),
+      b: new BigNumber(vec.b, 16)
+    }))
   }
 
   _getEndoRoots(num: BigNumber): [BigNumber, BigNumber] {

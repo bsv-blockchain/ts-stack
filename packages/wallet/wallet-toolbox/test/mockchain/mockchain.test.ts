@@ -141,6 +141,7 @@ describe('merkleTree', () => {
     // Verify the path computes the correct root
     const computedRoot = path.computeRoot(txids[1])
     expect(computedRoot).toBe(root)
+    expect(computeMerklePath(txids, 2, 5).computeRoot(txids[2])).toBe(root)
   })
 
   test('computeMerklePath for single tx', () => {

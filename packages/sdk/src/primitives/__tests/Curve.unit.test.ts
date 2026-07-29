@@ -16,9 +16,7 @@ describe('Curve', () => {
     expect(p.validate()).toBe(true)
     expect(p.dbl().validate()).toBe(true)
     expect(p.toJ().dbl().toP().validate()).toBe(true)
-    expect(
-      p.mul(new BigNumber('79be667e f9dcbbac 55a06295 ce870b07', 16)).validate()
-    ).toBe(true)
+    expect(p.mul(new BigNumber('79be667e f9dcbbac 55a06295 ce870b07', 16)).validate()).toBe(true)
 
     // Endomorphism test
     if (curve.endo === null || curve.endo === undefined) {
@@ -39,6 +37,100 @@ describe('Curve', () => {
     expect(testK.toString(16)).toEqual(k.toString(16))
   })
 
+  it('derives the same endomorphism when precomputed values are unavailable', () => {
+    const curve = new Curve()
+    const derived = curve._getEndomorphism({})
+
+    expect(derived).toBeDefined()
+    expect(derived?.beta.fromRed().toString(16)).toEqual(curve.endo?.beta.fromRed().toString(16))
+    expect(derived?.lambda.toString(16)).toEqual(curve.endo?.lambda.toString(16))
+    expect(
+      derived?.basis.map(vector => ({
+        a: vector.a.toString(16),
+        b: vector.b.toString(16)
+      }))
+    ).toEqual(
+      curve.endo?.basis.map(vector => ({
+        a: vector.a.toString(16),
+        b: vector.b.toString(16)
+      }))
+    )
+  })
+
+  it('retains explicit endomorphism derivation failure boundaries', () => {
+    const missingGenerator = new Curve()
+    const generator = missingGenerator.g
+    missingGenerator.g = null as any
+    expect(() =>
+      (missingGenerator as any)._endomorphismLambdaMatches(new BigNumber(1), new BigNumber(1))
+    ).toThrow('Curve generator point (g) is not defined')
+    missingGenerator.g = generator
+
+    const missingCoordinates = new Curve()
+    const multiply = jest.spyOn(missingCoordinates.g, 'mul').mockReturnValue({ x: null } as any)
+    expect(
+      (missingCoordinates as any)._endomorphismLambdaMatches(
+        new BigNumber(1),
+        missingCoordinates.endo!.beta
+      )
+    ).toBe(false)
+    expect(() =>
+      (missingCoordinates as any)._endomorphismLambdaMatches(
+        new BigNumber(1),
+        missingCoordinates.endo!.beta,
+        true
+      )
+    ).toThrow('Lambda computation failed')
+    multiply.mockRestore()
+
+    const missingGeneratorX = new Curve()
+    const generatorPoint = missingGeneratorX.g
+    missingGeneratorX.g = {
+      x: null,
+      mul: () => ({ x: new BigNumber(1) })
+    } as any
+    expect(
+      (missingGeneratorX as any)._endomorphismLambdaMatches(
+        new BigNumber(1),
+        missingGeneratorX.endo!.beta
+      )
+    ).toBe(false)
+    missingGeneratorX.g = generatorPoint
+
+    const missingRoots = new Curve()
+    const roots = jest.spyOn(missingRoots, '_getEndoRoots').mockReturnValue(null as any)
+    expect(() => (missingRoots as any)._resolveEndomorphismBeta({})).toThrow(
+      'Failed to get endomorphism roots for beta'
+    )
+    expect(() =>
+      (missingRoots as any)._resolveEndomorphismLambda({}, missingRoots.endo!.beta)
+    ).toThrow('Failed to get endomorphism roots for lambda')
+    roots.mockRestore()
+  })
+
+  it('selects the smaller derived endomorphism beta regardless of root order', () => {
+    const curve = new Curve()
+    const smaller = new BigNumber(11)
+    const larger = new BigNumber(13)
+    jest.spyOn(curve, '_getEndoRoots').mockReturnValue([larger, smaller])
+
+    expect((curve as any)._resolveEndomorphismBeta({}).fromRed().toString()).toBe('11')
+  })
+
+  it('retains selection of the second valid endomorphism lambda', () => {
+    const curve = new Curve()
+    const first = new BigNumber(11)
+    const second = new BigNumber(13)
+    jest.spyOn(curve, '_getEndoRoots').mockReturnValue([first, second])
+    const matches = jest
+      .spyOn(curve as any, '_endomorphismLambdaMatches')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
+
+    expect((curve as any)._resolveEndomorphismLambda({}, curve.endo!.beta)).toBe(second)
+    expect(matches).toHaveBeenNthCalledWith(2, second, curve.endo!.beta, true)
+  })
+
   it('should compute this problematic secp256k1 multiplication', () => {
     const curve = new Curve()
     const g1 = curve.g // precomputed g
@@ -46,10 +138,7 @@ describe('Curve', () => {
     const g2 = new Point(g1.getX(), g1.getY()) // not precomputed g
     expect(g2.precomputed).toBeNull()
 
-    const a = new BigNumber(
-      '6d1229a6b24c2e775c062870ad26bc261051e0198c67203167273c7c62538846',
-      16
-    )
+    const a = new BigNumber('6d1229a6b24c2e775c062870ad26bc261051e0198c67203167273c7c62538846', 16)
     const p1 = g1.mul(a)
     const p2 = g2.mul(a)
 
@@ -64,8 +153,7 @@ describe('Curve', () => {
     expect(g2.precomputed).toBeNull()
 
     const a = new BigNumber(
-      '6d1229a6b24c2e775c062870ad26bc26' +
-        '1051e0198c67203167273c7c6253884612345678',
+      '6d1229a6b24c2e775c062870ad26bc26' + '1051e0198c67203167273c7c6253884612345678',
       16
     )
     const p1 = g1.mul(a)
@@ -76,14 +164,8 @@ describe('Curve', () => {
 
   it('should not fail on secp256k1 regression', () => {
     const curve = new Curve()
-    const k1 = new BigNumber(
-      '32efeba414cd0c830aed727749e816a01c471831536fd2fce28c56b54f5a3bb1',
-      16
-    )
-    const k2 = new BigNumber(
-      '5f2e49b5d64e53f9811545434706cde4de528af97bfd49fde1f6cf792ee37a8c',
-      16
-    )
+    const k1 = new BigNumber('32efeba414cd0c830aed727749e816a01c471831536fd2fce28c56b54f5a3bb1', 16)
+    const k2 = new BigNumber('5f2e49b5d64e53f9811545434706cde4de528af97bfd49fde1f6cf792ee37a8c', 16)
 
     let p1 = curve.g.mul(k1)
     let p2 = curve.g.mul(k2)
@@ -143,7 +225,7 @@ describe('Point codec', () => {
     hybrid: string
   }
 
-  const makeShortTest = (definition: PointDefinition): () => void => {
+  const makeShortTest = (definition: PointDefinition): (() => void) => {
     return () => {
       const co = definition.coordinates
       const p = new Point(co.x, co.y)
@@ -164,8 +246,7 @@ describe('Point codec', () => {
       x: '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
       y: '483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'
     },
-    compactEncoded:
-      '02' + '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+    compactEncoded: '02' + '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
     encoded:
       '04' +
       '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' +
@@ -181,8 +262,7 @@ describe('Point codec', () => {
       x: 'fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556',
       y: 'ae12777aacfbb620f3be96017f45c560de80f0f6518fe4a03c870c36b075f297'
     },
-    compactEncoded:
-      '03' + 'fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556',
+    compactEncoded: '03' + 'fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556',
     encoded:
       '04' +
       'fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556' +
@@ -195,10 +275,7 @@ describe('Point codec', () => {
 
   it('should throw when trying to decode random bytes', () => {
     expect(() => {
-      Point.fromString(
-        '05' +
-          '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-      )
+      Point.fromString('05' + '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
     }).toThrow()
   })
 
@@ -273,5 +350,3 @@ describe('JacobianPoint – Infinity handling and equality (TOB-18)', () => {
     expect(messy.eq(canonical)).toBe(true)
   })
 })
-
-

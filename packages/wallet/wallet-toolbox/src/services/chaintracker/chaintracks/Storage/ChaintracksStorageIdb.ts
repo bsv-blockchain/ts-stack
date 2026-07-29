@@ -16,6 +16,27 @@ import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 
 export interface ChaintracksStorageIdbOptions extends ChaintracksStorageBaseOptions {}
 
+type IdbWriteTransaction = IDBPTransaction<
+  ChaintracksStorageIdbSchema,
+  string[],
+  'readwrite'
+>
+
+function createInsertHeaderResult(): InsertHeaderResult {
+  return {
+    added: false,
+    dupe: false,
+    noPrev: false,
+    badPrev: false,
+    noActiveAncestor: false,
+    isActiveTip: false,
+    reorgDepth: 0,
+    priorTip: undefined,
+    noTip: false,
+    deactivatedHeaders: []
+  }
+}
+
 export class ChaintracksStorageIdb extends ChaintracksStorageBase implements ChaintracksStorageBulkFileApi {
   dbName: string
 
@@ -239,6 +260,119 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     return headers
   }
 
+  private async insertFirstHeader(
+    trx: IdbWriteTransaction,
+    header: BlockHeader,
+    result: InsertHeaderResult
+  ): Promise<boolean> {
+    const store = trx.objectStore('live_headers')
+    if ((await store.count()) !== 0) return false
+    const lastBulkFile = await this.bulkManager.getLastFile()
+    if (lastBulkFile == null) {
+      throw new WERR_INVALID_OPERATION(
+        'bulk headers must exist before first live header can be added'
+      )
+    }
+    if (
+      header.previousHash !== lastBulkFile.lastHash ||
+      header.height !== lastBulkFile.firstHeight + lastBulkFile.count
+    ) {
+      return false
+    }
+    const newHeader: LiveBlockHeader = {
+      ...header,
+      headerId: 0,
+      previousHeaderId: null,
+      chainWork: addWork(
+        lastBulkFile.lastChainWork,
+        convertBitsToWork(header.bits)
+      ),
+      isChainTip: true,
+      isActive: true
+    }
+    newHeader.headerId = Number(
+      await store.add(this.prepareStoredLiveHeader(newHeader, true))
+    )
+    result.isActiveTip = true
+    result.added = true
+    return true
+  }
+
+  private async findActiveAncestor(
+    trx: IdbWriteTransaction,
+    oneBack: LiveBlockHeader,
+    result: InsertHeaderResult
+  ): Promise<LiveBlockHeader | undefined> {
+    const store = trx.objectStore('live_headers')
+    let activeAncestor = oneBack
+    while (!activeAncestor.isActive) {
+      const previousHeader = this.repairStoredLiveHeader(
+        await store.get(activeAncestor.previousHeaderId!)
+      )
+      if (previousHeader == null) {
+        result.noActiveAncestor = true
+        return undefined
+      }
+      activeAncestor = previousHeader
+    }
+    return activeAncestor
+  }
+
+  private async applyReorganization(
+    trx: IdbWriteTransaction,
+    oneBack: LiveBlockHeader,
+    activeAncestor: LiveBlockHeader,
+    result: InsertHeaderResult
+  ): Promise<void> {
+    if (activeAncestor.headerId === oneBack.headerId) return
+    const store = trx.objectStore('live_headers')
+    const activeTipIndex = store.index('activeTip')
+    let headerToDeactivate = this.repairStoredLiveHeader(
+      await activeTipIndex.get([1, 1])
+    )!
+    while (
+      headerToDeactivate != null &&
+      headerToDeactivate.headerId !== activeAncestor.headerId
+    ) {
+      result.deactivatedHeaders.push(headerToDeactivate)
+      await store.put(
+        this.prepareStoredLiveHeader({
+          ...headerToDeactivate,
+          isActive: false
+        })
+      )
+      headerToDeactivate = this.repairStoredLiveHeader(
+        await store.get(headerToDeactivate.previousHeaderId!)
+      )!
+    }
+    let headerToActivate = oneBack
+    while (headerToActivate.headerId !== activeAncestor.headerId) {
+      await store.put(
+        this.prepareStoredLiveHeader({ ...headerToActivate, isActive: true })
+      )
+      headerToActivate = this.repairStoredLiveHeader(
+        await store.get(headerToActivate.previousHeaderId!)
+      )!
+    }
+  }
+
+  private async prepareActiveTip(
+    trx: IdbWriteTransaction,
+    header: BlockHeader,
+    oneBack: LiveBlockHeader,
+    result: InsertHeaderResult
+  ): Promise<boolean> {
+    if (!result.isActiveTip) return true
+    const activeAncestor = await this.findActiveAncestor(trx, oneBack, result)
+    if (activeAncestor == null) return false
+    if (!(oneBack.isActive && oneBack.isChainTip)) {
+      result.reorgDepth =
+        Math.min(result.priorTip!.height, header.height) - activeAncestor.height
+    }
+    await this.applyReorganization(trx, oneBack, activeAncestor, result)
+    return true
+  }
+
   override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> {
     await this.makeAvailable()
 
@@ -247,18 +381,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const hashIndex = store.index('hash')
     const activeTipIndex = store.index('activeTip')
 
-    const r: InsertHeaderResult = {
-      added: false,
-      dupe: false,
-      noPrev: false,
-      badPrev: false,
-      noActiveAncestor: false,
-      isActiveTip: false,
-      reorgDepth: 0,
-      priorTip: undefined,
-      noTip: false,
-      deactivatedHeaders: []
-    }
+    const r = createInsertHeaderResult()
 
     // Check for duplicate
     if (await hashIndex.get(header.hash)) {
@@ -275,35 +398,10 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const oneBack: LiveBlockHeader | undefined = this.repairStoredLiveHeader(await hashIndex.get(header.previousHash))
 
     if (oneBack == null) {
-      // Check if this is first live header
-      const count = await store.count()
-      if (count === 0) {
-        // If this is the first live header, the last bulk header (if there is one) is the previous header.
-        const lbf = await this.bulkManager.getLastFile()
-        if (lbf == null)
-          throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
-        if (header.previousHash === lbf.lastHash && header.height === lbf.firstHeight + lbf.count) {
-          // Valid first live header. Add it.
-          const chainWork = addWork(lbf.lastChainWork, convertBitsToWork(header.bits))
-          r.isActiveTip = true
-          const newHeader: LiveBlockHeader = {
-            ...header,
-            headerId: 0,
-            previousHeaderId: null,
-            chainWork,
-            isChainTip: r.isActiveTip,
-            isActive: r.isActiveTip
-          }
-          const h = this.prepareStoredLiveHeader(newHeader, true)
-          newHeader.headerId = Number(await store.add(h))
-          r.added = true
-          await trx.done
-          return r
-        }
+      if (await this.insertFirstHeader(trx, header, r)) {
+        await trx.done
+        return r
       }
-      // Failure without a oneBack
-      // First live header that does not follow last bulk header or
-      // Not the first live header and live headers doesn't include a previousHash header.
       r.noPrev = true
       await trx.done
       return r
@@ -337,37 +435,9 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
       isActive: r.isActiveTip
     }
 
-    if (r.isActiveTip) {
-      let activeAncestor = oneBack
-      while (!activeAncestor.isActive) {
-        const previousHeader = this.repairStoredLiveHeader(await store.get(activeAncestor.previousHeaderId!))
-        if (previousHeader == null) {
-          r.noActiveAncestor = true
-          await trx.done
-          return r
-        }
-        activeAncestor = previousHeader
-      }
-
-      if (!(oneBack.isActive && oneBack.isChainTip)) {
-        r.reorgDepth = Math.min(r.priorTip.height, header.height) - activeAncestor.height
-      }
-
-      if (activeAncestor.headerId !== oneBack.headerId) {
-        // Deactivate reorg'ed headers
-        let headerToDeactivate = this.repairStoredLiveHeader(await activeTipIndex.get([1, 1]))!
-        while (headerToDeactivate && headerToDeactivate.headerId !== activeAncestor.headerId) {
-          r.deactivatedHeaders.push(headerToDeactivate)
-          await store.put(this.prepareStoredLiveHeader({ ...headerToDeactivate, isActive: false }))
-          headerToDeactivate = this.repairStoredLiveHeader(await store.get(headerToDeactivate.previousHeaderId!))!
-        }
-
-        let headerToActivate = oneBack
-        while (headerToActivate.headerId !== activeAncestor.headerId) {
-          await store.put(this.prepareStoredLiveHeader({ ...headerToActivate, isActive: true }))
-          headerToActivate = this.repairStoredLiveHeader(await store.get(headerToActivate.previousHeaderId!))!
-        }
-      }
+    if (!(await this.prepareActiveTip(trx, header, oneBack, r))) {
+      await trx.done
+      return r
     }
 
     if (oneBack.isChainTip) {

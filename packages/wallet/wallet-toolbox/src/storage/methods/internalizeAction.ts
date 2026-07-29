@@ -284,42 +284,123 @@ class InternalizeActionContext {
     return b
   }
 
-  async asyncSetup () {
-    ;({ ab: this.ab, tx: this.tx, txid: this.txid } = await this.validateAtomicBeef(this.args.tx))
-
-    for (const o of this.args.outputs) {
-      if (o.outputIndex < 0 || o.outputIndex >= this.tx.outputs.length) {
+  private classifyRequestedOutput (
+    output: Validation.ValidInternalizeActionArgs['outputs'][number]
+  ): void {
+    if (output.outputIndex < 0 || output.outputIndex >= this.tx.outputs.length) {
+      throw new WERR_INVALID_PARAMETER(
+        'outputIndex',
+        `a valid output index in range 0 to ${this.tx.outputs.length - 1}`
+      )
+    }
+    const txo = this.tx.outputs[output.outputIndex]
+    if (output.protocol === 'basket insertion') {
+      if (output.insertionRemittance == null || output.paymentRemittance != null) {
         throw new WERR_INVALID_PARAMETER(
-          'outputIndex',
-          `a valid output index in range 0 to ${this.tx.outputs.length - 1}`
+          'basket insertion',
+          'valid insertionRemittance and no paymentRemittance'
         )
       }
-      const txo = this.tx.outputs[o.outputIndex]
-      switch (o.protocol) {
-        case 'basket insertion':
-          if ((o.insertionRemittance == null) || (o.paymentRemittance != null)) { throw new WERR_INVALID_PARAMETER('basket insertion', 'valid insertionRemittance and no paymentRemittance') }
-          if (o.insertionRemittance.basket === 'default') {
-            throw new WERR_INVALID_PARAMETER('insertionRemittance.basket', 'a non-default basket')
-          }
-          this.basketInsertions.push({
-            ...o.insertionRemittance,
-            txo,
-            vout: o.outputIndex
-          })
-          break
-        case 'wallet payment':
-          if (o.insertionRemittance || (o.paymentRemittance == null)) { throw new WERR_INVALID_PARAMETER('wallet payment', 'valid paymentRemittance and no insertionRemittance') }
-          this.walletPayments.push({
-            ...o.paymentRemittance,
-            txo,
-            vout: o.outputIndex,
-            ignore: false
-          })
-          break
-        default:
-          throw new WERR_INTERNAL(`unexpected protocol ${o.protocol}`)
+      if (output.insertionRemittance.basket === 'default') {
+        throw new WERR_INVALID_PARAMETER(
+          'insertionRemittance.basket',
+          'a non-default basket'
+        )
+      }
+      this.basketInsertions.push({
+        ...output.insertionRemittance,
+        txo,
+        vout: output.outputIndex
+      })
+      return
+    }
+    if (output.protocol !== 'wallet payment') {
+      throw new WERR_INTERNAL(`unexpected protocol ${output.protocol}`)
+    }
+    if (output.insertionRemittance != null || output.paymentRemittance == null) {
+      throw new WERR_INVALID_PARAMETER(
+        'wallet payment',
+        'valid paymentRemittance and no insertionRemittance'
+      )
+    }
+    this.walletPayments.push({
+      ...output.paymentRemittance,
+      txo,
+      vout: output.outputIndex,
+      ignore: false
+    })
+  }
+
+  private async loadExistingTransaction (): Promise<void> {
+    this.etx = verifyOneOrNone(
+      await this.storage.findTransactions({
+        partial: { userId: this.userId, txid: this.txid }
+      })
+    )
+    const allowedStatuses: TransactionStatus[] = [
+      'completed',
+      'unproven',
+      'sending',
+      'nosend'
+    ]
+    if (this.etx != null && !allowedStatuses.includes(this.etx.status)) {
+      throw new WERR_INVALID_PARAMETER(
+        'tx',
+        `target transaction of internalizeAction has invalid status ${this.etx.status}.`
+      )
+    }
+    this.isMerge = this.etx != null
+  }
+
+  private async linkExistingOutputs (): Promise<void> {
+    if (!this.isMerge) return
+    this.eos = await this.storage.findOutputs({
+      partial: { userId: this.userId, txid: this.txid }
+    })
+    for (const existing of this.eos) {
+      const basket = this.basketInsertions.find(candidate => candidate.vout === existing.vout)
+      const payment = this.walletPayments.find(candidate => candidate.vout === existing.vout)
+      if (basket != null && payment != null) {
+        throw new WERR_INVALID_PARAMETER('outputs', 'unique outputIndex values')
+      }
+      if (basket != null) basket.eo = existing
+      if (payment != null) payment.eo = existing
+    }
+  }
+
+  private validateBasketMerges (): void {
+    if (!this.isMerge) return
+    for (const basket of this.basketInsertions) {
+      if (basket.eo != null && isManagedChangeOutput(basket.eo)) {
+        throw new WERR_INVALID_PARAMETER(
+          'outputs',
+          `output ${basket.vout} is wallet-managed change and cannot be reclassified as a basket insertion`
+        )
       }
     }
+  }
+
+  private computeWalletPaymentBalance (): void {
+    for (const payment of this.walletPayments) {
+      if (!this.isMerge || payment.eo == null) {
+        this.satoshis += payment.txo.satoshis!
+        continue
+      }
+      if (
+        isManagedChangeOutput(payment.eo) &&
+        payment.eo.basketId === this.changeBasket.basketId
+      ) {
+        payment.ignore = true
+        continue
+      }
+      this.satoshis += payment.txo.satoshis!
+    }
+  }
+
+  async asyncSetup (): Promise<void> {
+    ;({ ab: this.ab, tx: this.tx, txid: this.txid } = await this.validateAtomicBeef(this.args.tx))
+
+    for (const output of this.vargs.outputs) this.classifyRequestedOutput(output)
 
     this.changeBasket = verifyOne(
       await this.storage.findOutputBaskets({
@@ -327,68 +408,10 @@ class InternalizeActionContext {
       })
     )
     this.baskets = {}
-
-    this.etx = verifyOneOrNone(
-      await this.storage.findTransactions({
-        partial: { userId: this.userId, txid: this.txid }
-      })
-    )
-    if ((this.etx != null) && this.etx.status !== 'completed' && this.etx.status !== 'unproven' && this.etx.status !== 'sending' && this.etx.status !== 'nosend') {
-      throw new WERR_INVALID_PARAMETER(
-        'tx',
-        `target transaction of internalizeAction has invalid status ${this.etx.status}.`
-      )
-    }
-    this.isMerge = this.etx != null
-
-    if (this.isMerge) {
-      this.eos = await this.storage.findOutputs({
-        partial: { userId: this.userId, txid: this.txid }
-      }) // It is possible for a transaction to have no outputs, or less outputs in storage than in the transaction itself.
-      for (const eo of this.eos) {
-        const bi = this.basketInsertions.find(b => b.vout === eo.vout)
-        const wp = this.walletPayments.find(b => b.vout === eo.vout)
-        if ((bi != null) && (wp != null)) throw new WERR_INVALID_PARAMETER('outputs', 'unique outputIndex values')
-        if (bi != null) bi.eo = eo
-        if (wp != null) wp.eo = eo
-      }
-    }
-
-    for (const basket of this.basketInsertions) {
-      if (this.isMerge && (basket.eo != null)) {
-        if (isManagedChangeOutput(basket.eo)) {
-          throw new WERR_INVALID_PARAMETER(
-            'outputs',
-            `output ${basket.vout} is wallet-managed change and cannot be reclassified as a basket insertion`
-          )
-        }
-        // An incompatible legacy row in the default basket may be moved to a
-        // non-default recovery basket. It was not part of managed balance, so
-        // this metadata repair has no satoshi adjustment.
-      }
-    }
-
-    for (const payment of this.walletPayments) {
-      if (this.isMerge) {
-        if (payment.eo != null) {
-          if (isManagedChangeOutput(payment.eo) && payment.eo.basketId === this.changeBasket.basketId) {
-            // Re-internalizing managed change is idempotent.
-            payment.ignore = true
-          } else {
-            // Verified signer processing established that this is BRC-29.
-            // Promote a custom row (including legacy custom-in-default rows)
-            // to managed change and add it to balance.
-            this.satoshis += payment.txo.satoshis!
-          }
-        } else {
-          // adding a previously untracked output of an existing transaction as change... increase net satoshis
-          this.satoshis += payment.txo.satoshis!
-        }
-      } else {
-        // If there are no existing outputs, all incoming wallet payment outputs add to net satoshis
-        this.satoshis += payment.txo.satoshis!
-      }
-    }
+    await this.loadExistingTransaction()
+    await this.linkExistingOutputs()
+    this.validateBasketMerges()
+    this.computeWalletPaymentBalance()
   }
 
   /**
@@ -489,6 +512,66 @@ class InternalizeActionContext {
     return provenTxR.proven
   }
 
+  private async mergeWalletPayments (transactionId: number): Promise<void> {
+    for (const payment of this.walletPayments) {
+      if (payment.ignore) continue
+      if (payment.eo != null) {
+        await this.mergeWalletPaymentForOutput(transactionId, payment)
+      } else {
+        await this.storeNewWalletPaymentForOutput(transactionId, payment)
+      }
+    }
+  }
+
+  private async mergeBasketInsertions (transactionId: number): Promise<void> {
+    for (const basket of this.basketInsertions) {
+      if (basket.eo != null) {
+        await this.mergeBasketInsertionForOutput(transactionId, basket)
+      } else {
+        await this.storeNewBasketInsertionForOutput(transactionId, basket)
+      }
+    }
+  }
+
+  private async retireNoSendWithProof (
+    transactionId: number,
+    bump: MerklePath
+  ): Promise<void> {
+    const beefTx = this.ab.findTxid(this.txid)
+    if (beefTx == null) {
+      throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
+    }
+    const proven = await this.findOrInsertProvenTxFromBump(bump, beefTx)
+    await this.storage.updateTransaction(transactionId, {
+      provenTxId: proven.provenTxId,
+      status: 'completed'
+    })
+    const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
+    if (req?.status !== 'nosend') return
+    req.addHistoryNote({ what: 'internalizeAction-bumpRetire', userId: this.userId })
+    req.provenTxId = proven.provenTxId
+    req.status = 'completed'
+    await req.updateStorageDynamicProperties(this.storage)
+  }
+
+  private async retireNoSendWithoutProof (transactionId: number): Promise<void> {
+    await this.storage.updateTransaction(transactionId, { status: 'unproven' })
+    const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
+    if (req?.status !== 'nosend') return
+    req.addHistoryNote({ what: 'internalizeAction-nosendRetire', userId: this.userId })
+    req.status = 'unmined'
+    await req.updateStorageDynamicProperties(this.storage)
+  }
+
+  private async retireNoSendTransaction (transactionId: number): Promise<void> {
+    const bump = this.ab.findBump(this.txid)
+    if (bump != null) {
+      await this.retireNoSendWithProof(transactionId, bump)
+    } else {
+      await this.retireNoSendWithoutProof(transactionId)
+    }
+  }
+
   async mergedInternalize () {
     const transactionId = this.etx!.transactionId
     const wasNoSend = this.etx!.status === 'nosend'
@@ -503,15 +586,8 @@ class InternalizeActionContext {
     // case — already-spent outputs are skipped.
     await this.markInputsSpent(transactionId)
 
-    for (const payment of this.walletPayments) {
-      if ((payment.eo != null) && !payment.ignore) await this.mergeWalletPaymentForOutput(transactionId, payment)
-      else if (!payment.ignore) await this.storeNewWalletPaymentForOutput(transactionId, payment)
-    }
-
-    for (const basket of this.basketInsertions) {
-      if (basket.eo != null) await this.mergeBasketInsertionForOutput(transactionId, basket)
-      else await this.storeNewBasketInsertionForOutput(transactionId, basket)
-    }
+    await this.mergeWalletPayments(transactionId)
+    await this.mergeBasketInsertions(transactionId)
 
     // Lifecycle advance when merging into a tx that was 'nosend'.
     //
@@ -537,35 +613,7 @@ class InternalizeActionContext {
     // immediately) and transition the proven_tx_req to 'unmined' so
     // TaskCheckForProofs picks it up on its next nudge cycle. This
     // hands off to Monitor's standard proof-fetching flow.
-    if (wasNoSend) {
-      const bump = this.ab.findBump(this.txid)
-      if (bump != null) {
-        const btx = this.ab.findTxid(this.txid)
-        if (btx == null) {
-          throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
-        }
-        const proven = await this.findOrInsertProvenTxFromBump(bump, btx)
-        await this.storage.updateTransaction(transactionId, {
-          provenTxId: proven.provenTxId,
-          status: 'completed'
-        })
-        const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
-        if (req?.status === 'nosend') {
-          req.addHistoryNote({ what: 'internalizeAction-bumpRetire', userId: this.userId })
-          req.provenTxId = proven.provenTxId
-          req.status = 'completed'
-          await req.updateStorageDynamicProperties(this.storage)
-        }
-      } else {
-        await this.storage.updateTransaction(transactionId, { status: 'unproven' })
-        const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
-        if (req?.status === 'nosend') {
-          req.addHistoryNote({ what: 'internalizeAction-nosendRetire', userId: this.userId })
-          req.status = 'unmined'
-          await req.updateStorageDynamicProperties(this.storage)
-        }
-      }
-    }
+    if (wasNoSend) await this.retireNoSendTransaction(transactionId)
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Beef, Script, Transaction, TransactionInput, TransactionOutput, Validation } from '@bsv/sdk'
+import { Beef, Script, Transaction, Validation } from '@bsv/sdk'
 import { Wallet, PendingStorageInput } from '../../Wallet'
 import {
   StorageCreateActionResult,
@@ -45,132 +45,16 @@ export function buildSignableTransaction(
   verifyUnrequestedOutputsAreChangeOrCommission(storageOutputs, args)
 
   const tx = new Transaction(args.version, [], [], args.lockTime)
-
-  // The order of outputs in storageOutputs is always:
-  // CreateActionArgs.outputs in the original order
-  // Commission output
-  // Change outputs
-  // The Vout values will be randomized if args.options.randomizeOutputs is true. Default is true.
-  const voutToIndex = Array.from({ length: storageOutputs.length }, () => 0)
-  for (let vout = 0; vout < storageOutputs.length; vout++) {
-    const i = storageOutputs.findIndex(o => o.vout === vout)
-    if (i < 0) throw new WERR_INVALID_PARAMETER('output.vout', `sequential. ${vout} is missing`)
-    voutToIndex[vout] = i
-  }
-
-  /// ///////////
-  // Add OUTPUTS
-  /// //////////
-  for (let vout = 0; vout < storageOutputs.length; vout++) {
-    const i = voutToIndex[vout]
-    const out = storageOutputs[i]
-    if (vout !== out.vout) {
-      throw new WERR_INVALID_PARAMETER('output.vout', `equal to array index. ${out.vout} !== ${vout}`)
-    }
-
-    const change = out.providedBy === 'storage' && out.purpose === 'change'
-
-    const lockingScript = change
-      ? makeChangeLock(out, dctr, args, changeKeys, wallet)
-      : asBsvSdkScript(out.lockingScript)
-
-    const output: TransactionOutput = {
-      satoshis: out.satoshis,
-      lockingScript,
-      change
-    }
-    tx.addOutput(output)
-  }
-
-  if (storageOutputs.length === 0) {
-    // Add a dummy output to avoid transaction rejection by processors for having no outputs.
-    const output: TransactionOutput = {
-      satoshis: 0,
-      lockingScript: Script.fromASM('OP_FALSE OP_RETURN 42'),
-      change: false
-    }
-    tx.addOutput(output)
-  }
-
-  /// ///////////
-  // Merge and sort INPUTS info by vin order.
-  /// //////////
-  const inputs: Array<{
-    argsInput: Validation.ValidCreateActionInput | undefined
-    storageInput: StorageCreateTransactionSdkInput
-  }> = []
-  for (const storageInput of storageInputs) {
-    const argsInput =
-      storageInput.vin !== undefined && storageInput.vin < args.inputs.length
-        ? args.inputs[storageInput.vin]
-        : undefined
-    inputs.push({ argsInput, storageInput })
-  }
-  inputs.sort((a, b) => {
-    if (a.storageInput.vin < b.storageInput.vin) return -1
-    if (a.storageInput.vin === b.storageInput.vin) return 0
-    return 1
-  })
+  addPlannedOutputs(tx, storageOutputs, dctr, args, changeKeys, wallet)
 
   const pendingStorageInputs: PendingStorageInput[] = []
-
-  /// ///////////
-  // Add INPUTS
-  /// //////////
-  let totalChangeInputs = 0
-  for (const { storageInput, argsInput } of inputs) {
-    // Two types of inputs are handled: user specified wth/without unlockingScript and storage specified using SABPPP template.
-    if (argsInput != null) {
-      // Type 1: User supplied input, with or without an explicit unlockingScript.
-      // If without, signAction must be used to provide the actual unlockScript.
-      const unlock =
-        typeof argsInput.unlockingScript === 'string' ? asBsvSdkScript(argsInput.unlockingScript) : new Script()
-      const sourceTransaction = args.isSignAction ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx : undefined
-      const inputToAdd: TransactionInput = {
-        sourceTXID: argsInput.outpoint.txid,
-        sourceOutputIndex: argsInput.outpoint.vout,
-        // The source transaction is required here: the user-side fee model needs
-        // the source output's locking script and satoshi value.
-        sourceTransaction,
-        unlockingScript: unlock,
-        sequence: argsInput.sequenceNumber
-      }
-      tx.addInput(inputToAdd)
-    } else {
-      // Type2: SABPPP protocol inputs which are signed using ScriptTemplateBRC29.
-      if (storageInput.type !== 'P2PKH') {
-        throw new WERR_INVALID_PARAMETER(
-          'type',
-          `vin ${storageInput.vin}, "${storageInput.type}" is not a supported unlocking script type.`
-        )
-      }
-
-      pendingStorageInputs.push({
-        vin: tx.inputs.length,
-        derivationPrefix: verifyTruthy(storageInput.derivationPrefix),
-        derivationSuffix: verifyTruthy(storageInput.derivationSuffix),
-        unlockerPubKey: storageInput.senderIdentityKey,
-        sourceSatoshis: storageInput.sourceSatoshis,
-        lockingScript: storageInput.sourceLockingScript
-      })
-
-      let sourceTransaction: Transaction | undefined
-      if (storageInput.sourceTransaction != null) {
-        sourceTransaction = storageInput.sourceTransaction instanceof Uint8Array
-          ? Transaction.fromBinaryView(storageInput.sourceTransaction)
-          : Transaction.fromBinary(storageInput.sourceTransaction)
-      }
-      const inputToAdd: TransactionInput = {
-        sourceTXID: storageInput.sourceTxid,
-        sourceOutputIndex: storageInput.sourceVout,
-        sourceTransaction,
-        unlockingScript: new Script(),
-        sequence: 0xffffffff
-      }
-      tx.addInput(inputToAdd)
-      totalChangeInputs += Validation.validateSatoshis(storageInput.sourceSatoshis, 'storageInput.sourceSatoshis')
-    }
-  }
+  const totalChangeInputs = addPlannedInputs(
+    tx,
+    storageInputs,
+    args,
+    inputBeef,
+    pendingStorageInputs
+  )
 
   // The amount is the total of non-foreign inputs minus change outputs
   // Note that the amount can be negative when we are redeeming more inputs than we are spending
@@ -185,6 +69,142 @@ export function buildSignableTransaction(
     pdi: pendingStorageInputs,
     log: ''
   }
+}
+
+function outputIndexByVout(storageOutputs: StorageCreateTransactionSdkOutput[]): number[] {
+  return Array.from({ length: storageOutputs.length }, (_, vout) => {
+    const index = storageOutputs.findIndex(output => output.vout === vout)
+    if (index < 0) {
+      throw new WERR_INVALID_PARAMETER('output.vout', `sequential. ${vout} is missing`)
+    }
+    return index
+  })
+}
+
+function addPlannedOutputs(
+  tx: Transaction,
+  storageOutputs: StorageCreateTransactionSdkOutput[],
+  dctr: StorageCreateActionResult,
+  args: Validation.ValidCreateActionArgs,
+  changeKeys: KeyPair,
+  wallet: Wallet
+): void {
+  // Storage preserves request/commission/change array order while `vout` may
+  // randomize the final transaction order.
+  for (const [vout, index] of outputIndexByVout(storageOutputs).entries()) {
+    const output = storageOutputs[index]
+    if (vout !== output.vout) {
+      throw new WERR_INVALID_PARAMETER(
+        'output.vout',
+        `equal to array index. ${output.vout} !== ${vout}`
+      )
+    }
+    const change = output.providedBy === 'storage' && output.purpose === 'change'
+    tx.addOutput({
+      satoshis: output.satoshis,
+      lockingScript: change
+        ? makeChangeLock(output, dctr, args, changeKeys, wallet)
+        : asBsvSdkScript(output.lockingScript),
+      change
+    })
+  }
+  if (storageOutputs.length === 0) {
+    tx.addOutput({
+      satoshis: 0,
+      lockingScript: Script.fromASM('OP_FALSE OP_RETURN 42'),
+      change: false
+    })
+  }
+}
+
+function addRequestedInput(
+  tx: Transaction,
+  argsInput: Validation.ValidCreateActionInput,
+  args: Validation.ValidCreateActionArgs,
+  inputBeef: Beef | undefined
+): void {
+  const unlockingScript =
+    typeof argsInput.unlockingScript === 'string'
+      ? asBsvSdkScript(argsInput.unlockingScript)
+      : new Script()
+  tx.addInput({
+    sourceTXID: argsInput.outpoint.txid,
+    sourceOutputIndex: argsInput.outpoint.vout,
+    sourceTransaction: args.isSignAction
+      ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx
+      : undefined,
+    unlockingScript,
+    sequence: argsInput.sequenceNumber
+  })
+}
+
+function sourceTransactionForStorageInput(
+  storageInput: StorageCreateTransactionSdkInput
+): Transaction | undefined {
+  if (storageInput.sourceTransaction == null) return undefined
+  return storageInput.sourceTransaction instanceof Uint8Array
+    ? Transaction.fromBinaryView(storageInput.sourceTransaction)
+    : Transaction.fromBinary(storageInput.sourceTransaction)
+}
+
+function addStorageInput(
+  tx: Transaction,
+  storageInput: StorageCreateTransactionSdkInput,
+  pendingStorageInputs: PendingStorageInput[]
+): number {
+  if (storageInput.type !== 'P2PKH') {
+    throw new WERR_INVALID_PARAMETER(
+      'type',
+      `vin ${storageInput.vin}, "${storageInput.type}" is not a supported unlocking script type.`
+    )
+  }
+  pendingStorageInputs.push({
+    vin: tx.inputs.length,
+    derivationPrefix: verifyTruthy(storageInput.derivationPrefix),
+    derivationSuffix: verifyTruthy(storageInput.derivationSuffix),
+    unlockerPubKey: storageInput.senderIdentityKey,
+    sourceSatoshis: storageInput.sourceSatoshis,
+    lockingScript: storageInput.sourceLockingScript
+  })
+  tx.addInput({
+    sourceTXID: storageInput.sourceTxid,
+    sourceOutputIndex: storageInput.sourceVout,
+    sourceTransaction: sourceTransactionForStorageInput(storageInput),
+    unlockingScript: new Script(),
+    sequence: 0xffffffff
+  })
+  return Validation.validateSatoshis(
+    storageInput.sourceSatoshis,
+    'storageInput.sourceSatoshis'
+  )
+}
+
+function addPlannedInputs(
+  tx: Transaction,
+  storageInputs: StorageCreateTransactionSdkInput[],
+  args: Validation.ValidCreateActionArgs,
+  inputBeef: Beef | undefined,
+  pendingStorageInputs: PendingStorageInput[]
+): number {
+  const inputs = storageInputs
+    .map(storageInput => ({
+      storageInput,
+      argsInput:
+        storageInput.vin < args.inputs.length
+          ? args.inputs[storageInput.vin]
+          : undefined
+    }))
+    .sort((left, right) => left.storageInput.vin - right.storageInput.vin)
+
+  let totalChangeInputs = 0
+  for (const { storageInput, argsInput } of inputs) {
+    if (argsInput != null) {
+      addRequestedInput(tx, argsInput, args, inputBeef)
+      continue
+    }
+    totalChangeInputs += addStorageInput(tx, storageInput, pendingStorageInputs)
+  }
+  return totalChangeInputs
 }
 
 /**

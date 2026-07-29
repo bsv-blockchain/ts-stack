@@ -238,9 +238,9 @@
     {
       "id": "sdk-consensus-opcode-dispatch-switch",
       "category": "quality-rule",
-      "target": "typescript:S1479 and typescript:S3776 in packages/sdk/src/script/Spend.ts",
+      "target": "typescript:S1479 in packages/sdk/src/script/Spend.ts",
       "owner": "ts-stack-maintainers",
-      "reason": "The large switch is the auditable one-to-one dispatch table for Bitcoin Script opcodes. Artificially splitting consensus execution across threshold-sized switches or indirect dynamic dispatch would make opcode coverage and fallthrough behavior harder to review while adding risk to consensus-critical code without reducing runtime complexity.",
+      "reason": "The large switch is the auditable one-to-one dispatch table for Bitcoin Script opcodes. Replacing the exhaustive switch with indirect dynamic dispatch would make opcode coverage and fallthrough behavior harder to review while adding risk to consensus-critical code.",
       "evidence": [
         "packages/sdk/src/script/Spend.ts",
         "packages/sdk/src/script/__tests__/Spend.test.ts",
@@ -250,23 +250,6 @@
       "created": "2026-07-28",
       "reviewBy": "2026-10-26",
       "removeWhen": "Remove when the analyzer exempts exhaustive protocol dispatch or a separately reviewed generated opcode table improves auditability and passes every script vector, differential, mutation, fuzz, transaction, browser, and packed-consumer check."
-    },
-    {
-      "id": "sdk-wallet-wire-protocol-dispatch",
-      "category": "quality-rule",
-      "target": "typescript:S3776 in packages/sdk/src/wallet/substrates/WalletWireProcessor.ts",
-      "owner": "ts-stack-maintainers",
-      "reason": "The processor is the exhaustive, auditable request decoder for the BRC-100 wallet wire protocol. Its branches correspond directly to named wire calls and their distinct argument/result codecs; splitting the dispatch solely to satisfy a generic cognitive-complexity threshold would scatter protocol coverage and make binary compatibility harder to review.",
-      "evidence": [
-        "packages/sdk/src/wallet/substrates/WalletWireProcessor.ts",
-        "packages/sdk/src/wallet/substrates/WalletWireTransceiver.ts",
-        "packages/sdk/src/wallet/substrates/__tests__/WalletWire.test.ts",
-        "conformance/vectors/wallet",
-        "https://github.com/bsv-blockchain/ts-stack/issues/324"
-      ],
-      "created": "2026-07-28",
-      "reviewBy": "2026-10-26",
-      "removeWhen": "Remove when a generated or table-driven BRC-100 codec makes every request and response mapping more auditable and passes wire round-trip, cross-runtime conformance, packed-consumer, browser, mobile, fuzz, and compatibility tests."
     }
   ]
 }

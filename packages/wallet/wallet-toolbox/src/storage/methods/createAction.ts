@@ -714,6 +714,52 @@ async function ensureBeefContainsAllInputTxids(
 }
 
 /** Resolve satoshis and lockingScript for one xinput from either storage or the beef. */
+function applyStoredInputScript(
+  output: TableOutput,
+  input: XValidCreateActionInput,
+  vargs: Validation.ValidCreateActionArgs
+): void {
+  const { txid, vout } = input.outpoint
+  if (output.change) {
+    throw new WERR_INVALID_PARAMETER(
+      `inputs[${input.vin}]`,
+      'an unmanaged input. Change outputs are managed by your wallet.'
+    )
+  }
+  input.output = output
+  if (output.lockingScript === undefined || !Number.isInteger(output.satoshis)) {
+    throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'output with valid lockingScript and satoshis')
+  }
+  if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend) {
+    throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'spendable output unless noSend is true')
+  }
+  input.satoshis = Validation.validateSatoshis(output.satoshis, 'output.satoshis')
+  input.lockingScript = Script.fromBinary(asArray(output.lockingScript))
+}
+
+async function applyBeefInputScript(
+  storage: StorageProvider,
+  beef: Beef,
+  input: XValidCreateActionInput
+): Promise<void> {
+  const { txid, vout } = input.outpoint
+  let beefTx = beef.findTxid(txid)!
+  if (beefTx.isTxidOnly) {
+    const { rawTx, proven } = await storage.getProvenOrRawTx(txid)
+    if (rawTx == null) {
+      throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for ${txid}`)
+    }
+    beefTx = beef.mergeRawTx(asArray(rawTx))
+    if (proven != null) beef.mergeBump(new EntityProvenTx(proven).getMerklePath())
+  }
+  if (vout >= beefTx.tx!.outputs.length) {
+    throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'valid outpoint')
+  }
+  const sourceOutput = beefTx.tx!.outputs[vout]
+  input.satoshis = Validation.validateSatoshis(sourceOutput.satoshis, 'so.satoshis')
+  input.lockingScript = sourceOutput.lockingScript
+}
+
 async function resolveInputScript(
   storage: StorageProvider,
   userId: number,
@@ -726,32 +772,9 @@ async function resolveInputScript(
   let output: TableOutput | undefined = preloadedOutputsByOutpoint[`${txid}.${vout}`]
   output ??= verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
   if (output != null) {
-    if (output.change)
-      throw new WERR_INVALID_PARAMETER(
-        `inputs[${input.vin}]`,
-        'an unmanaged input. Change outputs are managed by your wallet.'
-      )
-    input.output = output
-    if (output.lockingScript === undefined || !Number.isInteger(output.satoshis)) {
-      throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'output with valid lockingScript and satoshis')
-    }
-    if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend) {
-      throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'spendable output unless noSend is true')
-    }
-    input.satoshis = Validation.validateSatoshis(output.satoshis, 'output.satoshis')
-    input.lockingScript = Script.fromBinary(asArray(output.lockingScript))
+    applyStoredInputScript(output, input, vargs)
   } else {
-    let btx = beef.findTxid(txid)!
-    if (btx.isTxidOnly) {
-      const { rawTx, proven } = await storage.getProvenOrRawTx(txid)
-      if (rawTx == null) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for ${txid}`)
-      btx = beef.mergeRawTx(asArray(rawTx))
-      if (proven != null) beef.mergeBump(new EntityProvenTx(proven).getMerklePath())
-    }
-    if (vout >= btx.tx!.outputs.length) throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'valid outpoint')
-    const so = btx.tx!.outputs[vout]
-    input.satoshis = Validation.validateSatoshis(so.satoshis, 'so.satoshis')
-    input.lockingScript = so.lockingScript
+    await applyBeefInputScript(storage, beef, input)
   }
 }
 

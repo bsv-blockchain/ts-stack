@@ -5,10 +5,7 @@ import Signature from '../../primitives/Signature'
 import Point from '../../primitives/Point'
 
 const curve = new Curve()
-const key = new BigNumber(
-  '1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5',
-  16
-)
+const key = new BigNumber('1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5', 16)
 const pub = curve.g.mul(key)
 const msg = new BigNumber('deadbeef', 16)
 
@@ -117,6 +114,35 @@ describe('ECDSA – additional coverage', () => {
       const sig = ECDSA.sign(msg, key, false, customK)
       expect(ECDSA.verify(msg, sig, pub)).toBe(true)
       expect(callCount).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  describe('fixed nonce failure compatibility', () => {
+    it('rejects a nonce function that produces no value', () => {
+      expect(() => ECDSA.sign(msg, key, false, (() => null) as any)).toThrow('k is undefined')
+    })
+
+    it('retains fixed-nonce infinity and zero-r failures', () => {
+      const atInfinity = jest
+        .spyOn(Point.prototype, 'mulCT')
+        .mockReturnValueOnce(new Point(null, null))
+      expect(() => ECDSA.sign(msg, key, false, new BigNumber(2))).toThrow('k·G at infinity')
+      atInfinity.mockRestore()
+
+      const zeroR = jest.spyOn(Point.prototype, 'mulCT').mockReturnValueOnce({
+        isInfinity: () => false,
+        getX: () => new BigNumber(0)
+      } as any)
+      expect(() => ECDSA.sign(msg, key, false, new BigNumber(2))).toThrow('r == 0')
+      zeroR.mockRestore()
+    })
+
+    it('rejects a fixed nonce that produces a zero s scalar', () => {
+      const fixedK = new BigNumber(2)
+      const r = curve.g.mulCT(fixedK).getX().umod(curve.n)
+      const zeroSumMessage = curve.n.sub(r.mul(key).umod(curve.n)).umod(curve.n)
+
+      expect(() => ECDSA.sign(zeroSumMessage, key, false, fixedK)).toThrow('s == 0')
     })
   })
 })

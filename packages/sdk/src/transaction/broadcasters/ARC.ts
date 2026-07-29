@@ -29,6 +29,90 @@ function defaultDeploymentId (): string {
   return `ts-sdk-${toHex(Random(16))}`
 }
 
+const ARC_ERROR_STATUSES = new Set([
+  'DOUBLE_SPEND_ATTEMPTED',
+  'REJECTED',
+  'INVALID',
+  'MALFORMED',
+  'MINED_IN_STALE_BLOCK'
+])
+
+function transactionHex (tx: Transaction): string {
+  try {
+    return tx.toHexEF()
+  } catch (error) {
+    if (
+      error.message ===
+      'All inputs must have source transactions when serializing to EF format'
+    ) return tx.toHex()
+    throw error
+  }
+}
+
+function successfulArcResponse (data: ArcResponse): BroadcastResponse | BroadcastFailure {
+  const { txid, extraInfo, txStatus, competingTxs } = data
+  const upperStatus = txStatus?.toUpperCase()
+  const isOrphan = extraInfo?.toUpperCase().includes('ORPHAN') ||
+    upperStatus?.includes('ORPHAN')
+  if (ARC_ERROR_STATUSES.has(upperStatus) || isOrphan) {
+    const failure: BroadcastFailure = {
+      status: 'error',
+      code: txStatus ?? 'UNKNOWN',
+      txid,
+      description: `${txStatus ?? ''} ${extraInfo ?? ''}`.trim()
+    }
+    if (competingTxs != null) failure.more = { competingTxs }
+    return failure
+  }
+
+  const response: BroadcastResponse = {
+    status: 'success',
+    txid,
+    message: `${txStatus} ${extraInfo}`
+  }
+  if (competingTxs != null) response.competingTxs = competingTxs
+  return response
+}
+
+function parseArcFailureData (data: unknown): unknown {
+  if (typeof data !== 'string') return data
+  try {
+    return JSON.parse(data)
+  } catch {
+    return data
+  }
+}
+
+function failedArcResponse (status: unknown, responseData: unknown): BroadcastFailure {
+  const failure: BroadcastFailure = {
+    status: 'error',
+    code: typeof status === 'number' || typeof status === 'string'
+      ? status.toString()
+      : 'ERR_UNKNOWN',
+    description: 'Unknown error'
+  }
+  const data = parseArcFailureData(responseData)
+  if (data == null || typeof data !== 'object') return failure
+  failure.more = data
+  if ('txid' in data && typeof data.txid === 'string') failure.txid = data.txid
+  if ('detail' in data && typeof data.detail === 'string') failure.description = data.detail
+  return failure
+}
+
+function caughtArcResponse (error: unknown): BroadcastFailure {
+  return {
+    status: 'error',
+    code: '500',
+    description:
+      error != null &&
+      typeof error === 'object' &&
+      'message' in error &&
+      typeof error.message === 'string'
+        ? error.message
+        : 'Internal Server Error'
+  }
+}
+
 /**
  * Represents an ARC transaction broadcaster.
  */
@@ -122,24 +206,10 @@ export default class ARC implements Broadcaster {
   async broadcast (
     tx: Transaction
   ): Promise<BroadcastResponse | BroadcastFailure> {
-    let rawTx
-    try {
-      rawTx = tx.toHexEF()
-    } catch (error) {
-      if (
-        error.message ===
-        'All inputs must have source transactions when serializing to EF format'
-      ) {
-        rawTx = tx.toHex()
-      } else {
-        throw error
-      }
-    }
-
     const requestOptions: HttpClientRequestOptions = {
       method: 'POST',
       headers: this.requestHeaders(),
-      data: { rawTx }
+      data: { rawTx: transactionHex(tx) }
     }
 
     try {
@@ -147,84 +217,11 @@ export default class ARC implements Broadcaster {
         `${this.URL}/v1/tx`,
         requestOptions
       )
-      if (response.ok) {
-        const { txid, extraInfo, txStatus, competingTxs } = response.data
-
-        // Check for error txStatus values that ARC returns with HTTP 200
-        // These should be treated as broadcast failures
-        const errorStatuses = [
-          'DOUBLE_SPEND_ATTEMPTED',
-          'REJECTED',
-          'INVALID',
-          'MALFORMED',
-          'MINED_IN_STALE_BLOCK'
-        ]
-
-        const isOrphan = extraInfo?.toUpperCase().includes('ORPHAN') ||
-          txStatus?.toUpperCase().includes('ORPHAN')
-
-        if (errorStatuses.includes(txStatus?.toUpperCase()) || isOrphan) {
-          const failure: BroadcastFailure = {
-            status: 'error',
-            code: txStatus ?? 'UNKNOWN',
-            txid,
-            description: `${txStatus ?? ''} ${extraInfo ?? ''}`.trim()
-          }
-          if (competingTxs != null) {
-            failure.more = { competingTxs }
-          }
-          return failure
-        }
-
-        const broadcastRes: BroadcastResponse = {
-          status: 'success',
-          txid,
-          message: `${txStatus} ${extraInfo}`
-        }
-        if (competingTxs != null) {
-          broadcastRes.competingTxs = competingTxs
-        }
-        return broadcastRes
-      } else {
-        const st = typeof response.status
-        const r: BroadcastFailure = {
-          status: 'error',
-          code:
-            st === 'number' || st === 'string'
-              ? response.status.toString()
-              : 'ERR_UNKNOWN',
-          description: 'Unknown error'
-        }
-        let d = response.data
-        if (typeof d === 'string') {
-          try {
-            d = JSON.parse(response.data as string)
-          } catch {
-            // Intentionally left empty
-          }
-        }
-        if (typeof d === 'object') {
-          if (d !== null) {
-            r.more = d
-          }
-          if ((d != null) && typeof (d as { txid: string }).txid === 'string') {
-            r.txid = (d as { txid: string }).txid
-          }
-          if ((d != null) && 'detail' in d && typeof (d as { detail: string }).detail === 'string') {
-            r.description = (d as { detail: string }).detail
-          }
-        }
-        return r
-      }
+      return response.ok
+        ? successfulArcResponse(response.data)
+        : failedArcResponse(response.status, response.data)
     } catch (error) {
-      return {
-        status: 'error',
-        code: '500',
-        description:
-          typeof error.message === 'string'
-            ? error.message
-            : 'Internal Server Error'
-      }
+      return caughtArcResponse(error)
     }
   }
 
@@ -236,19 +233,7 @@ export default class ARC implements Broadcaster {
    * @returns {Promise<Array<object>>} A promise that resolves to an array of objects.
    */
   async broadcastMany (txs: Transaction[]): Promise<object[]> {
-    const rawTxs = txs.map((tx) => {
-      try {
-        return { rawTx: tx.toHexEF() }
-      } catch (error) {
-        if (
-          error.message ===
-          'All inputs must have source transactions when serializing to EF format'
-        ) {
-          return { rawTx: tx.toHex() }
-        }
-        throw error
-      }
-    })
+    const rawTxs = txs.map(tx => ({ rawTx: transactionHex(tx) }))
 
     const requestOptions: HttpClientRequestOptions = {
       method: 'POST',
@@ -264,11 +249,7 @@ export default class ARC implements Broadcaster {
 
       return response.data as object[]
     } catch (error) {
-      const errorResponse: BroadcastFailure = {
-        status: 'error',
-        code: '500',
-        description: typeof error.message === 'string' ? error.message : 'Internal Server Error'
-      }
+      const errorResponse = caughtArcResponse(error)
       return txs.map(() => errorResponse)
     }
   }

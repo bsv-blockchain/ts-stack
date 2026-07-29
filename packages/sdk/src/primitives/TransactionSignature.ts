@@ -46,6 +46,130 @@ interface TransactionSignatureFormatParams {
 }
 
 const EMPTY_SCRIPT = new Uint8Array(0)
+const ZERO_HASH = Object.freeze(Array.from({ length: 32 }, () => 0))
+
+function bip143Inputs (
+  params: TransactionSignatureFormatParams,
+  currentInput: TransactionInput
+): TransactionInput[] {
+  if (params.allInputs != null) return params.allInputs
+  const inputs = [...params.otherInputs]
+  inputs.splice(params.inputIndex, 0, currentInput)
+  return inputs
+}
+
+function bip143InputAt (
+  inputs: TransactionInput[],
+  inputIndex: number,
+  currentInput: TransactionInput,
+  index: number
+): TransactionInput {
+  return index === inputIndex ? currentInput : inputs[index]
+}
+
+function hashPrevouts (
+  inputs: TransactionInput[],
+  inputIndex: number,
+  currentInput: TransactionInput
+): number[] {
+  const writer = new Writer()
+  for (let index = 0; index < inputs.length; index++) {
+    const input = bip143InputAt(inputs, inputIndex, currentInput, index)
+    if (input.sourceTXID == null) {
+      if (input.sourceTransaction == null) throw new Error('Missing sourceTransaction for input')
+      writer.write(input.sourceTransaction.hash() as number[])
+    } else {
+      writer.writeReverse(toArray(input.sourceTXID, 'hex'))
+    }
+    writer.writeUInt32LE(input.sourceOutputIndex)
+  }
+  return Hash.hash256(writer.toUint8Array())
+}
+
+function hashSequences (
+  inputs: TransactionInput[],
+  inputIndex: number,
+  currentInput: TransactionInput
+): number[] {
+  const writer = new Writer()
+  for (let index = 0; index < inputs.length; index++) {
+    const input = bip143InputAt(inputs, inputIndex, currentInput, index)
+    writer.writeUInt32LE(input.sequence ?? 0xffffffff)
+  }
+  return Hash.hash256(writer.toUint8Array())
+}
+
+function writeBip143Output (writer: Writer, output: TransactionOutput): void {
+  writer.writeUInt64LE(output.satoshis ?? 0)
+  const script = output.lockingScript?.toUint8Array() ?? EMPTY_SCRIPT
+  writer.writeVarIntNum(script.length)
+  writer.write(script)
+}
+
+function hashOutputs (outputs: TransactionOutput[], outputIndex?: number): number[] {
+  const writer = new Writer()
+  if (outputIndex == null) {
+    for (const output of outputs) writeBip143Output(writer, output)
+  } else {
+    const output = outputs[outputIndex]
+    if (output == null) throw new Error(`Output at index ${outputIndex} does not exist`)
+    writeBip143Output(writer, output)
+  }
+  return Hash.hash256(writer.toUint8Array())
+}
+
+function bip143PrevoutsHash (
+  params: TransactionSignatureFormatParams,
+  inputs: TransactionInput[],
+  currentInput: TransactionInput
+): number[] {
+  if ((params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) !== 0) return [...ZERO_HASH]
+  if (params.cache?.hashPrevouts != null) return params.cache.hashPrevouts
+  const hash = hashPrevouts(inputs, params.inputIndex, currentInput)
+  if (params.cache != null) params.cache.hashPrevouts = hash
+  return hash
+}
+
+function bip143SequenceHash (
+  params: TransactionSignatureFormatParams,
+  inputs: TransactionInput[],
+  currentInput: TransactionInput
+): number[] {
+  const baseScope = params.scope & 31
+  if (
+    (params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) !== 0 ||
+    baseScope === TransactionSignature.SIGHASH_SINGLE ||
+    baseScope === TransactionSignature.SIGHASH_NONE
+  ) return [...ZERO_HASH]
+  if (params.cache?.hashSequence != null) return params.cache.hashSequence
+  const hash = hashSequences(inputs, params.inputIndex, currentInput)
+  if (params.cache != null) params.cache.hashSequence = hash
+  return hash
+}
+
+function bip143OutputsHash (params: TransactionSignatureFormatParams): number[] {
+  const baseScope = params.scope & 31
+  if (
+    baseScope !== TransactionSignature.SIGHASH_SINGLE &&
+    baseScope !== TransactionSignature.SIGHASH_NONE
+  ) {
+    if (params.cache?.hashOutputsAll != null) return params.cache.hashOutputsAll
+    const hash = hashOutputs(params.outputs)
+    if (params.cache != null) params.cache.hashOutputsAll = hash
+    return hash
+  }
+  if (baseScope !== TransactionSignature.SIGHASH_SINGLE || params.inputIndex >= params.outputs.length) {
+    return [...ZERO_HASH]
+  }
+  const cached = params.cache?.hashOutputsSingle?.get(params.inputIndex)
+  if (cached != null) return cached
+  const hash = hashOutputs(params.outputs, params.inputIndex)
+  if (params.cache != null) {
+    params.cache.hashOutputsSingle ??= new Map()
+    params.cache.hashOutputsSingle.set(params.inputIndex, hash)
+  }
+  return hash
+}
 
 export default class TransactionSignature extends Signature {
   public static readonly SIGHASH_ALL = 0x00000001
@@ -177,140 +301,15 @@ export default class TransactionSignature extends Signature {
    * @returns Bytes for signing.
    */
   static formatBip143(params: TransactionSignatureFormatParams): Uint8Array {
-    const cache = params.cache
     const currentInput: TransactionInput = {
       sourceTXID: params.sourceTXID,
       sourceOutputIndex: params.sourceOutputIndex,
       sequence: params.inputSequence
     }
-    const inputs =
-      params.allInputs ??
-      (() => {
-        const reconstructed = [...params.otherInputs]
-        reconstructed.splice(params.inputIndex, 0, currentInput)
-        return reconstructed
-      })()
-
-    const getPrevoutHash = (): number[] => {
-      const writer = new Writer()
-
-      for (let index = 0; index < inputs.length; index++) {
-        const input = index === params.inputIndex ? currentInput : inputs[index]
-        if (input.sourceTXID === undefined) {
-          if (input.sourceTransaction == null) {
-            throw new Error('Missing sourceTransaction for input')
-          }
-          writer.write(input.sourceTransaction.hash() as number[])
-        } else {
-          writer.writeReverse(toArray(input.sourceTXID, 'hex'))
-        }
-        writer.writeUInt32LE(input.sourceOutputIndex)
-      }
-
-      const buf = writer.toUint8Array()
-      const ret = Hash.hash256(buf)
-      return ret
-    }
-
-    const getSequenceHash = (): number[] => {
-      const writer = new Writer()
-
-      for (let index = 0; index < inputs.length; index++) {
-        const input = index === params.inputIndex ? currentInput : inputs[index]
-        const sequence = input.sequence ?? 0xffffffff // Default to max sequence number
-        writer.writeUInt32LE(sequence)
-      }
-
-      const buf = writer.toUint8Array()
-      const ret = Hash.hash256(buf)
-      return ret
-    }
-
-    function getOutputsHash(outputIndex?: number): number[] {
-      const writer = new Writer()
-
-      if (outputIndex === undefined) {
-        for (const output of params.outputs) {
-          const satoshis = output.satoshis ?? 0 // Default to 0 if undefined
-          writer.writeUInt64LE(satoshis)
-
-          const script = output.lockingScript?.toUint8Array() ?? EMPTY_SCRIPT
-          writer.writeVarIntNum(script.length)
-          writer.write(script)
-        }
-      } else {
-        const output = params.outputs[outputIndex]
-
-        if (output === undefined) {
-          // ✅ Explicitly check for undefined
-          throw new Error(`Output at index ${outputIndex} does not exist`)
-        }
-
-        const satoshis = output.satoshis ?? 0 // Default to 0 if undefined
-        writer.writeUInt64LE(satoshis)
-
-        const script = output.lockingScript?.toUint8Array() ?? EMPTY_SCRIPT
-        writer.writeVarIntNum(script.length)
-        writer.write(script)
-      }
-
-      const buf = writer.toUint8Array()
-      const ret = Hash.hash256(buf)
-      return ret
-    }
-
-    let hashPrevouts = Array.from({ length: 32 }, () => 0)
-    let hashSequence = Array.from({ length: 32 }, () => 0)
-    let hashOutputs = Array.from({ length: 32 }, () => 0)
-
-    if ((params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) === 0) {
-      if (cache?.hashPrevouts == null) {
-        hashPrevouts = getPrevoutHash()
-        if (cache != null) cache.hashPrevouts = hashPrevouts
-      } else {
-        hashPrevouts = cache.hashPrevouts
-      }
-    }
-
-    if (
-      (params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) === 0 &&
-      (params.scope & 31) !== TransactionSignature.SIGHASH_SINGLE &&
-      (params.scope & 31) !== TransactionSignature.SIGHASH_NONE
-    ) {
-      if (cache?.hashSequence == null) {
-        hashSequence = getSequenceHash()
-        if (cache != null) cache.hashSequence = hashSequence
-      } else {
-        hashSequence = cache.hashSequence
-      }
-    }
-
-    if (
-      (params.scope & 31) !== TransactionSignature.SIGHASH_SINGLE &&
-      (params.scope & 31) !== TransactionSignature.SIGHASH_NONE
-    ) {
-      if (cache?.hashOutputsAll == null) {
-        hashOutputs = getOutputsHash()
-        if (cache != null) cache.hashOutputsAll = hashOutputs
-      } else {
-        hashOutputs = cache.hashOutputsAll
-      }
-    } else if (
-      (params.scope & 31) === TransactionSignature.SIGHASH_SINGLE &&
-      params.inputIndex < params.outputs.length
-    ) {
-      const key = params.inputIndex
-      const cachedSingle = cache?.hashOutputsSingle?.get(key)
-      if (cachedSingle == null) {
-        hashOutputs = getOutputsHash(key)
-        if (cache != null) {
-          cache.hashOutputsSingle ??= new Map()
-          cache.hashOutputsSingle.set(key, hashOutputs)
-        }
-      } else {
-        hashOutputs = cachedSingle
-      }
-    }
+    const inputs = bip143Inputs(params, currentInput)
+    const hashPrevouts = bip143PrevoutsHash(params, inputs, currentInput)
+    const hashSequence = bip143SequenceHash(params, inputs, currentInput)
+    const outputsHash = bip143OutputsHash(params)
 
     const writer = new Writer()
 
@@ -338,7 +337,7 @@ export default class TransactionSignature extends Signature {
     writer.writeUInt32LE(sequenceNumber)
 
     // Outputs (none/one/all, depending on flags)
-    writer.write(hashOutputs)
+    writer.write(outputsHash)
 
     // Locktime
     writer.writeUInt32LE(params.lockTime)

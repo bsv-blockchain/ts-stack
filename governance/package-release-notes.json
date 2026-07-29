@@ -98,8 +98,8 @@
       "name": "@bsv/overlay",
       "publishedVersion": "2.2.1",
       "releaseType": "patch",
-      "summary": "Repairs the documented storage export and reduces production complexity while preserving Engine and storage behavior.",
-      "migration": "No consumer migration is required; existing imports remain valid and the documented storage subpath is restored."
+      "summary": "Repairs the documented storage export and decomposes Engine submission validation, broadcast, storage, notification, and propagation orchestration while preserving execution order and behavior.",
+      "migration": "No consumer migration is required; existing imports, submission results, notification contracts, storage order, and network behavior remain unchanged."
     },
     {
       "name": "@bsv/overlay-discovery-services",
@@ -140,8 +140,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, and behavior-preserving production maintainability remediation.",
-      "migration": "No consumer migration is required; the source candidate preserves the 2.x public API and supported import forms."
+      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, and behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths.",
+      "migration": "No consumer migration is required; the source candidate preserves the 2.x public API, wire encodings, script semantics, errors, and supported import forms."
     },
     {
       "name": "@bsv/simple",
@@ -189,21 +189,21 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, and broad production maintainability and initialization improvements.",
-      "migration": "No consumer migration is required; persisted schemas and the 2.x wallet and storage interfaces remain compatible."
+      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, and broad maintainability remediation across wallet, monitor, provider, action-batch, storage, proof, and Chaintracks paths.",
+      "migration": "No consumer migration is required; persisted schemas, provider behavior, transaction construction, and the 2.x wallet and storage interfaces remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox client candidate with transport, validation, dependency, package, and declaration hardening.",
+      "summary": "Carries the lockstep Wallet Toolbox client candidate with transport, validation, storage, provider, dependency, package, and declaration hardening.",
       "migration": "No consumer migration is required; client entry points and remote storage contracts remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, package, declaration, and transport hardening.",
+      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, transport, storage, provider, package, and declaration hardening.",
       "migration": "No consumer migration is required; React Native and mobile bridge contracts remain compatible."
     },
     {

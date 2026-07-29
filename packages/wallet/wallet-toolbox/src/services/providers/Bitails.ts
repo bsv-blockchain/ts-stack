@@ -1,6 +1,11 @@
 import { Beef, defaultHttpClient, HexString, HttpClient, Utils } from '@bsv/sdk'
 import { Chain, ReqHistoryNote } from '../../sdk/types'
-import { GetMerklePathResult, PostBeefResult, WalletServices } from '../../sdk/WalletServices.interfaces'
+import {
+  GetMerklePathResult,
+  PostBeefResult,
+  PostTxResultForTxid,
+  WalletServices
+} from '../../sdk/WalletServices.interfaces'
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { convertProofToMerklePath } from '../../utility/tscProofToMerklePath'
@@ -10,6 +15,123 @@ export interface BitailsConfig {
   apiKey?: string
   /** The HTTP client used to make requests to the API. */
   httpClient?: HttpClient
+}
+
+interface BitailsPostNoteContext {
+  nn: () => { name: string; when: string }
+  nne: () => {
+    name: string
+    when: string
+    raws: string
+    txids: string
+    url: string
+  }
+}
+
+function initializeBitailsPostResult (
+  raws: HexString[],
+  requestedTxids?: string[]
+): { result: PostBeefResult; rawTxids: string[] } {
+  const result: PostBeefResult = {
+    name: 'BitailsPostRaws',
+    status: 'success',
+    txidResults: [],
+    notes: []
+  }
+  const rawTxids: string[] = []
+  for (const raw of raws) {
+    const txid = Utils.toHex(doubleSha256BE(Utils.toArray(raw, 'hex')))
+    rawTxids.push(txid)
+    if (requestedTxids == null || requestedTxids.includes(txid)) {
+      result.txidResults.push({ txid, status: 'success', notes: [] })
+    }
+  }
+  return { result, rawTxids }
+}
+
+function reconcileBitailsResponseTxids (
+  result: PostBeefResult,
+  responseResults: BitailsPostRawsResult[],
+  rawTxids: string[],
+  notes: BitailsPostNoteContext
+): boolean {
+  if (responseResults.length !== rawTxids.length) {
+    result.status = 'error'
+    result.notes!.push({ ...notes.nne(), what: 'postRawsErrorResultsCount' })
+    return false
+  }
+  for (let index = 0; index < responseResults.length; index++) {
+    const response = responseResults[index]
+    if (response.txid == null || response.txid === '') {
+      response.txid = rawTxids[index]
+      result.notes!.push({
+        ...notes.nn(),
+        what: 'postRawsResultMissingTxids',
+        i: index,
+        rawsTxid: rawTxids[index]
+      })
+    } else if (response.txid !== rawTxids[index]) {
+      result.status = 'error'
+      result.notes!.push({
+        ...notes.nn(),
+        what: 'postRawsResultTxids',
+        i: index,
+        txid: response.txid,
+        rawsTxid: rawTxids[index]
+      })
+    }
+  }
+  return result.status === 'success'
+}
+
+function applyBitailsTransactionResult (
+  result: PostTxResultForTxid,
+  response: BitailsPostRawsResult,
+  notes: BitailsPostNoteContext
+): void {
+  if (response.error == null) {
+    result.notes!.push({ ...notes.nn(), what: 'postRawsSuccess' })
+    return
+  }
+  const { code, message } = response.error
+  if (code === -27) {
+    result.notes!.push({ ...notes.nne(), what: 'postRawsSuccessAlreadyInMempool' })
+    return
+  }
+
+  result.status = 'error'
+  if (code === -25) {
+    result.doubleSpend = true
+    result.competingTxs = undefined
+    result.notes!.push({ ...notes.nne(), what: 'postRawsErrorMissingInputs' })
+  } else if ((response['code'] as string) === 'ECONNRESET') {
+    result.notes!.push({
+      ...notes.nne(),
+      what: 'postRawsErrorECONNRESET',
+      txid: result.txid,
+      message
+    })
+  } else {
+    result.notes!.push({
+      ...notes.nne(),
+      what: 'postRawsError',
+      txid: result.txid,
+      code,
+      message
+    })
+  }
+}
+
+function applyRequestedBitailsResults (
+  result: PostBeefResult,
+  responseResults: BitailsPostRawsResult[],
+  notes: BitailsPostNoteContext
+): void {
+  for (const txResult of result.txidResults) {
+    const response = responseResults.find(item => item.txid === txResult.txid)!
+    applyBitailsTransactionResult(txResult, response, notes)
+    if (txResult.status !== 'success') result.status = 'error'
+  }
 }
 
 /**
@@ -89,27 +211,7 @@ export class Bitails {
    * @returns
    */
   async postRaws (raws: HexString[], txids?: string[]): Promise<PostBeefResult> {
-    const r: PostBeefResult = {
-      name: 'BitailsPostRaws',
-      status: 'success',
-      txidResults: [],
-      notes: []
-    }
-
-    const rawTxids: string[] = []
-
-    for (const raw of raws) {
-      const txid = Utils.toHex(doubleSha256BE(Utils.toArray(raw, 'hex')))
-      // Results aren't always identified by txid.
-      rawTxids.push(txid)
-      if ((txids == null) || txids.includes(txid)) {
-        r.txidResults.push({
-          txid,
-          status: 'success',
-          notes: []
-        })
-      }
-    }
+    const { result: r, rawTxids } = initializeBitailsPostResult(raws, txids)
 
     const headers = this.getHttpHeaders()
     headers['Content-Type'] = 'application/json'
@@ -123,79 +225,36 @@ export class Bitails {
     }
 
     const url = `${this.URL}tx/broadcast/multi`
-    const nn = () => ({
-      name: 'BitailsPostRawTx',
-      when: new Date().toISOString()
-    })
-    const nne = () => ({
-      ...nn(),
-      raws: raws.join(','),
-      txids: r.txidResults.map(r => r.txid).join(','),
-      url
-    })
+    const notes: BitailsPostNoteContext = {
+      nn: () => ({
+        name: 'BitailsPostRawTx',
+        when: new Date().toISOString()
+      }),
+      nne: () => ({
+        name: 'BitailsPostRawTx',
+        when: new Date().toISOString(),
+        raws: raws.join(','),
+        txids: r.txidResults.map(result => result.txid).join(','),
+        url
+      })
+    }
 
     try {
       const response = await this.httpClient.request<BitailsPostRawsResult[]>(url, requestOptions)
       if (response.ok) {
-        // status: 201, statusText: 'Created'
-        const btrs: BitailsPostRawsResult[] = response.data
-        if (btrs.length !== raws.length) {
-          r.status = 'error'
-          r.notes!.push({ ...nne(), what: 'postRawsErrorResultsCount' })
-        } else {
-          // Check that each response result has a txid that matches corresponding rawTxids
-          let i = -1
-          for (const btr of btrs) {
-            i++
-            if (!btr.txid) {
-              btr.txid = rawTxids[i]
-              r.notes!.push({ ...nn(), what: 'postRawsResultMissingTxids', i, rawsTxid: rawTxids[i] })
-            } else if (btr.txid !== rawTxids[i]) {
-              r.status = 'error'
-              r.notes!.push({ ...nn(), what: 'postRawsResultTxids', i, txid: btr.txid, rawsTxid: rawTxids[i] })
-            }
-          }
-          if (r.status === 'success') {
-            // btrs has correct number of results and each one has expected txid.
-            // focus on results for requested txids
-            for (const rt of r.txidResults) {
-              const btr = btrs.find(btr => btr.txid === rt.txid)!
-              const txid = rt.txid
-              if (btr.error != null) {
-                // code: -25, message: 'missing-inputs'
-                // code: -27, message: 'already-in-mempool'
-                const { code, message } = btr.error
-                if (code === -27) {
-                  rt.notes!.push({ ...nne(), what: 'postRawsSuccessAlreadyInMempool' })
-                } else {
-                  rt.status = 'error'
-                  if (code === -25) {
-                    rt.doubleSpend = true // this is a possible double spend attempt
-                    rt.competingTxs = undefined // not provided with any data for this.
-                    rt.notes!.push({ ...nne(), what: 'postRawsErrorMissingInputs' })
-                  } else if ((btr['code'] as string) === 'ECONNRESET') {
-                    rt.notes!.push({ ...nne(), what: 'postRawsErrorECONNRESET', txid, message })
-                  } else {
-                    rt.notes!.push({ ...nne(), what: 'postRawsError', txid, code, message })
-                  }
-                }
-              } else {
-                rt.notes!.push({ ...nn(), what: 'postRawsSuccess' })
-              }
-              if (rt.status !== 'success' && r.status === 'success') r.status = 'error'
-            }
-          }
+        if (reconcileBitailsResponseTxids(r, response.data, rawTxids, notes)) {
+          applyRequestedBitailsResults(r, response.data, notes)
         }
       } else {
         r.status = 'error'
-        const n: ReqHistoryNote = { ...nne(), what: 'postRawsError' }
+        const n: ReqHistoryNote = { ...notes.nne(), what: 'postRawsError' }
         r.notes!.push(n)
       }
     } catch (error_: unknown) {
       r.status = 'error'
       const e = WalletError.fromUnknown(error_)
       const { code, description } = e
-      r.notes!.push({ ...nne(), what: 'postRawsCatch', code, description })
+      r.notes!.push({ ...notes.nne(), what: 'postRawsCatch', code, description })
     }
     return r
   }

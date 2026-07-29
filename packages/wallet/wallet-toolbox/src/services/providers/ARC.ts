@@ -5,6 +5,7 @@ import {
   defaultHttpClient,
   HexString,
   HttpClient,
+  HttpClientResponse,
   HttpClientRequestOptions,
   Random,
   Utils
@@ -80,6 +81,17 @@ export function isArcServiceErrorStatus (status: number | undefined, detail?: st
     d.includes('temporarily') ||
     d.includes('backpressure') ||
     d.includes('unavailable')
+}
+
+interface ArcPostNoteContext {
+  nn: () => { name: string; when: string }
+  nne: () => {
+    rawTx: HexString
+    txids: string
+    url: string
+    name: string
+    when: string
+  }
 }
 
 /**
@@ -161,6 +173,107 @@ export class ARC {
     return headers
   }
 
+  private applySuccessfulPostRawTx (
+    result: PostTxResultForTxid,
+    data: ArcResponse,
+    notes: ArcPostNoteContext
+  ): void {
+    const { txid, extraInfo, txStatus, competingTxs } = data
+    result.data = `${txStatus} ${extraInfo}`
+    if (result.txid !== txid) result.data += ` txid altered from ${result.txid} to ${txid}`
+    result.txid = txid
+    const responseNote = {
+      txid,
+      extraInfo,
+      txStatus,
+      competingTxs: competingTxs?.join(',')
+    }
+    if (isArcDoubleSpendTxStatus(txStatus)) {
+      result.status = 'error'
+      result.doubleSpend = true
+      result.competingTxs = competingTxs
+      result.notes!.push({ ...notes.nne(), ...responseNote, what: 'postRawTxDoubleSpend' })
+      return
+    }
+    result.notes!.push({ ...notes.nn(), ...responseNote, what: 'postRawTxSuccess' })
+  }
+
+  private applyFailedPostRawTx (
+    result: PostTxResultForTxid,
+    response: Exclude<HttpClientResponse<ArcResponse>, { ok: true }>,
+    data: ArcResponse,
+    notes: ArcPostNoteContext
+  ): void {
+    result.status = 'error'
+    const responseNote = {
+      txid: data.txid,
+      extraInfo: data.extraInfo,
+      txStatus: data.txStatus,
+      competingTxs: data.competingTxs?.join(',')
+    }
+    const note: ReqHistoryNote = {
+      ...notes.nn(),
+      ...notes.nne(),
+      ...responseNote,
+      what: 'postRawTxError'
+    }
+    const errorData: PostTxResultForTxidError = {}
+    result.data = errorData
+    const responseStatus: unknown = response.status
+    let numericStatus: number | undefined
+    if (typeof responseStatus === 'number' || typeof responseStatus === 'string') {
+      note.status = responseStatus
+      errorData.status = responseStatus.toString()
+      const parsed = Number(responseStatus)
+      if (Number.isFinite(parsed)) numericStatus = parsed
+    } else {
+      note.status = typeof responseStatus
+      errorData.status = 'ERR_UNKNOWN'
+    }
+
+    const responseData: unknown = response.data
+    if (typeof responseData === 'string' && responseData !== '') {
+      note.data = responseData.slice(0, 128)
+    } else if (responseData != null && typeof responseData === 'object') {
+      errorData.more = responseData
+      if ('detail' in responseData && typeof responseData.detail === 'string') {
+        errorData.detail = responseData.detail
+        note.detail = responseData.detail
+      }
+    }
+    result.serviceError = isArcServiceErrorStatus(numericStatus, errorData.detail)
+    result.notes!.push(note)
+  }
+
+  private applyPostRawTxResponse (
+    result: PostTxResultForTxid,
+    response: HttpClientResponse<ArcResponse>,
+    notes: ArcPostNoteContext
+  ): void {
+    if (response.ok) {
+      this.applySuccessfulPostRawTx(result, response.data, notes)
+    } else {
+      this.applyFailedPostRawTx(result, response, response.data as ArcResponse, notes)
+    }
+  }
+
+  private applyPostRawTxCatch (
+    result: PostTxResultForTxid,
+    error_: unknown,
+    notes: ArcPostNoteContext
+  ): void {
+    const error = WalletError.fromUnknown(error_)
+    result.status = 'error'
+    result.serviceError = true
+    result.data = `${error.code} ${error.message}`
+    result.notes!.push({
+      ...notes.nne(),
+      what: 'postRawTxCatch',
+      code: error.code,
+      description: error.description
+    })
+  }
+
   /**
    * The ARC '/v1/tx' endpoint, as of 2025-02-17 supports all of the following hex string formats:
    *   1. Single serialized raw transaction.
@@ -196,87 +309,22 @@ export class ARC {
     }
 
     const url = `${this.URL}/v1/tx`
-    const nn = () => ({ name: this.name, when: new Date().toISOString() })
-    const nne = () => ({ ...nn(), rawTx, txids: txids.join(','), url })
+    const notes: ArcPostNoteContext = {
+      nn: () => ({ name: this.name, when: new Date().toISOString() }),
+      nne: () => ({
+        name: this.name,
+        when: new Date().toISOString(),
+        rawTx,
+        txids: txids.join(','),
+        url
+      })
+    }
 
     try {
       const response = await this.httpClient.request<ArcResponse>(url, requestOptions)
-
-      const { txid, extraInfo, txStatus, competingTxs } = response.data
-      const nnr = () => ({
-        txid,
-        extraInfo,
-        txStatus,
-        competingTxs: competingTxs?.join(',')
-      })
-
-      if (response.ok) {
-        r.data = `${txStatus} ${extraInfo}`
-        if (r.txid !== txid) r.data += ` txid altered from ${r.txid} to ${txid}`
-        r.txid = txid
-        if (isArcDoubleSpendTxStatus(txStatus)) {
-          r.status = 'error'
-          r.doubleSpend = true
-          r.competingTxs = competingTxs
-          r.notes!.push({ ...nne(), ...nnr(), what: 'postRawTxDoubleSpend' })
-        } else {
-          r.notes!.push({ ...nn(), ...nnr(), what: 'postRawTxSuccess' })
-        }
-      } else if (typeof response === 'string') {
-        r.notes!.push({ ...nne(), what: 'postRawTxString', response })
-        r.status = 'error'
-        // response is not normally a string
-        r.serviceError = true
-      } else {
-        r.status = 'error'
-        const n: ReqHistoryNote = {
-          ...nn(),
-          ...nne(),
-          ...nnr(),
-          what: 'postRawTxError'
-        }
-        const ed: PostTxResultForTxidError = {}
-        r.data = ed
-        const st = typeof response.status
-        let status: number | undefined
-        if (st === 'number' || st === 'string') {
-          n.status = response.status
-          ed.status = response.status.toString()
-          if (typeof response.status === 'number') status = response.status
-          else {
-            const parsed = Number(response.status)
-            if (Number.isFinite(parsed)) status = parsed
-          }
-        } else {
-          n.status = st
-          ed.status = 'ERR_UNKNOWN'
-        }
-
-        const d = response.data
-        if (d && typeof d === 'string') {
-          n.data = response.data.slice(0, 128)
-        } else if (d && typeof d === 'object') {
-          ed.more = d
-          ed.detail = d.detail
-          if (typeof ed.detail !== 'string') ed.detail = undefined
-          if (ed.detail) {
-            n.detail = ed.detail
-          }
-        }
-        r.serviceError = isArcServiceErrorStatus(status, ed.detail)
-        r.notes!.push(n)
-      }
+      this.applyPostRawTxResponse(r, response, notes)
     } catch (error_: unknown) {
-      const e = WalletError.fromUnknown(error_)
-      r.status = 'error'
-      r.serviceError = true
-      r.data = `${e.code} ${e.message}`
-      r.notes!.push({
-        ...nne(),
-        what: 'postRawTxCatch',
-        code: e.code,
-        description: e.description
-      })
+      this.applyPostRawTxCatch(r, error_, notes)
     }
 
     return r

@@ -419,40 +419,106 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return this._services
   }
 
-  async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
-    if (auth.userId == null) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
-
-    const userId = auth.userId
+  private async findAbortableTransaction(
+    userId: number,
+    args: AbortActionArgs,
+    trx: TrxToken
+  ): Promise<{ tx: TableTransaction; reference: string | undefined }> {
     let reference: string | undefined = args.reference
-    let txid: string | undefined
-
-    const r = await this.transaction(async trx => {
-      let tx = verifyOneOrNone(
+    let tx = verifyOneOrNone(
+      await this.findTransactions({
+        partial: { reference, userId },
+        noRawTx: true,
+        trx
+      })
+    )
+    if (tx == null && args.reference.length === 64) {
+      reference = undefined
+      tx = verifyOneOrNone(
         await this.findTransactions({
-          partial: { reference, userId },
+          partial: { txid: args.reference, userId },
           noRawTx: true,
           trx
         })
       )
-      if (tx == null && args.reference.length === 64) {
-        // reference may also be a txid
-        txid = reference
-        reference = undefined
-        tx = verifyOneOrNone(
-          await this.findTransactions({
-            partial: { txid, userId },
-            noRawTx: true,
-            trx
-          })
-        )
+    }
+    const unAbortableStatus: TransactionStatus[] = ['completed', 'failed', 'sending', 'unproven']
+    if (tx == null || !tx.isOutgoing || unAbortableStatus.includes(tx.status)) {
+      throw new WERR_INVALID_PARAMETER(
+        'reference',
+        'an inprocess, outgoing action that has not been signed and shared to the network.'
+      )
+    }
+    return { tx, reference }
+  }
+
+  private async checkAbortChainProtection(
+    tx: TableTransaction,
+    args: AbortActionArgs,
+    trx: TrxToken
+  ): Promise<{ skipped: boolean; serviceUnreachable: boolean }> {
+    if (tx.txid == null || tx.txid === '' || tx.status !== 'nosend') {
+      return { skipped: false, serviceUnreachable: false }
+    }
+
+    let serviceUnreachable = false
+    let chainStatus: 'mined' | 'known' | 'unknown' | undefined
+    try {
+      const result = await this.getServices().getStatusForTxids([tx.txid])
+      if (result.status !== 'success') {
+        serviceUnreachable = true
+      } else {
+        chainStatus = result.results.find(item => item.txid === tx.txid)?.status
       }
-      const unAbortableStatus: TransactionStatus[] = ['completed', 'failed', 'sending', 'unproven']
-      if (tx == null || !tx.isOutgoing || unAbortableStatus.includes(tx.status)) {
-        throw new WERR_INVALID_PARAMETER(
-          'reference',
-          'an inprocess, outgoing action that has not been signed and shared to the network.'
+    } catch {
+      serviceUnreachable = true
+    }
+    if (chainStatus !== 'mined' && chainStatus !== 'known') {
+      return { skipped: false, serviceUnreachable }
+    }
+
+    const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+    if (req != null) {
+      req.addHistoryNote({
+        what: 'abortAction-skipped-onchain',
+        reference: args.reference,
+        chainStatus
+      })
+      await req.updateStorageDynamicProperties(this, trx)
+    }
+    return { skipped: true, serviceUnreachable }
+  }
+
+  private async invalidateAbortedTransaction(
+    tx: TableTransaction,
+    userId: number,
+    reference: string | undefined,
+    originalReference: string,
+    serviceUnreachable: boolean,
+    trx: TrxToken
+  ): Promise<AbortActionResult> {
+    await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
+    if (tx.txid != null && tx.txid !== '') {
+      const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+      if (req != null) {
+        req.addHistoryNote(
+          serviceUnreachable
+            ? { what: 'abortAction-offline-fallback', reference: originalReference }
+            : { what: 'abortAction', reference: originalReference }
         )
+        req.status = 'invalid'
+        await req.updateStorageDynamicProperties(this, trx)
       }
+    }
+    return { aborted: true }
+  }
+
+  async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
+    if (auth.userId == null) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
+
+    const userId = auth.userId
+    const r = await this.transaction(async trx => {
+      const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
       // Chain-status protection for signed nosend txs.
       //
       // Background: a nosend tx (created via createAction({noSend:true}))
@@ -484,57 +550,19 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       // hole can never be 100% closed against externally-broadcast
       // chain-confirmed txs while offline; the audit trail makes it
       // recoverable.
-      let serviceUnreachable = false
-      if (tx.txid != null && tx.txid !== '' && tx.status === 'nosend') {
-        const services = this.getServices()
-        let chainStatus: 'mined' | 'known' | 'unknown' | undefined
-        try {
-          const r = await services.getStatusForTxids([tx.txid])
-          if (r.status !== 'success') {
-            serviceUnreachable = true
-          } else {
-            chainStatus = r.results.find(x => x.txid === tx.txid)?.status
-          }
-        } catch {
-          serviceUnreachable = true
-        }
-        if (chainStatus === 'mined' || chainStatus === 'known') {
-          const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
-          if (req != null) {
-            req.addHistoryNote({
-              what: 'abortAction-skipped-onchain',
-              reference: args.reference,
-              chainStatus
-            })
-            await req.updateStorageDynamicProperties(this, trx)
-          }
-          // Surface the refusal via a sentinel so the surrounding
-          // transaction commits the history note BEFORE returning
-          // the aborted:false result. Returning directly from inside
-          // the transaction would still work, but the sentinel keeps
-          // the audit-write / result-shape decision on the same
-          // commit-then-return path that existed when this surface
-          // threw, minimizing diff churn.
-          return { __abortAction: 'skipped-onchain' as const, chainStatus }
-        }
+      const protection = await this.checkAbortChainProtection(tx, args, trx)
+      if (protection.skipped) {
+        // Commit the audit note before translating this sentinel to aborted:false.
+        return { __abortAction: 'skipped-onchain' as const }
       }
-      await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
-      if (tx.txid != null && tx.txid !== '') {
-        const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
-        if (req != null) {
-          req.addHistoryNote(
-            serviceUnreachable
-              ? { what: 'abortAction-offline-fallback', reference: args.reference }
-              : { what: 'abortAction', reference: args.reference }
-          )
-          req.status = 'invalid'
-          await req.updateStorageDynamicProperties(this, trx)
-        }
-      }
-      const r: AbortActionResult = {
-        aborted: true
-      }
-      return r
+      return await this.invalidateAbortedTransaction(
+        tx,
+        userId,
+        reference,
+        args.reference,
+        protection.serviceUnreachable,
+        trx
+      )
     })
     if ('__abortAction' in r) {
       // Tone Engel review feedback (PR #122 comment 4444566147 item 3):
@@ -1086,6 +1114,128 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return { log }
   }
 
+  private async prepareProofRecoveryOutputVerdicts(
+    transactions: TableTransaction[]
+  ): Promise<Map<number, boolean | undefined>> {
+    const verdicts = new Map<number, boolean | undefined>()
+    if (transactions.length === 0) return verdicts
+    const services = this.getServices()
+    for (const transaction of transactions) {
+      const outputs = await this.findOutputs({
+        partial: {
+          userId: transaction.userId,
+          transactionId: transaction.transactionId
+        }
+      })
+      for (const output of outputs) {
+        const outputId = verifyId(output.outputId)
+        await this.validateOutputScript(output)
+        verdicts.set(
+          outputId,
+          output.lockingScript == null ? undefined : await services.isUtxo(output)
+        )
+      }
+    }
+    return verdicts
+  }
+
+  private async restoreProofRecoveryInputs(
+    tx: TableTransaction,
+    bsvtx: Transaction,
+    indent: number,
+    trx: TrxToken
+  ): Promise<string> {
+    let log = ''
+    for (const [vin, input] of bsvtx.inputs.entries()) {
+      const sourceTXID = input.sourceTXID
+      if (sourceTXID == null) {
+        log += ' '.repeat(indent + 2) + `input ${vin} has no source transaction id\n`
+        continue
+      }
+      const outputs = await this.findOutputs({
+        partial: {
+          userId: tx.userId,
+          txid: sourceTXID,
+          vout: input.sourceOutputIndex
+        },
+        trx
+      })
+      if (outputs.length !== 1) {
+        log += ' '.repeat(indent + 2) + `input ${vin} not matched to user's outputs\n`
+        continue
+      }
+      const output = outputs[0]
+      log +=
+        ' '.repeat(indent + 2) +
+        `input ${vin} matched to output ${output.outputId} updated spentBy ${tx.transactionId}\n`
+      await this.updateOutput(
+        verifyId(output.outputId),
+        { spendable: false, spentBy: tx.transactionId },
+        trx
+      )
+    }
+    return log
+  }
+
+  private async restoreProofRecoveryOutputs(
+    tx: TableTransaction,
+    outputVerdicts: Map<number, boolean | undefined>,
+    indent: number,
+    trx: TrxToken
+  ): Promise<string> {
+    let log = ''
+    const outputs = await this.findOutputs({
+      partial: { userId: tx.userId, transactionId: tx.transactionId },
+      trx
+    })
+    for (const output of outputs) {
+      const outputId = verifyId(output.outputId)
+      if (!outputVerdicts.has(outputId)) {
+        throw new WERR_INTERNAL(
+          `Output ${outputId} changed while preparing proof recovery.`
+        )
+      }
+      const isUtxo = outputVerdicts.get(outputId)
+      if (isUtxo == null) {
+        log +=
+          ' '.repeat(indent + 2) +
+          `output ${output.outputId} does not have a valid locking script\n`
+        continue
+      }
+      if (isUtxo === output.spendable) {
+        log += ' '.repeat(indent + 2) + `output ${output.outputId} unchanged\n`
+        continue
+      }
+      log +=
+        ' '.repeat(indent + 2) +
+        `output ${output.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
+      await this.updateOutput(outputId, { spendable: isUtxo }, trx)
+    }
+    return log
+  }
+
+  private async restoreTransactionForProof(
+    tx: TableTransaction,
+    bsvtx: Transaction | undefined,
+    preparedTransactionIds: Set<number>,
+    outputVerdicts: Map<number, boolean | undefined>,
+    indent: number,
+    trx: TrxToken
+  ): Promise<string> {
+    if (bsvtx == null || !preparedTransactionIds.has(tx.transactionId)) {
+      throw new WERR_INTERNAL(
+        `Transaction ${tx.transactionId} changed while preparing proof recovery.`
+      )
+    }
+    await this.updateTransaction(tx.transactionId, { status: 'unproven' }, trx)
+    let log =
+      ' '.repeat(indent) +
+      `transaction ${tx.transactionId} status is now 'unproven'\n`
+    log += await this.restoreProofRecoveryInputs(tx, bsvtx, indent, trx)
+    log += await this.restoreProofRecoveryOutputs(tx, outputVerdicts, indent, trx)
+    return log
+  }
+
   /**
    * Restore every failed local copy of a transaction before proof completion.
    * Also heals the request's notification set from the authoritative txid
@@ -1113,24 +1263,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     // transition separately so it is persisted atomically with bookkeeping.
     await req.refreshFromStorage(this)
     const preparedTransactionIds = new Set(transactionsToRepair.map(transaction => transaction.transactionId))
-    const outputVerdicts = new Map<number, boolean | undefined>()
     const bsvtx = transactionsToRepair.length > 0 ? Transaction.fromBinary(req.rawTx) : undefined
 
     // UTXO checks can call external services. Complete every check before
     // opening the write transaction so network latency never holds DB locks.
-    if (transactionsToRepair.length > 0) {
-      const services = this.getServices()
-      for (const transaction of transactionsToRepair) {
-        const outputs = await this.findOutputs({
-          partial: { userId: transaction.userId, transactionId: transaction.transactionId }
-        })
-        for (const output of outputs) {
-          const outputId = verifyId(output.outputId)
-          await this.validateOutputScript(output)
-          outputVerdicts.set(outputId, output.lockingScript == null ? undefined : await services.isUtxo(output))
-        }
-      }
-    }
+    const outputVerdicts =
+      await this.prepareProofRecoveryOutputVerdicts(transactionsToRepair)
 
     return await this.transaction(async trx => {
       let log = ''
@@ -1154,59 +1292,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         }
         const shouldRepair = requestUpdate != null || tx.status === 'failed'
         if (!shouldRepair) continue
-        if (bsvtx == null || !preparedTransactionIds.has(tx.transactionId)) {
-          throw new WERR_INTERNAL(`Transaction ${tx.transactionId} changed while preparing proof recovery.`)
-        }
-
-        await this.updateTransaction(tx.transactionId, { status: 'unproven' }, trx)
-        log += ' '.repeat(indent) + `transaction ${tx.transactionId} status is now 'unproven'\n`
-
-        let vin = -1
-        for (const input of bsvtx.inputs) {
-          vin++
-          const sourceTXID = input.sourceTXID
-          if (sourceTXID == null) {
-            log += ' '.repeat(indent + 2) + `input ${vin} has no source transaction id\n`
-            continue
-          }
-          const outputs = await this.findOutputs({
-            partial: {
-              userId: tx.userId,
-              txid: sourceTXID,
-              vout: input.sourceOutputIndex
-            },
-            trx
-          })
-          if (outputs.length === 1) {
-            const output = outputs[0]
-            log +=
-              ' '.repeat(indent + 2) +
-              `input ${vin} matched to output ${output.outputId} updated spentBy ${tx.transactionId}\n`
-            await this.updateOutput(verifyId(output.outputId), { spendable: false, spentBy: tx.transactionId }, trx)
-          } else {
-            log += ' '.repeat(indent + 2) + `input ${vin} not matched to user's outputs\n`
-          }
-        }
-
-        const outputs = await this.findOutputs({
-          partial: { userId: tx.userId, transactionId: tx.transactionId },
+        log += await this.restoreTransactionForProof(
+          tx,
+          bsvtx,
+          preparedTransactionIds,
+          outputVerdicts,
+          indent,
           trx
-        })
-        for (const output of outputs) {
-          const outputId = verifyId(output.outputId)
-          if (!outputVerdicts.has(outputId)) {
-            throw new WERR_INTERNAL(`Output ${outputId} changed while preparing proof recovery.`)
-          }
-          const isUtxo = outputVerdicts.get(outputId)
-          if (isUtxo == null) {
-            log += ' '.repeat(indent + 2) + `output ${output.outputId} does not have a valid locking script\n`
-          } else if (isUtxo === output.spendable) {
-            log += ' '.repeat(indent + 2) + `output ${output.outputId} unchanged\n`
-          } else {
-            log += ' '.repeat(indent + 2) + `output ${output.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
-            await this.updateOutput(outputId, { spendable: isUtxo }, trx)
-          }
-        }
+        )
       }
 
       await req.updateStorageDynamicProperties(this, trx)

@@ -82,7 +82,7 @@ export default class WalletWireProcessor implements WalletWire {
       const paramsReader = messageReader // Remaining bytes
 
       switch (callName) {
-        case 'createAction': {
+        case 'createAction': return await (async () => {
           // Deserialize parameters from paramsReader
           const args: any = {}
 
@@ -100,226 +100,240 @@ export default class WalletWireProcessor implements WalletWire {
           }
 
           // Read inputs
-          const inputsLength = paramsReader.readVarIntNum()
-          if (inputsLength >= 0) {
-            args.inputs = []
-            for (let i = 0; i < inputsLength; i++) {
-              const input: any = {}
+          ;(() => {
+            const inputsLength = paramsReader.readVarIntNum()
+            if (inputsLength >= 0) {
+              args.inputs = []
+              for (let i = 0; i < inputsLength; i++) {
+                const input: any = {}
 
-              // outpoint
-              input.outpoint = this.decodeOutpoint(paramsReader)
+                // outpoint
+                input.outpoint = this.decodeOutpoint(paramsReader)
 
-              // unlockingScript / unlockingScriptLength
-              const unlockingScriptLength = paramsReader.readVarIntNum()
-              if (unlockingScriptLength >= 0) {
-                const unlockingScriptBytes = paramsReader.read(
-                  unlockingScriptLength
+                // unlockingScript / unlockingScriptLength
+                const unlockingScriptLength = paramsReader.readVarIntNum()
+                if (unlockingScriptLength >= 0) {
+                  const unlockingScriptBytes = paramsReader.read(
+                    unlockingScriptLength
+                  )
+                  input.unlockingScript = Utils.toHex(unlockingScriptBytes)
+                } else {
+                  input.unlockingScript = undefined
+                  const unlockingScriptLengthValue = paramsReader.readVarIntNum()
+                  input.unlockingScriptLength = unlockingScriptLengthValue
+                }
+
+                // inputDescription
+                const inputDescriptionLength = paramsReader.readVarIntNum()
+                const inputDescriptionBytes = paramsReader.read(
+                  inputDescriptionLength
                 )
-                input.unlockingScript = Utils.toHex(unlockingScriptBytes)
-              } else {
-                input.unlockingScript = undefined
-                const unlockingScriptLengthValue = paramsReader.readVarIntNum()
-                input.unlockingScriptLength = unlockingScriptLengthValue
+                input.inputDescription = Utils.toUTF8(inputDescriptionBytes)
+
+                // sequenceNumber
+                const sequenceNumber = paramsReader.readVarIntNum()
+                if (sequenceNumber >= 0) {
+                  input.sequenceNumber = sequenceNumber
+                } else {
+                  input.sequenceNumber = undefined
+                }
+
+                args.inputs.push(input)
               }
-
-              // inputDescription
-              const inputDescriptionLength = paramsReader.readVarIntNum()
-              const inputDescriptionBytes = paramsReader.read(
-                inputDescriptionLength
-              )
-              input.inputDescription = Utils.toUTF8(inputDescriptionBytes)
-
-              // sequenceNumber
-              const sequenceNumber = paramsReader.readVarIntNum()
-              if (sequenceNumber >= 0) {
-                input.sequenceNumber = sequenceNumber
-              } else {
-                input.sequenceNumber = undefined
-              }
-
-              args.inputs.push(input)
+            } else {
+              args.inputs = undefined
             }
-          } else {
-            args.inputs = undefined
-          }
+          })()
 
           // Read outputs
-          const outputsLength = paramsReader.readVarIntNum()
-          if (outputsLength >= 0) {
-            args.outputs = []
-            for (let i = 0; i < outputsLength; i++) {
-              const output: any = {}
+          ;(() => {
+            const outputsLength = paramsReader.readVarIntNum()
+            if (outputsLength >= 0) {
+              args.outputs = []
+              for (let i = 0; i < outputsLength; i++) {
+                const output: any = {}
 
-              // lockingScript
-              const lockingScriptLength = paramsReader.readVarIntNum()
-              const lockingScriptBytes = paramsReader.read(lockingScriptLength)
-              output.lockingScript = Utils.toHex(lockingScriptBytes)
+                // lockingScript
+                const lockingScriptLength = paramsReader.readVarIntNum()
+                const lockingScriptBytes = paramsReader.read(lockingScriptLength)
+                output.lockingScript = Utils.toHex(lockingScriptBytes)
 
-              // satoshis
-              output.satoshis = paramsReader.readVarIntNum()
+                // satoshis
+                output.satoshis = paramsReader.readVarIntNum()
 
-              // outputDescription
-              const outputDescriptionLength = paramsReader.readVarIntNum()
-              const outputDescriptionBytes = paramsReader.read(
-                outputDescriptionLength
-              )
-              output.outputDescription = Utils.toUTF8(outputDescriptionBytes)
-
-              // basket
-              const basketLength = paramsReader.readVarIntNum()
-              if (basketLength >= 0) {
-                const basketBytes = paramsReader.read(basketLength)
-                output.basket = Utils.toUTF8(basketBytes)
-              } else {
-                output.basket = undefined
-              }
-
-              // customInstructions
-              const customInstructionsLength = paramsReader.readVarIntNum()
-              if (customInstructionsLength >= 0) {
-                const customInstructionsBytes = paramsReader.read(
-                  customInstructionsLength
+                // outputDescription
+                const outputDescriptionLength = paramsReader.readVarIntNum()
+                const outputDescriptionBytes = paramsReader.read(
+                  outputDescriptionLength
                 )
-                output.customInstructions = Utils.toUTF8(
-                  customInstructionsBytes
-                )
-              } else {
-                output.customInstructions = undefined
+                output.outputDescription = Utils.toUTF8(outputDescriptionBytes)
+
+                ;(() => {
+                  // basket
+                  const basketLength = paramsReader.readVarIntNum()
+                  if (basketLength >= 0) {
+                    const basketBytes = paramsReader.read(basketLength)
+                    output.basket = Utils.toUTF8(basketBytes)
+                  } else {
+                    output.basket = undefined
+                  }
+
+                  // customInstructions
+                  const customInstructionsLength = paramsReader.readVarIntNum()
+                  if (customInstructionsLength >= 0) {
+                    const customInstructionsBytes = paramsReader.read(
+                      customInstructionsLength
+                    )
+                    output.customInstructions = Utils.toUTF8(
+                      customInstructionsBytes
+                    )
+                  } else {
+                    output.customInstructions = undefined
+                  }
+
+                  // tags
+                  const tagsLength = paramsReader.readVarIntNum()
+                  if (tagsLength >= 0) {
+                    output.tags = []
+                    for (let j = 0; j < tagsLength; j++) {
+                      const tagLength = paramsReader.readVarIntNum()
+                      const tagBytes = paramsReader.read(tagLength)
+                      const tag = Utils.toUTF8(tagBytes)
+                      output.tags.push(tag)
+                    }
+                  } else {
+                    output.tags = undefined
+                  }
+                })()
+
+                args.outputs.push(output)
               }
+            } else {
+              args.outputs = undefined
+            }
+          })()
 
-              // tags
-              const tagsLength = paramsReader.readVarIntNum()
-              if (tagsLength >= 0) {
-                output.tags = []
-                for (let j = 0; j < tagsLength; j++) {
-                  const tagLength = paramsReader.readVarIntNum()
-                  const tagBytes = paramsReader.read(tagLength)
-                  const tag = Utils.toUTF8(tagBytes)
-                  output.tags.push(tag)
-                }
-              } else {
-                output.tags = undefined
+          ;(() => {
+            // lockTime
+            const lockTime = paramsReader.readVarIntNum()
+            if (lockTime >= 0) {
+              args.lockTime = lockTime
+            } else {
+              args.lockTime = undefined
+            }
+
+            // version
+            const version = paramsReader.readVarIntNum()
+            if (version >= 0) {
+              args.version = version
+            } else {
+              args.version = undefined
+            }
+
+            // labels
+            const labelsLength = paramsReader.readVarIntNum()
+            if (labelsLength >= 0) {
+              args.labels = []
+              for (let i = 0; i < labelsLength; i++) {
+                const labelLength = paramsReader.readVarIntNum()
+                const labelBytes = paramsReader.read(labelLength)
+                const label = Utils.toUTF8(labelBytes)
+                args.labels.push(label)
               }
-
-              args.outputs.push(output)
+            } else {
+              args.labels = undefined
             }
-          } else {
-            args.outputs = undefined
-          }
-
-          // lockTime
-          const lockTime = paramsReader.readVarIntNum()
-          if (lockTime >= 0) {
-            args.lockTime = lockTime
-          } else {
-            args.lockTime = undefined
-          }
-
-          // version
-          const version = paramsReader.readVarIntNum()
-          if (version >= 0) {
-            args.version = version
-          } else {
-            args.version = undefined
-          }
-
-          // labels
-          const labelsLength = paramsReader.readVarIntNum()
-          if (labelsLength >= 0) {
-            args.labels = []
-            for (let i = 0; i < labelsLength; i++) {
-              const labelLength = paramsReader.readVarIntNum()
-              const labelBytes = paramsReader.read(labelLength)
-              const label = Utils.toUTF8(labelBytes)
-              args.labels.push(label)
-            }
-          } else {
-            args.labels = undefined
-          }
+          })()
 
           // options
           const optionsPresent = paramsReader.readInt8()
           if (optionsPresent === 1) {
             args.options = {}
 
-            // signAndProcess
-            const signAndProcessFlag = paramsReader.readInt8()
-            if (signAndProcessFlag === -1) {
-              args.options.signAndProcess = undefined
-            } else {
-              args.options.signAndProcess = signAndProcessFlag === 1
-            }
+            ;(() => {
+              // signAndProcess
+              const signAndProcessFlag = paramsReader.readInt8()
+              if (signAndProcessFlag === -1) {
+                args.options.signAndProcess = undefined
+              } else {
+                args.options.signAndProcess = signAndProcessFlag === 1
+              }
 
-            // acceptDelayedBroadcast
-            const acceptDelayedBroadcastFlag = paramsReader.readInt8()
-            if (acceptDelayedBroadcastFlag === -1) {
-              args.options.acceptDelayedBroadcast = undefined
-            } else {
-              args.options.acceptDelayedBroadcast =
-                acceptDelayedBroadcastFlag === 1
-            }
+              // acceptDelayedBroadcast
+              const acceptDelayedBroadcastFlag = paramsReader.readInt8()
+              if (acceptDelayedBroadcastFlag === -1) {
+                args.options.acceptDelayedBroadcast = undefined
+              } else {
+                args.options.acceptDelayedBroadcast =
+                  acceptDelayedBroadcastFlag === 1
+              }
 
-            // trustSelf
-            const trustSelfFlag = paramsReader.readInt8()
-            if (trustSelfFlag === -1) {
-              args.options.trustSelf = undefined
-            } else if (trustSelfFlag === 1) {
-              args.options.trustSelf = 'known'
-            }
+              // trustSelf
+              const trustSelfFlag = paramsReader.readInt8()
+              if (trustSelfFlag === -1) {
+                args.options.trustSelf = undefined
+              } else if (trustSelfFlag === 1) {
+                args.options.trustSelf = 'known'
+              }
+            })()
 
             // knownTxids
-            const knownTxidsLength = paramsReader.readVarIntNum()
-            if (knownTxidsLength >= 0) {
-              args.options.knownTxids = []
-              for (let i = 0; i < knownTxidsLength; i++) {
-                const txidBytes = paramsReader.read(32)
-                const txid = Utils.toHex(txidBytes)
-                args.options.knownTxids.push(txid)
+            ;(() => {
+              const knownTxidsLength = paramsReader.readVarIntNum()
+              if (knownTxidsLength >= 0) {
+                args.options.knownTxids = []
+                for (let i = 0; i < knownTxidsLength; i++) {
+                  const txidBytes = paramsReader.read(32)
+                  const txid = Utils.toHex(txidBytes)
+                  args.options.knownTxids.push(txid)
+                }
+              } else {
+                args.options.knownTxids = undefined
               }
-            } else {
-              args.options.knownTxids = undefined
-            }
 
-            // returnTXIDOnly
-            const returnTXIDOnlyFlag = paramsReader.readInt8()
-            if (returnTXIDOnlyFlag === -1) {
-              args.options.returnTXIDOnly = undefined
-            } else {
-              args.options.returnTXIDOnly = returnTXIDOnlyFlag === 1
-            }
+              // returnTXIDOnly
+              const returnTXIDOnlyFlag = paramsReader.readInt8()
+              if (returnTXIDOnlyFlag === -1) {
+                args.options.returnTXIDOnly = undefined
+              } else {
+                args.options.returnTXIDOnly = returnTXIDOnlyFlag === 1
+              }
 
-            // noSend
-            const noSendFlag = paramsReader.readInt8()
-            if (noSendFlag === -1) {
-              args.options.noSend = undefined
-            } else {
-              args.options.noSend = noSendFlag === 1
-            }
+              // noSend
+              const noSendFlag = paramsReader.readInt8()
+              if (noSendFlag === -1) {
+                args.options.noSend = undefined
+              } else {
+                args.options.noSend = noSendFlag === 1
+              }
+            })()
 
             // noSendChange
-            const noSendChangeLength = paramsReader.readVarIntNum()
-            if (noSendChangeLength >= 0) {
-              args.options.noSendChange = []
-              for (let i = 0; i < noSendChangeLength; i++) {
-                const outpoint = this.decodeOutpoint(paramsReader)
-                args.options.noSendChange.push(outpoint)
+            ;(() => {
+              const noSendChangeLength = paramsReader.readVarIntNum()
+              if (noSendChangeLength >= 0) {
+                args.options.noSendChange = []
+                for (let i = 0; i < noSendChangeLength; i++) {
+                  const outpoint = this.decodeOutpoint(paramsReader)
+                  args.options.noSendChange.push(outpoint)
+                }
+              } else {
+                args.options.noSendChange = undefined
               }
-            } else {
-              args.options.noSendChange = undefined
-            }
 
-            // sendWith
-            const sendWithLength = paramsReader.readVarIntNum()
-            if (sendWithLength >= 0) {
-              args.options.sendWith = []
-              for (let i = 0; i < sendWithLength; i++) {
-                const txidBytes = paramsReader.read(32)
-                const txid = Utils.toHex(txidBytes)
-                args.options.sendWith.push(txid)
+              // sendWith
+              const sendWithLength = paramsReader.readVarIntNum()
+              if (sendWithLength >= 0) {
+                args.options.sendWith = []
+                for (let i = 0; i < sendWithLength; i++) {
+                  const txidBytes = paramsReader.read(32)
+                  const txid = Utils.toHex(txidBytes)
+                  args.options.sendWith.push(txid)
+                }
+              } else {
+                args.options.sendWith = undefined
               }
-            } else {
-              args.options.sendWith = undefined
-            }
+            })()
 
             // randomizeOutputs
             const randomizeOutputsFlag = paramsReader.readInt8()
@@ -347,97 +361,105 @@ export default class WalletWireProcessor implements WalletWire {
           )
           resultWriter.writeUInt8(0) // errorByte = 0
 
-          // txid
-          if (createActionResult.txid != null && createActionResult.txid !== '') {
-            resultWriter.writeInt8(1)
-            resultWriter.write(Utils.toUint8Array(createActionResult.txid, 'hex'))
-          } else {
-            resultWriter.writeInt8(0)
-          }
-
-          // tx
-          if (createActionResult.tx == null) {
-            resultWriter.writeInt8(0)
-          } else {
-            resultWriter.writeInt8(1)
-            resultWriter.writeVarIntNum(createActionResult.tx.length)
-            resultWriter.write(createActionResult.tx)
-          }
-
-          // noSendChange
-          if (createActionResult.noSendChange == null) {
-            resultWriter.writeVarIntNum(-1)
-          } else {
-            resultWriter.writeVarIntNum(createActionResult.noSendChange.length)
-            for (const outpoint of createActionResult.noSendChange) {
-              resultWriter.write(this.encodeOutpoint(outpoint))
+          ;(() => {
+            // txid
+            if (createActionResult.txid != null && createActionResult.txid !== '') {
+              resultWriter.writeInt8(1)
+              resultWriter.write(Utils.toUint8Array(createActionResult.txid, 'hex'))
+            } else {
+              resultWriter.writeInt8(0)
             }
-          }
 
-          // sendWithResults
-          if (createActionResult.sendWithResults == null) {
-            resultWriter.writeVarIntNum(-1)
-          } else {
-            resultWriter.writeVarIntNum(
-              createActionResult.sendWithResults.length
-            )
-            for (const result of createActionResult.sendWithResults) {
-              resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
-              let statusCode
-              if (result.status === 'unproven') statusCode = 1
-              else if (result.status === 'sending') statusCode = 2
-              else if (result.status === 'failed') statusCode = 3
-              resultWriter.writeInt8(statusCode)
+            // tx
+            if (createActionResult.tx == null) {
+              resultWriter.writeInt8(0)
+            } else {
+              resultWriter.writeInt8(1)
+              resultWriter.writeVarIntNum(createActionResult.tx.length)
+              resultWriter.write(createActionResult.tx)
             }
-          }
+          })()
 
-          // signableTransaction
-          if (createActionResult.signableTransaction == null) {
-            resultWriter.writeInt8(0)
-          } else {
-            resultWriter.writeInt8(1)
-            resultWriter.writeVarIntNum(
-              createActionResult.signableTransaction.tx.length
-            )
-            resultWriter.write(createActionResult.signableTransaction.tx)
-            const referenceBytes = Utils.toUint8Array(
-              createActionResult.signableTransaction.reference,
-              'base64'
-            )
-            resultWriter.writeVarIntNum(referenceBytes.length)
-            resultWriter.write(referenceBytes)
-          }
+          ;(() => {
+            // noSendChange
+            if (createActionResult.noSendChange == null) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
+              resultWriter.writeVarIntNum(createActionResult.noSendChange.length)
+              for (const outpoint of createActionResult.noSendChange) {
+                resultWriter.write(this.encodeOutpoint(outpoint))
+              }
+            }
+
+            // sendWithResults
+            if (createActionResult.sendWithResults == null) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
+              resultWriter.writeVarIntNum(
+                createActionResult.sendWithResults.length
+              )
+              for (const result of createActionResult.sendWithResults) {
+                resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
+                let statusCode
+                if (result.status === 'unproven') statusCode = 1
+                else if (result.status === 'sending') statusCode = 2
+                else if (result.status === 'failed') statusCode = 3
+                resultWriter.writeInt8(statusCode)
+              }
+            }
+          })()
+
+          ;(() => {
+            // signableTransaction
+            if (createActionResult.signableTransaction == null) {
+              resultWriter.writeInt8(0)
+            } else {
+              resultWriter.writeInt8(1)
+              resultWriter.writeVarIntNum(
+                createActionResult.signableTransaction.tx.length
+              )
+              resultWriter.write(createActionResult.signableTransaction.tx)
+              const referenceBytes = Utils.toUint8Array(
+                createActionResult.signableTransaction.reference,
+                'base64'
+              )
+              resultWriter.writeVarIntNum(referenceBytes.length)
+              resultWriter.write(referenceBytes)
+            }
+          })()
 
           return resultWriter.toUint8ArrayZeroCopy()
-        }
-        case 'signAction': {
+        })()
+        case 'signAction': return await (async () => {
           const args: any = {}
 
           // Deserialize spends
-          const spendCount = paramsReader.readVarIntNum()
-          const spends = new Map<number, any>()
-          for (let i = 0; i < spendCount; i++) {
-            const inputIndex = paramsReader.readVarIntNum()
-            const spend: any = {}
+          ;(() => {
+            const spendCount = paramsReader.readVarIntNum()
+            const spends = new Map<number, any>()
+            for (let i = 0; i < spendCount; i++) {
+              const inputIndex = paramsReader.readVarIntNum()
+              const spend: any = {}
 
-            // unlockingScript
-            const unlockingScriptLength = paramsReader.readVarIntNum()
-            const unlockingScriptBytes = paramsReader.read(
-              unlockingScriptLength
-            )
-            spend.unlockingScript = Utils.toHex(unlockingScriptBytes)
+              // unlockingScript
+              const unlockingScriptLength = paramsReader.readVarIntNum()
+              const unlockingScriptBytes = paramsReader.read(
+                unlockingScriptLength
+              )
+              spend.unlockingScript = Utils.toHex(unlockingScriptBytes)
 
-            // sequenceNumber
-            const sequenceNumber = paramsReader.readVarIntNum()
-            if (sequenceNumber >= 0) {
-              spend.sequenceNumber = sequenceNumber
-            } else {
-              spend.sequenceNumber = undefined
+              // sequenceNumber
+              const sequenceNumber = paramsReader.readVarIntNum()
+              if (sequenceNumber >= 0) {
+                spend.sequenceNumber = sequenceNumber
+              } else {
+                spend.sequenceNumber = undefined
+              }
+
+              spends.set(inputIndex, spend)
             }
-
-            spends.set(inputIndex, spend)
-          }
-          args.spends = this.recordFromWireEntries(spends, 'spends')
+            args.spends = this.recordFromWireEntries(spends, 'spends')
+          })()
 
           // Deserialize reference
           const referenceLength = paramsReader.readVarIntNum()
@@ -449,43 +471,47 @@ export default class WalletWireProcessor implements WalletWire {
           if (optionsPresent === 1) {
             args.options = {}
 
-            // acceptDelayedBroadcast
-            const acceptDelayedBroadcastFlag = paramsReader.readInt8()
-            if (acceptDelayedBroadcastFlag === -1) {
-              args.options.acceptDelayedBroadcast = undefined
-            } else {
-              args.options.acceptDelayedBroadcast =
-                acceptDelayedBroadcastFlag === 1
-            }
+            ;(() => {
+              // acceptDelayedBroadcast
+              const acceptDelayedBroadcastFlag = paramsReader.readInt8()
+              if (acceptDelayedBroadcastFlag === -1) {
+                args.options.acceptDelayedBroadcast = undefined
+              } else {
+                args.options.acceptDelayedBroadcast =
+                  acceptDelayedBroadcastFlag === 1
+              }
 
-            // returnTXIDOnly
-            const returnTXIDOnlyFlag = paramsReader.readInt8()
-            if (returnTXIDOnlyFlag === -1) {
-              args.options.returnTXIDOnly = undefined
-            } else {
-              args.options.returnTXIDOnly = returnTXIDOnlyFlag === 1
-            }
+              // returnTXIDOnly
+              const returnTXIDOnlyFlag = paramsReader.readInt8()
+              if (returnTXIDOnlyFlag === -1) {
+                args.options.returnTXIDOnly = undefined
+              } else {
+                args.options.returnTXIDOnly = returnTXIDOnlyFlag === 1
+              }
 
-            // noSend
-            const noSendFlag = paramsReader.readInt8()
-            if (noSendFlag === -1) {
-              args.options.noSend = undefined
-            } else {
-              args.options.noSend = noSendFlag === 1
-            }
+              // noSend
+              const noSendFlag = paramsReader.readInt8()
+              if (noSendFlag === -1) {
+                args.options.noSend = undefined
+              } else {
+                args.options.noSend = noSendFlag === 1
+              }
+            })()
 
             // sendWith
-            const sendWithLength = paramsReader.readVarIntNum()
-            if (sendWithLength >= 0) {
-              args.options.sendWith = []
-              for (let i = 0; i < sendWithLength; i++) {
-                const txidBytes = paramsReader.read(32)
-                const txid = Utils.toHex(txidBytes)
-                args.options.sendWith.push(txid)
+            ;(() => {
+              const sendWithLength = paramsReader.readVarIntNum()
+              if (sendWithLength >= 0) {
+                args.options.sendWith = []
+                for (let i = 0; i < sendWithLength; i++) {
+                  const txidBytes = paramsReader.read(32)
+                  const txid = Utils.toHex(txidBytes)
+                  args.options.sendWith.push(txid)
+                }
+              } else {
+                args.options.sendWith = undefined
               }
-            } else {
-              args.options.sendWith = undefined
-            }
+            })()
           } else {
             args.options = undefined
           }
@@ -503,43 +529,47 @@ export default class WalletWireProcessor implements WalletWire {
           )
           resultWriter.writeUInt8(0) // errorByte = 0
 
-          // txid
-          if (signActionResult.txid != null && signActionResult.txid !== '') {
-            resultWriter.writeInt8(1)
-            resultWriter.write(Utils.toUint8Array(signActionResult.txid, 'hex'))
-          } else {
-            resultWriter.writeInt8(0)
-          }
+          ;(() => {
+            // txid
+            if (signActionResult.txid != null && signActionResult.txid !== '') {
+              resultWriter.writeInt8(1)
+              resultWriter.write(Utils.toUint8Array(signActionResult.txid, 'hex'))
+            } else {
+              resultWriter.writeInt8(0)
+            }
 
-          // tx
-          if (signActionResult.tx == null) {
-            resultWriter.writeInt8(0)
-          } else {
-            resultWriter.writeInt8(1)
-            resultWriter.writeVarIntNum(signActionResult.tx.length)
-            resultWriter.write(signActionResult.tx)
-          }
+            // tx
+            if (signActionResult.tx == null) {
+              resultWriter.writeInt8(0)
+            } else {
+              resultWriter.writeInt8(1)
+              resultWriter.writeVarIntNum(signActionResult.tx.length)
+              resultWriter.write(signActionResult.tx)
+            }
+          })()
 
           // sendWithResults
-          if (signActionResult.sendWithResults == null) {
-            resultWriter.writeVarIntNum(-1)
-          } else {
-            resultWriter.writeVarIntNum(
-              signActionResult.sendWithResults.length
-            )
-            for (const result of signActionResult.sendWithResults) {
-              resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
-              let statusCode
-              if (result.status === 'unproven') statusCode = 1
-              else if (result.status === 'sending') statusCode = 2
-              else if (result.status === 'failed') statusCode = 3
-              resultWriter.writeInt8(statusCode)
+          ;(() => {
+            if (signActionResult.sendWithResults == null) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
+              resultWriter.writeVarIntNum(
+                signActionResult.sendWithResults.length
+              )
+              for (const result of signActionResult.sendWithResults) {
+                resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
+                let statusCode
+                if (result.status === 'unproven') statusCode = 1
+                else if (result.status === 'sending') statusCode = 2
+                else if (result.status === 'failed') statusCode = 3
+                resultWriter.writeInt8(statusCode)
+              }
             }
-          }
+          })()
 
           return resultWriter.toUint8ArrayZeroCopy()
-        }
-        case 'abortAction': {
+        })()
+        case 'abortAction': return await (async () => {
           // Deserialize reference
           const referenceBytes = paramsReader.read()
           const reference = Utils.toBase64(referenceBytes)
@@ -551,70 +581,72 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
-        case 'listActions': {
+        })()
+        case 'listActions': return await (async () => {
           const args: any = {}
 
-          // Deserialize labels
-          const labelsLength = paramsReader.readVarIntNum()
-          args.labels = []
-          for (let i = 0; i < labelsLength; i++) {
-            const labelLength = paramsReader.readVarIntNum()
-            const labelBytes = paramsReader.read(labelLength)
-            args.labels.push(Utils.toUTF8(labelBytes))
-          }
-
-          // Deserialize labelQueryMode
-          const labelQueryModeFlag = paramsReader.readInt8()
-          if (labelQueryModeFlag === -1) {
-            args.labelQueryMode = undefined
-          } else if (labelQueryModeFlag === 1) {
-            args.labelQueryMode = 'any'
-          } else if (labelQueryModeFlag === 2) {
-            args.labelQueryMode = 'all'
-          }
-
-          // Deserialize include options
-          const includeOptionsNames = [
-            'includeLabels',
-            'includeInputs',
-            'includeInputSourceLockingScripts',
-            'includeInputUnlockingScripts',
-            'includeOutputs',
-            'includeOutputLockingScripts'
-          ]
-          for (const optionName of includeOptionsNames) {
-            const optionFlag = paramsReader.readInt8()
-            if (optionFlag === -1) {
-              args[optionName] = undefined
-            } else {
-              args[optionName] = optionFlag === 1
+          ;(() => {
+            // Deserialize labels
+            const labelsLength = paramsReader.readVarIntNum()
+            args.labels = []
+            for (let i = 0; i < labelsLength; i++) {
+              const labelLength = paramsReader.readVarIntNum()
+              const labelBytes = paramsReader.read(labelLength)
+              args.labels.push(Utils.toUTF8(labelBytes))
             }
-          }
 
-          // Deserialize limit
-          const limit = paramsReader.readVarIntNum()
-          if (limit >= 0) {
-            args.limit = limit
-          } else {
-            args.limit = undefined
-          }
+            // Deserialize labelQueryMode
+            const labelQueryModeFlag = paramsReader.readInt8()
+            if (labelQueryModeFlag === -1) {
+              args.labelQueryMode = undefined
+            } else if (labelQueryModeFlag === 1) {
+              args.labelQueryMode = 'any'
+            } else if (labelQueryModeFlag === 2) {
+              args.labelQueryMode = 'all'
+            }
 
-          // Deserialize offset
-          const offset = paramsReader.readVarIntNum()
-          if (offset >= 0) {
-            args.offset = offset
-          } else {
-            args.offset = undefined
-          }
+            // Deserialize include options
+            const includeOptionsNames = [
+              'includeLabels',
+              'includeInputs',
+              'includeInputSourceLockingScripts',
+              'includeInputUnlockingScripts',
+              'includeOutputs',
+              'includeOutputLockingScripts'
+            ]
+            for (const optionName of includeOptionsNames) {
+              const optionFlag = paramsReader.readInt8()
+              if (optionFlag === -1) {
+                args[optionName] = undefined
+              } else {
+                args[optionName] = optionFlag === 1
+              }
+            }
 
-          // Deserialize seekPermission
-          const seekPermission = paramsReader.readInt8()
-          if (seekPermission >= 0) {
-            args.seekPermission = seekPermission === 1
-          } else {
-            args.seekPermission = undefined
-          }
+            // Deserialize limit
+            const limit = paramsReader.readVarIntNum()
+            if (limit >= 0) {
+              args.limit = limit
+            } else {
+              args.limit = undefined
+            }
+
+            // Deserialize offset
+            const offset = paramsReader.readVarIntNum()
+            if (offset >= 0) {
+              args.offset = offset
+            } else {
+              args.offset = undefined
+            }
+
+            // Deserialize seekPermission
+            const seekPermission = paramsReader.readInt8()
+            if (seekPermission >= 0) {
+              args.seekPermission = seekPermission === 1
+            } else {
+              args.seekPermission = undefined
+            }
+          })()
 
           // Call the method
           const listActionsResult = await this.wallet.listActions(
@@ -630,197 +662,207 @@ export default class WalletWireProcessor implements WalletWire {
 
           // actions
           for (const action of listActionsResult.actions) {
-            // txid
-            resultWriter.write(Utils.toUint8Array(action.txid, 'hex'))
+            ;(() => {
+              // txid
+              resultWriter.write(Utils.toUint8Array(action.txid, 'hex'))
 
-            // satoshis
-            resultWriter.writeVarIntNum(action.satoshis)
+              // satoshis
+              resultWriter.writeVarIntNum(action.satoshis)
 
-            // status
-            let statusCode
-            switch (action.status) {
-              case 'completed':
-                statusCode = 1
-                break
-              case 'unprocessed':
-                statusCode = 2
-                break
-              case 'sending':
-                statusCode = 3
-                break
-              case 'unproven':
-                statusCode = 4
-                break
-              case 'unsigned':
-                statusCode = 5
-                break
-              case 'nosend':
-                statusCode = 6
-                break
-              case 'nonfinal':
-                statusCode = 7
-                break
-              case 'failed':
-                statusCode = 8
-                break
-              default:
-                statusCode = -1
-                break
-            }
-            resultWriter.writeInt8(statusCode)
-
-            // isOutgoing
-            resultWriter.writeInt8(action.isOutgoing ? 1 : 0)
-
-            // description
-            const descriptionBytes = Utils.toUint8Array(action.description, 'utf8')
-            resultWriter.writeVarIntNum(descriptionBytes.length)
-            resultWriter.write(descriptionBytes)
-
-            // labels
-            if (action.labels === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              resultWriter.writeVarIntNum(action.labels.length)
-              for (const label of action.labels) {
-                const labelBytes = Utils.toUint8Array(label, 'utf8')
-                resultWriter.writeVarIntNum(labelBytes.length)
-                resultWriter.write(labelBytes)
+              // status
+              let statusCode
+              switch (action.status) {
+                case 'completed':
+                  statusCode = 1
+                  break
+                case 'unprocessed':
+                  statusCode = 2
+                  break
+                case 'sending':
+                  statusCode = 3
+                  break
+                case 'unproven':
+                  statusCode = 4
+                  break
+                case 'unsigned':
+                  statusCode = 5
+                  break
+                case 'nosend':
+                  statusCode = 6
+                  break
+                case 'nonfinal':
+                  statusCode = 7
+                  break
+                case 'failed':
+                  statusCode = 8
+                  break
+                default:
+                  statusCode = -1
+                  break
               }
-            }
+              resultWriter.writeInt8(statusCode)
 
-            // version
-            resultWriter.writeVarIntNum(action.version)
+              // isOutgoing
+              resultWriter.writeInt8(action.isOutgoing ? 1 : 0)
 
-            // lockTime
-            resultWriter.writeVarIntNum(action.lockTime)
+              // description
+              const descriptionBytes = Utils.toUint8Array(action.description, 'utf8')
+              resultWriter.writeVarIntNum(descriptionBytes.length)
+              resultWriter.write(descriptionBytes)
+            })()
 
-            // inputs
-            if (action.inputs === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              resultWriter.writeVarIntNum(action.inputs.length)
-              for (const input of action.inputs) {
-                // sourceOutpoint
-                resultWriter.write(this.encodeOutpoint(input.sourceOutpoint))
-
-                // sourceSatoshis
-                resultWriter.writeVarIntNum(input.sourceSatoshis)
-
-                // sourceLockingScript
-                if (input.sourceLockingScript === undefined) {
-                  resultWriter.writeVarIntNum(-1)
-                } else {
-                  const sourceLockingScriptBytes = Utils.toUint8Array(
-                    input.sourceLockingScript,
-                    'hex'
-                  )
-                  resultWriter.writeVarIntNum(sourceLockingScriptBytes.length)
-                  resultWriter.write(sourceLockingScriptBytes)
+            ;(() => {
+              // labels
+              if (action.labels === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                resultWriter.writeVarIntNum(action.labels.length)
+                for (const label of action.labels) {
+                  const labelBytes = Utils.toUint8Array(label, 'utf8')
+                  resultWriter.writeVarIntNum(labelBytes.length)
+                  resultWriter.write(labelBytes)
                 }
-
-                // unlockingScript
-                if (input.unlockingScript === undefined) {
-                  resultWriter.writeVarIntNum(-1)
-                } else {
-                  const unlockingScriptBytes = Utils.toUint8Array(
-                    input.unlockingScript,
-                    'hex'
-                  )
-                  resultWriter.writeVarIntNum(unlockingScriptBytes.length)
-                  resultWriter.write(unlockingScriptBytes)
-                }
-
-                // inputDescription
-                const inputDescriptionBytes = Utils.toUint8Array(
-                  input.inputDescription,
-                  'utf8'
-                )
-                resultWriter.writeVarIntNum(inputDescriptionBytes.length)
-                resultWriter.write(inputDescriptionBytes)
-
-                // sequenceNumber
-                resultWriter.writeVarIntNum(input.sequenceNumber)
               }
-            }
 
-            // outputs
-            if (action.outputs === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              resultWriter.writeVarIntNum(action.outputs.length)
-              for (const output of action.outputs) {
-                // outputIndex
-                resultWriter.writeVarIntNum(output.outputIndex)
+              // version
+              resultWriter.writeVarIntNum(action.version)
 
-                // satoshis
-                resultWriter.writeVarIntNum(output.satoshis)
+              // lockTime
+              resultWriter.writeVarIntNum(action.lockTime)
+            })()
 
-                // lockingScript
-                if (output.lockingScript === undefined) {
-                  resultWriter.writeVarIntNum(-1)
-                } else {
-                  const lockingScriptBytes = Utils.toUint8Array(
-                    output.lockingScript,
-                    'hex'
-                  )
-                  resultWriter.writeVarIntNum(lockingScriptBytes.length)
-                  resultWriter.write(lockingScriptBytes)
-                }
+            ;(() => {
+              // inputs
+              if (action.inputs === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                resultWriter.writeVarIntNum(action.inputs.length)
+                for (const input of action.inputs) {
+                  // sourceOutpoint
+                  resultWriter.write(this.encodeOutpoint(input.sourceOutpoint))
 
-                // spendable
-                resultWriter.writeInt8(output.spendable ? 1 : 0)
+                  // sourceSatoshis
+                  resultWriter.writeVarIntNum(input.sourceSatoshis)
 
-                // outputDescription
-                const outputDescriptionBytes = Utils.toUint8Array(
-                  output.outputDescription,
-                  'utf8'
-                )
-                resultWriter.writeVarIntNum(outputDescriptionBytes.length)
-                resultWriter.write(outputDescriptionBytes)
-
-                // basket
-                if (output.basket === undefined) {
-                  resultWriter.writeVarIntNum(-1)
-                } else {
-                  const basketBytes = Utils.toUint8Array(output.basket, 'utf8')
-                  resultWriter.writeVarIntNum(basketBytes.length)
-                  resultWriter.write(basketBytes)
-                }
-
-                // tags
-                if (output.tags === undefined) {
-                  resultWriter.writeVarIntNum(-1)
-                } else {
-                  resultWriter.writeVarIntNum(output.tags.length)
-                  for (const tag of output.tags) {
-                    const tagBytes = Utils.toUint8Array(tag, 'utf8')
-                    resultWriter.writeVarIntNum(tagBytes.length)
-                    resultWriter.write(tagBytes)
+                  // sourceLockingScript
+                  if (input.sourceLockingScript === undefined) {
+                    resultWriter.writeVarIntNum(-1)
+                  } else {
+                    const sourceLockingScriptBytes = Utils.toUint8Array(
+                      input.sourceLockingScript,
+                      'hex'
+                    )
+                    resultWriter.writeVarIntNum(sourceLockingScriptBytes.length)
+                    resultWriter.write(sourceLockingScriptBytes)
                   }
-                }
 
-                // customInstructions
-                if (output.customInstructions === undefined) {
-                  resultWriter.writeVarIntNum(-1)
-                } else {
-                  const customInstructionsBytes = Utils.toUint8Array(
-                    output.customInstructions,
+                  // unlockingScript
+                  if (input.unlockingScript === undefined) {
+                    resultWriter.writeVarIntNum(-1)
+                  } else {
+                    const unlockingScriptBytes = Utils.toUint8Array(
+                      input.unlockingScript,
+                      'hex'
+                    )
+                    resultWriter.writeVarIntNum(unlockingScriptBytes.length)
+                    resultWriter.write(unlockingScriptBytes)
+                  }
+
+                  // inputDescription
+                  const inputDescriptionBytes = Utils.toUint8Array(
+                    input.inputDescription,
                     'utf8'
                   )
-                  resultWriter.writeVarIntNum(customInstructionsBytes.length)
-                  resultWriter.write(customInstructionsBytes)
+                  resultWriter.writeVarIntNum(inputDescriptionBytes.length)
+                  resultWriter.write(inputDescriptionBytes)
+
+                  // sequenceNumber
+                  resultWriter.writeVarIntNum(input.sequenceNumber)
                 }
               }
-            }
+            })()
+
+            ;(() => {
+              // outputs
+              if (action.outputs === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                resultWriter.writeVarIntNum(action.outputs.length)
+                for (const output of action.outputs) {
+                  // outputIndex
+                  resultWriter.writeVarIntNum(output.outputIndex)
+
+                  // satoshis
+                  resultWriter.writeVarIntNum(output.satoshis)
+
+                  // lockingScript
+                  if (output.lockingScript === undefined) {
+                    resultWriter.writeVarIntNum(-1)
+                  } else {
+                    const lockingScriptBytes = Utils.toUint8Array(
+                      output.lockingScript,
+                      'hex'
+                    )
+                    resultWriter.writeVarIntNum(lockingScriptBytes.length)
+                    resultWriter.write(lockingScriptBytes)
+                  }
+
+                  // spendable
+                  resultWriter.writeInt8(output.spendable ? 1 : 0)
+
+                  // outputDescription
+                  const outputDescriptionBytes = Utils.toUint8Array(
+                    output.outputDescription,
+                    'utf8'
+                  )
+                  resultWriter.writeVarIntNum(outputDescriptionBytes.length)
+                  resultWriter.write(outputDescriptionBytes)
+
+                  ;(() => {
+                    // basket
+                    if (output.basket === undefined) {
+                      resultWriter.writeVarIntNum(-1)
+                    } else {
+                      const basketBytes = Utils.toUint8Array(output.basket, 'utf8')
+                      resultWriter.writeVarIntNum(basketBytes.length)
+                      resultWriter.write(basketBytes)
+                    }
+
+                    // tags
+                    if (output.tags === undefined) {
+                      resultWriter.writeVarIntNum(-1)
+                    } else {
+                      resultWriter.writeVarIntNum(output.tags.length)
+                      for (const tag of output.tags) {
+                        const tagBytes = Utils.toUint8Array(tag, 'utf8')
+                        resultWriter.writeVarIntNum(tagBytes.length)
+                        resultWriter.write(tagBytes)
+                      }
+                    }
+
+                    // customInstructions
+                    if (output.customInstructions === undefined) {
+                      resultWriter.writeVarIntNum(-1)
+                    } else {
+                      const customInstructionsBytes = Utils.toUint8Array(
+                        output.customInstructions,
+                        'utf8'
+                      )
+                      resultWriter.writeVarIntNum(customInstructionsBytes.length)
+                      resultWriter.write(customInstructionsBytes)
+                    }
+                  })()
+                }
+              }
+            })()
           }
 
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(resultWriter.toUint8Array())
           return responseWriter.toUint8Array()
-        }
-        case 'internalizeAction': {
+        })()
+        case 'internalizeAction': return await (async () => {
           const args: any = {}
 
           // Read tx
@@ -828,79 +870,81 @@ export default class WalletWireProcessor implements WalletWire {
           args.tx = paramsReader.readView(txLength)
 
           // Read outputs
-          const outputsLength = paramsReader.readVarIntNum()
-          args.outputs = []
-          for (let i = 0; i < outputsLength; i++) {
-            const output: any = {}
+          ;(() => {
+            const outputsLength = paramsReader.readVarIntNum()
+            args.outputs = []
+            for (let i = 0; i < outputsLength; i++) {
+              const output: any = {}
 
-            // outputIndex
-            output.outputIndex = paramsReader.readVarIntNum()
+              // outputIndex
+              output.outputIndex = paramsReader.readVarIntNum()
 
-            // protocol
-            const protocolFlag = paramsReader.readUInt8()
-            if (protocolFlag === 1) {
-              output.protocol = 'wallet payment'
-              output.paymentRemittance = {}
+              // protocol
+              const protocolFlag = paramsReader.readUInt8()
+              if (protocolFlag === 1) {
+                output.protocol = 'wallet payment'
+                output.paymentRemittance = {}
 
-              // senderIdentityKey
-              const senderIdentityKeyBytes = paramsReader.read(33)
-              output.paymentRemittance.senderIdentityKey = Utils.toHex(
-                senderIdentityKeyBytes
-              )
-
-              // derivationPrefix
-              const derivationPrefixLength = paramsReader.readVarIntNum()
-              const derivationPrefixBytes = paramsReader.read(
-                derivationPrefixLength
-              )
-              output.paymentRemittance.derivationPrefix = Utils.toBase64(
-                derivationPrefixBytes
-              )
-
-              // derivationSuffix
-              const derivationSuffixLength = paramsReader.readVarIntNum()
-              const derivationSuffixBytes = paramsReader.read(
-                derivationSuffixLength
-              )
-              output.paymentRemittance.derivationSuffix = Utils.toBase64(
-                derivationSuffixBytes
-              )
-            } else if (protocolFlag === 2) {
-              output.protocol = 'basket insertion'
-              output.insertionRemittance = {}
-
-              // basket
-              const basketLength = paramsReader.readVarIntNum()
-              const basketBytes = paramsReader.read(basketLength)
-              output.insertionRemittance.basket = Utils.toUTF8(basketBytes)
-
-              // customInstructions
-              const customInstructionsLength = paramsReader.readVarIntNum()
-              if (customInstructionsLength >= 0) {
-                const customInstructionsBytes = paramsReader.read(
-                  customInstructionsLength
+                // senderIdentityKey
+                const senderIdentityKeyBytes = paramsReader.read(33)
+                output.paymentRemittance.senderIdentityKey = Utils.toHex(
+                  senderIdentityKeyBytes
                 )
-                output.insertionRemittance.customInstructions = Utils.toUTF8(
-                  customInstructionsBytes
-                )
-              }
 
-              // tags
-              const tagsLength = paramsReader.readVarIntNum()
-              if (tagsLength > 0) {
-                output.insertionRemittance.tags = []
-                for (let j = 0; j < tagsLength; j++) {
-                  const tagLength = paramsReader.readVarIntNum()
-                  const tagBytes = paramsReader.read(tagLength)
-                  output.insertionRemittance.tags.push(Utils.toUTF8(tagBytes))
+                // derivationPrefix
+                const derivationPrefixLength = paramsReader.readVarIntNum()
+                const derivationPrefixBytes = paramsReader.read(
+                  derivationPrefixLength
+                )
+                output.paymentRemittance.derivationPrefix = Utils.toBase64(
+                  derivationPrefixBytes
+                )
+
+                // derivationSuffix
+                const derivationSuffixLength = paramsReader.readVarIntNum()
+                const derivationSuffixBytes = paramsReader.read(
+                  derivationSuffixLength
+                )
+                output.paymentRemittance.derivationSuffix = Utils.toBase64(
+                  derivationSuffixBytes
+                )
+              } else if (protocolFlag === 2) {
+                output.protocol = 'basket insertion'
+                output.insertionRemittance = {}
+
+                // basket
+                const basketLength = paramsReader.readVarIntNum()
+                const basketBytes = paramsReader.read(basketLength)
+                output.insertionRemittance.basket = Utils.toUTF8(basketBytes)
+
+                // customInstructions
+                const customInstructionsLength = paramsReader.readVarIntNum()
+                if (customInstructionsLength >= 0) {
+                  const customInstructionsBytes = paramsReader.read(
+                    customInstructionsLength
+                  )
+                  output.insertionRemittance.customInstructions = Utils.toUTF8(
+                    customInstructionsBytes
+                  )
                 }
-              } else {
-                output.insertionRemittance.tags = []
-              }
-            }
 
-            args.outputs.push(output)
-          }
+                // tags
+                const tagsLength = paramsReader.readVarIntNum()
+                if (tagsLength > 0) {
+                  output.insertionRemittance.tags = []
+                  for (let j = 0; j < tagsLength; j++) {
+                    const tagLength = paramsReader.readVarIntNum()
+                    const tagBytes = paramsReader.read(tagLength)
+                    output.insertionRemittance.tags.push(Utils.toUTF8(tagBytes))
+                  }
+                } else {
+                  output.insertionRemittance.tags = []
+                }
+              }
+
+              args.outputs.push(output)
+            }
+          })()
 
           const numberOfLabels = paramsReader.readVarIntNum()
           if (numberOfLabels >= 0) {
@@ -929,9 +973,9 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'listOutputs': {
+        case 'listOutputs': return await (async () => {
           const args: any = {}
 
           // Deserialize basket
@@ -939,87 +983,91 @@ export default class WalletWireProcessor implements WalletWire {
           const basketBytes = paramsReader.read(basketLength)
           args.basket = Utils.toUTF8(basketBytes)
 
-          // Deserialize tags
-          const tagsLength = paramsReader.readVarIntNum()
-          if (tagsLength > 0) {
-            args.tags = []
-            for (let i = 0; i < tagsLength; i++) {
-              const tagLength = paramsReader.readVarIntNum()
-              const tagBytes = paramsReader.read(tagLength)
-              args.tags.push(Utils.toUTF8(tagBytes))
+          ;(() => {
+            // Deserialize tags
+            const tagsLength = paramsReader.readVarIntNum()
+            if (tagsLength > 0) {
+              args.tags = []
+              for (let i = 0; i < tagsLength; i++) {
+                const tagLength = paramsReader.readVarIntNum()
+                const tagBytes = paramsReader.read(tagLength)
+                args.tags.push(Utils.toUTF8(tagBytes))
+              }
+            } else {
+              args.tags = undefined
             }
-          } else {
-            args.tags = undefined
-          }
 
-          // Deserialize tagQueryMode
-          const tagQueryModeFlag = paramsReader.readInt8()
-          if (tagQueryModeFlag === 1) {
-            args.tagQueryMode = 'all'
-          } else if (tagQueryModeFlag === 2) {
-            args.tagQueryMode = 'any'
-          } else {
-            args.tagQueryMode = undefined
-          }
+            // Deserialize tagQueryMode
+            const tagQueryModeFlag = paramsReader.readInt8()
+            if (tagQueryModeFlag === 1) {
+              args.tagQueryMode = 'all'
+            } else if (tagQueryModeFlag === 2) {
+              args.tagQueryMode = 'any'
+            } else {
+              args.tagQueryMode = undefined
+            }
 
-          // Deserialize include
-          const includeFlag = paramsReader.readInt8()
-          if (includeFlag === 1) {
-            args.include = 'locking scripts'
-          } else if (includeFlag === 2) {
-            args.include = 'entire transactions'
-          } else {
-            args.include = undefined
-          }
+            // Deserialize include
+            const includeFlag = paramsReader.readInt8()
+            if (includeFlag === 1) {
+              args.include = 'locking scripts'
+            } else if (includeFlag === 2) {
+              args.include = 'entire transactions'
+            } else {
+              args.include = undefined
+            }
+          })()
 
-          // Deserialize includeCustomInstructions
-          const includeCustomInstructionsFlag = paramsReader.readInt8()
-          if (includeCustomInstructionsFlag === -1) {
-            args.includeCustomInstructions = undefined
-          } else {
-            args.includeCustomInstructions =
-              includeCustomInstructionsFlag === 1
-          }
+          ;(() => {
+            // Deserialize includeCustomInstructions
+            const includeCustomInstructionsFlag = paramsReader.readInt8()
+            if (includeCustomInstructionsFlag === -1) {
+              args.includeCustomInstructions = undefined
+            } else {
+              args.includeCustomInstructions =
+                includeCustomInstructionsFlag === 1
+            }
 
-          // Deserialize includeTags
-          const includeTagsFlag = paramsReader.readInt8()
-          if (includeTagsFlag === -1) {
-            args.includeTags = undefined
-          } else {
-            args.includeTags = includeTagsFlag === 1
-          }
+            // Deserialize includeTags
+            const includeTagsFlag = paramsReader.readInt8()
+            if (includeTagsFlag === -1) {
+              args.includeTags = undefined
+            } else {
+              args.includeTags = includeTagsFlag === 1
+            }
 
-          // Deserialize includeLabels
-          const includeLabelsFlag = paramsReader.readInt8()
-          if (includeLabelsFlag === -1) {
-            args.includeLabels = undefined
-          } else {
-            args.includeLabels = includeLabelsFlag === 1
-          }
+            // Deserialize includeLabels
+            const includeLabelsFlag = paramsReader.readInt8()
+            if (includeLabelsFlag === -1) {
+              args.includeLabels = undefined
+            } else {
+              args.includeLabels = includeLabelsFlag === 1
+            }
 
-          // Deserialize limit
-          const limit = paramsReader.readVarIntNum()
-          if (limit >= 0) {
-            args.limit = limit
-          } else {
-            args.limit = undefined
-          }
+            // Deserialize limit
+            const limit = paramsReader.readVarIntNum()
+            if (limit >= 0) {
+              args.limit = limit
+            } else {
+              args.limit = undefined
+            }
 
-          // Deserialize offset
-          const offset = paramsReader.readVarIntNum()
-          if (offset >= 0) {
-            args.offset = offset
-          } else {
-            args.offset = undefined
-          }
+            // Deserialize offset
+            const offset = paramsReader.readVarIntNum()
+            if (offset >= 0) {
+              args.offset = offset
+            } else {
+              args.offset = undefined
+            }
 
-          // Deserialize seekPermission
-          const seekPermission = paramsReader.readInt8()
-          if (seekPermission >= 0) {
-            args.seekPermission = seekPermission === 1
-          } else {
-            args.seekPermission = undefined
-          }
+            // Deserialize seekPermission
+            const seekPermission = paramsReader.readInt8()
+            if (seekPermission >= 0) {
+              args.seekPermission = seekPermission === 1
+            } else {
+              args.seekPermission = undefined
+            }
+          })()
 
           // Call the method
           const listOutputsResult = await this.wallet.listOutputs(
@@ -1047,65 +1095,69 @@ export default class WalletWireProcessor implements WalletWire {
 
           // outputs
           for (const output of listOutputsResult.outputs) {
-            // outpoint
-            resultWriter.write(this.encodeOutpoint(output.outpoint))
+            ;(() => {
+              // outpoint
+              resultWriter.write(this.encodeOutpoint(output.outpoint))
 
-            // satoshis
-            resultWriter.writeVarIntNum(output.satoshis)
+              // satoshis
+              resultWriter.writeVarIntNum(output.satoshis)
 
-            // lockingScript
-            if (output.lockingScript === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              const lockingScriptBytes = Utils.toUint8Array(
-                output.lockingScript,
-                'hex'
-              )
-              resultWriter.writeVarIntNum(lockingScriptBytes.length)
-              resultWriter.write(lockingScriptBytes)
-            }
-
-            // customInstructions
-            if (output.customInstructions === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              const customInstructionsBytes = Utils.toUint8Array(
-                output.customInstructions,
-                'utf8'
-              )
-              resultWriter.writeVarIntNum(customInstructionsBytes.length)
-              resultWriter.write(customInstructionsBytes)
-            }
-
-            // tags
-            if (output.tags === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              resultWriter.writeVarIntNum(output.tags.length)
-              for (const tag of output.tags) {
-                const tagBytes = Utils.toUint8Array(tag, 'utf8')
-                resultWriter.writeVarIntNum(tagBytes.length)
-                resultWriter.write(tagBytes)
+              // lockingScript
+              if (output.lockingScript === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                const lockingScriptBytes = Utils.toUint8Array(
+                  output.lockingScript,
+                  'hex'
+                )
+                resultWriter.writeVarIntNum(lockingScriptBytes.length)
+                resultWriter.write(lockingScriptBytes)
               }
-            }
 
-            // labels
-            if (output.labels === undefined) {
-              resultWriter.writeVarIntNum(-1)
-            } else {
-              resultWriter.writeVarIntNum(output.labels.length)
-              for (const label of output.labels) {
-                const labelBytes = Utils.toUint8Array(label, 'utf8')
-                resultWriter.writeVarIntNum(labelBytes.length)
-                resultWriter.write(labelBytes)
+              // customInstructions
+              if (output.customInstructions === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                const customInstructionsBytes = Utils.toUint8Array(
+                  output.customInstructions,
+                  'utf8'
+                )
+                resultWriter.writeVarIntNum(customInstructionsBytes.length)
+                resultWriter.write(customInstructionsBytes)
               }
-            }
+
+              // tags
+              if (output.tags === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                resultWriter.writeVarIntNum(output.tags.length)
+                for (const tag of output.tags) {
+                  const tagBytes = Utils.toUint8Array(tag, 'utf8')
+                  resultWriter.writeVarIntNum(tagBytes.length)
+                  resultWriter.write(tagBytes)
+                }
+              }
+            })()
+
+            ;(() => {
+              // labels
+              if (output.labels === undefined) {
+                resultWriter.writeVarIntNum(-1)
+              } else {
+                resultWriter.writeVarIntNum(output.labels.length)
+                for (const label of output.labels) {
+                  const labelBytes = Utils.toUint8Array(label, 'utf8')
+                  resultWriter.writeVarIntNum(labelBytes.length)
+                  resultWriter.write(labelBytes)
+                }
+              }
+            })()
           }
 
           return resultWriter.toUint8ArrayZeroCopy()
-        }
+        })()
 
-        case 'relinquishOutput': {
+        case 'relinquishOutput': return await (async () => {
           const args: any = {}
 
           // Deserialize basket
@@ -1123,9 +1175,9 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'getPublicKey': {
+        case 'getPublicKey': return await (async () => {
           const args: any = {}
 
           // Deserialize identityKey flag
@@ -1133,50 +1185,9 @@ export default class WalletWireProcessor implements WalletWire {
           args.identityKey = identityKeyFlag === 1
 
           if (args.identityKey === true) {
-            // Deserialize privilege parameters
-            const privilegedFlag = paramsReader.readInt8()
-            if (privilegedFlag === -1) {
-              args.privileged = undefined
-            } else {
-              args.privileged = privilegedFlag === 1
-            }
-
-            const privilegedReasonLength = paramsReader.readInt8()
-            if (privilegedReasonLength === -1) {
-              args.privilegedReason = undefined
-            } else {
-              const privilegedReasonBytes = paramsReader.read(
-                privilegedReasonLength
-              )
-              args.privilegedReason = Utils.toUTF8(privilegedReasonBytes)
-            }
+            Object.assign(args, this.decodePrivilegedParams(paramsReader))
           } else {
-            // Deserialize protocolID
-            args.protocolID = this.decodeProtocolID(paramsReader)
-
-            // Deserialize keyID
-            args.keyID = this.decodeString(paramsReader)
-
-            // Deserialize counterparty
-            args.counterparty = this.decodeCounterparty(paramsReader)
-
-            // Deserialize privilege parameters
-            const privilegedFlag = paramsReader.readInt8()
-            if (privilegedFlag === -1) {
-              args.privileged = undefined
-            } else {
-              args.privileged = privilegedFlag === 1
-            }
-
-            const privilegedReasonLength = paramsReader.readInt8()
-            if (privilegedReasonLength === -1) {
-              args.privilegedReason = undefined
-            } else {
-              const privilegedReasonBytes = paramsReader.read(
-                privilegedReasonLength
-              )
-              args.privilegedReason = Utils.toUTF8(privilegedReasonBytes)
-            }
+            Object.assign(args, this.decodeKeyRelatedParams(paramsReader))
 
             // Deserialize forSelf
             const forSelfFlag = paramsReader.readInt8()
@@ -1210,9 +1221,9 @@ export default class WalletWireProcessor implements WalletWire {
           )
           responseWriter.write(publicKeyBytes)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'encrypt': {
+        case 'encrypt': return await (async () => {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize plaintext
@@ -1235,9 +1246,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(encryptResult.ciphertext)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'decrypt': {
+        case 'decrypt': return await (async () => {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize ciphertext
@@ -1260,9 +1271,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(decryptResult.plaintext)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'createHmac': {
+        case 'createHmac': return await (async () => {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize data
@@ -1288,9 +1299,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(createHmacResult.hmac)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'verifyHmac': {
+        case 'verifyHmac': return await (async () => {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize hmac
@@ -1315,9 +1326,9 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'createSignature': {
+        case 'createSignature': return await (async () => {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize data or hashToDirectlySign
@@ -1348,9 +1359,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(createSignatureResult.signature)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'verifySignature': {
+        case 'verifySignature': return await (async () => {
           const args: any = this.decodeKeyRelatedParams(paramsReader)
 
           // Deserialize forSelf
@@ -1389,9 +1400,9 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'isAuthenticated': {
+        case 'isAuthenticated': return await (async () => {
           // No parameters to deserialize
 
           // Call the method
@@ -1407,9 +1418,9 @@ export default class WalletWireProcessor implements WalletWire {
             isAuthenticatedResult.authenticated ? 1 : 0
           )
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'waitForAuthentication': {
+        case 'waitForAuthentication': return await (async () => {
           // No parameters to deserialize
 
           // Call the method
@@ -1419,9 +1430,9 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'getHeight': {
+        case 'getHeight': return await (async () => {
           // No parameters to deserialize
 
           // Call the method
@@ -1432,9 +1443,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.writeVarIntNum(getHeightResult.height)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'getHeaderForHeight': {
+        case 'getHeaderForHeight': return await (async () => {
           const args: any = {}
 
           // Deserialize height
@@ -1452,9 +1463,9 @@ export default class WalletWireProcessor implements WalletWire {
           const headerBytes = Utils.toUint8Array(getHeaderResult.header, 'hex')
           responseWriter.write(headerBytes)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'getNetwork': {
+        case 'getNetwork': return await (async () => {
           // No parameters to deserialize
 
           // Call the method
@@ -1467,9 +1478,9 @@ export default class WalletWireProcessor implements WalletWire {
             getNetworkResult.network === 'mainnet' ? 0 : 1
           )
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'getVersion': {
+        case 'getVersion': return await (async () => {
           // No parameters to deserialize
 
           // Call the method
@@ -1481,9 +1492,9 @@ export default class WalletWireProcessor implements WalletWire {
           const versionBytes = Utils.toUint8Array(getVersionResult.version, 'utf8')
           responseWriter.write(versionBytes)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'revealCounterpartyKeyLinkage': {
+        case 'revealCounterpartyKeyLinkage': return await (async () => {
           const args: any = {}
 
           // Read privileged parameters
@@ -1553,9 +1564,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(resultWriter.toUint8Array())
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'revealSpecificKeyLinkage': {
+        case 'revealSpecificKeyLinkage': return await (async () => {
           // Deserialize key-related parameters and privileged parameters
           const args = this.decodeKeyRelatedParams(paramsReader)
 
@@ -1615,9 +1626,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(resultWriter.toUint8Array())
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'acquireCertificate': {
+        case 'acquireCertificate': return await (async () => {
           const args: any = {}
 
           // Read args.type
@@ -1739,59 +1750,45 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(certBin)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'listCertificates': {
+        case 'listCertificates': return await (async () => {
           const args: any = {}
 
-          // Read certifiers
-          const certifiersLength = paramsReader.readVarIntNum()
-          args.certifiers = []
-          for (let i = 0; i < certifiersLength; i++) {
-            const certifierBytes = paramsReader.read(33)
-            args.certifiers.push(Utils.toHex(certifierBytes))
-          }
+          ;(() => {
+            // Read certifiers
+            const certifiersLength = paramsReader.readVarIntNum()
+            args.certifiers = []
+            for (let i = 0; i < certifiersLength; i++) {
+              const certifierBytes = paramsReader.read(33)
+              args.certifiers.push(Utils.toHex(certifierBytes))
+            }
 
-          // Read types
-          const typesLength = paramsReader.readVarIntNum()
-          args.types = []
-          for (let i = 0; i < typesLength; i++) {
-            const typeBytes = paramsReader.read(32)
-            args.types.push(Utils.toBase64(typeBytes))
-          }
+            // Read types
+            const typesLength = paramsReader.readVarIntNum()
+            args.types = []
+            for (let i = 0; i < typesLength; i++) {
+              const typeBytes = paramsReader.read(32)
+              args.types.push(Utils.toBase64(typeBytes))
+            }
 
-          // Read limit and offset
-          const limit = paramsReader.readVarIntNum()
-          if (limit >= 0) {
-            args.limit = limit
-          } else {
-            args.limit = undefined
-          }
+            // Read limit and offset
+            const limit = paramsReader.readVarIntNum()
+            if (limit >= 0) {
+              args.limit = limit
+            } else {
+              args.limit = undefined
+            }
 
-          const offset = paramsReader.readVarIntNum()
-          if (offset >= 0) {
-            args.offset = offset
-          } else {
-            args.offset = undefined
-          }
+            const offset = paramsReader.readVarIntNum()
+            if (offset >= 0) {
+              args.offset = offset
+            } else {
+              args.offset = undefined
+            }
 
-          // Read privileged parameters
-          const privilegedFlag = paramsReader.readInt8()
-          if (privilegedFlag === -1) {
-            args.privileged = undefined
-          } else {
-            args.privileged = privilegedFlag === 1
-          }
-
-          const privilegedReasonLength = paramsReader.readInt8()
-          if (privilegedReasonLength === -1) {
-            args.privilegedReason = undefined
-          } else {
-            const privilegedReasonBytes = paramsReader.read(
-              privilegedReasonLength
-            )
-            args.privilegedReason = Utils.toUTF8(privilegedReasonBytes)
-          }
+            Object.assign(args, this.decodePrivilegedParams(paramsReader))
+          })()
 
           // Call the method
           const listResult = await this.wallet.listCertificates(
@@ -1807,41 +1804,43 @@ export default class WalletWireProcessor implements WalletWire {
 
           // certificates
           for (const cert of listResult.certificates) {
-            const certificate = new Certificate(
-              cert.type,
-              cert.serialNumber,
-              cert.subject,
-              cert.certifier,
-              cert.revocationOutpoint,
-              cert.fields,
-              cert.signature
-            )
-            const certBin = certificate.toBinary()
+            ;(() => {
+              const certificate = new Certificate(
+                cert.type,
+                cert.serialNumber,
+                cert.subject,
+                cert.certifier,
+                cert.revocationOutpoint,
+                cert.fields,
+                cert.signature
+              )
+              const certBin = certificate.toBinary()
 
-            // Write certificate binary length and data
-            resultWriter.writeVarIntNum(certBin.length)
-            resultWriter.write(certBin)
+              // Write certificate binary length and data
+              resultWriter.writeVarIntNum(certBin.length)
+              resultWriter.write(certBin)
 
-            if (cert.keyring && Object.keys(cert.keyring).length > 0) {
-              resultWriter.writeInt8(1) // Flag indicating keyring is present
-              const keyringEntries = Object.entries(cert.keyring)
-              resultWriter.writeVarIntNum(keyringEntries.length)
-              for (const [fieldName, fieldValue] of keyringEntries) {
-                const fieldNameBytes = Utils.toUint8Array(fieldName, 'utf8')
-                resultWriter.writeVarIntNum(fieldNameBytes.length)
-                resultWriter.write(fieldNameBytes)
+              if (cert.keyring && Object.keys(cert.keyring).length > 0) {
+                resultWriter.writeInt8(1) // Flag indicating keyring is present
+                const keyringEntries = Object.entries(cert.keyring)
+                resultWriter.writeVarIntNum(keyringEntries.length)
+                for (const [fieldName, fieldValue] of keyringEntries) {
+                  const fieldNameBytes = Utils.toUint8Array(fieldName, 'utf8')
+                  resultWriter.writeVarIntNum(fieldNameBytes.length)
+                  resultWriter.write(fieldNameBytes)
 
-                const fieldValueBytes = Utils.toUint8Array(fieldValue, 'base64')
-                resultWriter.writeVarIntNum(fieldValueBytes.length)
-                resultWriter.write(fieldValueBytes)
+                  const fieldValueBytes = Utils.toUint8Array(fieldValue, 'base64')
+                  resultWriter.writeVarIntNum(fieldValueBytes.length)
+                  resultWriter.write(fieldValueBytes)
+                }
+              } else {
+                resultWriter.writeInt8(0) // Flag indicating no keyring
               }
-            } else {
-              resultWriter.writeInt8(0) // Flag indicating no keyring
-            }
 
-            const verifierBytes = Utils.toUint8Array(cert.verifier, 'hex')
-            resultWriter.writeVarIntNum(verifierBytes.length)
-            resultWriter.write(verifierBytes)
+              const verifierBytes = Utils.toUint8Array(cert.verifier, 'hex')
+              resultWriter.writeVarIntNum(verifierBytes.length)
+              resultWriter.write(verifierBytes)
+            })()
           }
 
           // Return the response
@@ -1849,9 +1848,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(resultWriter.toUint8Array())
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'proveCertificate': {
+        case 'proveCertificate': return await (async () => {
           const args: any = {}
 
           // Read certificate
@@ -1957,9 +1956,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(resultWriter.toUint8Array())
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'relinquishCertificate': {
+        case 'relinquishCertificate': return await (async () => {
           const args: any = {}
 
           // Read type
@@ -1981,9 +1980,9 @@ export default class WalletWireProcessor implements WalletWire {
           const responseWriter = new Utils.WriterUint8Array()
           responseWriter.writeUInt8(0) // errorByte = 0
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'discoverByIdentityKey': {
+        case 'discoverByIdentityKey': return await (async () => {
           const args: any = {}
 
           // Read identityKey
@@ -2027,9 +2026,9 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(result)
           return responseWriter.toUint8Array()
-        }
+        })()
 
-        case 'discoverByAttributes': {
+        case 'discoverByAttributes': return await (async () => {
           const args: any = {}
 
           // Read attributes
@@ -2085,7 +2084,7 @@ export default class WalletWireProcessor implements WalletWire {
           responseWriter.writeUInt8(0) // errorByte = 0
           responseWriter.write(result)
           return responseWriter.toUint8Array()
-        }
+        })()
 
         default:
           throw new Error(`Method ${callName} not implemented`)
@@ -2138,6 +2137,21 @@ export default class WalletWireProcessor implements WalletWire {
       const counterpartyRemainingBytes = reader.read(32)
       return Utils.toHex([counterpartyFlag, ...counterpartyRemainingBytes])
     }
+  }
+
+  private decodePrivilegedParams(reader: Utils.ReaderUint8Array): {
+    privileged: boolean | undefined
+    privilegedReason: string | undefined
+  } {
+    const privilegedFlag = reader.readInt8()
+    const privileged = privilegedFlag === -1
+      ? undefined
+      : privilegedFlag === 1
+    const privilegedReasonLength = reader.readInt8()
+    const privilegedReason = privilegedReasonLength === -1
+      ? undefined
+      : Utils.toUTF8(reader.read(privilegedReasonLength))
+    return { privileged, privilegedReason }
   }
 
   private serializeDiscoveryResult(discoverResult: any): Uint8Array {
