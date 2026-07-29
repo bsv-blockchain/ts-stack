@@ -104,7 +104,12 @@ function isLocalHostname (hostname: string): boolean {
     normalized.endsWith('.localhost')
 }
 
-function normalizeServerUrl (serverUrl: string): URL {
+interface NormalizedServerUrl {
+  baseUrl: string
+  origin: string
+}
+
+function normalizeServerUrl (serverUrl: string): NormalizedServerUrl {
   let parsed: URL
   try {
     parsed = new URL(serverUrl)
@@ -135,8 +140,10 @@ function normalizeServerUrl (serverUrl: string): URL {
   while (pathname.endsWith('/')) {
     pathname = pathname.slice(0, -1)
   }
-  parsed.pathname = pathname
-  return parsed
+  return {
+    baseUrl: `${parsed.origin}${pathname}`,
+    origin: parsed.origin
+  }
 }
 
 function normalizePositiveInteger (
@@ -191,9 +198,9 @@ export class WABTransport {
   private readonly maxResponseBytes: number
 
   constructor (serverUrl: string, options: WABTransportOptions = {}) {
-    const parsed = normalizeServerUrl(serverUrl)
-    this.serverUrl = `${parsed.origin}${parsed.pathname === '/' ? '' : parsed.pathname}`
-    this.serverOrigin = parsed.origin
+    const normalized = normalizeServerUrl(serverUrl)
+    this.serverUrl = normalized.baseUrl
+    this.serverOrigin = normalized.origin
     const fetchClient = options.fetch ?? defaultFetch
     if (typeof fetchClient !== 'function') {
       throw new WABClientError(
