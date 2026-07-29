@@ -2,7 +2,7 @@ import { Knex, knex as makeKnex } from 'knex'
 import { ChaintracksStorageKnex } from '../../Storage/ChaintracksStorageKnex'
 import { deserializeBlockHeaders } from '../blockHeaderUtilities'
 import { BulkFileDataManager } from '../BulkFileDataManager'
-import { BulkHeaderFileInfo } from '../BulkHeaderFile'
+import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../BulkHeaderFile'
 import { ChaintracksFs } from '../ChaintracksFs'
 import { LocalCdnServer } from '../../__tests/LocalCdnServer'
 import { Chain } from '../../../../../sdk/types'
@@ -179,6 +179,13 @@ describe('BulkFileDataManager tests', () => {
     for (const i of [349, 379, 399, 402, 499]) {
       const folder = fs.pathJoin(rootFolder, `cdnTest${i}`)
       await manager.exportHeadersToFs(ChaintracksFs, 100, folder, `http://localhost:8${i}/blockheaders`, i)
+      const manifestBytes = await fs.readFile(fs.pathJoin(folder, 'mainNetBlockHeaders.json'))
+      const manifest = JSON.parse(new TextDecoder().decode(manifestBytes)) as BulkHeaderFilesInfo
+      expect(manifest.files.length).toBeGreaterThan(0)
+      const lastFile = manifest.files.at(-1)!
+      expect(lastFile.firstHeight + lastFile.count - 1).toBe(i)
+      const lastFileBytes = await fs.readFile(fs.pathJoin(folder, lastFile.fileName))
+      expect(lastFileBytes).toHaveLength(lastFile.count * 80)
     }
   })
 

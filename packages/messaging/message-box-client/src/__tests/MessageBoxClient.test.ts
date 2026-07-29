@@ -363,7 +363,11 @@ describe('MessageBoxClient', () => {
 
     const result = await messageBoxClient.acknowledgeMessage({ messageIds: ['42'] })
 
-    expect(result).toEqual(200)
+    // Preserve and characterize the deployed server contract: legacy servers
+    // return their numeric status value even though the client declaration is
+    // currently string-typed.
+    const runtimeResult: unknown = result
+    expect(runtimeResult).toBe(200)
   })
 
   it('Throws an error when sendMessage() API fails', async () => {

@@ -424,13 +424,14 @@ describe('ProtoWallet', () => {
     })
 
     await verifyNonce(an1, (bob as any), alicePriv.toPublicKey().toString())
-    await bob.verifySignature({
+    const { valid: aliceSignatureValid } = await bob.verifySignature({
       signature: as1,
       data: ad1,
       protocolID: [0, 'tests'],
       keyID: '1',
       counterparty: alicePriv.toPublicKey().toString()
     })
+    expect(aliceSignatureValid).toBe(true)
 
     const bn1 = await createNonce((bob as any), alicePriv.toPublicKey().toString())
     const { signature: bs1 } = await bob.createSignature({
@@ -441,13 +442,14 @@ describe('ProtoWallet', () => {
     })
 
     await verifyNonce(bn1, (alice as any), bobPriv.toPublicKey().toString())
-    await alice.verifySignature({
+    const { valid: bobSignatureValid } = await alice.verifySignature({
       signature: bs1,
       data: bd1,
       protocolID: [0, 'tests'],
       keyID: '1',
       counterparty: bobPriv.toPublicKey().toString()
     })
+    expect(bobSignatureValid).toBe(true)
   })
   describe('ProtoWallet Key Linkage Revelation', () => {
     it('encodes the Schnorr z scalar as a fixed 32-byte value', async () => {

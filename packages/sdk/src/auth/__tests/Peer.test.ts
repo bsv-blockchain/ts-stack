@@ -324,8 +324,14 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     alice = new Peer(walletA, transportA, undefined, new AsyncSessionStore())
     bob = new Peer(walletB, transportB, undefined, new AsyncSessionStore())
 
-    const bobReceivedGeneralMessage = waitForNextGeneralMessage(bob)
-    const aliceReceivedGeneralMessage = waitForNextGeneralMessage(alice)
+    let bobPayload: number[] | undefined
+    let alicePayload: number[] | undefined
+    const bobReceivedGeneralMessage = waitForNextGeneralMessage(bob, (_senderPublicKey, payload) => {
+      bobPayload = payload
+    })
+    const aliceReceivedGeneralMessage = waitForNextGeneralMessage(alice, (_senderPublicKey, payload) => {
+      alicePayload = payload
+    })
 
     bob.listenForGeneralMessages((senderPublicKey) => {
       void bob.toPeer(Utils.toArray('Hello Alice!'), senderPublicKey)
@@ -334,6 +340,9 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     await alice.toPeer(Utils.toArray('Hello Bob!'))
     await bobReceivedGeneralMessage
     await aliceReceivedGeneralMessage
+
+    expect(bobPayload).toEqual(Utils.toArray('Hello Bob!'))
+    expect(alicePayload).toEqual(Utils.toArray('Hello Alice!'))
   }, 15000)
 
   it('Alice talks to Bob across two devices, Bob can respond across both sessions', async () => {
@@ -1051,44 +1060,54 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       await aliceReceivedCertificates
 
       // Now general messages must be allowed
-      const received = new Promise<void>((resolve) => {
-        bob.listenForGeneralMessages(() => resolve())
+      const expectedPayload = Utils.toArray('Hello Bob!')
+      const received = new Promise<number[]>((resolve) => {
+        const listenerId = bob.listenForGeneralMessages((_senderPublicKey, payload) => {
+          // The earlier handshake payload can still be draining through the
+          // local transport. Observe the post-validation application message.
+          if (payload.join(',') === expectedPayload.join(',')) {
+            bob.stopListeningForGeneralMessages(listenerId)
+            resolve(payload)
+          }
+        })
       })
 
       await alice.toPeer(Utils.toArray('Hello Bob!'), bobPubKey)
-      await received
+      await expect(received).resolves.toEqual(expectedPayload)
     })
 
     it('times out waiting for certificate validation after 30 seconds', async () => {
       jest.useFakeTimers()
-
-      const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
-
-      setupPeers(false, true) // Bob requires certs
-
-      // Prevent Alice from auto-sending certificate response
-      alice.listenForCertificatesRequested(() => {
-        // Intentionally do nothing (no auto-response)
-      })
-
-      // Send message - this will cause Bob to wait for certificates
-      const messagePromise = alice.toPeer(Utils.toArray('Hello Bob!'), bobPubKey)
-
-      // Allow the handshake to complete but not certificate validation
-      await jest.advanceTimersByTimeAsync(100)
-
-      // Advance time past the 30 second timeout
-      await jest.advanceTimersByTimeAsync(30000)
-
-      // The message should eventually fail with timeout error
-      // Note: The error may be caught internally, so we just verify no message was delivered
       try {
-        await messagePromise
-      } catch {
-        // Expected - timeout or other error
-      }
+        const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
+        let messageReceived = false
 
-      jest.useRealTimers()
+        setupPeers(false, true) // Bob requires certs
+        bob.listenForGeneralMessages(() => {
+          messageReceived = true
+        })
+
+        // Prevent Alice from auto-sending certificate response
+        alice.listenForCertificatesRequested(() => {
+          // Intentionally do nothing (no auto-response)
+        })
+
+        // Send message - this will cause Bob to wait for certificates
+        const messagePromise = alice.toPeer(Utils.toArray('Hello Bob!'), bobPubKey)
+
+        // Allow the handshake to complete but not certificate validation
+        await jest.advanceTimersByTimeAsync(100)
+
+        // Advance time past the 30 second timeout
+        await jest.advanceTimersByTimeAsync(30000)
+
+        // The transport handles the receiver-side rejection internally, so
+        // delivery is the stable externally observable contract.
+        await messagePromise.catch(() => undefined)
+        expect(messageReceived).toBe(false)
+      } finally {
+        jest.useRealTimers()
+      }
     }, 35000)
 
     it('resolves certificate validation promise when certificates arrive mid-wait', async () => {
@@ -1168,8 +1187,12 @@ describe('Peer class mutual authentication and certificate exchange', () => {
         bobPubKey
       )
 
+      let receivedPayload: number[] | undefined
       const received = new Promise<void>((resolve) => {
-        bob.listenForGeneralMessages(() => resolve())
+        bob.listenForGeneralMessages((_senderPublicKey, payload) => {
+          receivedPayload = payload
+          resolve()
+        })
       })
 
       // Send message - certificates will be provided automatically
@@ -1177,9 +1200,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
       // Wait for message to be received
       await received
-
-      // If we get here without hanging, the timeout was properly cleaned up
-      // (otherwise the test would hang waiting for the 30s timeout)
+      expect(receivedPayload).toEqual(Utils.toArray('Hello Bob!'))
     })
 
     it('throws error when session nonce is null during certificate validation wait', async () => {
@@ -1203,10 +1224,15 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       // Wait for handshake to progress
       await new Promise(r => setTimeout(r, 50))
 
-      // Now spy on bob's sessionManager.getSession to return session without sessionNonce
-      // This simulates a corrupted session state
+      let messageReceived = false
+      bob.listenForGeneralMessages(() => {
+        messageReceived = true
+      })
+
+      // Now spy on bob's sessionManager.getSession to return session without sessionNonce.
+      // This simulates a corrupted session state.
       const originalGetSession = bob.sessionManager.getSession.bind(bob.sessionManager)
-      jest.spyOn(bob.sessionManager, 'getSession').mockImplementation((nonce: string) => {
+      const getSessionSpy = jest.spyOn(bob.sessionManager, 'getSession').mockImplementation((nonce: string) => {
         const session = originalGetSession(nonce)
         if (session != null) {
           // Return a session with undefined sessionNonce but requiring certificates
@@ -1230,8 +1256,9 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       // Allow transport handlers to run
       await new Promise(r => setTimeout(r, 50))
 
-      // Restore the original implementation
-      jest.restoreAllMocks()
+      expect(getSessionSpy).toHaveBeenCalled()
+      expect(messageReceived).toBe(false)
+      getSessionSpy.mockRestore()
     })
 
     it('handles reject callback in certificate validation promise', async () => {

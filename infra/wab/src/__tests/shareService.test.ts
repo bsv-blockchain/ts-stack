@@ -164,7 +164,9 @@ describe("ShareService", () => {
 
             const logs = await ShareService.getAccessLogs(testUserId);
             expect(logs.length).toBeGreaterThan(0);
-            expect(logs[0].success).toBe(1); // SQLite stores booleans as 1/0
+            // TypeORM exposes this field as a boolean while SQLite persists it
+            // as 1/0. Assert the semantic contract across both representations.
+            expect(logs[0].success).toBeTruthy();
             expect(logs[0].action).toBe("retrieve");
         });
 
@@ -178,7 +180,7 @@ describe("ShareService", () => {
             );
 
             const logs = await ShareService.getAccessLogs(testUserId);
-            expect(logs[0].success).toBe(0);
+            expect(logs[0].success).toBeFalsy();
             expect(logs[0].failureReason).toBe("OTP verification failed");
         });
     });
@@ -221,7 +223,7 @@ describe("ShareService", () => {
 
             const logs = await ShareService.getAccessLogs(testUserId);
             expect(logs.length).toBeGreaterThan(0);
-            expect(logs[0].success).toBe(0); // SQLite stores false as 0
+            expect(logs[0].success).toBeFalsy();
             expect(logs[0].failureReason).toBe("test failure");
         });
     });

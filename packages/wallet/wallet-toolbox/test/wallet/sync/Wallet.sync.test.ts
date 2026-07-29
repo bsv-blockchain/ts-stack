@@ -122,7 +122,9 @@ async function setActiveTwice(
     })
   )
 
-  expect(originalUserBefore.activeStorage === undefined || originalUserBefore.activeStorage === originalIdentityKey)
+  expect(
+    originalUserBefore.activeStorage === undefined || originalUserBefore.activeStorage === originalIdentityKey
+  ).toBe(true)
 
   let now = Date.now()
 

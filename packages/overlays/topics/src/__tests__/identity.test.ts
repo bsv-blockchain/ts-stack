@@ -205,9 +205,7 @@ describe('IdentityTopicManager', () => {
   //   - A real subject wallet to create the PushDrop signature
   //   - The certificate's decryptFields to return at least one public attribute
   // Skipping until ProtoWallet certificate construction utilities are available.
-  test.skip('admits a valid IdentityTopicManager output with real VerifiableCertificate', async () => {
-    // requires ProtoWallet certificate construction
-  })
+  test.todo('admits a valid IdentityTopicManager output with real VerifiableCertificate')
 
   it('getDocumentation returns a non-empty string', async () => {
     const doc = await manager.getDocumentation()

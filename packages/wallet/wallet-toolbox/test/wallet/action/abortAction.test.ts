@@ -38,7 +38,8 @@ describe('abortAction tests', () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('abortActionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('abortActionTests'))
     for (const { wallet } of ctxs) {
-      await wallet.abortAction({ reference: 'Sfh42EBViQ==' })
+      const result = await wallet.abortAction({ reference: 'Sfh42EBViQ==' })
+      expect(result.aborted).toBe(true)
     }
     for (const ctx of ctxs) {
       await ctx.storage.destroy()
