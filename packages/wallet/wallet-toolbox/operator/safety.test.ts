@@ -144,6 +144,66 @@ describe('Wallet Toolbox operator safety', () => {
     execute.mockRestore()
   })
 
+  test('prints command help when no command is selected', async () => {
+    const stdout: string[] = []
+    const stderr: string[] = []
+    await expect(
+      runOperatorCommand([], new Map([[command.name, command]]), {
+        stdout: value => stdout.push(value),
+        stderr: value => stderr.push(value)
+      })
+    ).resolves.toBe(0)
+    expect(stderr).toEqual([])
+    expect(JSON.parse(stdout[0])).toEqual({
+      mode: 'help',
+      commands: [
+        {
+          name: 'example',
+          description: 'Example command'
+        }
+      ]
+    })
+  })
+
+  test('executes an exactly authorized plan and returns structured evidence', async () => {
+    const stdout: string[] = []
+    const stderr: string[] = []
+    await expect(
+      runOperatorCommand(
+        ['example', '--output', './artifacts', '--apply', '--confirm', 'example'],
+        new Map([[command.name, command]]),
+        {
+          stdout: value => stdout.push(value),
+          stderr: value => stderr.push(value)
+        }
+      )
+    ).resolves.toBe(0)
+    expect(stderr).toEqual([])
+    expect(JSON.parse(stdout[0])).toMatchObject({
+      mode: 'applied',
+      plan: {
+        command: 'example'
+      },
+      evidence: {
+        command: 'example',
+        result: { ok: true }
+      }
+    })
+  })
+
+  test('rejects unknown commands before planning', async () => {
+    const stdout: string[] = []
+    const stderr: string[] = []
+    await expect(
+      runOperatorCommand(['missing'], new Map([[command.name, command]]), {
+        stdout: value => stdout.push(value),
+        stderr: value => stderr.push(value)
+      })
+    ).resolves.toBe(1)
+    expect(stdout).toEqual([])
+    expect(stderr).toEqual(['Unknown operator command "missing"'])
+  })
+
   test('rejects unknown options before execution', async () => {
     const stdout: string[] = []
     const stderr: string[] = []
