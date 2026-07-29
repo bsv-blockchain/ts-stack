@@ -36,14 +36,14 @@ export class MonitorDaemon {
   doneTasks?: Promise<void>
   stopDaemon: boolean = false
 
-  constructor (
+  constructor(
     public args: MonitorDaemonSetup,
     public noRunTasks?: boolean
   ) {
     /* */
   }
 
-  private configureKnex (setup: MonitorDaemonSetup): void {
+  private configureKnex(setup: MonitorDaemonSetup): void {
     if (setup.sqliteFilename != null && setup.sqliteFilename !== '') {
       setup.knexConfig = {
         client: 'better-sqlite3',
@@ -73,14 +73,11 @@ export class MonitorDaemon {
     }
   }
 
-  private async configureStorage (setup: MonitorDaemonSetup): Promise<void> {
+  private async configureStorage(setup: MonitorDaemonSetup): Promise<void> {
     if (setup.storageProvider != null) {
       await setup.storageProvider.makeAvailable()
       const settings = setup.storageProvider.getSettings()
-      setup.storageManager = new WalletStorageManager(
-        settings.storageIdentityKey,
-        setup.storageProvider
-      )
+      setup.storageManager = new WalletStorageManager(settings.storageIdentityKey, setup.storageProvider)
       await setup.storageManager.makeAvailable()
       return
     }
@@ -92,7 +89,7 @@ export class MonitorDaemon {
     }
   }
 
-  private configureServices (setup: MonitorDaemonSetup): void {
+  private configureServices(setup: MonitorDaemonSetup): void {
     if (setup.servicesOptions != null) {
       if (setup.servicesOptions.chain !== setup.chain) {
         throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain')
@@ -103,7 +100,7 @@ export class MonitorDaemon {
     setup.services ??= new Services(setup.chain ?? 'test')
   }
 
-  async createSetup (): Promise<void> {
+  async createSetup(): Promise<void> {
     this.setup = { ...this.args }
     const a = this.setup
 
@@ -123,9 +120,9 @@ export class MonitorDaemon {
     a.monitor = new Monitor(monitorOptions)
   }
 
-  async start (): Promise<void> {
+  async start(): Promise<void> {
     if (this.setup == null) await this.createSetup()
-    if ((this.setup?.monitor) == null) throw new WERR_INTERNAL('createSetup failed to initialize setup')
+    if (this.setup?.monitor == null) throw new WERR_INTERNAL('createSetup failed to initialize setup')
 
     const { monitor } = this.setup
 
@@ -135,10 +132,12 @@ export class MonitorDaemon {
     }
   }
 
-  async stop (): Promise<void> {
+  async stop(): Promise<void> {
     console.log('start of stop')
 
-    if ((this.setup == null) || ((this.doneTasks == null) && this.noRunTasks !== true) || (this.doneListening == null)) { throw new WERR_INTERNAL('call start or createSetup first') }
+    if (this.setup == null || (this.doneTasks == null && this.noRunTasks !== true) || this.doneListening == null) {
+      throw new WERR_INTERNAL('call start or createSetup first')
+    }
 
     const { monitor } = this.setup
 
@@ -150,14 +149,14 @@ export class MonitorDaemon {
     this.doneListening = undefined
   }
 
-  async destroy (): Promise<void> {
+  async destroy(): Promise<void> {
     if (this.setup == null) return
-    if ((this.doneTasks != null) || (this.doneListening != null)) await this.stop()
-    if (this.setup.storageProvider != null) void this.setup.storageProvider.destroy()
+    if (this.doneTasks != null || this.doneListening != null) await this.stop()
+    if (this.setup.storageProvider != null) await this.setup.storageProvider.destroy()
     this.setup = undefined
   }
 
-  async runDaemon (): Promise<void> {
+  async runDaemon(): Promise<void> {
     this.stopDaemon = false
     for (;;) {
       try {

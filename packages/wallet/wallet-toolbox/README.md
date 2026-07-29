@@ -176,6 +176,19 @@ merges four Wallet Toolbox coverage shards
 for reporting; the complete local `test:coverage` run currently measures
 69.12% statements, 59.09% branches, 72.83% functions, and 71.06% lines.
 
+Operational repair, migration, export, and long-running service procedures are
+not tests. They live under [`operator/`](./operator/README.md), produce an exact
+dry-run plan by default, and require explicit confirmation before they write
+state or artifacts. The exact manual-suite disposition inventory in
+`governance/test-quality/wallet-toolbox-manual-suites.json` prevents new
+operator procedures, fixture generators, diagnostics, or examples from being
+silently added as Jest suites.
+
+Reusable source recipes live under [`examples/`](./examples/README.md). Manual
+integration suites may validate an example against an explicitly configured
+environment, but the example implementation itself does not live inside a test
+body.
+
 `pack:check` installs the exact CommonJS tarball and verifies its public API.
 The browser and mobile commands build platform-specific packages and reject
 Node-only dependency leakage. Publishing and version changes are owned by the

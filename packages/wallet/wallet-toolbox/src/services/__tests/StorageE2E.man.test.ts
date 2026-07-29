@@ -635,33 +635,7 @@ async function waitForProofs (): Promise<ProofObservation[]> {
     await forEachWithConcurrency(pendingTransactions, PROOF_ARCADE_CONCURRENCY, async transaction => {
       const observation = observations.get(transaction.txid)
       if (observation == null) throw new Error(`Missing proof observation for ${transaction.txid}`)
-      try {
-        const arcadeService = root.services.arcade
-        if (arcadeService == null) throw new Error('Arcade is not configured')
-        const arcade = await withTimeout(`Arcade getTxData ${transaction.txid}`, arcadeService.getTxData(transaction.txid))
-        observation.arcadeStatus = arcade.txStatus
-        observation.blockHeight = arcade.blockHeight === 0 ? undefined : arcade.blockHeight
-        observation.arcadeProof = (arcade.txStatus === 'MINED' || arcade.txStatus === 'IMMUTABLE') && arcade.merklePath != null && arcade.merklePath !== ''
-        if (observation.arcadeProof && observation.arcadeProofObservedAt == null) {
-          observation.arcadeProofObservedAt = new Date().toISOString()
-        }
-      } catch (error: unknown) {
-        const arcadeError = `Arcade: ${errorMessage(error)}`
-        observation.error = observation.error == null ? arcadeError : `${observation.error}; ${arcadeError}`
-      }
-
-      const storageStatus = storageStatuses.get(transaction.txid)
-      if (storageStatus != null) observation.storageStatus = storageStatus
-      if (observation.storageStatus === 'completed' && observation.storageCompletedObservedAt == null) {
-        observation.storageCompletedObservedAt = new Date().toISOString()
-      }
-      if (observation.arcadeProof && observation.storageStatus === 'completed') {
-        if (observation.completedAt == null) {
-          observation.completedAt = new Date().toISOString()
-          observation.convergenceMs = Date.parse(observation.completedAt) - Date.parse(transaction.broadcastAt)
-        }
-        pending.delete(transaction.txid)
-      }
+      await observeProofTransaction(transaction, observation, storageStatuses, pending)
     })
 
     const statusCounts: Record<string, number> = {}
@@ -673,6 +647,43 @@ async function waitForProofs (): Promise<ProofObservation[]> {
     if (pending.size > 0) await new Promise(resolve => setTimeout(resolve, PROOF_POLL_MS))
   }
   return [...observations.values()]
+}
+
+async function observeProofTransaction (
+  transaction: TrackedTransaction,
+  observation: ProofObservation,
+  storageStatuses: ReadonlyMap<string, string>,
+  pending: Set<string>
+): Promise<void> {
+  try {
+    const arcadeService = root.services.arcade
+    if (arcadeService == null) throw new Error('Arcade is not configured')
+    const arcade = await withTimeout(`Arcade getTxData ${transaction.txid}`, arcadeService.getTxData(transaction.txid))
+    observation.arcadeStatus = arcade.txStatus
+    observation.blockHeight = arcade.blockHeight === 0 ? undefined : arcade.blockHeight
+    observation.arcadeProof =
+      (arcade.txStatus === 'MINED' || arcade.txStatus === 'IMMUTABLE') &&
+      arcade.merklePath != null &&
+      arcade.merklePath !== ''
+    if (observation.arcadeProof && observation.arcadeProofObservedAt == null) {
+      observation.arcadeProofObservedAt = new Date().toISOString()
+    }
+  } catch (error: unknown) {
+    const arcadeError = `Arcade: ${errorMessage(error)}`
+    observation.error = observation.error == null ? arcadeError : `${observation.error}; ${arcadeError}`
+  }
+
+  const storageStatus = storageStatuses.get(transaction.txid)
+  if (storageStatus != null) observation.storageStatus = storageStatus
+  if (observation.storageStatus === 'completed' && observation.storageCompletedObservedAt == null) {
+    observation.storageCompletedObservedAt = new Date().toISOString()
+  }
+  if (!observation.arcadeProof || observation.storageStatus !== 'completed') return
+  if (observation.completedAt == null) {
+    observation.completedAt = new Date().toISOString()
+    observation.convergenceMs = Date.parse(observation.completedAt) - Date.parse(transaction.broadcastAt)
+  }
+  pending.delete(transaction.txid)
 }
 
 const describeMainnet = ALLOW_MAINNET ? describe : describe.skip
@@ -806,6 +817,7 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   test(`2a sequential Storage writes (${TX_COUNT})`, async () => {
     const writer = users[0]
     const timings: number[] = []
+    const txids: string[] = []
     for (let i = 0; i < TX_COUNT; i++) {
       const started = Date.now()
       const result = await writer.wallet.createAction({
@@ -815,11 +827,14 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       timings.push(Date.now() - started)
-      track(result.txid, '2a-sequential', writer.index)
+      txids.push(track(result.txid, '2a-sequential', writer.index))
     }
     const stats = calcStats(timings)
     evidence.metrics.sequentialWrites = { ...stats, transactionsPerSecond: throughput(TX_COUNT, timings.reduce((sum, n) => sum + n, 0)) }
     console.log(`[write:sequential] ${JSON.stringify(evidence.metrics.sequentialWrites)}`)
+    expect(txids).toHaveLength(TX_COUNT)
+    expect(new Set(txids).size).toBe(TX_COUNT)
+    expect(txids.every(txid => /^[0-9a-f]{64}$/.test(txid))).toBe(true)
   })
 
   test(`2b concurrent Arcade submission with Storage reconciliation (${TX_COUNT})`, async () => {

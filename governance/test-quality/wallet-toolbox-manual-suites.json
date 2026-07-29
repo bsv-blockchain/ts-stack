@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-29",
+  "owner": "ts-stack-maintainers",
+  "reviewBy": "2026-08-29",
+  "suites": [
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/ARC.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates ARC raw transaction and BEEF submission against explicitly selected live services."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/ARC.timeout.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates timeout and service-error behavior against live transaction broadcasters."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/ArcGorillaPool.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates GorillaPool and ARC transaction submission using operator-provided funded fixtures."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/Arcade.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates Arcade endpoint routing and permanent versus transient error classification."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/ArcadeMainnet.man.test.ts",
+      "kind": "live-e2e",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates funded mainnet wallet construction, Arcade-first broadcast, and reconciliation."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/ArcadeProof.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates Arcade transaction status and merkle-proof consistency for an operator-selected transaction."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/StorageE2E.man.test.ts",
+      "kind": "live-e2e",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Measures authenticated Storage, Arcade, monitor, concurrency, and proof behavior with explicit mainnet opt-in."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/postBeef.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates live BEEF submission behavior on operator-selected networks."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Ingest/__tests/WhatsOnChainServices.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates live WhatsOnChain headers, bulk ingestion, links, and listener behavior."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/Chaintracks.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates no-database Chaintracks startup, tips, subscriptions, and shutdown on both networks."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/util/__tests/ChaintracksFetch.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates retrieval and structure of the public testnet Chaintracks header index."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/providers/__tests/WhatsOnChain.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates live raw transaction, merkle path, and exchange-rate provider contracts."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/__test/adminStats.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "read-only-remote",
+      "disposition": "retain-as-test",
+      "purpose": "Validates administrative storage statistics through both direct and authenticated remote providers."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/storage/remoting/__test/StorageClient.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates bounded tagged-revision create/sign, availability, and recorded authentication replay behavior against explicitly configured storage."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/wab-client/__tests/WABClient.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates WAB server information, phone authentication, faucet, linked methods, and user deletion."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/StorageClient/storageClient.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates remote StorageClient backup and synchronization for explicitly selected wallet identities."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/wallet/action/createActionToGenerateBeefs.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates multi-transaction BEEF creation, transaction logging, and cleanup of generated no-send, unsigned, and unprocessed actions."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/action/internalizeAction.a.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates funded wallet-payment internalization against an operator-provided wallet context."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/certificate/acquireCertificate.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates certificate acquisition, storage, listing, proving, and privileged access behavior."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/live/walletLive.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates BEEF parsing, a funded two-wallet BRC-29 payment/internalization, atomic BEEF encoding, and distinct remote client identities."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/local/localWallet.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "disposable-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates local wallet monitoring, action creation, synchronization, active-store changes, and backup."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/local/localWallet2.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates funded output recovery, delayed and immediate action creation, signing, burning, and double-spend review outcomes."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/signAction/mountaintop.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "funded-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates signatures produced for an operator-provided funded transaction fixture."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/Wallet/specOps/specOps.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates wallet and storage spec operations against explicitly configured environments."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/WalletClient/LocalKVStore.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "disposable-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates local key-value persistence for Wallet and WalletClient implementations."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/WalletClient/WERR.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates review-action error transport and recovery through WalletClient."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/WalletClient/staging.auth.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "remote-state",
+      "disposition": "retain-as-test",
+      "purpose": "Validates authenticated staging wallet identity retrieval and cleanup."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/examples/backup.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "local-artifact",
+      "disposition": "retain-as-test",
+      "purpose": "Validates the separately maintained SQLite backup example against explicitly configured wallet clients."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/test/services/Services.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates live wallet service UTXO, exchange-rate, chaintracker, raw transaction, and merkle-path contracts."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/GoChaintracksServiceClient.live.test.ts",
+      "kind": "live-e2e",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates public Go Chaintracks tips, headers, and subscriptions against both networks."
+    }
+  ]
+}

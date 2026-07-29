@@ -485,7 +485,7 @@
       "policy": "wallet-operator",
       "pathPrefix": "packages/wallet/wallet-toolbox/",
       "suffix": ".man.test.ts",
-      "expectedFiles": 37
+      "expectedFiles": 29
     },
     {
       "policy": "wallet-public-live",

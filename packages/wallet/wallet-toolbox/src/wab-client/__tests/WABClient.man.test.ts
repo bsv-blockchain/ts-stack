@@ -5,7 +5,9 @@ import { TwilioPhoneInteractor } from '../auth-method-interactors/TwilioPhoneInt
 // This test suite requires the WAB server to be running on localhost:3000 or you can
 // spin up a test environment or mock server. For demonstration, we'll keep it simple.
 
-describe('WABClient', () => {
+const describeWithWabEnvironment = _tu.noEnv('main') ? describe.skip : describe
+
+describeWithWabEnvironment('WABClient', () => {
   let client: WABClient
   const serverUrl = 'http://localhost:3000' // Adjust if your server is different
   const testPresentationKey = 'clientTestKey' + Date.now()
@@ -13,10 +15,6 @@ describe('WABClient', () => {
   beforeAll(() => {
     client = new WABClient(serverUrl)
   })
-
-  it('00', () => {})
-  // Don't run any of these tests whe
-  if (_tu.noEnv('main')) return
 
   it('should get server info', async () => {
     const info = await client.getInfo()

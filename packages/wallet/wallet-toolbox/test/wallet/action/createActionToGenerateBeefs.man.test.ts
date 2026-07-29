@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as bsv from '@bsv/sdk'
 import { sdk, Wallet } from '../../../src/index.all'
 
@@ -111,7 +110,7 @@ describe('createActionToGenerateBeefs test', () => {
         const cr = await wallet.createAction(createArgs)
 
         expect(cr.noSendChange).not.toBeTruthy()
-        expect(cr.sendWithResults?.length).toBe(2)
+        expect(cr.sendWithResults?.length).toBe(4)
         const [swr1, swr2, swr3, swr4] = cr.sendWithResults!
         expect(swr1.status !== 'failed').toBe(true)
         expect(swr2.status !== 'failed').toBe(true)
@@ -131,13 +130,14 @@ describe('createActionToGenerateBeefs test', () => {
     }
   })
 
-  test('3_test tranaction log', async () => {
+  test('3_test transaction log', async () => {
     const ctx = ctxs[0]
     if (ctx) {
       const { activeStorage: storage } = ctx
       const txid: bsv.HexString = 'ed11e4b7402e38bac0ec7431063ae7c14ee82370e5f1963d48ae27a70527f784'
       const rl = await logTransaction(storage, txid)
       console.log(rl)
+      expect(rl).toContain(`txid: ${txid}`)
     }
   })
   test('4_abort set of nosend transactions', async () => {

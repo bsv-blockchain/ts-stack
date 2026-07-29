@@ -40,6 +40,16 @@ export interface LocalTestWalletSetup extends TestWalletNoSetup {
   useIdentityKey2: boolean
 }
 
+export interface BurnOutputsEvidence {
+  available: number
+  burned: number
+}
+
+export interface RecoverOutputsEvidence {
+  available: number
+  recovered: number
+}
+
 export async function createSetup(chain: sdk.Chain, options: LocalWalletTestOptions): Promise<LocalTestWalletSetup> {
   const env = _tu.getEnv(chain)
   let identityKey: string | undefined
@@ -79,13 +89,15 @@ export async function burnOneSatTestOutput(
   setup: LocalTestWalletSetup,
   options: CreateActionOptions = {},
   howMany: number = 1
-): Promise<void> {
+): Promise<BurnOutputsEvidence> {
   const outputs = await setup.wallet.listOutputs({
     basket: 'test-output',
     include: 'entire transactions',
     limit: 1000
   })
 
+  const available = outputs.outputs.filter(output => output.satoshis === 1).length
+  let burned = 0
   while (howMany-- > 0) {
     const o = outputs.outputs.find(o => o.satoshis === 1)
     if (!o) break
@@ -105,7 +117,7 @@ export async function burnOneSatTestOutput(
       description: 'burn output'
     }
     const bcar = await setup.wallet.createAction(args)
-    expect(bcar.signableTransaction)
+    expect(bcar.signableTransaction).toBeDefined()
 
     const st = bcar.signableTransaction!
     const beef = Beef.fromBinary(st.tx)
@@ -118,8 +130,10 @@ export async function burnOneSatTestOutput(
     }
     const sar = await setup.wallet.signAction(signArgs)
     console.log(sar.txid)
-    expect(sar.txid)
+    expect(sar.txid).toMatch(/^[0-9a-f]{64}$/)
+    burned++
   }
+  return { available, burned }
 }
 
 export async function createOneSatTestOutput(
@@ -157,12 +171,12 @@ export async function createOneSatTestOutput(
     }
     vargs = Validation.validateCreateActionArgs(args)
     car = await setup.wallet.createAction(args)
-    expect(car.txid)
+    expect(car.txid).toMatch(/^[0-9a-f]{64}$/)
     txids.push(car.txid!)
     noSendChange = car.noSendChange
 
     const req = await EntityProvenTxReq.fromStorageTxid(setup.activeStorage, car.txid!)
-    expect(req?.history.notes !== undefined)
+    expect(req?.history.notes).toBeDefined()
     if (req?.history.notes) {
       if (vargs.isNoSend) {
         expect(req.status === 'nosend').toBe(true)
@@ -194,14 +208,19 @@ export async function createOneSatTestOutput(
   return car
 }
 
-export async function recoverOneSatTestOutputs(setup: LocalTestWalletSetup, testOptionsMode?: 1): Promise<void> {
+export async function recoverOneSatTestOutputs(
+  setup: LocalTestWalletSetup,
+  testOptionsMode?: 1
+): Promise<RecoverOutputsEvidence> {
   const outputs = await setup.wallet.listOutputs({
     basket: 'test-output',
     include: 'entire transactions',
     limit: 1000
   })
 
-  if (outputs.outputs.length > 0) {
+  const available = outputs.outputs.length
+  let recovered = 0
+  if (available > 0) {
     const args: CreateActionArgs = {
       inputBEEF: outputs.BEEF!,
       inputs: [],
@@ -221,7 +240,7 @@ export async function recoverOneSatTestOutputs(setup: LocalTestWalletSetup, test
       })
     }
     const car = await setup.wallet.createAction(args)
-    expect(car.signableTransaction)
+    expect(car.signableTransaction).toBeDefined()
 
     const st = car.signableTransaction!
     const beef = Beef.fromBinary(st.tx)
@@ -236,36 +255,39 @@ export async function recoverOneSatTestOutputs(setup: LocalTestWalletSetup, test
       signArgs.spends[i] = { unlockingScript }
     }
     const sar = await setup.wallet.signAction(signArgs)
-    expect(sar.txid)
+    expect(sar.txid).toMatch(/^[0-9a-f]{64}$/)
+    recovered = available
   }
+  return { available, recovered }
+}
+
+async function observeUnminedProgress(
+  req: EntityProvenTxReq,
+  height: number | undefined,
+  lastHeight: number | undefined,
+  newBlocks: number
+): Promise<number> {
+  if (req.status !== 'unmined' || !height || !lastHeight) return newBlocks
+  if (height === lastHeight) {
+    await wait(1000 * 60)
+    return newBlocks
+  }
+  const observedBlocks = newBlocks + 1
+  expect(observedBlocks).toBeLessThan(5)
+  return observedBlocks
 }
 
 export async function trackReqByTxid(setup: LocalTestWalletSetup, txid: string): Promise<void> {
   const req = await EntityProvenTxReq.fromStorageTxid(setup.activeStorage, txid)
 
-  expect(req?.history.notes !== undefined)
+  expect(req?.history.notes).toBeDefined()
   if (req?.history.notes == null) throw new sdk.WERR_INTERNAL()
 
   let newBlocks = 0
   let lastHeight: number | undefined
-  for (; req.status !== 'completed'; ) {
-    let height = setup.monitor.lastNewHeader?.height
-    if (req.status === 'unsent') {
-      // send it...
-    }
-    if (req.status === 'sending') {
-      // send it...
-    }
-    if (req.status === 'unmined') {
-      if (height && lastHeight) {
-        if (height === lastHeight) {
-          await wait(1000 * 60)
-        } else {
-          newBlocks++
-          expect(newBlocks < 5)
-        }
-      }
-    }
+  for (; req.status !== 'completed';) {
+    const height = setup.monitor.lastNewHeader?.height
+    newBlocks = await observeUnminedProgress(req, height, lastHeight, newBlocks)
 
     await setup.monitor.runOnce()
     await req.refreshFromStorage(setup.activeStorage)
@@ -323,7 +345,7 @@ export async function doubleSpendOldChange(
   } finally {
     setDisableDoubleSpendCheckForTest(false)
   }
-  expect(car.signableTransaction)
+  expect(car.signableTransaction).toBeDefined()
 
   const st = car.signableTransaction!
   const beef = Beef.fromBinary(st.tx)
