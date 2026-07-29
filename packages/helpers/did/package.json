@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -55,6 +55,7 @@
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports BsvDid,SdJwtVcHolder,SdJwtVcIssuer,SdJwtVcPresenter,SdJwtVcVerifier,applyDisclosures,base64UrlDecode,base64UrlDecodeJson,base64UrlEncode,base64UrlEncodeJson,createKeyBindingJwt,decodeDidKey,decodeJwt,disclosureDigest,encodeBase58Multibase,generateQrCode,jwkToPublicKey,parseDisclosure,parseSdJwt,privateKeyToJwk,publicKeyFromDid,publicKeyToDidKey,publicKeyToJwk,selectDisclosures,serializeSdJwt,signCompact,signJwt,verificationMethodForDid,verifyCompact,verifyJwt,verifyKeyBindingJwt",
     "prepublishOnly": "pnpm build",
     "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",
     "test:property": "jest --runInBand --watchman=false --runTestsByPath tests/codec.property.test.ts",
     "test:watch": "jest --watch",

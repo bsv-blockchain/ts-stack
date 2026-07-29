@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/402-pay",
+  "entry": "./client",
+  "requiredExports": ["constructPaymentHeaders", "create402Fetch"],
+  "prohibitedExports": ["createPaymentMiddleware", "send402", "validatePayment"],
+  "maximumBytes": {
+    "vite": {
+      "raw": 170000,
+      "gzip": 56000,
+      "brotli": 48000
+    },
+    "esbuild": {
+      "raw": 145000,
+      "gzip": 56000,
+      "brotli": 47000
+    }
+  }
+}

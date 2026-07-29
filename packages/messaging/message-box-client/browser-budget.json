@@ -20,23 +20,23 @@
   "prohibitedExports": [],
   "maximumBytes": {
     "vite": {
-      "raw": 1700000,
-      "gzip": 410000,
-      "brotli": 345000
+      "raw": 700000,
+      "gzip": 175000,
+      "brotli": 145000
     },
     "esbuild": {
-      "raw": 1400000,
-      "gzip": 380000,
-      "brotli": 325000
+      "raw": 545000,
+      "gzip": 160000,
+      "brotli": 135000
     }
   },
   "umd": {
     "path": "dist/umd/bundle.js",
     "global": "messageBoxClient",
     "maximumBytes": {
-      "raw": 490000,
-      "gzip": 140000,
-      "brotli": 117000
+      "raw": 510000,
+      "gzip": 147000,
+      "brotli": 124000
     }
   }
 }

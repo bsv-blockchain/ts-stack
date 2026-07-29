@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -66,6 +66,7 @@
     "lint": "oxlint src vitest.config.ts --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports HEADERS,HEADER_PREFIX,BRC29_PROTOCOL_ID,DEFAULT_PAYMENT_WINDOW_MS,createPaymentMiddleware,validatePayment,send402,create402Fetch,constructPaymentHeaders --entry-exports \"./server=createPaymentMiddleware|validatePayment|send402;./client=create402Fetch|constructPaymentHeaders\"",
     "test": "vitest run",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:property": "vitest run src/server.property.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",

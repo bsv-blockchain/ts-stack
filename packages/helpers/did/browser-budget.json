@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/did",
+  "entry": ".",
+  "requiredExports": [
+    "BsvDid",
+    "SdJwtVcHolder",
+    "SdJwtVcIssuer",
+    "SdJwtVcPresenter",
+    "SdJwtVcVerifier",
+    "applyDisclosures",
+    "base64UrlDecode",
+    "base64UrlDecodeJson",
+    "base64UrlEncode",
+    "base64UrlEncodeJson",
+    "createKeyBindingJwt",
+    "decodeDidKey",
+    "decodeJwt",
+    "disclosureDigest",
+    "encodeBase58Multibase",
+    "generateQrCode",
+    "jwkToPublicKey",
+    "parseDisclosure",
+    "parseSdJwt",
+    "privateKeyToJwk",
+    "publicKeyFromDid",
+    "publicKeyToDidKey",
+    "publicKeyToJwk",
+    "selectDisclosures",
+    "serializeSdJwt",
+    "signCompact",
+    "signJwt",
+    "verificationMethodForDid",
+    "verifyCompact",
+    "verifyJwt",
+    "verifyKeyBindingJwt"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 235000,
+      "gzip": 75000,
+      "brotli": 63000
+    },
+    "esbuild": {
+      "raw": 195000,
+      "gzip": 73000,
+      "brotli": 62000
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -48,6 +48,7 @@
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports ADMIN_PROTOCOL,Bsv21Token,DstasToken,MandalaAdmin,MandalaToken,MultiPushDrop,OpReturn,P2MSKH,StasToken",
     "prepublishOnly": "pnpm build",
     "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",
     "test:property": "jest --runInBand --watchman=false --runTestsByPath src/__tests/mandala-encoding.property.test.ts",
     "test:watch": "jest --watch",

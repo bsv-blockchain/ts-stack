@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
+import { governedWorkspacePackages, workspaceRuntimeClosure } from './lib/workspace-packages.mjs'
 
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
@@ -193,7 +194,7 @@ async function packPackage(packageDirectory, expectedName, packDirectory) {
   return path.resolve(result.filename)
 }
 
-async function installConsumer(tarballPath) {
+async function installConsumer(tarballPaths) {
   const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-package-consumer-'))
   await fs.writeFile(
     path.join(consumerDirectory, 'package.json'),
@@ -208,7 +209,7 @@ async function installConsumer(tarballPath) {
       '--no-fund',
       '--package-lock=false',
       '--omit=dev',
-      tarballPath
+      ...tarballPaths
     ],
     { cwd: consumerDirectory }
   )
@@ -408,7 +409,18 @@ export async function checkBrowserPackage(packageDirectory) {
   let consumerDirectory
   try {
     const tarballPath = await packPackage(packageDirectory, manifest.name, packDirectory)
-    consumerDirectory = await installConsumer(tarballPath)
+    const workspacePackages = await governedWorkspacePackages(REPOSITORY_ROOT)
+    const manifestsByName = new Map(
+      [...workspacePackages].map(([name, project]) => [name, project.manifest])
+    )
+    const dependencyTarballs = []
+    for (const name of workspaceRuntimeClosure(manifest, manifestsByName)) {
+      const dependency = workspacePackages.get(name)
+      dependencyTarballs.push(
+        await packPackage(dependency.directory, dependency.manifest.name, packDirectory)
+      )
+    }
+    consumerDirectory = await installConsumer([tarballPath, ...dependencyTarballs])
     const entryPath = path.join(consumerDirectory, 'entry.mjs')
     await fs.writeFile(
       entryPath,
