@@ -4,7 +4,7 @@ title: "Documentation Sources"
 kind: meta
 last_updated: "2026-04-29"
 version: "n/a"
-last_verified: "2026-04-29"
+last_verified: "2026-07-29"
 review_cadence_days: 90
 status: stable
 tags: [about, sources, documentation]
