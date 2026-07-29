@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { sdk, StorageClient } from '../../../src/index.all'
 import { _tu, TestWalletOnly } from '../../utils/TestUtilsWalletStorage'
 
@@ -30,9 +29,13 @@ describe('walletStorageClient test', () => {
     const { wallet, storage } = ctx
 
     {
+      const backupCount = storage.getBackupStores().length
       const client = new StorageClient(wallet, 'https://staging-storage.babbage.systems')
       await storage.addWalletStorageProvider(client)
-      await storage.updateBackups()
+      expect(storage.getBackupStores()).toHaveLength(backupCount + 1)
+      const log = await storage.updateBackups()
+      expect(log).toContain('BACKUP CURRENT ACTIVE')
+      expect(log).toContain('syncToWriter complete')
     }
   })
 
@@ -54,7 +57,9 @@ describe('walletStorageClient test', () => {
     const filePath = process.env.MY_MAIN_FILEPATH
     const identityKey = process.env.MY_MAIN_IDENTITY || ''
     const rootKeyHex = env.devKeys[identityKey]
-    expect(filePath && identityKey && rootKeyHex)
+    expect(filePath).toBeTruthy()
+    expect(identityKey).toMatch(/^[0-9a-f]{66}$/)
+    expect(rootKeyHex).toMatch(/^[0-9a-f]{64}$/)
 
     const chain: sdk.Chain = 'main'
 
@@ -67,9 +72,13 @@ describe('walletStorageClient test', () => {
     ctxs.push(main)
 
     {
+      const backupCount = main.storage.getBackupStores().length
       const client = new StorageClient(main.wallet, 'https://storage.babbage.systems')
       await main.storage.addWalletStorageProvider(client)
-      await main.storage.updateBackups()
+      expect(main.storage.getBackupStores()).toHaveLength(backupCount + 1)
+      const log = await main.storage.updateBackups()
+      expect(log).toContain('BACKUP CURRENT ACTIVE')
+      expect(log).toContain('syncToWriter complete')
     }
   })
 })

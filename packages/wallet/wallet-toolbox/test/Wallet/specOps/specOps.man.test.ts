@@ -8,12 +8,10 @@ import {
 } from '../../../src/sdk'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
-describe('specOps tests', () => {
-  jest.setTimeout(99999999)
+const describeWithSpecOpEnvironments = _tu.noTestEnv('test') || _tu.noTestEnv('main') ? describe.skip : describe
 
-  test('00', () => {})
-  if (_tu.noTestEnv('test')) return
-  if (_tu.noTestEnv('main')) return
+describeWithSpecOpEnvironments('specOps tests', () => {
+  jest.setTimeout(99999999)
 
   test('0 wallet balance specOp', async () => {
     const tcs: ListOutputsArgs[] = [

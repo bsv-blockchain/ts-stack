@@ -10,6 +10,7 @@ export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.me
 
 const POLICY_PATH = 'governance/test-quality/policy.json'
 const MUTATION_POLICY_PATH = 'governance/mutation-testing/policy.json'
+const WALLET_MANUAL_SUITES_PATH = 'governance/test-quality/wallet-toolbox-manual-suites.json'
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/
 const PROPERTY_TEST_FILE_PATTERN = /\.property\.test\.[cm]?[jt]sx?$/
 const MANUAL_SUFFIXES = ['.man.test.ts', '.live.test.ts']
@@ -657,6 +658,172 @@ function validateManualFiles(manualFiles, policy, manualPolicies, errors) {
   }
 }
 
+function maskRangePreservingLines(masked, source, start, end) {
+  for (let index = start; index < end; index++) {
+    if (source[index] !== '\n') masked[index] = ' '
+  }
+}
+
+function findQuotedEnd(source, start) {
+  const quote = source[start]
+  let index = start + 1
+  while (index < source.length) {
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === quote) return index + 1
+    index++
+  }
+  return source.length
+}
+
+function findNonCodeEnd(source, start) {
+  if (source.startsWith('//', start)) {
+    const lineEnd = source.indexOf('\n', start + 2)
+    return lineEnd === -1 ? source.length : lineEnd
+  }
+  if (source.startsWith('/*', start)) {
+    const blockEnd = source.indexOf('*/', start + 2)
+    return blockEnd === -1 ? source.length : blockEnd + 2
+  }
+  if (source[start] === "'" || source[start] === '"' || source[start] === '`') {
+    return findQuotedEnd(source, start)
+  }
+  return undefined
+}
+
+function maskNonCode(source) {
+  const masked = [...source]
+  let index = 0
+  while (index < source.length) {
+    const end = findNonCodeEnd(source, index)
+    if (end === undefined) {
+      index++
+      continue
+    }
+    maskRangePreservingLines(masked, source, index, end)
+    index = end
+  }
+  return masked.join('')
+}
+
+export function findUnboundedLoops(source) {
+  const executable = maskNonCode(source)
+  const pattern = /\b(?:for\s*\(\s*;\s*;\s*\)|while\s*\(\s*true\s*\))/g
+  return [...executable.matchAll(pattern)].map(match => {
+    const offset = match.index ?? 0
+    return executable.slice(0, offset).split('\n').length
+  })
+}
+
+const WALLET_PREFIX = 'packages/wallet/wallet-toolbox/'
+const WALLET_MANUAL_KINDS = new Set([
+  'dead-scaffolding',
+  'example',
+  'fixture-workflow',
+  'live-e2e',
+  'manual-integration',
+  'mixed',
+  'operator-diagnostic',
+  'operator-procedure'
+])
+const WALLET_SIDE_EFFECTS = new Set([
+  'disposable-state',
+  'funded-state',
+  'local-artifact',
+  'none',
+  'production-state',
+  'public-network',
+  'read-only-remote',
+  'remote-state'
+])
+const WALLET_DISPOSITIONS = new Set([
+  'extract-as-example',
+  'extract-as-fixture-tool',
+  'extract-as-operator',
+  'remove-after-preservation',
+  'retain-as-test',
+  'split-and-extract'
+])
+const WALLET_TARGET_DISPOSITIONS = new Set([
+  'extract-as-example',
+  'extract-as-fixture-tool',
+  'extract-as-operator',
+  'remove-after-preservation',
+  'split-and-extract'
+])
+const portablePath = file => file.toLowerCase()
+
+function validateWalletInventoryCoverage(discovered, suites, errors) {
+  const discoveredByPortablePath = new Map(discovered.map(file => [portablePath(file), file]))
+  const registered = suites.map(suite => suite.path)
+  const registeredSet = new Set(registered.map(portablePath))
+  if (registeredSet.size !== registered.length) {
+    errors.push('wallet manual suite inventory contains duplicate paths')
+  }
+  for (const file of discovered) {
+    if (!registeredSet.has(portablePath(file))) {
+      errors.push(`${file} lacks an exact wallet manual suite disposition`)
+    }
+  }
+  for (const file of registered) {
+    if (!discoveredByPortablePath.has(portablePath(file))) {
+      errors.push(`wallet manual suite inventory references missing suite ${file}`)
+    }
+  }
+  return discoveredByPortablePath
+}
+
+function validateWalletSuiteMetadata(suite, errors) {
+  const label = `wallet manual suite ${suite.path ?? '<unknown>'}`
+  if (typeof suite.path !== 'string' || !suite.path.startsWith(WALLET_PREFIX)) {
+    errors.push(`${label} must declare a Wallet Toolbox path`)
+  }
+  if (!WALLET_MANUAL_KINDS.has(suite.kind)) {
+    errors.push(`${label} has unknown kind "${suite.kind}"`)
+  }
+  if (!WALLET_SIDE_EFFECTS.has(suite.sideEffects)) {
+    errors.push(`${label} has unknown sideEffects "${suite.sideEffects}"`)
+  }
+  if (!WALLET_DISPOSITIONS.has(suite.disposition)) {
+    errors.push(`${label} has unknown disposition "${suite.disposition}"`)
+  }
+  if (typeof suite.purpose !== 'string' || suite.purpose.trim().length < 40) {
+    errors.push(`${label} must declare a concrete purpose`)
+  }
+  const targetIsRequired = WALLET_TARGET_DISPOSITIONS.has(suite.disposition)
+  const targetIsValid = typeof suite.target === 'string' && suite.target.startsWith(WALLET_PREFIX)
+  if (targetIsRequired && !targetIsValid) {
+    errors.push(`${label} must declare an in-package extraction target`)
+  }
+}
+
+function validateRetainedWalletSuite(root, suite, discoveredByPortablePath, errors) {
+  if (suite.disposition !== 'retain-as-test' || typeof suite.path !== 'string') return
+  const discoveredPath = discoveredByPortablePath.get(portablePath(suite.path))
+  if (discoveredPath === undefined) return
+  const source = fs.readFileSync(path.join(root, discoveredPath), 'utf8')
+  for (const line of findUnboundedLoops(source)) {
+    errors.push(`${suite.path}:${line} contains an unbounded loop in a retained manual test`)
+  }
+}
+
+function validateWalletManualSuiteInventory(root, manualFiles, policy, inventory, errors, today) {
+  validateDatedOwner(inventory, policy, 'wallet manual suite inventory', errors, today)
+  if (inventory.schemaVersion !== 1) {
+    errors.push('wallet manual suite inventory must use schemaVersion 1')
+  }
+  const discovered = manualFiles.filter(file => file.startsWith(WALLET_PREFIX))
+  const suites = inventory.suites ?? []
+  const discoveredByPortablePath = validateWalletInventoryCoverage(discovered, suites, errors)
+  for (const suite of suites) {
+    validateWalletSuiteMetadata(suite, errors)
+    validateRetainedWalletSuite(root, suite, discoveredByPortablePath, errors)
+  }
+  return suites.length
+}
+
 function collectRequiredTestSkips(root, requiredFiles, errors) {
   const observedSkips = []
   for (const file of requiredFiles) {
@@ -747,6 +914,7 @@ export function evaluateTestGovernance({
   root = REPOSITORY_ROOT,
   policy = readJson(root, POLICY_PATH),
   mutationPolicy = readJson(root, MUTATION_POLICY_PATH),
+  walletManualSuiteInventory = readJson(root, WALLET_MANUAL_SUITES_PATH),
   today = new Date().toISOString().slice(0, 10)
 } = {}) {
   const errors = []
@@ -770,6 +938,14 @@ export function evaluateTestGovernance({
   )
   const manualPolicies = validateManualPolicies(policy, errors, today)
   validateManualFiles(manualFiles, policy, manualPolicies, errors)
+  const walletManualSuites = validateWalletManualSuiteInventory(
+    root,
+    manualFiles,
+    policy,
+    walletManualSuiteInventory,
+    errors,
+    today
+  )
   const observedSkips = collectRequiredTestSkips(root, requiredFiles, errors)
   const registeredSkips = registerRequiredSkips(policy, errors, today)
   compareRequiredSkips(observedSkips, registeredSkips, errors)
@@ -786,6 +962,7 @@ export function evaluateTestGovernance({
       propertyClassifiedPackages: manifestPaths.length + excludedManifestPaths.length,
       mutationTargets,
       manualAndLiveFiles: manualFiles.length,
+      walletManualSuites,
       conformanceSkipFiles: conformance.byFile.size,
       conformanceSkips: [...conformance.byFile.values()].reduce(
         (sum, vectors) => sum + vectors.length,
@@ -814,6 +991,7 @@ function run() {
       `${summary.mutationTargets} governed mutation targets`,
       `${summary.propertyExcludedPackages} governed property exclusions`,
       `${summary.manualAndLiveFiles} classified manual/live files`,
+      `${summary.walletManualSuites} exact Wallet Toolbox dispositions`,
       `${summary.conformanceSkips} governed conformance skips across ${summary.conformanceSkipFiles} files`
     ].join(' ')
   )

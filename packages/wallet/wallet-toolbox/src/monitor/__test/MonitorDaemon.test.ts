@@ -114,4 +114,27 @@ describe('MonitorDaemon setup', () => {
     await preconfigured.createSetup()
     expect(preconfigured.setup?.monitor).toBe(existingMonitor)
   })
+
+  test('awaits storage-provider shutdown before clearing setup', async () => {
+    let releaseDestroy: () => void = () => {}
+    const destroy = jest.fn(
+      () =>
+        new Promise<void>(resolve => {
+          releaseDestroy = resolve
+        })
+    )
+    const daemon = new MonitorDaemon({})
+    daemon.setup = {
+      storageProvider: { destroy } as any
+    }
+
+    const completion = daemon.destroy()
+    await Promise.resolve()
+    expect(destroy).toHaveBeenCalledTimes(1)
+    expect(daemon.setup).toBeDefined()
+
+    releaseDestroy()
+    await completion
+    expect(daemon.setup).toBeUndefined()
+  })
 })

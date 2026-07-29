@@ -300,8 +300,8 @@
     "@bsv/btms": "1.1.2",
     "@bsv/btms-permission-module": "1.1.1",
     "@bsv/wallet-relay": "0.3.0",
-    "@bsv/wallet-toolbox-client": "2.4.15",
-    "@bsv/wallet-toolbox-mobile": "2.4.15",
-    "@bsv/wallet-toolbox": "2.4.15"
+    "@bsv/wallet-toolbox-client": "2.4.16",
+    "@bsv/wallet-toolbox-mobile": "2.4.16",
+    "@bsv/wallet-toolbox": "2.4.16"
   }
 }

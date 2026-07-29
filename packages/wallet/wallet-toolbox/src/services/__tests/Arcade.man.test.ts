@@ -20,7 +20,7 @@ import { arcadeDefaultUrl } from '../createDefaultWalletServicesOptions'
 const ARCADE_URL = process.env.ARCADE_URL ?? arcadeDefaultUrl('ttn')!
 const ARCADE_API_KEY = process.env.ARCADE_API_KEY
 
-function arcade (): Arcade {
+function arcade(): Arcade {
   return new Arcade(ARCADE_URL, { apiKey: ARCADE_API_KEY })
 }
 
@@ -53,13 +53,8 @@ describe('Arcade integration (live)', () => {
     expect(r.serviceError).toBe(false)
   })
 
-  // Full happy-path broadcast requires a funded teratest wallet to produce a valid,
-  // signed BEEF. Enable once funded test keys are wired (mirror ARC.man.test.ts's
-  // _tu.createNoSendTxPair), then assert:
-  //   - postBeef(beef, [txid]).status === 'success'  (Arcade 202 RECEIVED)
-  //   - getTxData(txid).txStatus progresses RECEIVED → SEEN_ON_NETWORK → MINED
-  //   - getTxData(txid).merklePath is present once MINED (BUMP hex)
-  test.skip('happy-path: postBeef a funded teratest tx → 202 success → MINED with merklePath', async () => {
-    // TODO: build a funded, signed BEEF via test utils and assert the lifecycle above.
-  })
+  // A funded happy-path belongs in this suite only once its key provisioning,
+  // cleanup, and assertions are implemented. Do not register an empty skipped
+  // test: the intended lifecycle is 202 RECEIVED → SEEN_ON_NETWORK → MINED,
+  // followed by a non-empty merklePath assertion.
 })

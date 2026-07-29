@@ -41,23 +41,36 @@ describe('localWallet tests', () => {
 
   test('2 create 1 sat delayed', async () => {
     const setup = await createSetup(chain, options)
-    const car = await createOneSatTestOutput(setup, {}, 1)
-    //await trackReqByTxid(setup, car.txid!)
-    await setup.wallet.destroy()
+    try {
+      const car = await createOneSatTestOutput(setup, {}, 1)
+      expect(car.txid).toMatch(/^[0-9a-f]{64}$/)
+      //await trackReqByTxid(setup, car.txid!)
+    } finally {
+      await setup.wallet.destroy()
+    }
   })
 
   test('2a create 1 sat immediate', async () => {
     const setup = await createSetup(chain, options)
-    const car = await createOneSatTestOutput(setup, { acceptDelayedBroadcast: false }, 1)
-    // await trackReqByTxid(setup, car.txid!)
-    await setup.wallet.destroy()
+    try {
+      const car = await createOneSatTestOutput(setup, { acceptDelayedBroadcast: false }, 1)
+      expect(car.txid).toMatch(/^[0-9a-f]{64}$/)
+      // await trackReqByTxid(setup, car.txid!)
+    } finally {
+      await setup.wallet.destroy()
+    }
   })
 
   test('2b create 2 nosend and sendWith', async () => {
     const setup = await createSetup(chain, options)
-    const car = await createOneSatTestOutput(setup, { noSend: true }, 2)
-    //await trackReqByTxid(setup, car.txid!)
-    await setup.wallet.destroy()
+    try {
+      const car = await createOneSatTestOutput(setup, { noSend: true }, 2)
+      expect(car.txid).toMatch(/^[0-9a-f]{64}$/)
+      expect(car.sendWithResults).toHaveLength(2)
+      //await trackReqByTxid(setup, car.txid!)
+    } finally {
+      await setup.wallet.destroy()
+    }
   })
 
   test('3 return active to cloud client', async () => {
@@ -81,6 +94,14 @@ describe('localWallet tests', () => {
     const ss = await EntitySyncState.fromStorage(writer, identityKey, readerSettings)
     const args = ss.makeRequestSyncChunkArgs(identityKey, writerSettings.storageIdentityKey)
     const chunk = await reader.getSyncChunk(args)
+    expect(chunk.userIdentityKey).toBe(identityKey)
+    expect(chunk.fromStorageIdentityKey).toBe(readerSettings.storageIdentityKey)
+    expect(chunk.toStorageIdentityKey).toBe(writerSettings.storageIdentityKey)
+    expect(
+      [chunk.provenTxs, chunk.provenTxReqs, chunk.transactions, chunk.outputs, chunk.certificates].every(
+        section => section === undefined || Array.isArray(section)
+      )
+    ).toBe(true)
     await setup.wallet.destroy()
   })
 
@@ -88,6 +109,8 @@ describe('localWallet tests', () => {
     const setup = await createSetup(chain, options)
     const log = await setup.storage.updateBackups()
     console.log(log)
+    expect(log).toContain('BACKUP CURRENT ACTIVE')
+    expect(log).toContain('syncToWriter complete')
     await setup.wallet.destroy()
   })
 })
