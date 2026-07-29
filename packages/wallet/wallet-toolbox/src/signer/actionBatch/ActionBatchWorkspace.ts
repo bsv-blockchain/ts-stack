@@ -593,6 +593,28 @@ class ActionBatchWorkspace {
       .finally(() => { this.extension = undefined })
   }
 
+  private addLockingScriptBlobs (blobs: Map<string, Uint8Array>): void {
+    if (this.usesCompactManifest) return
+    for (const [digest, script] of this.lockingScripts) {
+      if (!blobs.has(digest)) blobs.set(digest, asUint8Array(script))
+    }
+  }
+
+  private preparePhysicalUploads (
+    blobs: Map<string, Uint8Array>
+  ): { uploadBlobs: Map<string, Uint8Array>; blobChunks: Record<string, string[]> } {
+    const uploadBlobs = new Map<string, Uint8Array>()
+    const blobChunks: Record<string, string[]> = {}
+    for (const [digest, bytes] of blobs) {
+      const physical = this.physicalBlobs(digest, bytes)
+      for (const blob of physical.blobs) {
+        if (!uploadBlobs.has(blob.digest)) uploadBlobs.set(blob.digest, blob.bytes)
+      }
+      if (physical.chunks != null) blobChunks[digest] = physical.chunks
+    }
+    return { uploadBlobs, blobChunks }
+  }
+
   private buildManifest (sendWith: string[], isDelayed: boolean): { manifest: ActionBatchManifest, uploads: UploadBlob[] } {
     const stagedTxids = new Set(this.actions.map(action => action.txid))
     const externalTxids = this.actions.flatMap(action => action.plan.inputs)
@@ -616,25 +638,13 @@ class ActionBatchWorkspace {
       rawTxDigest: addBlob(rawBytes[index])
     }))
     const dependencyBeefDigest = addBlob(dependencyBytes)
-    if (!this.usesCompactManifest) {
-      for (const [digest, script] of this.lockingScripts) {
-        if (!blobs.has(digest)) blobs.set(digest, asUint8Array(script))
-      }
-    }
+    this.addLockingScriptBlobs(blobs)
     const totalBytes = [...blobs.values()].reduce((sum, bytes) => sum + bytes.length, 0)
     const useUploads = totalBytes > this.capabilities.maxInlineBytes
     if (useUploads) this.queueEagerLogicalBlob(dependencyBeefDigest, dependencyBytes)
-    const uploadBlobs = new Map<string, Uint8Array>()
-    const blobChunks: Record<string, string[]> = {}
-    if (useUploads) {
-      for (const [digest, bytes] of blobs) {
-        const physical = this.physicalBlobs(digest, bytes)
-        for (const blob of physical.blobs) {
-          if (!uploadBlobs.has(blob.digest)) uploadBlobs.set(blob.digest, blob.bytes)
-        }
-        if (physical.chunks != null) blobChunks[digest] = physical.chunks
-      }
-    }
+    const { uploadBlobs, blobChunks } = useUploads
+      ? this.preparePhysicalUploads(blobs)
+      : { uploadBlobs: new Map<string, Uint8Array>(), blobChunks: {} }
     const withoutDigest: Omit<ActionBatchManifest, 'digest'> = {
       format: this.usesCompactManifest ? 2 : undefined,
       batchId: this.batchId,

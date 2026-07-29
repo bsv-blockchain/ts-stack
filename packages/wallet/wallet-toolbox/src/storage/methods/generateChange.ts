@@ -282,22 +282,24 @@ export async function generateChangeSdk(
       feeExcessNow = feeExcess()
     }
 
-    // If we'd like to have more change outputs create them now.
-    // They may be removed if it turns out we can't fund them.
-    // Respect the per-transaction cap and ensure each output meets the dust floor.
-    while (
-      r.changeOutputs.length < maxChangeOutputs &&
-      ((hasTargetNetCount && targetNetCount > netChangeCount()) || (r.changeOutputs.length === 0 && feeExcess() > 0))
-    ) {
-      const satoshis =
-        r.changeOutputs.length === 0
+    const addDesiredChangeOutputs = (): void => {
+      // They may be removed if it turns out we can't fund them. Respect the
+      // per-transaction cap and ensure each output meets the dust floor.
+      while (
+        r.changeOutputs.length < maxChangeOutputs &&
+        ((hasTargetNetCount && targetNetCount > netChangeCount()) ||
+          (r.changeOutputs.length === 0 && feeExcess() > 0))
+      ) {
+        const satoshis = r.changeOutputs.length === 0
           ? Math.max(dustFloor, params.changeFirstSatoshis)
           : Math.max(dustFloor, params.changeInitialSatoshis)
-      r.changeOutputs.push({
-        satoshis,
-        lockingScriptLength: params.changeLockingScriptLength
-      })
+        r.changeOutputs.push({
+          satoshis,
+          lockingScriptLength: params.changeLockingScriptLength
+        })
+      }
     }
+    addDesiredChangeOutputs()
 
     const fundTransaction = async (): Promise<void> => {
       let removingOutputs = false

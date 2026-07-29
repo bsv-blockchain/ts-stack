@@ -532,37 +532,64 @@ export class Chaintracks implements ChaintracksManagementApi {
     return lastBulkSync
   }
 
-  private async processLiveHeaderQueue (lastSyncCheck: number, syncCheckRepeatMsecs: number): Promise<void> {
-    let count = 0
-    let liveHeaderDupes = 0
-    let needSyncCheck = false
+  private async processNextQueuedHeader (
+    stats: { count: number, liveHeaderDupes: number }
+  ): Promise<boolean | null> {
+    const liveHeader = this.liveHeaders.shift()
+    if (liveHeader != null) {
+      const result = await this.processOneLiveHeader(liveHeader)
+      if (result.needSyncCheck) return true
+      if (result.dupe) stats.liveHeaderDupes++
+      if (result.added) stats.count++
+      return false
+    }
+    const baseHeader = this.baseHeaders.shift()
+    if (baseHeader == null) return null
+    if (await this.processOneBaseHeader(baseHeader)) stats.count++
+    return false
+  }
 
+  private async flushLiveHeaderProgress (
+    stats: { count: number, liveHeaderDupes: number }
+  ): Promise<void> {
+    if (stats.count === 0) return
+    if (stats.liveHeaderDupes > 0) {
+      this.log(`${stats.liveHeaderDupes} duplicate headers ignored.`)
+      stats.liveHeaderDupes = 0
+    }
+    const updated = await this.storage.getAvailableHeightRanges()
+    this.log(
+      `After adding ${stats.count} live headers\n   After live: bulk ${updated.bulk}, live ${updated.live}\n`
+    )
+    stats.count = 0
+  }
+
+  private async waitForQueuedHeaders (
+    stats: { count: number, liveHeaderDupes: number },
+    lastSyncCheck: number,
+    syncCheckRepeatMsecs: number
+  ): Promise<boolean> {
+    await this.flushLiveHeaderProgress(stats)
+    await this.checkAndEnableSubscribers()
+    if (!this.available) this.available = true
+    const needSyncCheck =
+      Date.now() - lastSyncCheck > syncCheckRepeatMsecs
+    if (!needSyncCheck) await wait(1000)
+    return needSyncCheck
+  }
+
+  private async processLiveHeaderQueue (lastSyncCheck: number, syncCheckRepeatMsecs: number): Promise<void> {
+    const stats = { count: 0, liveHeaderDupes: 0 }
+    let needSyncCheck = false
     while (!needSyncCheck && !this.stopMainThread) {
-      const liveHeader = this.liveHeaders.shift()
-      if (liveHeader != null) {
-        const result = await this.processOneLiveHeader(liveHeader)
-        if (result.needSyncCheck) { needSyncCheck = true; continue }
-        if (result.dupe) liveHeaderDupes++
-        if (result.added) count++
-      } else {
-        const bheader = this.baseHeaders.shift()
-        if (bheader != null) {
-          const added = await this.processOneBaseHeader(bheader)
-          if (added) count++
-        } else {
-          // No live or base headers queued — idle path.
-          if (count > 0) {
-            if (liveHeaderDupes > 0) { this.log(`${liveHeaderDupes} duplicate headers ignored.`); liveHeaderDupes = 0 }
-            const updated = await this.storage.getAvailableHeightRanges()
-            this.log(`After adding ${count} live headers\n   After live: bulk ${updated.bulk}, live ${updated.live}\n`)
-            count = 0
-          }
-          await this.checkAndEnableSubscribers()
-          if (!this.available) this.available = true
-          needSyncCheck = Date.now() - lastSyncCheck > syncCheckRepeatMsecs
-          if (!needSyncCheck) await wait(1000)
-        }
-      }
+      const queuedResult = await this.processNextQueuedHeader(stats)
+      needSyncCheck =
+        queuedResult ??
+        (await this.waitForQueuedHeaders(
+          stats,
+          lastSyncCheck,
+          syncCheckRepeatMsecs
+        ))
     }
   }
 

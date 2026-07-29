@@ -80,6 +80,22 @@ export interface WABRequestOptions {
   correlationId?: string
 }
 
+interface WABRequestMetadata {
+  method: 'GET' | 'POST'
+  path: string
+  operation: string
+  correlationId: string
+  startedAt: number
+  errorContext: WABClientErrorOptions
+}
+
+interface WABRequestTimeout {
+  controller: AbortController
+  promise: Promise<never>
+  timer?: ReturnType<typeof setTimeout>
+  timedOut: boolean
+}
+
 function isLocalHostname (hostname: string): boolean {
   const normalized = hostname.toLowerCase()
   return normalized === 'localhost' ||
@@ -216,48 +232,97 @@ export class WABTransport {
   }
 
   async request<T>(path: string, options: WABRequestOptions): Promise<T> {
+    const metadata = this.createRequestMetadata(path, options)
+    this.captureRequestStarted(metadata)
+    const body = this.encodeRequestBody(options, metadata)
+    const timeout = this.startRequestTimeout(metadata.errorContext)
+    const response = await this.fetchResponse(metadata, body, timeout)
+    const responseContext = this.createResponseContext(response, metadata)
+    this.assertSuccessfulResponse(response, responseContext, metadata, timeout)
+    const responseText = await this.readResponseText(response, responseContext, metadata, timeout)
+
+    const parsed = this.parseResponseObject<T>(
+      responseText,
+      response,
+      responseContext,
+      metadata
+    )
+
+    this.telemetry.capture({
+      name: 'wallet-toolbox.wab.request.completed',
+      component: 'wallet-toolbox.wab-transport',
+      severity: 'info',
+      correlationId: metadata.correlationId,
+      attributes: {
+        operation: metadata.operation,
+        method: metadata.method,
+        route: metadata.path,
+        serverOrigin: this.serverOrigin,
+        status: response.status,
+        endpointMarkerPresent: responseContext.endpointMarkerPresent,
+        responseCorrelationMatched: responseContext.responseCorrelationMatched,
+        responseBytes: new TextEncoder().encode(responseText).byteLength,
+        durationMs: Date.now() - metadata.startedAt
+      }
+    })
+    return parsed
+  }
+
+  private createRequestMetadata (
+    path: string,
+    options: WABRequestOptions
+  ): WABRequestMetadata {
     assertSafePath(path)
-    const method = options.method ?? 'POST'
     const correlationId = options.correlationId != null &&
       isSafeCorrelationId(options.correlationId)
       ? options.correlationId
       : this.createCorrelationId()
-    const requestContext: WABClientErrorOptions = {
-      correlationId,
+    return {
+      method: options.method ?? 'POST',
+      path,
       operation: options.operation,
-      route: path
+      correlationId,
+      startedAt: Date.now(),
+      errorContext: {
+        correlationId,
+        operation: options.operation,
+        route: path
+      }
     }
-    const startedAt = Date.now()
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let timedOut = false
+  }
 
+  private captureRequestStarted (metadata: WABRequestMetadata): void {
     this.telemetry.capture({
       name: 'wallet-toolbox.wab.request.started',
       component: 'wallet-toolbox.wab-transport',
       severity: 'debug',
-      correlationId,
+      correlationId: metadata.correlationId,
       attributes: {
-        operation: options.operation,
-        method,
-        route: path,
+        operation: metadata.operation,
+        method: metadata.method,
+        route: metadata.path,
         serverOrigin: this.serverOrigin
       }
     })
+  }
 
+  private encodeRequestBody (
+    options: WABRequestOptions,
+    metadata: WABRequestMetadata
+  ): string | undefined {
     let body: string | undefined
     try {
       body = options.body === undefined ? undefined : JSON.stringify(options.body)
-    } catch (error) {
-      const normalized = new WABClientError(
+    } catch (cause) {
+      const error = new WABClientError(
         'WAB_INVALID_REQUEST',
         'WAB request payload could not be encoded.',
         false,
         undefined,
-        { ...requestContext, cause: error }
+        { ...metadata.errorContext, cause }
       )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
-      throw normalized
+      this.captureRequestFailure(metadata, error)
+      throw error
     }
     if (options.body !== undefined && body === undefined) {
       const error = new WABClientError(
@@ -265,141 +330,172 @@ export class WABTransport {
         'WAB request payload must be JSON-serializable.',
         false,
         undefined,
-        requestContext
+        metadata.errorContext
       )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
+      this.captureRequestFailure(metadata, error)
       throw error
     }
-    if (body !== undefined && new TextEncoder().encode(body).byteLength > this.maxRequestBytes) {
+    if (body != null && new TextEncoder().encode(body).byteLength > this.maxRequestBytes) {
       const error = new WABClientError(
         'WAB_REQUEST_TOO_LARGE',
         'WAB request exceeded the configured size limit.',
         false,
         undefined,
-        requestContext
+        metadata.errorContext
       )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
+      this.captureRequestFailure(metadata, error)
       throw error
     }
+    return body
+  }
 
+  private startRequestTimeout (errorContext: WABClientErrorOptions): WABRequestTimeout {
+    const timeout = {
+      controller: new AbortController(),
+      timedOut: false
+    } as WABRequestTimeout
+    timeout.promise = new Promise<never>((_resolve, reject) => {
+      timeout.timer = setTimeout(() => {
+        timeout.timedOut = true
+        timeout.controller.abort()
+        reject(new WABClientError(
+          'WAB_TIMEOUT',
+          'WAB request timed out.',
+          true,
+          undefined,
+          errorContext
+        ))
+      }, this.timeoutMs)
+    })
+    return timeout
+  }
+
+  private async fetchResponse (
+    metadata: WABRequestMetadata,
+    body: string | undefined,
+    timeout: WABRequestTimeout
+  ): Promise<Response> {
     const requestPromise = Promise.resolve().then(() =>
-      this.fetchClient(`${this.serverUrl}${path}`, {
-        method,
+      this.fetchClient(`${this.serverUrl}${metadata.path}`, {
+        method: metadata.method,
         headers: {
           Accept: 'application/json',
           ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-          'X-Correlation-ID': correlationId
+          'X-Correlation-ID': metadata.correlationId
         },
         ...(body !== undefined ? { body } : {}),
-        signal: controller.signal,
+        signal: timeout.controller.signal,
         credentials: 'omit',
         redirect: 'error',
         referrerPolicy: 'no-referrer'
       })
     )
     requestPromise.catch(() => { /* timeout may settle the public request first */ })
-
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => {
-        timedOut = true
-        controller.abort()
-        reject(new WABClientError(
-          'WAB_TIMEOUT',
-          'WAB request timed out.',
-          true,
-          undefined,
-          requestContext
-        ))
-      }, this.timeoutMs)
-    })
-
-    let response: Response
     try {
-      response = await Promise.race([requestPromise, timeoutPromise])
-    } catch (error) {
-      if (timer !== undefined) clearTimeout(timer)
-      const failureCode = timedOut ? 'WAB_TIMEOUT' : 'WAB_NETWORK_ERROR'
-      const failureMessage = timedOut
-        ? 'WAB request timed out.'
-        : 'WAB request failed before receiving a response.'
-      const normalized = error instanceof WABClientError
-        ? error
+      return await Promise.race([requestPromise, timeout.promise])
+    } catch (cause) {
+      if (timeout.timer !== undefined) clearTimeout(timeout.timer)
+      const error = cause instanceof WABClientError
+        ? cause
         : new WABClientError(
-          failureCode,
-          failureMessage,
+          timeout.timedOut ? 'WAB_TIMEOUT' : 'WAB_NETWORK_ERROR',
+          timeout.timedOut
+            ? 'WAB request timed out.'
+            : 'WAB request failed before receiving a response.',
           true,
           undefined,
-          { ...requestContext, cause: error }
+          { ...metadata.errorContext, cause }
         )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
-      throw normalized
-    }
-
-    const endpointMarkerPresent = isWabResponse(response)
-    const responseCorrelationMatched =
-      response.headers.get('X-Correlation-ID') === correlationId
-    const responseContext: WABClientErrorOptions = {
-      ...requestContext,
-      endpointMarkerPresent,
-      responseCorrelationMatched
-    }
-
-    if (!response.ok) {
-      if (timer !== undefined) clearTimeout(timer)
-      const endpointMismatch = response.status === 404 && !endpointMarkerPresent
-      const error = new WABClientError(
-        endpointMismatch ? 'WAB_ENDPOINT_MISMATCH' : 'WAB_HTTP_ERROR',
-        endpointMismatch
-          ? 'Configured WAB endpoint did not return a compatible WAB response.'
-          : `WAB request failed with HTTP status ${response.status}.`,
-        isRetryableStatus(response.status),
-        response.status,
-        responseContext
-      )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
-      void response.body?.cancel().catch(() => { /* best effort only */ })
+      this.captureRequestFailure(metadata, error)
       throw error
     }
+  }
 
-    let responseText: string
+  private createResponseContext (
+    response: Response,
+    metadata: WABRequestMetadata
+  ): WABClientErrorOptions {
+    return {
+      ...metadata.errorContext,
+      endpointMarkerPresent: isWabResponse(response),
+      responseCorrelationMatched:
+        response.headers.get('X-Correlation-ID') === metadata.correlationId
+    }
+  }
+
+  private assertSuccessfulResponse (
+    response: Response,
+    responseContext: WABClientErrorOptions,
+    metadata: WABRequestMetadata,
+    timeout: WABRequestTimeout
+  ): void {
+    if (response.ok) return
+    if (timeout.timer !== undefined) clearTimeout(timeout.timer)
+    const endpointMismatch = response.status === 404 &&
+      responseContext.endpointMarkerPresent !== true
+    const error = new WABClientError(
+      endpointMismatch ? 'WAB_ENDPOINT_MISMATCH' : 'WAB_HTTP_ERROR',
+      endpointMismatch
+        ? 'Configured WAB endpoint did not return a compatible WAB response.'
+        : `WAB request failed with HTTP status ${response.status}.`,
+      isRetryableStatus(response.status),
+      response.status,
+      responseContext
+    )
+    this.captureRequestFailure(metadata, error)
+    void response.body?.cancel().catch(() => { /* best effort only */ })
+    throw error
+  }
+
+  private async readResponseText (
+    response: Response,
+    responseContext: WABClientErrorOptions,
+    metadata: WABRequestMetadata,
+    timeout: WABRequestTimeout
+  ): Promise<string> {
     try {
-      responseText = await Promise.race([
+      return await Promise.race([
         this.readBoundedResponse(response, responseContext),
-        timeoutPromise
+        timeout.promise
       ])
-    } catch (error) {
-      const failureCode = timedOut ? 'WAB_TIMEOUT' : 'WAB_INVALID_RESPONSE'
-      const failureMessage = timedOut
-        ? 'WAB request timed out.'
-        : 'WAB response could not be read.'
-      const normalized = error instanceof WABClientError
-        ? error
+    } catch (cause) {
+      const error = cause instanceof WABClientError
+        ? cause
         : new WABClientError(
-          failureCode,
-          failureMessage,
+          timeout.timedOut ? 'WAB_TIMEOUT' : 'WAB_INVALID_RESPONSE',
+          timeout.timedOut
+            ? 'WAB request timed out.'
+            : 'WAB response could not be read.',
           true,
           response.status,
-          { ...responseContext, cause: error }
+          { ...responseContext, cause }
         )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
-      throw normalized
+      this.captureRequestFailure(metadata, error)
+      throw error
     } finally {
-      if (timer !== undefined) clearTimeout(timer)
+      if (timeout.timer !== undefined) clearTimeout(timeout.timer)
     }
+  }
 
+  private parseResponseObject<T> (
+    responseText: string,
+    response: Response,
+    responseContext: WABClientErrorOptions,
+    metadata: WABRequestMetadata
+  ): T {
     let parsed: unknown
     try {
       parsed = JSON.parse(responseText)
-    } catch (error) {
-      const normalized = new WABClientError(
+    } catch (cause) {
+      const error = new WABClientError(
         'WAB_INVALID_RESPONSE',
         'WAB response was not valid JSON.',
         true,
         response.status,
-        { ...responseContext, cause: error }
+        { ...responseContext, cause }
       )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, normalized)
-      throw normalized
+      this.captureRequestFailure(metadata, error)
+      throw error
     }
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       const error = new WABClientError(
@@ -409,28 +505,24 @@ export class WABTransport {
         response.status,
         responseContext
       )
-      this.captureFailure(options.operation, method, path, correlationId, startedAt, error)
+      this.captureRequestFailure(metadata, error)
       throw error
     }
-
-    this.telemetry.capture({
-      name: 'wallet-toolbox.wab.request.completed',
-      component: 'wallet-toolbox.wab-transport',
-      severity: 'info',
-      correlationId,
-      attributes: {
-        operation: options.operation,
-        method,
-        route: path,
-        serverOrigin: this.serverOrigin,
-        status: response.status,
-        endpointMarkerPresent,
-        responseCorrelationMatched,
-        responseBytes: new TextEncoder().encode(responseText).byteLength,
-        durationMs: Date.now() - startedAt
-      }
-    })
     return parsed as T
+  }
+
+  private captureRequestFailure (
+    metadata: WABRequestMetadata,
+    error: WABClientError
+  ): void {
+    this.captureFailure(
+      metadata.operation,
+      metadata.method,
+      metadata.path,
+      metadata.correlationId,
+      metadata.startedAt,
+      error
+    )
   }
 
   private async readBoundedResponse (

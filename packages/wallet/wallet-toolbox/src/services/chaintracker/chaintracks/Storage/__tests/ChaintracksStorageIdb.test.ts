@@ -6,6 +6,7 @@ import { deserializeBaseBlockHeader, genesisHeader } from '../../util/blockHeade
 import { ChaintracksStorageIdb, ChaintracksStorageIdbOptions } from '../ChaintracksStorageIdb'
 import { ChaintracksStorageBase } from '../ChaintracksStorageBase'
 import { LiveBlockHeader } from '../../Api/BlockHeaderApi'
+import { BlockHeader } from '../../Api/BlockHeaderApi'
 
 describe('ChaintracksStorageIdb tests', () => {
   jest.setTimeout(99999999)
@@ -104,6 +105,57 @@ describe('ChaintracksStorageIdb tests', () => {
 
     const deleteCount = await storage.deleteOlderLiveBlockHeaders(3 + ranges.bulk.maxHeight)
     expect(deleteCount).toBe(3)
+
+    await storage.deleteLiveBlockHeaders()
+
+    const lastBulkFile = await storage.bulkManager.getLastFile()
+    expect(lastBulkFile?.lastHash).toBeTruthy()
+    const makeHeader = (height: number, hashByte: string, previousHash: string): BlockHeader => ({
+      height,
+      hash: hashByte.repeat(64),
+      version: 1,
+      previousHash,
+      merkleRoot: '11'.repeat(32),
+      time: height,
+      bits: 0x1d00ffff,
+      nonce: height
+    })
+    const firstHeight = lastBulkFile!.firstHeight + lastBulkFile!.count
+    const first = makeHeader(firstHeight, 'a', lastBulkFile!.lastHash!)
+    const main = makeHeader(firstHeight + 1, 'b', first.hash)
+    const fork = makeHeader(firstHeight + 1, 'c', first.hash)
+    const forkTip = makeHeader(firstHeight + 2, 'd', fork.hash)
+
+    await expect(storage.insertHeader(first)).resolves.toMatchObject({
+      added: true,
+      isActiveTip: true
+    })
+    await expect(storage.insertHeader(first)).resolves.toMatchObject({
+      added: false,
+      dupe: true
+    })
+    await expect(storage.insertHeader(makeHeader(firstHeight + 1, 'e', 'ee'.repeat(32)))).resolves.toMatchObject({
+      added: false,
+      noPrev: true
+    })
+    await expect(storage.insertHeader(main)).resolves.toMatchObject({
+      added: true,
+      isActiveTip: true
+    })
+    await expect(storage.insertHeader(fork)).resolves.toMatchObject({
+      added: true,
+      isActiveTip: false
+    })
+    const reorg = await storage.insertHeader(forkTip)
+    expect(reorg).toMatchObject({
+      added: true,
+      isActiveTip: true,
+      reorgDepth: 1
+    })
+    expect(reorg.deactivatedHeaders.map(header => header.hash)).toEqual([main.hash])
+    await expect(storage.findChainTipHeader()).resolves.toMatchObject({
+      hash: forkTip.hash
+    })
 
     await storage.deleteLiveBlockHeaders()
   })

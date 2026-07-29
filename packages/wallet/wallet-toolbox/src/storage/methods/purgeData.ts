@@ -13,174 +13,19 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
   const r: PurgeResults = { count: 0, log: '' }
   const defaultAge = 1000 * 60 * 60 * 24 * 14
 
-  const runPurgeQuery = async (pq: PurgeQuery): Promise<void> => {
-    try {
-      pq.sql = pq.q.toString()
-      const count = await pq.q
-      if (count > 0) {
-        r.count += count
-        r.log += `${count} ${pq.log}\n`
-      }
-    } catch (error_: unknown) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const e = WalletError.fromUnknown(error_)
-      throw error_
-    }
-  }
-
   if (params.purgeCompleted) {
-    const age = params.purgeCompletedAge || defaultAge
-    const before = toSqlWhereDate(new Date(Date.now() - age))
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const qs: PurgeQuery[] = []
-
-    // select * from transactions where updated_at < '2024-08-20' and status = 'completed' and not provenTxId is null and (not truncatedExternalInputs is null or not beef is null or not rawTx is null)
-    qs.push({
-      log: 'conpleted transactions purged of transient data',
-      q: storage
-        .toDb(trx)('transactions')
-        .update({
-          inputBEEF: null,
-          rawTx: null
-        })
-        .where('updated_at', '<', before)
-        .where('status', 'completed')
-        .whereNotNull('provenTxId')
-        .where(function () {
-          this.orWhereNotNull('inputBEEF')
-          this.orWhereNotNull('rawTx')
-        })
-    })
-
-    const completedReqs = await storage
-      .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
-      .select('provenTxReqId')
-      .where('updated_at', '<', before)
-      .where('status', 'completed')
-      .whereNotNull('provenTxId')
-      .where('notified', 1)
-    const completedReqIds = completedReqs.map(o => o.provenTxReqId)
-
-    if (completedReqIds.length > 0) {
-      qs.push({
-        log: 'completed proven_tx_reqs deleted',
-        q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', completedReqIds).delete()
-      })
-    }
-
-    for (const q of qs) await runPurgeQuery(q)
+    await purgeCompletedData(storage, params.purgeCompletedAge || defaultAge, r, trx)
   }
 
   if (params.purgeFailed) {
-    const age = params.purgeFailedAge || defaultAge
-    const before = toSqlWhereDate(new Date(Date.now() - age))
-
-    const qs: PurgeQuery[] = []
-
-    const failedTxsQ = storage
-      .toDb(trx)<{ transactionId: number }>('transactions')
-      .select('transactionId')
-      .where('updated_at', '<', before)
-      .where('status', 'failed')
-    const txs = await failedTxsQ
-    const failedTxIds = txs.map(tx => tx.transactionId)
-
-    await deleteTransactions(failedTxIds, qs, 'failed', true)
-
-    const invalidReqs = await storage
-      .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
-      .select('provenTxReqId')
-      .where('updated_at', '<', before)
-      .where('status', 'invalid')
-    const invalidReqIds = invalidReqs.map(o => o.provenTxReqId)
-    if (invalidReqIds.length > 0) {
-      qs.push({
-        log: 'invalid proven_tx_reqs deleted',
-        q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', invalidReqIds).delete()
-      })
-    }
-
-    const doubleSpendReqs = await storage
-      .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
-      .select('provenTxReqId')
-      .where('updated_at', '<', before)
-      .where('status', 'doubleSpend')
-    const doubleSpendReqIds = doubleSpendReqs.map(o => o.provenTxReqId)
-    if (doubleSpendReqIds.length > 0) {
-      qs.push({
-        log: 'doubleSpend proven_tx_reqs deleted',
-        q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', doubleSpendReqIds).delete()
-      })
-    }
-
-    for (const q of qs) await runPurgeQuery(q)
+    await purgeFailedData(storage, params.purgeFailedAge || defaultAge, r, trx)
   }
 
   if (params.purgeSpent) {
-    const age = params.purgeSpentAge || defaultAge
-    const before = toSqlWhereDate(new Date(Date.now() - age))
-
-    const beef = new Beef()
-    const utxos = await storage.findOutputs({
-      partial: { spendable: true },
-      txStatus: ['sending', 'unproven', 'completed', 'nosend']
-    })
-    for (const utxo of utxos) {
-      // Figure out all the txids required to prove the validity of this utxo and merge proofs into beef.
-      const options: StorageGetBeefOptions = {
-        mergeToBeef: beef,
-        ignoreServices: true
-      }
-      if (utxo.txid) {
-        try {
-          await storage.getBeefForTransaction(utxo.txid, options)
-        } catch (error_: unknown) {
-          const e = WalletError.fromUnknown(error_)
-          if (!isMissingLocalBeefError(e, utxo.txid, storage.chain)) throw error_
-          // UTXO's tx beef not in local storage. Skip it; the tx has spendable outputs so it won't be purged anyway.
-        }
-      }
-    }
-    const proofTxids: Record<string, boolean> = {}
-    for (const btx of beef.txs) proofTxids[btx.txid] = true
-
-    const qs: PurgeQuery[] = []
-
-    const spentTxsQ = storage
-      .toDb(trx)<TableTransaction>('transactions')
-      .where('updated_at', '<', before)
-      .where('status', 'completed')
-      .whereRaw(
-        'not exists(select outputId from outputs as o where o.transactionId = transactions.transactionId and o.spendable = 1)'
-      )
-    const txs: TableTransaction[] = await spentTxsQ
-    // Save any spent txid still needed to prove a utxo:
-    const nptxs = txs.filter(t => !proofTxids[t.txid || ''])
-    const spentTxIds = nptxs.map(tx => tx.transactionId)
-
-    if (spentTxIds.length > 0) {
-      const update: Partial<TableOutput> = {
-        spentBy: null as unknown as undefined
-      }
-      qs.push({
-        log: 'spent outputs no longer tracked by spentBy',
-        q: storage
-          .toDb(trx)<TableOutput>('outputs')
-          .update(storage.validatePartialForUpdate(update, undefined, ['spendable']))
-          .where('spendable', false)
-          .whereIn('spentBy', spentTxIds)
-      })
-
-      await deleteTransactions(spentTxIds, qs, 'spent', false)
-
-      for (const q of qs) await runPurgeQuery(q)
-    }
+    await purgeSpentData(storage, params.purgeSpentAge || defaultAge, r, trx)
   }
 
-  // Delete proven_txs no longer referenced by remaining transactions.
-  const qs: PurgeQuery[] = []
-  qs.push({
+  await runPurgeQuery({
     log: 'orphan proven_txs deleted',
     q: storage
       .toDb(trx)('proven_txs')
@@ -191,63 +36,212 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
         'not exists(select * from proven_tx_reqs as r where r.txid = proven_txs.txid or r.provenTxId = proven_txs.provenTxId)'
       )
       .delete()
-  })
-  for (const q of qs) await runPurgeQuery(q)
+  }, r)
 
   return r
+}
 
-  async function deleteTransactions(
-    transactionIds: number[],
-    qs: PurgeQuery[],
-    reason: string,
-    markNotSpentBy: boolean
-  ) {
-    if (transactionIds.length > 0) {
-      const outputs = await storage
-        .toDb(trx)<{ outputId: number }>('outputs')
-        .select('outputId')
-        .whereIn('transactionId', transactionIds)
-      const outputIds = outputs.map(o => o.outputId)
-      if (outputIds.length > 0) {
-        qs.push(
-          {
-            log: `${reason} output_tags_map deleted`,
-            q: storage.toDb(trx)<TableOutputTagMap>('output_tags_map').whereIn('outputId', outputIds).delete()
-          },
-          {
-            log: `${reason} outputs deleted`,
-            q: storage.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).delete()
-          }
-        )
-      }
+async function runPurgeQuery(pq: PurgeQuery, result: PurgeResults): Promise<void> {
+  try {
+    pq.sql = pq.q.toString()
+    const count = await pq.q
+    if (count > 0) {
+      result.count += count
+      result.log += `${count} ${pq.log}\n`
+    }
+  } catch (error: unknown) {
+    WalletError.fromUnknown(error)
+    throw error
+  }
+}
 
-      qs.push(
-        {
-          log: `${reason} tx_labels_map deleted`,
-          q: storage.toDb(trx)<TableTxLabelMap>('tx_labels_map').whereIn('transactionId', transactionIds).delete()
-        },
-        {
-          log: `${reason} commissions deleted`,
-          q: storage.toDb(trx)<TableCommission>('commissions').whereIn('transactionId', transactionIds).delete()
-        }
-      )
+async function runPurgeQueries(queries: PurgeQuery[], result: PurgeResults): Promise<void> {
+  for (const query of queries) await runPurgeQuery(query, result)
+}
 
-      if (markNotSpentBy) {
-        qs.push({
-          log: 'unspent outputs updated to spendable',
-          q: storage
-            .toDb(trx)<TableOutput>('outputs')
-            .update({ spendable: true, spentBy: null as unknown as undefined })
-            .whereIn('spentBy', transactionIds)
-        })
-      }
-
-      qs.push({
-        log: `${reason} transactions deleted`,
-        q: storage.toDb(trx)<TableTransaction>('transactions').whereIn('transactionId', transactionIds).delete()
+async function purgeCompletedData(
+  storage: StorageKnex,
+  age: number,
+  result: PurgeResults,
+  trx?: TrxToken
+): Promise<void> {
+  const before = toSqlWhereDate(new Date(Date.now() - age))
+  const queries: PurgeQuery[] = [{
+    log: 'conpleted transactions purged of transient data',
+    q: storage
+      .toDb(trx)('transactions')
+      .update({ inputBEEF: null, rawTx: null })
+      .where('updated_at', '<', before)
+      .where('status', 'completed')
+      .whereNotNull('provenTxId')
+      .where(function () {
+        this.orWhereNotNull('inputBEEF')
+        this.orWhereNotNull('rawTx')
       })
+  }]
+  const completedReqs = await storage
+    .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
+    .select('provenTxReqId')
+    .where('updated_at', '<', before)
+    .where('status', 'completed')
+    .whereNotNull('provenTxId')
+    .where('notified', 1)
+  const ids = completedReqs.map(request => request.provenTxReqId)
+  if (ids.length > 0) {
+    queries.push({
+      log: 'completed proven_tx_reqs deleted',
+      q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', ids).delete()
+    })
+  }
+  await runPurgeQueries(queries, result)
+}
+
+async function queueProvenRequestDeletion(
+  storage: StorageKnex,
+  before: string,
+  status: 'invalid' | 'doubleSpend',
+  queries: PurgeQuery[],
+  trx?: TrxToken
+): Promise<void> {
+  const requests = await storage
+    .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
+    .select('provenTxReqId')
+    .where('updated_at', '<', before)
+    .where('status', status)
+  const ids = requests.map(request => request.provenTxReqId)
+  if (ids.length === 0) return
+  queries.push({
+    log: `${status} proven_tx_reqs deleted`,
+    q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', ids).delete()
+  })
+}
+
+async function purgeFailedData(
+  storage: StorageKnex,
+  age: number,
+  result: PurgeResults,
+  trx?: TrxToken
+): Promise<void> {
+  const before = toSqlWhereDate(new Date(Date.now() - age))
+  const failedTransactions = await storage
+    .toDb(trx)<{ transactionId: number }>('transactions')
+    .select('transactionId')
+    .where('updated_at', '<', before)
+    .where('status', 'failed')
+  const queries: PurgeQuery[] = []
+  await queueTransactionDeletion(
+    storage,
+    failedTransactions.map(transaction => transaction.transactionId),
+    queries,
+    'failed',
+    true,
+    trx
+  )
+  await queueProvenRequestDeletion(storage, before, 'invalid', queries, trx)
+  await queueProvenRequestDeletion(storage, before, 'doubleSpend', queries, trx)
+  await runPurgeQueries(queries, result)
+}
+
+async function collectProofTransactionIds(storage: StorageKnex): Promise<Set<string>> {
+  const beef = new Beef()
+  const utxos = await storage.findOutputs({
+    partial: { spendable: true },
+    txStatus: ['sending', 'unproven', 'completed', 'nosend']
+  })
+  for (const utxo of utxos) {
+    if (utxo.txid == null) continue
+    const options: StorageGetBeefOptions = { mergeToBeef: beef, ignoreServices: true }
+    try {
+      await storage.getBeefForTransaction(utxo.txid, options)
+    } catch (error: unknown) {
+      const walletError = WalletError.fromUnknown(error)
+      if (!isMissingLocalBeefError(walletError, utxo.txid, storage.chain)) throw error
     }
   }
+  return new Set(beef.txs.map(transaction => transaction.txid))
+}
+
+async function purgeSpentData(
+  storage: StorageKnex,
+  age: number,
+  result: PurgeResults,
+  trx?: TrxToken
+): Promise<void> {
+  const before = toSqlWhereDate(new Date(Date.now() - age))
+  const proofTxids = await collectProofTransactionIds(storage)
+  const spentTransactions: TableTransaction[] = await storage
+    .toDb(trx)<TableTransaction>('transactions')
+    .where('updated_at', '<', before)
+    .where('status', 'completed')
+    .whereRaw(
+      'not exists(select outputId from outputs as o where o.transactionId = transactions.transactionId and o.spendable = 1)'
+    )
+  const ids = spentTransactions
+    .filter(transaction => !proofTxids.has(transaction.txid ?? ''))
+    .map(transaction => transaction.transactionId)
+  if (ids.length === 0) return
+  const update: Partial<TableOutput> = { spentBy: null as unknown as undefined }
+  const queries: PurgeQuery[] = [{
+    log: 'spent outputs no longer tracked by spentBy',
+    q: storage
+      .toDb(trx)<TableOutput>('outputs')
+      .update(storage.validatePartialForUpdate(update, undefined, ['spendable']))
+      .where('spendable', false)
+      .whereIn('spentBy', ids)
+  }]
+  await queueTransactionDeletion(storage, ids, queries, 'spent', false, trx)
+  await runPurgeQueries(queries, result)
+}
+
+async function queueTransactionDeletion(
+  storage: StorageKnex,
+  transactionIds: number[],
+  queries: PurgeQuery[],
+  reason: string,
+  markNotSpentBy: boolean,
+  trx?: TrxToken
+): Promise<void> {
+  if (transactionIds.length === 0) return
+  const outputs = await storage
+    .toDb(trx)<{ outputId: number }>('outputs')
+    .select('outputId')
+    .whereIn('transactionId', transactionIds)
+  const outputIds = outputs.map(output => output.outputId)
+  if (outputIds.length > 0) {
+    queries.push(
+      {
+        log: `${reason} output_tags_map deleted`,
+        q: storage.toDb(trx)<TableOutputTagMap>('output_tags_map').whereIn('outputId', outputIds).delete()
+      },
+      {
+        log: `${reason} outputs deleted`,
+        q: storage.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).delete()
+      }
+    )
+  }
+  queries.push(
+    {
+      log: `${reason} tx_labels_map deleted`,
+      q: storage.toDb(trx)<TableTxLabelMap>('tx_labels_map').whereIn('transactionId', transactionIds).delete()
+    },
+    {
+      log: `${reason} commissions deleted`,
+      q: storage.toDb(trx)<TableCommission>('commissions').whereIn('transactionId', transactionIds).delete()
+    }
+  )
+  if (markNotSpentBy) {
+    queries.push({
+      log: 'unspent outputs updated to spendable',
+      q: storage
+        .toDb(trx)<TableOutput>('outputs')
+        .update({ spendable: true, spentBy: null as unknown as undefined })
+        .whereIn('spentBy', transactionIds)
+    })
+  }
+  queries.push({
+    log: `${reason} transactions deleted`,
+    q: storage.toDb(trx)<TableTransaction>('transactions').whereIn('transactionId', transactionIds).delete()
+  })
 }
 
 interface PurgeQuery {

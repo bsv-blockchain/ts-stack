@@ -55,6 +55,60 @@ const bytes = curve.n.byteLength()
 const ns1 = curve.n.subn(1)
 const halfN = N_BIGINT >> 1n
 
+function selectK (
+  customK: BigNumber | ((iter: number) => BigNumber) | undefined,
+  iter: number,
+  drbg: DRBG
+): BigNumber {
+  const selected = typeof customK === 'function'
+    ? customK(iter)
+    : BigNumber.isBN(customK)
+      ? customK
+      : new BigNumber(drbg.generate(bytes), 16)
+  if (selected == null) throw new Error('k is undefined')
+  return truncateToN(selected, true)
+}
+
+function retryOrRejectFixedK (fixedK: boolean, message: string): undefined {
+  if (fixedK) throw new Error(message)
+  return undefined
+}
+
+function signatureFromK (
+  kBN: BigNumber,
+  msgBig: bigint,
+  keyBig: bigint,
+  forceLowS: boolean,
+  fixedK: boolean
+): Signature | undefined {
+  if (kBN.cmpn(1) < 0 || kBN.cmp(ns1) > 0) {
+    return retryOrRejectFixedK(fixedK, 'Invalid fixed custom K value (must be >1 and <N-1)')
+  }
+
+  const R = curve.g.mulCT(kBN)
+  if (R.isInfinity()) {
+    return retryOrRejectFixedK(fixedK, 'Invalid fixed custom K value (k·G at infinity)')
+  }
+
+  const rBig = modN(BigInt('0x' + R.getX().toString(16)))
+  if (rBig === 0n) {
+    return retryOrRejectFixedK(fixedK, 'Invalid fixed custom K value (r == 0)')
+  }
+
+  const kInv = modInvN(BigInt('0x' + kBN.toString(16)))
+  const sum = modN(msgBig + modMulN(rBig, keyBig))
+  let sBig = modMulN(kInv, sum)
+  if (sBig === 0n) {
+    return retryOrRejectFixedK(fixedK, 'Invalid fixed custom K value (s == 0)')
+  }
+  if (forceLowS && sBig > halfN) sBig = N_BIGINT - sBig
+
+  return new Signature(
+    new BigNumber(rBig.toString(16), 16),
+    new BigNumber(sBig.toString(16), 16)
+  )
+}
+
 /**
  * Generates a digital signature for a given message.
  *
@@ -105,69 +159,17 @@ export const sign = (
   const bkey = key.toArray('be', bytes)
   const nonce = msg.toArray('be', bytes)
   const drbg = new DRBG(bkey, nonce)
+  const fixedK = BigNumber.isBN(customK)
 
   for (let iter = 0; ; iter++) {
-    let kBN: BigNumber | null
-    if (typeof customK === 'function') {
-      kBN = customK(iter)
-    } else if (BigNumber.isBN(customK)) {
-      kBN = customK
-    } else {
-      kBN = new BigNumber(drbg.generate(bytes), 16)
-    }
-
-    if (kBN == null) {
-      throw new Error('k is undefined')
-    }
-
-    kBN = truncateToN(kBN, true)
-
-    if (kBN.cmpn(1) < 0 || kBN.cmp(ns1) > 0) {
-      if (BigNumber.isBN(customK)) {
-        throw new Error('Invalid fixed custom K value (must be >1 and <N-1)')
-      }
-      continue
-    }
-
-    const R = curve.g.mulCT(kBN)
-
-    if (R.isInfinity()) {
-      if (BigNumber.isBN(customK)) {
-        throw new Error('Invalid fixed custom K value (k·G at infinity)')
-      }
-      continue
-    }
-
-    const xAff = BigInt('0x' + R.getX().toString(16))
-    const rBig = modN(xAff)
-
-    if (rBig === 0n) {
-      if (BigNumber.isBN(customK)) {
-        throw new Error('Invalid fixed custom K value (r == 0)')
-      }
-      continue
-    }
-
-    const kBig = BigInt('0x' + kBN.toString(16))
-    const kInv = modInvN(kBig)
-    const rTimesKey = modMulN(rBig, keyBig)
-    const sum = modN(msgBig + rTimesKey)
-    let sBig = modMulN(kInv, sum)
-
-    if (sBig === 0n) {
-      if (BigNumber.isBN(customK)) {
-        throw new Error('Invalid fixed custom K value (s == 0)')
-      }
-      continue
-    }
-
-    if (forceLowS && sBig > halfN) {
-      sBig = N_BIGINT - sBig
-    }
-
-    const r = new BigNumber(rBig.toString(16), 16)
-    const s = new BigNumber(sBig.toString(16), 16)
-    return new Signature(r, s)
+    const signature = signatureFromK(
+      selectK(customK, iter, drbg),
+      msgBig,
+      keyBig,
+      forceLowS,
+      fixedK
+    )
+    if (signature != null) return signature
   }
 }
 

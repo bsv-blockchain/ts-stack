@@ -2,6 +2,71 @@ import { MerklePath } from '@bsv/sdk'
 import { doubleSha256BE } from '../utility/utilityHelpers'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 
+interface MerkleLeaf {
+  offset: number
+  hash?: string
+  txid?: boolean
+  duplicate?: boolean
+}
+
+function merkleTreeHeight (leafCount: number): number {
+  let height = 0
+  while (leafCount > 1) {
+    height++
+    leafCount = Math.ceil(leafCount / 2)
+  }
+  return height
+}
+
+function appendMerklePathLevel (
+  pathLevel: MerkleLeaf[],
+  level: number,
+  index: number,
+  targetIndex: number,
+  txids: string[],
+  levelTxids: string[]
+): void {
+  const isOdd = index % 2 === 1
+  const siblingIndex = isOdd ? index - 1 : index + 1
+  if (level !== 0) {
+    pathLevel.push(
+      siblingIndex >= levelTxids.length
+        ? { offset: siblingIndex, duplicate: true }
+        : { offset: siblingIndex, hash: levelTxids[siblingIndex] }
+    )
+    return
+  }
+
+  const targetLeaf: MerkleLeaf = {
+    offset: targetIndex,
+    hash: txids[targetIndex],
+    txid: true
+  }
+  if (siblingIndex >= levelTxids.length) {
+    pathLevel.push(targetLeaf, { offset: siblingIndex, duplicate: true })
+  } else {
+    const siblingLeaf: MerkleLeaf = {
+      offset: siblingIndex,
+      hash: levelTxids[siblingIndex]
+    }
+    pathLevel.push(...(isOdd ? [siblingLeaf, targetLeaf] : [targetLeaf, siblingLeaf]))
+  }
+}
+
+function nextMerkleLevel (levelTxids: string[]): string[] {
+  const nextLevel: string[] = []
+  for (let index = 0; index < levelTxids.length; index += 2) {
+    const left = asArray(levelTxids[index])
+    left.reverse()
+    const right = index + 1 < levelTxids.length
+      ? asArray(levelTxids[index + 1])
+      : left
+    if (right !== left) right.reverse()
+    nextLevel.push(asString(doubleSha256BE([...left, ...right])))
+  }
+  return nextLevel
+}
+
 /**
  * Compute the merkle root from an array of txids (big-endian hex strings).
  * Returns the root as a big-endian hex string (reversed byte order from the
@@ -50,34 +115,14 @@ export function computeMerklePath(txids: string[], targetIndex: number, blockHei
     throw new Error(`targetIndex ${targetIndex} out of range [0, ${txids.length})`)
   }
 
-  interface Leaf {
-    offset: number
-    hash?: string
-    txid?: boolean
-    duplicate?: boolean
-  }
-
   // For a single tx, the root IS the txid; path has one level with just the txid leaf
   if (txids.length === 1) {
-    interface Leaf {
-      offset: number
-      hash?: string
-      txid?: boolean
-      duplicate?: boolean
-    }
-    const path: Leaf[][] = [[{ offset: 0, hash: txids[0], txid: true }]]
+    const path: MerkleLeaf[][] = [[{ offset: 0, hash: txids[0], txid: true }]]
     return new MerklePath(blockHeight, path)
   }
 
-  // Calculate tree height
-  let treeHeight = 0
-  let n = txids.length
-  while (n > 1) {
-    treeHeight++
-    n = Math.ceil(n / 2)
-  }
-
-  const path: Leaf[][] = Array.from({ length: treeHeight })
+  const treeHeight = merkleTreeHeight(txids.length)
+  const path: MerkleLeaf[][] = Array.from({ length: treeHeight })
     .fill(0)
     .map(() => [])
 
@@ -85,49 +130,8 @@ export function computeMerklePath(txids: string[], targetIndex: number, blockHei
   // For each level, we need to provide the sibling
   let levelTxids = [...txids]
   for (let level = 0; level < treeHeight; level++) {
-    const isOdd = index % 2 === 1
-    const siblingIndex = isOdd ? index - 1 : index + 1
-
-    if (level === 0) {
-      // At level 0, we include the target txid leaf and the sibling
-      const targetLeaf: Leaf = {
-        offset: targetIndex,
-        hash: txids[targetIndex],
-        txid: true
-      }
-
-      if (siblingIndex >= levelTxids.length) {
-        // Odd number of items, sibling is a duplicate
-        const siblingLeaf: Leaf = { offset: siblingIndex, duplicate: true }
-        path[0].push(targetLeaf, siblingLeaf)
-      } else {
-        const siblingLeaf: Leaf = { offset: siblingIndex, hash: levelTxids[siblingIndex] }
-        if (isOdd) {
-          path[0].push(siblingLeaf, targetLeaf)
-        } else {
-          path[0].push(targetLeaf, siblingLeaf)
-        }
-      }
-    } else if (siblingIndex >= levelTxids.length) {
-      // Higher levels: duplicate sibling when odd
-      path[level].push({ offset: siblingIndex, duplicate: true })
-    } else {
-      // Higher levels: we only need the sibling hash
-      path[level].push({ offset: siblingIndex, hash: levelTxids[siblingIndex] })
-    }
-
-    // Compute next level hashes
-    const nextLevel: string[] = []
-    for (let i = 0; i < levelTxids.length; i += 2) {
-      const left = asArray(levelTxids[i])
-      left.reverse()
-      const right = i + 1 < levelTxids.length ? asArray(levelTxids[i + 1]) : left
-      if (right !== left) right.reverse()
-      const combined = [...left, ...right]
-      const hash = doubleSha256BE(combined) // returns BE
-      nextLevel.push(asString(hash))
-    }
-    levelTxids = nextLevel
+    appendMerklePathLevel(path[level], level, index, targetIndex, txids, levelTxids)
+    levelTxids = nextMerkleLevel(levelTxids)
     index = Math.floor(index / 2)
   }
 

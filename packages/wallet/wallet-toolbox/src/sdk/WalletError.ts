@@ -55,59 +55,81 @@ export class WalletError extends Error implements WalletErrorObject {
    * Recovers all public fields from WalletError derived error classes and relevant Error derived errors.
    *
    */
+  private static nonEmptyString (value: unknown): string | undefined {
+    return typeof value === 'string' && value !== '' ? value : undefined
+  }
+
+  private static objectErrorFields (
+    error: Record<string, unknown>
+  ): {
+      name: string
+      message: string
+      stack: string | undefined
+      details: Record<string, string> | undefined
+    } {
+    const stringValue = WalletError.nonEmptyString
+    const genericName = error.name === 'Error' || error.name === 'FetchError'
+    const name = genericName
+      ? stringValue(error.code) ?? stringValue(error.status) ?? 'WERR_UNKNOWN'
+      : stringValue(error.name) ?? stringValue(error.code) ?? stringValue(error.status) ?? 'WERR_UNKNOWN'
+    const message = stringValue(error.message) ?? stringValue(error.description) ?? ''
+    const stack = typeof error.stack === 'string' ? error.stack : undefined
+    const details: Record<string, string> = {}
+    if (typeof error.sql === 'string') details.sql = error.sql
+    if (typeof error.sqlMessage === 'string') details.sqlMessage = error.sqlMessage
+    return {
+      name,
+      message,
+      stack,
+      details: Object.keys(details).length > 0 ? details : undefined
+    }
+  }
+
+  private static copyPublicErrorFields (
+    target: WalletError,
+    source: Record<string, unknown>
+  ): void {
+    const baseFields = new Set([
+      'status',
+      'name',
+      'code',
+      'message',
+      'description',
+      'stack',
+      'sql',
+      'sqlMessage'
+    ])
+    for (const [key, value] of Object.entries(source)) {
+      const supportedValue =
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        Array.isArray(value)
+      if (key === 'walletError') {
+        target[key] = WalletError.fromUnknown(value)
+      } else if (!baseFields.has(key) && supportedValue) {
+        target[key] = value
+      }
+    }
+  }
+
   static fromUnknown (err: unknown): WalletError {
     if (err instanceof WalletError) return err
-    let name = 'WERR_UNKNOWN'
-    let message: string
-    if (typeof err === 'string') message = err
-    else if (typeof err === 'number') message = err.toString()
-    else message = ''
-    let stack: string | undefined
-    const details: Record<string, string> = {}
-    if (err !== null && typeof err === 'object') {
-      const errObj = err as Record<string, unknown>
-      const ns = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined)
-      if (errObj.name === 'Error' || errObj.name === 'FetchError') name = ns(errObj.code) ?? ns(errObj.status) ?? 'WERR_UNKNOWN'
-      else name = ns(errObj.name) ?? ns(errObj.code) ?? ns(errObj.status) ?? 'WERR_UNKNOWN'
-      if (typeof name !== 'string') name = 'WERR_UNKNOWN'
-
-      message = ns(errObj.message) ?? ns(errObj.description) ?? ''
-      if (typeof message !== 'string') message = 'WERR_UNKNOWN'
-
-      if (typeof errObj.stack === 'string') stack = errObj.stack
-
-      if (typeof errObj.sql === 'string') details.sql = errObj.sql
-      if (typeof errObj.sqlMessage === 'string') details.sqlMessage = errObj.sqlMessage
+    let fields = {
+      name: 'WERR_UNKNOWN',
+      message: typeof err === 'string'
+        ? err
+        : typeof err === 'number'
+          ? err.toString()
+          : '',
+      stack: undefined as string | undefined,
+      details: undefined as Record<string, string> | undefined
     }
-    const e = new WalletError(name, message, stack, Object.keys(details).length > 0 ? details : undefined)
     if (err !== null && typeof err === 'object') {
-      for (const [key, value] of Object.entries(err)) {
-        if (key !== 'walletError' && typeof value !== 'string' && typeof value !== 'number' && !Array.isArray(value)) { continue }
-        switch (key) {
-          case 'walletError':
-            e[key] = WalletError.fromUnknown(value)
-            break
-          case 'status':
-            break
-          case 'name':
-            break
-          case 'code':
-            break
-          case 'message':
-            break
-          case 'description':
-            break
-          case 'stack':
-            break
-          case 'sql':
-            break
-          case 'sqlMessage':
-            break
-          default:
-            e[key] = value
-            break
-        }
-      }
+      fields = WalletError.objectErrorFields(err as Record<string, unknown>)
+    }
+    const e = new WalletError(fields.name, fields.message, fields.stack, fields.details)
+    if (err !== null && typeof err === 'object') {
+      WalletError.copyPublicErrorFields(e, err as Record<string, unknown>)
     }
     return e
   }

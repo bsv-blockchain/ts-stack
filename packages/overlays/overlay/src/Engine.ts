@@ -55,6 +55,20 @@ type HydratedUTXOHistoryNode = {
   transaction: Transaction
 }
 
+type TopicValidation = {
+  topic: string
+  isDupe: boolean
+  previousCoins: number[]
+  previousOutputs: Array<Output | null>
+  admissibleOutputs: AdmittanceInstructions
+}
+
+type StaleOutput = {
+  txid: string
+  previousOutputIndex: number
+  inputIndex: number
+}
+
 function findSpendingInputIndex(tx: Transaction, output: Output): number {
   return tx.inputs.findIndex(input => {
     const realSource = input.sourceTXID || input.sourceTransaction?.id('hex')
@@ -471,6 +485,492 @@ export class Engine {
     })
   }
 
+  private async validateTopicSubmission(
+    topic: string,
+    tx: Transaction,
+    txid: string,
+    beef: number[],
+    offChainValues: number[] | undefined,
+    mode: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv',
+    dupeTopics: Set<string>,
+    failedTopics: Set<string>
+  ): Promise<TopicValidation> {
+    try {
+      if (this.managers[topic] === undefined || this.managers[topic] === null) {
+        throw new Error(`This server does not support this topic: ${topic}`)
+      }
+
+      this.startTime(`dupCheck_${txid.substring(0, 10)}`)
+      const isDupe = await this.storage.doesAppliedTransactionExist({ txid, topic })
+      this.endTime(`dupCheck_${txid.substring(0, 10)}`)
+      if (isDupe) {
+        dupeTopics.add(topic)
+        return {
+          topic,
+          isDupe: true,
+          previousCoins: [],
+          previousOutputs: [],
+          admissibleOutputs: { outputsToAdmit: [], coinsToRetain: [] }
+        }
+      }
+
+      const previousCoins: number[] = []
+      const outputPromises = tx.inputs.map(async (input, inputIndex) => {
+        const previousTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+        if (previousTXID === undefined) return null
+        const output = await this.storage.findOutput(
+          previousTXID,
+          input.sourceOutputIndex,
+          topic
+        )
+        if (output !== undefined && output !== null) previousCoins.push(inputIndex)
+        return output ?? null
+      })
+
+      this.startTime(`previousOutputQuery_${txid.substring(0, 10)}`)
+      const previousOutputs = await Promise.all(outputPromises)
+      this.endTime(`previousOutputQuery_${txid.substring(0, 10)}`)
+
+      this.startTime(`identifyAdmissibleOutputs_${txid.substring(0, 10)}`)
+      const admissibleOutputs = await this.managers[topic].identifyAdmissibleOutputs(
+        beef,
+        previousCoins,
+        offChainValues,
+        mode
+      )
+      this.endTime(`identifyAdmissibleOutputs_${txid.substring(0, 10)}`)
+
+      return {
+        topic,
+        isDupe: false,
+        previousCoins,
+        previousOutputs,
+        admissibleOutputs
+      }
+    } catch (error) {
+      this.logger.error(`Error validating topic during submit: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(error)}`)
+      failedTopics.add(topic)
+      return {
+        topic,
+        isDupe: false,
+        previousCoins: [],
+        previousOutputs: [],
+        admissibleOutputs: { outputsToAdmit: [], coinsToRetain: [] }
+      }
+    }
+  }
+
+  private isTopicSubmissionAccepted(
+    validation: TopicValidation,
+    failedTopics: Set<string>
+  ): boolean {
+    return !failedTopics.has(validation.topic) && (
+      validation.isDupe ||
+      validation.admissibleOutputs.outputsToAdmit.length > 0 ||
+      validation.admissibleOutputs.coinsToRetain.length > 0 ||
+      validation.previousCoins.length > 0
+    )
+  }
+
+  private async broadcastAcceptedSubmission(
+    tx: Transaction,
+    txid: string,
+    mode: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv',
+    anyTopicAccepted: boolean
+  ): Promise<void> {
+    this.startTime(`broadcast_${txid.substring(0, 10)}`)
+    if (mode !== 'historical-tx' && this.broadcaster !== undefined && anyTopicAccepted) {
+      try {
+        let response: BroadcastResponse | BroadcastFailure
+        if (tx.merklePath !== undefined) {
+          const mp = tx.merklePath
+          const leaf = mp.path[0].find(leaf => leaf.hash === txid)
+          response = {
+            status: 'success',
+            txid,
+            message: `In block at height ${mp.blockHeight} index ${leaf?.offset}`
+          }
+        } else {
+          response = await this.broadcaster.broadcast(tx)
+        }
+        if (isBroadcastFailure(response) && this.throwOnBroadcastFailure) {
+          const error = new Error(
+            `Failed to broadcast transaction! Error: ${response.description}`
+          )
+          ;(error as any).more = response.more
+          throw error
+        }
+      } catch (error) {
+        if (this.throwOnBroadcastFailure) throw error
+        this.logger.error('Error broadcasting transaction:', error)
+      }
+    }
+    this.endTime(`broadcast_${txid.substring(0, 10)}`)
+  }
+
+  private async notifyOutputSpent(
+    lookupService: LookupService,
+    tx: Transaction,
+    txid: string,
+    output: Output,
+    topic: string,
+    offChainValues?: number[]
+  ): Promise<void> {
+    if (typeof lookupService.outputSpent !== 'function') return
+    if (lookupService.spendNotificationMode === 'txid') {
+      await lookupService.outputSpent({
+        mode: 'txid',
+        spendingTxid: txid,
+        txid: output.txid,
+        outputIndex: output.outputIndex,
+        topic
+      })
+      return
+    }
+    if (lookupService.spendNotificationMode === 'script') {
+      const inputIndex = findSpendingInputIndex(tx, output)
+      if (inputIndex === -1) throw new Error('Could not find input index')
+      await lookupService.outputSpent({
+        mode: 'script',
+        spendingTxid: txid,
+        inputIndex,
+        sequenceNumber: tx.inputs[inputIndex].sequence ?? 0xffffffff,
+        unlockingScript: tx.inputs[inputIndex].unlockingScript!,
+        txid: output.txid,
+        outputIndex: output.outputIndex,
+        topic,
+        offChainValues
+      })
+      return
+    }
+    if (lookupService.spendNotificationMode === 'whole-tx') {
+      await lookupService.outputSpent({
+        mode: 'whole-tx',
+        spendingAtomicBEEF: tx.toAtomicBEEF(),
+        txid: output.txid,
+        outputIndex: output.outputIndex,
+        topic,
+        offChainValues
+      })
+      return
+    }
+    await lookupService.outputSpent({
+      mode: 'none',
+      txid: output.txid,
+      outputIndex: output.outputIndex,
+      topic
+    })
+  }
+
+  private async markPreviousOutputSpent(
+    output: Output | null,
+    topic: string,
+    tx: Transaction,
+    txid: string,
+    offChainValues?: number[]
+  ): Promise<void> {
+    if (output === null) return
+    try {
+      await this.storage.markUTXOAsSpent(output.txid, output.outputIndex, topic)
+      await Promise.all(Object.values(this.lookupServices).map(async lookupService => {
+        try {
+          await this.notifyOutputSpent(
+            lookupService,
+            tx,
+            txid,
+            output,
+            topic,
+            offChainValues
+          )
+        } catch (error) {
+          this.logger.error('Error in lookup service for outputSpent:', error)
+        }
+      }))
+    } catch (error) {
+      this.logger.error('Error marking UTXO as spent:', error)
+    }
+  }
+
+  private async markPreviousOutputsSpent(
+    validations: TopicValidation[],
+    failedTopics: Set<string>,
+    tx: Transaction,
+    txid: string,
+    offChainValues?: number[]
+  ): Promise<void> {
+    await Promise.all(validations.map(async validation => {
+      if (validation.isDupe || failedTopics.has(validation.topic)) return
+      await Promise.all(validation.previousOutputs.map(async output => {
+        await this.markPreviousOutputSpent(
+          output,
+          validation.topic,
+          tx,
+          txid,
+          offChainValues
+        )
+      }))
+    }))
+  }
+
+  private classifyPreviousCoins(
+    tx: Transaction,
+    validation: TopicValidation
+  ): {
+      outputsConsumed: Array<{ txid: string, outputIndex: number }>
+      outputsToMarkStale: StaleOutput[]
+    } {
+    const outputsConsumed: Array<{ txid: string, outputIndex: number }> = []
+    const outputsToMarkStale: StaleOutput[] = []
+    for (const inputIndex of validation.previousCoins) {
+      const input = tx.inputs[inputIndex]
+      const previousTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+      if (typeof previousTXID !== 'string') continue
+      if (validation.admissibleOutputs.coinsToRetain.includes(inputIndex)) {
+        outputsConsumed.push({
+          txid: previousTXID,
+          outputIndex: input.sourceOutputIndex
+        })
+      } else {
+        outputsToMarkStale.push({
+          txid: previousTXID,
+          previousOutputIndex: input.sourceOutputIndex,
+          inputIndex
+        })
+      }
+    }
+    return { outputsConsumed, outputsToMarkStale }
+  }
+
+  private async removeStaleOutputs(
+    outputs: StaleOutput[],
+    topic: string,
+    txid: string
+  ): Promise<void> {
+    this.startTime(`lookForStaleOutputs_${txid.substring(0, 10)}`)
+    await Promise.all(outputs.map(async coin => {
+      const output = await this.storage.findOutput(
+        coin.txid,
+        coin.previousOutputIndex,
+        topic
+      )
+      if (output !== undefined && output !== null) await this.deleteUTXODeep(output)
+    }))
+    this.endTime(`lookForStaleOutputs_${txid.substring(0, 10)}`)
+  }
+
+  private async notifyOutputAdmitted(
+    lookupService: LookupService,
+    tx: Transaction,
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    offChainValues?: number[]
+  ): Promise<void> {
+    if (lookupService.admissionMode === 'locking-script') {
+      if (
+        typeof tx.outputs[outputIndex].lockingScript !== 'object' ||
+        typeof tx.outputs[outputIndex].satoshis !== 'number'
+      ) return
+      await lookupService.outputAdmittedByTopic({
+        mode: 'locking-script',
+        txid,
+        outputIndex,
+        lockingScript: tx.outputs[outputIndex].lockingScript,
+        satoshis: tx.outputs[outputIndex].satoshis,
+        topic,
+        offChainValues
+      })
+      return
+    }
+    await lookupService.outputAdmittedByTopic({
+      mode: 'whole-tx',
+      atomicBEEF: tx.toAtomicBEEF(),
+      outputIndex,
+      topic,
+      offChainValues
+    })
+  }
+
+  private async admitOutput(
+    tx: Transaction,
+    txid: string,
+    beef: number[],
+    outputIndex: number,
+    topic: string,
+    outputsConsumed: Array<{ txid: string, outputIndex: number }>,
+    newUTXOs: Array<{ txid: string, outputIndex: number }>,
+    offChainValues?: number[]
+  ): Promise<void> {
+    if (typeof tx.outputs[outputIndex].satoshis !== 'number') return
+    this.startTime(`insertNewOutput_${txid.substring(0, 10)}`)
+    await this.storage.insertOutput({
+      txid,
+      outputIndex,
+      outputScript: tx.outputs[outputIndex].lockingScript.toBinary(),
+      satoshis: tx.outputs[outputIndex].satoshis,
+      topic,
+      spent: false,
+      beef: this.compactBEEFForStorage(tx, beef),
+      consumedBy: [],
+      outputsConsumed,
+      score: Date.now(),
+      blockHeight: extractMerkleProofMetadata(txid, tx.merklePath)?.blockHeight
+    })
+    this.endTime(`insertNewOutput_${txid.substring(0, 10)}`)
+    newUTXOs.push({ txid, outputIndex })
+
+    this.startTime(`notifyLookupService${txid.substring(0, 10)}`)
+    await Promise.all(Object.values(this.lookupServices).map(async lookupService => {
+      try {
+        await this.notifyOutputAdmitted(
+          lookupService,
+          tx,
+          txid,
+          outputIndex,
+          topic,
+          offChainValues
+        )
+      } catch (error) {
+        this.logger.error('Error in lookup service for outputAdmittedByTopic:', error)
+      }
+    }))
+    this.endTime(`notifyLookupService${txid.substring(0, 10)}`)
+  }
+
+  private async updateConsumedOutput(
+    output: { txid: string, outputIndex: number },
+    newUTXOs: Array<{ txid: string, outputIndex: number }>,
+    topic: string
+  ): Promise<void> {
+    const storedOutput = await this.storage.findOutput(output.txid, output.outputIndex, topic)
+    if (storedOutput === undefined || storedOutput === null) return
+    const consumedBy = [...new Set([...newUTXOs, ...storedOutput.consumedBy])]
+    await this.storage.updateConsumedBy(
+      output.txid,
+      output.outputIndex,
+      topic,
+      consumedBy
+    )
+  }
+
+  private async applyTopicStorageMutation(
+    validation: TopicValidation,
+    steak: STEAK,
+    tx: Transaction,
+    txid: string,
+    beef: number[],
+    offChainValues?: number[]
+  ): Promise<void> {
+    const topic = validation.topic
+    const { outputsConsumed, outputsToMarkStale } =
+      this.classifyPreviousCoins(tx, validation)
+    await this.removeStaleOutputs(outputsToMarkStale, topic, txid)
+    steak[topic].coinsRemoved = outputsToMarkStale.map(output => output.inputIndex)
+
+    const newUTXOs: Array<{ txid: string, outputIndex: number }> = []
+    await Promise.all(validation.admissibleOutputs.outputsToAdmit.map(async outputIndex => {
+      await this.admitOutput(
+        tx,
+        txid,
+        beef,
+        outputIndex,
+        topic,
+        outputsConsumed,
+        newUTXOs,
+        offChainValues
+      )
+    }))
+
+    this.startTime(`outputConsumed_${txid.substring(0, 10)}`)
+    const appliedRecord = await this.buildAppliedTransactionRecord(tx)
+    await this.recordTransactionData(tx, beef, appliedRecord.blockHash)
+    await Promise.all([
+      ...outputsConsumed.map(async output => {
+        await this.updateConsumedOutput(output, newUTXOs, topic)
+      }),
+      this.storage.insertAppliedTransaction({ txid, topic, ...appliedRecord })
+    ])
+    if (appliedRecord.blockHeight !== undefined && appliedRecord.blockHash !== undefined) {
+      await this.recomputeTopicBlockAnchor(
+        topic,
+        appliedRecord.blockHeight,
+        appliedRecord.blockHash
+      )
+    }
+    this.endTime(`outputConsumed_${txid.substring(0, 10)}`)
+  }
+
+  private async applyStorageMutations(
+    validations: TopicValidation[],
+    dupeTopics: Set<string>,
+    failedTopics: Set<string>,
+    steak: STEAK,
+    tx: Transaction,
+    txid: string,
+    beef: number[],
+    offChainValues?: number[]
+  ): Promise<void> {
+    for (const validation of validations) {
+      const topic = validation.topic
+      if (dupeTopics.has(topic) || failedTopics.has(topic)) continue
+      try {
+        await this.applyTopicStorageMutation(
+          validation,
+          steak,
+          tx,
+          txid,
+          beef,
+          offChainValues
+        )
+      } catch (error) {
+        this.logger.error(
+          'Error updating storage and notifying lookup services for topic',
+          topic,
+          error
+        )
+      }
+    }
+  }
+
+  private async propagateSubmission(
+    taggedBEEF: TaggedBEEF,
+    steak: STEAK,
+    dupeTopics: Set<string>,
+    tx: Transaction,
+    txid: string
+  ): Promise<void> {
+    this.startTime(`transactionPropagation_${txid.substring(0, 10)}`)
+    const relevantTopics = taggedBEEF.topics.filter(topic =>
+      steak[topic] !== undefined &&
+      !dupeTopics.has(topic) &&
+      (
+        steak[topic].outputsToAdmit.length !== 0 ||
+        steak[topic].coinsRemoved?.length !== 0
+      )
+    )
+    if (relevantTopics.length === 0) {
+      this.endTime(`transactionPropagation_${txid.substring(0, 10)}`)
+      return
+    }
+
+    let customBroadcasterConfig
+    if (Array.isArray(this.slapTrackers)) {
+      const resolverConfig: LookupResolverConfig = {
+        slapTrackers: this.slapTrackers
+      }
+      customBroadcasterConfig = {
+        resolver: new LookupResolver(resolverConfig)
+      }
+    }
+    const shipBroadcaster = new SHIPBroadcaster(relevantTopics, customBroadcasterConfig)
+    try {
+      await shipBroadcaster.broadcast(tx)
+    } catch (error) {
+      this.logger.error('Error during propagation to other nodes:', error)
+    }
+    this.endTime(`transactionPropagation_${txid.substring(0, 10)}`)
+  }
+
   /**
    * Submits a transaction for processing by Overlay Services.
    * @param {TaggedBEEF} taggedBEEF - The transaction to process
@@ -508,84 +1008,18 @@ export class Engine {
     // ===================================================================
     // PHASE 1: VALIDATE (read-only, no mutations)
     // ===================================================================
-    type TopicValidation = {
-      topic: string
-      isDupe: boolean
-      previousCoins: number[]
-      previousOutputs: Array<Output | null>
-      admissibleOutputs: AdmittanceInstructions
-    }
-
-    const topicValidations = taggedBEEF.topics.map(async (topic): Promise<TopicValidation> => {
-      try {
-        if (this.managers[topic] === undefined || this.managers[topic] === null) {
-          throw new Error(`This server does not support this topic: ${topic}`)
-        }
-
-        // Check for duplicate transactions
-        this.startTime(`dupCheck_${txid.substring(0, 10)}`)
-        const dupeCheck = await this.storage.doesAppliedTransactionExist({ txid, topic })
-        this.endTime(`dupCheck_${txid.substring(0, 10)}`)
-
-        if (dupeCheck) {
-          dupeTopics.add(topic)
-          return {
-            topic,
-            isDupe: true,
-            previousCoins: [],
-            previousOutputs: [],
-            admissibleOutputs: { outputsToAdmit: [], coinsToRetain: [] }
-          }
-        }
-
-        // Identify previous coins admitted to this specific topic
-        const previousCoins: number[] = []
-        const outputPromises = tx.inputs.map(async (input, i) => {
-          const previousTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-          if (previousTXID !== undefined) {
-            // Check if the previous output was admitted to this specific topic
-            const output = await this.storage.findOutput(previousTXID, input.sourceOutputIndex, topic)
-            if (output !== undefined && output !== null) {
-              previousCoins.push(i)
-              return output
-            }
-          }
-          return null
-        })
-
-        this.startTime(`previousOutputQuery_${txid.substring(0, 10)}`)
-        const previousOutputs = await Promise.all(outputPromises)
-        this.endTime(`previousOutputQuery_${txid.substring(0, 10)}`)
-
-        // Determine which outputs are admissible for this topic (validation only)
-        this.startTime(`identifyAdmissibleOutputs_${txid.substring(0, 10)}`)
-        const admissibleOutputs = await this.managers[topic].identifyAdmissibleOutputs(
-          taggedBEEF.beef,
-          previousCoins,
-          offChainValues,
-          mode
-        )
-        this.endTime(`identifyAdmissibleOutputs_${txid.substring(0, 10)}`)
-
-        return {
-          topic,
-          isDupe: false,
-          previousCoins,
-          previousOutputs,
-          admissibleOutputs
-        }
-      } catch (error) {
-        this.logger.error(`Error validating topic during submit: topic=${serializeLogValue(topic)} error=${serializeErrorForLog(error)}`)
-        failedTopics.add(topic)
-        return {
-          topic,
-          isDupe: false,
-          previousCoins: [],
-          previousOutputs: [],
-          admissibleOutputs: { outputsToAdmit: [], coinsToRetain: [] }
-        }
-      }
-    })
+    const topicValidations = taggedBEEF.topics.map(async topic =>
+      await this.validateTopicSubmission(
+        topic,
+        tx,
+        txid,
+        taggedBEEF.beef,
+        offChainValues,
+        mode,
+        dupeTopics,
+        failedTopics
+      )
+    )
 
     const validations = await Promise.all(topicValidations)
 
@@ -607,45 +1041,10 @@ export class Engine {
     // network: submitters treat an empty STEAK as a rejection and
     // abort/release their held inputs, so broadcasting it anyway would
     // desync their wallets from the chain.
-    const anyTopicAccepted = validations.some(v =>
-      !failedTopics.has(v.topic) && (
-        v.isDupe ||
-        v.admissibleOutputs.outputsToAdmit.length > 0 ||
-        v.admissibleOutputs.coinsToRetain.length > 0 ||
-        v.previousCoins.length > 0
-      )
+    const anyTopicAccepted = validations.some(validation =>
+      this.isTopicSubmissionAccepted(validation, failedTopics)
     )
-    this.startTime(`broadcast_${txid.substring(0, 10)}`)
-    if (mode !== 'historical-tx' && this.broadcaster !== undefined && anyTopicAccepted) {
-      try {
-        let response: BroadcastResponse | BroadcastFailure
-        if (tx.merklePath !== undefined) {
-          // tx has been verified, thus if there is a merklePath, the transaction is already on-chain...skip broadcast.
-          const txid = tx.id('hex')
-          const mp = tx.merklePath
-          const leaf = mp.path[0].find(leaf => leaf.hash === txid)
-          const r: BroadcastResponse = {
-            status: 'success',
-            txid: tx.id('hex'),
-            message: `In block at height ${mp.blockHeight} index ${leaf?.offset}`,
-          }
-          response = r
-        } else {
-          response = await this.broadcaster.broadcast(tx)
-        }
-        if (isBroadcastFailure(response) && this.throwOnBroadcastFailure) {
-          const e = new Error(`Failed to broadcast transaction! Error: ${response.description}`)
-            ; (e as any).more = response.more
-          throw e
-        }
-      } catch (error) {
-        if (this.throwOnBroadcastFailure) {
-          throw error
-        }
-        this.logger.error('Error broadcasting transaction:', error)
-      }
-    }
-    this.endTime(`broadcast_${txid.substring(0, 10)}`)
+    await this.broadcastAcceptedSubmission(tx, txid, mode, anyTopicAccepted)
 
     // Call the callback function with STEAK if it is provided (before storage mutations)
     if (onSteakReady !== undefined) {
@@ -656,254 +1055,31 @@ export class Engine {
     // PHASE 3: MUTATE STORAGE (only after broadcast succeeded)
     // ===================================================================
     // Mark previous outputs as spent and notify lookup services
-    await Promise.all(validations.map(async (validation) => {
-      if (validation.isDupe || failedTopics.has(validation.topic)) {
-        return
-      }
+    await this.markPreviousOutputsSpent(
+      validations,
+      failedTopics,
+      tx,
+      txid,
+      offChainValues
+    )
 
-      const topic = validation.topic
-      const previousOutputs = validation.previousOutputs
-
-      // Mark all previous outputs as spent
-      const markSpentPromises = previousOutputs.map(async (output) => {
-        if (output !== undefined && output !== null) {
-          try {
-            await this.storage.markUTXOAsSpent(output.txid, output.outputIndex, topic)
-            await Promise.all(Object.values(this.lookupServices).map(async l => {
-              try {
-                if (typeof l.outputSpent === 'function') {
-                  if (l.spendNotificationMode === 'txid') {
-                    await l.outputSpent({
-                      mode: 'txid',
-                      spendingTxid: txid,
-                      txid: output.txid,
-                      outputIndex: output.outputIndex,
-                      topic
-                    })
-                  } else if (l.spendNotificationMode === 'script') {
-                    const inputIndex = findSpendingInputIndex(tx, output)
-                    if (inputIndex === -1) {
-                      throw new Error('Could not find input index')
-                    }
-                    await l.outputSpent({
-                      mode: 'script',
-                      spendingTxid: txid,
-                      inputIndex,
-                      sequenceNumber: tx.inputs[inputIndex].sequence ?? 0xffffffff,
-                      unlockingScript: tx.inputs[inputIndex].unlockingScript!,
-                      txid: output.txid,
-                      outputIndex: output.outputIndex,
-                      topic,
-                      offChainValues
-                    })
-                  } else if (l.spendNotificationMode === 'whole-tx') {
-                    await l.outputSpent({
-                      mode: 'whole-tx',
-                      spendingAtomicBEEF: tx.toAtomicBEEF(),
-                      txid: output.txid,
-                      outputIndex: output.outputIndex,
-                      topic,
-                      offChainValues
-                    })
-                  } else { // none
-                    await l.outputSpent({
-                      mode: 'none',
-                      txid: output.txid,
-                      outputIndex: output.outputIndex,
-                      topic
-                    })
-                  }
-                }
-              } catch (error) {
-                this.logger.error('Error in lookup service for outputSpent:', error)
-              }
-            }))
-          } catch (error) {
-            this.logger.error('Error marking UTXO as spent:', error)
-          }
-        }
-      })
-
-      await Promise.all(markSpentPromises)
-    }))
-
-    // Continue with storage updates and lookup service notifications
-    for (const validation of validations) {
-      const topic = validation.topic
-      if (dupeTopics.has(topic)) {
-        continue
-      }
-      if (failedTopics.has(topic)) {
-        continue
-      }
-      try {
-        const admissibleOutputs = steak[topic]
-        const outputsToAdmit: number[] = admissibleOutputs.outputsToAdmit
-        const outputsConsumed: Array<{
-          txid: string
-          outputIndex: number
-        }> = []
-
-        const outputsToMarkStale: Array<{
-          txid: string
-          previousOutputIndex: number
-          inputIndex: number
-        }> = []
-
-        // Use previousCoins from validation
-        const previousCoins = validation.previousCoins
-
-        // For each of the previous UTXOs for this topic, if the UTXO was not included in the list of UTXOs identified for retention, then it will be marked as stale.
-        for (const inputIndex of previousCoins) {
-          const previousTXID = tx.inputs[inputIndex].sourceTXID ?? tx.inputs[inputIndex].sourceTransaction?.id('hex')
-          if (typeof previousTXID !== 'string') continue
-          const previousOutputIndex = tx.inputs[inputIndex].sourceOutputIndex
-          if (admissibleOutputs.coinsToRetain.includes(inputIndex)) {
-            outputsConsumed.push({
-              txid: previousTXID,
-              outputIndex: previousOutputIndex
-            })
-          } else {
-            outputsToMarkStale.push({
-              txid: previousTXID,
-              previousOutputIndex,
-              inputIndex
-            })
-          }
-        }
-
-        // Remove stale outputs recursively
-        this.startTime(`lookForStaleOutputs_${txid.substring(0, 10)}`)
-        await Promise.all(outputsToMarkStale.map(async coin => {
-          const output = await this.storage.findOutput(coin.txid, coin.previousOutputIndex, topic)
-          if (output !== undefined && output !== null) {
-            await this.deleteUTXODeep(output)
-          }
-        }))
-        this.endTime(`lookForStaleOutputs_${txid.substring(0, 10)}`)
-
-        // Update the STEAK to indicate which coins were removed
-        steak[topic].coinsRemoved = outputsToMarkStale.map(x => x.inputIndex)
-
-        // Handle admittance and notification of incoming UTXOs
-        const newUTXOs: Array<{ txid: string, outputIndex: number }> = []
-        await Promise.all(outputsToAdmit.map(async outputIndex => {
-          if (typeof tx.outputs[outputIndex].satoshis !== 'number') return
-          this.startTime(`insertNewOutput_${txid.substring(0, 10)}`)
-          await this.storage.insertOutput({
-            txid,
-            outputIndex,
-            outputScript: tx.outputs[outputIndex].lockingScript.toBinary(),
-            satoshis: tx.outputs[outputIndex].satoshis,
-            topic,
-            spent: false,
-            beef: this.compactBEEFForStorage(tx, taggedBEEF.beef),
-            consumedBy: [],
-            outputsConsumed,
-            score: Date.now(),
-            blockHeight: extractMerkleProofMetadata(txid, tx.merklePath)?.blockHeight
-          })
-          this.endTime(`insertNewOutput_${txid.substring(0, 10)}`)
-          newUTXOs.push({ txid, outputIndex })
-
-          this.startTime(`notifyLookupService${txid.substring(0, 10)}`)
-          await Promise.all(Object.values(this.lookupServices).map(async l => {
-            try {
-              if (l.admissionMode === 'locking-script') {
-                if (
-                  typeof tx.outputs[outputIndex].lockingScript !== 'object' ||
-                  typeof tx.outputs[outputIndex].satoshis !== 'number'
-                ) {
-                  return
-                }
-                await l.outputAdmittedByTopic({
-                  mode: 'locking-script',
-                  txid,
-                  outputIndex,
-                  lockingScript: tx.outputs[outputIndex].lockingScript,
-                  satoshis: tx.outputs[outputIndex].satoshis,
-                  topic,
-                  offChainValues
-                })
-              } else {
-                await l.outputAdmittedByTopic({
-                  mode: 'whole-tx',
-                  atomicBEEF: tx.toAtomicBEEF(),
-                  outputIndex,
-                  topic,
-                  offChainValues
-                })
-              }
-            } catch (error) {
-              this.logger.error('Error in lookup service for outputAdmittedByTopic:', error)
-            }
-          }))
-          this.endTime(`notifyLookupService${txid.substring(0, 10)}`)
-        }))
-
-        this.startTime(`outputConsumed_${txid.substring(0, 10)}`)
-        // Update each output consumed to know who consumed it and insert applied transaction in parallel
-        const appliedRecord = await this.buildAppliedTransactionRecord(tx)
-        await this.recordTransactionData(tx, taggedBEEF.beef, appliedRecord.blockHash)
-
-        await Promise.all([
-          ...outputsConsumed.map(async output => {
-            const outputToUpdate = await this.storage.findOutput(output.txid, output.outputIndex, topic)
-            if (outputToUpdate !== undefined && outputToUpdate !== null) {
-              const newConsumedBy = [...new Set([...newUTXOs, ...outputToUpdate.consumedBy])]
-              await this.storage.updateConsumedBy(output.txid, output.outputIndex, topic, newConsumedBy)
-            }
-          }),
-          this.storage.insertAppliedTransaction({
-            txid,
-            topic,
-            ...appliedRecord
-          })
-        ])
-
-        if (appliedRecord.blockHeight !== undefined && appliedRecord.blockHash !== undefined) {
-          await this.recomputeTopicBlockAnchor(topic, appliedRecord.blockHeight, appliedRecord.blockHash)
-        }
-        this.endTime(`outputConsumed_${txid.substring(0, 10)}`)
-      } catch (error) {
-        this.logger.error('Error updating storage and notifying lookup services for topic', topic, error)
-      }
-    }
+    await this.applyStorageMutations(
+      validations,
+      dupeTopics,
+      failedTopics,
+      steak,
+      tx,
+      txid,
+      taggedBEEF.beef,
+      offChainValues
+    )
 
     // If we don't have an advertiser or we are dealing with historical transactions, just return the steak
     if (this.advertiser === undefined || mode === 'historical-tx' || mode === 'historical-tx-no-spv') {
       return steak
     }
 
-    this.startTime(`transactionPropagation_${txid.substring(0, 10)}`)
-    const relevantTopics = taggedBEEF.topics.filter(topic =>
-      steak[topic] !== undefined && !dupeTopics.has(topic) && (steak[topic].outputsToAdmit.length !== 0 || steak[topic].coinsRemoved?.length !== 0)
-    )
-
-    if (relevantTopics.length === 0) {
-      this.endTime(`transactionPropagation_${txid.substring(0, 10)}`)
-      return steak
-    }
-
-    // Create a SHIPBroadcaster instance
-    let customBroadcasterConfig
-    if (Array.isArray(this.slapTrackers)) {
-      // Custom SLAP trackers warrant a custom broadcaster config
-      const resolverConfig: LookupResolverConfig = {
-        slapTrackers: this.slapTrackers
-      }
-      customBroadcasterConfig = {
-        resolver: new LookupResolver(resolverConfig)
-      }
-    }
-    const shipBroadcaster = new SHIPBroadcaster(relevantTopics, customBroadcasterConfig)
-
-    try {
-      await shipBroadcaster.broadcast(tx)
-    } catch (error) {
-      this.logger.error('Error during propagation to other nodes:', error)
-    }
-    this.endTime(`transactionPropagation_${txid.substring(0, 10)}`)
+    await this.propagateSubmission(taggedBEEF, steak, dupeTopics, tx, txid)
 
     // Immediately return from the function without waiting for the promises to resolve.
     return steak

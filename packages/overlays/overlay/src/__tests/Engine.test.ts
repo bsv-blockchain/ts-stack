@@ -2,7 +2,14 @@ import { Engine } from '../Engine'
 import { LookupService } from '../LookupService'
 import { TopicManager } from '../TopicManager'
 import { Storage } from '../storage/Storage'
-import { Transaction, Utils, TaggedBEEF, AdmittanceInstructions, STEAK } from '@bsv/sdk'
+import {
+  Transaction,
+  Utils,
+  TaggedBEEF,
+  AdmittanceInstructions,
+  STEAK,
+  SHIPBroadcaster
+} from '@bsv/sdk'
 import { Output } from '../Output'
 import { SyncConfiguration } from '../SyncConfiguration'
 import { Advertiser } from '../Advertiser'
@@ -704,6 +711,62 @@ describe('BSV Overlay Services Engine', () => {
         expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
       })
 
+      it('preserves strict broadcast failures and their provider details', async () => {
+        const broadcaster = {
+          broadcast: jest.fn(async () => ({
+            status: 'error' as const,
+            code: 'ERR_REJECTED',
+            description: 'provider policy rejected the transaction',
+            more: { retryable: false }
+          }))
+        }
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          undefined,
+          broadcaster,
+          undefined,
+          undefined,
+          false,
+          '[OVERLAY_ENGINE] ',
+          true
+        )
+
+        await expect(
+          engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        ).rejects.toMatchObject({
+          message:
+            'Failed to broadcast transaction! Error: provider policy rejected the transaction',
+          more: { retryable: false }
+        })
+      })
+
+      it('logs transport exceptions and continues when strict broadcast failure is disabled', async () => {
+        const broadcaster = {
+          broadcast: jest.fn(async () => {
+            throw new Error('provider unavailable')
+          })
+        }
+        const engine = makeEngine(broadcaster)
+        const logger = {
+          ...console,
+          error: jest.fn()
+        }
+        engine.logger = logger
+
+        await expect(
+          engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        ).resolves.toHaveProperty('Hello')
+        expect(logger.error).toHaveBeenCalledWith(
+          'Error broadcasting transaction:',
+          expect.objectContaining({ message: 'provider unavailable' })
+        )
+      })
+
       it('never broadcasts a transaction every topic manager rejected', async () => {
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
           outputsToAdmit: [],
@@ -769,6 +832,35 @@ describe('BSV Overlay Services Engine', () => {
         const engine = makeEngine(broadcaster)
         await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
         expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
+      })
+
+      it('propagates admitted current transactions when an advertiser is configured', async () => {
+        const propagate = jest
+          .spyOn(SHIPBroadcaster.prototype, 'broadcast')
+          .mockResolvedValue({
+            status: 'success',
+            txid: exampleTXID,
+            message: 'propagated'
+          })
+        const engine = new Engine(
+          { tm_Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          ['https://slap.example.com'],
+          undefined,
+          mockAdvertiser
+        )
+
+        const result = await engine.submit({
+          beef: exampleBeef,
+          topics: ['tm_Hello']
+        })
+
+        expect(result.tm_Hello.outputsToAdmit).toEqual([0])
+        expect(propagate).toHaveBeenCalledTimes(1)
       })
     })
 
@@ -897,6 +989,49 @@ describe('BSV Overlay Services Engine', () => {
             topic: 'Hello'
           })
         })
+
+        it.each(['txid', 'whole-tx'] as const)(
+          'preserves %s spend-notification compatibility',
+          async spendNotificationMode => {
+            mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+            const outputSpent = jest.fn()
+            const engine = new Engine(
+              {
+                Hello: mockTopicManager
+              },
+              {
+                Hello: {
+                  ...mockLookupService,
+                  spendNotificationMode,
+                  outputSpent
+                }
+              },
+              mockStorageEngine,
+              mockChainTracker
+            )
+
+            await engine.submit({
+              beef: exampleBeef,
+              topics: ['Hello']
+            })
+
+            expect(outputSpent).toHaveBeenCalledWith(
+              expect.objectContaining({
+                mode: spendNotificationMode,
+                txid: exampleTXID,
+                outputIndex: 0,
+                topic: 'Hello'
+              })
+            )
+            if (spendNotificationMode === 'whole-tx') {
+              expect(outputSpent.mock.calls[0][0].spendingAtomicBEEF).toEqual(
+                Transaction.fromBEEF(exampleBeef).toAtomicBEEF()
+              )
+            } else {
+              expect(outputSpent.mock.calls[0][0].spendingTxid).toBe(exampleTXID)
+            }
+          }
+        )
 
         it('preserves script-mode spending input details', async () => {
           const spentOutput: Output = {

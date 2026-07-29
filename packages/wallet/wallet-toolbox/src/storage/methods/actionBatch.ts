@@ -587,6 +587,52 @@ async function persistLabels (
   }
 }
 
+function outputBasketId (
+  isChange: boolean,
+  basket: string | undefined,
+  baskets: Record<string, TableOutputBasket>
+): number | undefined {
+  if (isChange) return baskets.default?.basketId
+  return basket == null ? undefined : baskets[basket].basketId
+}
+
+async function persistOutputTags (
+  storage: StorageProvider,
+  outputId: number,
+  tagNames: string[],
+  tags: Record<string, TableOutputTag>,
+  trx: TrxToken
+): Promise<void> {
+  for (const tagName of new Set(tagNames)) {
+    const tag = tags[tagName]
+    await storage.findOrInsertOutputTagMap(outputId, verifyId(tag.outputTagId), trx)
+  }
+}
+
+async function persistOutputCommission (
+  storage: StorageProvider,
+  row: TableOutput,
+  action: ActionBatchCommitAction,
+  transactionId: number,
+  trx: TrxToken
+): Promise<void> {
+  if (row.lockingScript == null) {
+    throw new WERR_INTERNAL('commission locking script must be retained')
+  }
+  const commission: TableCommission = {
+    commissionId: 0,
+    userId: row.userId,
+    transactionId,
+    satoshis: row.satoshis,
+    keyOffset: action.commissionKeyOffset ?? '',
+    isRedeemed: false,
+    lockingScript: row.lockingScript,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  }
+  await storage.insertCommission(commission, trx)
+}
+
 async function persistOutputs (
   storage: StorageProvider,
   userId: number,
@@ -608,18 +654,12 @@ async function persistOutputs (
     const lockingScript = offset.length <= storage.getSettings().maxOutputScript || isCommission
       ? output.lockingScript.toBinary()
       : undefined
-    let basketId: number | undefined
-    if (isChange) {
-      basketId = baskets.default?.basketId
-    } else if (planned.basket != null) {
-      basketId = baskets[planned.basket].basketId
-    }
     const now = new Date()
     const row: TableOutput = {
       outputId: 0,
       userId,
       transactionId,
-      basketId,
+      basketId: outputBasketId(isChange, planned.basket, baskets),
       spendable: !isCommission,
       change: isChange,
       outputDescription: planned.outputDescription,
@@ -639,25 +679,8 @@ async function persistOutputs (
       updated_at: now
     }
     row.outputId = await storage.insertOutput(row, trx)
-    for (const tagName of new Set(planned.tags)) {
-      const tag: TableOutputTag = tags[tagName]
-      await storage.findOrInsertOutputTagMap(row.outputId, verifyId(tag.outputTagId), trx)
-    }
-    if (isCommission) {
-      if (lockingScript == null) throw new WERR_INTERNAL('commission locking script must be retained')
-      const commission: TableCommission = {
-        commissionId: 0,
-        userId,
-        transactionId,
-        satoshis: planned.satoshis,
-        keyOffset: action.commissionKeyOffset ?? '',
-        isRedeemed: false,
-        lockingScript,
-        created_at: now,
-        updated_at: now
-      }
-      await storage.insertCommission(commission, trx)
-    }
+    await persistOutputTags(storage, row.outputId, planned.tags, tags, trx)
+    if (isCommission) await persistOutputCommission(storage, row, action, transactionId, trx)
     rows.push(row)
   }
   return rows

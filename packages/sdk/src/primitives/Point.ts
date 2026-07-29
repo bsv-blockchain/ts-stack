@@ -1079,6 +1079,142 @@ export default class Point extends BasePoint {
     return a.toP()
   }
 
+  private _prepareWnafWindows(
+    defW: number,
+    points: Point[],
+    len: number,
+    wndWidth: number[],
+    wnd: Point[][]
+  ): void {
+    for (let index = 0; index < len; index++) {
+      const nafPoints = points[index]._getNAFPoints(defW)
+      wndWidth[index] = nafPoints.wnd
+      wnd[index] = nafPoints.points
+    }
+  }
+
+  private _combineWnafPair(
+    a: number,
+    b: number,
+    points: Point[],
+    coeffs: BigNumber[],
+    wndWidth: number[],
+    wnd: Point[][],
+    naf: number[][],
+    currentMax: number
+  ): number {
+    if (wndWidth[a] !== 1 || wndWidth[b] !== 1) {
+      naf[a] = this.curve.getNAF(
+        coeffs[a],
+        wndWidth[a],
+        this.curve._bitLength
+      )
+      naf[b] = this.curve.getNAF(
+        coeffs[b],
+        wndWidth[b],
+        this.curve._bitLength
+      )
+      return Math.max(currentMax, naf[a].length, naf[b].length)
+    }
+    const comb: any[] = [points[a], null, null, points[b]]
+    const aY = points[a].y ?? new BigNumber(0)
+    const bY = points[b].y ?? new BigNumber(0)
+    if (aY.cmp(bY) === 0) {
+      comb[1] = points[a].add(points[b])
+      comb[2] = points[a].toJ().mixedAdd(points[b].neg())
+    } else if (aY.cmp(bY.redNeg()) === 0) {
+      comb[1] = points[a].toJ().mixedAdd(points[b])
+      comb[2] = points[a].add(points[b].neg())
+    } else {
+      comb[1] = points[a].toJ().mixedAdd(points[b])
+      comb[2] = points[a].toJ().mixedAdd(points[b].neg())
+    }
+    const index = [-3, -1, -5, -7, 0, 7, 5, 1, 3]
+    const jsf = this.curve.getJSF(coeffs[a], coeffs[b])
+    const max = Math.max(currentMax, jsf[0].length)
+    naf[a] = Array.from({ length: max })
+    naf[b] = Array.from({ length: max })
+    for (let position = 0; position < max; position++) {
+      const ja = Math.trunc(jsf[0][position])
+      const jb = Math.trunc(jsf[1][position])
+      naf[a][position] = index[(ja + 1) * 3 + (jb + 1)]
+      naf[b][position] = 0
+      wnd[a] = comb
+    }
+    return max
+  }
+
+  private _prepareWnafRepresentations(
+    points: Point[],
+    coeffs: BigNumber[],
+    len: number,
+    wndWidth: number[],
+    wnd: Point[][],
+    naf: number[][]
+  ): number {
+    let max = 0
+    for (let index = len - 1; index >= 1; index -= 2) {
+      max = this._combineWnafPair(
+        index - 1,
+        index,
+        points,
+        coeffs,
+        wndWidth,
+        wnd,
+        naf,
+        max
+      )
+    }
+    return max
+  }
+
+  private _collectWnafStep(
+    start: number,
+    len: number,
+    naf: number[][],
+    tmp: BigNumber[]
+  ): { index: number; doubles: number } {
+    let index = start
+    let doubles = 0
+    while (index >= 0) {
+      let zero = true
+      for (let point = 0; point < len; point++) {
+        tmp[point] = new BigNumber(
+          typeof naf[point][index] === 'number' ? naf[point][index] : 0
+        )
+        if (!tmp[point].isZero()) zero = false
+      }
+      if (!zero) break
+      doubles++
+      index--
+    }
+    if (index >= 0) doubles++
+    return { index, doubles }
+  }
+
+  private _addWnafStep(
+    accumulator: JPoint,
+    len: number,
+    tmp: BigNumber[],
+    wnd: Point[][]
+  ): JPoint {
+    const one = new BigNumber(1)
+    const two = new BigNumber(2)
+    let result = accumulator
+    for (let index = 0; index < len; index++) {
+      const value = tmp[index]
+      if (value.cmpn(0) === 0) continue
+      const point: any = value.isNeg()
+        ? wnd[index][value.neg().sub(one).div(two).toNumber()].neg()
+        : wnd[index][value.sub(one).div(two).toNumber()]
+      result =
+        point.type === 'affine'
+          ? result.mixedAdd(point)
+          : result.add(point)
+    }
+    return result
+  }
+
   private _wnafMulAdd(
     defW: number,
     points: Point[],
@@ -1091,114 +1227,24 @@ export default class Point extends BasePoint {
     const wnd: Point[][] = Array.from({ length: scratchLength }, () => [])
     const naf: number[][] = Array.from({ length: scratchLength }, () => [])
 
-    // Fill all arrays
-    let max = 0
-    for (let i = 0; i < len; i++) {
-      const p = points[i]
-      const nafPoints = p._getNAFPoints(defW)
-      wndWidth[i] = nafPoints.wnd // Ensure correct type
-      wnd[i] = nafPoints.points // Ensure correct type
-    }
-
-    // Comb small window NAFs
-    for (let i = len - 1; i >= 1; i -= 2) {
-      const a = i - 1
-      const b = i
-      if (wndWidth[a] !== 1 || wndWidth[b] !== 1) {
-        naf[a] = this.curve.getNAF(coeffs[a], wndWidth[a], this.curve._bitLength)
-        naf[b] = this.curve.getNAF(coeffs[b], wndWidth[b], this.curve._bitLength)
-        max = Math.max(naf[a].length, max)
-        max = Math.max(naf[b].length, max)
-        continue
-      }
-
-      const comb: any[] = [points[a] /* 1 */, null /* 3 */, null /* 5 */, points[b] /* 7 */]
-
-      // Try to avoid Projective points, if possible
-      if ((points[a].y ?? new BigNumber(0)).cmp(points[b].y ?? new BigNumber(0)) === 0) {
-        comb[1] = points[a].add(points[b])
-        comb[2] = points[a].toJ().mixedAdd(points[b].neg())
-      } else if (
-        (points[a].y ?? new BigNumber(0)).cmp((points[b].y ?? new BigNumber(0)).redNeg()) === 0
-      ) {
-        comb[1] = points[a].toJ().mixedAdd(points[b])
-        comb[2] = points[a].add(points[b].neg())
-      } else {
-        comb[1] = points[a].toJ().mixedAdd(points[b])
-        comb[2] = points[a].toJ().mixedAdd(points[b].neg())
-      }
-
-      const index = [
-        -3 /* -1 -1 */, -1 /* -1 0 */, -5 /* -1 1 */, -7 /* 0 -1 */, 0 /* 0 0 */, 7 /* 0 1 */,
-        5 /* 1 -1 */, 1 /* 1 0 */, 3 /* 1 1 */
-      ]
-
-      const jsf = this.curve.getJSF(coeffs[a], coeffs[b])
-      max = Math.max(jsf[0].length, max)
-      naf[a] = Array.from({ length: max })
-      naf[b] = Array.from({ length: max })
-      for (let j = 0; j < max; j++) {
-        const ja = Math.trunc(jsf[0][j])
-        const jb = Math.trunc(jsf[1][j])
-
-        naf[a][j] = index[(ja + 1) * 3 + (jb + 1)]
-        naf[b][j] = 0
-        wnd[a] = comb
-      }
-    }
+    this._prepareWnafWindows(defW, points, len, wndWidth, wnd)
+    const max = this._prepareWnafRepresentations(
+      points,
+      coeffs,
+      len,
+      wndWidth,
+      wnd,
+      naf
+    )
 
     let acc = new JPoint(null, null, null)
     const tmp = this.curve._wnafT4
     for (let i = max; i >= 0; i--) {
-      let k = 0
-
-      while (i >= 0) {
-        let zero = true
-        for (let j = 0; j < len; j++) {
-          tmp[j] = new BigNumber(typeof naf[j][i] === 'number' ? naf[j][i] : 0) // Ensure type consistency
-          if (!tmp[j].isZero()) {
-            // Use BigNumber's built-in comparison
-            zero = false
-          }
-        }
-        if (!zero) {
-          break
-        }
-        k++
-        i--
-      }
-      if (i >= 0) {
-        k++
-      }
-      acc = acc.dblp(k)
-      if (i < 0) {
-        break
-      }
-
-      const one = new BigNumber(1)
-      const two = new BigNumber(2)
-
-      for (let j = 0; j < len; j++) {
-        const z = tmp[j]
-        let p
-
-        if (z.cmpn(0) === 0) {
-          // Check if z is 0
-          continue
-        } else if (z.isNeg()) {
-          // If z is negative
-          p = wnd[j][z.neg().sub(one).div(two).toNumber()].neg()
-        } else {
-          // If z is positive
-          p = wnd[j][z.sub(one).div(two).toNumber()]
-        }
-
-        if (p.type === 'affine') {
-          acc = acc.mixedAdd(p)
-        } else {
-          acc = acc.add(p)
-        }
-      }
+      const step = this._collectWnafStep(i, len, naf, tmp)
+      i = step.index
+      acc = acc.dblp(step.doubles)
+      if (i < 0) break
+      acc = this._addWnafStep(acc, len, tmp, wnd)
     }
     // Zeroify references
     for (let i = 0; i < len; i++) {

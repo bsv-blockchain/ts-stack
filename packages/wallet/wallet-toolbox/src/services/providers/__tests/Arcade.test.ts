@@ -29,12 +29,12 @@ interface CapturedRequest {
 }
 
 /** A mock HttpClient that records the request and returns a scripted response. */
-function mockHttpClient (
+function mockHttpClient(
   response: Partial<HttpClientResponse<unknown>> | (() => never),
   captured: CapturedRequest[]
 ): HttpClient {
   return {
-    async request<D> (url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+    async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
       captured.push({ url, options })
       if (typeof response === 'function') {
         response() // throw to simulate a network error
@@ -44,12 +44,12 @@ function mockHttpClient (
   }
 }
 
-function mockHttpClientSequence (
+function mockHttpClientSequence(
   responses: Array<Partial<HttpClientResponse<unknown>>>,
   captured: CapturedRequest[]
 ): HttpClient {
   return {
-    async request<D> (url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+    async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
       captured.push({ url, options })
       const response = responses.shift()
       if (response == null) throw new Error('No scripted HTTP response')
@@ -74,7 +74,10 @@ describe('Arcade broadcaster', () => {
   describe('endpoint URLs', () => {
     test('Arcade posts to URL + /tx', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: true, status: 202, statusText: 'Accepted', data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' } }, captured)
+      const http = mockHttpClient(
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' } },
+        captured
+      )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       await arc.postRawTx(RAW_TX)
       expect(captured[0].url).toBe('https://arcade.example/tx')
@@ -82,7 +85,10 @@ describe('Arcade broadcaster', () => {
 
     test('standard ARC posts to URL + /v1/tx', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: true, status: 200, statusText: 'OK', data: { txid: 'abc', extraInfo: '', txStatus: 'SEEN_ON_NETWORK' } }, captured)
+      const http = mockHttpClient(
+        { ok: true, status: 200, statusText: 'OK', data: { txid: 'abc', extraInfo: '', txStatus: 'SEEN_ON_NETWORK' } },
+        captured
+      )
       const arc = new ARC('https://arc.example', { httpClient: http })
       await arc.postRawTx(RAW_TX)
       expect(captured[0].url).toBe('https://arc.example/v1/tx')
@@ -90,7 +96,10 @@ describe('Arcade broadcaster', () => {
 
     test('Arcade getTxData hits URL + /tx/{txid}', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: true, status: 200, statusText: 'OK', data: { txid: 'deadbeef', txStatus: 'MINED' } }, captured)
+      const http = mockHttpClient(
+        { ok: true, status: 200, statusText: 'OK', data: { txid: 'deadbeef', txStatus: 'MINED' } },
+        captured
+      )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       await arc.getTxData('deadbeef')
       expect(captured[0].url).toBe('https://arcade.example/tx/deadbeef')
@@ -103,7 +112,10 @@ describe('Arcade broadcaster', () => {
       // Echo back the caller-supplied txid so the "txid altered" annotation is not triggered,
       // isolating the assertion to the extraInfo cosmetic guard (no trailing "undefined").
       const txid = '11'.repeat(32)
-      const http = mockHttpClient({ ok: true, status: 202, statusText: 'Accepted', data: { txid, status: 202, txStatus: 'RECEIVED' } }, captured)
+      const http = mockHttpClient(
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid, status: 202, txStatus: 'RECEIVED' } },
+        captured
+      )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX, [txid])
       expect(r.status).toBe('success')
@@ -114,7 +126,15 @@ describe('Arcade broadcaster', () => {
 
     test('Arcade HTTP 400 → status error treated as invalidTx (serviceError=false)', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: false, status: 400, statusText: 'Bad Request', data: { error: 'transaction failed validation', reason: 'script evaluation failed' } }, captured)
+      const http = mockHttpClient(
+        {
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          data: { error: 'transaction failed validation', reason: 'script evaluation failed' }
+        },
+        captured
+      )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
@@ -123,7 +143,10 @@ describe('Arcade broadcaster', () => {
 
     test('Arcade HTTP 503 backpressure → transient serviceError=true', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: false, status: 503, statusText: 'Service Unavailable', data: { error: 'backpressure' } }, captured)
+      const http = mockHttpClient(
+        { ok: false, status: 503, statusText: 'Service Unavailable', data: { error: 'backpressure' } },
+        captured
+      )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
@@ -132,16 +155,154 @@ describe('Arcade broadcaster', () => {
 
     test('Arcade network throw → serviceError=true', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient(() => { throw new Error('ECONNREFUSED') }, captured)
+      const http = mockHttpClient(() => {
+        throw new Error('ECONNREFUSED')
+      }, captured)
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
       expect(r.serviceError).toBe(true)
     })
 
+    test.each([
+      {
+        name: 'standard ARC',
+        create: (http: HttpClient) => new ARC('https://arc.example', { httpClient: http }),
+        status: 200
+      },
+      {
+        name: 'Arcade',
+        create: (http: HttpClient) => new Arcade('https://arcade.example', { httpClient: http }),
+        status: 202
+      }
+    ])('$name preserves double-spend response details', async ({ create, status }) => {
+      const captured: CapturedRequest[] = []
+      const txid = '11'.repeat(32)
+      const competingTxs = ['22'.repeat(32)]
+      const http = mockHttpClient(
+        {
+          ok: true,
+          status,
+          statusText: 'Accepted',
+          data: {
+            txid,
+            extraInfo: 'conflict',
+            txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+            competingTxs
+          }
+        },
+        captured
+      )
+
+      const result = await create(http).postRawTx(RAW_TX, [txid])
+
+      expect(result).toMatchObject({
+        txid,
+        status: 'error',
+        doubleSpend: true,
+        competingTxs
+      })
+      expect(result.notes).toEqual([
+        expect.objectContaining({
+          what: 'postRawTxDoubleSpend',
+          txid,
+          competingTxs: competingTxs.join(',')
+        })
+      ])
+    })
+
+    test('standard ARC network throw preserves a service-error history note', async () => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClient(() => {
+        throw new Error('ECONNRESET')
+      }, captured)
+      const result = await new ARC('https://arc.example', {
+        httpClient: http
+      }).postRawTx(RAW_TX)
+
+      expect(result).toMatchObject({
+        status: 'error',
+        serviceError: true
+      })
+      expect(result.notes).toEqual([
+        expect.objectContaining({
+          what: 'postRawTxCatch',
+          description: 'ECONNRESET'
+        })
+      ])
+    })
+
+    test.each([
+      {
+        name: 'standard ARC',
+        create: (http: HttpClient) => new ARC('https://arc.example', { httpClient: http })
+      },
+      {
+        name: 'Arcade',
+        create: (http: HttpClient) => new Arcade('https://arcade.example', { httpClient: http })
+      }
+    ])('$name safely classifies nonstandard status and string error data', async ({ create }) => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClient(
+        {
+          ok: false,
+          status: {} as unknown as number,
+          statusText: 'Unknown',
+          data: 'plain-text failure'
+        },
+        captured
+      )
+
+      const result = await create(http).postRawTx(RAW_TX)
+
+      expect(result).toMatchObject({
+        status: 'error',
+        serviceError: true,
+        data: { status: 'ERR_UNKNOWN' }
+      })
+      expect(result.notes).toEqual([
+        expect.objectContaining({
+          what: 'postRawTxError',
+          status: 'object',
+          data: 'plain-text failure'
+        })
+      ])
+    })
+
+    test('Arcade preserves structured error detail in its result and history', async () => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClient(
+        {
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          data: { detail: 'script evaluation failed' }
+        },
+        captured
+      )
+
+      const result = await new Arcade('https://arcade.example', {
+        httpClient: http
+      }).postRawTx(RAW_TX)
+
+      expect(result.data).toMatchObject({
+        status: '400',
+        detail: 'script evaluation failed'
+      })
+      expect(result.notes).toEqual([
+        expect.objectContaining({
+          what: 'postRawTxError',
+          detail: 'script evaluation failed'
+        })
+      ])
+    })
+
     test('standard ARC HTTP validation error → status error treated as invalidTx (serviceError=false)', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: false, status: 464, statusText: 'Invalid Inputs', data: { detail: 'script evaluation failed' } }, captured)
+      const http = mockHttpClient(
+        { ok: false, status: 464, statusText: 'Invalid Inputs', data: { detail: 'script evaluation failed' } },
+        captured
+      )
       const arc = new ARC('https://arc.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
@@ -150,7 +311,15 @@ describe('Arcade broadcaster', () => {
 
     test('standard ARC HTTP 476 batch limit → transient serviceError=true', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: false, status: 476, statusText: 'Maximum batch size exceeded', data: { detail: 'Maximum batch size exceeded' } }, captured)
+      const http = mockHttpClient(
+        {
+          ok: false,
+          status: 476,
+          statusText: 'Maximum batch size exceeded',
+          data: { detail: 'Maximum batch size exceeded' }
+        },
+        captured
+      )
       const arc = new ARC('https://arc.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
@@ -175,10 +344,18 @@ describe('Arcade broadcaster', () => {
         txs: [],
         toHex: () => RAW_TX
       } as unknown as Beef
-      const http = mockHttpClientSequence([
-        { ok: true, status: 200, statusText: 'OK', data: { txid: primaryTxid, extraInfo: '', txStatus: 'SEEN_ON_NETWORK' } },
-        { ok: true, status: 200, statusText: 'OK', data: { txid: extraTxid, txStatus } }
-      ], captured)
+      const http = mockHttpClientSequence(
+        [
+          {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            data: { txid: primaryTxid, extraInfo: '', txStatus: 'SEEN_ON_NETWORK' }
+          },
+          { ok: true, status: 200, statusText: 'OK', data: { txid: extraTxid, txStatus } }
+        ],
+        captured
+      )
       const arc = new ARC('https://arc.example', { httpClient: http })
 
       const r = await arc.postBeef(beef, [extraTxid, primaryTxid])
@@ -192,7 +369,10 @@ describe('Arcade broadcaster', () => {
   describe('request headers', () => {
     test('includes XDeployment-ID, Authorization, and X-CallbackToken when configured', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: true, status: 202, statusText: 'Accepted', data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' } }, captured)
+      const http = mockHttpClient(
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' } },
+        captured
+      )
       const arc = new Arcade('https://arcade.example', {
         httpClient: http,
         apiKey: 'server-key',
@@ -216,7 +396,7 @@ describe('Arcade broadcaster', () => {
 
     // Build an in-memory BEEF { sourceTx (anchored by a dummy BUMP) -> spendTx } from which
     // Extended Format can be reconstructed. Also returns an orphan txid whose source is absent.
-    function buildBeef (): { beef: Beef, spendTxid: string, orphanTxid: string } {
+    function buildBeef(): { beef: Beef; spendTxid: string; orphanTxid: string } {
       const priv = PrivateKey.fromHex('11'.repeat(32))
       const lock = new P2PKH().lock(priv.toPublicKey().toAddress())
 
@@ -238,7 +418,7 @@ describe('Arcade broadcaster', () => {
       return { beef, spendTxid: spendTx.id('hex'), orphanTxid: orphan.id('hex') }
     }
 
-    function buildBeefBatch (count: number): { beef: Beef, txids: string[] } {
+    function buildBeefBatch(count: number): { beef: Beef; txids: string[] } {
       const priv = PrivateKey.fromHex('22'.repeat(32))
       const lock = new P2PKH().lock(priv.toPublicKey().toAddress())
 
@@ -259,7 +439,7 @@ describe('Arcade broadcaster', () => {
       return { beef, txids }
     }
 
-    function buildBeefChain (count: number): { beef: Beef, txids: string[] } {
+    function buildBeefChain(count: number): { beef: Beef; txids: string[] } {
       const priv = PrivateKey.fromHex('33'.repeat(32))
       const lock = new P2PKH().lock(priv.toPublicKey().toAddress())
 
@@ -361,7 +541,7 @@ describe('Arcade broadcaster', () => {
       let inFlight = 0
       let maxInFlight = 0
       const http: HttpClient = {
-        async request<D> (): Promise<HttpClientResponse<D>> {
+        async request<D>(): Promise<HttpClientResponse<D>> {
           const txid = txids[callIndex++]
           inFlight++
           maxInFlight = Math.max(maxInFlight, inFlight)
@@ -392,7 +572,7 @@ describe('Arcade broadcaster', () => {
       let inFlight = 0
       let maxInFlight = 0
       const http: HttpClient = {
-        async request<D> (): Promise<HttpClientResponse<D>> {
+        async request<D>(): Promise<HttpClientResponse<D>> {
           const txid = txids[callOrder.length]
           callOrder.push(txid)
           inFlight++
@@ -428,16 +608,26 @@ describe('Arcade broadcaster', () => {
       'fef2920e00120222021a55f9b655aefbf4b2908407802838362de976aa5e4435ef0193fbf75ac183f2230057eead000df51a926a9f6b3b330f4b028c1f1c27fb218ae408e78feb2a30fa800110005fc2894e94e9009ce8102e1beb99b6a99c352e13502f53fb94e853e3d563bf4d010900d139cc229d5599c75ec9fd094da6faba3e7b97e64b8977317fa84401c17a895f0105000740a1ee710d80805c05d3e835c95d4174ad38695912e96a1c01bc17b282151d01030071c33071477ce0c6a96475bd024ecb8fa555138f47c5bf5fe7f28bf02b42f1020100008cc12b2dc5e57ceb205289260a82114e92101c496f3ccfb4c569b613d8e96a1a01010078224ee8acd16aa820d2a4bf8f022038ff95e9ceee990f08d98c17bb21a7ce8601010083f5508c315f3b7d3352e9fac3eaa6c76c0d4069558473386d31972f40c843f8010100901f20844e8ede781d7c1e8893f725c6bda494899a45a74b175f38d4e1862d76010100903877404503535b4e171ac8c92ab1c6406ab3ac81c89ad87013bb8deb39a7ca010100cdeccbedd2e94eee765e4ea01c0898789df7e9e1825130b7b73db655abd040a501010048ef4e124408fec09fd605875a54cc9bd79557e3ffc68c5011d0f50cdefb59f4010100f5714c108080ed499e7840c3f3e4a52d642723f2c5819ba502c0c00761ad892c010100c31f41af367fbb7f0d31b353a2a4b396e75bf02f122d239da9a1721f24f0dd2e0101008f44d227bcd7b051838ff8f4bffaa418660f440def819cc5a050bad07ef597e9010100c77390cde6d159a78f1543e252b9ab3984f409003d127958be1d91a387ee1c610101008954773b6594d2a1ff601726ff3aa9218282b7ff708cad72c148387f2913abfa010100198bbe74ae81436e36ba87948c8d8a452f30c859af710d71c923030ac2270a39'
 
     const header = (merkleRoot: string): BlockHeader =>
-      ({ height: F283_HEIGHT, hash: F283_BLOCKHASH, merkleRoot } as unknown as BlockHeader)
+      ({ height: F283_HEIGHT, hash: F283_BLOCKHASH, merkleRoot }) as unknown as BlockHeader
 
     // Minimal WalletServices stub exposing only hashToHeader (all this provider uses).
     const fakeServices = (h: BlockHeader | Error): WalletServices =>
-      ({ hashToHeader: async () => { if (h instanceof Error) throw h; return h } } as unknown as WalletServices)
+      ({
+        hashToHeader: async () => {
+          if (h instanceof Error) throw h
+          return h
+        }
+      }) as unknown as WalletServices
 
-    function minedHttp (merklePath: string | undefined, txStatus = 'MINED'): HttpClient {
+    function minedHttp(merklePath: string | undefined, txStatus = 'MINED'): HttpClient {
       const captured: CapturedRequest[] = []
       return mockHttpClient(
-        { ok: true, status: 200, statusText: 'OK', data: { txid: F283_TXID, txStatus, blockHeight: F283_HEIGHT, blockHash: F283_BLOCKHASH, merklePath } },
+        {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: { txid: F283_TXID, txStatus, blockHeight: F283_HEIGHT, blockHash: F283_BLOCKHASH, merklePath }
+        },
         captured
       )
     }

@@ -863,7 +863,21 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         description: 'Test action with all options',
-        inputs: [],
+        inputs: [
+          {
+            outpoint:
+              'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
+            unlockingScript: '51',
+            inputDescription: 'Already unlocked input',
+            sequenceNumber: 0xffffffff
+          },
+          {
+            outpoint:
+              'feedface20248806feedface20248806feedface20248806feedface20248806.1',
+            unlockingScriptLength: 108,
+            inputDescription: 'Input to unlock later'
+          }
+        ],
         inputBEEF: [1, 2, 3, 4],
         outputs: [
           {
@@ -980,6 +994,67 @@ describe('WalletWire Integration Tests', () => {
       await expect(wallet.signAction(args)).rejects.toThrow('Invalid inputs')
       expect(signActionMock).toHaveBeenCalledWith(args, '')
     })
+
+    it('preserves complete signing options and all send statuses', async () => {
+      const signActionMock = jest.fn().mockResolvedValue({
+        sendWithResults: [
+          {
+            txid: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806',
+            status: 'unproven'
+          },
+          {
+            txid: 'feedface20248806feedface20248806feedface20248806feedface20248806',
+            status: 'sending'
+          },
+          {
+            txid: '0123456720248806012345672024880601234567202488060123456720248806',
+            status: 'failed'
+          }
+        ]
+      })
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({
+          signAction: signActionMock
+        })
+      )
+      const args = {
+        spends: {
+          0: {
+            unlockingScript: '51',
+            sequenceNumber: 0xfffffffe
+          }
+        },
+        reference: Utils.toBase64([1, 2, 3]),
+        options: {
+          acceptDelayedBroadcast: false,
+          returnTXIDOnly: false,
+          noSend: true,
+          sendWith: [
+            'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'
+          ]
+        }
+      }
+
+      const result = await wallet.signAction(args)
+
+      expect(result).toEqual({
+        sendWithResults: [
+          {
+            txid: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806',
+            status: 'unproven'
+          },
+          {
+            txid: 'feedface20248806feedface20248806feedface20248806feedface20248806',
+            status: 'sending'
+          },
+          {
+            txid: '0123456720248806012345672024880601234567202488060123456720248806',
+            status: 'failed'
+          }
+        ]
+      })
+      expect(signActionMock).toHaveBeenCalledWith(args, '')
+    })
   })
 
   describe('abortAction', () => {
@@ -1077,6 +1152,123 @@ describe('WalletWire Integration Tests', () => {
       expect(result).toHaveProperty('totalActions')
       expect(result.totalActions).toBe(0)
       expect(result.actions).toEqual([])
+      expect(listActionsMock).toHaveBeenCalledWith(args, '')
+    })
+
+    it('round-trips every action status and complete input/output metadata', async () => {
+      const txids = [
+        '0000000020248806000000002024880600000000202488060000000020248806',
+        '1111111120248806111111112024880611111111202488061111111120248806',
+        '2222222220248806222222222024880622222222202488062222222220248806',
+        '3333333320248806333333332024880633333333202488063333333320248806',
+        '4444444420248806444444442024880644444444202488064444444420248806',
+        '5555555520248806555555552024880655555555202488065555555520248806',
+        '6666666620248806666666662024880666666666202488066666666620248806',
+        '7777777720248806777777772024880677777777202488067777777720248806'
+      ]
+      const statuses = [
+        'completed',
+        'unprocessed',
+        'sending',
+        'unproven',
+        'unsigned',
+        'nosend',
+        'nonfinal',
+        'failed'
+      ] as const
+      const actions = statuses.map((status, index) => ({
+        txid: txids[index],
+        satoshis: index + 1,
+        status,
+        isOutgoing: index % 2 === 0,
+        description: `Action ${status}`,
+        version: 1,
+        lockTime: index,
+        labels: index === 0 ? ['complete'] : undefined,
+        inputs:
+          index === 0
+            ? [
+                {
+                  sourceOutpoint: `${txids[1]}.0`,
+                  sourceSatoshis: 100,
+                  sourceLockingScript: '51',
+                  unlockingScript: '00',
+                  inputDescription: 'Complete input',
+                  sequenceNumber: 0xffffffff
+                },
+                {
+                  sourceOutpoint: `${txids[2]}.1`,
+                  sourceSatoshis: 200,
+                  sourceLockingScript: undefined,
+                  unlockingScript: undefined,
+                  inputDescription: 'Metadata-only input',
+                  sequenceNumber: 0xfffffffe
+                }
+              ]
+            : undefined,
+        outputs:
+          index === 0
+            ? [
+                {
+                  outputIndex: 0,
+                  satoshis: 50,
+                  lockingScript: '51',
+                  spendable: true,
+                  outputDescription: 'Complete output',
+                  basket: 'test basket',
+                  tags: ['one', 'two'],
+                  customInstructions: 'preserve verbatim'
+                },
+                {
+                  outputIndex: 1,
+                  satoshis: 50,
+                  lockingScript: undefined,
+                  spendable: false,
+                  outputDescription: 'Metadata-only output',
+                  basket: undefined,
+                  tags: undefined,
+                  customInstructions: undefined
+                }
+              ]
+            : undefined
+      }))
+      const listActionsMock = jest.fn().mockResolvedValue({
+        totalActions: actions.length,
+        actions
+      })
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({
+          listActions: listActionsMock
+        })
+      )
+      const args = {
+        labels: ['complete'],
+        labelQueryMode: 'all' as const,
+        includeLabels: true,
+        includeInputs: true,
+        includeInputSourceLockingScripts: true,
+        includeInputUnlockingScripts: true,
+        includeOutputs: true,
+        includeOutputLockingScripts: true,
+        limit: 20,
+        offset: 0,
+        seekPermission: false
+      }
+
+      const result = await wallet.listActions(args)
+
+      expect(result.totalActions).toBe(actions.length)
+      expect(result.actions.map(action => action.status)).toEqual(statuses)
+      expect(result.actions[0]).toMatchObject({
+        ...actions[0],
+        outputs: [
+          actions[0].outputs![0],
+          {
+            ...actions[0].outputs![1],
+            tags: []
+          }
+        ]
+      })
       expect(listActionsMock).toHaveBeenCalledWith(args, '')
     })
 

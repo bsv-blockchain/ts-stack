@@ -1065,6 +1065,244 @@ export default class Transaction {
     return id
   }
 
+  private async completeVerificationFromMerklePath(
+    tx: Transaction,
+    scriptsOnly: boolean,
+    chainTracker: ChainTracker | 'scripts only',
+    getTxid: () => string,
+    verifiedTransactions: Set<Transaction>,
+    verifiedTxids: Set<string>
+  ): Promise<boolean> {
+    if (typeof tx.merklePath !== 'object') return false
+    if (scriptsOnly) {
+      verifiedTransactions.add(tx)
+      return true
+    }
+    if (await tx.merklePath.verify(getTxid(), chainTracker)) {
+      verifiedTxids.add(getTxid())
+      return true
+    }
+    throw new Error(`Invalid merkle path for transaction ${getTxid()}`)
+  }
+
+  private async verifyTransactionFee(
+    tx: Transaction,
+    feeModel: FeeModel | undefined,
+    getTxid: () => string
+  ): Promise<void> {
+    if (feeModel === undefined) return
+    if (tx === undefined) throw new Error('Transaction is undefined')
+    const copy = Transaction.fromEF(tx.toEF())
+    delete copy.outputs[0].satoshis
+    copy.outputs[0].change = true
+    await copy.fee(feeModel)
+    if (tx.getFee() < copy.getFee()) {
+      throw new Error(
+        `Verification failed because the transaction ${getTxid()} has an insufficient fee and has not been mined.`
+      )
+    }
+  }
+
+  private queueSourceTransactionForVerification(
+    sourceTransaction: Transaction,
+    sourceTxid: string,
+    scriptsOnly: boolean,
+    txQueue: Transaction[],
+    queuedTransactions: Set<Transaction>,
+    queuedTxids: Set<string>,
+    verifiedTransactions: Set<Transaction>,
+    verifiedTxids: Set<string>
+  ): void {
+    if (scriptsOnly) {
+      if (
+        !verifiedTransactions.has(sourceTransaction) &&
+        !queuedTransactions.has(sourceTransaction)
+      ) {
+        txQueue.push(sourceTransaction)
+        queuedTransactions.add(sourceTransaction)
+      }
+      return
+    }
+    if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
+      txQueue.push(sourceTransaction)
+      queuedTxids.add(sourceTxid)
+    }
+  }
+
+  private verifyTransactionInputs(
+    tx: Transaction,
+    scriptsOnly: boolean,
+    useVerifier: boolean,
+    memoryLimit: number | undefined,
+    getTxid: () => string,
+    txQueue: Transaction[],
+    queuedTransactions: Set<Transaction>,
+    queuedTxids: Set<string>,
+    verifiedTransactions: Set<Transaction>,
+    verifiedTxids: Set<string>
+  ): { valid: boolean; inputTotal: number } {
+    let inputTotal = 0
+    const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
+    for (let index = 0; index < tx.inputs.length; index++) {
+      const input = tx.inputs[index]
+      if (typeof input.sourceTransaction !== 'object') {
+        throw new TypeError(
+          `Verification failed because the input at index ${index} of transaction ${getTxid()} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
+        )
+      }
+      if (typeof input.unlockingScript !== 'object') {
+        throw new TypeError(
+          `Verification failed because the input at index ${index} of transaction ${getTxid()} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
+        )
+      }
+      const sourceTransaction = input.sourceTransaction
+      const sourceOutput = sourceTransaction.outputs[input.sourceOutputIndex]
+      inputTotal += sourceOutput.satoshis ?? 0
+      const sourceTxid =
+        scriptsOnly && input.sourceTXID !== undefined
+          ? input.sourceTXID
+          : sourceTransaction.id('hex')
+      this.queueSourceTransactionForVerification(
+        sourceTransaction,
+        sourceTxid,
+        scriptsOnly,
+        txQueue,
+        queuedTransactions,
+        queuedTxids,
+        verifiedTransactions,
+        verifiedTxids
+      )
+      input.sourceTXID ??= sourceTxid
+      if (
+        !useVerifier &&
+        !new Spend({
+          sourceTXID: input.sourceTXID,
+          sourceOutputIndex: input.sourceOutputIndex,
+          lockingScript: sourceOutput.lockingScript,
+          sourceSatoshis: sourceOutput.satoshis ?? 0,
+          transactionVersion: tx.version,
+          otherInputs: [],
+          allInputs: tx.inputs,
+          unlockingScript: input.unlockingScript,
+          inputSequence: input.sequence ?? 0xffffffff,
+          inputIndex: index,
+          outputs: tx.outputs,
+          lockTime: tx.lockTime,
+          memoryLimit,
+          sigHashCache
+        }).validateJavaScript()
+      ) {
+        return { valid: false, inputTotal }
+      }
+    }
+    return { valid: true, inputTotal }
+  }
+
+  private totalVerifiedOutputs(tx: Transaction): number {
+    let outputTotal = 0
+    for (const output of tx.outputs) {
+      if (typeof output.satoshis !== 'number') {
+        throw new TypeError(
+          'Every output must have a defined amount during transaction verification.'
+        )
+      }
+      outputTotal += output.satoshis
+    }
+    return outputTotal
+  }
+
+  private async verifyQueuedScripts(
+    verifierQueue: Array<{
+      tx: Transaction
+      blockHeight: number
+      consensus: boolean
+      memoryLimit?: number
+    }>,
+    selectedVerifier: BdkVerifierInterface | undefined
+  ): Promise<void> {
+    if (verifierQueue.length === 0 || selectedVerifier === undefined) return
+    const scriptVerdicts =
+      selectedVerifier.verifyScriptsBatch === undefined
+        ? await Promise.all(
+            verifierQueue.map(
+              async params => await selectedVerifier.verifyScripts(params)
+            )
+          )
+        : await selectedVerifier.verifyScriptsBatch(verifierQueue)
+    if (scriptVerdicts.length !== verifierQueue.length) {
+      throw new Error('Script verifier returned an invalid batch result count')
+    }
+    const failedIndex = scriptVerdicts.findIndex(valid => !valid)
+    if (failedIndex >= 0) {
+      throw new Error(
+        `Script verification failed for transaction ${verifierQueue[failedIndex].tx.id('hex')}`
+      )
+    }
+  }
+
+  private isTransactionAlreadyVerified(
+    tx: Transaction,
+    scriptsOnly: boolean,
+    getTxid: () => string,
+    verifiedTransactions: Set<Transaction>,
+    verifiedTxids: Set<string>
+  ): boolean {
+    return scriptsOnly
+      ? verifiedTransactions.has(tx)
+      : verifiedTxids.has(getTxid())
+  }
+
+  private async verifyUnminedTransaction(
+    tx: Transaction,
+    scriptsOnly: boolean,
+    feeModel: FeeModel | undefined,
+    memoryLimit: number | undefined,
+    selectedVerifier: BdkVerifierInterface | undefined,
+    getTxid: () => string,
+    txQueue: Transaction[],
+    queuedTransactions: Set<Transaction>,
+    queuedTxids: Set<string>,
+    verifiedTransactions: Set<Transaction>,
+    verifiedTxids: Set<string>,
+    verifierQueue: Array<{
+      tx: Transaction
+      blockHeight: number
+      consensus: boolean
+      memoryLimit?: number
+    }>
+  ): Promise<boolean> {
+    await this.verifyTransactionFee(tx, feeModel, getTxid)
+    const verifierParams = {
+      tx,
+      blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
+      consensus: true,
+      ...(memoryLimit === undefined ? {} : { memoryLimit })
+    } as const
+    const useVerifier =
+      selectedVerifier !== undefined &&
+      (memoryLimit === undefined ||
+        selectedVerifier.supportsMemoryLimit === true) &&
+      (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
+    const inputVerification = this.verifyTransactionInputs(
+      tx,
+      scriptsOnly,
+      useVerifier,
+      memoryLimit,
+      getTxid,
+      txQueue,
+      queuedTransactions,
+      queuedTxids,
+      verifiedTransactions,
+      verifiedTxids
+    )
+    if (!inputVerification.valid) return false
+    if (useVerifier) verifierQueue.push(verifierParams)
+    if (this.totalVerifiedOutputs(tx) > inputVerification.inputTotal) return false
+    if (scriptsOnly) verifiedTransactions.add(tx)
+    else verifiedTxids.add(getTxid())
+    return true
+  }
+
   /**
    * Verifies the legitimacy of the Bitcoin transaction according to the rules of SPV by ensuring all the input transactions link back to valid block headers, the chain of spends for all inputs are valid, and the sum of inputs is not less than the sum of outputs.
    *
@@ -1109,165 +1347,47 @@ export default class Transaction {
         txid ??= tx.id('hex')
         return txid
       }
-      if (scriptsOnly ? verifiedTransactions.has(tx) : verifiedTxids.has(getTxid())) {
+      if (
+        this.isTransactionAlreadyVerified(
+          tx,
+          scriptsOnly,
+          getTxid,
+          verifiedTransactions,
+          verifiedTxids
+        )
+      ) {
         continue
       }
 
-      // If the transaction has a valid merkle path, verification is complete.
-      if (typeof tx.merklePath === 'object') {
-        if (scriptsOnly) {
-          verifiedTransactions.add(tx)
-          continue
-        } else {
-          const proofValid = await tx.merklePath.verify(getTxid(), chainTracker)
-          // If the proof is valid, no need to verify inputs.
-          if (proofValid) {
-            verifiedTxids.add(getTxid())
-            continue
-          } else {
-            throw new Error(`Invalid merkle path for transaction ${getTxid()}`)
-          }
-        }
-      }
-
-      // Verify fee if feeModel is provided
-      if (feeModel !== undefined) {
-        if (tx === undefined) {
-          throw new Error('Transaction is undefined')
-        }
-        const cpTx = Transaction.fromEF(tx.toEF())
-        delete cpTx.outputs[0].satoshis
-        cpTx.outputs[0].change = true
-        await cpTx.fee(feeModel)
-        if (tx.getFee() < cpTx.getFee()) {
-          throw new Error(
-            `Verification failed because the transaction ${getTxid()} has an insufficient fee and has not been mined.`
-          )
-        }
-      }
-
-      const verifierParams = {
-        tx,
-        blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
-        // Transaction version is script data, not a policy/consensus selector.
-        // Graph verification establishes consensus validity by default.
-        consensus: true,
-        ...(memoryLimit === undefined ? {} : { memoryLimit })
-      } as const
-      const useVerifier =
-        selectedVerifier !== undefined &&
-        (memoryLimit === undefined || selectedVerifier.supportsMemoryLimit === true) &&
-        (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
-
-      // Verify each input transaction and evaluate the spend events.
-      // Also, keep a total of the input amounts for later.
-      let inputTotal = 0
-      const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
-      for (let i = 0; i < tx.inputs.length; i++) {
-        const input = tx.inputs[i]
-        if (typeof input.sourceTransaction !== 'object') {
-          throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${getTxid()} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
-          )
-        }
-        if (typeof input.unlockingScript !== 'object') {
-          throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${getTxid()} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
-          )
-        }
-        const sourceOutput = input.sourceTransaction.outputs[input.sourceOutputIndex]
-        inputTotal += sourceOutput.satoshis ?? 0
-
-        const sourceTransaction = input.sourceTransaction
-        const sourceTxid =
-          scriptsOnly && input.sourceTXID !== undefined
-            ? input.sourceTXID
-            : sourceTransaction.id('hex')
-        if (scriptsOnly) {
-          if (
-            !verifiedTransactions.has(sourceTransaction) &&
-            !queuedTransactions.has(sourceTransaction)
-          ) {
-            txQueue.push(sourceTransaction)
-            queuedTransactions.add(sourceTransaction)
-          }
-        } else if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
-          txQueue.push(sourceTransaction)
-          queuedTxids.add(sourceTxid)
-        }
-
-        input.sourceTXID ??= sourceTxid
-
-        if (!useVerifier) {
-          const spend = new Spend({
-            sourceTXID: input.sourceTXID,
-            sourceOutputIndex: input.sourceOutputIndex,
-            lockingScript: sourceOutput.lockingScript,
-            sourceSatoshis: sourceOutput.satoshis ?? 0,
-            transactionVersion: tx.version,
-            otherInputs: [],
-            allInputs: tx.inputs,
-            unlockingScript: input.unlockingScript,
-            inputSequence: input.sequence ?? 0xffffffff, // default to max sequence
-            inputIndex: i,
-            outputs: tx.outputs,
-            lockTime: tx.lockTime,
-            memoryLimit,
-            sigHashCache
-          })
-          const spendValid = spend.validateJavaScript()
-
-          if (!spendValid) {
-            return false
-          }
-        }
-      }
-
-      // When the selected pluggable verifier accepts the transaction, hand the
-      // whole transaction to it once. Its verdict is authoritative and any
-      // thrown error propagates (no post-selection JavaScript fallback).
-      if (useVerifier) {
-        // A tx reaching here has no merkle proof (mined txs short-circuit above),
-        // so its source UTXO mined-height is unobtainable -> post-Chronicle fallback.
-        verifierQueue.push(verifierParams)
-      }
-
-      // Total the outputs to ensure they don't amount to more than the inputs
-      let outputTotal = 0
-      for (const out of tx.outputs) {
-        if (typeof out.satoshis !== 'number') {
-          throw new TypeError(
-            'Every output must have a defined amount during transaction verification.'
-          )
-        }
-        outputTotal += out.satoshis
-      }
-
-      if (outputTotal > inputTotal) {
-        return false
-      }
-
-      if (scriptsOnly) verifiedTransactions.add(tx)
-      else verifiedTxids.add(getTxid())
-    }
-
-    if (verifierQueue.length > 0 && selectedVerifier !== undefined) {
-      const scriptVerdicts =
-        selectedVerifier.verifyScriptsBatch === undefined
-          ? await Promise.all(
-              verifierQueue.map(async params => await selectedVerifier.verifyScripts(params))
-            )
-          : await selectedVerifier.verifyScriptsBatch(verifierQueue)
-      if (scriptVerdicts.length !== verifierQueue.length) {
-        throw new Error('Script verifier returned an invalid batch result count')
-      }
-      const failedIndex = scriptVerdicts.findIndex(valid => !valid)
-      if (failedIndex >= 0) {
-        throw new Error(
-          `Script verification failed for transaction ${verifierQueue[failedIndex].tx.id('hex')}`
+      if (
+        await this.completeVerificationFromMerklePath(
+          tx,
+          scriptsOnly,
+          chainTracker,
+          getTxid,
+          verifiedTransactions,
+          verifiedTxids
         )
+      ) {
+        continue
       }
+      if (!(await this.verifyUnminedTransaction(
+        tx,
+        scriptsOnly,
+        feeModel,
+        memoryLimit,
+        selectedVerifier,
+        getTxid,
+        txQueue,
+        queuedTransactions,
+        queuedTxids,
+        verifiedTransactions,
+        verifiedTxids,
+        verifierQueue
+      ))) return false
     }
+
+    await this.verifyQueuedScripts(verifierQueue, selectedVerifier)
 
     return true
   }

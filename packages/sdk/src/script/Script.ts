@@ -12,6 +12,44 @@ import BigNumber from '../primitives/BigNumber.js'
  */
 const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
+function serializedChunkPrefix(chunk: ScriptChunk): number[] | undefined {
+  const dataLength = chunk.data?.length ?? 0
+  if (dataLength === 0 || chunk.op === OP.OP_RETURN || chunk.op < OP.OP_PUSHDATA1) {
+    return [chunk.op]
+  }
+  if (chunk.op === OP.OP_PUSHDATA1) {
+    return [chunk.op, dataLength & 0xff]
+  }
+  if (chunk.op === OP.OP_PUSHDATA2) {
+    return [chunk.op, dataLength & 0xff, (dataLength >> 8) & 0xff]
+  }
+  if (chunk.op === OP.OP_PUSHDATA4) {
+    const size = dataLength >>> 0
+    return [
+      chunk.op,
+      size & 0xff,
+      (size >> 8) & 0xff,
+      (size >> 16) & 0xff,
+      (size >> 24) & 0xff
+    ]
+  }
+  return undefined
+}
+
+function chunkMatchesBytes(chunk: ScriptChunk, targetBytes: Uint8Array): boolean {
+  const prefix = serializedChunkPrefix(chunk)
+  const data = chunk.data ?? []
+  if (prefix == null || targetBytes.length !== prefix.length + data.length) return false
+
+  for (let i = 0; i < prefix.length; i++) {
+    if (targetBytes[i] !== prefix[i]) return false
+  }
+  for (let i = 0; i < data.length; i++) {
+    if (targetBytes[prefix.length + i] !== data[i]) return false
+  }
+  return true
+}
+
 export default class Script {
   private _chunks: ScriptChunk[]
   private parsed: boolean
@@ -348,73 +386,10 @@ export default class Script {
   findAndDelete(script: Script): this {
     this.invalidateSerializationCaches()
     const targetBytes = script.toUint8Array()
-    const targetLen = targetBytes.length
-    if (targetLen === 0) return this
-
-    const targetOp = targetBytes[0] ?? 0
-
-    const matchesChunk = (chunk: ScriptChunk): boolean => {
-      if (chunk.op !== targetOp) return false
-      const dataArr = chunk.data ?? []
-      const dataLen = dataArr.length
-
-      if (dataLen === 0) {
-        return targetLen === 1
-      }
-
-      if (chunk.op === OP.OP_RETURN) {
-        if (targetLen !== 1 + dataLen) return false
-        for (let j = 0; j < dataLen; j++) {
-          if (targetBytes[1 + j] !== dataArr[j]) return false
-        }
-        return true
-      }
-
-      if (chunk.op < OP.OP_PUSHDATA1) {
-        if (targetLen !== 1 + dataLen) return false
-        for (let j = 0; j < dataLen; j++) {
-          if (targetBytes[1 + j] !== dataArr[j]) return false
-        }
-        return true
-      }
-
-      if (chunk.op === OP.OP_PUSHDATA1) {
-        if (targetLen !== 2 + dataLen) return false
-        if (targetBytes[1] !== (dataLen & 0xff)) return false
-        for (let j = 0; j < dataLen; j++) {
-          if (targetBytes[2 + j] !== dataArr[j]) return false
-        }
-        return true
-      }
-
-      if (chunk.op === OP.OP_PUSHDATA2) {
-        if (targetLen !== 3 + dataLen) return false
-        if (targetBytes[1] !== (dataLen & 0xff)) return false
-        if (targetBytes[2] !== ((dataLen >> 8) & 0xff)) return false
-        for (let j = 0; j < dataLen; j++) {
-          if (targetBytes[3 + j] !== dataArr[j]) return false
-        }
-        return true
-      }
-
-      if (chunk.op === OP.OP_PUSHDATA4) {
-        if (targetLen !== 5 + dataLen) return false
-        const size = dataLen >>> 0
-        if (targetBytes[1] !== (size & 0xff)) return false
-        if (targetBytes[2] !== ((size >> 8) & 0xff)) return false
-        if (targetBytes[3] !== ((size >> 16) & 0xff)) return false
-        if (targetBytes[4] !== ((size >> 24) & 0xff)) return false
-        for (let j = 0; j < dataLen; j++) {
-          if (targetBytes[5 + j] !== dataArr[j]) return false
-        }
-        return true
-      }
-
-      return false
-    }
+    if (targetBytes.length === 0) return this
 
     for (let i = 0; i < this.chunks.length;) {
-      if (matchesChunk(this.chunks[i])) {
+      if (chunkMatchesBytes(this.chunks[i], targetBytes)) {
         this.chunks.splice(i, 1)
       } else {
         i++

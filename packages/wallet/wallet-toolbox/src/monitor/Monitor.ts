@@ -321,58 +321,66 @@ export class Monitor {
   }
 
   async runOnce (): Promise<void> {
-    if (this._runAsyncSetup) {
-      for (const t of this._tasks) {
-        try {
-          await t.asyncSetup()
-        } catch (error_: unknown) {
-          const e = WalletError.fromUnknown(error_)
-          const details = `monitor task ${t.name} asyncSetup error ${e.code} ${e.description}`
-          console.log(details)
-          await this.logEvent('error0', details)
-        }
-        if (!this._tasksRunning) break
-      }
-      this._runAsyncSetup = false
+    await this.setupTasksOnce()
+    if (!this.storage.getActive().isStorageProvider()) return
+    for (const task of await this.tasksReadyToRun()) {
+      await this.runScheduledTask(task)
     }
+  }
 
-    if (this.storage.getActive().isStorageProvider()) {
-      const tasksToRun: WalletMonitorTask[] = []
-      const now = Date.now()
-      for (const t of this._tasks) {
-        try {
-          if (t.trigger(now).run) tasksToRun.push(t)
-        } catch (error_: unknown) {
-          const e = WalletError.fromUnknown(error_)
-          const details = `monitor task ${t.name} trigger error ${e.code} ${e.description}`
-          console.log(details)
-          await this.logEvent('error0', details)
-        }
+  private async setupTasksOnce (): Promise<void> {
+    if (!this._runAsyncSetup) return
+    for (const task of this._tasks) {
+      try {
+        await task.asyncSetup()
+      } catch (error_: unknown) {
+        await this.logTaskError(task, 'asyncSetup', 'error0', error_)
       }
+      if (!this._tasksRunning) break
+    }
+    this._runAsyncSetup = false
+  }
 
-      for (const ttr of tasksToRun) {
-        try {
-          if (this.storage.getActive().isStorageProvider()) {
-            const log = await ttr.runTask()
-            if (log.length > 0) {
-              let details = log.slice(0, 1024)
-              if (ttr.name === 'MonitorCallHistory') {
-                details = '...'
-              }
-              console.log(`Task${ttr.name} ${details}`)
-              await this.logEvent(ttr.name, log)
-            }
-          }
-        } catch (error_: unknown) {
-          const e = WalletError.fromUnknown(error_)
-          const details = `monitor task ${ttr.name} runTask error ${e.code} ${e.description}\n${e.stack ?? ''}`
-          console.log(details)
-          await this.logEvent('error1', details)
-        } finally {
-          ttr.lastRunMsecsSinceEpoch = Date.now()
-        }
+  private async tasksReadyToRun (): Promise<WalletMonitorTask[]> {
+    const tasks: WalletMonitorTask[] = []
+    const now = Date.now()
+    for (const task of this._tasks) {
+      try {
+        if (task.trigger(now).run) tasks.push(task)
+      } catch (error_: unknown) {
+        await this.logTaskError(task, 'trigger', 'error0', error_)
       }
     }
+    return tasks
+  }
+
+  private async runScheduledTask (task: WalletMonitorTask): Promise<void> {
+    try {
+      if (!this.storage.getActive().isStorageProvider()) return
+      const log = await task.runTask()
+      if (log.length === 0) return
+      const details = task.name === 'MonitorCallHistory' ? '...' : log.slice(0, 1024)
+      console.log(`Task${task.name} ${details}`)
+      await this.logEvent(task.name, log)
+    } catch (error_: unknown) {
+      await this.logTaskError(task, 'runTask', 'error1', error_, true)
+    } finally {
+      task.lastRunMsecsSinceEpoch = Date.now()
+    }
+  }
+
+  private async logTaskError (
+    task: WalletMonitorTask,
+    operation: 'asyncSetup' | 'trigger' | 'runTask',
+    event: 'error0' | 'error1',
+    error_: unknown,
+    includeStack = false
+  ): Promise<void> {
+    const error = WalletError.fromUnknown(error_)
+    const stack = includeStack ? `\n${error.stack ?? ''}` : ''
+    const details = `monitor task ${task.name} ${operation} error ${error.code} ${error.description}${stack}`
+    console.log(details)
+    await this.logEvent(event, details)
   }
 
   _runAsyncSetup: boolean = true

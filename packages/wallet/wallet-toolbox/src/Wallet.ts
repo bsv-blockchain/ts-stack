@@ -565,166 +565,170 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // Certificates
   /// ///////////////
 
+  private async acquireDirectCertificateProtocol (
+    args: AcquireCertificateArgs
+  ): Promise<AcquireCertificateResult> {
+    const { auth, vargs } = this.validateAuthAndArgs(
+      args,
+      Validation.validateAcquireDirectCertificateArgs
+    )
+    vargs.subject = (
+      await this.getPublicKey({
+        identityKey: true,
+        privileged: args.privileged,
+        privilegedReason: args.privilegedReason
+      })
+    ).publicKey
+    try {
+      const certificate = new MasterCertificate(
+        vargs.type,
+        vargs.serialNumber,
+        vargs.subject,
+        vargs.certifier,
+        vargs.revocationOutpoint,
+        vargs.fields,
+        vargs.keyringForSubject,
+        vargs.signature
+      )
+      await certificate.verify()
+      await MasterCertificate.decryptFields(
+        this,
+        vargs.keyringForSubject,
+        vargs.fields,
+        vargs.certifier,
+        vargs.privileged,
+        vargs.privilegedReason
+      )
+    } catch (error_: unknown) {
+      const error = WalletError.fromUnknown(error_)
+      throw new WERR_INVALID_PARAMETER(
+        'args',
+        `valid encrypted and signed certificate and keyring from revealer. ${error.name}: ${error.message}`
+      )
+    }
+    return await acquireDirectCertificate(this, auth, vargs)
+  }
+
+  private validateIssuedCertificateFields (
+    certificate: Certificate,
+    expectedFields: Record<string, string>
+  ): void {
+    if (Object.keys(certificate.fields).length !== Object.keys(expectedFields).length) {
+      throw new Error('Fields mismatch! Objects have different numbers of keys.')
+    }
+    for (const field of Object.keys(expectedFields)) {
+      if (!(field in certificate.fields)) {
+        throw new Error(`Missing field: ${field} in certificate.fields`)
+      }
+      if (certificate.fields[field] !== expectedFields[field]) {
+        throw new Error(
+          `Invalid field! Expected: ${expectedFields[field]}, Received: ${certificate.fields[field]}`
+        )
+      }
+    }
+  }
+
+  private validateIssuedCertificate (
+    certificate: Certificate,
+    vargs: Validation.ValidAcquireIssuanceCertificateArgs,
+    expectedFields: Record<string, string>
+  ): void {
+    if (certificate.type !== vargs.type) {
+      throw new Error(`Invalid certificate type! Expected: ${vargs.type}, Received: ${certificate.type}`)
+    }
+    if (certificate.subject !== this.identityKey) {
+      throw new Error(
+        `Invalid certificate subject! Expected: ${this.identityKey}, Received: ${certificate.subject}`
+      )
+    }
+    if (certificate.certifier !== vargs.certifier) {
+      throw new Error(`Invalid certifier! Expected: ${vargs.certifier}, Received: ${certificate.certifier}`)
+    }
+    if (!certificate.revocationOutpoint) {
+      throw new Error('Invalid revocationOutpoint!')
+    }
+    this.validateIssuedCertificateFields(certificate, expectedFields)
+  }
+
+  private async acquireIssuedCertificateProtocol (
+    args: AcquireCertificateArgs
+  ): Promise<AcquireCertificateResult> {
+    const { auth, vargs } = this.validateAuthAndArgs(
+      args,
+      Validation.validateAcquireIssuanceCertificateArgs
+    )
+    const clientNonce = await createNonce(this, vargs.certifier)
+    const authClient = new AuthFetch(this)
+    const { certificateFields, masterKeyring } =
+      await MasterCertificate.createCertificateFields(
+        this,
+        vargs.certifier,
+        vargs.fields
+      )
+    const response = await authClient.fetch(`${vargs.certifierUrl}/signCertificate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientNonce,
+        type: vargs.type,
+        fields: certificateFields,
+        masterKeyring
+      })
+    })
+    const responseIdentity = response.headers.get('x-bsv-auth-identity-key')
+    if (responseIdentity !== vargs.certifier) {
+      throw new Error(
+        `Invalid certifier! Expected: ${vargs.certifier}, Received: ${responseIdentity}`
+      )
+    }
+    const { certificate, serverNonce } = await response.json()
+    if (!certificate) throw new Error('No certificate received from certifier!')
+    if (!serverNonce) throw new Error('No serverNonce received from certifier!')
+
+    const signedCertificate = new Certificate(
+      certificate.type,
+      certificate.serialNumber,
+      certificate.subject,
+      certificate.certifier,
+      certificate.revocationOutpoint,
+      certificate.fields,
+      certificate.signature
+    )
+    await verifyNonce(serverNonce, this, vargs.certifier)
+    const { valid } = await this.verifyHmac({
+      hmac: Utils.toArray(signedCertificate.serialNumber, 'base64'),
+      data: Utils.toArray(clientNonce + serverNonce, 'base64'),
+      protocolID: [2, 'certificate issuance'],
+      keyID: serverNonce + clientNonce,
+      counterparty: vargs.certifier
+    })
+    if (!valid) throw new Error('Invalid serialNumber')
+    this.validateIssuedCertificate(signedCertificate, vargs, certificateFields)
+    await signedCertificate.verify()
+    await MasterCertificate.decryptFields(
+      this,
+      masterKeyring,
+      certificate.fields,
+      vargs.certifier
+    )
+    return await acquireDirectCertificate(this, auth, {
+      ...certificate,
+      keyringRevealer: 'certifier',
+      keyringForSubject: masterKeyring,
+      privileged: vargs.privileged
+    })
+  }
+
   async acquireCertificate(
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
     Validation.validateOriginator(originator)
     if (args.acquisitionProtocol === 'direct') {
-      const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateAcquireDirectCertificateArgs)
-      vargs.subject = (
-        await this.getPublicKey({
-          identityKey: true,
-          privileged: args.privileged,
-          privilegedReason: args.privilegedReason
-        })
-      ).publicKey
-      try {
-        // Confirm that the information received adds up to a usable certificate.
-        // Field decryption uses the class-level API because the certificate is
-        // verified before any decrypted value is accepted.
-        const cert = new MasterCertificate(
-          vargs.type,
-          vargs.serialNumber,
-          vargs.subject,
-          vargs.certifier,
-          vargs.revocationOutpoint,
-          vargs.fields,
-          vargs.keyringForSubject,
-          vargs.signature
-        )
-        await cert.verify()
-
-        // Verify certificate details
-        await MasterCertificate.decryptFields(
-          this,
-          vargs.keyringForSubject,
-          vargs.fields,
-          vargs.certifier,
-          vargs.privileged,
-          vargs.privilegedReason
-        )
-      } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        throw new WERR_INVALID_PARAMETER(
-          'args',
-          `valid encrypted and signed certificate and keyring from revealer. ${e.name}: ${e.message}`
-        )
-      }
-
-      const r = await acquireDirectCertificate(this, auth, vargs)
-      return r
+      return await this.acquireDirectCertificateProtocol(args)
     }
-
     if (args.acquisitionProtocol === 'issuance') {
-      const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateAcquireIssuanceCertificateArgs)
-      // Create a random nonce that the server can verify
-      const clientNonce = await createNonce(this, vargs.certifier)
-      // Issuance uses the authenticated signCertificate exchange. Certificate
-      // discovery/negotiation is intentionally a separate caller operation.
-      const authClient = new AuthFetch(this)
-
-      // Create a certificate master keyring
-      // The certifier is able to decrypt these fields as they are the counterparty
-      const { certificateFields, masterKeyring } = await MasterCertificate.createCertificateFields(
-        this,
-        vargs.certifier,
-        vargs.fields
-      )
-
-      // Make a Certificate Signing Request (CSR) to the certifier
-      const response = await authClient.fetch(`${vargs.certifierUrl}/signCertificate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          clientNonce,
-          type: vargs.type,
-          fields: certificateFields,
-          masterKeyring
-        })
-      })
-
-      if (response.headers.get('x-bsv-auth-identity-key') !== vargs.certifier) {
-        throw new Error(
-          `Invalid certifier! Expected: ${vargs.certifier}, Received: ${response.headers.get('x-bsv-auth-identity-key')}`
-        )
-      }
-
-      const { certificate, serverNonce } = await response.json()
-
-      // Validate the server response
-      if (!certificate) {
-        throw new Error('No certificate received from certifier!')
-      }
-      if (!serverNonce) {
-        throw new Error('No serverNonce received from certifier!')
-      }
-
-      const signedCertificate = new Certificate(
-        certificate.type,
-        certificate.serialNumber,
-        certificate.subject,
-        certificate.certifier,
-        certificate.revocationOutpoint,
-        certificate.fields,
-        certificate.signature
-      )
-
-      // Validate server nonce
-      await verifyNonce(serverNonce, this, vargs.certifier)
-      // Verify the server included our nonce
-      const { valid } = await this.verifyHmac({
-        hmac: Utils.toArray(signedCertificate.serialNumber, 'base64'),
-        data: Utils.toArray(clientNonce + serverNonce, 'base64'),
-        protocolID: [2, 'certificate issuance'],
-        keyID: serverNonce + clientNonce,
-        counterparty: vargs.certifier
-      })
-      if (!valid) throw new Error('Invalid serialNumber')
-
-      // Validate the certificate received
-      if (signedCertificate.type !== vargs.type) {
-        throw new Error(`Invalid certificate type! Expected: ${vargs.type}, Received: ${signedCertificate.type}`)
-      }
-      if (signedCertificate.subject !== this.identityKey) {
-        throw new Error(
-          `Invalid certificate subject! Expected: ${this.identityKey}, Received: ${signedCertificate.subject}`
-        )
-      }
-      if (signedCertificate.certifier !== vargs.certifier) {
-        throw new Error(`Invalid certifier! Expected: ${vargs.certifier}, Received: ${signedCertificate.certifier}`)
-      }
-      if (!signedCertificate.revocationOutpoint) {
-        throw new Error('Invalid revocationOutpoint!')
-      }
-      if (Object.keys(signedCertificate.fields).length !== Object.keys(certificateFields).length) {
-        throw new Error('Fields mismatch! Objects have different numbers of keys.')
-      }
-      for (const field of Object.keys(certificateFields)) {
-        if (!(field in signedCertificate.fields)) {
-          throw new Error(`Missing field: ${field} in certificate.fields`)
-        }
-        if (signedCertificate.fields[field] !== certificateFields[field]) {
-          throw new Error(
-            `Invalid field! Expected: ${certificateFields[field]}, Received: ${signedCertificate.fields[field]}`
-          )
-        }
-      }
-
-      await signedCertificate.verify()
-
-      // Test decryption works
-      await MasterCertificate.decryptFields(this, masterKeyring, certificate.fields, vargs.certifier)
-
-      // Store the newly issued certificate
-      return await acquireDirectCertificate(this, auth, {
-        ...certificate,
-        keyringRevealer: 'certifier',
-        keyringForSubject: masterKeyring,
-        privileged: vargs.privileged
-      })
+      return await this.acquireIssuedCertificateProtocol(args)
     }
 
     throw new WERR_INVALID_PARAMETER('acquisitionProtocol', `valid.${args.acquisitionProtocol} is unrecognized.`)

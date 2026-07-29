@@ -18,6 +18,21 @@ interface ChaintracksNoDbData {
 
 export interface ChaintracksStorageNoDbOptions extends ChaintracksStorageBaseOptions {}
 
+function createInsertHeaderResult(): InsertHeaderResult {
+  return {
+    added: false,
+    dupe: false,
+    noPrev: false,
+    badPrev: false,
+    noActiveAncestor: false,
+    isActiveTip: false,
+    reorgDepth: 0,
+    priorTip: undefined,
+    noTip: false,
+    deactivatedHeaders: []
+  }
+}
+
 export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
   static readonly mainData: ChaintracksNoDbData = {
     chain: 'main',
@@ -168,21 +183,117 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     return headers
   }
 
+  private async insertFirstHeader (
+    data: ChaintracksNoDbData,
+    header: BlockHeader,
+    result: InsertHeaderResult
+  ): Promise<boolean> {
+    if (data.liveHeaders.size !== 0) return false
+    const lastBulkFile = await this.bulkManager.getLastFile()
+    if (lastBulkFile == null) {
+      throw new WERR_INVALID_OPERATION(
+        'bulk headers must exist before first live header can be added'
+      )
+    }
+    if (
+      header.previousHash !== lastBulkFile.lastHash ||
+      header.height !== lastBulkFile.firstHeight + lastBulkFile.count
+    ) {
+      return false
+    }
+    const newHeader: LiveBlockHeader = {
+      ...header,
+      headerId: ++data.maxHeaderId,
+      previousHeaderId: null,
+      chainWork: addWork(
+        lastBulkFile.lastChainWork,
+        convertBitsToWork(header.bits)
+      ),
+      isChainTip: true,
+      isActive: true
+    }
+    data.liveHeaders.set(newHeader.headerId, newHeader)
+    data.hashToHeaderId.set(header.hash, newHeader.headerId)
+    data.tipHeaderId = newHeader.headerId
+    result.isActiveTip = true
+    result.added = true
+    return true
+  }
+
+  private findActiveAncestor (
+    data: ChaintracksNoDbData,
+    oneBack: LiveBlockHeader,
+    result: InsertHeaderResult
+  ): LiveBlockHeader | undefined {
+    let activeAncestor = oneBack
+    while (!activeAncestor.isActive) {
+      const previousHeader = data.liveHeaders.get(
+        activeAncestor.previousHeaderId!
+      )
+      if (previousHeader == null) {
+        result.noActiveAncestor = true
+        return undefined
+      }
+      activeAncestor = previousHeader
+    }
+    return activeAncestor
+  }
+
+  private applyReorganization (
+    data: ChaintracksNoDbData,
+    oneBack: LiveBlockHeader,
+    activeAncestor: LiveBlockHeader,
+    result: InsertHeaderResult
+  ): void {
+    if (activeAncestor.headerId === oneBack.headerId) return
+    let headerToDeactivate = Array.from(data.liveHeaders.values()).find(
+      candidate => candidate.isChainTip && candidate.isActive
+    )
+    while (
+      headerToDeactivate != null &&
+      headerToDeactivate.headerId !== activeAncestor.headerId
+    ) {
+      result.deactivatedHeaders.push(headerToDeactivate)
+      data.liveHeaders.set(headerToDeactivate.headerId, {
+        ...headerToDeactivate,
+        isActive: false
+      })
+      headerToDeactivate = data.liveHeaders.get(
+        headerToDeactivate.previousHeaderId!
+      )
+    }
+    let headerToActivate = oneBack
+    while (headerToActivate.headerId !== activeAncestor.headerId) {
+      data.liveHeaders.set(headerToActivate.headerId, {
+        ...headerToActivate,
+        isActive: true
+      })
+      headerToActivate = data.liveHeaders.get(
+        headerToActivate.previousHeaderId!
+      )!
+    }
+  }
+
+  private prepareActiveTip (
+    data: ChaintracksNoDbData,
+    header: BlockHeader,
+    oneBack: LiveBlockHeader,
+    result: InsertHeaderResult
+  ): boolean {
+    if (!result.isActiveTip) return true
+    const activeAncestor = this.findActiveAncestor(data, oneBack, result)
+    if (activeAncestor == null) return false
+    if (!(oneBack.isActive && oneBack.isChainTip)) {
+      result.reorgDepth =
+        Math.min(result.priorTip!.height, header.height) - activeAncestor.height
+    }
+    this.applyReorganization(data, oneBack, activeAncestor, result)
+    return true
+  }
+
   override async insertHeader (header: BlockHeader): Promise<InsertHeaderResult> {
     const data = await this.getData()
-
-    const r: InsertHeaderResult = {
-      added: false,
-      dupe: false,
-      noPrev: false,
-      badPrev: false,
-      noActiveAncestor: false,
-      isActiveTip: false,
-      reorgDepth: 0,
-      priorTip: undefined,
-      noTip: false,
-      deactivatedHeaders: []
-    }
+    const r = createInsertHeaderResult()
 
     // Check for duplicate
     if (data.hashToHeaderId.has(header.hash)) {
@@ -194,34 +305,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     const oneBack = Array.from(data.liveHeaders.values()).find(h => h.hash === header.previousHash)
 
     if (oneBack == null) {
-      // Check if this is first live header
-      const count = data.liveHeaders.size
-      if (count === 0) {
-        // If this is the first live header, the last bulk header (if there is one) is the previous header.
-        const lbf = await this.bulkManager.getLastFile()
-        if (lbf == null) throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
-        if (header.previousHash === lbf.lastHash && header.height === lbf.firstHeight + lbf.count) {
-          // Valid first live header. Add it.
-          const chainWork = addWork(lbf.lastChainWork, convertBitsToWork(header.bits))
-          r.isActiveTip = true
-          const newHeader = {
-            ...header,
-            headerId: ++data.maxHeaderId,
-            previousHeaderId: null,
-            chainWork,
-            isChainTip: r.isActiveTip,
-            isActive: r.isActiveTip
-          }
-          data.liveHeaders.set(newHeader.headerId, newHeader)
-          data.hashToHeaderId.set(header.hash, newHeader.headerId)
-          data.tipHeaderId = newHeader.headerId
-          r.added = true
-          return r
-        }
-      }
-      // Failure without a oneBack
-      // First live header that does not follow last bulk header or
-      // Not the first live header and live headers doesn't include a previousHash header.
+      if (await this.insertFirstHeader(data, header, r)) return r
       r.noPrev = true
       return r
     }
@@ -258,36 +342,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
       isActive: r.isActiveTip
     }
 
-    if (r.isActiveTip) {
-      let activeAncestor = oneBack
-      while (!activeAncestor.isActive) {
-        const previousHeader = data.liveHeaders.get(activeAncestor.previousHeaderId!)
-        if (previousHeader == null) {
-          r.noActiveAncestor = true
-          return r
-        }
-        activeAncestor = previousHeader
-      }
-
-      if (!(oneBack.isActive && oneBack.isChainTip)) {
-        r.reorgDepth = Math.min(r.priorTip.height, header.height) - activeAncestor.height
-      }
-
-      if (activeAncestor.headerId !== oneBack.headerId) {
-        let headerToDeactivate = Array.from(data.liveHeaders.values()).find(h => h.isChainTip && h.isActive)
-        while ((headerToDeactivate != null) && headerToDeactivate.headerId !== activeAncestor.headerId) {
-          r.deactivatedHeaders.push(headerToDeactivate)
-          data.liveHeaders.set(headerToDeactivate.headerId, { ...headerToDeactivate, isActive: false })
-          headerToDeactivate = data.liveHeaders.get(headerToDeactivate.previousHeaderId!)
-        }
-
-        let headerToActivate = oneBack
-        while (headerToActivate.headerId !== activeAncestor.headerId) {
-          data.liveHeaders.set(headerToActivate.headerId, { ...headerToActivate, isActive: true })
-          headerToActivate = data.liveHeaders.get(headerToActivate.previousHeaderId!)!
-        }
-      }
-    }
+    if (!this.prepareActiveTip(data, header, oneBack, r)) return r
 
     if (oneBack.isChainTip) {
       data.liveHeaders.set(oneBack.headerId, { ...oneBack, isChainTip: false })
