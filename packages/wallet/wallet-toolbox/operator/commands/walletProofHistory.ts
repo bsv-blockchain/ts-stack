@@ -11,6 +11,7 @@ import {
   optionInteger,
   optionString,
   parseChain,
+  readBoundedRegularFile,
   requiredEnvironment
 } from '../safety'
 
@@ -113,11 +114,12 @@ async function analyzeProofHistory(
 ): Promise<EvidenceResult> {
   const input = plan.parameters.input as string
   const maxRecords = plan.parameters.maxRecords as number
-  const stats = await fs.stat(input)
-  if (!stats.isFile() || stats.size > MAX_ARTIFACT_BYTES) {
-    throw new Error('Proof-history input must be a regular file no larger than 100 MiB')
-  }
-  const artifact = JSON.parse(await fs.readFile(input, 'utf8')) as unknown
+  const inputJson = await readBoundedRegularFile(
+    input,
+    MAX_ARTIFACT_BYTES,
+    'Proof-history input must be a regular file no larger than 100 MiB'
+  )
+  const artifact = JSON.parse(inputJson) as unknown
   if (!isArtifact(artifact)) {
     throw new Error('Proof-history input does not match schema version 1')
   }

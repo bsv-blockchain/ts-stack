@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { promises as fs } from 'node:fs'
 
 import type { Chain } from '../out/src'
 import { OperatorCommand, OperatorIo, OperatorPlan, ParsedOperatorArguments } from './contracts'
@@ -79,6 +80,23 @@ export function requiredEnvironment(name: string): string {
     throw new Error(`Required environment variable "${name}" is not set`)
   }
   return value
+}
+
+export async function readBoundedRegularFile(
+  input: string,
+  maxBytes: number,
+  invalidMessage: string
+): Promise<string> {
+  const handle = await fs.open(input, 'r')
+  try {
+    const stats = await handle.stat()
+    if (!stats.isFile() || stats.size > maxBytes) throw new Error(invalidMessage)
+    const contents = await handle.readFile('utf8')
+    if (Buffer.byteLength(contents, 'utf8') > maxBytes) throw new Error(invalidMessage)
+    return contents
+  } finally {
+    await handle.close()
+  }
 }
 
 export function optionString(options: ReadonlyMap<string, string | true>, name: string, fallback?: string): string {

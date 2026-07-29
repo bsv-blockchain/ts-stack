@@ -1,4 +1,6 @@
 import path from 'node:path'
+import os from 'node:os'
+import { promises as fs } from 'node:fs'
 
 import { chaintracksExportCommand } from './commands/chaintracksExport'
 import { chaintracksIdbObserveCommand } from './commands/chaintracksIdbObserve'
@@ -16,7 +18,13 @@ import { walletReviewCustomOutputsCommand } from './commands/walletReviewCustomO
 import { walletReviewOutputsCommand } from './commands/walletReviewOutputs'
 import { walletReviewProofRequestsCommand } from './commands/walletReviewProofRequests'
 import { OperatorCommand } from './contracts'
-import { assertExecutionAuthorized, explicitOutputPath, parseOperatorArguments, runOperatorCommand } from './safety'
+import {
+  assertExecutionAuthorized,
+  explicitOutputPath,
+  parseOperatorArguments,
+  readBoundedRegularFile,
+  runOperatorCommand
+} from './safety'
 
 const command: OperatorCommand = {
   name: 'example',
@@ -69,6 +77,19 @@ describe('Wallet Toolbox operator safety', () => {
     expect(explicitOutputPath(new Map([['output', './artifacts']]), 'output', '/workspace')).toBe(
       path.join('/workspace', 'artifacts')
     )
+  })
+
+  test('reads bounded regular files through one validated handle', async () => {
+    const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'wallet-toolbox-operator-'))
+    const input = path.join(temporaryDirectory, 'input.txt')
+    try {
+      await fs.writeFile(input, 'bounded input')
+      await expect(readBoundedRegularFile(input, 13, 'invalid input')).resolves.toBe('bounded input')
+      await expect(readBoundedRegularFile(input, 12, 'invalid input')).rejects.toThrow('invalid input')
+      await expect(readBoundedRegularFile(temporaryDirectory, 100, 'invalid input')).rejects.toThrow('invalid input')
+    } finally {
+      await fs.rm(temporaryDirectory, { recursive: true, force: true })
+    }
   })
 
   test('requires apply, exact confirmation, and production opt-in', () => {

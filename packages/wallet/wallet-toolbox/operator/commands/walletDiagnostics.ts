@@ -1,9 +1,15 @@
 import path from 'node:path'
-import { promises as fs } from 'node:fs'
 
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { environmentName, optionInteger, optionString, parseChain, requiredEnvironment } from '../safety'
+import {
+  environmentName,
+  optionInteger,
+  optionString,
+  parseChain,
+  readBoundedRegularFile,
+  requiredEnvironment
+} from '../safety'
 
 const TXID = /^[0-9a-fA-F]{64}$/
 const MAX_RAW_TRANSACTION_BYTES = 10 * 1024 * 1024
@@ -91,11 +97,13 @@ async function inputUtxoReport(
   rawTransactionFile: string,
   maxRecords: number
 ): Promise<unknown> {
-  const file = await fs.stat(rawTransactionFile)
-  if (!file.isFile() || file.size > MAX_RAW_TRANSACTION_BYTES) {
-    throw new Error('Raw transaction input must be a regular file no larger than 10 MiB')
-  }
-  const rawHex = (await fs.readFile(rawTransactionFile, 'utf8')).trim()
+  const rawHex = (
+    await readBoundedRegularFile(
+      rawTransactionFile,
+      MAX_RAW_TRANSACTION_BYTES,
+      'Raw transaction input must be a regular file no larger than 10 MiB'
+    )
+  ).trim()
   if (!/^(?:[0-9a-fA-F]{2})+$/.test(rawHex)) {
     throw new Error('Raw transaction input must contain only an even-length hexadecimal transaction')
   }
