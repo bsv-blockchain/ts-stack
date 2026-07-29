@@ -3,9 +3,8 @@ import { promises as fs } from 'node:fs'
 
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
+import { environmentName, optionInteger, optionString, parseChain, requiredEnvironment } from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const TXID = /^[0-9a-fA-F]{64}$/
 const MAX_RAW_TRANSACTION_BYTES = 10 * 1024 * 1024
 
@@ -17,20 +16,6 @@ type SdkModule = Awaited<ReturnType<typeof loadSdk>>
 type WalletModule = typeof import('../../out/src/index.js')
 type ServicesInstance = InstanceType<WalletModule['Services']>
 type StorageInstance = InstanceType<WalletModule['StorageKnex']>
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
-}
 
 function parseReport(value: string): Report {
   if (
@@ -98,14 +83,6 @@ function validateReportInputs(
       'Report inputs must be exact: recent-transactions needs --user-id; merged-beef needs --txids; downstream-spends needs both; input-utxos needs --raw-transaction-file'
     )
   }
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
 }
 
 async function inputUtxoReport(

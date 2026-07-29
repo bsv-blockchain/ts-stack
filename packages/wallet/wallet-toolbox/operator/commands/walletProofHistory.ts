@@ -5,12 +5,19 @@ import type { Chain } from '../../out/src'
 import type { ProvenTxReqStatus } from '../../out/src/sdk/types'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
 import { classifyProofHistory, reviewProofHistory } from '../proofHistoryReview'
-import { optionInteger, optionString } from '../safety'
+import {
+  booleanOption,
+  environmentName,
+  optionInteger,
+  optionString,
+  parseChain,
+  requiredEnvironment
+} from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
 
 type Mode = 'analyze' | 'export' | 'verify'
+type EvidenceResult = Record<string, boolean | number | string>
 async function loadSdk() {
   return await import('@bsv/sdk')
 }
@@ -30,33 +37,11 @@ interface ProofHistoryArtifact {
   schemaVersion: 1
 }
 
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
 function parseMode(value: string): Mode {
   if (value !== 'analyze' && value !== 'export' && value !== 'verify') {
     throw new Error('Operator option "--mode" must be "analyze", "export", or "verify"')
   }
   return value
-}
-
-function environmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
-}
-
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
 }
 
 function optionalJsonPath(options: ReadonlyMap<string, string | true>, name: string): string | undefined {
@@ -104,14 +89,6 @@ function validateModeInputs(
   }
 }
 
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
-}
-
 function isArtifact(value: unknown): value is ProofHistoryArtifact {
   if (
     typeof value !== 'object' ||
@@ -133,7 +110,7 @@ function isArtifact(value: unknown): value is ProofHistoryArtifact {
 
 async function analyzeProofHistory(
   plan: Parameters<OperatorCommand['execute']>[1]
-): Promise<Record<string, boolean | number | string>> {
+): Promise<EvidenceResult> {
   const input = plan.parameters.input as string
   const maxRecords = plan.parameters.maxRecords as number
   const stats = await fs.stat(input)
@@ -153,7 +130,8 @@ async function analyzeProofHistory(
     try {
       const review = reviewProofHistory(record.history)
       for (const classification of classifyProofHistory(review)) {
-        ;(classifications[classification] ??= []).push(record.provenTxReqId)
+        const classifiedRequests = (classifications[classification] ??= [])
+        classifiedRequests.push(record.provenTxReqId)
       }
     } catch {
       invalidHistories++
@@ -171,7 +149,7 @@ async function analyzeProofHistory(
 async function exportProofHistory(
   plan: Parameters<OperatorCommand['execute']>[1],
   storage: StorageInstance
-): Promise<Record<string, boolean | number | string>> {
+): Promise<EvidenceResult> {
   const maxRecords = plan.parameters.maxRecords as number
   const minRequestId = plan.parameters.minRequestId as number
   const pageSize = plan.parameters.pageSize as number

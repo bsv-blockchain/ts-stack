@@ -1,22 +1,6 @@
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
-
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error('Operator option "--whatsonchain-api-key-env" must name an uppercase environment variable')
-  }
-  return value
-}
+import { environmentName, optionInteger, optionString, parseChain } from '../safety'
 
 export const chaintracksIdbObserveCommand: OperatorCommand = {
   name: 'chaintracks-idb-observe',
@@ -26,7 +10,8 @@ export const chaintracksIdbObserveCommand: OperatorCommand = {
     const chain = parseChain(optionString(options, 'chain'))
     const prefix = chain === 'main' ? 'MAIN' : 'TEST'
     const whatsonchainApiKeyEnvironment = environmentName(
-      optionString(options, 'whatsonchain-api-key-env', `${prefix}_WHATSONCHAIN_API_KEY`)
+      optionString(options, 'whatsonchain-api-key-env', `${prefix}_WHATSONCHAIN_API_KEY`),
+      'whatsonchain-api-key-env'
     )
     const observeSeconds = optionInteger(options, 'observe-seconds', 0, {
       min: 0,

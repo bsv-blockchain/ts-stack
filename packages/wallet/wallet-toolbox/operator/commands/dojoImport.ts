@@ -3,39 +3,15 @@ import { randomBytes } from 'node:crypto'
 
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { explicitOutputPath, optionInteger, optionString } from '../safety'
-
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
-}
-
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
-}
+import {
+  booleanOption,
+  environmentName,
+  explicitOutputPath,
+  optionInteger,
+  optionString,
+  parseChain,
+  requiredEnvironment
+} from '../safety'
 
 export const dojoImportCommand: OperatorCommand = {
   name: 'dojo-import',

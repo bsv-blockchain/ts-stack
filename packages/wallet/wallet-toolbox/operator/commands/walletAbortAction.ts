@@ -1,34 +1,10 @@
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
-
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error('Operator option "--database-env" must name an uppercase environment variable')
-  }
-  return value
-}
+import { environmentName, optionInteger, optionString, parseChain, requiredEnvironment } from '../safety'
 
 function reference(value: string): string {
   if (value.length < 1 || value.length > 512 || /\s/.test(value)) {
     throw new Error('Operator option "--reference" must be a non-whitespace wallet reference or transaction ID')
-  }
-  return value
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
   }
   return value
 }
@@ -41,7 +17,8 @@ export const walletAbortActionCommand: OperatorCommand = {
     const chain = parseChain(optionString(options, 'chain', 'main'))
     const prefix = chain === 'main' ? 'MAIN' : 'TEST'
     const databaseEnvironment = environmentName(
-      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`)
+      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`),
+      'database-env'
     )
     const userId = optionInteger(options, 'user-id', Number.NaN, {
       min: 1,

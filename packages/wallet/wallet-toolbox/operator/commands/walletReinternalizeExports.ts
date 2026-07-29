@@ -1,9 +1,14 @@
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
 import { findOutputWithoutScript } from '../outputLookup'
-import { optionInteger, optionString } from '../safety'
-
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
+import {
+  booleanOption,
+  environmentName,
+  optionInteger,
+  optionString,
+  parseChain,
+  requiredEnvironment
+} from '../safety'
 
 interface Brc29Instructions {
   type?: unknown
@@ -32,26 +37,15 @@ interface ExportCounts {
   missingProofs: number
 }
 
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error('Operator option "--database-env" must name an uppercase environment variable')
-  }
-  return value
-}
-
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
+interface ReviewExportPagesArguments {
+  storage: StorageInstance
+  sourceUser: StoredUser
+  destinationUsers: StoredUser[]
+  fromUserId: number
+  initialAfterOutputId: number
+  pageSize: number
+  maxRecords: number
+  internalize: boolean
 }
 
 function parseUserIds(value: string): number[] {
@@ -65,14 +59,6 @@ function parseUserIds(value: string): number[] {
     throw new Error('Operator option "--to-user-ids" must contain 1 through 100 unique positive integer IDs')
   }
   return values
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
 }
 
 export function parseInstructions(value: string): ValidBrc29Instructions | undefined {
@@ -212,16 +198,16 @@ function recordExportOutcome(counts: ExportCounts, outcome: ExportOutcome): void
   }
 }
 
-async function reviewExportPages(
-  storage: StorageInstance,
-  sourceUser: StoredUser,
-  destinationUsers: StoredUser[],
-  fromUserId: number,
-  initialAfterOutputId: number,
-  pageSize: number,
-  maxRecords: number,
-  internalize: boolean
-): Promise<{ counts: ExportCounts; finalOutputId: number; reviewed: number }> {
+async function reviewExportPages({
+  storage,
+  sourceUser,
+  destinationUsers,
+  fromUserId,
+  initialAfterOutputId,
+  pageSize,
+  maxRecords,
+  internalize
+}: ReviewExportPagesArguments): Promise<{ counts: ExportCounts; finalOutputId: number; reviewed: number }> {
   const counts: ExportCounts = {
     alreadyPresent: 0,
     candidates: 0,
@@ -270,7 +256,8 @@ export const walletReinternalizeExportsCommand: OperatorCommand = {
     const chain = parseChain(optionString(options, 'chain', 'main'))
     const prefix = chain === 'main' ? 'MAIN' : 'TEST'
     const databaseEnvironment = environmentName(
-      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`)
+      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`),
+      'database-env'
     )
     const fromUserId = optionInteger(options, 'from-user-id', Number.NaN, { min: 1, max: Number.MAX_SAFE_INTEGER })
     const toUserIds = parseUserIds(optionString(options, 'to-user-ids'))
@@ -337,7 +324,7 @@ export const walletReinternalizeExportsCommand: OperatorCommand = {
       const destinationUsers = await Promise.all(
         toUserIds.map(async userId => await findExactUser(storage, userId, 'destination'))
       )
-      review = await reviewExportPages(
+      review = await reviewExportPages({
         storage,
         sourceUser,
         destinationUsers,
@@ -346,7 +333,7 @@ export const walletReinternalizeExportsCommand: OperatorCommand = {
         pageSize,
         maxRecords,
         internalize
-      )
+      })
     } finally {
       await storage.destroy()
     }

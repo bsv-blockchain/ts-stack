@@ -1,8 +1,10 @@
 import path from 'node:path'
 
+import type { Chain } from '../out/src'
 import { OperatorCommand, OperatorIo, OperatorPlan, ParsedOperatorArguments } from './contracts'
 
 const GLOBAL_OPTIONS = new Set(['allow-production', 'apply', 'confirm', 'help'])
+const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 
 function parseOption(argv: string[], index: number, options: Map<string, string | true>): number {
   const token = argv[index]
@@ -34,19 +36,49 @@ function parseOption(argv: string[], index: number, options: Map<string, string 
 export function parseOperatorArguments(argv: string[]): ParsedOperatorArguments {
   const options = new Map<string, string | true>()
   let command: string | undefined
-
-  for (let index = 0; index < argv.length; index++) {
+  let index = 0
+  while (index < argv.length) {
     const token = argv[index]
     if (!token.startsWith('--')) {
       if (command !== undefined) throw new Error(`Unexpected positional argument "${token}"`)
       command = token
+      index++
       continue
     }
-
-    index = parseOption(argv, index, options)
+    index = parseOption(argv, index, options) + 1
   }
 
   return { command, options }
+}
+
+export function parseChain(value: string): Chain {
+  if (value !== 'main' && value !== 'test') {
+    throw new Error('Operator option "--chain" must be "main" or "test"')
+  }
+  return value
+}
+
+export function environmentName(value: string, option: string): string {
+  if (!ENVIRONMENT_NAME.test(value)) {
+    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
+  }
+  return value
+}
+
+export function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
+  const value = options.get(name)
+  if (value !== undefined && value !== true) {
+    throw new Error(`Operator option "--${name}" does not accept a value`)
+  }
+  return value === true
+}
+
+export function requiredEnvironment(name: string): string {
+  const value = process.env[name]
+  if (value === undefined || value === '') {
+    throw new Error(`Required environment variable "${name}" is not set`)
+  }
+  return value
 }
 
 export function optionString(options: ReadonlyMap<string, string | true>, name: string, fallback?: string): string {

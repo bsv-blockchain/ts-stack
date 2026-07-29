@@ -658,90 +658,110 @@ function validateManualFiles(manualFiles, policy, manualPolicies, errors) {
   }
 }
 
-export function findUnboundedLoops(source) {
-  const masked = [...source]
-  let state = 'code'
-  let quote = ''
-  for (let index = 0; index < source.length; index++) {
-    const character = source[index]
-    const next = source[index + 1]
-    if (state === 'line-comment') {
-      if (character === '\n') state = 'code'
-      else masked[index] = ' '
-      continue
-    }
-    if (state === 'block-comment') {
-      if (character === '*' && next === '/') {
-        masked[index] = ' '
-        masked[index + 1] = ' '
-        index++
-        state = 'code'
-      } else if (character !== '\n') {
-        masked[index] = ' '
-      }
-      continue
-    }
-    if (state === 'string') {
-      if (character === '\\') {
-        masked[index] = ' '
-        if (next !== undefined && next !== '\n') {
-          masked[index + 1] = ' '
-          index++
-        }
-      } else {
-        if (character === quote) state = 'code'
-        if (character !== '\n') masked[index] = ' '
-      }
-      continue
-    }
-    if (character === '/' && next === '/') {
-      masked[index] = ' '
-      masked[index + 1] = ' '
-      index++
-      state = 'line-comment'
-    } else if (character === '/' && next === '*') {
-      masked[index] = ' '
-      masked[index + 1] = ' '
-      index++
-      state = 'block-comment'
-    } else if (character === "'" || character === '"' || character === '`') {
-      quote = character
-      masked[index] = ' '
-      state = 'string'
-    }
+function maskRangePreservingLines(masked, source, start, end) {
+  for (let index = start; index < end; index++) {
+    if (source[index] !== '\n') masked[index] = ' '
   }
-
-  const loops = []
-  const executable = masked.join('')
-  const pattern = /\b(?:for\s*\(\s*;\s*;\s*\)|while\s*\(\s*true\s*\))/g
-  for (const match of executable.matchAll(pattern)) {
-    const index = match.index ?? 0
-    let line = 1
-    for (let offset = 0; offset < index; offset++) {
-      if (executable[offset] === '\n') line++
-    }
-    loops.push(line)
-  }
-  return loops
 }
 
-function validateWalletManualSuiteInventory(root, manualFiles, policy, inventory, errors, today) {
-  validateDatedOwner(inventory, policy, 'wallet manual suite inventory', errors, today)
-  if (inventory.schemaVersion !== 1) {
-    errors.push('wallet manual suite inventory must use schemaVersion 1')
+function findQuotedEnd(source, start) {
+  const quote = source[start]
+  let index = start + 1
+  while (index < source.length) {
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === quote) return index + 1
+    index++
   }
+  return source.length
+}
 
-  const walletPrefix = 'packages/wallet/wallet-toolbox/'
-  const discovered = manualFiles.filter(file => file.startsWith(walletPrefix))
-  const portablePath = file => file.toLowerCase()
+function findNonCodeEnd(source, start) {
+  if (source.startsWith('//', start)) {
+    const lineEnd = source.indexOf('\n', start + 2)
+    return lineEnd === -1 ? source.length : lineEnd
+  }
+  if (source.startsWith('/*', start)) {
+    const blockEnd = source.indexOf('*/', start + 2)
+    return blockEnd === -1 ? source.length : blockEnd + 2
+  }
+  if (source[start] === "'" || source[start] === '"' || source[start] === '`') {
+    return findQuotedEnd(source, start)
+  }
+  return undefined
+}
+
+function maskNonCode(source) {
+  const masked = [...source]
+  let index = 0
+  while (index < source.length) {
+    const end = findNonCodeEnd(source, index)
+    if (end === undefined) {
+      index++
+      continue
+    }
+    maskRangePreservingLines(masked, source, index, end)
+    index = end
+  }
+  return masked.join('')
+}
+
+export function findUnboundedLoops(source) {
+  const executable = maskNonCode(source)
+  const pattern = /\b(?:for\s*\(\s*;\s*;\s*\)|while\s*\(\s*true\s*\))/g
+  return [...executable.matchAll(pattern)].map(match => {
+    const offset = match.index ?? 0
+    return executable.slice(0, offset).split('\n').length
+  })
+}
+
+const WALLET_PREFIX = 'packages/wallet/wallet-toolbox/'
+const WALLET_MANUAL_KINDS = new Set([
+  'dead-scaffolding',
+  'example',
+  'fixture-workflow',
+  'live-e2e',
+  'manual-integration',
+  'mixed',
+  'operator-diagnostic',
+  'operator-procedure'
+])
+const WALLET_SIDE_EFFECTS = new Set([
+  'disposable-state',
+  'funded-state',
+  'local-artifact',
+  'none',
+  'production-state',
+  'public-network',
+  'read-only-remote',
+  'remote-state'
+])
+const WALLET_DISPOSITIONS = new Set([
+  'extract-as-example',
+  'extract-as-fixture-tool',
+  'extract-as-operator',
+  'remove-after-preservation',
+  'retain-as-test',
+  'split-and-extract'
+])
+const WALLET_TARGET_DISPOSITIONS = new Set([
+  'extract-as-example',
+  'extract-as-fixture-tool',
+  'extract-as-operator',
+  'remove-after-preservation',
+  'split-and-extract'
+])
+const portablePath = file => file.toLowerCase()
+
+function validateWalletInventoryCoverage(discovered, suites, errors) {
   const discoveredByPortablePath = new Map(discovered.map(file => [portablePath(file), file]))
-  const suites = inventory.suites ?? []
   const registered = suites.map(suite => suite.path)
   const registeredSet = new Set(registered.map(portablePath))
   if (registeredSet.size !== registered.length) {
     errors.push('wallet manual suite inventory contains duplicate paths')
   }
-
   for (const file of discovered) {
     if (!registeredSet.has(portablePath(file))) {
       errors.push(`${file} lacks an exact wallet manual suite disposition`)
@@ -752,77 +772,55 @@ function validateWalletManualSuiteInventory(root, manualFiles, policy, inventory
       errors.push(`wallet manual suite inventory references missing suite ${file}`)
     }
   }
+  return discoveredByPortablePath
+}
 
-  const kinds = new Set([
-    'dead-scaffolding',
-    'example',
-    'fixture-workflow',
-    'live-e2e',
-    'manual-integration',
-    'mixed',
-    'operator-diagnostic',
-    'operator-procedure'
-  ])
-  const sideEffects = new Set([
-    'disposable-state',
-    'funded-state',
-    'local-artifact',
-    'none',
-    'production-state',
-    'public-network',
-    'read-only-remote',
-    'remote-state'
-  ])
-  const dispositions = new Set([
-    'extract-as-example',
-    'extract-as-fixture-tool',
-    'extract-as-operator',
-    'remove-after-preservation',
-    'retain-as-test',
-    'split-and-extract'
-  ])
-  const dispositionsRequiringTarget = new Set([
-    'extract-as-example',
-    'extract-as-fixture-tool',
-    'extract-as-operator',
-    'remove-after-preservation',
-    'split-and-extract'
-  ])
-
-  for (const suite of suites) {
-    const label = `wallet manual suite ${suite.path ?? '<unknown>'}`
-    if (typeof suite.path !== 'string' || !suite.path.startsWith(walletPrefix)) {
-      errors.push(`${label} must declare a Wallet Toolbox path`)
-    }
-    if (!kinds.has(suite.kind)) {
-      errors.push(`${label} has unknown kind "${suite.kind}"`)
-    }
-    if (!sideEffects.has(suite.sideEffects)) {
-      errors.push(`${label} has unknown sideEffects "${suite.sideEffects}"`)
-    }
-    if (!dispositions.has(suite.disposition)) {
-      errors.push(`${label} has unknown disposition "${suite.disposition}"`)
-    }
-    if (typeof suite.purpose !== 'string' || suite.purpose.trim().length < 40) {
-      errors.push(`${label} must declare a concrete purpose`)
-    }
-    if (
-      dispositionsRequiringTarget.has(suite.disposition) &&
-      (typeof suite.target !== 'string' ||
-        !suite.target.startsWith('packages/wallet/wallet-toolbox/'))
-    ) {
-      errors.push(`${label} must declare an in-package extraction target`)
-    }
-    if (suite.disposition === 'retain-as-test' && typeof suite.path === 'string') {
-      const discoveredPath = discoveredByPortablePath.get(portablePath(suite.path))
-      if (discoveredPath === undefined) continue
-      const source = fs.readFileSync(path.join(root, discoveredPath), 'utf8')
-      for (const line of findUnboundedLoops(source)) {
-        errors.push(`${suite.path}:${line} contains an unbounded loop in a retained manual test`)
-      }
-    }
+function validateWalletSuiteMetadata(suite, errors) {
+  const label = `wallet manual suite ${suite.path ?? '<unknown>'}`
+  if (typeof suite.path !== 'string' || !suite.path.startsWith(WALLET_PREFIX)) {
+    errors.push(`${label} must declare a Wallet Toolbox path`)
   }
+  if (!WALLET_MANUAL_KINDS.has(suite.kind)) {
+    errors.push(`${label} has unknown kind "${suite.kind}"`)
+  }
+  if (!WALLET_SIDE_EFFECTS.has(suite.sideEffects)) {
+    errors.push(`${label} has unknown sideEffects "${suite.sideEffects}"`)
+  }
+  if (!WALLET_DISPOSITIONS.has(suite.disposition)) {
+    errors.push(`${label} has unknown disposition "${suite.disposition}"`)
+  }
+  if (typeof suite.purpose !== 'string' || suite.purpose.trim().length < 40) {
+    errors.push(`${label} must declare a concrete purpose`)
+  }
+  const targetIsRequired = WALLET_TARGET_DISPOSITIONS.has(suite.disposition)
+  const targetIsValid = typeof suite.target === 'string' && suite.target.startsWith(WALLET_PREFIX)
+  if (targetIsRequired && !targetIsValid) {
+    errors.push(`${label} must declare an in-package extraction target`)
+  }
+}
 
+function validateRetainedWalletSuite(root, suite, discoveredByPortablePath, errors) {
+  if (suite.disposition !== 'retain-as-test' || typeof suite.path !== 'string') return
+  const discoveredPath = discoveredByPortablePath.get(portablePath(suite.path))
+  if (discoveredPath === undefined) return
+  const source = fs.readFileSync(path.join(root, discoveredPath), 'utf8')
+  for (const line of findUnboundedLoops(source)) {
+    errors.push(`${suite.path}:${line} contains an unbounded loop in a retained manual test`)
+  }
+}
+
+function validateWalletManualSuiteInventory(root, manualFiles, policy, inventory, errors, today) {
+  validateDatedOwner(inventory, policy, 'wallet manual suite inventory', errors, today)
+  if (inventory.schemaVersion !== 1) {
+    errors.push('wallet manual suite inventory must use schemaVersion 1')
+  }
+  const discovered = manualFiles.filter(file => file.startsWith(WALLET_PREFIX))
+  const suites = inventory.suites ?? []
+  const discoveredByPortablePath = validateWalletInventoryCoverage(discovered, suites, errors)
+  for (const suite of suites) {
+    validateWalletSuiteMetadata(suite, errors)
+    validateRetainedWalletSuite(root, suite, discoveredByPortablePath, errors)
+  }
   return suites.length
 }
 

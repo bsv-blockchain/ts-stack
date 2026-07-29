@@ -1,9 +1,15 @@
 import type { Chain } from '../../out/src'
 import type { TransactionStatus } from '../../out/src/sdk/types'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
+import {
+  booleanOption,
+  environmentName,
+  optionInteger,
+  optionString,
+  parseChain,
+  requiredEnvironment
+} from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 async function loadSdk() {
   return await import('@bsv/sdk')
 }
@@ -13,18 +19,15 @@ type StorageInstance = InstanceType<WalletModule['StorageKnex']>
 type StoredTransaction = Awaited<ReturnType<StorageInstance['findTransactions']>>[number]
 type ReconcileOutcome = 'already-tracked' | 'created-request' | 'marked-failed' | 'none' | 'unresolved-raw-transaction'
 
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
+interface ReconcileTransactionArguments {
+  storage: StorageInstance
+  services: InstanceType<WalletModule['Services']>
+  runtime: WalletModule
+  sdk: SdkModule
+  transaction: StoredTransaction
+  chainStatus: string | undefined
+  cutoff: Date
+  repair: boolean
 }
 
 function parseStatus(value: string): 'sending' | 'unproven' {
@@ -34,32 +37,16 @@ function parseStatus(value: string): 'sending' | 'unproven' {
   return value
 }
 
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
-}
-
-export async function reconcileTransaction(
-  storage: StorageInstance,
-  services: InstanceType<WalletModule['Services']>,
-  runtime: WalletModule,
-  sdk: SdkModule,
-  transaction: StoredTransaction,
-  chainStatus: string | undefined,
-  cutoff: Date,
-  repair: boolean
-): Promise<{ eligible: boolean; outcome: ReconcileOutcome }> {
+export async function reconcileTransaction({
+  storage,
+  services,
+  runtime,
+  sdk,
+  transaction,
+  chainStatus,
+  cutoff,
+  repair
+}: ReconcileTransactionArguments): Promise<{ eligible: boolean; outcome: ReconcileOutcome }> {
   if (transaction.updated_at > cutoff) {
     return { eligible: false, outcome: 'none' }
   }
@@ -217,16 +204,16 @@ export const walletReconcileStuckCommand: OperatorCommand = {
       for (const transaction of withTxids) {
         reviewed++
         const current = serviceResult.results.find(result => result.txid === transaction.txid)
-        const result = await reconcileTransaction(
+        const result = await reconcileTransaction({
           storage,
           services,
           runtime,
           sdk,
           transaction,
-          current?.status,
+          chainStatus: current?.status,
           cutoff,
           repair
-        )
+        })
         if (result.eligible) eligible++
         if (result.outcome === 'marked-failed') markedFailed++
         if (result.outcome === 'created-request') createdRequests++

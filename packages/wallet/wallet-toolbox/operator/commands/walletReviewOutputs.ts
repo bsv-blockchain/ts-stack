@@ -1,34 +1,11 @@
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionString } from '../safety'
+import { booleanOption, environmentName, optionString, parseChain, requiredEnvironment } from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 type WalletModule = typeof import('../../out/src/index.js')
 type StorageInstance = InstanceType<WalletModule['StorageKnex']>
 type SdkNamespace = WalletModule['sdk']
 type ListedOutput = Awaited<ReturnType<StorageInstance['listOutputs']>>['outputs'][number]
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error('Operator option "--database-env" must name an uppercase environment variable')
-  }
-  return value
-}
-
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
-}
 
 function parseUserIds(value: string): number[] {
   const values = value.split(',').map(candidate => Number(candidate.trim()))
@@ -41,14 +18,6 @@ function parseUserIds(value: string): number[] {
     throw new Error('Operator option "--user-ids" must contain 1 through 100 unique positive integer IDs')
   }
   return values
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
 }
 
 async function verifyReleasedOutputs(
@@ -112,10 +81,12 @@ export const walletReviewOutputsCommand: OperatorCommand = {
     const chain = parseChain(optionString(options, 'chain', 'main'))
     const prefix = chain === 'main' ? 'MAIN' : 'TEST'
     const databaseEnvironment = environmentName(
-      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`)
+      optionString(options, 'database-env', `${prefix}_CLOUD_MYSQL_CONNECTION`),
+      'database-env'
     )
     const whatsonchainApiKeyEnvironment = environmentName(
-      optionString(options, 'whatsonchain-api-key-env', `${prefix}_WHATSONCHAIN_API_KEY`)
+      optionString(options, 'whatsonchain-api-key-env', `${prefix}_WHATSONCHAIN_API_KEY`),
+      'whatsonchain-api-key-env'
     )
     const userIds = parseUserIds(optionString(options, 'user-ids'))
     const release = booleanOption(options, 'release')

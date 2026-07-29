@@ -100,13 +100,16 @@ test('unbounded-loop detection ignores comments and accepts bounded loops', () =
   const source = [
     '// for (;;) {}',
     '/* while (true) {} */',
+    '"for (;;) {}"',
+    "'while (true) {}'",
+    '`for (;;) {}`',
     'for (; index < limit; index++) {}',
     'while (remaining > 0) { remaining-- }',
     'for (;;) { await work() }',
     'while (true) { await work() }'
   ].join('\n')
 
-  assert.deepEqual(findUnboundedLoops(source), [5, 6])
+  assert.deepEqual(findUnboundedLoops(source), [8, 9])
 })
 
 test('manual classification requires one matching policy rule', () => {

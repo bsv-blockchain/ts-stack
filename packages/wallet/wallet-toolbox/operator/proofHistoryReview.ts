@@ -143,13 +143,14 @@ function classifyTransitions(review: ProofHistoryReview): string[] {
 
 function classifyAggregate(review: ProofHistoryReview): string[] {
   const classifications: string[] = []
-  if (review.aggregate !== undefined && review.aggregate.successCount === 0 && review.finalStatus === 'completed') {
+  const successCount = review.aggregate?.successCount
+  if (successCount === 0 && review.finalStatus === 'completed') {
     classifications.push('completed-without-success')
   }
-  if (review.aggregate !== undefined && review.aggregate.successCount > 0 && review.finalStatus === 'doubleSpend') {
+  if ((successCount ?? 0) > 0 && review.finalStatus === 'doubleSpend') {
     classifications.push('double-spend-after-success')
   }
-  if (review.aggregate !== undefined && review.aggregate.successCount > 0 && review.finalStatus === 'invalid') {
+  if ((successCount ?? 0) > 0 && review.finalStatus === 'invalid') {
     classifications.push('invalid-after-success')
   }
   return classifications

@@ -1,25 +1,15 @@
 import type { Chain, MonitorStartupTaskMode } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionString } from '../safety'
+import {
+  environmentName as parseEnvironmentName,
+  optionString,
+  parseChain,
+  requiredEnvironment
+} from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const STARTUP_TASK_MODES = new Set<MonitorStartupTaskMode>(['alltoother', 'default', 'multiuser', 'none'])
 
 type RunMode = 'daemon' | 'once'
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function parseEnvironmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
-}
 
 function parseStartupTaskMode(value: string): MonitorStartupTaskMode {
   if (!STARTUP_TASK_MODES.has(value as MonitorStartupTaskMode)) {
@@ -38,12 +28,6 @@ function parseRunMode(value: string): RunMode {
 function optionalEnvironment(name: string): string | undefined {
   const value = process.env[name]
   return value === undefined || value === '' ? undefined : value
-}
-
-function requiredEnvironment(name: string): string {
-  const value = optionalEnvironment(name)
-  if (value === undefined) throw new Error(`Required environment variable "${name}" is not set`)
-  return value
 }
 
 function shutdownSignal(): {

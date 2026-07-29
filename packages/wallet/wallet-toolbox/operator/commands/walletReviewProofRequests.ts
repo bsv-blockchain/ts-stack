@@ -1,48 +1,24 @@
 import type { Chain } from '../../out/src'
 import type { ProvenTxReqStatus } from '../../out/src/sdk/types.js'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
+import {
+  booleanOption,
+  environmentName,
+  optionInteger,
+  optionString,
+  parseChain,
+  requiredEnvironment
+} from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 type ReviewStatus = 'doubleSpend' | 'invalid'
 type WalletModule = typeof import('../../out/src/index.js')
 type StorageInstance = InstanceType<WalletModule['StorageKnex']>
 type ServicesInstance = InstanceType<WalletModule['Services']>
 type StoredRequest = Awaited<ReturnType<StorageInstance['findProvenTxReqs']>>[number]
 
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
-}
-
 function parseStatus(value: string): ReviewStatus {
   if (value !== 'doubleSpend' && value !== 'invalid') {
     throw new Error('Operator option "--status" must be "doubleSpend" or "invalid"')
-  }
-  return value
-}
-
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
   }
   return value
 }

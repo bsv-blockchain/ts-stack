@@ -1,23 +1,8 @@
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
+import { environmentName, optionInteger, optionString, parseChain, requiredEnvironment } from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const BASKET_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
-
-function environmentName(value: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error('Operator option "--root-key-env" must name an uppercase environment variable')
-  }
-  return value
-}
 
 function endpointUrl(value: string): string {
   const url = new URL(value)
@@ -30,14 +15,6 @@ function endpointUrl(value: string): string {
 function basketName(value: string): string {
   if (!BASKET_NAME.test(value)) {
     throw new Error('Operator option "--basket" must be a 1 through 64 character safe basket name')
-  }
-  return value
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
   }
   return value
 }
@@ -58,7 +35,7 @@ export const storageClientExerciseCommand: OperatorCommand = {
   plan(options) {
     const chain = parseChain(optionString(options, 'chain'))
     const endpoint = endpointUrl(optionString(options, 'endpoint'))
-    const rootKeyEnvironment = environmentName(optionString(options, 'root-key-env'))
+    const rootKeyEnvironment = environmentName(optionString(options, 'root-key-env'), 'root-key-env')
     const basket = basketName(optionString(options, 'basket', 'storage-client-exercise'))
     const iterations = optionInteger(options, 'iterations', 1, {
       min: 1,

@@ -3,20 +3,12 @@ import { promises as fs } from 'node:fs'
 
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { optionInteger, optionString } from '../safety'
+import { booleanOption, environmentName, optionInteger, optionString, requiredEnvironment } from '../safety'
 
-const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const IDENTITY_KEY = /^(02|03)[0-9a-fA-F]{64}$/
 
 type Mode = 'copy' | 'purge'
 type WalletModule = typeof import('../../out/src/index.js')
-
-function environmentName(value: string, option: string): string {
-  if (!ENVIRONMENT_NAME.test(value)) {
-    throw new Error(`Operator option "--${option}" must name an uppercase environment variable`)
-  }
-  return value
-}
 
 function parseMode(value: string): Mode {
   if (value !== 'copy' && value !== 'purge') {
@@ -32,14 +24,6 @@ function identityKey(value: string): string {
   return value.toLowerCase()
 }
 
-function booleanOption(options: ReadonlyMap<string, string | true>, name: string): boolean {
-  const value = options.get(name)
-  if (value !== undefined && value !== true) {
-    throw new Error(`Operator option "--${name}" does not accept a value`)
-  }
-  return value === true
-}
-
 function optionalEnvironment(options: ReadonlyMap<string, string | true>, name: string): string | undefined {
   if (options.get(name) === undefined) return undefined
   return environmentName(optionString(options, name), name)
@@ -52,14 +36,6 @@ function optionalSqlitePath(options: ReadonlyMap<string, string | true>): string
     throw new Error('Operator option "--destination-sqlite" must identify a SQLite file')
   }
   return resolved
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
-  if (value === undefined || value === '') {
-    throw new Error(`Required environment variable "${name}" is not set`)
-  }
-  return value
 }
 
 export async function prepareSqliteDestination(destinationSqlite: string, dropExisting: boolean): Promise<void> {

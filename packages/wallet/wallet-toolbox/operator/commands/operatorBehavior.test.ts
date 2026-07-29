@@ -201,16 +201,16 @@ describe('extracted Wallet Toolbox operator behavior', () => {
     }
 
     await expect(
-      reconcileTransaction(
-        storage as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        transaction as never,
-        'unknown',
-        new Date('2026-01-01T00:00:00.000Z'),
-        true
-      )
+      reconcileTransaction({
+        storage: storage as never,
+        services: {} as never,
+        runtime: {} as never,
+        sdk: {} as never,
+        transaction: transaction as never,
+        chainStatus: 'unknown',
+        cutoff: new Date('2026-01-01T00:00:00.000Z'),
+        repair: true
+      })
     ).resolves.toEqual({
       eligible: true,
       outcome: 'marked-failed'
@@ -256,16 +256,16 @@ describe('extracted Wallet Toolbox operator behavior', () => {
     }
 
     await expect(
-      reconcileTransaction(
-        storage as never,
-        {} as never,
-        runtime as never,
-        sdk as never,
-        transaction as never,
-        'mined',
-        new Date('2026-01-01T00:00:00.000Z'),
-        true
-      )
+      reconcileTransaction({
+        storage: storage as never,
+        services: {} as never,
+        runtime: runtime as never,
+        sdk: sdk as never,
+        transaction: transaction as never,
+        chainStatus: 'mined',
+        cutoff: new Date('2026-01-01T00:00:00.000Z'),
+        repair: true
+      })
     ).resolves.toEqual({
       eligible: true,
       outcome: 'created-request'

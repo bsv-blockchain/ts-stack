@@ -2,16 +2,9 @@ import fs from 'node:fs'
 
 import type { Chain } from '../../out/src'
 import { OperatorCommand, OperatorEvidence } from '../contracts'
-import { explicitOutputPath, optionInteger, optionString } from '../safety'
+import { explicitOutputPath, optionInteger, optionString, parseChain } from '../safety'
 
 const DEFAULT_CDN_BASE_URL = 'https://cdn.projectbabbage.com/blockheaders'
-
-function parseChain(value: string): Chain {
-  if (value !== 'main' && value !== 'test') {
-    throw new Error('Operator option "--chain" must be "main" or "test"')
-  }
-  return value
-}
 
 export const chaintracksExportCommand: OperatorCommand = {
   name: 'chaintracks-export',
