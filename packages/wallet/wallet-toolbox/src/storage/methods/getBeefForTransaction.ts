@@ -102,6 +102,55 @@ async function getProvenOrRawTxFromServices(
   return { proven: por.proven?.toApi(), rawTx: por.rawTx }
 }
 
+async function getStoredBeef(
+  storage: StorageProvider,
+  txid: string,
+  options: StorageGetBeefOptions,
+  recursionDepth: number
+): Promise<Beef | undefined> {
+  if (options.ignoreStorage) return undefined
+
+  const requiredLevels = options.minProofLevel === undefined ? undefined : options.minProofLevel + recursionDepth
+  return await storage.getValidBeefForTxid(
+    txid,
+    new Beef(),
+    options.trustSelf,
+    options.knownTxids,
+    undefined,
+    requiredLevels,
+    options.chainTracker,
+    options.skipInvalidProofs
+  )
+}
+
+async function mergeUsableProvenTransaction(
+  beef: Beef,
+  txid: string,
+  result: ProvenOrRawTx,
+  options: StorageGetBeefOptions,
+  recursionDepth: number
+): Promise<Beef | undefined> {
+  const proven = result.proven
+  if (proven == null) return undefined
+  if (options.minProofLevel !== undefined && options.minProofLevel > recursionDepth) return undefined
+
+  const merklePath = new EntityProvenTx(proven).getMerklePath()
+  if (options.chainTracker != null) {
+    const root = merklePath.computeRoot()
+    const isValid = await options.chainTracker.isValidRootForHeight(root, proven.height)
+    if (!isValid) {
+      if (!options.skipInvalidProofs) {
+        throw new WERR_INVALID_MERKLE_ROOT(proven.blockHash, proven.height, root, txid)
+      }
+      return undefined
+    }
+  }
+
+  beef.mergeRawTx(proven.rawTx)
+  beef.mergeBump(merklePath)
+  return beef
+}
+
 async function resolveBeefForTransaction(
   storage: StorageProvider,
   txid: string,
@@ -122,21 +171,8 @@ async function resolveBeefForTransaction(
     return { beef, dependencies: [] }
   }
 
-  if (!options.ignoreStorage) {
-    // if we can use storage, ask storage if it has the txid
-    const requiredLevels = options.minProofLevel === undefined ? undefined : options.minProofLevel + recursionDepth
-    const knownBeef = await storage.getValidBeefForTxid(
-      txid,
-      beef,
-      options.trustSelf,
-      options.knownTxids,
-      undefined,
-      requiredLevels,
-      options.chainTracker,
-      options.skipInvalidProofs
-    )
-    if (knownBeef != null) return { beef: knownBeef, dependencies: [] }
-  }
+  const storedBeef = await getStoredBeef(storage, txid, options, recursionDepth)
+  if (storedBeef != null) return { beef: storedBeef, dependencies: [] }
 
   if (options.ignoreServices) {
     throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`)
@@ -144,38 +180,14 @@ async function resolveBeefForTransaction(
 
   // if storage doesn't know about txid, use services
   // to find it and if it has a proof, remember it.
-  const r = await getProvenOrRawTxFromServices(storage, txid, options)
+  const result = await getProvenOrRawTxFromServices(storage, txid, options)
+  const provenBeef = await mergeUsableProvenTransaction(beef, txid, result, options, recursionDepth)
+  if (provenBeef != null) return { beef: provenBeef, dependencies: [] }
 
-  if (r.proven != null && options.minProofLevel !== undefined && options.minProofLevel > recursionDepth) {
-    // ignore proof at this recursion depth
-    r.proven = undefined
-  }
-
-  if (r.proven != null) {
-    // storage has proven this txid,
-    // merge both the raw transaction and its merkle path
-    const mp = new EntityProvenTx(r.proven).getMerklePath()
-    if (options.chainTracker != null) {
-      const root = mp.computeRoot()
-      const isValid = await options.chainTracker.isValidRootForHeight(root, r.proven.height)
-      if (!isValid) {
-        if (!options.skipInvalidProofs) {
-          throw new WERR_INVALID_MERKLE_ROOT(r.proven.blockHash, r.proven.height, root, txid)
-        }
-        // ignore this currently invalid proof and try to recurse deeper
-        r.proven = undefined
-      }
-    }
-    if (r.proven != null) {
-      beef.mergeRawTx(r.proven.rawTx)
-      beef.mergeBump(mp)
-      return { beef, dependencies: [] }
-    }
-  }
-
-  if (r.rawTx == null) throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`)
+  if (result.rawTx == null)
+    throw new WERR_INVALID_PARAMETER(`txid ${txid}`, `valid transaction on chain ${storage.chain}`)
 
   // merge the raw transaction and recurse over its inputs.
-  const beefTx = beef.mergeRawTx(r.rawTx)
+  const beefTx = beef.mergeRawTx(result.rawTx)
   return { beef, dependencies: beefTx.inputTxids }
 }

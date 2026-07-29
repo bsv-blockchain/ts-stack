@@ -89,6 +89,40 @@ describe('getBeefForTransaction tests', () => {
     expect(fresh.findTxid(txid)).toBeDefined()
   })
 
+  test('uses storage BEEF and forwards proof-validation policy', async () => {
+    const storage = new ProtoStorage('main')
+    const txid = '22'.repeat(32)
+    const stored = new Beef()
+    stored.mergeTxidOnly(txid)
+    const chainTracker = {
+      isValidRootForHeight: jest.fn(async () => true),
+      currentHeight: jest.fn(async () => 800000)
+    }
+    const getValidBeefForTxid = jest
+      .spyOn(storage, 'getValidBeefForTxid')
+      .mockResolvedValue(stored)
+
+    const result = await storage.getBeefForTransaction(txid, {
+      ignoreServices: true,
+      minProofLevel: 2,
+      trustSelf: 'known',
+      chainTracker,
+      skipInvalidProofs: true
+    })
+
+    expect(result.findTxid(txid)).toBeDefined()
+    expect(getValidBeefForTxid).toHaveBeenCalledWith(
+      txid,
+      expect.any(Beef),
+      'known',
+      undefined,
+      undefined,
+      2,
+      chainTracker,
+      true
+    )
+  })
+
   test('0 ProtoStorage.getBeefForTxid', async () => {
     const ps = new ProtoStorage('main')
 
@@ -143,7 +177,16 @@ describe('getBeefForTransaction tests', () => {
       }
     })
 
-    const beef = await ps.getBeefForTxid('794f836052ad73732a550c38bea3697a722c6a1e54bcbe63735ba79e0d23f623')
+    const firstTxid = '794f836052ad73732a550c38bea3697a722c6a1e54bcbe63735ba79e0d23f623'
+    const isValidRootForHeight = jest.fn(async () => false)
+    ps.gbo.chainTracker = {
+      isValidRootForHeight,
+      currentHeight: jest.fn(async () => 800000)
+    }
+    await expect(ps.getBeefForTxid(firstTxid)).rejects.toThrow(/Invalid merkleRoot/)
+
+    isValidRootForHeight.mockResolvedValue(true)
+    const beef = await ps.getBeefForTxid(firstTxid)
     expect(beef.bumps.length).toBeGreaterThan(0)
     {
       const beef = await ps.getBeefForTxid('53023657e79f446ca457040a0ab3b903000d7281a091397c7853f021726a560e')

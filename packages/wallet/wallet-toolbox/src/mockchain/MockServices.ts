@@ -174,7 +174,7 @@ export class MockServices implements WalletServices {
       if (sourceTransaction.merklePath != null) continue
       const stxid = sourceTransaction.id('hex')
       const stx = await this.storage.getTransaction(stxid)
-      if ((stx == null) || stx.blockHeight === null) continue
+      if (stx?.blockHeight == null) continue
       const txsInBlock = await this.storage.getTransactionsInBlock(stx.blockHeight)
       const stxids = txsInBlock.map(t => t.txid)
       const idx = stxids.indexOf(stxid)

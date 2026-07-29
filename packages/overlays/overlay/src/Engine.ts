@@ -1196,92 +1196,55 @@ export class Engine {
     }
 
     for (const topic of Object.keys(this.syncConfiguration)) {
-      // Make sure syncEndpoints is an array or SHIP
-      let syncEndpoints: string[] | string | false = this.syncConfiguration[topic]
+      const configuredEndpoints = this.syncConfiguration[topic]
+      if (configuredEndpoints === false) continue
+      if (!Array.isArray(configuredEndpoints) && configuredEndpoints !== 'SHIP') continue
 
-      // Check if this topic has been configured NOT to sync
-      if (syncEndpoints === false) {
-        continue
-      }
-
-      if (syncEndpoints === 'SHIP') {
-        // Perform lookup and find ship advertisements to set syncEndpoints for topic
-        const resolverConfig: LookupResolverConfig = this.slapTrackers
-          ? { slapTrackers: this.slapTrackers }
-          : {}
-
-        const resolver = new LookupResolver(resolverConfig)
-        const lookupAnswer: LookupAnswer = await resolver.query({
-          service: 'ls_ship',
-          query: {
-            topics: [topic]
-          }
-        })
-
-        // Lookup will currently always return type output-list
-        if (lookupAnswer.type === 'output-list') {
-          const endpointSet = new Set<string>()
-
-          lookupAnswer.outputs.forEach(output => {
-            try {
-              // Parse out the advertisements using the provided parser
-              const tx = Transaction.fromBEEF(output.beef)
-              const advertisement = this.advertiser?.parseAdvertisement(tx.outputs[output.outputIndex].lockingScript)
-              if (advertisement?.protocol === 'SHIP') {
-                endpointSet.add(advertisement.domain)
-              }
-            } catch (error) {
-              this.logger.error('Failed to parse advertisement output:', error)
-            }
-          })
-
-          syncEndpoints = Array.from(endpointSet)
-        }
-      }
-
-      // Now syncEndpoints is guaranteed to be an array of strings without duplicates
-      if (Array.isArray(syncEndpoints)) {
-        // Remove our own hosting URL so we don't sync with ourselves
-        syncEndpoints = syncEndpoints.filter((endpoint) => endpoint !== this.hostingURL)
-
-        this.logger.info(`[GASP SYNC] Will attempt to sync with ${syncEndpoints.length} peer${syncEndpoints.length === 1 ? '' : 's'}`)
-        // Sync with each endpoint individually to avoid parallel locks and let failures be isolated
-        for (const endpoint of syncEndpoints) {
-          this.logger.info(`[GASP SYNC] Starting sync for topic "${topic}" with peer "${endpoint}"`)
-
-          try {
-            // Read the last interaction score from storage
-            const lastInteraction = await this.storage.getLastInteraction(endpoint, topic)
-
-            const gasp = new GASP(
-              new OverlayGASPStorage(topic, this),
-              new OverlayGASPRemote(endpoint, topic),
-              lastInteraction,
-              `[GASP Sync of ${topic} with ${endpoint}]`,
-              true,
-              true
-            )
-            await gasp.sync(endpoint, DEFAULT_GASP_SYNC_LIMIT)
-
-            // Save the updated last interaction score
-            if (gasp.lastInteraction > lastInteraction) {
-              await this.storage.updateLastInteraction(endpoint, topic, gasp.lastInteraction)
-            }
-
-            this.logger.info(`[GASP SYNC] Sync successful for topic "${topic}" with peer "${endpoint}"`)
-          } catch (err) {
-            this.logger.error(
-              `[GASP SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`,
-              err
-            )
-            // Continue on to the next endpoint without throwing
-          }
-        }
+      const syncEndpoints = await this.resolveSyncEndpointsForTopic(
+        topic,
+        'Failed to parse advertisement output:'
+      )
+      this.logger.info(`[GASP SYNC] Will attempt to sync with ${syncEndpoints.length} peer${syncEndpoints.length === 1 ? '' : 's'}`)
+      // Sync with each endpoint sequentially to avoid parallel locks while
+      // keeping peer failures isolated.
+      for (const endpoint of syncEndpoints) {
+        await this.syncGASPWithPeer(topic, endpoint)
       }
     }
   }
 
-  private async resolveSyncEndpointsForTopic(topic: string): Promise<string[]> {
+  private async syncGASPWithPeer(topic: string, endpoint: string): Promise<void> {
+    this.logger.info(`[GASP SYNC] Starting sync for topic "${topic}" with peer "${endpoint}"`)
+
+    try {
+      const lastInteraction = await this.storage.getLastInteraction(endpoint, topic)
+      const gasp = new GASP(
+        new OverlayGASPStorage(topic, this),
+        new OverlayGASPRemote(endpoint, topic),
+        lastInteraction,
+        `[GASP Sync of ${topic} with ${endpoint}]`,
+        true,
+        true
+      )
+      await gasp.sync(endpoint, DEFAULT_GASP_SYNC_LIMIT)
+
+      if (gasp.lastInteraction > lastInteraction) {
+        await this.storage.updateLastInteraction(endpoint, topic, gasp.lastInteraction)
+      }
+      this.logger.info(`[GASP SYNC] Sync successful for topic "${topic}" with peer "${endpoint}"`)
+    } catch (error) {
+      this.logger.error(
+        `[GASP SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`,
+        error
+      )
+      // Continue on to the next endpoint without throwing.
+    }
+  }
+
+  private async resolveSyncEndpointsForTopic(
+    topic: string,
+    advertisementErrorMessage = 'Failed to parse BASM advertisement output:'
+  ): Promise<string[]> {
     if (this.syncConfiguration === undefined) {
       return []
     }
@@ -1313,7 +1276,7 @@ export class Engine {
               endpointSet.add(advertisement.domain)
             }
           } catch (error) {
-            this.logger.error('Failed to parse BASM advertisement output:', error)
+            this.logger.error(advertisementErrorMessage, error)
           }
         })
       }

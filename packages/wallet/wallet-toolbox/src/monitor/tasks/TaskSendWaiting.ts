@@ -154,56 +154,12 @@ export class TaskSendWaiting extends WalletMonitorTask {
    */
   async processUnsent (reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
     const txids = reqApis.map(r => r.txid)
-    const logs: Record<string, string> = {}
+    const logs = this.initializeRequestLogs(reqApis)
     const reqApiIds = new Set(reqApis.map(r => r.provenTxReqId))
     const groupedReqIds = new Set<number>()
-    for (let i = 0; i < reqApis.length; i++) {
-      const reqApi = reqApis[i]
-      logs[reqApi.txid] = `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}:`
-    }
+
     for (const reqApi of reqApis) {
-      if (groupedReqIds.has(reqApi.provenTxReqId)) {
-        logs[reqApi.txid] += ' processed with batch'
-        continue
-      }
-      if (reqApi.status !== 'unsent' && reqApi.status !== 'sending') {
-        logs[reqApi.txid] += ` status now ${reqApi.status}`
-        continue
-      }
-      const req = new EntityProvenTxReq(reqApi)
-      const reqs: EntityProvenTxReq[] = []
-      if (req.batch) {
-        logs[reqApi.txid] += ` batch ${req.batch}`
-        // Make sure wew process entire batch together for efficient beef generation
-        const batchReqApis = await this.storage.findProvenTxReqs({
-          partial: { batch: req.batch },
-          status: this.includeSending ? ['unsent', 'sending'] : ['unsent']
-        })
-        for (const bra of batchReqApis) {
-          if (reqApiIds.has(bra.provenTxReqId)) groupedReqIds.add(bra.provenTxReqId)
-          reqs.push(new EntityProvenTxReq(bra))
-        }
-      } else {
-        // Just a single non-batched req...
-        reqs.push(req)
-      }
-
-      const r = await this.storage.runAsStorageProvider(async sp => {
-        return await attemptToPostReqsToNetwork(sp, reqs)
-      })
-
-      for (const rd of r.details) {
-        logs[rd.txid] += ` req.status ${rd.req.status} post.status ${rd.status}`
-      }
-
-      if (this.monitor.onTransactionBroadcasted != null) {
-        const rar = await this.storage.runAsStorageProvider(async sp => {
-          const ars: SendWithResult[] = [{ txid: req.txid, status: 'sending' }]
-          const { rar } = await aggregateActionResults(sp, ars, r)
-          return rar
-        })
-        this.monitor.callOnBroadcastedTransaction(rar[0])
-      }
+      await this.processUnsentRequest(reqApi, reqApiIds, groupedReqIds, logs)
     }
 
     let log = ''
@@ -211,5 +167,71 @@ export class TaskSendWaiting extends WalletMonitorTask {
       log += `${' '.repeat(indent)}${logs[txid]}\n`
     }
     return log
+  }
+
+  private initializeRequestLogs(reqApis: TableProvenTxReq[]): Record<string, string> {
+    const logs: Record<string, string> = {}
+    for (let i = 0; i < reqApis.length; i++) {
+      const req = reqApis[i]
+      logs[req.txid] = `${i} reqId=${req.provenTxReqId} attempts=${req.attempts} txid=${req.txid}:`
+    }
+    return logs
+  }
+
+  private async processUnsentRequest(
+    reqApi: TableProvenTxReq,
+    reqApiIds: Set<number>,
+    groupedReqIds: Set<number>,
+    logs: Record<string, string>
+  ): Promise<void> {
+    if (groupedReqIds.has(reqApi.provenTxReqId)) {
+      logs[reqApi.txid] += ' processed with batch'
+      return
+    }
+    if (reqApi.status !== 'unsent' && reqApi.status !== 'sending') {
+      logs[reqApi.txid] += ` status now ${reqApi.status}`
+      return
+    }
+
+    const req = new EntityProvenTxReq(reqApi)
+    const reqs = await this.expandRequestBatch(req, reqApiIds, groupedReqIds, logs)
+    const result = await this.storage.runAsStorageProvider(async sp => {
+      return await attemptToPostReqsToNetwork(sp, reqs)
+    })
+
+    for (const detail of result.details) {
+      logs[detail.txid] += ` req.status ${detail.req.status} post.status ${detail.status}`
+    }
+
+    if (this.monitor.onTransactionBroadcasted != null) {
+      const aggregateResults = await this.storage.runAsStorageProvider(async sp => {
+        const actions: SendWithResult[] = [{ txid: req.txid, status: 'sending' }]
+        const { rar } = await aggregateActionResults(sp, actions, result)
+        return rar
+      })
+      this.monitor.callOnBroadcastedTransaction(aggregateResults[0])
+    }
+  }
+
+  private async expandRequestBatch(
+    req: EntityProvenTxReq,
+    reqApiIds: Set<number>,
+    groupedReqIds: Set<number>,
+    logs: Record<string, string>
+  ): Promise<EntityProvenTxReq[]> {
+    if (!req.batch) return [req]
+
+    logs[req.txid] += ` batch ${req.batch}`
+    // Process the entire batch together for efficient BEEF generation.
+    const batchReqApis = await this.storage.findProvenTxReqs({
+      partial: { batch: req.batch },
+      status: this.includeSending ? ['unsent', 'sending'] : ['unsent']
+    })
+    const reqs: EntityProvenTxReq[] = []
+    for (const batchReq of batchReqApis) {
+      if (reqApiIds.has(batchReq.provenTxReqId)) groupedReqIds.add(batchReq.provenTxReqId)
+      reqs.push(new EntityProvenTxReq(batchReq))
+    }
+    return reqs
   }
 }

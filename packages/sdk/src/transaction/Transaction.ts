@@ -120,6 +120,39 @@ export default class Transaction {
     return this.activeSignatureHashCache ?? { hashOutputsSingle: new Map() }
   }
 
+  private completeSourceTransaction(
+    tx: Transaction,
+    visiting: Set<Transaction>,
+    complete: Set<Transaction>
+  ): void {
+    for (const input of tx.inputs) {
+      if (input.sourceTXID == null && input.sourceTransaction != null) {
+        input.sourceTXID = input.sourceTransaction.id('hex')
+      }
+    }
+    visiting.delete(tx)
+    complete.add(tx)
+  }
+
+  private scheduleSourceTransactions(
+    tx: Transaction,
+    visiting: Set<Transaction>,
+    complete: Set<Transaction>,
+    stack: Array<{ tx: Transaction; expanded: boolean }>
+  ): void {
+    if (visiting.has(tx)) {
+      throw new Error('Cyclic source transaction graph')
+    }
+    visiting.add(tx)
+    stack.push({ tx, expanded: true })
+    for (let i = tx.inputs.length - 1; i >= 0; i--) {
+      const source = tx.inputs[i].sourceTransaction
+      if (tx.inputs[i].sourceTXID == null && source != null && !complete.has(source)) {
+        stack.push({ tx: source, expanded: false })
+      }
+    }
+  }
+
   /**
    * Iteratively materializes source transaction IDs so deep spend chains do not
    * recurse through `hash()` while serializing their parents.
@@ -135,31 +168,11 @@ export default class Transaction {
       if (complete.has(frame.tx)) continue
 
       if (frame.expanded) {
-        for (const input of frame.tx.inputs) {
-          if (input.sourceTXID == null && input.sourceTransaction != null) {
-            input.sourceTXID = input.sourceTransaction.id('hex')
-          }
-        }
-        visiting.delete(frame.tx)
-        complete.add(frame.tx)
+        this.completeSourceTransaction(frame.tx, visiting, complete)
         continue
       }
 
-      if (visiting.has(frame.tx)) {
-        throw new Error('Cyclic source transaction graph')
-      }
-      visiting.add(frame.tx)
-      stack.push({ tx: frame.tx, expanded: true })
-      for (let i = frame.tx.inputs.length - 1; i >= 0; i--) {
-        const input = frame.tx.inputs[i]
-        if (
-          input.sourceTXID == null &&
-          input.sourceTransaction != null &&
-          !complete.has(input.sourceTransaction)
-        ) {
-          stack.push({ tx: input.sourceTransaction, expanded: false })
-        }
-      }
+      this.scheduleSourceTransactions(frame.tx, visiting, complete, stack)
     }
   }
 
@@ -1271,82 +1284,131 @@ export default class Transaction {
   writeSerializedBEEF(writer: Writer | WriterUint8Array, allowPartial?: boolean): void {
     this.materializeSourceTXIDs()
     writer.writeUInt32LE(BEEF_V1)
-    const BUMPs: MerklePath[] = []
+    const { bumps, txs } = this.collectBEEFTransactions(allowPartial)
+
+    writer.writeVarIntNum(bumps.length)
+    const bumpBytes = this.reserveBEEFWriter(writer, bumps, txs)
+    for (let i = 0; i < bumps.length; i++) {
+      writer.write(bumpBytes?.[i] ?? bumps[i].toBinary())
+    }
+    writer.writeVarIntNum(txs.length)
+    for (const item of txs) {
+      writer.write(item.tx.toUint8Array())
+      if (typeof item.pathIndex === 'number') {
+        writer.writeUInt8(1)
+        writer.writeVarIntNum(item.pathIndex)
+      } else {
+        writer.writeUInt8(0)
+      }
+    }
+  }
+
+  private collectBEEFTransactions(
+    allowPartial?: boolean
+  ): { bumps: MerklePath[]; txs: Array<{ tx: Transaction; pathIndex?: number }> } {
+    const bumps: MerklePath[] = []
     const bumpIndexByInstance = new Map<MerklePath, number>()
     const bumpIndexByRoot = new Map<string, number>()
     const txs: Array<{ tx: Transaction; pathIndex?: number }> = []
     const seenTxids = new Set<string>()
-
-    const getBumpIndex = (merklePath: MerklePath): number => {
-      const existingByInstance = bumpIndexByInstance.get(merklePath)
-      if (existingByInstance !== undefined) {
-        return existingByInstance
-      }
-
-      const key = `${merklePath.blockHeight}:${merklePath.computeRoot()}`
-      const existingByRoot = bumpIndexByRoot.get(key)
-      if (existingByRoot !== undefined) {
-        BUMPs[existingByRoot].combine(merklePath)
-        bumpIndexByInstance.set(merklePath, existingByRoot)
-        return existingByRoot
-      }
-
-      const newIndex = BUMPs.length
-      BUMPs.push(merklePath)
-      bumpIndexByInstance.set(merklePath, newIndex)
-      bumpIndexByRoot.set(key, newIndex)
-      return newIndex
-    }
-
     const scheduledTxids = new Set<string>()
     const stack: Array<{ tx: Transaction; expanded: boolean }> = [{ tx: this, expanded: false }]
+
     while (stack.length > 0) {
       const frame = stack.pop()
       if (frame == null) continue
-      const txid = frame.tx.id('hex')
       if (frame.expanded) {
-        if (seenTxids.has(txid)) continue
-        const obj: { tx: Transaction; pathIndex?: number } = { tx: frame.tx }
-        if (frame.tx.merklePath != null) obj.pathIndex = getBumpIndex(frame.tx.merklePath)
-        seenTxids.add(txid)
-        txs.push(obj)
+        this.appendBEEFTransaction(frame.tx, seenTxids, txs, bumps, bumpIndexByInstance, bumpIndexByRoot)
         continue
       }
-      if (scheduledTxids.has(txid)) continue
-      scheduledTxids.add(txid)
-      stack.push({ tx: frame.tx, expanded: true })
-      if (frame.tx.merklePath == null) {
-        for (const input of frame.tx.inputs) {
-          const source = input.sourceTransaction
-          if (source != null) stack.push({ tx: source, expanded: false })
-          else if (allowPartial === false)
-            throw new Error('A required source transaction is missing!')
-        }
-      }
+      this.scheduleBEEFTransaction(frame.tx, allowPartial, scheduledTxids, stack)
     }
 
-    writer.writeVarIntNum(BUMPs.length)
+    return { bumps, txs }
+  }
+
+  private appendBEEFTransaction(
+    tx: Transaction,
+    seenTxids: Set<string>,
+    txs: Array<{ tx: Transaction; pathIndex?: number }>,
+    bumps: MerklePath[],
+    bumpIndexByInstance: Map<MerklePath, number>,
+    bumpIndexByRoot: Map<string, number>
+  ): void {
+    const txid = tx.id('hex')
+    if (seenTxids.has(txid)) return
+
+    const item: { tx: Transaction; pathIndex?: number } = { tx }
+    if (tx.merklePath != null) {
+      item.pathIndex = this.getBEEFPathIndex(
+        tx.merklePath,
+        bumps,
+        bumpIndexByInstance,
+        bumpIndexByRoot
+      )
+    }
+    seenTxids.add(txid)
+    txs.push(item)
+  }
+
+  private scheduleBEEFTransaction(
+    tx: Transaction,
+    allowPartial: boolean | undefined,
+    scheduledTxids: Set<string>,
+    stack: Array<{ tx: Transaction; expanded: boolean }>
+  ): void {
+    const txid = tx.id('hex')
+    if (scheduledTxids.has(txid)) return
+
+    scheduledTxids.add(txid)
+    stack.push({ tx, expanded: true })
+    if (tx.merklePath != null) return
+
+    for (const input of tx.inputs) {
+      const source = input.sourceTransaction
+      if (source != null) stack.push({ tx: source, expanded: false })
+      else if (allowPartial === false) throw new Error('A required source transaction is missing!')
+    }
+  }
+
+  private getBEEFPathIndex(
+    merklePath: MerklePath,
+    bumps: MerklePath[],
+    bumpIndexByInstance: Map<MerklePath, number>,
+    bumpIndexByRoot: Map<string, number>
+  ): number {
+    const existingByInstance = bumpIndexByInstance.get(merklePath)
+    if (existingByInstance !== undefined) return existingByInstance
+
+    const key = `${merklePath.blockHeight}:${merklePath.computeRoot()}`
+    const existingByRoot = bumpIndexByRoot.get(key)
+    if (existingByRoot !== undefined) {
+      bumps[existingByRoot].combine(merklePath)
+      bumpIndexByInstance.set(merklePath, existingByRoot)
+      return existingByRoot
+    }
+
+    const newIndex = bumps.length
+    bumps.push(merklePath)
+    bumpIndexByInstance.set(merklePath, newIndex)
+    bumpIndexByRoot.set(key, newIndex)
+    return newIndex
+  }
+
+  private reserveBEEFWriter(
+    writer: Writer | WriterUint8Array,
+    bumps: MerklePath[],
+    txs: Array<{ tx: Transaction; pathIndex?: number }>
+  ): Uint8Array[] | undefined {
     let bumpBytes: Uint8Array[] | undefined
     if (writer instanceof WriterUint8Array) {
-      bumpBytes = BUMPs.map(bump => bump.toBinaryUint8Array())
+      bumpBytes = bumps.map(bump => bump.toBinaryUint8Array())
       let remainingBytes = 16
       for (const bytes of bumpBytes) remainingBytes += bytes.length
       for (const item of txs) remainingBytes += item.tx.toUint8Array().length + 10
       writer.reserve(remainingBytes)
     }
-    for (let i = 0; i < BUMPs.length; i++) {
-      writer.write(bumpBytes?.[i] ?? BUMPs[i].toBinary())
-    }
-    writer.writeVarIntNum(txs.length)
-    for (const t of txs) {
-      writer.write(t.tx.toUint8Array())
-      if (typeof t.pathIndex === 'number') {
-        writer.writeUInt8(1)
-        writer.writeVarIntNum(t.pathIndex)
-      } else {
-        writer.writeUInt8(0)
-      }
-    }
+    return bumpBytes
   }
 
   /**

@@ -279,12 +279,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     // 3. Compute chainWork for each header.
     // 4. Verify chain of header hash and previousHash values. One header at each height. Retain chain with most chainWork.
 
-    let minHeight: number
-    if (bulkRange.isEmpty) {
-      minHeight = before.bulk.isEmpty ? 0 : before.bulk.maxHeight + 1
-    } else {
-      minHeight = bulkRange.minHeight
-    }
+    const minHeight = this.getMinimumBulkHeaderHeight(before.bulk, bulkRange)
     const filteredHeaders = headers.concat(priorLiveHeaders || []).filter(h => h.height >= minHeight)
     const sortedHeaders = [...filteredHeaders]
     sortedHeaders.sort((a, b) => a.height - b.height)
@@ -295,61 +290,80 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
       return liveHeaders
     }
 
-    const chains: AddBulkHeadersChain[] = []
-
-    for (const h of sortedHeaders) {
-      const dupe = chains.find(c => {
-        const lh = c.headers.at(-1)!
-        return lh.hash === h.hash
-      })
-      if (dupe != null) continue
-      const chainWork = convertBitsToWork(h.bits)
-      let chain = chains.find(c => {
-        const lh = c.headers.at(-1)!
-        return lh.height + 1 === h.height && lh.hash === h.previousHash
-      })
-      if (chain != null) {
-        chain.headers.push(h)
-        chain.chainWork = addWork(chain.chainWork, chainWork)
-        if (h.height <= bulkRange.maxHeight) {
-          chain.bulkChainWork = chain.chainWork
-        }
-        continue
-      }
-      // Since headers are assumed to be sorted by height,
-      // if this header doesn't extend an existing chain,
-      // it may be a branch from the previous header.
-      chain = chains.find(c => {
-        const lh = c.headers.at(-2)!
-        return lh.height + 1 === h.height && lh.hash === h.previousHash
-      })
-      if (chain != null) {
-        // This header competes with tip of `chain`.
-        // Create a new chain with this header as the tip.
-        const headers = chain.headers.slice(0, -1)
-        headers.push(h)
-        const otherHeaderChainWork = convertBitsToWork(chain.headers.at(-1)!.bits)
-        const newChainWork = addWork(subWork(chain.chainWork, otherHeaderChainWork), chainWork)
-        const newChain = {
-          headers,
-          chainWork: newChainWork,
-          bulkChainWork: h.height <= bulkRange.maxHeight ? newChainWork : undefined
-        }
-        chains.push(newChain)
-        continue
-      }
-      // Starting a new chain
-      chains.push({ headers: [h], chainWork, bulkChainWork: h.height <= bulkRange.maxHeight ? chainWork : undefined })
-    }
-
-    // Find the chain with the most chainWork.
-    const bestChain = chains.reduce((best, c) => (isMoreWork(c.chainWork, best.chainWork) ? c : best), chains[0])
-
-    const newBulkHeaders = bestChain.headers.slice(0, bulkRange.maxHeight - bestChain.headers[0].height + 1)
+    const chains = this.buildBulkHeaderChains(sortedHeaders, bulkRange)
+    const bestChain = chains.reduce(
+      (best, chain) => isMoreWork(chain.chainWork, best.chainWork) ? chain : best,
+      chains[0]
+    )
+    const newBulkHeaderCount = bulkRange.maxHeight - bestChain.headers[0].height + 1
+    const newBulkHeaders = bestChain.headers.slice(0, newBulkHeaderCount)
 
     await this.addBulkHeadersFromBestChain(newBulkHeaders, bestChain)
 
     return liveHeaders
+  }
+
+  private getMinimumBulkHeaderHeight (availableBulk: HeightRange, requestedBulk: HeightRange): number {
+    if (!requestedBulk.isEmpty) return requestedBulk.minHeight
+    return availableBulk.isEmpty ? 0 : availableBulk.maxHeight + 1
+  }
+
+  private buildBulkHeaderChains (
+    sortedHeaders: BlockHeader[],
+    bulkRange: HeightRange
+  ): AddBulkHeadersChain[] {
+    const chains: AddBulkHeadersChain[] = []
+    for (const header of sortedHeaders) {
+      this.addHeaderToBulkChains(chains, header, bulkRange)
+    }
+    return chains
+  }
+
+  private addHeaderToBulkChains (
+    chains: AddBulkHeadersChain[],
+    header: BlockHeader,
+    bulkRange: HeightRange
+  ): void {
+    const duplicate = chains.some(chain => chain.headers.at(-1)!.hash === header.hash)
+    if (duplicate) return
+
+    const headerWork = convertBitsToWork(header.bits)
+    const extendedChain = chains.find(chain => {
+      const tip = chain.headers.at(-1)!
+      return tip.height + 1 === header.height && tip.hash === header.previousHash
+    })
+    if (extendedChain != null) {
+      extendedChain.headers.push(header)
+      extendedChain.chainWork = addWork(extendedChain.chainWork, headerWork)
+      if (header.height <= bulkRange.maxHeight) {
+        extendedChain.bulkChainWork = extendedChain.chainWork
+      }
+      return
+    }
+
+    // Sorted headers may branch from the parent of an existing chain tip.
+    const forkedChain = chains.find(chain => {
+      const parent = chain.headers.at(-2)!
+      return parent.height + 1 === header.height && parent.hash === header.previousHash
+    })
+    if (forkedChain != null) {
+      const forkHeaders = forkedChain.headers.slice(0, -1)
+      forkHeaders.push(header)
+      const replacedTipWork = convertBitsToWork(forkedChain.headers.at(-1)!.bits)
+      const forkWork = addWork(subWork(forkedChain.chainWork, replacedTipWork), headerWork)
+      chains.push({
+        headers: forkHeaders,
+        chainWork: forkWork,
+        bulkChainWork: header.height <= bulkRange.maxHeight ? forkWork : undefined
+      })
+      return
+    }
+
+    chains.push({
+      headers: [header],
+      chainWork: headerWork,
+      bulkChainWork: header.height <= bulkRange.maxHeight ? headerWork : undefined
+    })
   }
 
   private async addBulkHeadersFromBestChain (newBulkHeaders: BlockHeader[], bestChain: AddBulkHeadersChain) {

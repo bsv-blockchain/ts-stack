@@ -1238,6 +1238,21 @@ export class Beef {
    * Topologically sort queue into result; return anything that cannot be sorted.
    */
   private topoSort (queue: BeefTx[], validTxids: Record<string, boolean>, result: BeefTx[]): BeefTx[] {
+    const { indegree, dependents, originalIndex, round } = this.buildTopoSortGraph(queue, validTxids)
+    const processed = this.processTopoSortQueue(queue, indegree, dependents, originalIndex, round)
+    this.appendTopoSortResult(queue, processed, round, validTxids, result)
+    return queue.filter(tx => !processed.has(tx.txid))
+  }
+
+  private buildTopoSortGraph (
+    queue: BeefTx[],
+    validTxids: Record<string, boolean>
+  ): {
+      indegree: Map<string, number>
+      dependents: Map<string, BeefTx[]>
+      originalIndex: Map<string, number>
+      round: Map<string, number>
+    } {
     const candidates = new Set(queue.map(tx => tx.txid))
     const indegree = new Map<string, number>()
     const dependents = new Map<string, BeefTx[]>()
@@ -1259,6 +1274,16 @@ export class Beef {
       round.set(tx.txid, 0)
     }
 
+    return { indegree, dependents, originalIndex, round }
+  }
+
+  private processTopoSortQueue (
+    queue: BeefTx[],
+    indegree: Map<string, number>,
+    dependents: Map<string, BeefTx[]>,
+    originalIndex: Map<string, number>,
+    round: Map<string, number>
+  ): Set<string> {
     const ready = queue.filter(tx => indegree.get(tx.txid) === 0)
     const processed = new Set<string>()
     for (const tx of ready) {
@@ -1275,6 +1300,16 @@ export class Beef {
       }
     }
 
+    return processed
+  }
+
+  private appendTopoSortResult (
+    queue: BeefTx[],
+    processed: Set<string>,
+    round: Map<string, number>,
+    validTxids: Record<string, boolean>,
+    result: BeefTx[]
+  ): void {
     // Preserve the legacy repeated-scan ordering without repeating scans: a
     // dependency that originally appears after its child advances that child
     // to the next scan round. Bucketing by round and original position is O(V).
@@ -1292,7 +1327,6 @@ export class Beef {
         result.push(tx)
       }
     }
-    return queue.filter(tx => !processed.has(tx.txid))
   }
 
   /**
