@@ -38,6 +38,29 @@ import { scriptVerificationBackend } from './ScriptVerificationBackend.js'
 /** Post-Chronicle height used when an input's source UTXO mined-height is unobtainable. */
 const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
 
+type QueuedScriptVerification = {
+  tx: Transaction
+  blockHeight: number
+  consensus: boolean
+  memoryLimit?: number
+}
+
+type TransactionVerificationState = {
+  scriptsOnly: boolean
+  memoryLimit: number | undefined
+  txQueue: Transaction[]
+  queuedTransactions: Set<Transaction>
+  queuedTxids: Set<string>
+  verifiedTransactions: Set<Transaction>
+  verifiedTxids: Set<string>
+}
+
+type UnminedTransactionVerificationContext = TransactionVerificationState & {
+  feeModel: FeeModel | undefined
+  selectedVerifier: BdkVerifierInterface | undefined
+  verifierQueue: QueuedScriptVerification[]
+}
+
 /**
  * Represents a complete Bitcoin transaction. This class encapsulates all the details
  * required for creating, signing, and processing a Bitcoin transaction, including
@@ -1106,40 +1129,32 @@ export default class Transaction {
   private queueSourceTransactionForVerification(
     sourceTransaction: Transaction,
     sourceTxid: string,
-    scriptsOnly: boolean,
-    txQueue: Transaction[],
-    queuedTransactions: Set<Transaction>,
-    queuedTxids: Set<string>,
-    verifiedTransactions: Set<Transaction>,
-    verifiedTxids: Set<string>
+    state: TransactionVerificationState
   ): void {
-    if (scriptsOnly) {
+    if (state.scriptsOnly) {
       if (
-        !verifiedTransactions.has(sourceTransaction) &&
-        !queuedTransactions.has(sourceTransaction)
+        !state.verifiedTransactions.has(sourceTransaction) &&
+        !state.queuedTransactions.has(sourceTransaction)
       ) {
-        txQueue.push(sourceTransaction)
-        queuedTransactions.add(sourceTransaction)
+        state.txQueue.push(sourceTransaction)
+        state.queuedTransactions.add(sourceTransaction)
       }
       return
     }
-    if (!verifiedTxids.has(sourceTxid) && !queuedTxids.has(sourceTxid)) {
-      txQueue.push(sourceTransaction)
-      queuedTxids.add(sourceTxid)
+    if (
+      !state.verifiedTxids.has(sourceTxid) &&
+      !state.queuedTxids.has(sourceTxid)
+    ) {
+      state.txQueue.push(sourceTransaction)
+      state.queuedTxids.add(sourceTxid)
     }
   }
 
   private verifyTransactionInputs(
     tx: Transaction,
-    scriptsOnly: boolean,
     useVerifier: boolean,
-    memoryLimit: number | undefined,
     getTxid: () => string,
-    txQueue: Transaction[],
-    queuedTransactions: Set<Transaction>,
-    queuedTxids: Set<string>,
-    verifiedTransactions: Set<Transaction>,
-    verifiedTxids: Set<string>
+    state: TransactionVerificationState
   ): { valid: boolean; inputTotal: number } {
     let inputTotal = 0
     const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
@@ -1159,18 +1174,13 @@ export default class Transaction {
       const sourceOutput = sourceTransaction.outputs[input.sourceOutputIndex]
       inputTotal += sourceOutput.satoshis ?? 0
       const sourceTxid =
-        scriptsOnly && input.sourceTXID !== undefined
+        state.scriptsOnly && input.sourceTXID !== undefined
           ? input.sourceTXID
           : sourceTransaction.id('hex')
       this.queueSourceTransactionForVerification(
         sourceTransaction,
         sourceTxid,
-        scriptsOnly,
-        txQueue,
-        queuedTransactions,
-        queuedTxids,
-        verifiedTransactions,
-        verifiedTxids
+        state
       )
       input.sourceTXID ??= sourceTxid
       if (
@@ -1188,7 +1198,7 @@ export default class Transaction {
           inputIndex: index,
           outputs: tx.outputs,
           lockTime: tx.lockTime,
-          memoryLimit,
+          memoryLimit: state.memoryLimit,
           sigHashCache
         }).validateJavaScript()
       ) {
@@ -1212,12 +1222,7 @@ export default class Transaction {
   }
 
   private async verifyQueuedScripts(
-    verifierQueue: Array<{
-      tx: Transaction
-      blockHeight: number
-      consensus: boolean
-      memoryLimit?: number
-    }>,
+    verifierQueue: QueuedScriptVerification[],
     selectedVerifier: BdkVerifierInterface | undefined
   ): Promise<void> {
     if (verifierQueue.length === 0 || selectedVerifier === undefined) return
@@ -1242,35 +1247,20 @@ export default class Transaction {
 
   private isTransactionAlreadyVerified(
     tx: Transaction,
-    scriptsOnly: boolean,
     getTxid: () => string,
-    verifiedTransactions: Set<Transaction>,
-    verifiedTxids: Set<string>
+    state: TransactionVerificationState
   ): boolean {
-    return scriptsOnly
-      ? verifiedTransactions.has(tx)
-      : verifiedTxids.has(getTxid())
+    return state.scriptsOnly
+      ? state.verifiedTransactions.has(tx)
+      : state.verifiedTxids.has(getTxid())
   }
 
   private async verifyUnminedTransaction(
     tx: Transaction,
-    scriptsOnly: boolean,
-    feeModel: FeeModel | undefined,
-    memoryLimit: number | undefined,
-    selectedVerifier: BdkVerifierInterface | undefined,
     getTxid: () => string,
-    txQueue: Transaction[],
-    queuedTransactions: Set<Transaction>,
-    queuedTxids: Set<string>,
-    verifiedTransactions: Set<Transaction>,
-    verifiedTxids: Set<string>,
-    verifierQueue: Array<{
-      tx: Transaction
-      blockHeight: number
-      consensus: boolean
-      memoryLimit?: number
-    }>
+    context: UnminedTransactionVerificationContext
   ): Promise<boolean> {
+    const { feeModel, memoryLimit, selectedVerifier, verifierQueue } = context
     await this.verifyTransactionFee(tx, feeModel, getTxid)
     const verifierParams = {
       tx,
@@ -1285,21 +1275,15 @@ export default class Transaction {
       (selectedVerifier.shouldVerifyScripts?.(verifierParams) ?? true)
     const inputVerification = this.verifyTransactionInputs(
       tx,
-      scriptsOnly,
       useVerifier,
-      memoryLimit,
       getTxid,
-      txQueue,
-      queuedTransactions,
-      queuedTxids,
-      verifiedTransactions,
-      verifiedTxids
+      context
     )
     if (!inputVerification.valid) return false
     if (useVerifier) verifierQueue.push(verifierParams)
     if (this.totalVerifiedOutputs(tx) > inputVerification.inputTotal) return false
-    if (scriptsOnly) verifiedTransactions.add(tx)
-    else verifiedTxids.add(getTxid())
+    if (context.scriptsOnly) context.verifiedTransactions.add(tx)
+    else context.verifiedTxids.add(getTxid())
     return true
   }
 
@@ -1332,12 +1316,19 @@ export default class Transaction {
     const queuedTxids = new Set<string>()
     if (!scriptsOnly) queuedTxids.add(this.id('hex'))
     const queuedTransactions = new Set<Transaction>(txQueue)
-    const verifierQueue: Array<{
-      tx: Transaction
-      blockHeight: number
-      consensus: boolean
-      memoryLimit?: number
-    }> = []
+    const verifierQueue: QueuedScriptVerification[] = []
+    const verificationContext: UnminedTransactionVerificationContext = {
+      scriptsOnly,
+      memoryLimit,
+      txQueue,
+      queuedTransactions,
+      queuedTxids,
+      verifiedTransactions,
+      verifiedTxids,
+      feeModel,
+      selectedVerifier,
+      verifierQueue
+    }
     let queueIndex = 0
 
     while (queueIndex < txQueue.length) {
@@ -1350,10 +1341,8 @@ export default class Transaction {
       if (
         this.isTransactionAlreadyVerified(
           tx,
-          scriptsOnly,
           getTxid,
-          verifiedTransactions,
-          verifiedTxids
+          verificationContext
         )
       ) {
         continue
@@ -1373,17 +1362,8 @@ export default class Transaction {
       }
       if (!(await this.verifyUnminedTransaction(
         tx,
-        scriptsOnly,
-        feeModel,
-        memoryLimit,
-        selectedVerifier,
         getTxid,
-        txQueue,
-        queuedTransactions,
-        queuedTxids,
-        verifiedTransactions,
-        verifiedTxids,
-        verifierQueue
+        verificationContext
       ))) return false
     }
 

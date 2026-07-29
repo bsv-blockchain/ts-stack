@@ -114,13 +114,15 @@ export class WalletError extends Error implements WalletErrorObject {
 
   static fromUnknown (err: unknown): WalletError {
     if (err instanceof WalletError) return err
+    let message = ''
+    if (typeof err === 'string') {
+      message = err
+    } else if (typeof err === 'number') {
+      message = err.toString()
+    }
     let fields = {
       name: 'WERR_UNKNOWN',
-      message: typeof err === 'string'
-        ? err
-        : typeof err === 'number'
-          ? err.toString()
-          : '',
+      message,
       stack: undefined as string | undefined,
       details: undefined as Record<string, string> | undefined
     }

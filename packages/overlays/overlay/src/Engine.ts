@@ -69,6 +69,41 @@ type StaleOutput = {
   inputIndex: number
 }
 
+type SubmissionMode =
+  | 'historical-tx'
+  | 'current-tx'
+  | 'historical-tx-no-spv'
+
+type TopicSubmissionContext = {
+  tx: Transaction
+  txid: string
+  beef: number[]
+  offChainValues: number[] | undefined
+  mode: SubmissionMode
+  dupeTopics: Set<string>
+  failedTopics: Set<string>
+}
+
+type OutputAdmissionContext = {
+  tx: Transaction
+  txid: string
+  beef: number[]
+  topic: string
+  outputsConsumed: Array<{ txid: string, outputIndex: number }>
+  newUTXOs: Array<{ txid: string, outputIndex: number }>
+  offChainValues: number[] | undefined
+}
+
+type StorageMutationContext = {
+  dupeTopics: Set<string>
+  failedTopics: Set<string>
+  steak: STEAK
+  tx: Transaction
+  txid: string
+  beef: number[]
+  offChainValues: number[] | undefined
+}
+
 function findSpendingInputIndex(tx: Transaction, output: Output): number {
   return tx.inputs.findIndex(input => {
     const realSource = input.sourceTXID || input.sourceTransaction?.id('hex')
@@ -487,14 +522,17 @@ export class Engine {
 
   private async validateTopicSubmission(
     topic: string,
-    tx: Transaction,
-    txid: string,
-    beef: number[],
-    offChainValues: number[] | undefined,
-    mode: 'historical-tx' | 'current-tx' | 'historical-tx-no-spv',
-    dupeTopics: Set<string>,
-    failedTopics: Set<string>
+    context: TopicSubmissionContext
   ): Promise<TopicValidation> {
+    const {
+      tx,
+      txid,
+      beef,
+      offChainValues,
+      mode,
+      dupeTopics,
+      failedTopics
+    } = context
     try {
       if (this.managers[topic] === undefined || this.managers[topic] === null) {
         throw new Error(`This server does not support this topic: ${topic}`)
@@ -792,15 +830,18 @@ export class Engine {
   }
 
   private async admitOutput(
-    tx: Transaction,
-    txid: string,
-    beef: number[],
     outputIndex: number,
-    topic: string,
-    outputsConsumed: Array<{ txid: string, outputIndex: number }>,
-    newUTXOs: Array<{ txid: string, outputIndex: number }>,
-    offChainValues?: number[]
+    context: OutputAdmissionContext
   ): Promise<void> {
+    const {
+      tx,
+      txid,
+      beef,
+      topic,
+      outputsConsumed,
+      newUTXOs,
+      offChainValues
+    } = context
     if (typeof tx.outputs[outputIndex].satoshis !== 'number') return
     this.startTime(`insertNewOutput_${txid.substring(0, 10)}`)
     await this.storage.insertOutput({
@@ -869,16 +910,15 @@ export class Engine {
 
     const newUTXOs: Array<{ txid: string, outputIndex: number }> = []
     await Promise.all(validation.admissibleOutputs.outputsToAdmit.map(async outputIndex => {
-      await this.admitOutput(
+      await this.admitOutput(outputIndex, {
         tx,
         txid,
         beef,
-        outputIndex,
         topic,
         outputsConsumed,
         newUTXOs,
         offChainValues
-      )
+      })
     }))
 
     this.startTime(`outputConsumed_${txid.substring(0, 10)}`)
@@ -902,14 +942,17 @@ export class Engine {
 
   private async applyStorageMutations(
     validations: TopicValidation[],
-    dupeTopics: Set<string>,
-    failedTopics: Set<string>,
-    steak: STEAK,
-    tx: Transaction,
-    txid: string,
-    beef: number[],
-    offChainValues?: number[]
+    context: StorageMutationContext
   ): Promise<void> {
+    const {
+      dupeTopics,
+      failedTopics,
+      steak,
+      tx,
+      txid,
+      beef,
+      offChainValues
+    } = context
     for (const validation of validations) {
       const topic = validation.topic
       if (dupeTopics.has(topic) || failedTopics.has(topic)) continue
@@ -1009,16 +1052,15 @@ export class Engine {
     // PHASE 1: VALIDATE (read-only, no mutations)
     // ===================================================================
     const topicValidations = taggedBEEF.topics.map(async topic =>
-      await this.validateTopicSubmission(
-        topic,
+      await this.validateTopicSubmission(topic, {
         tx,
         txid,
-        taggedBEEF.beef,
+        beef: taggedBEEF.beef,
         offChainValues,
         mode,
         dupeTopics,
         failedTopics
-      )
+      })
     )
 
     const validations = await Promise.all(topicValidations)
@@ -1063,16 +1105,15 @@ export class Engine {
       offChainValues
     )
 
-    await this.applyStorageMutations(
-      validations,
+    await this.applyStorageMutations(validations, {
       dupeTopics,
       failedTopics,
       steak,
       tx,
       txid,
-      taggedBEEF.beef,
+      beef: taggedBEEF.beef,
       offChainValues
-    )
+    })
 
     // If we don't have an advertiser or we are dealing with historical transactions, just return the steak
     if (this.advertiser === undefined || mode === 'historical-tx' || mode === 'historical-tx-no-spv') {

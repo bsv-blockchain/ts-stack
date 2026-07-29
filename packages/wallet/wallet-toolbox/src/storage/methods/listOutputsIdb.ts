@@ -14,6 +14,18 @@ interface ResolvedListTags {
   basketId?: number
 }
 
+interface IdbOutputQuery {
+  storage: StorageIdb
+  userId: number
+  basketId: number | undefined
+  tagIds: number[]
+  queryModeAll: boolean
+  specOp: ListOutputsSpecOp | undefined
+  limit: number
+  offset: number
+  orderDescending: boolean
+}
+
 function normalizeListOffset(offset: number): {
   offset: number
   orderDescending: boolean
@@ -89,16 +101,19 @@ function tagQueryCannotMatch(
 }
 
 async function loadIdbOutputs(
-  storage: StorageIdb,
-  userId: number,
-  basketId: number | undefined,
-  tagIds: number[],
-  queryModeAll: boolean,
-  specOp: ListOutputsSpecOp | undefined,
-  limit: number,
-  offset: number,
-  orderDescending: boolean
+  query: IdbOutputQuery
 ): Promise<{ outputs: TableOutput[]; totalOutputs: number }> {
+  const {
+    storage,
+    userId,
+    basketId,
+    tagIds,
+    queryModeAll,
+    specOp,
+    limit,
+    offset,
+    orderDescending
+  } = query
   const args: FindOutputsArgs = {
     partial: {
       userId,
@@ -230,17 +245,17 @@ export async function listOutputsIdb(
   const tagIds = await findIdbTagIds(storage, userId, tags)
   const isQueryModeAll = vargs.tagQueryMode === 'all'
   if (tagQueryCannotMatch(tags, tagIds, isQueryModeAll)) return result
-  let { outputs, totalOutputs } = await loadIdbOutputs(
+  let { outputs, totalOutputs } = await loadIdbOutputs({
     storage,
     userId,
     basketId,
     tagIds,
-    isQueryModeAll,
+    queryModeAll: isQueryModeAll,
     specOp,
     limit,
     offset,
     orderDescending
-  )
+  })
   result.totalOutputs = totalOutputs
   if (specOp != null) {
     if (specOp.filterOutputs != null) {

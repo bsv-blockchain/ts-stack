@@ -395,17 +395,26 @@ export class WABTransport {
       return await Promise.race([requestPromise, timeout.promise])
     } catch (cause) {
       if (timeout.timer !== undefined) clearTimeout(timeout.timer)
-      const error = cause instanceof WABClientError
-        ? cause
-        : new WABClientError(
-          timeout.timedOut ? 'WAB_TIMEOUT' : 'WAB_NETWORK_ERROR',
-          timeout.timedOut
-            ? 'WAB request timed out.'
-            : 'WAB request failed before receiving a response.',
+      let error: WABClientError
+      if (cause instanceof WABClientError) {
+        error = cause
+      } else if (timeout.timedOut) {
+        error = new WABClientError(
+          'WAB_TIMEOUT',
+          'WAB request timed out.',
           true,
           undefined,
           { ...metadata.errorContext, cause }
         )
+      } else {
+        error = new WABClientError(
+          'WAB_NETWORK_ERROR',
+          'WAB request failed before receiving a response.',
+          true,
+          undefined,
+          { ...metadata.errorContext, cause }
+        )
+      }
       this.captureRequestFailure(metadata, error)
       throw error
     }
@@ -459,17 +468,26 @@ export class WABTransport {
         timeout.promise
       ])
     } catch (cause) {
-      const error = cause instanceof WABClientError
-        ? cause
-        : new WABClientError(
-          timeout.timedOut ? 'WAB_TIMEOUT' : 'WAB_INVALID_RESPONSE',
-          timeout.timedOut
-            ? 'WAB request timed out.'
-            : 'WAB response could not be read.',
+      let error: WABClientError
+      if (cause instanceof WABClientError) {
+        error = cause
+      } else if (timeout.timedOut) {
+        error = new WABClientError(
+          'WAB_TIMEOUT',
+          'WAB request timed out.',
           true,
           response.status,
           { ...responseContext, cause }
         )
+      } else {
+        error = new WABClientError(
+          'WAB_INVALID_RESPONSE',
+          'WAB response could not be read.',
+          true,
+          response.status,
+          { ...responseContext, cause }
+        )
+      }
       this.captureRequestFailure(metadata, error)
       throw error
     } finally {

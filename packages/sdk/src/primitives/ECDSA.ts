@@ -60,11 +60,14 @@ function selectK (
   iter: number,
   drbg: DRBG
 ): BigNumber {
-  const selected = typeof customK === 'function'
-    ? customK(iter)
-    : BigNumber.isBN(customK)
-      ? customK
-      : new BigNumber(drbg.generate(bytes), 16)
+  let selected: BigNumber
+  if (typeof customK === 'function') {
+    selected = customK(iter)
+  } else if (BigNumber.isBN(customK)) {
+    selected = customK
+  } else {
+    selected = new BigNumber(drbg.generate(bytes), 16)
+  }
   if (selected == null) throw new Error('k is undefined')
   return truncateToN(selected, true)
 }

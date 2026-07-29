@@ -83,6 +83,15 @@ export const biModPow = (base: bigint, exp: bigint): bigint => {
 export const P_PLUS1_DIV4 = (P_BIGINT + 1n) >> 2n
 type PointInput = BigNumber | number | number[] | string
 
+interface WnafPairContext {
+  points: Point[]
+  coeffs: BigNumber[]
+  wndWidth: number[]
+  wnd: Point[][]
+  naf: number[][]
+  currentMax: number
+}
+
 export const biModSqrt = (a: bigint): bigint | null => {
   const r = biModPow(a, P_PLUS1_DIV4)
 
@@ -1096,13 +1105,9 @@ export default class Point extends BasePoint {
   private _combineWnafPair(
     a: number,
     b: number,
-    points: Point[],
-    coeffs: BigNumber[],
-    wndWidth: number[],
-    wnd: Point[][],
-    naf: number[][],
-    currentMax: number
+    context: WnafPairContext
   ): number {
+    const { points, coeffs, wndWidth, wnd, naf, currentMax } = context
     if (wndWidth[a] !== 1 || wndWidth[b] !== 1) {
       naf[a] = this.curve.getNAF(
         coeffs[a],
@@ -1157,12 +1162,7 @@ export default class Point extends BasePoint {
       max = this._combineWnafPair(
         index - 1,
         index,
-        points,
-        coeffs,
-        wndWidth,
-        wnd,
-        naf,
-        max
+        { points, coeffs, wndWidth, wnd, naf, currentMax: max }
       )
     }
     return max
@@ -1239,12 +1239,14 @@ export default class Point extends BasePoint {
 
     let acc = new JPoint(null, null, null)
     const tmp = this.curve._wnafT4
-    for (let i = max; i >= 0; i--) {
-      const step = this._collectWnafStep(i, len, naf, tmp)
-      i = step.index
+    let index = max
+    while (index >= 0) {
+      const step = this._collectWnafStep(index, len, naf, tmp)
+      index = step.index
       acc = acc.dblp(step.doubles)
-      if (i < 0) break
+      if (index < 0) break
       acc = this._addWnafStep(acc, len, tmp, wnd)
+      index--
     }
     // Zeroify references
     for (let i = 0; i < len; i++) {

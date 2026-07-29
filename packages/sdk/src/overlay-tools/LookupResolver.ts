@@ -194,6 +194,11 @@ function isSemanticLookupRejection(err: unknown): boolean {
   return err instanceof LookupHTTPError && err.kind === 'semantic'
 }
 
+function lookupErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return Reflect.apply(String, undefined, [error])
+}
+
 function isByteArray(value: unknown): value is number[] {
   return (
     Array.isArray(value) && value.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
@@ -546,9 +551,12 @@ class LookupQuerySession {
     this.freeformHosts++
   }
 
-  recordFailure(semanticRejection: boolean): void {
-    if (semanticRejection) this.rejectedHosts++
-    else this.failedHosts++
+  recordRejection(): void {
+    this.rejectedHosts++
+  }
+
+  recordAvailabilityFailure(): void {
+    this.failedHosts++
   }
 
   recordDone(): void {
@@ -689,6 +697,16 @@ class LookupQuerySession {
       if (this.softTimer !== null) clearTimeout(this.softTimer)
     }
   }
+}
+
+interface LookupHostFailureContext {
+  session: LookupQuerySession
+  service: string
+  host: string
+  hostStartedAt: number
+  correlationId: string | undefined
+  onUnreachableHost: LookupQueryOptions['onUnreachableHost']
+  notificationCooldownMs: number
 }
 
 /**
@@ -932,7 +950,7 @@ export default class LookupResolver {
       const result = callback({
         host,
         service,
-        error: error instanceof Error ? error.message : String(error),
+        error: lookupErrorMessage(error),
         advertisedBy: this.advertisedBy.get(host)
       })
       void Promise.resolve(result).catch(() => {
@@ -973,17 +991,21 @@ export default class LookupResolver {
   }
 
   private recordLookupHostFailure(
-    session: LookupQuerySession,
-    service: string,
-    host: string,
-    error: unknown,
-    hostStartedAt: number,
-    correlationId: string | undefined,
-    onUnreachableHost: LookupQueryOptions['onUnreachableHost'],
-    notificationCooldownMs: number
+    context: LookupHostFailureContext,
+    error: unknown
   ): void {
+    const {
+      session,
+      service,
+      host,
+      hostStartedAt,
+      correlationId,
+      onUnreachableHost,
+      notificationCooldownMs
+    } = context
     const semanticRejection = isSemanticLookupRejection(error)
-    session.recordFailure(semanticRejection)
+    if (semanticRejection) session.recordRejection()
+    else session.recordAvailabilityFailure()
     this.captureHostTelemetry(
       service,
       host,
@@ -1027,16 +1049,15 @@ export default class LookupResolver {
           )
         })
         .catch(error => {
-          this.recordLookupHostFailure(
+          this.recordLookupHostFailure({
             session,
-            question.service,
+            service: question.service,
             host,
-            error,
             hostStartedAt,
             correlationId,
-            options?.onUnreachableHost,
+            onUnreachableHost: options?.onUnreachableHost,
             notificationCooldownMs
-          )
+          }, error)
         })
         .finally(() => {
           session.recordDone()
