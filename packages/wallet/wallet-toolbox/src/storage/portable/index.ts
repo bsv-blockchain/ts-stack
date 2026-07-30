@@ -4,7 +4,7 @@
 
 import { Random, Utils } from '@bsv/sdk'
 import { AESGCM, AESGCMDecrypt } from '@bsv/sdk/primitives/AESGCM'
-import { argon2id } from 'hash-wasm'
+import { argon2id } from '../../utility/hashWasm'
 import { StorageProvider } from '../StorageProvider'
 import {
   TableCertificate,

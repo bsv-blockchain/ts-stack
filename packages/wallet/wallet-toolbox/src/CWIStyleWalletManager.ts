@@ -67,8 +67,8 @@ import {
   Telemetry,
   TelemetryConfig
 } from '@bsv/sdk'
-import { argon2id, pbkdf2, createSHA256, createSHA512 } from 'hash-wasm'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
+import { argon2id, createSHA256, createSHA512, pbkdf2 } from './utility/hashWasm'
 
 /**
  * Number of rounds used in PBKDF2 for deriving password keys.
