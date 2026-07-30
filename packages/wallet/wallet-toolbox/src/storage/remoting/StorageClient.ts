@@ -11,6 +11,11 @@ import {
   stringifyJsonRpc
 } from './BinaryJson'
 
+interface RpcLoggerState {
+  logger?: WalletLoggerInterface
+  requestOptions?: Record<string, unknown>
+}
+
 /**
  * `StorageClient` implements the `WalletStorageProvider` interface which allows it to
  * serve as a BRC-100 wallet's active storage.
@@ -41,18 +46,11 @@ export class StorageClient extends StorageClientBase {
    */
   protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
     return await this.traceRpcCall(method, params, async rpcSpan => {
-      const requestOptions =
-        typeof params[1] === 'object' && params[1] !== null ? (params[1] as Record<string, unknown>) : undefined
-      const logger = requestOptions?.logger as WalletLoggerInterface | undefined
+      const loggerState = this.startRpcLogging(method, params)
+      const { logger } = loggerState
 
       try {
         const id = this.nextId++
-
-        if (logger != null) {
-          // Replace logger object with seed json object to continue logging on request server.
-          logger.group(`StorageClient ${method}`)
-          requestOptions!.logger = { indent: logger.indent || 0 }
-        }
 
         const body = {
           jsonrpc: '2.0',
@@ -144,11 +142,27 @@ export class StorageClient extends StorageClientBase {
         logWalletError(error_, logger, 'error setting up request to remote service')
         throw error_
       } finally {
-        if (logger != null) {
-          // Restore original logger in params
-          requestOptions!.logger = logger
-        }
+        this.restoreRpcLogging(loggerState)
       }
     })
+  }
+
+  private startRpcLogging(method: string, params: unknown[]): RpcLoggerState {
+    const requestOptions =
+      typeof params[1] === 'object' && params[1] !== null ? (params[1] as Record<string, unknown>) : undefined
+    const logger = requestOptions?.logger as WalletLoggerInterface | undefined
+    if (logger != null && requestOptions != null) {
+      // Replace logger object with seed json object to continue logging on request server.
+      logger.group(`StorageClient ${method}`)
+      requestOptions.logger = { indent: logger.indent || 0 }
+    }
+    return { logger, requestOptions }
+  }
+
+  private restoreRpcLogging({ logger, requestOptions }: RpcLoggerState): void {
+    if (logger != null && requestOptions != null) {
+      // Restore original logger in params
+      requestOptions.logger = logger
+    }
   }
 }
