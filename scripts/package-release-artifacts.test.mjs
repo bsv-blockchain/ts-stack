@@ -446,13 +446,16 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.ok(verify < upload)
   assert.ok(upload < publish)
 
-  // Every gh invocation in this workflow must have GH_TOKEN in scope. The
-  // attestation-verify step previously omitted it and failed with exit 4.
+  // Every gh invocation in this workflow must have GH_TOKEN in scope. Prefer
+  // the org-level GH_PAT_TOKEN (so sync PRs can trigger checks) with a
+  // github.token fallback. The attestation-verify step previously omitted
+  // any token and failed with exit 4.
+  const tokenBinding = /GH_TOKEN: \$\{\{ secrets\.GH_PAT_TOKEN \|\| github\.token \}\}/
   const verifyStep = workflow.slice(verify, upload)
-  assert.match(verifyStep, /GH_TOKEN: \$\{\{ github\.token \}\}/)
+  assert.match(verifyStep, tokenBinding)
   assert.match(verifyStep, /gh attestation verify/)
   const pushSync = workflow.indexOf('- name: Push version sync branch')
   const openSyncPr = workflow.indexOf('- name: Open version sync PR')
-  assert.match(workflow.slice(pushSync, openSyncPr), /GH_TOKEN: \$\{\{ github\.token \}\}/)
-  assert.match(workflow.slice(openSyncPr), /GH_TOKEN: \$\{\{ github\.token \}\}/)
+  assert.match(workflow.slice(pushSync, openSyncPr), tokenBinding)
+  assert.match(workflow.slice(openSyncPr), tokenBinding)
 })
