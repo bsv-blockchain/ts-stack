@@ -233,7 +233,9 @@ jobs:
 
       - name: Verify npm package attestations
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Org-level PAT (preferred). github.token is the least-privilege
+          # fallback so a missing secret mapping cannot strand publish mid-run.
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN || github.token }}
           SOURCE_DIGEST: ${{ github.sha }}
           SOURCE_REF: ${{ github.ref }}
         run: |
@@ -340,7 +342,9 @@ jobs:
       - name: Push version sync branch
         if: steps.sync.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Org-level PAT so the sync PR can trigger required checks (GITHUB_TOKEN
+          # PRs do not). Falls back to github.token if the secret is unavailable.
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN || github.token }}
           SYNC_BRANCH: ${{ steps.sync.outputs.branch }}
         run: |
           gh auth setup-git
@@ -349,7 +353,7 @@ jobs:
       - name: Open version sync PR
         if: steps.sync.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT_TOKEN || github.token }}
           SYNC_BRANCH: ${{ steps.sync.outputs.branch }}
         run: |
           existing_pr="$(gh pr list --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
