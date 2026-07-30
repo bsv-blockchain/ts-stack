@@ -127,9 +127,12 @@ updates:
       # digest and version updates.
       - dependency-name: your-registry/wallet-infra
 
-  # Dependabot discovers readable Node version updates here. This file is never
-  # built; repository health requires its version, the governed digest, and all
-  # release Dockerfiles to move together before the grouped PR can merge.
+  # Dependabot discovers readable Node version updates from the canonical
+  # Docker Hub reference here. This file is never built. Other governed
+  # registry mirrors are verified during review rather than queried by
+  # Dependabot, avoiding transient public ECR rate-limit failures. Repository
+  # health requires the version, governed digest, and all release Dockerfiles
+  # to move together before the grouped PR can merge.
   - package-ecosystem: docker
     directory: /governance
     patterns:

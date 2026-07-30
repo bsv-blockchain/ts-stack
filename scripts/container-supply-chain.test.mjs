@@ -63,11 +63,15 @@ test('container registry exactly owns every release Dockerfile and immutable bas
     .map(line => line.split(/\s+/)[1])
     .sort()
   const expectedRefreshBases = registry.baseImages
-    .flatMap(base =>
-      base.references.map(reference => `${reference}:${base.version}@${base.digest}`)
-    )
+    .map(base => `${base.discoveryReference}:${base.version}@${base.digest}`)
     .sort()
   assert.deepEqual(refreshBases, expectedRefreshBases)
+  for (const base of registry.baseImages) {
+    assert.ok(
+      base.references.includes(base.discoveryReference),
+      `${base.name} discovery reference must also be a governed runtime reference`
+    )
+  }
 
   for (const component of registry.components) {
     assert.match(component.name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/)
@@ -223,6 +227,11 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   assert.match(dependabot, /package-ecosystem: docker/)
   assert.match(dependabot, /directory: \/governance/)
   assert.match(dependabot, /dependency-name: node/)
+  assert.doesNotMatch(
+    readFileSync(BASE_REFRESH_DOCKERFILE_PATH, 'utf8'),
+    /public\.ecr\.aws/,
+    'Dependabot discovery must not query the rate-limited public ECR mirror'
+  )
   assert.match(
     dependabot,
     /exclude-paths:\s+- Dockerfile\s+- '\*\*\/Dockerfile'/,

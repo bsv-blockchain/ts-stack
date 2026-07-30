@@ -2,9 +2,9 @@
 id: container-supply-chain
 title: 'Container Supply Chain'
 kind: reference
-version: '1.1.0'
-last_updated: '2026-07-26'
-last_verified: '2026-07-26'
+version: '1.1.1'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
@@ -34,15 +34,20 @@ resolution, incomplete OCI metadata, unpinned deployment examples, and loss of
 the scan, attestation, signature, Docker Dependabot, or Scorecard controls.
 
 `governance/Dockerfile.container-bases` is dependency-discovery metadata, not a
-build context. Its readable tags let Dependabot discover Node releases while
-its digests let Scorecard verify pinning. Repository health requires those
-tag-and-digest references, the registry's expected version and digest, and every
-digest-only release `FROM` instruction to reconcile in one change. Runtime
-Dockerfiles deliberately omit the tag because Docker uses the digest as the
-actual identity. They are excluded from the deployment-image Dependabot scan so
-its Docker updater cannot reinterpret bare digest-only Node references as
-`latest`; the versioned governance manifest is the single Node discovery
-source, while deployment images and database versions remain monitored.
+build context. Its canonical Docker Hub tag lets Dependabot discover Node
+releases while its digest lets Scorecard verify pinning. The inventory's
+`discoveryReference` records that single automation source; equivalent runtime
+registry mirrors remain in `references` and must be resolved and compared
+during review. This avoids making routine dependency discovery depend on public
+ECR's unauthenticated rate limits without weakening multi-registry verification.
+Repository health requires the discovery tag and digest, the registry's
+expected version and digest, and every digest-only release `FROM` instruction
+to reconcile in one change. Runtime Dockerfiles deliberately omit the tag
+because Docker uses the digest as the actual identity. They are excluded from
+the deployment-image Dependabot scan so its Docker updater cannot reinterpret
+bare digest-only Node references as `latest`; the versioned governance manifest
+is the single Node discovery source, while deployment images and database
+versions remain monitored.
 Automatic Sonar analysis excludes only the non-build metadata file because its
 rule rejects tag-and-digest syntax; the executable zero-install repository check
 remains authoritative for it.
@@ -123,7 +128,8 @@ For a base-image refresh:
 
 1. start from the Dependabot change in
    `governance/Dockerfile.container-bases`;
-2. verify that version's multi-platform digest directly against each registry;
+2. verify that version's multi-platform digest directly against every entry in
+   `governance/container-images.json#baseImages[].references`;
 3. update `governance/container-images.json` and every matching digest-only
    `FROM` line in one PR;
 4. let the complete image matrix build and scan;
