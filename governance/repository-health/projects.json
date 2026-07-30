@@ -362,10 +362,10 @@
       "name": "@bsv/air-gap",
       "owner": "ts-stack-maintainers",
       "area": "helpers",
-      "profile": "node-library",
-      "consumerProfiles": ["node-cjs", "node-esm"],
-      "criticality": "tier-2",
-      "runtimeTargets": ["node"],
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {

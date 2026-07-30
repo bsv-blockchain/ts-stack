@@ -14,10 +14,10 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6439,
+    "passed": 6470,
     "skipped": 211,
-    "total": 6650,
-    "vectorFiles": 74,
+    "total": 6681,
+    "vectorFiles": 75,
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812559"
   },
   "testExceptions": {
@@ -297,7 +297,7 @@
     ]
   },
   "publicPackageVersions": {
-    "@bsv/air-gap": "0.1.0",
+    "@bsv/air-gap": "0.1.1",
     "@bsv/amountinator": "2.1.4",
     "@bsv/wallet-helper": "0.1.6",
     "create-bsv-app": "1.0.4",

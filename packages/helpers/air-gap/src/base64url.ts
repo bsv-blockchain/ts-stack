@@ -1,10 +1,13 @@
 /**
  * Unpadded base64url, kept local so this package has no runtime dependencies.
  *
- * base64url rather than base64 because a part string ends up in QR alphanumeric
- * mode, URLs and log lines, and `+` / `/` / `=` are hostile in all three.
- * Encoding runs through `globalThis.btoa` / `atob`, which exist in browsers and
- * in Node 22+, so the same code path serves both.
+ * base64url rather than base64 because a part string ends up in URLs, log
+ * lines and deep links, and `+` / `/` / `=` are hostile in all three. Note
+ * that QR encoders store either alphabet in **byte mode** — base64url's
+ * lowercase letters and `_` rule out the smaller alphanumeric mode — so the
+ * choice costs nothing in symbol capacity. Encoding runs through
+ * `globalThis.btoa` / `atob`, which exist in browsers and in Node 22+, so the
+ * same code path serves both.
  */
 
 /**

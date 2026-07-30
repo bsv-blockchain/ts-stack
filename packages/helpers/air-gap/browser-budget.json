@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/air-gap",
+  "entry": ".",
+  "requiredExports": [
+    "AIR_GAP_PREFIX",
+    "AIR_GAP_WIRE_VERSION",
+    "AirGapDecoder",
+    "AirGapEncoder",
+    "AirGapError",
+    "DEFAULT_BLOCK_BYTES",
+    "MAX_BLOCK_BYTES",
+    "MAX_MESSAGE_BYTES",
+    "SESSION_ID_BYTES",
+    "SESSION_SWITCH_PARTS",
+    "crc32",
+    "estimatePartCharLength",
+    "isAirGapPart"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": { "raw": 18000, "gzip": 6500, "brotli": 5500 },
+    "esbuild": { "raw": 18000, "gzip": 6500, "brotli": 5500 }
+  }
+}

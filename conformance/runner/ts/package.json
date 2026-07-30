@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit --pretty false"
   },
   "devDependencies": {
+    "@bsv/air-gap": "workspace:^",
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/node": "^26.1.2",

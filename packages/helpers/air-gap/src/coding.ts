@@ -6,6 +6,12 @@
  * RNG over the same seed. Change a constant here and every frozen conformance
  * vector — and every peer implementation — stops interoperating. Treat this
  * file as frozen wire format, not as code to improve.
+ *
+ * Every operation below is exact in 64-bit floating point and is specified in
+ * plain integer arithmetic, so a port to any language with 32-bit integers and
+ * 64-bit integer (or double) multiplication reproduces it bit for bit. The
+ * normative statement of this mapping is §5 of
+ * `specs/transport/air-gap-optical.md` (BRC-141).
  */
 
 /**
@@ -28,33 +34,45 @@ function makeRng(seed: number): () => number {
 }
 
 /**
+ * One 23-bit draw from `rng`, in `[0, 2^23)`.
+ *
+ * 23 bits so every downstream product stays inside the 53-bit exact-integer
+ * range of a double: `r * (k - i)` is at most `(2^23 - 1) * 65535 < 2^40`.
+ */
+function draw23(rng: () => number): number {
+  return rng() >>> 9
+}
+
+/**
  * The source-block indices XORed into part `seq`.
  *
  * Only meaningful for `seq >= k`; below `k` the part *is* block `seq` (the
  * systematic prefix, so one clean camera cycle decodes with zero overhead).
  *
- * The degree follows the ideal soliton distribution — 1 with probability 1/K,
- * otherwise `d` with probability 1/(d(d-1)) via the `ceil(1/u)` inverse-CDF
- * trick — which is what makes any K+ε distinct parts enough to peel out all K
- * blocks. Indices come from a partial Fisher–Yates shuffle, so they are
- * distinct without a rejection loop.
+ * The degree is drawn from the ideal soliton distribution over `1..k` —
+ * ρ(1) = 1/K, ρ(d) = 1/(d(d−1)) — by exact integer inverse-CDF: one 23-bit
+ * draw `r` gives `d = ceil(2^23 / (r + 1))`, computed as
+ * `floor((2^23 + r) / (r + 1))`, and any `d > k` (the truncated tail, total
+ * probability ≈ 1/K) becomes degree 1, which is precisely the mass ρ(1) needs.
+ * Indices then come from a partial Fisher–Yates shuffle, so they are distinct
+ * without a rejection loop, with `j = i + floor(r_i * (k - i) / 2^23)` per
+ * swap — exact integer arithmetic throughout.
+ *
+ * The seed is the 32-bit modular product `seq * 0x9e3779b1` (`Math.imul`, not
+ * `*`: JavaScript number multiplication loses low bits past 2^53, and those
+ * are exactly the bits a u32 port keeps).
  *
  * @param seq - Part sequence number.
  * @param k - Source block count.
  */
 export function blocksForPart(seq: number, k: number): number[] {
-  const rng = makeRng((seq * 0x9e3779b1) >>> 0)
-  // (0,1] for the degree draw — the +1 keeps 1/u finite.
-  const open01 = () => ((rng() >>> 9) + 1) / 2 ** 23
-  // [0,1) for index draws — floor stays in range.
-  const half01 = () => (rng() >>> 9) / 2 ** 23
-  let degree: number
-  if (k === 1) degree = 1
-  else if (open01() <= 1 / k) degree = 1
-  else degree = Math.min(k, Math.ceil(1 / open01()))
+  const rng = makeRng(Math.imul(seq, 0x9e3779b1) >>> 0)
+  const r = draw23(rng)
+  let degree = Math.floor((2 ** 23 + r) / (r + 1))
+  if (degree > k) degree = 1
   const pool = Array.from({ length: k }, (_, i) => i)
   for (let i = 0; i < degree; i++) {
-    const j = i + Math.floor(half01() * (k - i))
+    const j = i + Math.floor((draw23(rng) * (k - i)) / 2 ** 23)
     const t = pool[i]
     pool[i] = pool[j]
     pool[j] = t

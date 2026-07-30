@@ -67,6 +67,9 @@ importers:
 
   conformance/runner/ts:
     devDependencies:
+      '@bsv/air-gap':
+        specifier: workspace:^
+        version: link:../../../packages/helpers/air-gap
       '@bsv/sdk':
         specifier: workspace:^
         version: link:../../../packages/sdk

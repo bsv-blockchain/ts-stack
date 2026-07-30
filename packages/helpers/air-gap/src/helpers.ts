@@ -1,4 +1,4 @@
-import { AIR_GAP_PREFIX, DEFAULT_BLOCK_BYTES, HEADER_BYTES } from './constants'
+import { AIR_GAP_PREFIX, DEFAULT_BLOCK_BYTES, HEADER_BYTES, MAX_BLOCK_BYTES } from './constants'
 import { AirGapError } from './errors'
 
 /**
@@ -6,7 +6,7 @@ import { AirGapError } from './errors'
  *
  * A prefix test and nothing more — cheap enough to run on every barcode a
  * camera reports, so a scanner can route reads without paying for base64
- * decoding. Say nothing about whether the part is well formed; only
+ * decoding. Says nothing about whether the part is well formed; only
  * {@link AirGapDecoder.accept} can answer that.
  */
 export function isAirGapPart(text: string): boolean {
@@ -18,14 +18,20 @@ export function isAirGapPart(text: string): boolean {
  *
  * All parts are the same length by construction — the header is fixed and the
  * last source block is zero-padded — so this is a sizing aid for choosing
- * `blockBytes` against a QR version's alphanumeric capacity *before* building
- * an encoder, not an estimate that needs a safety margin.
+ * `blockBytes` *before* building an encoder, not an estimate that needs a
+ * safety margin. Compare the result against your QR library's **byte-mode**
+ * capacity table (base64url text contains lowercase letters, `-` and `_`, so
+ * QR encoders cannot use alphanumeric mode): version 40 at error-correction
+ * level L holds 2,953 bytes, and one part character is one byte.
  *
- * @throws {AirGapError} when `blockBytes` is not a positive integer.
+ * @throws {AirGapError} when `blockBytes` is not an integer in
+ *   `1..MAX_BLOCK_BYTES`, mirroring the encoder's own bounds.
  */
 export function estimatePartCharLength(blockBytes: number = DEFAULT_BLOCK_BYTES): number {
-  if (!Number.isInteger(blockBytes) || blockBytes < 1) {
-    throw new AirGapError(`blockBytes must be a positive integer, received ${blockBytes}`)
+  if (!Number.isInteger(blockBytes) || blockBytes < 1 || blockBytes > MAX_BLOCK_BYTES) {
+    throw new AirGapError(
+      `blockBytes must be an integer between 1 and ${MAX_BLOCK_BYTES}, received ${blockBytes}`
+    )
   }
   const bytes = HEADER_BYTES + blockBytes
   const remainder = bytes % 3

@@ -6,6 +6,13 @@
   "growthPolicy": "Every browser consumer is measured from its exact packed dependency graph with Vite and esbuild (or the governed platform equivalent). A budget increase requires a versioned source change, composition evidence, and explicit review; generated reports preserve package/module composition for comparison.",
   "packages": [
     {
+      "name": "@bsv/air-gap",
+      "path": "packages/helpers/air-gap",
+      "budget": "packages/helpers/air-gap/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "Single self-contained codec entry with zero runtime dependencies; no server adapter or optional platform code exists to split."
+    },
+    {
       "name": "@bsv/did-client",
       "path": "packages/helpers/did-client",
       "budget": "packages/helpers/did-client/browser-budget.json",
