@@ -25,7 +25,7 @@ describe('base64url', () => {
 
   it('encodes the empty input as the empty string', () => {
     expect(toB64url(new Uint8Array(0))).toBe('')
-    expect(fromB64url('').length).toBe(0)
+    expect(fromB64url('')).toHaveLength(0)
   })
 
   it('rejects characters outside the base64url alphabet', () => {
@@ -43,8 +43,8 @@ describe('base64url', () => {
   })
 
   it('accepts every unpadded body length that can encode bytes', () => {
-    expect(fromB64url('AA').length).toBe(1)
-    expect(fromB64url('AAA').length).toBe(2)
-    expect(fromB64url('AAAA').length).toBe(3)
+    expect(fromB64url('AA')).toHaveLength(1)
+    expect(fromB64url('AAA')).toHaveLength(2)
+    expect(fromB64url('AAAA')).toHaveLength(3)
   })
 })

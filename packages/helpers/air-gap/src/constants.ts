@@ -43,4 +43,4 @@ export const HEADER_BYTES = 14
 export const MAX_BLOCK_COUNT = 0xffff
 
 /** Exclusive upper bound on `seq`, which the header carries as a u32. */
-export const MAX_SEQ_EXCLUSIVE = 0x1_0000_0000
+export const MAX_SEQ_EXCLUSIVE = 2 ** 32

@@ -24,7 +24,13 @@ export function toB64url(bytes: Uint8Array): string {
     // Every byte is below 0x100, so a code point is a single code unit here.
     binary += String.fromCodePoint(...bytes.subarray(i, i + CHUNK))
   }
-  return globalThis.btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+  // btoa pads to a multiple of four, so there are never more than two '=' —
+  // and a bounded quantifier keeps the strip linear rather than backtracking.
+  const base64 = globalThis.btoa(binary)
+  return base64
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/={0,2}$/, '')
 }
 
 /**

@@ -14,7 +14,7 @@ import {
 test('current contributor and agent policy is uniform across the governed stack', () => {
   const result = evaluateContributorPolicy()
   assert.deepEqual(result.errors, [])
-  assert.equal(result.summary.scopedProjectsAndServices, 43)
+  assert.equal(result.summary.scopedProjectsAndServices, 44)
   assert.equal(result.summary.consolidatedLegacyAgentFiles, 31)
   assert.equal(result.summary.historicalGitHubFiles, 49)
   assert.equal(result.summary.retiredPackageContributionFiles, 8)
