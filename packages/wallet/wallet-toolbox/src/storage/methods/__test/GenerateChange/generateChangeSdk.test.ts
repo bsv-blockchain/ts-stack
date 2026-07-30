@@ -125,6 +125,10 @@ describe('generateChange tests', () => {
   })
 
   test('2 WERR_INSUFFICIENT_FUNDS', async () => {
+    const events: any[] = []
+    const telemetry = new Telemetry({
+      sink: { capture: event => events.push(event) }
+    })
     const params: GenerateChangeSdkParams = {
       ...defParams,
       fixedOutputs: [
@@ -137,10 +141,10 @@ describe('generateChange tests', () => {
 
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
 
-    expectToThrowWERR(
-      sdk.WERR_INSUFFICIENT_FUNDS,
-      async () => await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
-    )
+    await expect(
+      generateChangeSdk(params, allocateChangeInput, releaseChangeInput, undefined, telemetry)
+    ).rejects.toBeInstanceOf(sdk.WERR_INSUFFICIENT_FUNDS)
+    expect(events.some(event => event.name === 'wallet.storage.generate_change.release')).toBe(true)
   })
 
   test('2a WERR_INSUFFICIENT_FUNDS no inputs', async () => {
@@ -1177,16 +1181,9 @@ describe('generateChange tests', () => {
         { satoshis: 2, lockingScriptLength: 25 }
       ]
     }
-    const { allocateChangeInput, releaseChangeInput } =
-      generateChangeSdkMakeStorage([...defAvailableChange()])
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([...defAvailableChange()])
 
-    await generateChangeSdk(
-      params,
-      allocateChangeInput,
-      releaseChangeInput,
-      undefined,
-      telemetry
-    )
+    await generateChangeSdk(params, allocateChangeInput, releaseChangeInput, undefined, telemetry)
 
     const total = events.find(event => event.name === 'wallet.storage.generate_change')
     const allocation = events.find(event => event.name === 'wallet.storage.generate_change.allocate')

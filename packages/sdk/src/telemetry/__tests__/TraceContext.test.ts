@@ -8,6 +8,13 @@ describe('W3C trace context', () => {
     const value = formatTraceparent({ traceId, spanId, traceFlags: 1 })
     expect(value).toBe(`00-${traceId}-${spanId}-01`)
     expect(parseTraceparent(value)).toEqual({ traceId, spanId, traceFlags: 1 })
+    expect(formatTraceparent({ traceId, spanId })).toBe(`00-${traceId}-${spanId}-01`)
+    expect(formatTraceparent({ traceId, spanId, traceFlags: -1 })).toBe(
+      `00-${traceId}-${spanId}-00`
+    )
+    expect(formatTraceparent({ traceId, spanId, traceFlags: 999 })).toBe(
+      `00-${traceId}-${spanId}-ff`
+    )
   })
 
   it.each([

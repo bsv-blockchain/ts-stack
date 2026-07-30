@@ -1,4 +1,4 @@
-import { Beef, CreateActionArgs, Transaction, Validation } from '@bsv/sdk'
+import { Beef, CreateActionArgs, Telemetry, TelemetryEvent, Transaction, Validation } from '@bsv/sdk'
 import { Wallet } from '../../../src/Wallet'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../../src/utility/actionBatchDigest'
@@ -307,6 +307,14 @@ describe('in-memory action batch workspace', () => {
   })
 
   test('two-step signing remains local until the batch commit', async () => {
+    const events: TelemetryEvent[] = []
+    Reflect.set(
+      ctx.wallet,
+      'telemetry',
+      new Telemetry({
+        sink: { capture: event => events.push(event) }
+      })
+    )
     const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
     const legacyProcess = jest.spyOn(ctx.storage, 'processAction')
     const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
@@ -316,6 +324,8 @@ describe('in-memory action batch workspace', () => {
       options: { ...actionArgs().options, signAndProcess: false }
     })
     expect(created.signableTransaction).toBeDefined()
+    const pending = ctx.wallet.pendingSignActions[created.signableTransaction!.reference]
+    pending.dcr.inputBeef = Array.from(pending.dcr.inputBeef as Uint8Array)
     const signed = await ctx.wallet.signAction({
       reference: created.signableTransaction!.reference,
       spends: {},
@@ -328,6 +338,9 @@ describe('in-memory action batch workspace', () => {
     await ctx.wallet.createAction({ description: 'Commit two-step batch', options: { sendWith: [signed.txid!] } })
     expect(commit).toHaveBeenCalledTimes(1)
     expect(commit.mock.calls[0][0].actions[0].plan.inputs.every(input => input.sourceTransaction == null)).toBe(true)
+    expect(events.some(event => event.name === 'wallet.create_action' && event.spanStatus === 'ok')).toBe(true)
+    expect(events.some(event => event.name === 'wallet.sign_action' && event.spanStatus === 'ok')).toBe(true)
+    expect(events.some(event => event.name === 'wallet.crypto.transaction_sign')).toBe(true)
   })
 
   test('an open batch does not capture a legacy pending signAction', async () => {

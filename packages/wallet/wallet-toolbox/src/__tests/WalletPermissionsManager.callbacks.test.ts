@@ -244,6 +244,28 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     expect(JSON.stringify(events)).not.toContain('private-protocol-name')
     expect(JSON.stringify(events)).not.toContain('private-key-id')
     expect(JSON.stringify(events)).not.toContain(requestID)
+
+    const grantedPromise = manager.createSignature(
+      {
+        protocolID: [1, 'second-private-protocol'],
+        keyID: 'second-private-key',
+        data: [0x03, 0x04],
+        privileged: false
+      },
+      'private-origin.example.com'
+    )
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await manager.grantPermission({
+      requestID,
+      expiry: 123456789,
+      ephemeral: true
+    })
+    await expect(grantedPromise).resolves.toBeDefined()
+    expect(
+      events.find(
+        event => event.name === 'wallet.permission.request' && event.attributes?.['permission.granted'] === true
+      )
+    ).toBeDefined()
   })
 
   it('should resolve the original caller promise when requests are granted', async () => {

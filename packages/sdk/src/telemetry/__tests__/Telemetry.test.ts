@@ -400,5 +400,55 @@ describe('Telemetry', () => {
       spanStatus: 'error',
       error: { message: 'synchronous failure' }
     })
+
+    const edgeEvents: TelemetryEvent[] = []
+    const edgeTelemetry = new Telemetry({
+      sink: { capture: event => edgeEvents.push(event) }
+    })
+    edgeTelemetry.capture({
+      name: 'invalid.span',
+      component: 'test',
+      spanId: '0'.repeat(16),
+      error: { name: '', message: '' }
+    })
+    edgeTelemetry.capture({
+      name: 'object.error',
+      component: 'test',
+      error: { message: 'object error' }
+    })
+    edgeTelemetry.capture({
+      name: 'primitive.error',
+      component: 'test',
+      error: 'primitive error'
+    })
+    edgeTelemetry.startSpan('explicit.error', { component: 'test' }).end({
+      status: 'error'
+    })
+    edgeTelemetry.startSpan('inferred.error', { component: 'test' }).end({
+      error: new Error('inferred error')
+    })
+    expect(edgeEvents[0]).toMatchObject({
+      error: { name: 'Error', message: 'Unknown error' }
+    })
+    expect(edgeEvents[0].spanId).toBeUndefined()
+    expect(edgeEvents[1]).toMatchObject({
+      error: { name: 'Error', message: 'object error' }
+    })
+    expect(edgeEvents[2]).toMatchObject({
+      error: { name: 'Error', message: 'primitive error' }
+    })
+
+    const performanceDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'performance')
+    try {
+      Object.defineProperty(globalThis, 'performance', {
+        configurable: true,
+        value: undefined
+      })
+      expect(edgeTelemetry.monotonicClock()()).toBeGreaterThan(0)
+    } finally {
+      if (performanceDescriptor != null) {
+        Object.defineProperty(globalThis, 'performance', performanceDescriptor)
+      }
+    }
   })
 })

@@ -70,7 +70,8 @@ describe('StorageKnex telemetry', () => {
   it.each([
     ['mysql2', 'mysql'],
     ['pg', 'postgresql'],
-    ['custom-adapter', 'unknown']
+    ['custom-adapter', 'unknown'],
+    [undefined, 'unknown']
   ])('normalizes the %s client without depending on query payloads', async (client, system) => {
     const events: TelemetryEvent[] = []
     const knex = new EventEmitter() as any
@@ -86,6 +87,7 @@ describe('StorageKnex telemetry', () => {
     })
 
     knex.emit('query', { method: 'select' })
+    knex.emit('query-response', undefined, {})
     knex.emit('query-response', undefined, { __knexQueryUid: 'not-started' })
     knex.emit('query', { __knexQueryUid: 'query', method: undefined })
     knex.emit('query-response', undefined, { __knexQueryUid: 'query' })

@@ -853,9 +853,11 @@ describe('ExpressTransport hardening', () => {
       allowUnauthenticated: true,
       telemetry
     })
-    for (const [statusCode, writableEnded, eventName, status] of [
-      [503, true, 'finish', 'error'],
-      [200, false, 'close', 'cancelled']
+    for (const [statusCode, writableEnded, eventName, status, traceparent] of [
+      [503, true, 'finish', 'error', 'x'.repeat(129)],
+      [200, true, 'finish', 'ok', undefined],
+      [200, true, 'close', 'ok', `00-0123456789abcdef0123456789abcdef-${'0'.repeat(16)}-01`],
+      [200, false, 'close', 'cancelled', undefined]
     ] as const) {
       const res = responseMock()
       res.statusCode = statusCode
@@ -864,7 +866,7 @@ describe('ExpressTransport hardening', () => {
         {
           path: '/public',
           method: 'GET',
-          headers: {}
+          headers: traceparent === undefined ? {} : { traceparent }
         } as any,
         res,
         jest.fn()

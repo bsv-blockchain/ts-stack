@@ -316,7 +316,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
   async putActionBatchPack(_auth: AuthId, args: PutActionBatchPackArgs): Promise<void> {
     const available = new Set(supportedActionBatchPackEncodings())
-    const encoding = (args.preferredEncodings ?? ['identity']).find(candidate => available.has(candidate)) ?? 'identity'
+    const encoding = (args.preferredEncodings ?? ['identity'])
+      .find(candidate => available.has(candidate)) ?? 'identity'
     const frameLength = actionBatchPackLength(args.items)
     let body = await compressActionBatchPackItems(args.items, encoding, args.maxPackBytes, args.maxItems)
     let transmittedEncoding = encoding
@@ -346,7 +347,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     return await this.rpcCall<CommitActionBatchResult>('commitActionBatch', [auth, manifest])
   }
 
-  async commitActionBatchByDigest(auth: AuthId, args: CommitActionBatchByDigestArgs): Promise<CommitActionBatchResult> {
+  async commitActionBatchByDigest(
+    auth: AuthId,
+    args: CommitActionBatchByDigestArgs
+  ): Promise<CommitActionBatchResult> {
     return await this.rpcCall<CommitActionBatchResult>('commitActionBatchByDigest', [auth, args])
   }
 

@@ -21,11 +21,7 @@ describe('Wallet validation telemetry', () => {
     const normalized = { limit: 10, offset: 0 }
     const validate = jest.fn(() => normalized)
 
-    const result = Reflect.get(wallet, 'validateAuthAndArgs').call(
-      wallet,
-      args,
-      validate
-    )
+    const result = Reflect.get(wallet, 'validateAuthAndArgs').call(wallet, args, validate)
 
     expect(result).toEqual({
       vargs: normalized,
@@ -41,16 +37,15 @@ describe('Wallet validation telemetry', () => {
       attributes: { 'validation.result': 'ok' }
     })
 
+    const primitiveResult = Reflect.get(wallet, 'validateAuthAndArgs').call(wallet, { offset: 0 }, () => 'normalized')
+    expect(primitiveResult.vargs).toBe('normalized')
+
     expect(() =>
-      Reflect.get(wallet, 'validateAuthAndArgs').call(
-        wallet,
-        { invalid: true },
-        () => {
-          throw new Error('invalid arguments')
-        }
-      )
+      Reflect.get(wallet, 'validateAuthAndArgs').call(wallet, { invalid: true }, () => {
+        throw new Error('invalid arguments')
+      })
     ).toThrow('invalid arguments')
-    expect(events[1]).toMatchObject({
+    expect(events[2]).toMatchObject({
       name: 'wallet.validate_args',
       spanStatus: 'error',
       attributes: { 'validation.result': 'rejected' },
@@ -62,9 +57,7 @@ describe('Wallet validation telemetry', () => {
     const validate = jest.fn(() => 'validated')
     const disabled = walletWithTelemetry(new Telemetry())
 
-    expect(
-      Reflect.get(disabled, 'validateAuthAndArgs').call(disabled, null, validate)
-    ).toEqual({
+    expect(Reflect.get(disabled, 'validateAuthAndArgs').call(disabled, null, validate)).toEqual({
       vargs: 'validated',
       auth: { identityKey: 'wallet-identity' }
     })

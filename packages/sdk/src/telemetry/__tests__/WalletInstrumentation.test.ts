@@ -29,9 +29,15 @@ describe('instrumentWallet', () => {
       attributes: method => ({ 'bridge.method': String(method) })
     })
     await instrumented.getVersion({})
+    await instrumented.getVersion({})
 
-    expect(getVersion).toHaveBeenCalledTimes(1)
-    expect(events.map(event => event.name)).toEqual(['wallet.inner', 'wallet.call.getVersion'])
+    expect(getVersion).toHaveBeenCalledTimes(2)
+    expect(events.map(event => event.name)).toEqual([
+      'wallet.inner',
+      'wallet.call.getVersion',
+      'wallet.inner',
+      'wallet.call.getVersion'
+    ])
     expect(events[0]).toMatchObject({
       traceId: events[1].traceId,
       parentSpanId: events[1].spanId
@@ -64,5 +70,14 @@ describe('instrumentWallet', () => {
 
     expect(instrumented.value).toBe(7)
     expect(instrumented.customMethod()).toBe(7)
+  })
+
+  it('preserves non-function values assigned to wallet method names', () => {
+    const wallet = { getVersion: 'temporarily unavailable' } as unknown as WalletInterface
+    const instrumented = instrumentWallet(wallet, {
+      sink: { capture: () => {} }
+    })
+
+    expect(Reflect.get(instrumented, 'getVersion')).toBe('temporarily unavailable')
   })
 })
