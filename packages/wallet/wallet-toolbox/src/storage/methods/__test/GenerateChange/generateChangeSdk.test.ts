@@ -15,6 +15,36 @@ import {
 describe('generateChange tests', () => {
   jest.setTimeout(99999999)
 
+  test('logs only a redacted parameter summary when diagnostics are enabled', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [
+        { satoshis: 1234, lockingScriptLength: 1739091 },
+        { satoshis: 2, lockingScriptLength: 25 }
+      ],
+      noLogging: false
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([...defAvailableChange()])
+    const log = jest.spyOn(console, 'log').mockImplementation()
+
+    try {
+      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+      expect(log).toHaveBeenCalledWith('generateChangeSdk parameter summary', {
+        fixedInputCount: 0,
+        fixedOutputCount: 2,
+        targetNetCount: undefined,
+        changeInitialSatoshis: 1000,
+        changeFirstSatoshis: 285,
+        randomValsCount: params.randomVals?.length
+      })
+      expect(JSON.stringify(log.mock.calls)).not.toContain('lockingScriptLength')
+      expect(JSON.stringify(log.mock.calls)).not.toContain(JSON.stringify(params.randomVals))
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   test('0 two outputs', async () => {
     const params: GenerateChangeSdkParams = {
       ...defParams,
