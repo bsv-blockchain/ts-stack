@@ -350,7 +350,7 @@
       "name": "@bsv/did",
       "owner": "ts-stack-maintainers",
       "area": "helpers",
-      "profile": "dual-runtime-library",
+      "profile": "browser-library",
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
@@ -390,7 +390,7 @@
       "name": "@bsv/templates",
       "owner": "ts-stack-maintainers",
       "area": "helpers",
-      "profile": "dual-runtime-library",
+      "profile": "browser-library",
       "criticality": "tier-2",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
@@ -420,7 +420,7 @@
       "name": "@bsv/message-box-client",
       "owner": "ts-stack-maintainers",
       "area": "messaging",
-      "profile": "dual-runtime-library",
+      "profile": "browser-library",
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
@@ -430,7 +430,7 @@
       "name": "@bsv/paymail",
       "owner": "ts-stack-maintainers",
       "area": "messaging",
-      "profile": "dual-runtime-library",
+      "profile": "browser-library",
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "declarationDependencies": ["@types/express"],
@@ -451,7 +451,7 @@
       "name": "@bsv/402-pay",
       "owner": "ts-stack-maintainers",
       "area": "middleware",
-      "profile": "dual-runtime-library",
+      "profile": "browser-library",
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
@@ -513,7 +513,7 @@
       "name": "@bsv/gasp",
       "owner": "ts-stack-maintainers",
       "area": "overlays",
-      "profile": "dual-runtime-library",
+      "profile": "browser-library",
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"

@@ -78,6 +78,10 @@ jobs:
       filter: ${{ steps.scope.outputs.filter }}
       standard-packages: ${{ steps.scope.outputs.standard-packages }}
       coverage-other-packages: ${{ steps.scope.outputs.coverage-other-packages }}
+      coverage-other-matrix: ${{ steps.scope.outputs.coverage-other-matrix }}
+      browser-packages: ${{ steps.scope.outputs.browser-packages }}
+      browser-matrix: ${{ steps.scope.outputs.browser-matrix }}
+      coverage-required: ${{ steps.scope.outputs.coverage-required }}
       mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
@@ -132,7 +136,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-package-artifact|check-wallet-toolbox-platform|package-release-artifacts|repository-health|run-ci-tests|normalize-lcov-paths|run-governed-test|sonar-pr-gate|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-browser-package|check-package-artifact|check-wallet-toolbox-platform|package-release-artifacts|repository-health|run-ci-tests|run-prebuilt-package-script|normalize-lcov-paths|run-governed-test|sonar-pr-gate|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy|lib/workspace-packages)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"
@@ -168,6 +172,25 @@ jobs:
             --projects-json .ci-affected-packages.json \
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
+          COVERAGE_OTHER_MATRIX=$(jq -c \
+            'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
+            <<<"$COVERAGE_OTHER_PACKAGES")
+          echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
+          BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \
+            --projects-json .ci-affected-packages.json \
+            --mode browser)
+          echo "browser-packages=$BROWSER_PACKAGES" >> "$GITHUB_OUTPUT"
+          BROWSER_MATRIX=$(jq -c \
+            'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
+            <<<"$BROWSER_PACKAGES")
+          echo "browser-matrix=$BROWSER_MATRIX" >> "$GITHUB_OUTPUT"
+
+          COVERAGE_REQUIRED=false
+          if [ "$COVERAGE_OTHER_PACKAGES" != "[]" ] ||
+             grep -Eq '^(@bsv/did|@bsv/sdk|@bsv/verifast|@bsv/wallet-toolbox)$' <<<"$AFFECTED"; then
+            COVERAGE_REQUIRED=true
+          fi
+          echo "coverage-required=$COVERAGE_REQUIRED" >> "$GITHUB_OUTPUT"
 
           for entry in \
             "sdk:@bsv/sdk" \
@@ -328,6 +351,7 @@ jobs:
 
   standard-tests:
     name: Tests / non-coverage packages
+    if: needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     permissions:
@@ -366,6 +390,60 @@ jobs:
             filters+=(--filter "$package")
           done
           pnpm -r "${filters[@]}" run test
+
+  browser-packages:
+    name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
+    if: needs.prepare.outputs.browser-packages != '[]'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.browser-matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Rebuild the audited browser bundler
+        run: pnpm rebuild esbuild
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - name: Restore build outputs
+        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify affected exact-tarball browser consumers
+        env:
+          BROWSER_PACKAGES: ${{ needs.prepare.outputs.browser-packages }}
+          PREBUILT_PACKAGE_OUTPUTS: '1'
+        run: |
+          packages=()
+          index=0
+          while IFS= read -r package; do
+            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
+              packages+=("$package")
+            fi
+            index=$((index + 1))
+          done < <(jq -r '.[]' <<<"$BROWSER_PACKAGES")
+
+          filters=()
+          echo "Browser consumer shard ${{ matrix.shard }}/${{ matrix.total }}:"
+          for package in "${packages[@]}"; do
+            echo "  - $package"
+            filters+=(--filter "$package")
+          done
+          if [ "${#filters[@]}" -gt 0 ]; then
+            pnpm -r --no-sort "${filters[@]}" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --script test:browser
+          else
+            echo "No affected browser packages in this shard."
+          fi
 
   wallet-browser-platform:
     name: Platform / wallet browser
@@ -433,9 +511,16 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Generate SDK coverage
+      - name: Generate SDK coverage and verify the packed browser consumer
+        env:
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
-          pnpm --filter @bsv/sdk run test:coverage
+          pnpm --filter @bsv/sdk exec node \
+            "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+            --script test:coverage
+          pnpm --filter @bsv/sdk exec node \
+            "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+            --script test:browser
           node scripts/normalize-lcov-paths.mjs packages/sdk/coverage/lcov.info packages/sdk
           mkdir -p .coverage-output
           cp packages/sdk/coverage/lcov.info .coverage-output/sdk.lcov.info
@@ -594,8 +679,12 @@ jobs:
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Generate VeriFast coverage and run packaged-consumer checks
+        env:
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
-          pnpm --filter @bsv/verifast run test:coverage
+          pnpm --filter @bsv/verifast exec node \
+            "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+            --script test:coverage
           pnpm --filter @bsv/verifast exec node scripts/test-node-consumers.mjs
           pnpm --filter @bsv/verifast exec node scripts/test-browser-bundler.mjs
           node scripts/normalize-lcov-paths.mjs packages/verifast/coverage/lcov.info packages/verifast
@@ -610,15 +699,15 @@ jobs:
           retention-days: 1
 
   coverage-other:
-    name: Coverage / other affected packages (${{ matrix.shard }}/2)
+    name: Coverage / other affected packages (${{ matrix.shard }}/${{ matrix.total }})
+    if: needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      matrix:
-        shard: [1, 2]
+      matrix: ${{ fromJSON(needs.prepare.outputs.coverage-other-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -632,34 +721,35 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Warm MongoDB memory-server binary cache
-        env:
-          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
-        run: >
-          pnpm --filter @bsv/overlay-topics exec node --input-type=module -e
-          "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
       - name: Generate coverage for other affected packages
         env:
           COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
           index=0
           while IFS= read -r package; do
-            if [ $((index % 2 + 1)) -eq "${{ matrix.shard }}" ]; then
+            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
               packages+=("$package")
             fi
             index=$((index + 1))
           done < <(jq -r '.[]' <<<"$COVERAGE_OTHER_PACKAGES")
 
           filters=()
-          echo "Coverage shard ${{ matrix.shard }}/2:"
+          echo "Coverage shard ${{ matrix.shard }}/${{ matrix.total }}:"
           for package in "${packages[@]}"; do
             echo "  - $package"
             filters+=(--filter "$package")
           done
+          if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/overlay-topics'; then
+            pnpm --filter @bsv/overlay-topics exec node --input-type=module -e \
+              "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
+          fi
           if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --no-sort "${filters[@]}" run test:coverage
+            pnpm -r --no-sort "${filters[@]}" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --script test:coverage
           else
             echo "No affected coverage packages in this shard."
           fi
@@ -689,7 +779,8 @@ jobs:
     if: >-
       always() &&
       needs.prepare.result == 'success' &&
-      needs.coverage-other.result == 'success' &&
+      needs.prepare.outputs.coverage-required == 'true' &&
+      (needs.coverage-other.result == 'success' || needs.coverage-other.result == 'skipped') &&
       (needs.coverage-sdk.result == 'success' || needs.coverage-sdk.result == 'skipped') &&
       (needs.coverage-did.result == 'success' || needs.coverage-did.result == 'skipped') &&
       (needs.coverage-wallet.result == 'success' || needs.coverage-wallet.result == 'skipped') &&
@@ -753,6 +844,7 @@ jobs:
     needs:
       - prepare
       - standard-tests
+      - browser-packages
       - coverage-upload
       - wallet-browser-platform
       - wallet-mobile-platform
@@ -763,16 +855,18 @@ jobs:
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           TEST_RESULT: ${{ needs.standard-tests.result }}
+          PACKAGE_BROWSER_RESULT: ${{ needs.browser-packages.result }}
           COVERAGE_RESULT: ${{ needs.coverage-upload.result }}
           BROWSER_RESULT: ${{ needs.wallet-browser-platform.result }}
           MOBILE_RESULT: ${{ needs.wallet-mobile-platform.result }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
-                "$TEST_RESULT" != "success" ||
-                "$COVERAGE_RESULT" != "success" ||
+                ( "$TEST_RESULT" != "success" && "$TEST_RESULT" != "skipped" ) ||
+                ( "$PACKAGE_BROWSER_RESULT" != "success" && "$PACKAGE_BROWSER_RESULT" != "skipped" ) ||
+                ( "$COVERAGE_RESULT" != "success" && "$COVERAGE_RESULT" != "skipped" ) ||
                 ( "$BROWSER_RESULT" != "success" && "$BROWSER_RESULT" != "skipped" ) ||
                 ( "$MOBILE_RESULT" != "success" && "$MOBILE_RESULT" != "skipped" ) ]]; then
-            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT tests=$TEST_RESULT coverage=$COVERAGE_RESULT browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
+            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT tests=$TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
             exit 1
           fi
 

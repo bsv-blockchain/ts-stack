@@ -13,6 +13,7 @@
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
     "sourceMap": true,
+    "inlineSources": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true,

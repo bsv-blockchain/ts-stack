@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/templates",
+  "entry": ".",
+  "requiredExports": [
+    "ADMIN_PROTOCOL",
+    "Bsv21Token",
+    "DstasToken",
+    "MandalaAdmin",
+    "MandalaToken",
+    "MultiPushDrop",
+    "OpReturn",
+    "P2MSKH",
+    "StasToken"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 220000,
+      "gzip": 68000,
+      "brotli": 57000
+    },
+    "esbuild": {
+      "raw": 178000,
+      "gzip": 66000,
+      "brotli": 56000
+    }
+  }
+}

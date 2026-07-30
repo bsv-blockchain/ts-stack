@@ -3,8 +3,8 @@ id: package-api-migrations
 title: 'Package API, Declarations, and Migration Ledger'
 kind: reference
 version: '1.0.0'
-last_updated: '2026-07-28'
-last_verified: '2026-07-28'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, packages, api, declarations, migrations, release-notes]
@@ -25,7 +25,7 @@ and clean-consumer tests remain the executable type authority.
 
 | Package                           | npm baseline | Source   | Candidate | API                                                                   | Migration                                                                                                                                                                                                                        |
 | --------------------------------- | ------------ | -------- | --------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@bsv/402-pay`                    | `0.2.1`      | `0.2.1`  | none      | [API and usage](../packages/middleware/402-pay.md)                    | No migration is pending for the current source version.                                                                                                                                                                          |
+| `@bsv/402-pay`                    | `0.2.1`      | `0.2.2`  | patch     | [API and usage](../packages/middleware/402-pay.md)                    | No consumer migration is required; client and server exports, payment protocol behavior, and runtime defaults are unchanged.                                                                                                     |
 | `@bsv/amountinator`               | `2.1.1`      | `2.1.2`  | patch     | [API and usage](../packages/helpers/amountinator.md)                  | No consumer migration is required; this is a backward-compatible patch candidate.                                                                                                                                                |
 | `@bsv/auth`                       | `0.1.1`      | `0.1.1`  | none      | [API and usage](../packages/middleware/auth.md)                       | No migration is pending for the current source version.                                                                                                                                                                          |
 | `@bsv/auth-express-middleware`    | `2.1.2`      | `2.1.3`  | patch     | [API and usage](../packages/middleware/auth-express-middleware.md)    | No consumer migration is required; existing public CORS defaults and middleware APIs are retained.                                                                                                                               |
@@ -33,10 +33,10 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/authsocket-client`          | `2.1.1`      | `2.1.1`  | none      | [API and usage](../packages/messaging/authsocket-client.md)           | No migration is pending for the current source version.                                                                                                                                                                          |
 | `@bsv/btms`                       | `1.1.1`      | `1.1.2`  | patch     | [API and usage](../packages/wallet/btms.md)                           | No consumer migration is required; token and lookup wire contracts are unchanged.                                                                                                                                                |
 | `@bsv/btms-permission-module`     | `1.1.1`      | `1.1.1`  | none      | [API and usage](../packages/wallet/btms-permission-module.md)         | No migration is pending for the current source version.                                                                                                                                                                          |
-| `@bsv/did`                        | `0.2.1`      | `0.2.1`  | none      | [API and usage](../packages/helpers/did.md)                           | No migration is pending for the current source version.                                                                                                                                                                          |
+| `@bsv/did`                        | `0.2.1`      | `0.2.2`  | patch     | [API and usage](../packages/helpers/did.md)                           | No consumer migration is required; DID APIs, encodings, credential behavior, and supported import forms are unchanged.                                                                                                           |
 | `@bsv/did-client`                 | `1.2.1`      | `1.2.1`  | none      | [API and usage](../packages/helpers/did-client.md)                    | No migration is pending for the current source version.                                                                                                                                                                          |
 | `@bsv/fund-wallet`                | `1.4.1`      | `1.4.1`  | none      | [API and usage](../packages/helpers/fund-wallet.md)                   | No migration is pending for the current source version.                                                                                                                                                                          |
-| `@bsv/gasp`                       | `1.3.1`      | `1.3.2`  | patch     | [API and usage](../packages/overlays/gasp.md)                         | No consumer migration is required; existing constructor calls and synchronization behavior are unchanged.                                                                                                                        |
+| `@bsv/gasp`                       | `1.3.1`      | `1.3.3`  | patch     | [API and usage](../packages/overlays/gasp.md)                         | No consumer migration is required; existing constructor calls, imports, synchronization behavior, and wire semantics are unchanged.                                                                                              |
 | `@bsv/message-box-client`         | `2.2.2`      | `2.2.4`  | patch     | [API and usage](../packages/messaging/message-box-client.md)          | No consumer migration is required; Message Box protocol and client entry points are unchanged.                                                                                                                                   |
 | `@bsv/overlay`                    | `2.2.1`      | `2.2.5`  | patch     | [API and usage](../packages/overlays/overlay.md)                      | No consumer migration is required; existing imports, submission results, notification contracts, storage order, and network behavior remain unchanged.                                                                           |
 | `@bsv/overlay-discovery-services` | `2.1.1`      | `2.1.4`  | patch     | [API and usage](../packages/overlays/overlay-discovery-services.md)   | No consumer migration is required; discovery records and public network behavior are unchanged.                                                                                                                                  |
@@ -46,7 +46,7 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/payment-express-middleware` | `2.1.1`      | `2.1.2`  | patch     | [API and usage](../packages/middleware/payment-express-middleware.md) | No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported.                                                                                                                                         |
 | `@bsv/sdk`                        | `2.2.0`      | `2.2.12` | patch     | [API and usage](../packages/sdk/bsv-sdk.md)                           | No consumer migration is required; the source candidate preserves the 2.x public API, wire encodings, script semantics, errors, and supported import forms.                                                                      |
 | `@bsv/simple`                     | `0.4.1`      | `0.4.6`  | patch     | [API and usage](../packages/helpers/simple.md)                        | No consumer migration is required; the browser and server entry points remain compatible.                                                                                                                                        |
-| `@bsv/templates`                  | `1.9.1`      | `1.9.2`  | patch     | [API and usage](../packages/helpers/templates.md)                     | No consumer migration is required; template APIs and generated script semantics are unchanged.                                                                                                                                   |
+| `@bsv/templates`                  | `1.9.1`      | `1.9.3`  | patch     | [API and usage](../packages/helpers/templates.md)                     | No consumer migration is required; template APIs, supported imports, and generated script semantics are unchanged.                                                                                                               |
 | `@bsv/teranode-listener`          | `1.1.1`      | `1.1.2`  | patch     | [API and usage](../packages/network/teranode-listener.md)             | No consumer migration is required; listener APIs, topics, and network configuration are unchanged.                                                                                                                               |
 | `@bsv/verifast`                   | `0.3.0`      | `0.3.1`  | patch     | [API and usage](../packages/sdk/verifast.md)                          | No consumer migration is required; valid verification results and worker protocols are unchanged.                                                                                                                                |
 | `@bsv/wallet-helper`              | `0.1.1`      | `0.1.4`  | patch     | [API and usage](../packages/helpers/wallet-helper.md)                 | No consumer migration is required; fluent builder APIs and transaction semantics are unchanged.                                                                                                                                  |
@@ -67,8 +67,8 @@ explicitly authorized operations.
 
 - Package documentation: [docs/packages/middleware/402-pay.md](../packages/middleware/402-pay.md)
 - Source: [packages/middleware/402-pay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/402-pay)
-- Release note: The source manifest matches the published package; no unpublished release candidate exists.
-- Migration: No migration is pending for the current source version.
+- Release note: Adds an exact-tarball Vite and esbuild contract for the browser-safe client entry point, including a bundle-size ratchet and an assertion that server exports never leak into browser consumers.
+- Migration: No consumer migration is required; client and server exports, payment protocol behavior, and runtime defaults are unchanged.
 
 | Public subpath | Runtime target(s)                          | Declaration target(s)                          |
 | -------------- | ------------------------------------------ | ---------------------------------------------- |
@@ -160,8 +160,8 @@ explicitly authorized operations.
 
 - Package documentation: [docs/packages/helpers/did.md](../packages/helpers/did.md)
 - Source: [packages/helpers/did](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did)
-- Release note: The source manifest matches the published package; no unpublished release candidate exists.
-- Migration: No migration is pending for the current source version.
+- Release note: Adds an exact-tarball Vite and esbuild browser-consumer contract with public-export, source-map, server-dependency, and bundle-size ratchets.
+- Migration: No consumer migration is required; DID APIs, encodings, credential behavior, and supported import forms are unchanged.
 
 | Public subpath | Runtime target(s)                       | Declaration target(s)                       |
 | -------------- | --------------------------------------- | ------------------------------------------- |
@@ -198,8 +198,8 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/overlays/gasp.md](../packages/overlays/gasp.md)
 - Source: [packages/overlays/gasp-core](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core)
-- Release note: Preserves the positional GASP constructor contract while improving declaration metadata and production maintainability.
-- Migration: No consumer migration is required; existing constructor calls and synchronization behavior are unchanged.
+- Release note: Preserves the positional GASP constructor contract while improving declaration metadata and production maintainability, and adds an exact-tarball browser-consumer and bundle-size contract.
+- Migration: No consumer migration is required; existing constructor calls, imports, synchronization behavior, and wire semantics are unchanged.
 
 | Public subpath | Runtime target(s)                              | Declaration target(s)                                |
 | -------------- | ---------------------------------------------- | ---------------------------------------------------- |
@@ -375,8 +375,8 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/helpers/templates.md](../packages/helpers/templates.md)
 - Source: [packages/helpers/ts-templates](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates)
-- Release note: Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence.
-- Migration: No consumer migration is required; template APIs and generated script semantics are unchanged.
+- Release note: Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence, and adds an exact-tarball browser-consumer and bundle-size contract.
+- Migration: No consumer migration is required; template APIs, supported imports, and generated script semantics are unchanged.
 
 | Public subpath | Runtime target(s)                       | Declaration target(s)                       |
 | -------------- | --------------------------------------- | ------------------------------------------- |

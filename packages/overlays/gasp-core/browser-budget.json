@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/gasp",
+  "entry": ".",
+  "requiredExports": ["GASP", "GASPVersionMismatchError", "LogLevel"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 350000,
+      "gzip": 96000,
+      "brotli": 80000
+    },
+    "esbuild": {
+      "raw": 270000,
+      "gzip": 88000,
+      "brotli": 75000
+    }
+  }
+}
