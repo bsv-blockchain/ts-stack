@@ -817,7 +817,10 @@ jobs:
 
           mkdir -p .coverage-output
           while IFS= read -r report; do
-            artifact_name="${report//\//_}"
+            # The aggregate lane and the patch-coverage gate both collect
+            # *.lcov.info, so the suffix has to be a dot — a flattened
+            # "..._coverage_lcov.info" name is silently ignored by both.
+            artifact_name="$(printf '%s' "${report%/coverage/lcov.info}" | tr '/' '_').lcov.info"
             cp "$report" ".coverage-output/${artifact_name}"
           done < <(find packages -type f -path '*/coverage/lcov.info' | sort)
           echo "Coverage-capable packages are tested in this lane; packages without"
