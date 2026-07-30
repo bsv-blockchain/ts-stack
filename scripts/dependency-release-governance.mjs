@@ -69,6 +69,23 @@ function packageManifestPaths() {
   return [...new Set(manifests)].sort(compareText)
 }
 
+function parseOverrideEntry(line) {
+  if (!line.startsWith('  ') || line.startsWith('   ')) return undefined
+  const entry = line.slice(2)
+  const separator = entry.indexOf(':')
+  if (separator < 1) return undefined
+  const rawSelector = entry.slice(0, separator).trim()
+  const value = entry.slice(separator + 1).trim()
+  if (value === '') return undefined
+  const quote = rawSelector[0]
+  const quoted =
+    rawSelector.length >= 2 && (quote === "'" || quote === '"') && rawSelector.at(-1) === quote
+  return {
+    selector: quoted ? rawSelector.slice(1, -1) : rawSelector,
+    value
+  }
+}
+
 export function parsePnpmOverrides(source) {
   const overrides = []
   let inside = false
@@ -79,19 +96,8 @@ export function parsePnpmOverrides(source) {
     }
     if (!inside) continue
     if (line.trim() !== '' && !line.startsWith(' ')) break
-    if (!line.startsWith('  ') || line.startsWith('   ')) continue
-    const entry = line.slice(2)
-    const separator = entry.indexOf(':')
-    if (separator < 1) continue
-    const rawSelector = entry.slice(0, separator).trim()
-    const value = entry.slice(separator + 1).trim()
-    if (value === '') continue
-    const quoted =
-      rawSelector.length >= 2 &&
-      (rawSelector[0] === "'" || rawSelector[0] === '"') &&
-      rawSelector.at(-1) === rawSelector[0]
-    const selector = quoted ? rawSelector.slice(1, -1) : rawSelector
-    overrides.push({ selector, value })
+    const override = parseOverrideEntry(line)
+    if (override !== undefined) overrides.push(override)
   }
   return overrides
 }
@@ -401,11 +407,26 @@ export async function verifyPublishedPackages() {
   }
 }
 
+function deploymentImageReference(line) {
+  let content = line.trim()
+  if (content.startsWith('- ')) content = content.slice(2).trimStart()
+  if (!content.startsWith('image:')) return undefined
+  let value = content.slice('image:'.length).trim()
+  const quote = value[0]
+  if (quote === "'" || quote === '"') {
+    if (value.at(-1) !== quote) return undefined
+    value = value.slice(1, -1)
+  }
+  if (/\s/.test(value)) return undefined
+  const separator = value.lastIndexOf('@sha256:')
+  if (separator < 1) return undefined
+  const digest = value.slice(separator + '@sha256:'.length)
+  if (digest.length !== 64 || !/^[0-9a-f]+$/.test(digest)) return undefined
+  return value
+}
+
 export function immutableDeploymentImages() {
   const references = new Set()
-  const imagePattern = new RegExp(
-    String.raw`^\s*(?:-\s*)?image:\s*['"]?([^'"\s]+@sha256:[0-9a-f]{64})['"]?\s*$`
-  )
   for (const root of [
     path.join(ROOT, 'infra/overlay-server/deploy'),
     path.join(ROOT, 'infra/wab/deploy'),
@@ -414,8 +435,8 @@ export function immutableDeploymentImages() {
     walk(root, filePath => {
       if (!/\.ya?ml$/.test(filePath)) return
       for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
-        const match = imagePattern.exec(line)
-        if (match) references.add(match[1])
+        const reference = deploymentImageReference(line)
+        if (reference !== undefined) references.add(reference)
       }
     })
   }
@@ -431,9 +452,12 @@ export function validatePullRequestEvidence(body, changedFiles, policy = readJso
   const start = body.indexOf(heading)
   if (start === -1) return [`Dependency changes require the ${heading} section`]
   const section = body.slice(start, body.indexOf('\n## ', start + heading.length) || undefined)
+  const lines = section.split(/\r?\n/)
   for (const field of evidence.requiredFields) {
-    const match = new RegExp(`^- ${field}:\\s*(.+)$`, 'm').exec(section)
-    if (!match || /^(?:n\/a|none|todo|tbd|-|\[fill)/i.test(match[1].trim())) {
+    const prefix = `- ${field}:`
+    const line = lines.find(item => item.startsWith(prefix))
+    const value = line?.slice(prefix.length).trim()
+    if (value === undefined || /^(?:n\/a|none|todo|tbd|-|\[fill)/i.test(value)) {
       errors.push(`Dependency evidence must complete ${field}`)
     }
   }
@@ -459,86 +483,100 @@ function argumentValue(args, name) {
   return index === -1 ? undefined : args[index + 1]
 }
 
+function checkGovernance() {
+  const errors = validateDependencyReleaseGovernance()
+  if (errors.length > 0) throw new Error(errors.join('\n'))
+  console.log(
+    `Dependency and release governance passed (${collectOverrides().length} overrides registered).`
+  )
+}
+
+async function preparePublishedInstall(args) {
+  const reportPath = argumentValue(args, '--report')
+  const directory = argumentValue(args, '--directory')
+  if (!reportPath || !directory) {
+    throw new Error('prepare-published-install requires --report and --directory')
+  }
+  const report = readJson(path.resolve(reportPath))
+  const installPath = path.resolve(directory)
+  fs.mkdirSync(installPath, { recursive: true })
+  const dependencies = Object.fromEntries(
+    report.packages
+      .map(item => [item.name, item.publishedLatest])
+      .sort(([left], [right]) => compareText(left, right))
+  )
+  fs.writeFileSync(
+    path.join(installPath, 'package.json'),
+    `${JSON.stringify(
+      { name: 'ts-stack-published-verification', private: true, dependencies },
+      null,
+      2
+    )}\n`
+  )
+  await execFileAsync(
+    'npm',
+    [
+      'install',
+      '--package-lock-only',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--package-lock=true'
+    ],
+    { cwd: installPath, encoding: 'utf8', timeout: 5 * 60_000 }
+  )
+}
+
+async function verifyPublished(args) {
+  const report = await verifyPublishedPackages()
+  await writeReport(argumentValue(args, '--output'), report)
+  if (report.errors.length > 0) throw new Error(report.errors.join('\n'))
+}
+
+async function verifyPullRequestEvidence(args) {
+  const base = argumentValue(args, '--base')
+  const head = argumentValue(args, '--head')
+  if (!base || !head) throw new Error('pr-evidence requires --base and --head')
+  const changedFiles = await gitChangedFiles(base, head)
+  const errors = validatePullRequestEvidence(process.env.PR_BODY ?? '', changedFiles)
+  if (errors.length > 0) {
+    throw new Error(`${errors.join('\n')}\nChanged: ${changedFiles.join(', ')}`)
+  }
+  console.log(
+    changedFiles.length === 0
+      ? 'No dependency evidence required.'
+      : `Dependency evidence passed for ${changedFiles.length} changed dependency file(s).`
+  )
+}
+
+const commandHandlers = new Map([
+  ['check', async () => checkGovernance()],
+  [
+    'inventory',
+    async args =>
+      await writeReport(argumentValue(args, '--output'), await createDirectLatestInventory())
+  ],
+  ['verify-published', verifyPublished],
+  ['prepare-published-install', preparePublishedInstall],
+  [
+    'image-refs',
+    async args =>
+      await writeReport(argumentValue(args, '--output'), {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        images: immutableDeploymentImages()
+      })
+  ],
+  ['pr-evidence', verifyPullRequestEvidence]
+])
+
 async function main(args) {
   const command = args[0] ?? 'check'
-  if (command === 'check') {
-    const errors = validateDependencyReleaseGovernance()
-    if (errors.length > 0) throw new Error(errors.join('\n'))
-    console.log(
-      `Dependency and release governance passed (${collectOverrides().length} overrides registered).`
-    )
-    return
+  const handler = commandHandlers.get(command)
+  if (handler === undefined) {
+    throw new Error(`Unknown command ${command}`)
   }
-  if (command === 'inventory') {
-    await writeReport(argumentValue(args, '--output'), await createDirectLatestInventory())
-    return
-  }
-  if (command === 'verify-published') {
-    const report = await verifyPublishedPackages()
-    await writeReport(argumentValue(args, '--output'), report)
-    if (report.errors.length > 0) throw new Error(report.errors.join('\n'))
-    return
-  }
-  if (command === 'prepare-published-install') {
-    const reportPath = argumentValue(args, '--report')
-    const directory = argumentValue(args, '--directory')
-    if (!reportPath || !directory) {
-      throw new Error('prepare-published-install requires --report and --directory')
-    }
-    const report = readJson(path.resolve(reportPath))
-    const installPath = path.resolve(directory)
-    fs.mkdirSync(installPath, { recursive: true })
-    const dependencies = Object.fromEntries(
-      report.packages
-        .map(item => [item.name, item.publishedLatest])
-        .sort(([left], [right]) => compareText(left, right))
-    )
-    fs.writeFileSync(
-      path.join(installPath, 'package.json'),
-      `${JSON.stringify(
-        { name: 'ts-stack-published-verification', private: true, dependencies },
-        null,
-        2
-      )}\n`
-    )
-    await execFileAsync(
-      'npm',
-      [
-        'install',
-        '--package-lock-only',
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        '--package-lock=true'
-      ],
-      { cwd: installPath, encoding: 'utf8', timeout: 5 * 60_000 }
-    )
-    return
-  }
-  if (command === 'image-refs') {
-    await writeReport(argumentValue(args, '--output'), {
-      schemaVersion: 1,
-      generatedAt: new Date().toISOString(),
-      images: immutableDeploymentImages()
-    })
-    return
-  }
-  if (command === 'pr-evidence') {
-    const base = argumentValue(args, '--base')
-    const head = argumentValue(args, '--head')
-    if (!base || !head) throw new Error('pr-evidence requires --base and --head')
-    const changedFiles = await gitChangedFiles(base, head)
-    const errors = validatePullRequestEvidence(process.env.PR_BODY ?? '', changedFiles)
-    if (errors.length > 0)
-      throw new Error(`${errors.join('\n')}\nChanged: ${changedFiles.join(', ')}`)
-    console.log(
-      changedFiles.length === 0
-        ? 'No dependency evidence required.'
-        : `Dependency evidence passed for ${changedFiles.length} changed dependency file(s).`
-    )
-    return
-  }
-  throw new Error(`Unknown command ${command}`)
+  await handler(args)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
