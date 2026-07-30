@@ -167,8 +167,8 @@ async function loadGovernedProjects() {
     path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
   )
   const projects = governedProjects(registry)
-  if (projects.length !== 30) {
-    throw new Error(`expected 30 governed npm packages, found ${projects.length}`)
+  if (projects.length !== 31) {
+    throw new Error(`expected 31 governed npm packages, found ${projects.length}`)
   }
   return await Promise.all(
     projects.map(async project => {

@@ -83,6 +83,7 @@ Independent HTTP 402 flow:
 - [@bsv/did-client](./helpers/did-client.md) — DID resolver (Decentralized Identifiers)
 - [@bsv/simple](./helpers/simple.md) — Simplified API for common operations
 - [@bsv/wallet-helper](./helpers/wallet-helper.md) — Wallet utility functions
+- [@bsv/air-gap](./helpers/air-gap.md) — Fountain-coded optical QR transport for arbitrary bytes
 - [@bsv/amountinator](./helpers/amountinator.md) — Satoshi/BSV conversion and formatting
 - [@bsv/fund-wallet](./helpers/fund-wallet.md) — Faucet integration for testnet/devnet
 - [create-bsv-app](./helpers/create-bsv-app.md) — CLI and starter catalogue for new applications

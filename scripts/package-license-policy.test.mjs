@@ -25,7 +25,7 @@ test('all package projects use the exact current Open BSV license', () => {
   assert.equal(LICENSE_FILE, 'LICENSE.txt')
   assert.equal(LICENSE_DECLARATION, 'SEE LICENSE IN LICENSE.txt')
   assert.equal(OCI_LICENSE_REFERENCE, 'LicenseRef-Open-BSV-License-6')
-  assert.equal(discoverPackageManifests().length, 46)
+  assert.equal(discoverPackageManifests().length, 47)
   assert.deepEqual(validatePackageLicenses(), [])
 })
 

@@ -28,6 +28,7 @@
       "packages/overlays/overlay/package.json",
       "packages/verifast/package.json",
       "packages/wallet/btms/package.json",
+      "packages/helpers/air-gap/package.json",
       "packages/helpers/amountinator/package.json",
       "packages/helpers/fund-wallet/package.json",
       "packages/middleware/402-pay/package.json",
@@ -231,6 +232,20 @@
           "Valid derivation instructions round-trip with exact key material.",
           "Non-string derivation material is rejected with UTXO context.",
           "Arbitrary message text never escapes the tolerant parser."
+        ]
+      },
+      {
+        "path": "packages/helpers/air-gap/tests/airGapCodec.property.test.ts",
+        "manifest": "packages/helpers/air-gap/package.json",
+        "risk": "high",
+        "boundary": "Camera-supplied optical wire parts decoded into application payload bytes",
+        "target": "Fountain wire round trips under arbitrary frame loss, decoder totality on arbitrary scanned text, and fail-closed CRC integrity on corrupted parts",
+        "invariants": [
+          "Every non-empty byte payload round-trips through one systematic part cycle.",
+          "Arbitrary repeating frame-loss patterns still reconstruct the exact payload.",
+          "Arbitrary scanned text never throws and never completes a message.",
+          "A corrupted part yields either the exact original bytes or nothing at all.",
+          "Every rendered part has the exact predicted character length for its block size."
         ]
       },
       {

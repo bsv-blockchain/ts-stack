@@ -12,7 +12,7 @@ tags: [reference, packages, api, declarations, migrations, release-notes]
 
 # Package API, Declarations, and Migration Ledger
 
-This page is generated from all 30 public manifests, package documentation, and
+This page is generated from all 31 public manifests, package documentation, and
 `governance/package-release-notes.json`. It records source candidates without
 publishing them. CI rejects a version change unless its release classification,
 summary, and migration guidance are updated at the same time.
@@ -26,6 +26,7 @@ and clean-consumer tests remain the executable type authority.
 | Package                           | npm baseline | Source   | Candidate | API                                                                   | Migration                                                                                                                                                                                                                        |
 | --------------------------------- | ------------ | -------- | --------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@bsv/402-pay`                    | `0.2.1`      | `0.2.4`  | patch     | [API and usage](../packages/middleware/402-pay.md)                    | No consumer migration is required; client and server exports, payment protocol behavior, and runtime defaults are unchanged.                                                                                                     |
+| `@bsv/air-gap`                    | `0.0.0`      | `0.1.0`  | minor     | [API and usage](../packages/helpers/air-gap.md)                       | No consumer migration is required; this is the first published release of a new package with no prior public API.                                                                                                                |
 | `@bsv/amountinator`               | `2.1.1`      | `2.1.4`  | patch     | [API and usage](../packages/helpers/amountinator.md)                  | No consumer migration is required; this is a backward-compatible patch candidate.                                                                                                                                                |
 | `@bsv/auth`                       | `0.1.1`      | `0.1.3`  | patch     | [API and usage](../packages/middleware/auth.md)                       | No consumer migration is required; authentication APIs, wire behavior, and runtime defaults are unchanged.                                                                                                                       |
 | `@bsv/auth-express-middleware`    | `2.1.2`      | `2.1.5`  | patch     | [API and usage](../packages/middleware/auth-express-middleware.md)    | No consumer migration is required; existing public CORS defaults and middleware APIs are retained.                                                                                                                               |
@@ -75,6 +76,17 @@ explicitly authorized operations.
 | `.`            | `./dist/index.mjs`<br>`./dist/index.cjs`   | `./dist/index.d.mts`<br>`./dist/index.d.cts`   |
 | `./server`     | `./dist/server.mjs`<br>`./dist/server.cjs` | `./dist/server.d.mts`<br>`./dist/server.d.cts` |
 | `./client`     | `./dist/client.mjs`<br>`./dist/client.cjs` | `./dist/client.d.mts`<br>`./dist/client.d.cts` |
+
+## @bsv/air-gap
+
+- Package documentation: [docs/packages/helpers/air-gap.md](../packages/helpers/air-gap.md)
+- Source: [packages/helpers/air-gap](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/air-gap)
+- Release note: Introduces the zero-dependency one-directional optical air-gap transport: fountain-coded wire parts for arbitrary bytes, CRC32 payload integrity, a camera-safe decoder that never throws, and dual CJS/ESM builds.
+- Migration: No consumer migration is required; this is the first published release of a new package with no prior public API.
+
+| Public subpath | Runtime target(s)                        | Declaration target(s)                        |
+| -------------- | ---------------------------------------- | -------------------------------------------- |
+| `.`            | `./dist/index.mjs`<br>`./dist/index.cjs` | `./dist/index.d.mts`<br>`./dist/index.d.cts` |
 
 ## @bsv/amountinator
 

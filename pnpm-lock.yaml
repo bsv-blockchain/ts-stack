@@ -174,6 +174,36 @@ importers:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
+  packages/helpers/air-gap:
+    devDependencies:
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.9.0
+      jest:
+        specifier: ^30.4.2
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
+      oxlint:
+        specifier: ^1.76.0
+        version: 1.76.0
+      ts-jest:
+        specifier: ^29.4.12
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/helpers/amountinator:
     dependencies:
       '@bsv/wallet-toolbox-client':
