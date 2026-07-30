@@ -45,11 +45,11 @@ describe('Services telemetry', () => {
     const attemptsSpans = events.filter(event => event.name === 'wallet.chaintracks.attempt')
     expect(requests).toHaveLength(4)
     expect(attemptsSpans).toHaveLength(6)
-    expect(attemptsSpans.every(event =>
-      requests.some(request =>
-        request.traceId === event.traceId && request.spanId === event.parentSpanId
+    expect(
+      attemptsSpans.every(event =>
+        requests.some(request => request.traceId === event.traceId && request.spanId === event.parentSpanId)
       )
-    )).toBe(true)
+    ).toBe(true)
     expect(requests.map(event => event.attributes?.['chaintracks.operation'])).toEqual([
       'retry_test',
       'current_height',
@@ -63,8 +63,6 @@ describe('Services telemetry', () => {
     options.chaintracks = {} as any
     const services = new Services(options)
 
-    await expect(
-      services.invokeChaintracksWithRetry(async () => 'untraced')
-    ).resolves.toBe('untraced')
+    await expect(services.invokeChaintracksWithRetry(async () => 'untraced')).resolves.toBe('untraced')
   })
 })

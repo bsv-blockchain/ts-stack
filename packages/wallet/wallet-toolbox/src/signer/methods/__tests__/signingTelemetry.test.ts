@@ -14,9 +14,9 @@ describe('signing telemetry', () => {
       })
     } as any
 
-    await expect(
-      signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' })
-    ).rejects.toThrow('recovery of out-of-session signAction')
+    await expect(signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' })).rejects.toThrow(
+      'recovery of out-of-session signAction'
+    )
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
       name: 'wallet.sign_action',
@@ -24,9 +24,9 @@ describe('signing telemetry', () => {
     })
 
     wallet.telemetry = new Telemetry()
-    await expect(
-      signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' })
-    ).rejects.toThrow('recovery of out-of-session signAction')
+    await expect(signAction(wallet, { identityKey: 'wallet' }, { reference: 'missing' })).rejects.toThrow(
+      'recovery of out-of-session signAction'
+    )
   })
 
   it('times transaction signing while retaining the disabled fast path', async () => {

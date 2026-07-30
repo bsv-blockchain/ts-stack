@@ -1,12 +1,15 @@
-import {
-  WalletInterface,
-  WalletLoggerInterface
-} from '@bsv/sdk'
+import { WalletInterface, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { logWalletError } from '../../WalletLogger'
 import { formatTraceparent } from '../../utility/traceContext'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
-import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
+import {
+  BINARY_ENCODING,
+  BINARY_ENCODING_HEADER,
+  BINARY_REQUEST_ENCODING_HEADER,
+  parseJsonRpc,
+  stringifyJsonRpc
+} from './BinaryJson'
 
 /**
  * `StorageClient` implements the `WalletStorageProvider` interface which allows it to
@@ -23,7 +26,7 @@ import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER
  * For details of the API implemented, follow the "See also" link for the `WalletStorageProvider` interface.
  */
 export class StorageClient extends StorageClientBase {
-  constructor (wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
+  constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     super(wallet, endpointUrl, options)
   }
 
@@ -34,8 +37,8 @@ export class StorageClient extends StorageClientBase {
   /**
    * Make a JSON-RPC call to the remote server.
    * @param method The WalletStorage method name to call.
-  * @param params The array of parameters to pass to the method in order.
-  */
+   * @param params The array of parameters to pass to the method in order.
+   */
   protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
     return await this.traceRpcCall(method, params, async rpcSpan => {
       const requestOptions =

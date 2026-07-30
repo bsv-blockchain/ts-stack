@@ -35,7 +35,9 @@ describe('StorageClient telemetry', () => {
     const result = await Reflect.get(client, 'rpcCall').call(client, 'isAvailable', [{ userId: 1 }])
 
     expect(result).toEqual({ available: true })
-    expect((requestInit?.headers as Record<string, string>).traceparent).toMatch(
+    const requestHeaders = requestInit?.headers
+    expect(requestHeaders).toBeDefined()
+    expect((requestHeaders as Record<string, string>).traceparent).toMatch(
       /^00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-[0-9a-f]{16}-01$/
     )
     const byName = new Map(events.map(event => [event.name, event]))
