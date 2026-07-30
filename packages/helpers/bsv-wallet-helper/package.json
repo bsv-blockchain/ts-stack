@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-helper",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -61,14 +61,14 @@
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
-    "tslib": "^2.8.1",
-    "oxlint": "^1.75.0",
     "tsdown": "0.22.14",
-    "@typescript/native": "npm:typescript@7.0.2",
+    "tslib": "^2.8.1",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "bugs": {

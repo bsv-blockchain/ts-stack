@@ -2,9 +2,9 @@
 id: release-operations
 title: 'Release and Operations Guide'
 kind: reference
-version: '1.1.0'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+version: '1.1.1'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, releases, operations, rollback, npm, containers]
@@ -76,6 +76,15 @@ Also require the affected package coverage, property, mutation, browser,
 mobile, CLI, WASM, clean-consumer, and `pack:check` lanes selected by CI. The
 full release workflow repeats artifact-critical checks; local success is not a
 substitute.
+
+On pull requests, the repository-owned 90% patch-coverage gate is blocking and
+uses the merged LCOV reports for changed production lines and branches.
+External coverage reporting remains informational only when it cannot enforce
+that contract. Exact package checks must prove all conditional/wildcard
+exports, declarations, maps, side-effect metadata, peer/optional adapter
+metadata, and clean ESM/CommonJS consumers. Browser candidates must also
+produce the governed composition report without exceeding their committed
+budgets.
 
 Confirm before proceeding:
 

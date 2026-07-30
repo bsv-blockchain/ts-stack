@@ -369,6 +369,33 @@ describe('shared service edge policy', () => {
     }
   })
 
+  it('keeps CORS accessibility independent from CSP configuration', async () => {
+    process.env.TEST_CONTENT_SECURITY_POLICY = "default-src 'self'; connect-src https:"
+    delete process.env.TEST_CORS_MODE
+    delete process.env.TEST_CORS_ALLOWED_ORIGINS
+    const app = express()
+    app.use(securityHeaders({ environmentPrefix: 'TEST' }))
+    app.use(corsPolicy({
+      environmentPrefix: 'TEST',
+      methods: ['GET']
+    }))
+    app.get('/', (_req, res) => res.json({ ok: true }))
+    const { server, origin } = await listen(app)
+
+    try {
+      const response = await fetch(origin, {
+        headers: { Origin: 'https://unknown-deployed-app.example' }
+      })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('access-control-allow-origin')).toBe('*')
+      expect(response.headers.get('access-control-allow-credentials')).toBeNull()
+      expect(response.headers.get('content-security-policy'))
+        .toBe("default-src 'self'; connect-src https:")
+    } finally {
+      await close(server)
+    }
+  })
+
   it('does not trust a raw forwarded-proto header for HSTS', async () => {
     const app = express()
     app.use(securityHeaders())

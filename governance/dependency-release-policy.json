@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-29",
+  "lastReviewed": "2026-07-30",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -29,12 +29,108 @@
   "directLatestInventory": {
     "cadence": "monthly-and-after-release",
     "command": "node scripts/dependency-release-governance.mjs inventory",
+    "minimumReleaseAgeMinutes": 1440,
     "classifications": [
       "current",
       "compatible-update",
+      "release-age-hold",
       "security-urgent",
       "major-migration",
+      "coordinated-major-hold",
+      "toolchain-bridge",
+      "forward-version",
+      "supported-peer-range",
       "first-party-release-held"
+    ],
+    "dispositions": [
+      {
+        "dependency": "typescript",
+        "declaredPrefix": "npm:@typescript/typescript6@",
+        "classification": "toolchain-bridge",
+        "rationale": "TypeScript 7 owns every native CLI build while compiler-API consumers use the official TypeScript 6 compatibility package until a stable TypeScript 7 API exists.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-27",
+        "removeWhen": "All compiler-API consumers support the native TypeScript 7 API and the complete declaration, Jest, conformance, browser, mobile, infrastructure, and packed-consumer matrix passes without the alias."
+      },
+      {
+        "dependency": "hermes-compiler",
+        "classification": "forward-version",
+        "rationale": "React Native's tested Hermes compiler build is intentionally newer than the npm latest version metadata and must not be downgraded by a latest-version sweep.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "The React Native toolchain selects a newer compatible Hermes build and the Metro platform contract passes with it."
+      },
+      {
+        "dependency": "qrcode",
+        "field": "peerDependencies",
+        "classification": "supported-peer-range",
+        "rationale": "The relay accepts the supported qrcode peer family; narrowing the floor to one latest patch would break existing valid consumers.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "A demonstrated incompatible qrcode release requires a semver upper boundary backed by consumer tests."
+      },
+      {
+        "dependency": "express",
+        "field": "peerDependencies",
+        "classification": "supported-peer-range",
+        "rationale": "The relay preserves its established Express 4 and 5 peer compatibility instead of forcing consumers onto the latest major.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "Tests demonstrate that an admitted Express major cannot satisfy the public adapter contract."
+      },
+      {
+        "dependency": "react",
+        "field": "peerDependencies",
+        "classification": "supported-peer-range",
+        "rationale": "The optional React adapter preserves its documented React 17 through 19 compatibility and does not force an application-wide React upgrade.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "Tests demonstrate that an admitted React major cannot satisfy the public adapter contract."
+      },
+      {
+        "dependency": "@types/node",
+        "manifestPrefix": "infra/",
+        "classification": "coordinated-major-hold",
+        "rationale": "Infrastructure compiles and runs against the governed Node 24 LTS line; Node 26 types move only with the runtime migration.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "The governed infrastructure runtime, images, CI matrix, and support policy migrate together to Node 26."
+      },
+      {
+        "dependency": "@babel/core",
+        "manifest": "packages/wallet/wallet-toolbox/mobile/package.json",
+        "classification": "coordinated-major-hold",
+        "rationale": "Babel 8 is a React Native/Metro migration rather than an isolated development dependency patch.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "The supported React Native and Metro stack declares Babel 8 compatibility and the exact mobile package contract passes."
+      },
+      {
+        "dependency": "@babel/runtime",
+        "manifest": "packages/wallet/wallet-toolbox/mobile/package.json",
+        "classification": "coordinated-major-hold",
+        "rationale": "Babel runtime must remain aligned with the supported React Native/Metro compiler family.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "Babel core, runtime, React Native, and Metro migrate together with exact-package tests green."
+      },
+      {
+        "dependency": "chalk",
+        "classification": "coordinated-major-hold",
+        "rationale": "Chalk 6 changes the supported Node/tooling boundary and is reviewed as one consumer-compatible migration across all command-line packages.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-10-30",
+        "removeWhen": "All CLI consumers support Chalk 6 without changing output or supported runtimes."
+      },
+      {
+        "dependency": "typescript",
+        "manifest": "tools/codegen/node/package.json",
+        "classification": "coordinated-major-hold",
+        "rationale": "The isolated OpenAPI code generator is pinned to its tested compiler API and generated-output reproducibility boundary.",
+        "owner": "ts-stack-maintainers",
+        "reviewBy": "2026-08-25",
+        "removeWhen": "The generator and Redocly closure support the new compiler and deterministic codegen remains byte-for-byte clean."
+      }
     ]
   },
   "firstParty": {
@@ -46,6 +142,13 @@
     "verification": "scripts/check-versions.mjs",
     "publicationHold": "Source candidates may remain ahead of npm only while publication is explicitly unauthorized. Registry versions may never be ahead of or diverge from source ownership, and release reconciliation must record every held or published package.",
     "closeImplementationWaveAfterPublication": false
+  },
+  "overrideRemovalReview": {
+    "reviewedAt": "2026-07-30",
+    "method": "Regenerated each standalone npm lockfile without gaxios, uuid, or brace-expansion overrides and compared the resulting natural graph; separately rechecked the root Jest/minimatch, typed-rest-client/qs, and isolated Redocly codegen closures.",
+    "retainedCount": 19,
+    "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. No override can be removed safely in this wave.",
+    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, or Redocly dependency changes."
   },
   "overrideRegistry": [
     {

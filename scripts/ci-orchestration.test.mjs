@@ -21,6 +21,11 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
     /^      matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.browser-matrix\) \}\}$/m
   )
   assert.match(workflow, /PREBUILT_PACKAGE_OUTPUTS: '1'/)
+  assert.match(workflow, /BROWSER_COMPOSITION_DIRECTORY:/)
+  assert.match(workflow, /name: browser-composition-\$\{\{ matrix\.shard \}\}/)
+  assert.match(workflow, /name: browser-composition-sdk/)
+  assert.match(workflow, /name: browser-composition-verifast/)
+  assert.match(workflow, /name: browser-composition-wallet/)
   assert.match(workflow, /run-prebuilt-package-script\.mjs" \\\n\s+--script test:browser/)
   assert.match(workflow, /run-prebuilt-package-script\.mjs" \\\n\s+--script test:coverage/)
   assert.doesNotMatch(workflow, /@bsv\/sdk run test:coverage/)

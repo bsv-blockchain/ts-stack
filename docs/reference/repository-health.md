@@ -3,8 +3,8 @@ id: repository-health
 title: 'Repository Health Controls'
 kind: reference
 version: '1.3.3'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -149,11 +149,15 @@ than its source tree. The shared checker:
 1. creates the exact pnpm release tarball with lifecycle scripts disabled;
 2. rejects tests, compiler caches, lockfiles, and uncompiled TypeScript in the
    payload;
-3. runs strict `publint` metadata and entry-point validation;
-4. runs the `@arethetypeswrong/core` analyzer across every strict Node and
+3. proves that every conditional and wildcard export target is packed,
+   expands every concrete public subpath, validates every referenced source
+   map, and checks `sideEffects`, optional dependencies, and peer metadata;
+4. runs strict `publint` metadata and entry-point validation;
+5. runs the `@arethetypeswrong/core` analyzer across every strict Node and
    bundler resolution mode; and
-5. installs the tarball into a clean temporary consumer and exercises every
-   declared runtime module format. The consumer installs exact tarballs for the
+6. installs the tarball into a clean temporary consumer, resolves every
+   concrete public subpath in every supported module mode, and executes the
+   declared runtime contracts. The consumer installs exact tarballs for the
    package's transitive `workspace:` runtime dependency closure, so coordinated
    unpublished version bumps cannot pass by resolving older registry releases.
 
@@ -169,6 +173,14 @@ shared workspace build. The release workflow repeats every implemented check
 before resolving or publishing a release plan. Adding a script therefore adds
 a blocking release contract; it must not be a placeholder or a source-only
 check.
+
+Browser packages additionally use
+`governance/browser-artifact-policy.json`. It binds every browser-bundler
+consumer to its exact entry, byte budget, and reviewed optional-adapter
+splitting disposition. CI retains normalized Vite/esbuild module and package
+composition reports for 30 days. A budget increase is a versioned source
+change requiring composition evidence and explicit review; it cannot be hidden
+in routine dependency maintenance.
 
 The workspace typecheck runs after the shared build so cross-package
 declarations resolve exactly as downstream consumers see them. It catches

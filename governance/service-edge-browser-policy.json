@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-30",
+  "owner": "ts-stack-maintainers",
+  "defaultContract": {
+    "corsMode": "public",
+    "allowOrigin": "*",
+    "allowCredentials": false,
+    "opaqueOrigin": "allowed",
+    "cspControlsCors": false,
+    "rationale": "WAB, Overlays, Storage, and the other protocol services are intentionally callable by deployed browser, WUI, mobile-webview, and future applications across unknown domains. Authentication and authorization remain protocol concerns; operators may opt into an exact allowlist, credentials, or disabled cross-origin access."
+  },
+  "canonicalSource": "infra/wab/src/security/edgePolicy.ts",
+  "synchronizedSources": [
+    "infra/uhrp-server-basic/src/security/edgePolicy.ts",
+    "infra/uhrp-server-cloud-bucket/src/security/edgePolicy.ts",
+    "infra/message-box-server/src/security/edgePolicy.ts",
+    "infra/chaintracks-server/src/security/edgePolicy.ts",
+    "packages/overlays/overlay-express/src/security/edgePolicy.ts",
+    "packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.ts"
+  ],
+  "canonicalTest": "infra/wab/src/security/edgePolicy.test.ts",
+  "synchronizedTests": [
+    "packages/overlays/overlay-express/src/security/edgePolicy.test.ts",
+    "packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.test.ts"
+  ],
+  "requiredContractTests": [
+    "keeps public protocol APIs browser-accessible by default",
+    "allows only explicitly configured browser origins",
+    "supports an explicit cross-origin disabled mode",
+    "validates explicit origin and credential options",
+    "gives service-specific CORS settings precedence over global fallbacks",
+    "sets the API security-header baseline",
+    "supports deployment-specific browser security headers",
+    "keeps CORS accessibility independent from CSP configuration"
+  ],
+  "integrations": [
+    {
+      "service": "WAB",
+      "integration": "infra/wab/src/app.ts",
+      "environmentPrefix": "WAB",
+      "source": "infra/wab/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "UHRP basic",
+      "integration": "infra/uhrp-server-basic/src/index.ts",
+      "environmentPrefix": "UHRP",
+      "source": "infra/uhrp-server-basic/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "UHRP cloud bucket",
+      "integration": "infra/uhrp-server-cloud-bucket/src/index.ts",
+      "environmentPrefix": "UHRP",
+      "source": "infra/uhrp-server-cloud-bucket/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "Message Box",
+      "integration": "infra/message-box-server/src/app.ts",
+      "environmentPrefix": "MESSAGE_BOX",
+      "source": "infra/message-box-server/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "Chaintracks API",
+      "integration": "infra/chaintracks-server/src/server.ts",
+      "environmentPrefix": "CHAINTRACKS",
+      "source": "infra/chaintracks-server/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "Chaintracks CDN",
+      "integration": "infra/chaintracks-server/src/server.ts",
+      "environmentPrefix": "CHAINTRACKS_CDN",
+      "source": "infra/chaintracks-server/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "OverlayExpress",
+      "integration": "packages/overlays/overlay-express/src/OverlayExpress.ts",
+      "environmentPrefix": "OVERLAY",
+      "source": "packages/overlays/overlay-express/src/security/edgePolicy.ts"
+    },
+    {
+      "service": "Wallet Storage",
+      "integration": "packages/wallet/wallet-toolbox/src/storage/remoting/StorageServer.ts",
+      "environmentPrefix": "WALLET_STORAGE",
+      "source": "packages/wallet/wallet-toolbox/src/storage/remoting/edgePolicy.ts"
+    }
+  ]
+}

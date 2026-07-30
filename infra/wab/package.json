@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wab-server",
   "private": true,
-  "version": "1.4.15",
+  "version": "1.4.16",
   "overrides": {
     "brace-expansion": "5.0.8",
     "gaxios": "7.3.0"
@@ -53,13 +53,13 @@
     "@types/express-serve-static-core": "^5.1.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.13.3",
+    "@typescript/native": "npm:typescript@7.0.2",
     "body-parser": "^2.3.0",
     "jest": "^30.4.2",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "license": "SEE LICENSE IN LICENSE.txt"

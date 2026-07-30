@@ -137,13 +137,7 @@ export function createReport({
         'per-job and per-step duration',
         'job queue time',
         'artifact upload/download step duration'
-      ],
-      unavailableFromActionsApi: [
-        'hosted-runner CPU utilization',
-        'hosted-runner memory utilization',
-        'action-internal cache hit rate'
-      ],
-      note: 'Unavailable metrics require explicit in-run instrumentation; they are not inferred from the GitHub Actions REST API.'
+      ]
     },
     groups: Object.fromEntries(
       Object.entries(groups).map(([name, runs]) => [name, { summary: groupSummary(runs), runs }])
@@ -407,12 +401,7 @@ function renderSummary(report, comparisons) {
     comparisons.length === 0
       ? 'Performance budget: passed.'
       : ['Performance budget: failed.', '', comparisonDetails].join('\n')
-  lines.push(
-    '',
-    budgetStatus,
-    '',
-    'GitHub-hosted CPU, memory, and action-internal cache-hit data are not exposed by the Actions REST API and remain an explicit instrumentation gap.'
-  )
+  lines.push('', budgetStatus)
   return `${lines.join('\n')}\n`
 }
 

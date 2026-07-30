@@ -23,11 +23,13 @@ prepare-job duration; artifact upload/download duration; and variance. This
 separates targeted feedback from the complete merge gate so a changing PR mix
 cannot make the trend appear faster or slower by accident.
 
-GitHub's Actions REST API does not expose hosted-runner CPU utilization, memory
-utilization, or action-internal cache-hit results. Those fields remain an
-explicit instrumentation gap in the baseline rather than being estimated from
-wall-clock time. Add deliberate in-run instrumentation before claiming those
-metrics.
+The main CI workflow builds the workspace once and shares immutable outputs
+with isolated test lanes, skips empty affected-package lanes, installs through
+the setup-node pnpm cache, caches the immutable MongoDB test binary, and
+rebuilds native/build tools only in jobs that execute them. Browser lanes
+retain exact package-composition reports without rebuilding the workspace.
+These optimizations reduce repeated CPU, network, and setup work without
+removing coverage, mutation, platform, security, or package-consumer checks.
 
 To refresh the evidence without changing the baseline:
 

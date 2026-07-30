@@ -97,9 +97,6 @@ jobs:
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Rebuild the audited workspace build tool
-        run: pnpm rebuild esbuild
-
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: mutation-build-outputs

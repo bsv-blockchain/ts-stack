@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   aggregateBundleSizes,
+  bundleComposition,
   bundleSizes,
   prohibitedModuleIds,
   prohibitedRuntimeSpecifiers,
@@ -34,6 +35,24 @@ test('browser bundle composition rejects Node and server dependencies', () => {
       'import value from "node:fs"; const other = require("path"); import("./safe.js")'
     ),
     ['node:fs', 'path']
+  )
+})
+
+test('browser composition reports stable chunk, module, and package evidence', () => {
+  assert.deepEqual(
+    bundleComposition(
+      [
+        '/consumer/node_modules/@bsv/sdk/mod.js',
+        '/consumer/node_modules/.pnpm/uuid@11/node_modules/uuid/index.js',
+        '/consumer/entry.mjs'
+      ],
+      ['/tmp/consumer.mjs', '/tmp/chunk.js', '/tmp/consumer.mjs.map']
+    ),
+    {
+      chunks: 2,
+      modules: 3,
+      packages: ['@bsv/sdk', 'uuid']
+    }
   )
 })
 

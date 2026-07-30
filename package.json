@@ -20,7 +20,7 @@
     "check-versions": "node scripts/check-versions.mjs",
     "typescript:check": "node scripts/typescript-toolchain.mjs",
     "health:baseline": "node scripts/repository-health.mjs --update-contract-baseline",
-    "health:check": "node --test scripts/*.test.mjs && pnpm docs:facts:check && pnpm ops:check && node scripts/dependency-release-governance.mjs check && node scripts/typescript-toolchain.mjs && node scripts/package-license-policy.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
+    "health:check": "node --test scripts/*.test.mjs && pnpm docs:facts:check && pnpm ops:check && node scripts/dependency-release-governance.mjs check && node scripts/browser-artifact-governance.mjs && node scripts/typescript-toolchain.mjs && node scripts/package-license-policy.mjs && node scripts/sync-service-rate-limit-policy.mjs --check && node scripts/sync-service-edge-policy.mjs --check && node scripts/repository-health.mjs",
     "health:report": "node scripts/repository-health.mjs --format markdown",
     "test:governance": "node scripts/test-governance.mjs",
     "build:property": "pnpm -r --filter '!@bsv/ts-stack' --filter '!docs-site' --filter '!example-paymail' run build",

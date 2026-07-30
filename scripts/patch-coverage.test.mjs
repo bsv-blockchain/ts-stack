@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import { changedLinesFromDiff, evaluatePatchCoverage, mergeLcov } from './patch-coverage.mjs'
+
+test('patch coverage intersects changed production lines with merged LCOV line and branch data', () => {
+  const changed =
+    changedLinesFromDiff(`diff --git a/packages/sdk/src/example.ts b/packages/sdk/src/example.ts
++++ b/packages/sdk/src/example.ts
+@@ -1,0 +2,3 @@
+`)
+  const coverage = mergeLcov([
+    `SF:packages/sdk/src/example.ts
+DA:2,1
+DA:3,1
+DA:4,0
+BRDA:3,0,0,1
+BRDA:3,0,1,0
+end_of_record
+`,
+    `SF:packages/sdk/src/example.ts
+DA:4,1
+BRDA:3,0,1,1
+end_of_record
+`
+  ])
+
+  assert.deepEqual(evaluatePatchCoverage(changed, coverage), {
+    covered: 5,
+    total: 5,
+    percent: 100,
+    misses: [],
+    missingFiles: []
+  })
+})
+
+test('patch coverage ignores tests and reports uncovered production branches', () => {
+  const changed =
+    changedLinesFromDiff(`diff --git a/packages/sdk/src/example.ts b/packages/sdk/src/example.ts
++++ b/packages/sdk/src/example.ts
+@@ -3 +3 @@
+diff --git a/packages/sdk/src/example.test.ts b/packages/sdk/src/example.test.ts
++++ b/packages/sdk/src/example.test.ts
+@@ -1,0 +1,20 @@
+`)
+  const coverage = mergeLcov([
+    `SF:packages/sdk/src/example.ts
+DA:3,1
+BRDA:3,0,0,1
+BRDA:3,0,1,0
+end_of_record
+`
+  ])
+  const result = evaluatePatchCoverage(changed, coverage)
+
+  assert.equal(changed.size, 1)
+  assert.equal(result.covered, 2)
+  assert.equal(result.total, 3)
+  assert.ok(Math.abs(result.percent - 200 / 3) < Number.EPSILON * 100)
+  assert.deepEqual(result.misses, ['packages/sdk/src/example.ts:3 (branch 0:1)'])
+  assert.deepEqual(result.missingFiles, [])
+})
+
+test('patch coverage fails closed when a changed production file is absent from LCOV', () => {
+  const changed =
+    changedLinesFromDiff(`diff --git a/packages/sdk/src/missing.ts b/packages/sdk/src/missing.ts
++++ b/packages/sdk/src/missing.ts
+@@ -0,0 +1,2 @@
+`)
+
+  assert.deepEqual(evaluatePatchCoverage(changed, new Map()), {
+    covered: 0,
+    total: 0,
+    percent: 100,
+    misses: [],
+    missingFiles: ['packages/sdk/src/missing.ts']
+  })
+})

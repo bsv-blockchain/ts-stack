@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth-express-middleware",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -68,14 +68,14 @@
     "@types/body-parser": "^1.19.6",
     "@types/jest": "^30.0.0",
     "@types/mime-types": "^3.0.1",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsdown": "0.22.14",
-    "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {

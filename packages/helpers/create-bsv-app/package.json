@@ -1,6 +1,6 @@
 {
   "name": "create-bsv-app",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "sideEffects": false,
   "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",
@@ -40,13 +40,13 @@
   "devDependencies": {
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
-    "@typescript/native": "npm:typescript@7.0.2",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
-    "oxlint": "^1.75.0"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "publishConfig": {
     "access": "public"

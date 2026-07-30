@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-30",
+  "owner": "ts-stack-maintainers",
+  "reportRetentionDays": 30,
+  "growthPolicy": "Every browser consumer is measured from its exact packed dependency graph with Vite and esbuild (or the governed platform equivalent). A budget increase requires a versioned source change, composition evidence, and explicit review; generated reports preserve package/module composition for comparison.",
+  "packages": [
+    {
+      "name": "@bsv/did-client",
+      "path": "packages/helpers/did-client",
+      "budget": "packages/helpers/did-client/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "No optional server adapter is reachable from the browser entry."
+    },
+    {
+      "name": "@bsv/did",
+      "path": "packages/helpers/did",
+      "budget": "packages/helpers/did/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The package is browser-native and has no optional server adapter in its entry."
+    },
+    {
+      "name": "@bsv/simple",
+      "path": "packages/helpers/simple",
+      "budget": "packages/helpers/simple/browser-budget.json",
+      "entry": "./browser",
+      "splittingDisposition": "Server modules are excluded by the browser export; the optional certification implementation remains a dynamic import."
+    },
+    {
+      "name": "@bsv/templates",
+      "path": "packages/helpers/ts-templates",
+      "budget": "packages/helpers/ts-templates/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The browser entry contains no optional server adapter."
+    },
+    {
+      "name": "@bsv/authsocket-client",
+      "path": "packages/messaging/authsocket-client",
+      "budget": "packages/messaging/authsocket-client/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The client package is already separated from server-side AuthSocket code."
+    },
+    {
+      "name": "@bsv/message-box-client",
+      "path": "packages/messaging/message-box-client",
+      "budget": "packages/messaging/message-box-client/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The client package is already separated from Message Box service code."
+    },
+    {
+      "name": "@bsv/paymail",
+      "path": "packages/messaging/ts-paymail",
+      "budget": "packages/messaging/ts-paymail/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "Conditional exports select the browser-safe implementation and the composition gate rejects Node/server dependencies."
+    },
+    {
+      "name": "@bsv/402-pay",
+      "path": "packages/middleware/402-pay",
+      "budget": "packages/middleware/402-pay/browser-budget.json",
+      "entry": "./client",
+      "splittingDisposition": "The explicit client subpath excludes the server middleware adapter."
+    },
+    {
+      "name": "@bsv/gasp",
+      "path": "packages/overlays/gasp-core",
+      "budget": "packages/overlays/gasp-core/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The protocol core has no optional server adapter in its browser graph."
+    },
+    {
+      "name": "@bsv/sdk",
+      "path": "packages/sdk",
+      "budget": "packages/sdk/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The SDK browser graph is a public compatibility surface; further splitting requires evidence that it preserves synchronous exports and consumer behavior."
+    },
+    {
+      "name": "@bsv/verifast",
+      "path": "packages/verifast",
+      "budget": "packages/verifast/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "WASM and worker payloads remain separate packed assets and are measured with the exact browser consumer."
+    },
+    {
+      "name": "@bsv/wallet-relay",
+      "path": "packages/wallet/ts-wallet-relay",
+      "budget": "packages/wallet/ts-wallet-relay/browser-budget.json",
+      "entry": "./client",
+      "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager."
+    },
+    {
+      "name": "@bsv/wallet-toolbox-client",
+      "path": "packages/wallet/wallet-toolbox/client",
+      "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The dedicated browser export excludes Node storage and database adapters and is verified through its platform-specific exact-package gate."
+    }
+  ]
+}

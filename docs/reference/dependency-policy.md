@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -139,6 +139,15 @@ frozen graph stayed clean without it. The machine-readable registry now maps
 every remaining selector and exact value to its exception. CI rejects a new,
 changed, stale, expired, unowned, or upstream-unlinked override.
 
+Wave 38 repeated the removal rehearsal by regenerating every standalone lock
+without its `gaxios`, `uuid`, and `brace-expansion` substitutions and checking
+the natural dependency graph. It also rechecked the root Jest/minimatch,
+typed-rest-client/qs, and isolated Redocly closures. All 19 remaining
+selectors still prevent a reproduced vulnerable resolution or preserve the
+governed reproducible generator, so none can be removed safely yet. The
+method, result, count, and next rehearsal are enforced in
+`governance/dependency-release-policy.json`.
+
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with
 the same owner/review/removal fields, and must regenerate identical checked-in
@@ -159,7 +168,9 @@ scheduled verification. On the first day of every month and after successful
 npm or infrastructure release workflows, the read-only verification workflow:
 
 - generates a direct-versus-latest inventory and separates compatible updates
-  from major migration projects;
+  from major migration projects, versions younger than the repository's
+  24-hour release-age floor, supported peer ranges, coordinated runtime/tool
+  migrations, the TypeScript compiler-API bridge, and forward vendor builds;
 - reconciles all 30 source manifests, recorded published baselines, and npm
   `latest`, explicitly reporting source candidates held by an operator's
   publication decision;
@@ -196,7 +207,9 @@ consumer and development graphs first.
 
 ## Update and release flow
 
-1. Refresh direct dependencies within their declared semver ranges.
+1. Refresh mature direct dependencies within their declared semver ranges.
+   Never bypass the 24-hour release-age floor merely to make the inventory
+   report `current`.
 2. Remove obsolete or unused packages before considering overrides.
 3. Run the frozen install, version checks, audit, lint, build, tests,
    conformance, and documentation build.

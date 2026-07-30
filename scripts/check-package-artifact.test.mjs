@@ -1,15 +1,23 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 
 import {
+  concretePublicEntrypoints,
   typeProblemsForModes,
+  validateManifestArtifactContract,
   validatePackedFiles,
+  validateReferencedSourceMaps,
   workspaceRuntimeClosure
 } from './check-package-artifact.mjs'
 
 const manifest = {
   name: '@bsv/example',
-  version: '1.2.3'
+  version: '1.2.3',
+  sideEffects: false,
+  exports: './dist/index.js'
 }
 
 test('packed artifact policy accepts a minimal compiled package', () => {
@@ -105,6 +113,92 @@ test('strict type policy ignores only the unsupported CommonJS mode for ESM-only
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs']), problems)
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs'], ['.']), problems.slice(2))
   assert.deepEqual(typeProblemsForModes(problems, ['esm', 'cjs'], [], ['.']), [])
+})
+
+test('artifact contract expands every concrete wildcard export and validates target payloads', () => {
+  const exportedManifest = {
+    ...manifest,
+    exports: {
+      '.': { import: './dist/index.js', types: './dist/index.d.ts' },
+      './*.ts': {
+        import: './dist/src/*.js',
+        types: './dist/src/*.d.ts'
+      }
+    },
+    peerDependencies: { react: '>=18' },
+    peerDependenciesMeta: { react: { optional: true } }
+  }
+  const files = [
+    'dist/index.d.ts',
+    'dist/index.js',
+    'dist/src/type-only.d.ts',
+    'dist/src/alpha.d.ts',
+    'dist/src/alpha.js',
+    'dist/src/nested/beta.d.ts',
+    'dist/src/nested/beta.js'
+  ]
+
+  assert.deepEqual(validateManifestArtifactContract(exportedManifest, files), [])
+  assert.deepEqual(concretePublicEntrypoints(exportedManifest, files), [
+    '.',
+    './alpha.ts',
+    './nested/beta.ts'
+  ])
+  assert.ok(
+    validateManifestArtifactContract(
+      {
+        ...exportedManifest,
+        exports: { '.': './dist/missing.js' },
+        peerDependenciesMeta: { missing: { optional: true } }
+      },
+      files
+    ).some(error => error.includes('does not match a packed file'))
+  )
+})
+
+test('artifact contract permits a bin-only package without runtime exports', () => {
+  assert.deepEqual(
+    validateManifestArtifactContract(
+      {
+        name: '@bsv/cli',
+        version: '1.0.0',
+        sideEffects: false,
+        bin: { cli: './dist/index.mjs' }
+      },
+      ['dist/index.mjs']
+    ),
+    []
+  )
+})
+
+test('artifact contract validates each referenced packed source map', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'artifact-source-map-'))
+  t.after(async () => await fs.rm(directory, { recursive: true, force: true }))
+  await fs.mkdir(path.join(directory, 'dist'))
+  await fs.writeFile(
+    path.join(directory, 'dist/index.js'),
+    'export const value = 1\n//# sourceMappingURL=index.js.map\n'
+  )
+  await fs.writeFile(
+    path.join(directory, 'dist/index.js.map'),
+    JSON.stringify({ version: 3, sources: ['../src/index.ts'], mappings: '' })
+  )
+  const sourceMapManifest = {
+    ...manifest,
+    exports: { '.': './dist/index.js' }
+  }
+  assert.deepEqual(
+    await validateReferencedSourceMaps(directory, sourceMapManifest, [
+      'dist/index.js',
+      'dist/index.js.map'
+    ]),
+    []
+  )
+  assert.ok(
+    (await validateReferencedSourceMaps(directory, sourceMapManifest, ['dist/index.js'])).some(
+      error => error.includes('missing packed source map')
+    )
+  )
 })
 
 test('packed consumers use the exact transitive workspace runtime closure', () => {

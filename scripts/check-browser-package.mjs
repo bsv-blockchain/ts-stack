@@ -71,6 +71,22 @@ function compareText(left, right) {
   return left.localeCompare(right)
 }
 
+function packageNameFromModuleId(moduleId) {
+  const normalized = moduleId.replaceAll('\\', '/')
+  const installed = normalized.split('/node_modules/').at(-1)
+  if (!installed || installed === normalized) return undefined
+  const parts = installed.split('/')
+  return parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+}
+
+export function bundleComposition(moduleIds, files) {
+  return {
+    chunks: files.filter(file => /\.[cm]?js$/.test(file)).length,
+    modules: new Set(moduleIds).size,
+    packages: [...new Set(moduleIds.map(packageNameFromModuleId).filter(Boolean))].sort(compareText)
+  }
+}
+
 const run = createCommandRunner({
   timeoutMs: COMMAND_TIMEOUT_MS,
   maxBufferBytes: MAX_BUFFER_BYTES,
@@ -336,7 +352,10 @@ async function checkVite(consumerDirectory, entryPath, budget) {
   assertBrowserComposition([...moduleIds], bundle.code.toString('utf8'), 'Vite browser bundle')
   const measurements = bundleSizes(bundle.code)
   validateBundleBudget(measurements, budget, 'Vite browser bundle')
-  return measurements
+  return {
+    bytes: measurements,
+    composition: bundleComposition([...moduleIds], bundle.files)
+  }
 }
 
 async function checkEsbuild(consumerDirectory, entryPath, budget) {
@@ -368,7 +387,10 @@ async function checkEsbuild(consumerDirectory, entryPath, budget) {
   )
   const measurements = bundleSizes(bundle.code)
   validateBundleBudget(measurements, budget, 'esbuild browser bundle')
-  return measurements
+  return {
+    bytes: measurements,
+    composition: bundleComposition(Object.keys(result.metafile.inputs), bundle.files)
+  }
 }
 
 function installedPackageDirectory(consumerDirectory, packageName) {
@@ -425,7 +447,14 @@ async function checkUmd(consumerDirectory, manifest, budget) {
   }
   const measurements = aggregateBundleSizes(payloads)
   validateBundleBudget(measurements, budget.umd.maximumBytes, 'UMD browser payload')
-  return measurements
+  return {
+    bytes: measurements,
+    composition: {
+      chunks: payloads.filter((_payload, index) => /\.[cm]?js$/.test(payloadPaths[index])).length,
+      modules: sourceMap.sources.length,
+      packages: []
+    }
+  }
 }
 
 export async function checkBrowserPackage(packageDirectory) {
@@ -481,6 +510,28 @@ async function main(arguments_) {
     await fs.readFile(path.join(packageDirectory, 'package.json'), 'utf8')
   )
   const measurements = await checkBrowserPackage(packageDirectory)
+  const outputDirectory = process.env.BROWSER_COMPOSITION_DIRECTORY
+  if (outputDirectory) {
+    await fs.mkdir(outputDirectory, { recursive: true })
+    const slug = manifest.name.replace(/^@/, '').replaceAll('/', '-')
+    const budget = JSON.parse(
+      await fs.readFile(path.join(packageDirectory, 'browser-budget.json'), 'utf8')
+    )
+    await fs.writeFile(
+      path.join(outputDirectory, `${slug}.json`),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          package: manifest.name,
+          version: manifest.version,
+          entry: budget.entry,
+          measurements
+        },
+        null,
+        2
+      )}\n`
+    )
+  }
   console.log(
     `Verified ${manifest.name}@${manifest.version} exact-tarball browser contract: ` +
       JSON.stringify(measurements)
