@@ -17,39 +17,53 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-export function validateBrowserArtifactGovernance(root = REPOSITORY_ROOT) {
-  const policy = readJson(path.join(root, path.relative(REPOSITORY_ROOT, POLICY_PATH)))
-  const registry = readJson(path.join(root, path.relative(REPOSITORY_ROOT, PROJECTS_PATH)))
+function policyErrors(policy) {
   const errors = []
   if (policy.schemaVersion !== 1) errors.push('browser artifact policy schemaVersion must be 1')
   if (!Number.isSafeInteger(policy.reportRetentionDays) || policy.reportRetentionDays < 1) {
     errors.push('browser artifact report retention must be positive')
   }
   if (!isNonEmptyString(policy.growthPolicy)) errors.push('browser growth policy is required')
+  return errors
+}
 
-  const governedNames = new Set(
+function governedBrowserNames(registry) {
+  return new Set(
     registry.projects
       .filter(project => (project.consumerProfiles ?? []).includes('browser-bundler'))
       .map(project => project.name)
   )
+}
+
+function browserEntryErrors(root, entry, governedNames) {
+  const errors = []
+  if (!governedNames.has(entry.name)) {
+    errors.push(`stale browser artifact disposition for ${entry.name}`)
+  }
+  const manifest = readJson(path.join(root, entry.path, 'package.json'))
+  const budget = readJson(path.join(root, entry.budget))
+  if (manifest.name !== entry.name) errors.push(`${entry.path} does not identify ${entry.name}`)
+  if (budget.profile !== 'browser') errors.push(`${entry.budget} is not a browser budget`)
+  if (budget.entry !== undefined && budget.entry !== entry.entry) {
+    errors.push(`${entry.name} policy entry differs from its browser budget`)
+  }
+  if (!isNonEmptyString(entry.splittingDisposition)) {
+    errors.push(`${entry.name} requires an optional-adapter splitting disposition`)
+  }
+  return errors
+}
+
+export function validateBrowserArtifactGovernance(root = REPOSITORY_ROOT) {
+  const policy = readJson(path.join(root, path.relative(REPOSITORY_ROOT, POLICY_PATH)))
+  const registry = readJson(path.join(root, path.relative(REPOSITORY_ROOT, PROJECTS_PATH)))
+  const errors = policyErrors(policy)
+  const governedNames = governedBrowserNames(registry)
   const policyNames = new Set(policy.packages.map(item => item.name))
   for (const name of governedNames) {
     if (!policyNames.has(name)) errors.push(`missing browser artifact disposition for ${name}`)
   }
   for (const entry of policy.packages) {
-    if (!governedNames.has(entry.name)) {
-      errors.push(`stale browser artifact disposition for ${entry.name}`)
-    }
-    const manifest = readJson(path.join(root, entry.path, 'package.json'))
-    const budget = readJson(path.join(root, entry.budget))
-    if (manifest.name !== entry.name) errors.push(`${entry.path} does not identify ${entry.name}`)
-    if (budget.profile !== 'browser') errors.push(`${entry.budget} is not a browser budget`)
-    if (budget.entry !== undefined && budget.entry !== entry.entry) {
-      errors.push(`${entry.name} policy entry differs from its browser budget`)
-    }
-    if (!isNonEmptyString(entry.splittingDisposition)) {
-      errors.push(`${entry.name} requires an optional-adapter splitting disposition`)
-    }
+    errors.push(...browserEntryErrors(root, entry, governedNames))
   }
   return errors
 }

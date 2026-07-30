@@ -26,22 +26,32 @@ function isGovernedSource(file) {
   )
 }
 
+function governedDiffFile(line) {
+  const target = line.slice(4)
+  if (target === '/dev/null') return undefined
+  const file = normalizedPath(target.replace(/^b\//, ''))
+  return isGovernedSource(file) ? file : undefined
+}
+
+function addChangedHunkLines(line, changedLines) {
+  const match = /\+(\d+)(?:,(\d+))?/.exec(line)
+  if (!match) return
+  const start = Number(match[1])
+  const count = match[2] === undefined ? 1 : Number(match[2])
+  for (let offset = 0; offset < count; offset++) changedLines.add(start + offset)
+}
+
 export function changedLinesFromDiff(diff) {
   const changed = new Map()
   let file
   for (const line of diff.split(/\r?\n/)) {
     if (line.startsWith('+++ ')) {
-      const target = line.slice(4)
-      file = target === '/dev/null' ? undefined : normalizedPath(target.replace(/^b\//, ''))
-      if (file && isGovernedSource(file) && !changed.has(file)) changed.set(file, new Set())
+      file = governedDiffFile(line)
+      if (file && !changed.has(file)) changed.set(file, new Set())
       continue
     }
     if (!file || !changed.has(file) || !line.startsWith('@@ ')) continue
-    const match = /\+(\d+)(?:,(\d+))?/.exec(line)
-    if (!match) continue
-    const start = Number(match[1])
-    const count = match[2] === undefined ? 1 : Number(match[2])
-    for (let offset = 0; offset < count; offset++) changed.get(file).add(start + offset)
+    addChangedHunkLines(line, changed.get(file))
   }
   return changed
 }
@@ -79,36 +89,45 @@ export function mergeLcov(texts) {
 }
 
 export function evaluatePatchCoverage(changed, coverage) {
-  let covered = 0
-  let total = 0
   const misses = []
   const missingFiles = []
+  const points = { covered: 0, total: 0 }
   for (const [file, lines] of changed) {
     const fileCoverage = coverage.get(file)
     if (!fileCoverage) {
       missingFiles.push(file)
       continue
     }
-    for (const line of [...lines].sort((left, right) => left - right)) {
-      if (fileCoverage.lines.has(line)) {
-        total++
-        if (fileCoverage.lines.get(line) > 0) covered++
-        else misses.push(`${file}:${line} (line)`)
-      }
-      for (const [key, hits] of fileCoverage.branches) {
-        if (!key.startsWith(`${line}:`)) continue
-        total++
-        if (hits > 0) covered++
-        else misses.push(`${file}:${line} (branch ${key.slice(String(line).length + 1)})`)
-      }
-    }
+    addFileCoverage(file, lines, fileCoverage, points, misses)
   }
   return {
-    covered,
-    total,
-    percent: total === 0 ? 100 : (covered / total) * 100,
+    ...points,
+    percent: points.total === 0 ? 100 : (points.covered / points.total) * 100,
     misses,
     missingFiles
+  }
+}
+
+function addFileCoverage(file, lines, fileCoverage, points, misses) {
+  for (const line of [...lines].sort((left, right) => left - right)) {
+    addLineCoverage(file, line, fileCoverage, points, misses)
+    addBranchCoverage(file, line, fileCoverage, points, misses)
+  }
+}
+
+function addLineCoverage(file, line, fileCoverage, points, misses) {
+  if (!fileCoverage.lines.has(line)) return
+  points.total++
+  if (fileCoverage.lines.get(line) > 0) points.covered++
+  else misses.push(`${file}:${line} (line)`)
+}
+
+function addBranchCoverage(file, line, fileCoverage, points, misses) {
+  for (const [key, hits] of fileCoverage.branches) {
+    if (!key.startsWith(`${line}:`)) continue
+    points.total++
+    if (hits > 0) points.covered++
+    else misses.push(`${file}:${line} (branch ${key.slice(String(line).length + 1)})`)
   }
 }
 
@@ -124,7 +143,7 @@ function lcovFiles(directory) {
     if (entry.isDirectory()) files.push(...lcovFiles(entryPath))
     else if (entry.isFile() && entry.name.endsWith('.lcov.info')) files.push(entryPath)
   }
-  return files.sort()
+  return files.sort((left, right) => left.localeCompare(right))
 }
 
 async function main(arguments_) {
@@ -135,7 +154,7 @@ async function main(arguments_) {
     throw new Error('Usage: patch-coverage.mjs --base <sha> --lcov-directory <path> [--target 90]')
   }
   const diff = execFileSync(
-    'git',
+    '/usr/bin/git',
     ['diff', '--unified=0', '--diff-filter=AMRC', `${base}...HEAD`, '--', 'packages'],
     { cwd: REPOSITORY_ROOT, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }
   )

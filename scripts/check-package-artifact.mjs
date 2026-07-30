@@ -133,7 +133,7 @@ function identityErrors(packResult, manifest) {
 }
 
 function escapeRegularExpression(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }
 
 function exportTargets(value, location = 'exports') {
@@ -178,7 +178,19 @@ function expandExportTarget(subpath, target, files) {
 }
 
 export function validateManifestArtifactContract(manifest, files) {
-  const errors = []
+  const errors = sideEffectsErrors(manifest)
+  errors.push(...peerMetadataErrors(manifest), ...optionalDependencyErrors(manifest))
+  for (const [subpath, value] of exportSubpathEntries(manifest.exports)) {
+    const targets = exportTargets(value, `exports.${subpath}`)
+    if (targets.length === 0) errors.push(`${subpath} has no export target`)
+    for (const { location, target } of targets) {
+      errors.push(...exportTargetErrors(location, target, subpath, files))
+    }
+  }
+  return errors
+}
+
+function sideEffectsErrors(manifest) {
   if (
     typeof manifest.sideEffects !== 'boolean' &&
     !(
@@ -186,9 +198,13 @@ export function validateManifestArtifactContract(manifest, files) {
       manifest.sideEffects.every(value => typeof value === 'string' && value.length > 0)
     )
   ) {
-    errors.push('package.json sideEffects must be an explicit boolean or string array')
+    return ['package.json sideEffects must be an explicit boolean or string array']
   }
+  return []
+}
 
+function peerMetadataErrors(manifest) {
+  const errors = []
   const peerNames = new Set(Object.keys(manifest.peerDependencies ?? {}))
   for (const [name, metadata] of Object.entries(manifest.peerDependenciesMeta ?? {})) {
     if (!peerNames.has(name)) errors.push(`peerDependenciesMeta contains undeclared peer ${name}`)
@@ -202,36 +218,30 @@ export function validateManifestArtifactContract(manifest, files) {
       errors.push(`peerDependenciesMeta.${name} must contain only an optional boolean`)
     }
   }
+  return errors
+}
 
+function optionalDependencyErrors(manifest) {
+  const errors = []
   const optionalNames = new Set(Object.keys(manifest.optionalDependencies ?? {}))
   for (const name of Object.keys(manifest.dependencies ?? {})) {
     if (optionalNames.has(name)) {
       errors.push(`${name} cannot be both a dependency and optionalDependency`)
     }
   }
-
-  for (const [subpath, value] of exportSubpathEntries(manifest.exports)) {
-    const targets = exportTargets(value, `exports.${subpath}`)
-    if (targets.length === 0) errors.push(`${subpath} has no export target`)
-    for (const { location, target } of targets) {
-      if (typeof target !== 'string') {
-        errors.push(`${location} must resolve to a string or null`)
-        continue
-      }
-      if (
-        !target.startsWith('./') ||
-        target.includes('\\') ||
-        target.split('/').some(segment => segment === '..')
-      ) {
-        errors.push(`${location} has unsafe package target ${JSON.stringify(target)}`)
-        continue
-      }
-      if (expandExportTarget(subpath, target, files).length === 0) {
-        errors.push(`${location} target ${target} does not match a packed file`)
-      }
-    }
-  }
   return errors
+}
+
+function exportTargetErrors(location, target, subpath, files) {
+  if (typeof target !== 'string') {
+    return [`${location} must resolve to a string or null`]
+  }
+  if (!target.startsWith('./') || target.includes('\\') || target.split('/').includes('..')) {
+    return [`${location} has unsafe package target ${JSON.stringify(target)}`]
+  }
+  return expandExportTarget(subpath, target, files).length === 0
+    ? [`${location} target ${target} does not match a packed file`]
+    : []
 }
 
 export function concretePublicEntrypoints(manifest, files) {
@@ -245,11 +255,10 @@ export function concretePublicEntrypoints(manifest, files) {
       }
     }
   }
-  return [...entrypoints].sort()
+  return [...entrypoints].sort((left, right) => left.localeCompare(right))
 }
 
-export async function validateReferencedSourceMaps(packageDirectory, manifest, files) {
-  const errors = []
+function exportedJavaScriptTargets(manifest, files) {
   const javascriptTargets = new Set()
   for (const [, value] of exportSubpathEntries(manifest.exports)) {
     for (const { target } of exportTargets(value)) {
@@ -257,32 +266,43 @@ export async function validateReferencedSourceMaps(packageDirectory, manifest, f
       const targetPattern = target.slice(2)
       const expression = target.includes('*') ? wildcardExpression(targetPattern) : undefined
       for (const file of files) {
-        if (
-          (expression ? expression.test(file) : file === targetPattern) &&
-          /\.[cm]?js$/i.test(file)
-        ) {
+        if (isExportedJavaScriptFile(file, targetPattern, expression)) {
           javascriptTargets.add(file)
         }
       }
     }
   }
+  return javascriptTargets
+}
+
+function isExportedJavaScriptFile(file, targetPattern, expression) {
+  const targetMatches = expression ? expression.test(file) : file === targetPattern
+  return targetMatches && /\.[cm]?js$/i.test(file)
+}
+
+async function sourceMapErrors(packageDirectory, file, files) {
+  const source = await fs.readFile(path.join(packageDirectory, file), 'utf8')
+  const match = /\/\/[#@]\s*sourceMappingURL=([^\s]+)\s*$/.exec(source)
+  if (!match || match[1].startsWith('data:')) return []
+  const mapFile = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1]))
+  if (mapFile.startsWith('../') || !files.includes(mapFile)) {
+    return [`${file} references missing packed source map ${match[1]}`]
+  }
+  try {
+    const sourceMap = JSON.parse(await fs.readFile(path.join(packageDirectory, mapFile), 'utf8'))
+    return !Array.isArray(sourceMap.sources) || sourceMap.sources.length === 0
+      ? [`${mapFile} must contain at least one source`]
+      : []
+  } catch (error) {
+    return [`${mapFile} is not a valid source map: ${error.message}`]
+  }
+}
+
+export async function validateReferencedSourceMaps(packageDirectory, manifest, files) {
+  const errors = []
+  const javascriptTargets = exportedJavaScriptTargets(manifest, files)
   for (const file of javascriptTargets) {
-    const source = await fs.readFile(path.join(packageDirectory, file), 'utf8')
-    const match = /\/\/[#@]\s*sourceMappingURL=([^\s]+)\s*$/.exec(source)
-    if (!match || match[1].startsWith('data:')) continue
-    const mapFile = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1]))
-    if (mapFile.startsWith('../') || !files.includes(mapFile)) {
-      errors.push(`${file} references missing packed source map ${match[1]}`)
-      continue
-    }
-    try {
-      const sourceMap = JSON.parse(await fs.readFile(path.join(packageDirectory, mapFile), 'utf8'))
-      if (!Array.isArray(sourceMap.sources) || sourceMap.sources.length === 0) {
-        errors.push(`${mapFile} must contain at least one source`)
-      }
-    } catch (error) {
-      errors.push(`${mapFile} is not a valid source map: ${error.message}`)
-    }
+    errors.push(...(await sourceMapErrors(packageDirectory, file, files)))
   }
   return errors
 }
