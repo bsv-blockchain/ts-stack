@@ -33,9 +33,13 @@ export function partBytes(raw: string): Uint8Array {
 export function toPart(bytes: Uint8Array): string {
   let bin = ''
   for (const byte of bytes) bin += String.fromCodePoint(byte)
+  const base64 = globalThis.btoa(bin)
   return (
     AIR_GAP_PREFIX +
-    globalThis.btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+    base64
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/={0,2}$/, '')
   )
 }
 

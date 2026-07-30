@@ -139,7 +139,7 @@ describe('air-gap wire properties', () => {
         const enc = new AirGapEncoder(bytes, block)
         const part = enc.partAt(seq)
         expect(part.startsWith(AIR_GAP_PREFIX)).toBe(true)
-        expect(part.length).toBe(estimatePartCharLength(block))
+        expect(part).toHaveLength(estimatePartCharLength(block))
       })
     )
   })

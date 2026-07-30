@@ -17,7 +17,7 @@ describe('AirGapEncoder', () => {
     const fountain = enc.partAt(enc.blockCount + 1)
     expect(first.startsWith(AIR_GAP_PREFIX)).toBe(true)
     expect(fountain.startsWith(AIR_GAP_PREFIX)).toBe(true)
-    expect(first.length).toBe(fountain.length)
+    expect(first).toHaveLength(fountain.length)
   })
 
   it('refuses an empty message', () => {
@@ -145,7 +145,7 @@ describe('AirGapEncoder', () => {
   it('produces parts of exactly the estimated character length', () => {
     for (const blockBytes of [1, 2, 3, 8, 100, 1200, 1500]) {
       const enc = new AirGapEncoder(message(3000), blockBytes)
-      expect(enc.partAt(0).length).toBe(estimatePartCharLength(blockBytes))
+      expect(enc.partAt(0)).toHaveLength(estimatePartCharLength(blockBytes))
     }
   })
 
