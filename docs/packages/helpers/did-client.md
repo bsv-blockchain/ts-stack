@@ -3,10 +3,10 @@ id: pkg-did-client
 title: '@bsv/did-client'
 kind: package
 domain: helpers
-version: '1.2.1'
+version: '1.2.2'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/did-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client'

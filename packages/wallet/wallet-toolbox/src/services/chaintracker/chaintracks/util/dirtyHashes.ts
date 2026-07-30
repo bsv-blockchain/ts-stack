@@ -18,12 +18,14 @@ export const dirtyHashes = {
   '0000000000000000004626ff6e3b936941d341c5932ece4357eeccac44e6d56c':
     'This is the first header of the invalid ABC chain.'
 }
+const dirtyHashLookup = dirtyHashes as typeof dirtyHashes & Record<string, string | undefined>
 
 /**
  * Throws Error if blockHash is in the dirtyHashes list.
  */
-export function validateAgainstDirtyHashes (blockHash: string): void {
-  if (dirtyHashes[blockHash]) {
-    throw new Error(`Not adding a header with a dirty hash: ${dirtyHashes[blockHash]}`)
+export function validateAgainstDirtyHashes(blockHash: string): void {
+  const reason = dirtyHashLookup[blockHash]
+  if (reason) {
+    throw new Error(`Not adding a header with a dirty hash: ${reason}`)
   }
 }

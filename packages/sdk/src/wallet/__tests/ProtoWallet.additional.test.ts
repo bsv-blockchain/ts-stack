@@ -1,7 +1,7 @@
 import ProtoWallet from '../../wallet/ProtoWallet'
 import PrivateKey from '../../primitives/PrivateKey'
 
-function walletWithNullKeyDeriver (): ProtoWallet {
+function walletWithNullKeyDeriver(): ProtoWallet {
   const wallet = new ProtoWallet(PrivateKey.fromRandom())
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(wallet as any).keyDeriver = undefined
@@ -81,7 +81,7 @@ describe('ProtoWallet – additional coverage', () => {
       await expect(
         wallet.verifyHmac({
           data: [1, 2, 3],
-          hmac: new Array(32).fill(0),
+          hmac: Array.from({ length: 32 }).fill(0),
           protocolID: [1, 'test'],
           keyID: 'k1'
         })

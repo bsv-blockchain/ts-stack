@@ -18,7 +18,7 @@ import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
 const includeTestChaintracks = false
 const noLog = true
-const logFilePath = path.resolve(__dirname, 'createAction2.test.ts')
+const _logFilePath = path.resolve(__dirname, 'createAction2.test.ts')
 
 function sanitizeTestName(testName: string): string {
   const cleanTestName = testName.replace(/[^a-zA-Z0-9_]/g, '_')
@@ -413,7 +413,7 @@ describe('createAction2 nosend transactions', () => {
       expect(spendingArgs.options!.knownTxids).toEqual(expect.arrayContaining(['tx123', 'tx456']))
       const fundingBeef = Beef.fromBinary(fundingResult.tx!)
       expect(fundingBeef).toBeDefined()
-      const BeefPartyTxids = fundingBeef.txs.map(tx => tx.txid)
+      const _BeefPartyTxids = fundingBeef.txs.map(tx => tx.txid)
       const expectedTxids = ['tx123', 'tx456']
       if (spendingArgs.options?.knownTxids) {
         const sortedKnown = [...spendingArgs.options.knownTxids].sort((a, b) => a.localeCompare(b))
@@ -461,7 +461,7 @@ describe('createAction2 nosend transactions', () => {
       expect(spendingArgs.options!.knownTxids).toEqual(expect.arrayContaining(['tx123', 'tx456']))
       const fundingBeef = Beef.fromBinary(fundingResult.tx!)
       expect(fundingBeef).toBeDefined()
-      const partyBeefTxids = fundingBeef.txs.map(tx => tx.txid)
+      const _partyBeefTxids = fundingBeef.txs.map(tx => tx.txid)
       const expectedTxids = ['tx123', 'tx456']
       const sortedKnownTxids = [...(spendingArgs.options!.knownTxids ?? [])].sort((a, b) => a.localeCompare(b))
       const sortedExpectedTxids = [...expectedTxids].sort((a, b) => a.localeCompare(b))
@@ -486,9 +486,11 @@ describe('createAction2 nosend transactions', () => {
       expect(additionalSpendResult).toBeDefined()
       const finalBeef = Beef.fromBinary(spendingResult.tx!)
       expect(finalBeef).toBeDefined()
-      const finalPartyBeefTxids = finalBeef.txs.map(tx => tx.txid)
+      const _finalPartyBeefTxids = finalBeef.txs.map(tx => tx.txid)
       const finalExpectedTxids = [...expectedTxids]
-      const sortedAdditionalTxids = [...(additionalSpendArgs.options!.knownTxids ?? [])].sort((a, b) => a.localeCompare(b))
+      const sortedAdditionalTxids = [...(additionalSpendArgs.options!.knownTxids ?? [])].sort((a, b) =>
+        a.localeCompare(b)
+      )
       const sortedFinalExpected = [...finalExpectedTxids].sort((a, b) => a.localeCompare(b))
       expect(sortedAdditionalTxids).toEqual(sortedFinalExpected)
     }
@@ -654,7 +656,7 @@ describe('createAction2 nosend transactions', () => {
 
 // Helper functions
 
-function getExpectedLog(testName: string, logFilePath: string): { log: string; logColor: string } | null {
+function _getExpectedLog(testName: string, logFilePath: string): { log: string; logColor: string } | null {
   if (!fs.existsSync(logFilePath)) {
     return null
   }
@@ -675,7 +677,7 @@ function getExpectedLog(testName: string, logFilePath: string): { log: string; l
   return null
 }
 
-const normalizeVariableParts = (log: string): string => {
+const _normalizeVariableParts = (log: string): string => {
   return log
     .replace(/txid:[a-f0-9]{64}/g, 'txid:PLACEHOLDER') // Replace txids
     .replace(/unlock:\(\d+\)(?:483045022100[a-f0-9]{64}0220|[a-f0-9]+)/g, 'unlock:PLACEHOLDER')
@@ -689,7 +691,7 @@ const normalizeVariableParts = (log: string): string => {
  * @param {string} testName - The name of the test.
  * @param {{ log: string; logColor: string }} rl - The log data.
  */
-function appendLogsAsConst(testName: string, rl: { log: string; logColor: string }) {
+function _appendLogsAsConst(testName: string, rl: { log: string; logColor: string }) {
   const normalizedTestName = testName
     .replace(/[^a-zA-Z0-9_ ]/g, '')
     .trim()
@@ -758,7 +760,7 @@ const formatMetadata = (metadata?: any) =>
  */
 const formatMerklePath = (merklePath?: MerklePath | string) => (merklePath ? `merklePath:${String(merklePath)}` : '')
 
-const MAX_LOG_LINE_LENGTH = 120 // Define in the test
+const _MAX_LOG_LINE_LENGTH = 120 // Define in the test
 
 /**
  * Wraps a log line to a specified max length.
@@ -978,7 +980,7 @@ export function createActionResultToTxLogString(
 ): { log: string; logColor: string } {
   const BEEF_V1 = 4022206465
 
-  const beef = Beef.fromBinary(createActionResult?.tx!)
+  const beef = Beef.fromBinary(createActionResult?.tx)
   beef.version = BEEF_V1
   const mainTxid = beef.txs.slice(-1)[0].txid
 
@@ -1096,7 +1098,7 @@ export function txToLogString(
   tx: Transaction,
   indent: number = 0,
   showKey: boolean = false,
-  actionsResult?: ListActionsResult
+  _actionsResult?: ListActionsResult
 ): { log: string; logColor: string } {
   try {
     if (indent / 2 >= MAX_RECURSION_DEPTH) {
@@ -1169,7 +1171,7 @@ function log(s: string) {
   //if (!noLog) process.stdout.write(s)
 }
 
-function logWarn(s: string) {
+function _logWarn(s: string) {
   process.stdout.write(colors.yellow(s))
 }
 
@@ -1182,7 +1184,7 @@ export function numberArrayToHexString(numbers: number[]): string {
 //appendLogsAsConst(testName, rl1)
 
 // Auto-generated test log - 2025-02-05T13:04:29.906Z
-const LOG_createAction_nosend_transactions_1_transaction_with_single_output_checked_using_toLogString = {
+const _LOG_createAction_nosend_transactions_1_transaction_with_single_output_checked_using_toLogString = {
   log: `transactions:3
   txid:30bdac0f5c6491f130820517802ff57e20e5a50c08b5c65e6976627fb82ae930 version:1 lockTime:0 sats:-4 status:nosend 
      outgoing:true desc:'Funding transaction' labels:['funding transaction for createaction','this is an extra long test 
@@ -1214,7 +1216,7 @@ const LOG_createAction_nosend_transactions_1_transaction_with_single_output_chec
 }
 
 // Auto-generated test log - 2025-02-05T13:46:12.091Z
-const LOG_createAction_nosend_transactions_2_transaction_with_multiple_outputs_checked_using_toLogString = {
+const _LOG_createAction_nosend_transactions_2_transaction_with_multiple_outputs_checked_using_toLogString = {
   log: `transactions:3
   txid:b3848f2cabf5887ec679ca60347a29f6ecad425fda738700265c2f9d22c18ab5 version:1 lockTime:0 sats:-12 status:nosend 
      outgoing:true desc:'Funding transaction with multiple outputs' labels:['funding transaction for createaction','this 
@@ -1252,7 +1254,7 @@ const LOG_createAction_nosend_transactions_2_transaction_with_multiple_outputs_c
 }
 
 // Auto-generated test log - 2025-02-05T14:50:57.843Z
-const LOG_createAction_nosend_transactions_3_transaction_with_explicit_change_check_also_uses_toLogString_on_the_spend =
+const _LOG_createAction_nosend_transactions_3_transaction_with_explicit_change_check_also_uses_toLogString_on_the_spend =
   {
     log: `transactions:5
   txid:afa6713aab0957cf5bb00dee532ad7b895e919a99564ec2016b51cb3d472d87f version:1 lockTime:0 sats:1 status:nosend 
@@ -1289,7 +1291,7 @@ const LOG_createAction_nosend_transactions_3_transaction_with_explicit_change_ch
   }
 
 // Auto-generated test log - 2025-02-05T15:22:24.388Z
-const LOG_createAction_nosend_transactions_4_transaction_with_custom_options_knownTxids_and_returnTXIDOnly_false_uses_toLogString =
+const _LOG_createAction_nosend_transactions_4_transaction_with_custom_options_knownTxids_and_returnTXIDOnly_false_uses_toLogString =
   {
     log: `transactions:2
   txid:38ded69627603b30bd1f55eb3f88098dbf74f2ef0ff5e3cfe6a34f97ce2db9c2 version:1 lockTime:0 sats:-5 status:nosend 

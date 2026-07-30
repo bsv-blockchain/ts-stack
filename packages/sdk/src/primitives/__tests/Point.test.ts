@@ -3,9 +3,7 @@ import BigNumber from '../../primitives/BigNumber'
 
 describe('Point.fromJSON / fromDER / fromX curve validation (TOB-24)', () => {
   it('rejects clearly off-curve coordinates', () => {
-    expect(() =>
-      Point.fromJSON([123, 456], true)
-    ).toThrow(/Invalid point/)
+    expect(() => Point.fromJSON([123, 456], true)).toThrow(/Invalid point/)
   })
 
   it('rejects nested off-curve precomputed points', () => {
@@ -27,8 +25,7 @@ describe('Point.fromJSON / fromDER / fromX curve validation (TOB-24)', () => {
 
   it('accepts valid generator point from toJSON → fromJSON roundtrip', () => {
     // Compressed secp256k1 G:
-    const G_COMPRESSED =
-      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+    const G_COMPRESSED = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
     const g = Point.fromString(G_COMPRESSED)
     const serialized = g.toJSON()
@@ -40,22 +37,20 @@ describe('Point.fromJSON / fromDER / fromX curve validation (TOB-24)', () => {
   it('rejects invalid compressed points in fromDER', () => {
     // 0x02 is a valid compressed prefix, but x = 0 gives y^2 = 7,
     // which has no square root mod p on secp256k1 → invalid point.
-    const der = [0x02, ...new Array(32).fill(0x00)]
+    const der = [0x02, ...Array.from({ length: 32 }).fill(0x00)]
     expect(() => Point.fromDER(der)).toThrow(/Invalid point/)
-    })
+  })
 
   it('fromX rejects values with no square root mod p', () => {
     // x = 0 ⇒ y^2 = 7, which has no square root mod p on secp256k1.
     // This guarantees that fromX must reject it.
     const badX = '0000000000000000000000000000000000000000000000000000000000000000'
     expect(() => Point.fromX(badX, true)).toThrow(/Invalid point/)
-    })
+  })
 })
 
 describe('Point.mulCT (constant-time scalar multiplication)', () => {
-  const G = Point.fromString(
-    '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-  )
+  const G = Point.fromString('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
 
   it('returns point at infinity for scalar = 0', () => {
     const r = G.mulCT(0)
@@ -71,8 +66,7 @@ describe('Point.mulCT (constant-time scalar multiplication)', () => {
   })
 
   it('matches regular mul for large scalar', () => {
-    const k =
-      'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'
+    const k = 'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'
 
     const r1 = G.mul(k)
     const r2 = G.mulCT(k)
@@ -92,9 +86,7 @@ describe('Point.mulCT (constant-time scalar multiplication)', () => {
 
   it('handles alternating bit patterns (ctSwap exercised)', () => {
     // 101010... pattern forces both swap paths
-    const k = BigInt(
-      '0b101010101010101010101010101010101010101010101010101010101010101'
-    )
+    const k = BigInt('0b101010101010101010101010101010101010101010101010101010101010101')
 
     const r1 = G.mul(k.toString(10))
     const r2 = G.mulCT(k.toString(10))
@@ -109,4 +101,3 @@ describe('Point.mulCT (constant-time scalar multiplication)', () => {
     expect(r2.eq(r1)).toBe(true)
   })
 })
-

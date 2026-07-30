@@ -1,12 +1,9 @@
-import { wait } from '../../../../../utility/utilityHelpers'
 import { BlockHeader } from '../../Api/BlockHeaderApi'
-import { deserializeBaseBlockHeader, deserializeBlockHeader } from '../../util/blockHeaderUtilities'
+import { deserializeBlockHeader } from '../../util/blockHeaderUtilities'
 import { ChaintracksFetch } from '../../util/ChaintracksFetch'
-import { ChaintracksFs } from '../../util/ChaintracksFs'
 import { EnqueueHandler, ErrorHandler, WhatsOnChainServices, WocGetHeadersHeader } from '../WhatsOnChainServices'
 import { StopListenerToken, WocHeadersBulkListener, WocHeadersLiveListener } from '../WhatsOnChainIngestorWs'
 import { Chain } from '../../../../../sdk'
-import { URL } from 'node:url'
 import { HeightRange } from '../../util/HeightRange'
 import { _tu } from '../../../../../../test/utils/TestUtilsWalletStorage'
 
@@ -39,7 +36,7 @@ describe('WhatsOnChainServices tests', () => {
   })
 
   const stopOldListenersToken: StopListenerToken = { stop: undefined }
-  function stopOldListener() {
+  function _stopOldListener() {
     stopOldListenersToken.stop?.()
   }
 
@@ -133,7 +130,7 @@ describe('WhatsOnChainServices tests', () => {
   })
 
   test('4 get header byte file links', async () => {
-    const fetch = new ChaintracksFetch()
+    const _fetch = new ChaintracksFetch()
     const woc = new WhatsOnChainServices(WhatsOnChainServices.createWhatsOnChainServicesOptions('main'))
     const files = await woc.getHeaderByteFileLinks(new HeightRange(907123, 911000))
     expect(files.length).toBe(3)

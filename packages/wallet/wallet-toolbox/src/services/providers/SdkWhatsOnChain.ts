@@ -19,7 +19,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
    * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
-  constructor (network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' = 'main', config: WhatsOnChainConfig = {}) {
+  constructor(network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' = 'main', config: WhatsOnChainConfig = {}) {
     const { apiKey, httpClient } = config
     this.network = network
     if (network === 'ttn') {
@@ -36,7 +36,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     this.apiKey = apiKey ?? ''
   }
 
-  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
     const requestOptions = {
       method: 'GET',
       headers: this.getHttpHeaders()
@@ -58,16 +58,19 @@ export default class SdkWhatsOnChain implements ChainTracker {
     }
   }
 
-  async currentHeight (): Promise<number> {
+  async currentHeight(): Promise<number> {
     try {
       const requestOptions = {
         method: 'GET',
         headers: this.getHttpHeaders()
       }
 
-      const response = await this.httpClient.request<{ height: number }>(`${this.URL}/block/headers`, requestOptions)
+      const response = await this.httpClient.request<Array<{ height: number }>>(
+        `${this.URL}/block/headers`,
+        requestOptions
+      )
       if (response.ok) {
-        return response.data[0].height
+        return response.data[0]!.height
       } else {
         throw new Error(`Failed to get current height because of an error: ${JSON.stringify(response.data)} `)
       }
@@ -78,7 +81,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     }
   }
 
-  protected getHttpHeaders (): Record<string, string> {
+  protected getHttpHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json'
     }

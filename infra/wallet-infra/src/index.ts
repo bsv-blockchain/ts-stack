@@ -51,7 +51,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
   knex: Knex
   activeStorage: StorageKnex
   storage: WalletStorageManager
-  services: Services
+  services: Services | MockServices
   settings: TableSettings
   keyDeriver: KeyDeriver
   wallet: Wallet
@@ -154,7 +154,8 @@ async function setupWalletStorageAndMonitor(): Promise<{
         taskRunWaitMsecs: 5000,
         abandonedMsecs: 1000 * 60 * 5,
         unprovenAttemptsLimitTest: 10,
-        unprovenAttemptsLimitMain: 144
+        unprovenAttemptsLimitMain: 144,
+        maxRebroadcastAttempts: 0
       }
     } else {
       const servOpts = Services.createDefaultOptions(chain)

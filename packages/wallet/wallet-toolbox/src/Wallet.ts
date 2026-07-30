@@ -216,7 +216,7 @@ export interface WalletArgs {
 }
 
 function isWalletSigner(args: WalletArgs | WalletSigner): args is WalletSigner {
-  return args['isWalletSigner']
+  return 'isWalletSigner' in args && args.isWalletSigner
 }
 
 export class Wallet implements WalletInterface, ProtoWallet {
@@ -565,13 +565,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
   // Certificates
   /// ///////////////
 
-  private async acquireDirectCertificateProtocol (
-    args: AcquireCertificateArgs
-  ): Promise<AcquireCertificateResult> {
-    const { auth, vargs } = this.validateAuthAndArgs(
-      args,
-      Validation.validateAcquireDirectCertificateArgs
-    )
+  private async acquireDirectCertificateProtocol(args: AcquireCertificateArgs): Promise<AcquireCertificateResult> {
+    const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateAcquireDirectCertificateArgs)
     vargs.subject = (
       await this.getPublicKey({
         identityKey: true,
@@ -609,10 +604,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return await acquireDirectCertificate(this, auth, vargs)
   }
 
-  private validateIssuedCertificateFields (
-    certificate: Certificate,
-    expectedFields: Record<string, string>
-  ): void {
+  private validateIssuedCertificateFields(certificate: Certificate, expectedFields: Record<string, string>): void {
     if (Object.keys(certificate.fields).length !== Object.keys(expectedFields).length) {
       throw new Error('Fields mismatch! Objects have different numbers of keys.')
     }
@@ -621,14 +613,12 @@ export class Wallet implements WalletInterface, ProtoWallet {
         throw new Error(`Missing field: ${field} in certificate.fields`)
       }
       if (certificate.fields[field] !== expectedFields[field]) {
-        throw new Error(
-          `Invalid field! Expected: ${expectedFields[field]}, Received: ${certificate.fields[field]}`
-        )
+        throw new Error(`Invalid field! Expected: ${expectedFields[field]}, Received: ${certificate.fields[field]}`)
       }
     }
   }
 
-  private validateIssuedCertificate (
+  private validateIssuedCertificate(
     certificate: Certificate,
     vargs: Validation.ValidAcquireIssuanceCertificateArgs,
     expectedFields: Record<string, string>
@@ -637,9 +627,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
       throw new Error(`Invalid certificate type! Expected: ${vargs.type}, Received: ${certificate.type}`)
     }
     if (certificate.subject !== this.identityKey) {
-      throw new Error(
-        `Invalid certificate subject! Expected: ${this.identityKey}, Received: ${certificate.subject}`
-      )
+      throw new Error(`Invalid certificate subject! Expected: ${this.identityKey}, Received: ${certificate.subject}`)
     }
     if (certificate.certifier !== vargs.certifier) {
       throw new Error(`Invalid certifier! Expected: ${vargs.certifier}, Received: ${certificate.certifier}`)
@@ -650,21 +638,15 @@ export class Wallet implements WalletInterface, ProtoWallet {
     this.validateIssuedCertificateFields(certificate, expectedFields)
   }
 
-  private async acquireIssuedCertificateProtocol (
-    args: AcquireCertificateArgs
-  ): Promise<AcquireCertificateResult> {
-    const { auth, vargs } = this.validateAuthAndArgs(
-      args,
-      Validation.validateAcquireIssuanceCertificateArgs
-    )
+  private async acquireIssuedCertificateProtocol(args: AcquireCertificateArgs): Promise<AcquireCertificateResult> {
+    const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateAcquireIssuanceCertificateArgs)
     const clientNonce = await createNonce(this, vargs.certifier)
     const authClient = new AuthFetch(this)
-    const { certificateFields, masterKeyring } =
-      await MasterCertificate.createCertificateFields(
-        this,
-        vargs.certifier,
-        vargs.fields
-      )
+    const { certificateFields, masterKeyring } = await MasterCertificate.createCertificateFields(
+      this,
+      vargs.certifier,
+      vargs.fields
+    )
     const response = await authClient.fetch(`${vargs.certifierUrl}/signCertificate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -677,9 +659,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     })
     const responseIdentity = response.headers.get('x-bsv-auth-identity-key')
     if (responseIdentity !== vargs.certifier) {
-      throw new Error(
-        `Invalid certifier! Expected: ${vargs.certifier}, Received: ${responseIdentity}`
-      )
+      throw new Error(`Invalid certifier! Expected: ${vargs.certifier}, Received: ${responseIdentity}`)
     }
     const { certificate, serverNonce } = await response.json()
     if (!certificate) throw new Error('No certificate received from certifier!')
@@ -705,12 +685,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (!valid) throw new Error('Invalid serialNumber')
     this.validateIssuedCertificate(signedCertificate, vargs, certificateFields)
     await signedCertificate.verify()
-    await MasterCertificate.decryptFields(
-      this,
-      masterKeyring,
-      certificate.fields,
-      vargs.certifier
-    )
+    await MasterCertificate.decryptFields(this, masterKeyring, certificate.fields, vargs.certifier)
     return await acquireDirectCertificate(this, auth, {
       ...certificate,
       keyringRevealer: 'certifier',

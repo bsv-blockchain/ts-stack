@@ -27,7 +27,7 @@ describe('postBeef service tests', () => {
     const beef = Beef.fromString(beefTimeout)
     const txid = beef.txs.slice(-1)[0].txid
     const svcs0 = [...services.postBeefServices.services]
-    const r = await services.postBeef(beef, [txid])
+    const _r = await services.postBeef(beef, [txid])
     const svcs1 = [...services.postBeefServices.services]
     expect(svcs0[1].name).toBe('TaalArcBeef')
     expect(svcs1.slice(-1)[0].name).toBe('TaalArcBeef')

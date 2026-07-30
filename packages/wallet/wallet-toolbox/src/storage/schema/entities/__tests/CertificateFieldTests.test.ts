@@ -1,4 +1,4 @@
-import { createSyncMap, sdk, SyncMap, TableCertificate, TableCertificateField } from '../../../../../src'
+import { createSyncMap, TableCertificate, TableCertificateField } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityCertificateField } from '../EntityCertificateField'
 

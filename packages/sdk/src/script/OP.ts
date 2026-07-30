@@ -1,7 +1,7 @@
 /**
  * An object mapping opcode names (such as OP_DUP) to their corresponding numbers (such as 0x76), and vice versa.
  */
-const OP = {
+const namedOP = {
   // push value
   OP_0: 0x00, // when two op codes have the same value, the top one will be used in standard ASM output
   OP_FALSE: 0x00,
@@ -218,8 +218,11 @@ const OP = {
   OP_INVALIDOPCODE: 0xff
 }
 
-for (const name in OP) {
-  if (OP[OP[name]] === undefined) OP[OP[name]] = name
+const OP = namedOP as typeof namedOP & Record<string, number | string> & Record<number, string>
+
+for (const name of Object.keys(namedOP) as Array<keyof typeof namedOP>) {
+  const opcode = namedOP[name]
+  OP[opcode] ??= name
 }
 
 export default OP

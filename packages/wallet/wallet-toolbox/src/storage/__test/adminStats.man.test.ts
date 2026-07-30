@@ -56,16 +56,11 @@ describe('storage adminStats tests', () => {
       id
     }
 
-    let response: Response
-    try {
-      response = await authFetch.fetch(endpointUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-    } catch (eu: unknown) {
-      throw eu
-    }
+    const response = await authFetch.fetch(endpointUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
 
     if (!response.ok) {
       throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)

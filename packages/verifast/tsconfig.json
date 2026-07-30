@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../config/typescript/wasm-worker.json",
   "compilerOptions": {
     "strictNullChecks": true,
     "noEmit": true,

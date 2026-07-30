@@ -1,8 +1,7 @@
 import LookupResolver, {
   HTTPSOverlayLookupFacilitator,
   DEFAULT_SLAP_TRACKERS,
-  DEFAULT_TESTNET_SLAP_TRACKERS,
-  LookupQuestion
+  DEFAULT_TESTNET_SLAP_TRACKERS
 } from '../LookupResolver'
 import { getOverlayHostReputationTracker, HostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../../overlay-tools/OverlayAdminTokenTemplate'
@@ -37,7 +36,7 @@ const sampleBeef2 = new Transaction(
 // Helper: build a SLAP token transaction pointing at a given host/service
 // --------------------------------------------------------------------------
 
-async function makeSlapTx (
+async function makeSlapTx(
   keyScalar: number,
   domain: string,
   service: string
@@ -131,17 +130,23 @@ describe('LookupResolver – additional coverage', () => {
 
   describe('hostOverrides validation', () => {
     it('throws when hostOverride service name does not start with ls_', () => {
-      expect(() => new LookupResolver({
-        facilitator: mockFacilitator,
-        hostOverrides: { badServiceName: ['https://host.com'] }
-      })).toThrow('Host override service names must start with "ls_": badServiceName')
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            hostOverrides: { badServiceName: ['https://host.com'] }
+          })
+      ).toThrow('Host override service names must start with "ls_": badServiceName')
     })
 
     it('does not throw for valid ls_ prefixed hostOverride keys', () => {
-      expect(() => new LookupResolver({
-        facilitator: mockFacilitator,
-        hostOverrides: { ls_valid: ['https://host.com'] }
-      })).not.toThrow()
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            hostOverrides: { ls_valid: ['https://host.com'] }
+          })
+      ).not.toThrow()
     })
   })
 
@@ -152,17 +157,22 @@ describe('LookupResolver – additional coverage', () => {
   describe('reputationStorage', () => {
     it('accepts reputationStorage: "localStorage" option', () => {
       // Simply verify construction does not throw
-      expect(() => new LookupResolver({
-        facilitator: mockFacilitator,
-        reputationStorage: 'localStorage'
-      })).not.toThrow()
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            reputationStorage: 'localStorage'
+          })
+      ).not.toThrow()
     })
 
     it('accepts reputationStorage as a custom key-value store object', async () => {
       const store = new Map<string, string>()
       const kvStore = {
         get: (key: string): string | null => store.get(key) ?? null,
-        set: (key: string, value: string): void => { store.set(key, value) }
+        set: (key: string, value: string): void => {
+          store.set(key, value)
+        }
       }
 
       mockFacilitator.lookup.mockResolvedValueOnce({
@@ -288,10 +298,12 @@ describe('LookupResolver – additional coverage', () => {
       const slapTx = await makeSlapTx(42, 'https://coalesce.host', 'ls_coalesce')
 
       let resolveSlap: (v: any) => void
-      const slapPromise = new Promise<any>((res) => { resolveSlap = res })
+      const slapPromise = new Promise<any>(res => {
+        resolveSlap = res
+      })
 
       mockFacilitator.lookup
-        .mockReturnValueOnce(slapPromise)   // slap tracker – delayed
+        .mockReturnValueOnce(slapPromise) // slap tracker – delayed
         .mockResolvedValue({
           type: 'output-list',
           outputs: [{ beef: sampleBeef1, outputIndex: 0 }]
@@ -452,7 +464,10 @@ describe('LookupResolver – additional coverage', () => {
         json: async () => ({ type: 'output-list', outputs: [] })
       })
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
-      const result = await facilitator.lookup('http://localhost:8080', { service: 'ls_test', query: {} })
+      const result = await facilitator.lookup('http://localhost:8080', {
+        service: 'ls_test',
+        query: {}
+      })
       expect(result).toEqual({ type: 'output-list', outputs: [] })
     })
 
@@ -483,7 +498,10 @@ describe('LookupResolver – additional coverage', () => {
       // Simulate the CORS-blocked / hung-preflight case where the fetch promise
       // does not honor the AbortController signal and never settles.
       const neverFetch = jest.fn().mockImplementation(
-        () => new Promise(() => { /* never resolves */ })
+        () =>
+          new Promise(() => {
+            /* never resolves */
+          })
       )
       const facilitator = new HTTPSOverlayLookupFacilitator(neverFetch, true)
       const start = Date.now()
@@ -518,7 +536,8 @@ describe('LookupResolver – additional coverage', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/octet-stream' },
-        arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
+        arrayBuffer: async () =>
+          payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
       })
 
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
@@ -539,7 +558,11 @@ describe('LookupResolver – additional coverage', () => {
       const beef = tx.toBEEF()
       const txid = Buffer.from(tx.id('hex'), 'hex')
       const payload = Buffer.concat([
-        Buffer.from([0x01]), txid, Buffer.from([0x00]), Buffer.from([0x00]), Buffer.from(beef)
+        Buffer.from([0x01]),
+        txid,
+        Buffer.from([0x00]),
+        Buffer.from([0x00]),
+        Buffer.from(beef)
       ])
 
       for (const header of [
@@ -550,7 +573,8 @@ describe('LookupResolver – additional coverage', () => {
         const mockFetch = jest.fn().mockResolvedValue({
           ok: true,
           headers: { get: () => header },
-          arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
+          arrayBuffer: async () =>
+            payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
         })
         const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
         const result = await facilitator.lookup('https://host', { service: 'ls_test', query: {} })
@@ -576,12 +600,20 @@ describe('LookupResolver – additional coverage', () => {
       const contextLen = Buffer.from([0x02])
       const contextBytes = Buffer.from([0xde, 0xad])
       const beefBuf = Buffer.from(beef)
-      const payload = Buffer.concat([nOutpoints, txid, outputIndex, contextLen, contextBytes, beefBuf])
+      const payload = Buffer.concat([
+        nOutpoints,
+        txid,
+        outputIndex,
+        contextLen,
+        contextBytes,
+        beefBuf
+      ])
 
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/octet-stream' },
-        arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
+        arrayBuffer: async () =>
+          payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
       })
 
       const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)

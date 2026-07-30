@@ -17,7 +17,7 @@ jest.useFakeTimers()
 // ------------------------------------------------------------------------------------------
 
 /** A utility to create an Outpoint string for test usage. */
-function makeOutpoint (txid: string, vout: number): string {
+function makeOutpoint(txid: string, vout: number): string {
   return `${txid}:${vout}`
 }
 
@@ -61,7 +61,7 @@ const mockUnderlyingWallet = {
 /**
  * A mock function that simulates building an underlying wallet.
  */
-const mockWalletBuilder = jest.fn(async (primaryKey, privilegedKeyManager) => {
+const mockWalletBuilder = jest.fn(async (_primaryKey, _privilegedKeyManager) => {
   // Return our mock underlying wallet object.
   return mockUnderlyingWallet
 })
@@ -71,17 +71,17 @@ const mockWalletBuilder = jest.fn(async (primaryKey, privilegedKeyManager) => {
  * We can track whether buildAndSend is called with the right arguments, etc.
  */
 const mockUMPTokenInteractor: UMPTokenInteractor = {
-  findByPresentationKeyHash: jest.fn(async (hash: number[]) => undefined),
-  findByRecoveryKeyHash: jest.fn(async (hash: number[]) => undefined),
+  findByPresentationKeyHash: jest.fn(async (_hash: number[]) => undefined),
+  findByRecoveryKeyHash: jest.fn(async (_hash: number[]) => undefined),
   buildAndSend: jest.fn(
-    async (wallet: WalletInterface, admin: string, token: UMPToken, oldToken?: UMPToken) => 'abcd.0'
+    async (_wallet: WalletInterface, _admin: string, _token: UMPToken, _oldToken?: UMPToken) => 'abcd.0'
   )
 }
 
 /**
  * A mock "recoveryKeySaver" that claims it always saved the key successfully.
  */
-const mockRecoveryKeySaver = jest.fn(async (key: number[]) => true as true)
+const mockRecoveryKeySaver = jest.fn(async (_key: number[]) => true as true)
 
 /**
  * A mock "passwordRetriever" that we can customize to return a specific password
@@ -93,7 +93,7 @@ const XOR = (n1: number[], n2: number[]): number[] => {
   if (n1.length !== n2.length) {
     throw new Error('lengths mismatch')
   }
-  const r = new Array<number>(n1.length)
+  const r = Array.from({ length: n1.length })
   for (let i = 0; i < n1.length; i++) {
     r[i] = n1[i] ^ n2[i]
   }
@@ -112,7 +112,7 @@ const privilegedKey = Random(32)
  * A helper function to create a minimal valid UMP token.
  * This can be used to mock a stored token for existing users.
  */
-async function createMockUMPToken (): Promise<UMPToken> {
+async function createMockUMPToken(): Promise<UMPToken> {
   const presentationPassword = new SymmetricKey(XOR(presentationKey, passwordKey))
   const presentationRecovery = new SymmetricKey(XOR(presentationKey, recoveryKey))
   const recoveryPassword = new SymmetricKey(XOR(recoveryKey, passwordKey))
@@ -342,7 +342,9 @@ describe('CWIStyleWalletManager Tests', () => {
       )
 
       // Not authenticated yet
-      await expect(async () => await freshManager.getPublicKey({ identityKey: true })).rejects.toThrow('User is not authenticated')
+      await expect(async () => await freshManager.getPublicKey({ identityKey: true })).rejects.toThrow(
+        'User is not authenticated'
+      )
 
       // Load the snapshot
       await freshManager.loadSnapshot(snapshot)
@@ -523,7 +525,9 @@ describe('CWIStyleWalletManager Tests', () => {
 
     expect(manager.authenticated).toBe(false)
     // And we can confirm that manager won't allow calls
-    await expect(async () => await manager.getPublicKey({ identityKey: true })).rejects.toThrow('User is not authenticated')
+    await expect(async () => await manager.getPublicKey({ identityKey: true })).rejects.toThrow(
+      'User is not authenticated'
+    )
   })
 
   // ----------------------------------------------------------------------------------------
@@ -541,7 +545,9 @@ describe('CWIStyleWalletManager Tests', () => {
     test('Throws if user is not authenticated', async () => {
       // force de-auth
       ;(manager as any).authenticated = false
-      await expect(async () => await manager.getPublicKey({ identityKey: true })).rejects.toThrow('User is not authenticated.')
+      await expect(async () => await manager.getPublicKey({ identityKey: true })).rejects.toThrow(
+        'User is not authenticated.'
+      )
     })
 
     test('Throws if originator is adminOriginator', async () => {
@@ -646,7 +652,7 @@ describe('CWIStyleWalletManager Tests', () => {
       // In a new-user flow, buildUnderlying is called without a privilegedKey,
       // so any later use of the privileged manager will trigger a password prompt.
       const customPasswordRetriever = jest.fn(
-        async (reason: string, testFn: (candidate: string) => boolean | Promise<boolean>) => {
+        async (_reason: string, _testFn: (candidate: string) => boolean | Promise<boolean>) => {
           return 'test-password'
         }
       )
@@ -687,7 +693,7 @@ describe('CWIStyleWalletManager Tests', () => {
     let manager: CWIStyleWalletManager
     let mockInteractor: UMPTokenInteractor
 
-    function makeManager (interactor: UMPTokenInteractor = mockInteractor): CWIStyleWalletManager {
+    function makeManager(interactor: UMPTokenInteractor = mockInteractor): CWIStyleWalletManager {
       return new CWIStyleWalletManager(
         'test.admin',
         mockWalletBuilder as any,
@@ -697,7 +703,7 @@ describe('CWIStyleWalletManager Tests', () => {
       )
     }
 
-    function makeLegacyToken (rootPrimary: number[], outpoint = 'legacy.0'): UMPToken {
+    function makeLegacyToken(rootPrimary: number[], outpoint = 'legacy.0'): UMPToken {
       return {
         passwordSalt,
         passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(
@@ -720,7 +726,7 @@ describe('CWIStyleWalletManager Tests', () => {
       }
     }
 
-    async function deriveArgon2Key (iterations: number, memorySize: number): Promise<number[]> {
+    async function deriveArgon2Key(iterations: number, memorySize: number): Promise<number[]> {
       return Array.from(
         await argon2id({
           password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
@@ -734,11 +740,11 @@ describe('CWIStyleWalletManager Tests', () => {
       )
     }
 
-    function makeV3Token (
+    function makeV3Token(
       argon2PasswordKey: number[],
       rootPrimary: number[],
       outpoint: string,
-      kdfParams: { iterations: number, memoryKiB: number }
+      kdfParams: { iterations: number; memoryKiB: number }
     ): UMPToken {
       return {
         passwordSalt,

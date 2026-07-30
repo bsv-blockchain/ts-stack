@@ -3,18 +3,9 @@ import PrivateKey from '../../primitives/PrivateKey'
 import vectors from './SymmetricKey.vectors'
 
 const KEYS: SymmetricKey[] = [
-  new SymmetricKey(
-    '5a90d59d829197983a54d887fdea2dc4c38098f00ba3110f2645633b6ea11458',
-    16
-  ),
-  new SymmetricKey(
-    'bac6ac492f54d7c997fadc1be593a4ace26ecdf37d30b3ad12f34077fb2629e4',
-    16
-  ),
-  new SymmetricKey(
-    '53dcdc6ea6a6910af35a48708f49228e0e6661ea885435080cbabc58e6a14f10',
-    16
-  )
+  new SymmetricKey('5a90d59d829197983a54d887fdea2dc4c38098f00ba3110f2645633b6ea11458', 16),
+  new SymmetricKey('bac6ac492f54d7c997fadc1be593a4ace26ecdf37d30b3ad12f34077fb2629e4', 16),
+  new SymmetricKey('53dcdc6ea6a6910af35a48708f49228e0e6661ea885435080cbabc58e6a14f10', 16)
 ]
 
 const PLAINTEXT_1 = 'hello there'
@@ -52,10 +43,7 @@ describe('SymmetricKey', () => {
   vectors.forEach((vector, index) => {
     it(`Should pass test vector #${index + 1}`, () => {
       const key = new SymmetricKey([...Buffer.from(vector.key, 'base64')])
-      const result = key.decrypt(
-        [...Buffer.from(vector.ciphertext, 'base64')],
-        'hex'
-      )
+      const result = key.decrypt([...Buffer.from(vector.ciphertext, 'base64')], 'hex')
       expect(result).toEqual(Buffer.from(vector.plaintext).toString('hex'))
     })
   })
@@ -102,9 +90,9 @@ describe('SymmetricKey', () => {
 
       expect(decrypted).toBe(plaintext)
     })
-    
+
     it('throws "Ciphertext too short" for inputs shorter than IV + tag', () => {
-      const shortCipherArray = new Array(47).fill(0)
+      const shortCipherArray = Array.from({ length: 47 }).fill(0)
       expect(() => {
         KEYS[0].decrypt(shortCipherArray)
       }).toThrow(new Error('Ciphertext too short'))

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.4.16",
+  "version": "2.4.17",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -59,8 +59,8 @@
     "operator:build": "pnpm build && tsc --project operator/tsconfig.json --pretty false",
     "operator": "pnpm operator:build && node .operator-build/cli.js",
     "bench:action-batch": "pnpm build && jest --runInBand --runTestsByPath benchmarks/action-batch.bench.test.ts --testPathIgnorePatterns=man.test.ts",
-    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/{README.md,jest.config.ts,package.json,tsconfig*.json}\"",
-    "lint": "oxlint src benchmarks examples operator --ignore-pattern 'src/**/__test/**' --ignore-pattern 'src/**/__tests/**' --ignore-pattern 'src/**/*.test.ts' --ignore-pattern 'benchmarks/**/*.test.ts' --ignore-pattern 'operator/**/*.test.ts' --deny-warnings",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/{README.md,jest.config.cjs,package.json,tsconfig*.json}\"",
+    "lint": "oxlint src test benchmarks examples operator --deny-warnings",
     "lint:ci": "pnpm lint",
     "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes cjs --exports Wallet,WalletSigner,WalletStorageManager,StorageClient,StorageKnex,Services,Setup,WalletPermissionsManager,WalletSettingsManager,sdk --entry-exports \"./out/src/sdk=WalletError|WERR_BAD_REQUEST|WERR_INTERNAL|WERR_INVALID_PARAMETER|WERR_UNAUTHORIZED\"",
     "typecheck": "tsc --build --pretty false && tsc --project examples/tsconfig.json --pretty false && tsc --project operator/tsconfig.json --noEmit --pretty false",
@@ -96,6 +96,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "@types/ws": "^8.18.1",
     "cors": "^2.8.6",
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.9.0",

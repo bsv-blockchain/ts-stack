@@ -1,4 +1,5 @@
 {
+  "extends": "../../../../../config/typescript/test.json",
   "compilerOptions": {
     "lib": ["dom", "ESNext"],
     "moduleDetection": "force",

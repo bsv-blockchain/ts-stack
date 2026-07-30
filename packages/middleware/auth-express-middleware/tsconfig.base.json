@@ -1,4 +1,5 @@
 {
+  "extends": "../../../config/typescript/node-library.json",
   "compilerOptions": {
     "lib": ["ES2023"],
     "module": "NodeNext",

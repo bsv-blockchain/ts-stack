@@ -28,7 +28,7 @@ interface BitailsPostNoteContext {
   }
 }
 
-function initializeBitailsPostResult (
+function initializeBitailsPostResult(
   raws: HexString[],
   requestedTxids?: string[]
 ): { result: PostBeefResult; rawTxids: string[] } {
@@ -49,7 +49,7 @@ function initializeBitailsPostResult (
   return { result, rawTxids }
 }
 
-function reconcileBitailsResponseTxids (
+function reconcileBitailsResponseTxids(
   result: PostBeefResult,
   responseResults: BitailsPostRawsResult[],
   rawTxids: string[],
@@ -84,7 +84,7 @@ function reconcileBitailsResponseTxids (
   return result.status === 'success'
 }
 
-function applyBitailsTransactionResult (
+function applyBitailsTransactionResult(
   result: PostTxResultForTxid,
   response: BitailsPostRawsResult,
   notes: BitailsPostNoteContext
@@ -104,7 +104,7 @@ function applyBitailsTransactionResult (
     result.doubleSpend = true
     result.competingTxs = undefined
     result.notes!.push({ ...notes.nne(), what: 'postRawsErrorMissingInputs' })
-  } else if ((response['code'] as string) === 'ECONNRESET') {
+  } else if ((response as BitailsPostRawsResult & { code?: string }).code === 'ECONNRESET') {
     result.notes!.push({
       ...notes.nne(),
       what: 'postRawsErrorECONNRESET',
@@ -122,7 +122,7 @@ function applyBitailsTransactionResult (
   }
 }
 
-function applyRequestedBitailsResults (
+function applyRequestedBitailsResults(
   result: PostBeefResult,
   responseResults: BitailsPostRawsResult[],
   notes: BitailsPostNoteContext
@@ -143,7 +143,7 @@ export class Bitails {
   readonly URL: string
   readonly httpClient: HttpClient
 
-  constructor (chain: Chain = 'main', config: BitailsConfig = {}) {
+  constructor(chain: Chain = 'main', config: BitailsConfig = {}) {
     const { apiKey, httpClient } = config
     this.chain = chain
     switch (chain) {
@@ -160,7 +160,7 @@ export class Bitails {
     this.apiKey = apiKey ?? ''
   }
 
-  getHttpHeaders (): Record<string, string> {
+  getHttpHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json'
     }
@@ -181,7 +181,7 @@ export class Bitails {
    * @param txids
    * @returns
    */
-  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult> {
+  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
     const nn = () => ({
       name: 'BitailsPostBeef',
       when: new Date().toISOString()
@@ -210,7 +210,7 @@ export class Bitails {
    * @param txids Array of txids for transactions in raws for which results are requested, remaining raws are supporting only.
    * @returns
    */
-  async postRaws (raws: HexString[], txids?: string[]): Promise<PostBeefResult> {
+  async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult> {
     const { result: r, rawTxids } = initializeBitailsPostResult(raws, txids)
 
     const headers = this.getHttpHeaders()
@@ -265,7 +265,7 @@ export class Bitails {
    * @param services
    * @returns
    */
-  async getMerklePath (txid: string, services: WalletServices): Promise<GetMerklePathResult> {
+  async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> {
     const r: GetMerklePathResult = { name: 'BitailsTsc', notes: [] }
 
     const url = `${this.URL}tx/${txid}/proof/tsc`

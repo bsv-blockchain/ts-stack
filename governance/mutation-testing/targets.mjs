@@ -77,7 +77,7 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/wallet/wallet-toolbox/src/utility/__tests/actionBatchPack.property.test.ts',
       mutate: ['src/utility/actionBatchPack.ts:38-132'],
       ...jestTarget(
-        'jest.config.ts',
+        'jest.config.cjs',
         [
           '<rootDir>/src/utility/__tests/actionBatchPack*.test.ts',
           '<rootDir>/src/utility/__tests__/actionBatchPack*.test.ts'

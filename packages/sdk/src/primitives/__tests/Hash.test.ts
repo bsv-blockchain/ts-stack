@@ -6,7 +6,7 @@ import { toArray, toHex } from '../../primitives/utils'
 import { SHA1 } from '../..//primitives/Hash'
 
 describe('Hash', function () {
-  function test (Hash, cases): void {
+  function test(Hash, cases): void {
     for (let i = 0; i < cases.length; i++) {
       const msg = cases[i][0]
       const res = cases[i][1]
@@ -16,29 +16,19 @@ describe('Hash', function () {
       expect(dgst).toEqual(res)
 
       // Split message
-      dgst = new Hash()
-        .update(msg.slice(0, 2), enc)
-        .update(msg.slice(2), enc)
-        .digestHex()
+      dgst = new Hash().update(msg.slice(0, 2), enc).update(msg.slice(2), enc).digestHex()
       expect(dgst).toEqual(res)
     }
   }
 
   it('should support sha256', function () {
     test(hash.SHA256, [
-      [
-        'abc',
-        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
-      ],
+      ['abc', 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'],
       [
         'abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq',
         '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1'
       ],
-      [
-        'deadbeef',
-        '5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953',
-        'hex'
-      ]
+      ['deadbeef', '5f78c33274e43fa9de5659265c1d917e25c03722dcb0b8d27db8d5feaa813953', 'hex']
     ])
   })
 
@@ -100,23 +90,20 @@ describe('Hash', function () {
         '您好', // three bytes per character
         '👋', // four bytes per character
         'hello привет 您好 👋!!!' // mixed character lengths
-      ].map((str) => [
-        str,
-        crypto.createHash('sha256').update(str).digest('hex')
-      ])
+      ].map(str => [str, crypto.createHash('sha256').update(str).digest('hex')])
     )
   })
 
   describe('BaseHash padding and endianness', () => {
     it('encodes length in big-endian for SHA1', () => {
       const sha1 = new (hash as any).SHA1()
-      ;(sha1).pendingTotal = 12345
-      const pad = (sha1)._pad() as number[]
-      const padLength = (sha1).padLength as number
+      sha1.pendingTotal = 12345
+      const pad = sha1._pad() as number[]
+      const padLength = sha1.padLength as number
       const lengthBytes = pad.slice(-padLength)
 
       const totalBits = BigInt(12345) * 8n
-      const expected = new Array<number>(padLength)
+      const expected = Array.from({ length: padLength })
       let tmp = totalBits
       for (let i = padLength - 1; i >= 0; i--) {
         expected[i] = Number(tmp & 0xffn)
@@ -128,13 +115,13 @@ describe('Hash', function () {
 
     it('encodes length in little-endian for RIPEMD160', () => {
       const ripemd = new (hash as any).RIPEMD160()
-      ;(ripemd).pendingTotal = 12345
-      const pad = (ripemd)._pad() as number[]
-      const padLength = (ripemd).padLength as number
+      ripemd.pendingTotal = 12345
+      const pad = ripemd._pad() as number[]
+      const padLength = ripemd.padLength as number
       const lengthBytes = pad.slice(-padLength)
 
       const totalBits = BigInt(12345) * 8n
-      const expected = new Array<number>(padLength)
+      const expected = Array.from({ length: padLength })
       let tmp = totalBits
       for (let i = 0; i < padLength; i++) {
         expected[i] = Number(tmp & 0xffn)
@@ -146,11 +133,11 @@ describe('Hash', function () {
 
     it('throws when message length exceeds maximum encodable bits', () => {
       const sha1 = new (hash as any).SHA1()
-      ;(sha1).padLength = 1
-      ;(sha1).pendingTotal = 40
+      sha1.padLength = 1
+      sha1.pendingTotal = 40
 
       expect(() => {
-        ;(sha1)._pad()
+        sha1._pad()
       }).toThrow(new Error('Message too long for this hash function'))
     })
   })
@@ -235,7 +222,7 @@ describe('Hash', function () {
     it('realHtonl preserves value when system is big-endian (forced simulation)', () => {
       // We simulate the big-endian branch of realHtonl by calling
       // the fallback path directly.
-      const forceBigEndianRealHtonl = (w: number): number => (w >>> 0)
+      const forceBigEndianRealHtonl = (w: number): number => w >>> 0
 
       expect(forceBigEndianRealHtonl(0x11223344)).toBe(0x11223344)
       expect(forceBigEndianRealHtonl(0xaabbccdd)).toBe(0xaabbccdd)
@@ -243,13 +230,7 @@ describe('Hash', function () {
     })
 
     it('htonl, swapBytes32, realHtonl never throw for any 32-bit input', () => {
-      const inputs = [
-        0, 1, -1,
-        0x7fffffff,
-        0x80000000,
-        0xffffffff,
-        0x12345678
-      ]
+      const inputs = [0, 1, -1, 0x7fffffff, 0x80000000, 0xffffffff, 0x12345678]
 
       for (const n of inputs) {
         expect(() => htonl(n)).not.toThrow()

@@ -11,26 +11,25 @@ import { EntityTimeStamp } from '../../sdk/types'
  *   - Replace `Uint8Array` / `Buffer` values with plain `number[]` arrays.
  */
 
-export function validateDate (date: Date | string | number): Date {
+export function validateDate(date: Date | string | number): Date {
   if (date instanceof Date) return date
   return new Date(date)
 }
 
-function defineOwnValues (
-  target: object,
-  values: ReadonlyMap<string, unknown>
-): void {
+function defineOwnValues(target: object, values: ReadonlyMap<string, unknown>): void {
   Object.defineProperties(
     target,
-    Object.fromEntries(Array.from(values, ([key, value]) => [
-      key,
-      {
-        value,
-        writable: true,
-        enumerable: true,
-        configurable: true
-      }
-    ]))
+    Object.fromEntries(
+      Array.from(values, ([key, value]) => [
+        key,
+        {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        }
+      ])
+    )
   )
 }
 
@@ -39,18 +38,20 @@ function defineOwnValues (
  * Use to process all individual records with timestamps retrieved from database.
  */
 export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T {
+  const indexedEntity = entity as T & Record<string, unknown>
   entity.created_at = validateDate(entity.created_at)
   entity.updated_at = validateDate(entity.updated_at)
   const replacements = new Map<string, unknown>()
   if (dateFields != null) {
     for (const df of dateFields) {
-      if (Object.hasOwn(entity, df) && entity[df]) {
-        replacements.set(df, validateDate(entity[df]))
+      const value = indexedEntity[df]
+      if (Object.hasOwn(entity, df) && value) {
+        replacements.set(df, validateDate(value as Date | string | number))
       }
     }
   }
   for (const key of Object.keys(entity)) {
-    const val = replacements.has(key) ? replacements.get(key) : entity[key]
+    const val = replacements.has(key) ? replacements.get(key) : indexedEntity[key]
     if (val === null) {
       replacements.set(key, undefined)
     } else if (val instanceof Uint8Array) {
@@ -78,7 +79,7 @@ export function validateEntities<T extends EntityTimeStamp>(entities: T[], dateF
  * Validate all entity arrays within a `SyncChunk` received from a remote storage call.
  * Normalises timestamps, nulls, and binary fields in-place.
  */
-export function validateSyncChunkEntities (r: SyncChunk): SyncChunk {
+export function validateSyncChunkEntities(r: SyncChunk): SyncChunk {
   if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
   if (r.certificates != null) r.certificates = validateEntities(r.certificates)
   if (r.commissions != null) r.commissions = validateEntities(r.commissions)

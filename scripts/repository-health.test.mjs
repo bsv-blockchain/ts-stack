@@ -10,6 +10,7 @@ import {
   createContractBaseline,
   discoverWorkspaceProjects,
   evaluateRepositoryHealth,
+  lintScriptExcludesAuthoredCode,
   readJson,
   validateExceptionRegistry,
   validateProjectRegistry
@@ -18,6 +19,23 @@ import { validateBaseline as validateCiPerformanceBaseline } from './ci-performa
 
 const healthDirectory = path.join(REPOSITORY_ROOT, 'governance/repository-health')
 const projects = readJson(path.join(healthDirectory, 'projects.json'))
+
+test('lint exclusion parsing rejects authored tests and benchmarks without backtracking', () => {
+  assert.equal(
+    lintScriptExcludesAuthoredCode("oxlint src --ignore-pattern '**/__tests__/**' --deny-warnings"),
+    true
+  )
+  assert.equal(
+    lintScriptExcludesAuthoredCode('oxlint src --ignore-pattern=benchmarks/** --deny-warnings'),
+    true
+  )
+  assert.equal(
+    lintScriptExcludesAuthoredCode(
+      "oxlint src --ignore-pattern 'src/generated/**' --deny-warnings"
+    ),
+    false
+  )
+})
 
 test('workspace discovery exactly matches the 37-project registry', () => {
   const discovered = discoverWorkspaceProjects()

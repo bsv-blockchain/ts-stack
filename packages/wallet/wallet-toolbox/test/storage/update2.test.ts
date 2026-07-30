@@ -1,7 +1,7 @@
 /* Additional update tests for setting edge cases and exercising contraints (unique/foreign) */
 /* Requires a new DB for each test                                                           */
 import { _tu, TestSetup1 } from '../utils/TestUtilsWalletStorage'
-import { sdk, StorageProvider, StorageKnex, verifyOne } from '../../src/index.all'
+import { sdk, StorageKnex, verifyOne } from '../../src/index.all'
 import {
   normalizeDate,
   setLogging,
@@ -11,23 +11,7 @@ import {
   validateUpdateTime,
   verifyValues
 } from '../utils/TestUtilsWalletStorage'
-import {
-  TableProvenTx,
-  TableProvenTxReq,
-  TableUser,
-  TableCertificate,
-  TableCertificateField,
-  TableOutputBasket,
-  TableTransaction,
-  TableCommission,
-  TableOutput,
-  TableOutputTag,
-  TableOutputTagMap,
-  TableTxLabel,
-  TableTxLabelMap,
-  TableMonitorEvent,
-  TableSyncState
-} from '../../src/storage/schema/tables'
+import { TableProvenTx, TableProvenTxReq, TableUser, TableCertificate } from '../../src/storage/schema/tables'
 
 setLogging(false)
 
@@ -547,7 +531,7 @@ describe('update2 tests', () => {
           }
         }
       ]
-      for (const { description, updates } of scenarios) {
+      for (const { description: _description, updates } of scenarios) {
         const referenceTime = new Date()
         const records = await storage.findUsers({ partial: {} })
         for (const record of records) {

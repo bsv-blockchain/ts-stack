@@ -5,11 +5,8 @@ import PublicKey from '../../primitives/PublicKey'
 import * as ECDSA from '../../primitives/ECDSA'
 import Curve from '../../primitives/Curve'
 
-const key = new BigNumber(
-  '1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5',
-  16
-)
-const curve = new Curve()
+const key = new BigNumber('1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5', 16)
+const _curve = new Curve()
 const msg = new BigNumber('deadbeef', 16)
 
 describe('Signature', () => {
@@ -64,8 +61,12 @@ describe('Signature', () => {
       const der = [
         0x30,
         2 + rBytes.length + 2 + sBytes.length,
-        0x02, rBytes.length, ...rBytes,
-        0x02, sBytes.length, ...sBytes
+        0x02,
+        rBytes.length,
+        ...rBytes,
+        0x02,
+        sBytes.length,
+        ...sBytes
       ]
       expect(() => Signature.fromDER(der)).toThrow('Invalid R-value in signature DER')
     })
@@ -77,8 +78,12 @@ describe('Signature', () => {
       const der = [
         0x30,
         2 + rBytes.length + 2 + sBytes.length,
-        0x02, rBytes.length, ...rBytes,
-        0x02, sBytes.length, ...sBytes
+        0x02,
+        rBytes.length,
+        ...rBytes,
+        0x02,
+        sBytes.length,
+        ...sBytes
       ]
       expect(() => Signature.fromDER(der)).toThrow('Invalid S-value in signature DER')
     })
@@ -114,18 +119,22 @@ describe('Signature', () => {
   // --------------------------------------------------------------------------
   describe('fromCompact', () => {
     it('throws when data is not 65 bytes', () => {
-      expect(() => Signature.fromCompact(new Array(64).fill(0))).toThrow('Invalid Compact Signature')
-      expect(() => Signature.fromCompact(new Array(66).fill(0))).toThrow('Invalid Compact Signature')
+      expect(() => Signature.fromCompact(Array.from({ length: 64 }).fill(0))).toThrow(
+        'Invalid Compact Signature'
+      )
+      expect(() => Signature.fromCompact(Array.from({ length: 66 }).fill(0))).toThrow(
+        'Invalid Compact Signature'
+      )
     })
 
     it('throws when compact byte < 27', () => {
-      const data = new Array(65).fill(0)
+      const data = Array.from({ length: 65 }).fill(0)
       data[0] = 26
       expect(() => Signature.fromCompact(data)).toThrow('Invalid Compact Byte')
     })
 
     it('throws when compact byte >= 35', () => {
-      const data = new Array(65).fill(0)
+      const data = Array.from({ length: 65 }).fill(0)
       data[0] = 35
       expect(() => Signature.fromCompact(data)).toThrow('Invalid Compact Byte')
     })
@@ -191,7 +200,7 @@ describe('Signature', () => {
       expect(fromToString).toEqual(fromToDER)
     })
 
-    it('toString(\"hex\") returns same as toDER(\"hex\")', () => {
+    it('toString("hex") returns same as toDER("hex")', () => {
       const sig = ECDSA.sign(msg, key)
       expect(sig.toString('hex')).toBe(sig.toDER('hex'))
     })
@@ -201,14 +210,14 @@ describe('Signature', () => {
       expect(Array.isArray(sig.toDER())).toBe(true)
     })
 
-    it('toDER(\"hex\") returns hex string', () => {
+    it('toDER("hex") returns hex string', () => {
       const sig = ECDSA.sign(msg, key)
       const hex = sig.toDER('hex')
       expect(typeof hex).toBe('string')
       expect(hex as string).toMatch(/^[0-9a-f]+$/)
     })
 
-    it('toDER(\"base64\") returns base64 string', () => {
+    it('toDER("base64") returns base64 string', () => {
       const sig = ECDSA.sign(msg, key)
       const b64 = sig.toDER('base64')
       expect(typeof b64).toBe('string')
@@ -252,14 +261,14 @@ describe('Signature', () => {
       expect((compact as number[]).length).toBe(65)
     })
 
-    it('returns hex string when enc=\"hex\"', () => {
+    it('returns hex string when enc="hex"', () => {
       const sig = ECDSA.sign(msg, key)
       const hex = sig.toCompact(0, true, 'hex')
       expect(typeof hex).toBe('string')
       expect((hex as string).length).toBe(130)
     })
 
-    it('returns base64 string when enc=\"base64\"', () => {
+    it('returns base64 string when enc="base64"', () => {
       const sig = ECDSA.sign(msg, key)
       const b64 = sig.toCompact(0, true, 'base64')
       expect(typeof b64).toBe('string')

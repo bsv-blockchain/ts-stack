@@ -1,4 +1,4 @@
-import { createSyncMap, sdk, SyncMap, TableCommission, TableTransaction } from '../../../../../src'
+import { createSyncMap, TableCommission, TableTransaction } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityCommission } from '../EntityCommission'
 

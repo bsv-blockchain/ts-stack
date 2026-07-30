@@ -21,7 +21,7 @@ import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_e
  * @param args
  * @returns
  */
-export async function getSyncChunk (storage: StorageReader, args: RequestSyncChunkArgs): Promise<SyncChunk> {
+export async function getSyncChunk(storage: StorageReader, args: RequestSyncChunkArgs): Promise<SyncChunk> {
   const r: SyncChunk = {
     fromStorageIdentityKey: args.fromStorageIdentityKey,
     toStorageIdentityKey: args.toStorageIdentityKey,
@@ -34,7 +34,7 @@ export async function getSyncChunk (storage: StorageReader, args: RequestSyncChu
   let done = false
 
   const user = verifyTruthy(await storage.findUserByIdentityKey(args.identityKey))
-  if ((args.since == null) || user.updated_at > new Date(args.since)) r.user = user
+  if (args.since == null || user.updated_at > new Date(args.since)) r.user = user
 
   const chunkers: ChunkerArgs[] = [
     {
@@ -233,7 +233,9 @@ export async function getSyncChunk (storage: StorageReader, args: RequestSyncChu
       return
     }
     let { offset, name: oname } = args.offsets[i++]
-    if (a.name !== oname) { throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`) }
+    if (a.name !== oname) {
+      throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`)
+    }
     let preAddCalled = false
     while (!done) {
       const limit = Math.min(itemCount, Math.max(10, args.maxItems / a.maxDivider))
@@ -279,14 +281,17 @@ interface ChunkerArgs {
   findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) => Promise<any[]>
 }
 
-function checkIsDate (v: any) {
+function checkIsDate(v: any) {
   if (!(v instanceof Date)) throw new WERR_INVALID_OPERATION('bad date')
 }
 
-function checkEntityValues (es: object[]) {
+function checkEntityValues(es: object[]) {
   for (const e of es) {
-    checkIsDate(e['created_at'])
-    checkIsDate(e['updated_at'])
-    for (const key of Object.keys(e)) if (e[key] === null) throw new WERR_INVALID_OPERATION()
+    const entity = e as Record<string, unknown>
+    checkIsDate(entity.created_at)
+    checkIsDate(entity.updated_at)
+    for (const key of Object.keys(entity)) {
+      if (entity[key] === null) throw new WERR_INVALID_OPERATION()
+    }
   }
 }

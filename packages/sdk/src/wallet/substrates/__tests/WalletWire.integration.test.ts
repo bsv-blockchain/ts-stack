@@ -892,7 +892,7 @@ describe('WalletWire Integration Tests', () => {
         options: {
           signAndProcess: false,
           acceptDelayedBroadcast: false,
-          trustSelf: 'known' as 'known',
+          trustSelf: 'known' as const,
           knownTxids: ['deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806'],
           returnTXIDOnly: false,
           noSend: true,
@@ -1343,7 +1343,7 @@ describe('WalletWire Integration Tests', () => {
         outputs: [
           {
             outputIndex: 0,
-            protocol: 'wallet payment' as 'wallet payment',
+            protocol: 'wallet payment' as const,
             paymentRemittance: {
               derivationPrefix: Utils.toBase64([1, 2, 3]),
               derivationSuffix: Utils.toBase64([4, 5, 6]),
@@ -1395,7 +1395,7 @@ describe('WalletWire Integration Tests', () => {
         outputs: [
           {
             outputIndex: 0,
-            protocol: 'basket insertion' as 'basket insertion',
+            protocol: 'basket insertion' as const,
             insertionRemittance: {
               basket: 'test-basket',
               customInstructions: 'Test instructions',
@@ -1602,7 +1602,7 @@ describe('WalletWire Integration Tests', () => {
       const args = {
         protocolID: [1, 'testprotocol'] as [0 | 1 | 2, string],
         keyID: 'testkeyid',
-        counterparty: 'anyone' as 'anyone'
+        counterparty: 'anyone' as const
       }
       const result = await wallet.getPublicKey(args)
       expect(result).toHaveProperty('publicKey')
@@ -1796,9 +1796,9 @@ describe('WalletWire Integration Tests', () => {
     it('should acquire a certificate with valid inputs', async () => {
       // Mock the acquireCertificate method
       const acquireCertificateMock = jest.fn().mockResolvedValue({
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         subject: '02' + 'a'.repeat(64),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
@@ -1815,14 +1815,14 @@ describe('WalletWire Integration Tests', () => {
       )
 
       const args = {
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         certifier: '02' + 'b'.repeat(64),
-        acquisitionProtocol: 'direct' as 'direct',
+        acquisitionProtocol: 'direct' as const,
         fields: {
           field1: 'value1',
           field2: 'value2'
         },
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
@@ -1842,9 +1842,9 @@ describe('WalletWire Integration Tests', () => {
     it('should acquire a certificate using acquisitionProtocol "direct" with keyringRevealer as "certifier"', async () => {
       // Mock the acquireCertificate method
       const acquireCertificateMock = jest.fn().mockResolvedValue({
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         subject: '02' + 'a'.repeat(64),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
@@ -1861,18 +1861,18 @@ describe('WalletWire Integration Tests', () => {
       )
 
       const args = {
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         certifier: '02' + 'b'.repeat(64),
-        acquisitionProtocol: 'direct' as 'direct',
+        acquisitionProtocol: 'direct' as const,
         fields: {
           field1: 'value1',
           field2: 'value2'
         },
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
-        keyringRevealer: 'certifier' as 'certifier',
+        keyringRevealer: 'certifier' as const,
         keyringForSubject: {
           field1: Utils.toBase64([0x01, 0x02, 0x03]),
           field2: Utils.toBase64([0x04, 0x05, 0x06])
@@ -1892,9 +1892,9 @@ describe('WalletWire Integration Tests', () => {
     it('should acquire a certificate using acquisitionProtocol "direct" with keyringRevealer as PubKeyHex', async () => {
       // Mock the acquireCertificate method
       const acquireCertificateMock = jest.fn().mockResolvedValue({
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         subject: '02' + 'a'.repeat(64),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
@@ -1912,14 +1912,14 @@ describe('WalletWire Integration Tests', () => {
       )
 
       const args = {
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         certifier: '02' + 'b'.repeat(64),
-        acquisitionProtocol: 'direct' as 'direct',
+        acquisitionProtocol: 'direct' as const,
         fields: {
           field1: 'value1',
           field2: 'value2'
         },
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
@@ -1943,9 +1943,9 @@ describe('WalletWire Integration Tests', () => {
     it('should acquire a certificate using acquisitionProtocol "issuance"', async () => {
       // Mock the acquireCertificate method
       const acquireCertificateMock = jest.fn().mockResolvedValue({
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         subject: '02' + 'd'.repeat(64),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64),
         revocationOutpoint: 'cafebabedeadbeefcafebabedeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
         signature:
@@ -1962,9 +1962,9 @@ describe('WalletWire Integration Tests', () => {
       )
 
       const args = {
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         certifier: '02' + 'b'.repeat(64),
-        acquisitionProtocol: 'issuance' as 'issuance',
+        acquisitionProtocol: 'issuance' as const,
         fields: {
           field3: 'value3',
           field4: 'value4'
@@ -1985,9 +1985,9 @@ describe('WalletWire Integration Tests', () => {
     it('should handle optional keyringForSubject being empty in "direct" protocol', async () => {
       // Mock the acquireCertificate method
       const acquireCertificateMock = jest.fn().mockResolvedValue({
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         subject: '02' + 'e'.repeat(64),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64),
         revocationOutpoint: 'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',
         signature:
@@ -2003,17 +2003,17 @@ describe('WalletWire Integration Tests', () => {
       )
 
       const args = {
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         certifier: '02' + 'b'.repeat(64),
-        acquisitionProtocol: 'direct' as 'direct',
+        acquisitionProtocol: 'direct' as const,
         fields: {
           field5: 'value5'
         },
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         revocationOutpoint: 'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',
         signature:
           '3045022100e4d03d959697ed191f9ef7ae7deacd3118b8693d18da0fd76e4ad92664ce05cf02200d753951e766cbf2d2b306e08921c06341d2de67ab75389bf84caf954ee40e88',
-        keyringRevealer: 'certifier' as 'certifier',
+        keyringRevealer: 'certifier' as const,
         keyringForSubject: {} // Empty keyring
       }
       const result = await wallet.acquireCertificate(args)
@@ -2036,9 +2036,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 1,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
@@ -2059,7 +2059,7 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certifiers: ['02' + 'b'.repeat(64)],
-        types: [Utils.toBase64(new Array(32).fill(1))],
+        types: [Utils.toBase64(Array.from({ length: 32 }).fill(1))],
         limit: 10,
         offset: 0
       }
@@ -2072,9 +2072,9 @@ describe('WalletWire Integration Tests', () => {
 
     it('preserves omitted pagination and certificate keyrings', async () => {
       const certificate = {
-        type: Utils.toBase64(new Array(32).fill(1)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
         subject: '02' + 'a'.repeat(64),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64),
         revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
         signature:
@@ -2112,9 +2112,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 2,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.0',
@@ -2126,9 +2126,9 @@ describe('WalletWire Integration Tests', () => {
             }
           },
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'c'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe.1',
@@ -2150,7 +2150,10 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certifiers: ['02' + 'b'.repeat(64)],
-        types: [Utils.toBase64(new Array(32).fill(1)), Utils.toBase64(new Array(32).fill(2))],
+        types: [
+          Utils.toBase64(Array.from({ length: 32 }).fill(1)),
+          Utils.toBase64(Array.from({ length: 32 }).fill(2))
+        ],
         limit: 10,
         offset: 0
       }
@@ -2175,9 +2178,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 1,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'd'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'e'.repeat(64),
             revocationOutpoint:
               'cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe.2',
@@ -2197,7 +2200,7 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certifiers: ['02' + 'e'.repeat(64)],
-        types: [Utils.toBase64(new Array(32).fill(1))],
+        types: [Utils.toBase64(Array.from({ length: 32 }).fill(1))],
         limit: 10,
         offset: 0,
         privileged: true,
@@ -2227,9 +2230,9 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certificate: {
-          type: Utils.toBase64(new Array(32).fill(1)),
+          type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
           subject: '02' + 'a'.repeat(64),
-          serialNumber: Utils.toBase64(new Array(32).fill(2)),
+          serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
           certifier: '02' + 'b'.repeat(64),
           revocationOutpoint: 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
           signature:
@@ -2262,9 +2265,9 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certificate: {
-          type: Utils.toBase64(new Array(32).fill(1)),
+          type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
           subject: '02' + 'a'.repeat(64),
-          serialNumber: Utils.toBase64(new Array(32).fill(2)),
+          serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
           certifier: '02' + 'b'.repeat(64),
           revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.0',
           signature:
@@ -2297,9 +2300,9 @@ describe('WalletWire Integration Tests', () => {
 
       const args = {
         certificate: {
-          type: Utils.toBase64(new Array(32).fill(1)),
+          type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
           subject: '02' + 'a'.repeat(64),
-          serialNumber: Utils.toBase64(new Array(32).fill(2)),
+          serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
           certifier: '02' + 'b'.repeat(64),
           revocationOutpoint: 'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe.1',
           signature:
@@ -2330,8 +2333,8 @@ describe('WalletWire Integration Tests', () => {
       )
 
       const args = {
-        type: Utils.toBase64(new Array(32).fill(1)),
-        serialNumber: Utils.toBase64(new Array(32).fill(2)),
+        type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
+        serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
         certifier: '02' + 'b'.repeat(64)
       }
       const result = await wallet.relinquishCertificate(args)
@@ -2409,9 +2412,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 1,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
@@ -2452,9 +2455,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 1,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.0',
@@ -2497,9 +2500,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 2,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.0',
@@ -2520,9 +2523,9 @@ describe('WalletWire Integration Tests', () => {
             }
           },
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'c'.repeat(64),
             revocationOutpoint:
               'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe.1',
@@ -2587,9 +2590,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 1,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'a'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'b'.repeat(64),
             revocationOutpoint:
               'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0',
@@ -2647,9 +2650,9 @@ describe('WalletWire Integration Tests', () => {
         totalCertificates: 1,
         certificates: [
           {
-            type: Utils.toBase64(new Array(32).fill(1)),
+            type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
             subject: '02' + 'd'.repeat(64),
-            serialNumber: Utils.toBase64(new Array(32).fill(2)),
+            serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
             certifier: '02' + 'e'.repeat(64),
             revocationOutpoint:
               'beadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbeadbead.2',

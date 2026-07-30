@@ -1,9 +1,5 @@
 import { TableOutput, TableOutputBasket } from '../schema/tables'
-import {
-  _tu,
-  TestWalletNoSetup,
-  TestWalletProviderNoSetup
-} from '../../../test/utils/TestUtilsWalletStorage'
+import { _tu, TestWalletNoSetup, TestWalletProviderNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import 'fake-indexeddb/auto'
 import { managedChangeOutputFields } from '../methods/managedChange'
 import { specOpWalletManagedUtxos } from '../../sdk/types'
@@ -34,7 +30,7 @@ describe('allocateChangeInput managed-change policy', () => {
     for (const ctx of ctxs) await ctx.storage.destroy()
   })
 
-  const p2pkhScript = [0x76, 0xa9, 0x14, ...new Array(20).fill(0x11), 0x88, 0xac]
+  const p2pkhScript = [0x76, 0xa9, 0x14, ...Array.from({ length: 20 }).fill(0x11), 0x88, 0xac]
 
   async function freshBasket(ctx: Ctx, name: string): Promise<number> {
     const basket: TableOutputBasket = {
@@ -97,7 +93,13 @@ describe('allocateChangeInput managed-change policy', () => {
         })
       )
       const p2pkhId = await storage.insertOutput(
-        output(ctx, { transactionId: tx.transactionId, basketId, satoshis: value, vout: 901, ...managedChangeOutputFields })
+        output(ctx, {
+          transactionId: tx.transactionId,
+          basketId,
+          satoshis: value,
+          vout: 901,
+          ...managedChangeOutputFields
+        })
       )
       expect(customId).toBeLessThan(p2pkhId)
 
@@ -173,9 +175,11 @@ describe('allocateChangeInput managed-change policy', () => {
   test('default balance and UTXO APIs exclude custom rows without hiding them from recovery', async () => {
     for (const [backend, ctx] of ctxs.entries()) {
       const storage = ctx.activeStorage
-      const defaultBasket = (await storage.findOutputBaskets({
-        partial: { userId: ctx.userId, name: 'default' }
-      }))[0]
+      const defaultBasket = (
+        await storage.findOutputBaskets({
+          partial: { userId: ctx.userId, name: 'default' }
+        })
+      )[0]
       const tx = (await storage.findTransactions({ partial: { userId: ctx.userId, status: 'completed' } }))[0]
       const baseline = await ctx.wallet.balance()
       const managedBefore = await ctx.wallet.listOutputs({ basket: specOpWalletManagedUtxos, limit: 1 })

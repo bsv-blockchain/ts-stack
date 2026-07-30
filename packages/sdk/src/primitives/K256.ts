@@ -39,7 +39,7 @@ export default class K256 extends Mersenne {
    * const output = new BigNumber(0);
    * k256.split(input, output);
    */
-  split(input: BigNumber, output: BigNumber): void {
+  override split(input: BigNumber, output: BigNumber): void {
     const mask = 0x3fffff // 22 bits
     const inputWords = input.words // Access via getter
     const inputNominalLength = input.length // Access via getter, respects _nominalWordLength
@@ -112,7 +112,7 @@ export default class K256 extends Mersenne {
    * const number = new BigNumber(12345);
    * const result = k256.imulK(number);
    */
-  imulK(num: BigNumber): BigNumber {
+  override imulK(num: BigNumber): BigNumber {
     const currentWords = num.words // Get current words based on _magnitude and _nominalWordLength
     const originalNominalLength = num.length // Getter
 

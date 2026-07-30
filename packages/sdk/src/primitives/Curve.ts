@@ -9,49 +9,50 @@ import { toArray } from './utils.js'
 // So far, this assumption has proven to be valid.
 let globalCurve: Curve
 
-function normalizedMod4 (value: BigNumber, carry: number): number {
+interface EndomorphismConfig {
+  beta?: string
+  lambda?: string
+  basis?: Array<{ a: string; b: string }>
+}
+
+function normalizedMod4(value: BigNumber, carry: number): number {
   const mod4 = (value.andln(3) + carry) & 3
   return mod4 === 3 ? -1 : mod4
 }
 
-function jsfDigit (
-  value: BigNumber,
-  carry: number,
-  mod4: number,
-  otherMod4: number
-): number {
+function jsfDigit(value: BigNumber, carry: number, mod4: number, otherMod4: number): number {
   if ((mod4 & 1) === 0) return 0
   const mod8 = (value.andln(7) + carry) & 7
   return (mod8 === 3 || mod8 === 5) && otherMod4 === 2 ? -mod4 : mod4
 }
 
-function nextJsfCarry (carry: number, digit: number): number {
+function nextJsfCarry(carry: number, digit: number): number {
   return 2 * carry === digit + 1 ? 1 - carry : carry
 }
 
 export default class Curve {
-  p: BigNumber
-  red: ReductionContext
-  redN: BigNumber | null
-  zero: BigNumber
-  one: BigNumber
-  two: BigNumber
-  g: Point
-  n: BigNumber
-  a: BigNumber
-  b: BigNumber
-  tinv: BigNumber
-  zeroA: boolean
-  threeA: boolean
+  p!: BigNumber
+  red!: ReductionContext
+  redN!: BigNumber | null
+  zero!: BigNumber
+  one!: BigNumber
+  two!: BigNumber
+  g!: Point
+  n!: BigNumber
+  a!: BigNumber
+  b!: BigNumber
+  tinv!: BigNumber
+  zeroA!: boolean
+  threeA!: boolean
   endo:
     { beta: BigNumber; lambda: BigNumber; basis: Array<{ a: BigNumber; b: BigNumber }> } | undefined // beta, lambda, basis
-  _endoWnafT1: BigNumber[]
-  _endoWnafT2: BigNumber[]
-  _wnafT1: BigNumber[]
-  _wnafT2: BigNumber[]
-  _wnafT3: BigNumber[]
-  _wnafT4: BigNumber[]
-  _bitLength: number
+  _endoWnafT1!: BigNumber[]
+  _endoWnafT2!: BigNumber[]
+  _wnafT1!: BigNumber[]
+  _wnafT2!: BigNumber[]
+  _wnafT3!: BigNumber[]
+  _wnafT4!: BigNumber[]
+  _bitLength!: number
 
   // Represent num in a w-NAF form
   static assert(expression: unknown, message: string = 'Elliptic curve assertion failed'): void {
@@ -116,9 +117,9 @@ export default class Curve {
     return jsf
   }
 
-  static cachedProperty(obj, name: string, computer): void {
+  static cachedProperty(obj: any, name: string, computer: (this: any) => unknown): void {
     const key = '_' + name
-    obj.prototype[name] = function cachedProperty() {
+    obj.prototype[name] = function cachedProperty(this: Record<string, unknown>) {
       if (this[key] === undefined) {
         this[key] = computer.call(this)
       }
@@ -997,7 +998,7 @@ export default class Curve {
     this._endoWnafT2 = Array.from({ length: 4 }, () => undefined as unknown as BigNumber)
   }
 
-  _getEndomorphism(conf):
+  _getEndomorphism(conf: EndomorphismConfig):
     | {
         beta: BigNumber
         lambda: BigNumber
@@ -1018,7 +1019,7 @@ export default class Curve {
     }
   }
 
-  private _resolveEndomorphismBeta (conf): BigNumber {
+  private _resolveEndomorphismBeta(conf: EndomorphismConfig): BigNumber {
     if (conf.beta !== undefined) return new BigNumber(conf.beta, 16).toRed(this.red)
     const betas = this._getEndoRoots(this.p)
     if (betas == null) throw new Error('Failed to get endomorphism roots for beta.')
@@ -1026,7 +1027,7 @@ export default class Curve {
     return beta.toRed(this.red)
   }
 
-  private _endomorphismLambdaMatches (
+  private _endomorphismLambdaMatches(
     lambda: BigNumber,
     beta: BigNumber,
     requireCoordinates = false
@@ -1045,7 +1046,7 @@ export default class Curve {
     return gMulX.cmp(gXRedMulBeta) === 0
   }
 
-  private _resolveEndomorphismLambda (conf, beta: BigNumber): BigNumber {
+  private _resolveEndomorphismLambda(conf: EndomorphismConfig, beta: BigNumber): BigNumber {
     if (conf.lambda !== undefined) return new BigNumber(conf.lambda, 16)
     const lambdas = this._getEndoRoots(this.n)
     if (lambdas == null) throw new Error('Failed to get endomorphism roots for lambda.')
@@ -1057,8 +1058,8 @@ export default class Curve {
     return lambdas[1]
   }
 
-  private _resolveEndomorphismBasis (
-    conf,
+  private _resolveEndomorphismBasis(
+    conf: EndomorphismConfig,
     lambda: BigNumber
   ): Array<{ a: BigNumber; b: BigNumber }> {
     if (typeof conf.basis !== 'object' || conf.basis === null) {

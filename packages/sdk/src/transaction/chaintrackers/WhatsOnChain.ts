@@ -1,4 +1,3 @@
-
 import ChainTracker from '../ChainTracker.js'
 import { HttpClient } from '../http/HttpClient.js'
 import { defaultHttpClient } from '../http/DefaultHttpClient.js'
@@ -30,10 +29,7 @@ export default class WhatsOnChain implements ChainTracker {
    * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
-  constructor(
-    network: 'main' | 'test' | 'stn' = 'main',
-    config: WhatsOnChainConfig = {}
-  ) {
+  constructor(network: 'main' | 'test' | 'stn' = 'main', config: WhatsOnChainConfig = {}) {
     const { apiKey, httpClient } = config
     this.network = network
     this.URL = `https://api.whatsonchain.com/v1/bsv/${network}`
@@ -70,12 +66,12 @@ export default class WhatsOnChain implements ChainTracker {
         headers: this.getHttpHeaders()
       }
 
-      const response = await this.httpClient.request<{ height: number }>(
+      const response = await this.httpClient.request<Array<{ height: number }>>(
         `${this.URL}/block/headers`,
         requestOptions
       )
       if (response.ok) {
-        return response.data[0].height
+        return response.data[0]!.height
       } else {
         throw new Error(
           `Failed to get current height because of an error: ${JSON.stringify(response.data)} `

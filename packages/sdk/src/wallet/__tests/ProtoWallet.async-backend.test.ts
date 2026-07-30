@@ -8,7 +8,7 @@ import {
   unregisterAsyncCryptoBackend
 } from '../../../mod'
 
-function backendFor (
+function backendFor(
   operations: readonly AsyncCryptoOperation[],
   overrides: Partial<AsyncCryptoBackend> = {}
 ): AsyncCryptoBackend {
@@ -27,7 +27,7 @@ function backendFor (
   }
 }
 
-function withoutRequiredSignPadding (der: number[]): number[] | undefined {
+function withoutRequiredSignPadding(der: number[]): number[] | undefined {
   const rLength = der[3]
   const rStart = 4
   const sLengthIndex = rStart + rLength + 1
@@ -54,9 +54,9 @@ describe('ProtoWallet optional async backend boundaries', () => {
 
   it('canonicalizes lenient DER before accelerated verification', async () => {
     const wallet = new ProtoWallet(new PrivateKey(42))
-    let fixture: { digest: number[], canonical: number[], nonCanonical: number[] } | undefined
+    let fixture: { digest: number[]; canonical: number[]; nonCanonical: number[] } | undefined
     for (let suffix = 0; suffix < 256 && fixture === undefined; suffix++) {
-      const digest = [...new Array(31).fill(0), suffix]
+      const digest = [...Array.from({ length: 31 }).fill(0), suffix]
       const { signature } = await wallet.createSignature({
         hashToDirectlySign: digest,
         protocolID,
@@ -74,13 +74,15 @@ describe('ProtoWallet optional async backend boundaries', () => {
     const backend = backendFor(['verifyDigest'], { verifyDigest })
     registerAsyncCryptoBackend(backend)
     try {
-      await expect(wallet.verifySignature({
-        hashToDirectlyVerify: fixture.digest,
-        signature: fixture.nonCanonical,
-        protocolID,
-        keyID,
-        counterparty: 'self'
-      })).resolves.toEqual({ valid: true })
+      await expect(
+        wallet.verifySignature({
+          hashToDirectlyVerify: fixture.digest,
+          signature: fixture.nonCanonical,
+          protocolID,
+          keyID,
+          counterparty: 'self'
+        })
+      ).resolves.toEqual({ valid: true })
       expect(Array.from(verifyDigest.mock.calls[0][2])).toEqual(fixture.canonical)
     } finally {
       unregisterAsyncCryptoBackend(backend)
@@ -91,19 +93,18 @@ describe('ProtoWallet optional async backend boundaries', () => {
     const wallet = new ProtoWallet(new PrivateKey(42))
     const signDigest = jest.fn(async () => new Uint8Array())
     const verifyDigest = jest.fn(async () => true)
-    const backend = backendFor(
-      ['signDigest', 'verifyDigest'],
-      { signDigest, verifyDigest }
-    )
+    const backend = backendFor(['signDigest', 'verifyDigest'], { signDigest, verifyDigest })
     registerAsyncCryptoBackend(backend)
     try {
-      const oversizedDigest = [1, ...new Array(32).fill(0)]
-      await expect(wallet.createSignature({
-        hashToDirectlySign: oversizedDigest,
-        protocolID,
-        keyID,
-        counterparty: 'self'
-      })).rejects.toThrow()
+      const oversizedDigest = [1, ...Array.from({ length: 32 }).fill(0)]
+      await expect(
+        wallet.createSignature({
+          hashToDirectlySign: oversizedDigest,
+          protocolID,
+          keyID,
+          counterparty: 'self'
+        })
+      ).rejects.toThrow()
       expect(signDigest).not.toHaveBeenCalled()
       expect(verifyDigest).not.toHaveBeenCalled()
     } finally {
@@ -118,8 +119,7 @@ describe('ProtoWallet optional async backend boundaries', () => {
     })
     registerAsyncCryptoBackend(backend)
     try {
-      await expect(wallet.getPublicKey({ identityKey: true }))
-        .rejects.toThrow('expected 33')
+      await expect(wallet.getPublicKey({ identityKey: true })).rejects.toThrow('expected 33')
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }
@@ -132,12 +132,14 @@ describe('ProtoWallet optional async backend boundaries', () => {
     })
     registerAsyncCryptoBackend(backend)
     try {
-      await expect(wallet.createSignature({
-        hashToDirectlySign: new Array(32).fill(0),
-        protocolID,
-        keyID,
-        counterparty: 'self'
-      })).rejects.toThrow()
+      await expect(
+        wallet.createSignature({
+          hashToDirectlySign: Array.from({ length: 32 }).fill(0),
+          protocolID,
+          keyID,
+          counterparty: 'self'
+        })
+      ).rejects.toThrow()
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }
@@ -145,21 +147,17 @@ describe('ProtoWallet optional async backend boundaries', () => {
 
   it('rejects malformed multiplied points before symmetric derivation', async () => {
     const keyDeriver = new KeyDeriver(new PrivateKey(42))
-    const backend = backendFor([
-      'multiplyPublicKey',
-      'publicKeyFromPrivate',
-      'tweakPrivateKeyAdd',
-      'tweakPublicKeyAdd'
-    ], {
-      multiplyPublicKey: async () => new Uint8Array(32)
-    })
+    const backend = backendFor(
+      ['multiplyPublicKey', 'publicKeyFromPrivate', 'tweakPrivateKeyAdd', 'tweakPublicKeyAdd'],
+      {
+        multiplyPublicKey: async () => new Uint8Array(32)
+      }
+    )
     registerAsyncCryptoBackend(backend)
     try {
-      await expect(keyDeriver.deriveSymmetricKeyAsync(
-        protocolID,
-        keyID,
-        'anyone'
-      )).rejects.toThrow('expected 33')
+      await expect(keyDeriver.deriveSymmetricKeyAsync(protocolID, keyID, 'anyone')).rejects.toThrow(
+        'expected 33'
+      )
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }

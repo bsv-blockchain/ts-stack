@@ -25,13 +25,7 @@ function serializedChunkPrefix(chunk: ScriptChunk): number[] | undefined {
   }
   if (chunk.op === OP.OP_PUSHDATA4) {
     const size = dataLength >>> 0
-    return [
-      chunk.op,
-      size & 0xff,
-      (size >> 8) & 0xff,
-      (size >> 16) & 0xff,
-      (size >> 24) & 0xff
-    ]
+    return [chunk.op, size & 0xff, (size >> 8) & 0xff, (size >> 16) & 0xff, (size >> 24) & 0xff]
   }
   return undefined
 }
@@ -94,7 +88,7 @@ export default class Script {
     if (token === '-1') return { chunk: { op: OP.OP_1NEGATE }, advance: 1 }
 
     const isKnownOp = token.startsWith('OP_') && OP[token] !== undefined
-    const opCodeNum: number = isKnownOp ? OP[token] : 0
+    const opCodeNum: number = isKnownOp ? (OP[token] as number) : 0
 
     // Inline PUSHDATA opcodes consume the next two tokens (size, hex data)
     if (

@@ -101,7 +101,7 @@ describe('Transaction – additional coverage', () => {
     it('adds a change output when satoshis is omitted', () => {
       const tx = new Transaction()
       // Pass a 20-byte hash directly to avoid base58 parsing
-      const pubKeyHash = new Array(20).fill(0x01)
+      const pubKeyHash = Array.from({ length: 20 }).fill(0x01)
       tx.addP2PKHOutput(pubKeyHash)
       expect(tx.outputs).toHaveLength(1)
       expect(tx.outputs[0].change).toBe(true)
@@ -113,7 +113,7 @@ describe('Transaction – additional coverage', () => {
       const tx = new Transaction()
       const h = tx.hash('hex')
       expect(typeof h).toBe('string')
-      expect((h as string)).toHaveLength(64)
+      expect(h as string).toHaveLength(64)
     })
 
     it('returns binary array from id() without enc', () => {
@@ -166,15 +166,17 @@ describe('Transaction – additional coverage', () => {
       const sign = jest.fn(async () => UnlockingScript.fromHex('52'))
       const tx = new Transaction(
         1,
-        [{
-          sourceTXID: '00'.repeat(32),
-          sourceOutputIndex: 0,
-          unlockingScript: existingScript,
-          unlockingScriptTemplate: {
-            sign,
-            estimateLength: async () => 1
+        [
+          {
+            sourceTXID: '00'.repeat(32),
+            sourceOutputIndex: 0,
+            unlockingScript: existingScript,
+            unlockingScriptTemplate: {
+              sign,
+              estimateLength: async () => 1
+            }
           }
-        }],
+        ],
         [{ lockingScript: new LockingScript(), satoshis: 0 }],
         0
       )

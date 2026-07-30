@@ -1,8 +1,4 @@
-import {
-  BroadcastResponse,
-  BroadcastFailure,
-  Broadcaster
-} from '../Broadcaster.js'
+import { BroadcastResponse, BroadcastFailure, Broadcaster } from '../Broadcaster.js'
 import Transaction from '../Transaction.js'
 import { binaryHttpClient, HttpClient } from '../http/index.js'
 
@@ -19,10 +15,7 @@ export default class Teranode implements Broadcaster {
    * @param {string} URL - The URL endpoint for the Teranode API.
    * @param {HttpClient} httpClient - The HTTP client used to make requests to the API, binaryHttpClient by default.
    */
-  constructor(
-    URL: string,
-    httpClient: HttpClient = binaryHttpClient()
-  ) {
+  constructor(URL: string, httpClient: HttpClient = binaryHttpClient()) {
     this.URL = URL
     this.httpClient = httpClient
   }
@@ -33,9 +26,7 @@ export default class Teranode implements Broadcaster {
    * @param {Transaction} tx - The transaction to be broadcasted.
    * @returns {Promise<BroadcastResponse | BroadcastFailure>} A promise that resolves to either a success or failure response.
    */
-  async broadcast(
-    tx: Transaction
-  ): Promise<BroadcastResponse | BroadcastFailure> {
+  async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> {
     const rawTx = tx.toEF()
     const requestOptions = {
       method: 'POST',
@@ -45,10 +36,7 @@ export default class Teranode implements Broadcaster {
       data: new Blob([new Uint8Array(rawTx)])
     }
     try {
-      const response = await this.httpClient.request<string>(
-        this.URL,
-        requestOptions
-      )
+      const response = await this.httpClient.request<string>(this.URL, requestOptions)
       if (response.ok) {
         const txid = tx.id('hex')
         return {
@@ -64,13 +52,12 @@ export default class Teranode implements Broadcaster {
         }
       }
     } catch (error) {
+      const caughtError = error as { message?: unknown }
       return {
         status: 'error',
         code: '500',
         description:
-          typeof error.message === 'string'
-            ? error.message
-            : 'Internal Server Error'
+          typeof caughtError.message === 'string' ? caughtError.message : 'Internal Server Error'
       }
     }
   }

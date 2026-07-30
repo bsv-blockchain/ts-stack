@@ -387,7 +387,7 @@ describe('getBytes', () => {
 })
 
 describe('AESGCM IV validation', () => {
-  const key = new Uint8Array(new Array(16).fill(0x01))
+  const key = new Uint8Array(Array.from({ length: 16 }).fill(0x01))
   const plaintext = new Uint8Array([1, 2, 3, 4])
 
   it('AESGCM throws when IV is empty', () => {

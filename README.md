@@ -45,7 +45,7 @@ Useful root commands:
 | ---------------------- | ------------------------------------------------------------------------------------- |
 | `pnpm build`           | Builds every workspace package except the private root package                        |
 | `pnpm test`            | Runs every workspace package test script                                              |
-| `pnpm lint`            | Runs every workspace package lint script                                              |
+| `pnpm lint`            | Lints every authored JS/TS file with a repository-wide zero-warning gate               |
 | `pnpm format:check`    | Verifies repository and workspace formatting without changing files                   |
 | `pnpm health:check`    | Enforces repository profiles, package metadata, licensing, and policy synchronization |
 | `pnpm test:governance` | Verifies required skips, manual/live suites, empty-test policy, and conformance gaps  |

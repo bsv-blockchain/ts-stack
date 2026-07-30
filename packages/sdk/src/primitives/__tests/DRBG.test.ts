@@ -31,36 +31,36 @@ describe('DRBG', () => {
 
   describe('constructor input validation', () => {
     it('throws if entropy is shorter than 32 bytes', () => {
-      const entropy = new Array(31).fill(0x01)
-      const nonce = new Array(32).fill(0x02)
+      const entropy = Array.from({ length: 31 }).fill(0x01)
+      const nonce = Array.from({ length: 32 }).fill(0x02)
 
       expect(() => new DRBG(entropy, nonce)).toThrow('Entropy must be exactly 32 bytes (256 bits)')
     })
 
     it('throws if entropy is longer than 32 bytes', () => {
-      const entropy = new Array(33).fill(0x01)
-      const nonce = new Array(32).fill(0x02)
+      const entropy = Array.from({ length: 33 }).fill(0x01)
+      const nonce = Array.from({ length: 32 }).fill(0x02)
 
       expect(() => new DRBG(entropy, nonce)).toThrow('Entropy must be exactly 32 bytes (256 bits)')
     })
 
     it('throws if nonce is shorter than 32 bytes', () => {
-      const entropy = new Array(32).fill(0x01)
-      const nonce = new Array(31).fill(0x02)
+      const entropy = Array.from({ length: 32 }).fill(0x01)
+      const nonce = Array.from({ length: 31 }).fill(0x02)
 
       expect(() => new DRBG(entropy, nonce)).toThrow('Nonce must be exactly 32 bytes (256 bits)')
     })
 
     it('throws if nonce is longer than 32 bytes', () => {
-      const entropy = new Array(32).fill(0x01)
-      const nonce = new Array(33).fill(0x02)
+      const entropy = Array.from({ length: 32 }).fill(0x01)
+      const nonce = Array.from({ length: 33 }).fill(0x02)
 
       expect(() => new DRBG(entropy, nonce)).toThrow('Nonce must be exactly 32 bytes (256 bits)')
     })
 
     it('accepts both hex strings and number[] inputs equivalently', () => {
-      const entropyArr = new Array(32).fill(0x11)
-      const nonceArr = new Array(32).fill(0x22)
+      const entropyArr = Array.from({ length: 32 }).fill(0x11)
+      const nonceArr = Array.from({ length: 32 }).fill(0x22)
 
       const entropyHex = Buffer.from(entropyArr).toString('hex')
       const nonceHex = Buffer.from(nonceArr).toString('hex')
@@ -76,33 +76,22 @@ describe('DRBG', () => {
   })
 
   describe('determinism', () => {
-    const entropyHex =
-      '1b2e3d4c5f60718293a4b5c6d7e8f9011b2e3d4c5f60718293a4b5c6d7e8f901'
-    const nonceHex =
-      'abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd'
+    const entropyHex = '1b2e3d4c5f60718293a4b5c6d7e8f9011b2e3d4c5f60718293a4b5c6d7e8f901'
+    const nonceHex = 'abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd'
 
     it('produces the same sequence for the same inputs', () => {
       const drbg1 = new DRBG(entropyHex, nonceHex)
       const drbg2 = new DRBG(entropyHex, nonceHex)
 
-      const seq1 = [
-        drbg1.generate(32),
-        drbg1.generate(32),
-        drbg1.generate(16)
-      ]
+      const seq1 = [drbg1.generate(32), drbg1.generate(32), drbg1.generate(16)]
 
-      const seq2 = [
-        drbg2.generate(32),
-        drbg2.generate(32),
-        drbg2.generate(16)
-      ]
+      const seq2 = [drbg2.generate(32), drbg2.generate(32), drbg2.generate(16)]
 
       expect(seq1).toEqual(seq2)
     })
 
     it('produces different sequences if entropy changes', () => {
-      const entropyHex2 =
-        '2b3e4d5c6f708192a3b4c5d6e7f809112b3e4d5c6f708192a3b4c5d6e7f80911'
+      const entropyHex2 = '2b3e4d5c6f708192a3b4c5d6e7f809112b3e4d5c6f708192a3b4c5d6e7f80911'
       const drbg1 = new DRBG(entropyHex, nonceHex)
       const drbg2 = new DRBG(entropyHex2, nonceHex)
 
@@ -113,8 +102,7 @@ describe('DRBG', () => {
     })
 
     it('produces different sequences if nonce changes', () => {
-      const nonceHex2 =
-        '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
+      const nonceHex2 = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
       const drbg1 = new DRBG(entropyHex, nonceHex)
       const drbg2 = new DRBG(entropyHex, nonceHex2)
 
@@ -126,8 +114,8 @@ describe('DRBG', () => {
   })
 
   describe('output length and state advancement', () => {
-    const entropyBytes = new Array(32).fill(0x33)
-    const nonceBytes = new Array(32).fill(0x44)
+    const entropyBytes = Array.from({ length: 32 }).fill(0x33)
+    const nonceBytes = Array.from({ length: 32 }).fill(0x44)
 
     it('returns hex strings of length 2 * len', () => {
       const drbg = new DRBG(entropyBytes, nonceBytes)
@@ -166,13 +154,12 @@ describe('DRBG', () => {
 
   describe('RFC 6979 ECDSA P-256 / SHA-256 vectors', () => {
     // q for NIST P-256, from RFC 6979 A.2.5
-    const qHex =
-      'FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551'
+    const qHex = 'FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551'
     const q = BigInt('0x' + qHex)
 
     // int2octets: convert a non-negative bigint < 2^256 to a 32-byte big-endian array
     const intToOctets = (x: bigint): number[] => {
-      const out = new Array<number>(32)
+      const out = Array.from({ length: 32 })
       let v = x
       for (let i = 31; i >= 0; i--) {
         out[i] = Number(v & 0xffn)
@@ -193,12 +180,10 @@ describe('DRBG', () => {
     it('reproduces RFC 6979 k for P-256, SHA-256, message "sample"', () => {
       // From RFC 6979 A.2.5 (ECDSA, 256 bits, P-256):
       // private key x:
-      const xHex =
-        'C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721'
+      const xHex = 'C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721'
 
       // expected k for SHA-256, message = "sample"
-      const expectedKHex =
-        'A6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60'
+      const expectedKHex = 'A6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60'
 
       const msg = 'sample'
 
@@ -224,12 +209,10 @@ describe('DRBG', () => {
 
     it('reproduces RFC 6979 k for P-256, SHA-256, message "test"', () => {
       // Same key x as above (RFC 6979 A.2.5), different message:
-      const xHex =
-        'C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721'
+      const xHex = 'C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721'
 
       // expected k for SHA-256, message = "test"
-      const expectedKHex =
-        'D16B6AE827F17175E040871A1C7EC3500192C4C92677336EC2537ACAEE0008E0'
+      const expectedKHex = 'D16B6AE827F17175E040871A1C7EC3500192C4C92677336EC2537ACAEE0008E0'
 
       const msg = 'test'
 
@@ -250,8 +233,7 @@ describe('DRBG', () => {
     })
 
     it('is deterministic for the same RFC 6979 key and message', () => {
-      const xHex =
-        'C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721'
+      const xHex = 'C9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721'
       const msg = 'sample'
 
       const x = BigInt('0x' + xHex)
@@ -269,5 +251,3 @@ describe('DRBG', () => {
     })
   })
 })
-
-

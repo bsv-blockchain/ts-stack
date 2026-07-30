@@ -1,8 +1,4 @@
 import 'fake-indexeddb/auto'
-import { ChaintracksFs } from '../../util/ChaintracksFs'
-import { Chain } from '../../../../../sdk'
-import { ChaintracksStorageKnex } from '../ChaintracksStorageKnex'
-import { deserializeBaseBlockHeader, genesisHeader } from '../../util/blockHeaderUtilities'
 import { ChaintracksStorageIdb, ChaintracksStorageIdbOptions } from '../ChaintracksStorageIdb'
 import { ChaintracksStorageBase } from '../ChaintracksStorageBase'
 import { LiveBlockHeader } from '../../Api/BlockHeaderApi'
@@ -11,7 +7,7 @@ import { BlockHeader } from '../../Api/BlockHeaderApi'
 describe('ChaintracksStorageIdb tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance
+  let _logSpy: jest.SpyInstance
   const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
@@ -22,7 +18,7 @@ describe('ChaintracksStorageIdb tests', () => {
   test('0', async () => {
     const options: ChaintracksStorageIdbOptions = ChaintracksStorageBase.createStorageBaseOptions('main')
     const storage = new ChaintracksStorageIdb(options)
-    const r = await storage.migrateLatest()
+    const _r = await storage.migrateLatest()
     const db = storage.db!
     expect(db).toBeTruthy()
 

@@ -8,14 +8,14 @@ import {
   VerifiableCertificate
 } from '@bsv/sdk'
 import { _tu, expectToThrowWERR } from '../../utils/TestUtilsWalletStorage'
-import { sdk, Wallet } from '../../../src/index.all'
+import { sdk } from '../../../src/index.all'
 
 describe('acquireCertificate tests', () => {
   jest.setTimeout(99999999)
 
   if (_tu.noEnv('test')) return
 
-  const env = _tu.getEnv('test')
+  const _env = _tu.getEnv('test')
 
   test('1 invalid params', async () => {
     const { wallet, storage } = await _tu.createLegacyWalletSQLiteCopy('acquireCertificate1')
@@ -137,7 +137,7 @@ describe('acquireCertificate tests', () => {
   })
 
   test('3 privileged acquireCertificate listCertificate proveCertificate', async () => {
-    const { wallet, storage } = await _tu.createSQLiteTestWallet({
+    const { wallet, storage: _storage } = await _tu.createSQLiteTestWallet({
       databaseName: 'acquireCertificate3',
       privKeyHex: '42'.repeat(32),
       dropAll: true
@@ -270,7 +270,7 @@ describe('acquireCertificate tests', () => {
       fields: fields
     }
     // store the new signed certificate in user's wallet
-    const r = await wallet.acquireCertificate(args)
+    const _r = await wallet.acquireCertificate(args)
     const certificatesFound = await wallet.listCertificates({
       certifiers: [args.certifier],
       types: []

@@ -184,7 +184,7 @@ export async function inputPushDrop(
 ) {
   const { protocol, keyId, fromIdentityKey, satoshis, beef: inputBeef, outpoint } = outputPushDrop
 
-  const { keyDeriver } = setup
+  const { keyDeriver: _keyDeriver } = setup
 
   const t = new PushDrop(setup.wallet)
 

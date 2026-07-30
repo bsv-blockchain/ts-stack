@@ -1,13 +1,24 @@
 {
-    "compilerOptions": {
-        "outDir": "dist",
-        "rootDir": "src",
-        "sourceMap": true,
-        "target": "es2022",
-        "module": "nodenext",
-        "moduleResolution": "nodenext",
-        "esModuleInterop": true,
-        "resolveJsonModule": true,
-        "skipLibCheck": true
-    }
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "forceConsistentCasingInFileNames": true
+  }
 }

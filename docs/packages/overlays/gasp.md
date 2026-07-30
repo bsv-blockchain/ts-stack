@@ -3,7 +3,7 @@ id: pkg-gasp
 title: '@bsv/gasp'
 kind: package
 domain: overlays
-version: '1.3.3'
+version: '1.3.4'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-07-29'
 last_verified: '2026-07-29'

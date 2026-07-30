@@ -1,4 +1,4 @@
-import { createSyncMap, sdk, SyncMap, TableOutput } from '../../../../../src'
+import { createSyncMap, TableOutput } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityOutput } from '../EntityOutput'
 

@@ -1,4 +1,5 @@
 {
+  "extends": "../../../config/typescript/dual-runtime.json",
   "compilerOptions": {
     "lib": ["dom", "ESNext"],
     "module": "NodeNext",
@@ -6,9 +7,9 @@
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
     "rootDir": "./",
-    "strict": false,
+    "strict": true,
     "isolatedModules": true,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,

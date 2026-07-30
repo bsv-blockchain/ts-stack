@@ -1,5 +1,5 @@
 import * as bsv from '@bsv/sdk'
-import { createSyncMap, sdk, sha256Hash, SyncMap } from '../../../../../src'
+import { createSyncMap, sdk, sha256Hash } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityProvenTx } from '../EntityProvenTx'
 
@@ -93,7 +93,7 @@ describe('ProvenTx class method tests', () => {
 
       getChainTracker: async () =>
         await Promise.resolve({
-          isValidRootForHeight: async (root: string, height: number) => true,
+          isValidRootForHeight: async (_root: string, _height: number) => true,
           currentHeight: async () => height
         }),
 
@@ -190,7 +190,7 @@ describe('ProvenTx class method tests', () => {
 
     // Verify the rawTx and Merkle proof
     const rawTx = await services.getRawTx(txid)
-    const merkleProof = await services.getMerklePath(txid)
+    const _merkleProof = await services.getMerklePath(txid)
 
     // Call the method under test
     const result = await EntityProvenTx.fromTxid(txid, services)

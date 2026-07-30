@@ -20,7 +20,7 @@ export default class PublicProfileRoute extends PaymailRoute {
     })
   }
 
-  protected serializeResponse(domainLogicResponse: PublicProfileResponse): string {
+  protected override serializeResponse(domainLogicResponse: PublicProfileResponse): string {
     return JSON.stringify({
       avatar: domainLogicResponse.avatar,
       name: domainLogicResponse.name

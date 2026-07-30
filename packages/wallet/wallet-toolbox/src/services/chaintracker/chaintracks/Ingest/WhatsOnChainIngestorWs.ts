@@ -8,7 +8,7 @@ export interface StopListenerToken {
   stop: (() => void) | undefined
 }
 
-export function createStopHandler (
+export function createStopHandler(
   markOk: () => void,
   isOpen: () => boolean,
   markClosed: () => void,
@@ -140,11 +140,17 @@ export async function WocHeadersBulkListener(
   }
 
   stop.stop = createStopHandler(
-    () => { state.ok = true },
+    () => {
+      state.ok = true
+    },
     () => state.wsIsOpen,
-    () => { state.wsIsOpen = false },
+    () => {
+      state.wsIsOpen = false
+    },
     () => ws.close(),
-    () => { state.done = true }
+    () => {
+      state.done = true
+    }
   )
 
   let webSocketUrl: string
@@ -313,11 +319,17 @@ export async function WocHeadersLiveListener(
   let msecsWithoutPing = 0
 
   stop.stop = createStopHandler(
-    () => { ok = true },
+    () => {
+      ok = true
+    },
     () => wsIsOpen,
-    () => { wsIsOpen = false },
+    () => {
+      wsIsOpen = false
+    },
     () => ws.close(),
-    () => { done = true }
+    () => {
+      done = true
+    }
   )
 
   let webSocketUrl: string
@@ -334,13 +346,14 @@ export async function WocHeadersLiveListener(
       throw new Error("WocHeadersLiveListener does not support 'mock' chain.")
   }
 
-  function processData(rawData) {
-    if (rawData.length === 0) {
+  function processData(rawData: WebSocket.Data) {
+    const serializedData = rawData.toString()
+    if (serializedData.length === 0) {
       // Ping
       return
     }
     // rawData may be a Buffer...
-    const data = JSON.parse(rawData)
+    const data = JSON.parse(serializedData)
     const json = JSON.stringify(data)
     switch (data.type || 0) {
       case 0:

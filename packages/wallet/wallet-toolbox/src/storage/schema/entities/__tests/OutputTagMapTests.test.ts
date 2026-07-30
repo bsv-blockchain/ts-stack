@@ -1,5 +1,4 @@
-import * as bsv from '@bsv/sdk'
-import { createSyncMap, sdk, SyncMap, TableOutputTagMap } from '../../../../../src'
+import { createSyncMap, sdk, TableOutputTagMap } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityOutputTagMap } from '../EntityOutputTagMap'
 

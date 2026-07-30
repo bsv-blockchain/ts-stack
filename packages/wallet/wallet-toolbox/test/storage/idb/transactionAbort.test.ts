@@ -1,23 +1,15 @@
 import { _tu, logger } from '../../utils/TestUtilsWalletStorage'
-import {
-  randomBytesBase64,
-  randomBytesHex,
-  sdk,
-  StorageProvider,
-  StorageProviderOptions,
-  TableCommission
-} from '../../../src/index.client'
+import { sdk, StorageProvider, StorageProviderOptions } from '../../../src/index.client'
 import { StorageIdb } from '../../../src/storage/StorageIdb'
 
 import 'fake-indexeddb/auto'
-import { openDB } from 'idb'
 
 describe('idb transactionAbort tests', () => {
   jest.setTimeout(99999999)
 
   let storages: StorageProvider[] = []
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnv(chain)
+  const _env = _tu.getEnv(chain)
 
   beforeEach(async () => {
     storages = []
@@ -90,8 +82,8 @@ describe('idb transactionAbort tests', () => {
       expect(count).toBe(0)
       try {
         const r = await storage.transaction(async tx => {
-          const r12 = await _tu.insertTestProvenTx(storage, '12'.repeat(32), tx)
-          const r23 = await _tu.insertTestProvenTx(storage, '23'.repeat(32), tx)
+          const _r12 = await _tu.insertTestProvenTx(storage, '12'.repeat(32), tx)
+          const _r23 = await _tu.insertTestProvenTx(storage, '23'.repeat(32), tx)
           throw new Error('Test error')
         })
         expect(r).toEqual([1, 2])

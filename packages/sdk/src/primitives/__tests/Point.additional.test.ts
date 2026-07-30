@@ -118,7 +118,7 @@ describe('Point – additional coverage', () => {
     })
 
     it('throws for unknown format', () => {
-      const der = [0x05, ...new Array(32).fill(0x01)]
+      const der = [0x05, ...Array.from({ length: 32 }).fill(0x01)]
       expect(() => Point.fromDER(der)).toThrow('Unknown point format')
     })
   })
@@ -147,7 +147,7 @@ describe('Point – additional coverage', () => {
     it('fromX accepts number', () => {
       // Use a valid x value that has a square root mod p
       const g = G.mul(new BigNumber(7))
-      const xNum = Number.parseInt(g.getX().toString(16).slice(-4), 16)
+      const _xNum = Number.parseInt(g.getX().toString(16).slice(-4), 16)
       // fromX with a number, may produce a point
       const p = Point.fromX(g.getX(), true)
       expect(p.validate()).toBe(true)

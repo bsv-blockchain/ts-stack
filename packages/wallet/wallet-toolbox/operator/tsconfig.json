@@ -1,4 +1,5 @@
 {
+  "extends": "../../../../config/typescript/cli.json",
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

@@ -34,16 +34,12 @@ class LocalTransport implements Transport {
       // Simulate message delivery by calling the onData callback of the peer
       this.peerTransport.onDataCallback(message)
     } else {
-      throw new Error(
-        'Peer transport is not connected or not listening for data.'
-      )
+      throw new Error('Peer transport is not connected or not listening for data.')
     }
   }
 
-  async onData(
-    callback: (message: AuthMessage) => Promise<void>
-  ): Promise<void> {
-    this.onDataCallback = (m) => {
+  async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
+    this.onDataCallback = m => {
       void (callback(m) as Promise<void>).catch(() => {
         // Match real transport behaviour: catch errors from handleIncomingMessage
         // to prevent unhandled promise rejections in tests.
@@ -101,7 +97,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   let certificatesReceivedByAlice: VerifiableCertificate[] | undefined
   let certificatesReceivedByBob: VerifiableCertificate[] | undefined
 
-  const certificateType = Utils.toBase64(new Array(32).fill(1))
+  const certificateType = Utils.toBase64(Array.from({ length: 32 }).fill(1))
   // const certificateSerialNumber = Utils.toBase64(new Array(32).fill(2))
   const certifierPrivateKey = certifierPrivKey
   const certifierPublicKey = certifierPrivateKey.toPublicKey().toString()
@@ -125,20 +121,17 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     subjectWallet: WalletInterface,
     fields: Record<string, string>
   ): Promise<MasterCertificate> {
-    const subjectPubKey = (
-      await subjectWallet.getPublicKey({ identityKey: true })
-    ).publicKey
+    const subjectPubKey = (await subjectWallet.getPublicKey({ identityKey: true })).publicKey
     const certifierWallet = new CompletedProtoWallet(certifierPrivateKey)
 
     // Issue a new MasterCertificate for the subject (e.g. Alice/Bob)
-    const masterCertificate =
-      await MasterCertificate.issueCertificateForSubject(
-        certifierWallet,
-        subjectPubKey,
-        fields,
-        certificateType,
-        async () => DUMMY_REVOCATION_OUTPOINT_HEX
-      )
+    const masterCertificate = await MasterCertificate.issueCertificateForSubject(
+      certifierWallet,
+      subjectPubKey,
+      fields,
+      certificateType,
+      async () => DUMMY_REVOCATION_OUTPOINT_HEX
+    )
 
     // For test consistency, you could override the auto-generated serialNumber:
     // masterCertificate.signature = undefined
@@ -194,25 +187,17 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       bobCertsToRequest = certificatesToRequest
     } = options
 
-    alice = new Peer(
-      walletA,
-      transportA,
-      aliceRequests ? aliceCertsToRequest : undefined
-    )
-    bob = new Peer(
-      walletB,
-      transportB,
-      bobRequests ? bobCertsToRequest : undefined
-    )
+    alice = new Peer(walletA, transportA, aliceRequests ? aliceCertsToRequest : undefined)
+    bob = new Peer(walletB, transportB, bobRequests ? bobCertsToRequest : undefined)
 
-    const aliceReceivedCertificates = new Promise<void>((resolve) => {
+    const aliceReceivedCertificates = new Promise<void>(resolve => {
       alice.listenForCertificatesReceived((senderPublicKey, certificates) => {
         certificatesReceivedByAlice = certificates
         resolve()
       })
     })
 
-    const bobReceivedCertificates = new Promise<void>((resolve) => {
+    const bobReceivedCertificates = new Promise<void>(resolve => {
       bob.listenForCertificatesReceived((senderPublicKey, certificates) => {
         certificatesReceivedByBob = certificates
         resolve()
@@ -228,7 +213,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     alicePubKey: string,
     bobPubKey: string
   ): Promise<any> {
-    ; (getVerifiableCertificates as jest.Mock).mockImplementation(
+    ;(getVerifiableCertificates as jest.Mock).mockImplementation(
       async (wallet, _, verifierIdentityKey) => {
         if (wallet === walletA && verifierIdentityKey === bobPubKey) {
           return aliceCertificate !== null && aliceCertificate !== undefined
@@ -262,7 +247,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const aliceAny = alice as any
       if (aliceAny.certificateValidationPromises != null) {
         aliceAny.certificateValidationPromises.forEach(
-          (promiseHandlers: { resolve: () => void, reject: (error: Error) => void }) => {
+          (promiseHandlers: { resolve: () => void; reject: (error: Error) => void }) => {
             promiseHandlers.reject(new Error('Test cleanup'))
           }
         )
@@ -278,7 +263,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const bobAny = bob as any
       if (bobAny.certificateValidationPromises != null) {
         bobAny.certificateValidationPromises.forEach(
-          (promiseHandlers: { resolve: () => void, reject: (error: Error) => void }) => {
+          (promiseHandlers: { resolve: () => void; reject: (error: Error) => void }) => {
             promiseHandlers.reject(new Error('Test cleanup'))
           }
         )
@@ -293,21 +278,18 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   })
 
   it('Neither Alice nor Bob request certificates, mutual authentication completes successfully', async () => {
-    setupPeers(
-      false,
-      false
-    )
+    setupPeers(false, false)
 
-    const bobReceivedGeneralMessage = new Promise<void>((resolve) => {
-      bob.listenForGeneralMessages((senderPublicKey, payload) => {
-        (async () => {
+    const bobReceivedGeneralMessage = new Promise<void>(resolve => {
+      bob.listenForGeneralMessages((senderPublicKey, _payload) => {
+        ;(async () => {
           await bob.toPeer(Utils.toArray('Hello Alice!'), senderPublicKey)
           resolve()
-        })().catch(e => { })
+        })().catch(_e => {})
       })
     })
-    const aliceReceivedGeneralMessage = new Promise<void>((resolve) => {
-      alice.listenForGeneralMessages((senderPublicKey, payload) => {
+    const aliceReceivedGeneralMessage = new Promise<void>(resolve => {
+      alice.listenForGeneralMessages((_senderPublicKey, _payload) => {
         resolve()
       })
     })
@@ -326,14 +308,20 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
     let bobPayload: number[] | undefined
     let alicePayload: number[] | undefined
-    const bobReceivedGeneralMessage = waitForNextGeneralMessage(bob, (_senderPublicKey, payload) => {
-      bobPayload = payload
-    })
-    const aliceReceivedGeneralMessage = waitForNextGeneralMessage(alice, (_senderPublicKey, payload) => {
-      alicePayload = payload
-    })
+    const bobReceivedGeneralMessage = waitForNextGeneralMessage(
+      bob,
+      (_senderPublicKey, payload) => {
+        bobPayload = payload
+      }
+    )
+    const aliceReceivedGeneralMessage = waitForNextGeneralMessage(
+      alice,
+      (_senderPublicKey, payload) => {
+        alicePayload = payload
+      }
+    )
 
-    bob.listenForGeneralMessages((senderPublicKey) => {
+    bob.listenForGeneralMessages(senderPublicKey => {
       void bob.toPeer(Utils.toArray('Hello Alice!'), senderPublicKey)
     })
 
@@ -354,29 +342,20 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     const walletA1 = new CompletedProtoWallet(aliceKey)
     const walletA2 = new CompletedProtoWallet(aliceKey)
     const walletB = new CompletedProtoWallet(alicePrivKey)
-    const aliceFirstDevice = new Peer(
-      walletA1,
-      transportA1
-    )
-    const aliceOtherDevice = new Peer(
-      walletA2,
-      transportA2
-    )
-    const bob = new Peer(
-      walletB,
-      transportB
-    )
+    const aliceFirstDevice = new Peer(walletA1, transportA1)
+    const aliceOtherDevice = new Peer(walletA2, transportA2)
+    const bob = new Peer(walletB, transportB)
     const alice1MessageHandler = jest.fn()
     const alice2MessageHandler = jest.fn()
     const bobMessageHandler = jest.fn()
 
-    const bobReceivedGeneralMessage = new Promise<void>((resolve) => {
+    const bobReceivedGeneralMessage = new Promise<void>(resolve => {
       bob.listenForGeneralMessages((senderPublicKey, payload) => {
-        (async () => {
+        ;(async () => {
           await bob.toPeer(Utils.toArray('Hello Alice!'), senderPublicKey)
           resolve()
           bobMessageHandler(senderPublicKey, payload)
-        })().catch(e => { })
+        })().catch(_e => {})
       })
     })
     const aliceReceivedGeneralMessageOnFirstDevice = waitForNextGeneralMessage(
@@ -395,10 +374,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     await aliceOtherDevice.toPeer(Utils.toArray('Hello Bob from my other device!'))
     await aliceReceivedGeneralMessageOnOtherDevice
     transportA1.connect(transportB)
-    const waitForSecondMessage = waitForNextGeneralMessage(
-      aliceFirstDevice,
-      alice1MessageHandler
-    )
+    const waitForSecondMessage = waitForNextGeneralMessage(aliceFirstDevice, alice1MessageHandler)
     await aliceFirstDevice.toPeer(
       Utils.toArray('Back on my first device now, Bob! Can you still hear me?')
     )
@@ -407,15 +383,10 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   }, 30000)
 
   it('Bob requests certificates from Alice, Alice does not request any from Bob', async () => {
-    const alicePubKey = (await walletA.getPublicKey({ identityKey: true }))
-      .publicKey
-    const bobPubKey = (await walletB.getPublicKey({ identityKey: true }))
-      .publicKey
+    const alicePubKey = (await walletA.getPublicKey({ identityKey: true })).publicKey
+    const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
 
-    const aliceMasterCertificate = await createMasterCertificate(
-      walletA,
-      aliceFields
-    )
+    const aliceMasterCertificate = await createMasterCertificate(walletA, aliceFields)
     const aliceVerifiableCertificate = await createVerifiableCertificate(
       aliceMasterCertificate,
       walletA,
@@ -445,8 +416,8 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   describe('propagateTransportError', () => {
     const createPeerInstance = (): Peer => {
       const transport: Transport = {
-        send: jest.fn(async (_message: AuthMessage) => { }),
-        onData: async () => { }
+        send: jest.fn(async (_message: AuthMessage) => {}),
+        onData: async () => {}
       }
       return new Peer({} as WalletInterface, transport)
     }
@@ -457,7 +428,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
       let thrown: Error | undefined
       try {
-        (peer as any).propagateTransportError('peer-public-key', originalError)
+        ;(peer as any).propagateTransportError('peer-public-key', originalError)
       } catch (error) {
         thrown = error as Error
       }
@@ -469,11 +440,11 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     it('preserves existing details when appending peer identity', () => {
       const peer = createPeerInstance()
       const originalError = new Error('existing details')
-        ; (originalError as any).details = { status: 503 }
+      ;(originalError as any).details = { status: 503 }
 
       let thrown: Error | undefined
       try {
-        (peer as any).propagateTransportError('peer-public-key', originalError)
+        ;(peer as any).propagateTransportError('peer-public-key', originalError)
       } catch (error) {
         thrown = error as Error
       }
@@ -514,12 +485,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       aliceCertsToRequest: aliceCertificatesToRequest
     })
 
-    await mockGetVerifiableCertificates(
-      undefined,
-      bobVerifiableCertificate,
-      alicePubKey,
-      bobPubKey
-    )
+    await mockGetVerifiableCertificates(undefined, bobVerifiableCertificate, alicePubKey, bobPubKey)
 
     const aliceAcceptedLibraryCard = jest.fn()
 
@@ -543,10 +509,8 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   }, 15000)
 
   it('Bob requests additional certificates from Alice after initial communication', async () => {
-    const alicePubKey = (await walletA.getPublicKey({ identityKey: true }))
-      .publicKey
-    const bobPubKey = (await walletB.getPublicKey({ identityKey: true }))
-      .publicKey
+    const alicePubKey = (await walletA.getPublicKey({ identityKey: true })).publicKey
+    const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
 
     const aliceMasterCertificate = await createMasterCertificate(walletA, {
       name: 'Alice'
@@ -573,7 +537,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     await bobReceivedCertificates
 
     // ---- Bob requests additional certificates AFTER validation
-    const bobReceivedAdditionalCertificates = new Promise<void>((resolve) => {
+    const bobReceivedAdditionalCertificates = new Promise<void>(resolve => {
       bob.listenForCertificatesReceived(async (senderPublicKey, certificates) => {
         if (certificates.length > 0) {
           for (const cert of certificates) {
@@ -591,10 +555,8 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   }, 15000)
 
   it('Bob requests Alice to provide her membership status before granting access to premium content', async () => {
-    const alicePubKey = (await walletA.getPublicKey({ identityKey: true }))
-      .publicKey
-    const bobPubKey = (await walletB.getPublicKey({ identityKey: true }))
-      .publicKey
+    const alicePubKey = (await walletA.getPublicKey({ identityKey: true })).publicKey
+    const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
 
     const aliceMasterCertificate = await createMasterCertificate(walletA, {
       ...aliceFields,
@@ -626,7 +588,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
     const bobAcceptedMembershipStatus = jest.fn()
 
-    const waitForCerts = new Promise<void>((resolve) => {
+    const waitForCerts = new Promise<void>(resolve => {
       bob.listenForCertificatesReceived(async (_, certificates) => {
         for (const cert of certificates) {
           const decryptedFields = await cert.decryptFields(walletB)
@@ -644,9 +606,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     await waitForCerts
 
     // ---- OPTIONAL: now Alice can request premium content
-    await alice.toPeer(
-      Utils.toArray('I would like to access the premium content.')
-    )
+    await alice.toPeer(Utils.toArray('I would like to access the premium content.'))
 
     expect(bobAcceptedMembershipStatus).toHaveBeenCalled()
     expect(certificatesReceivedByBob).toEqual([aliceVerifiableCertificate])
@@ -684,14 +644,10 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       types: { [certificateType]: ['driversLicenseNumber'] }
     }
 
-    const { aliceReceivedCertificates, bobReceivedCertificates } = setupPeers(
-      true,
-      true,
-      {
-        aliceCertsToRequest: certificatesToRequestDriversLicense,
-        bobCertsToRequest: certificatesToRequestDriversLicense
-      }
-    )
+    const { aliceReceivedCertificates, bobReceivedCertificates } = setupPeers(true, true, {
+      aliceCertsToRequest: certificatesToRequestDriversLicense,
+      bobCertsToRequest: certificatesToRequestDriversLicense
+    })
 
     await mockGetVerifiableCertificates(
       aliceVerifiableCertificate,
@@ -712,7 +668,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     expect(certificatesReceivedByBob).toEqual([aliceVerifiableCertificate])
 
     // 🔓 Step 3: NOW general messages are allowed
-    const bobReceivedMessage = new Promise<void>((resolve) => {
+    const bobReceivedMessage = new Promise<void>(resolve => {
       bob.listenForGeneralMessages(() => resolve())
     })
 
@@ -751,14 +707,10 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       types: { [certificateType]: ['name', 'email'] }
     }
 
-    const { aliceReceivedCertificates, bobReceivedCertificates } = setupPeers(
-      true,
-      true,
-      {
-        aliceCertsToRequest: partialCertificatesToRequest,
-        bobCertsToRequest: partialCertificatesToRequest
-      }
-    )
+    const { aliceReceivedCertificates, bobReceivedCertificates } = setupPeers(true, true, {
+      aliceCertsToRequest: partialCertificatesToRequest,
+      bobCertsToRequest: partialCertificatesToRequest
+    })
 
     await mockGetVerifiableCertificates(
       aliceVerifiableCertificate,
@@ -791,7 +743,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     expect(certificatesReceivedByBob).toEqual([aliceVerifiableCertificate])
 
     // --- Optional: now general messages should work (since validation happened) ---
-    const bobReceivedGeneralMessage = new Promise<void>((resolve) => {
+    const bobReceivedGeneralMessage = new Promise<void>(resolve => {
       bob.listenForGeneralMessages(() => resolve())
     })
 
@@ -804,7 +756,9 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
     test('Should trigger "Failed to send message to peer" error with network failure', async () => {
       // Create a mock fetch that always fails
-      const failingFetch = (jest.fn() as any).mockRejectedValue(new Error('Network connection failed'))
+      const failingFetch = (jest.fn() as any).mockRejectedValue(
+        new Error('Network connection failed')
+      )
 
       // Create a transport that will fail
       const transport = new SimplifiedFetchTransport('http://localhost:9999', failingFetch)
@@ -814,7 +768,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const peer = new Peer(wallet, transport)
 
       // Register a dummy onData callback (required before sending)
-      await transport.onData(async (message) => {
+      await transport.onData(async _message => {
         // This won't be called due to network failure
       })
 
@@ -842,7 +796,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         await peer.toPeer([5, 6, 7, 8], '03def789abc123')
@@ -865,7 +819,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         await peer.toPeer([9, 10, 11, 12], '03xyz987fed654')
@@ -879,20 +833,25 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
     test('Should trigger error during certificate request send', async () => {
       // Create a failing fetch
-      const failingFetch = (jest.fn() as any).mockRejectedValue(new Error('Connection reset by peer'))
+      const failingFetch = (jest.fn() as any).mockRejectedValue(
+        new Error('Connection reset by peer')
+      )
 
       const transport = new SimplifiedFetchTransport('http://localhost:9999', failingFetch)
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         // Try to send a certificate request - this should also trigger the error
-        await peer.requestCertificates({
-          certifiers: ['03certifier123'],
-          types: { 'type1': ['field1'] }
-        }, '03abc123def456')
+        await peer.requestCertificates(
+          {
+            certifiers: ['03certifier123'],
+            types: { type1: ['field1'] }
+          },
+          '03abc123def456'
+        )
         fail('Expected error to be thrown')
       } catch (error: any) {
         expect(error.message).toContain('Network error while sending authenticated request')
@@ -908,7 +867,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         // Try to send a certificate response - this should also trigger the error
@@ -930,7 +889,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         await peer.toPeer([13, 14, 15, 16], '03peer123456')
@@ -952,7 +911,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         await peer.toPeer([17, 18, 19, 20], '03peer789abc')
@@ -972,7 +931,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const wallet = new CompletedProtoWallet(privKey)
       const peer = new Peer(wallet, transport)
 
-      await transport.onData(async (message) => { })
+      await transport.onData(async _message => {})
 
       try {
         // Try to send to an undefined peer (this might happen in some edge cases)
@@ -1025,9 +984,9 @@ describe('Peer class mutual authentication and certificate exchange', () => {
         // Intentionally do nothing (no auto-response)
       })
 
-      await expect(
-        alice.toPeer(Utils.toArray('Hello Bob!'))
-      ).rejects.toThrow('certificate validation')
+      await expect(alice.toPeer(Utils.toArray('Hello Bob!'))).rejects.toThrow(
+        'certificate validation'
+      )
     })
 
     it('allows general messages after certificate validation completes', async () => {
@@ -1035,23 +994,15 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
 
       const bobMasterCert = await createMasterCertificate(walletB, { name: 'Bob' })
-      const bobCert = await createVerifiableCertificate(
-        bobMasterCert,
-        walletB,
-        alicePubKey,
-        ['name']
-      )
+      const bobCert = await createVerifiableCertificate(bobMasterCert, walletB, alicePubKey, [
+        'name'
+      ])
 
       // Alice requires certs from Bob
       const { aliceReceivedCertificates } = setupPeers(true, false)
 
       // Bob will provide his cert to Alice when asked
-      await mockGetVerifiableCertificates(
-        undefined,
-        bobCert,
-        alicePubKey,
-        bobPubKey
-      )
+      await mockGetVerifiableCertificates(undefined, bobCert, alicePubKey, bobPubKey)
 
       // Trigger handshake + cert exchange WITHOUT sending a general message
       await alice.toPeer(Utils.toArray('handshake'), bobPubKey)
@@ -1061,7 +1012,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
       // Now general messages must be allowed
       const expectedPayload = Utils.toArray('Hello Bob!')
-      const received = new Promise<number[]>((resolve) => {
+      const received = new Promise<number[]>(resolve => {
         const listenerId = bob.listenForGeneralMessages((_senderPublicKey, payload) => {
           // The earlier handshake payload can still be draining through the
           // local transport. Observe the post-validation application message.
@@ -1111,16 +1062,13 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     }, 35000)
 
     it('resolves certificate validation promise when certificates arrive mid-wait', async () => {
-      const alicePubKey = (await walletA.getPublicKey({ identityKey: true })).publicKey
+      const _alicePubKey = (await walletA.getPublicKey({ identityKey: true })).publicKey
       const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
 
       const aliceMasterCert = await createMasterCertificate(walletA, aliceFields)
-      const aliceCert = await createVerifiableCertificate(
-        aliceMasterCert,
-        walletA,
-        bobPubKey,
-        ['name']
-      )
+      const aliceCert = await createVerifiableCertificate(aliceMasterCert, walletA, bobPubKey, [
+        'name'
+      ])
 
       setupPeers(false, true) // Bob requires certs from Alice
 
@@ -1128,7 +1076,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       let certificateRequestReceived = false
       let sendCertificates: (() => Promise<void>) | undefined
 
-      alice.listenForCertificatesRequested((peerIdentityKey) => {
+      alice.listenForCertificatesRequested(peerIdentityKey => {
         certificateRequestReceived = true
         // Store the function to send certificates later
         sendCertificates = async () => {
@@ -1170,25 +1118,17 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
 
       const aliceMasterCert = await createMasterCertificate(walletA, aliceFields)
-      const aliceCert = await createVerifiableCertificate(
-        aliceMasterCert,
-        walletA,
-        bobPubKey,
-        ['name']
-      )
+      const aliceCert = await createVerifiableCertificate(aliceMasterCert, walletA, bobPubKey, [
+        'name'
+      ])
 
       setupPeers(false, true) // Bob requires certs from Alice
 
       // Mock to provide certificates
-      await mockGetVerifiableCertificates(
-        aliceCert,
-        undefined,
-        alicePubKey,
-        bobPubKey
-      )
+      await mockGetVerifiableCertificates(aliceCert, undefined, alicePubKey, bobPubKey)
 
       let receivedPayload: number[] | undefined
-      const received = new Promise<void>((resolve) => {
+      const received = new Promise<void>(resolve => {
         bob.listenForGeneralMessages((_senderPublicKey, payload) => {
           receivedPayload = payload
           resolve()
@@ -1232,19 +1172,21 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       // Now spy on bob's sessionManager.getSession to return session without sessionNonce.
       // This simulates a corrupted session state.
       const originalGetSession = bob.sessionManager.getSession.bind(bob.sessionManager)
-      const getSessionSpy = jest.spyOn(bob.sessionManager, 'getSession').mockImplementation((nonce: string) => {
-        const session = originalGetSession(nonce)
-        if (session != null) {
-          // Return a session with undefined sessionNonce but requiring certificates
-          return {
-            ...session,
-            sessionNonce: undefined,
-            certificatesRequired: true,
-            certificatesValidated: false
+      const getSessionSpy = jest
+        .spyOn(bob.sessionManager, 'getSession')
+        .mockImplementation((nonce: string) => {
+          const session = originalGetSession(nonce)
+          if (session != null) {
+            // Return a session with undefined sessionNonce but requiring certificates
+            return {
+              ...session,
+              sessionNonce: undefined,
+              certificatesRequired: true,
+              certificatesValidated: false
+            }
           }
-        }
-        return session
-      })
+          return session
+        })
 
       // Send another message - this should trigger the null session nonce error path
       try {
@@ -1288,7 +1230,10 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       await new Promise(r => setTimeout(r, 100))
 
       // Find and call the reject function on the stored promise
-      const promises = bobAny.certificateValidationPromises as Map<string, { resolve: () => void, reject: (error: Error) => void }>
+      const promises = bobAny.certificateValidationPromises as Map<
+        string,
+        { resolve: () => void; reject: (error: Error) => void }
+      >
       if (promises.size > 0) {
         const [, promiseHandlers] = [...promises.entries()][0]
         // Call reject with an error - this covers lines 918-919

@@ -1,5 +1,5 @@
 import { EntityTxLabelMap } from '../EntityTxLabelMap'
-import { createSyncMap, sdk, SyncMap, TableTxLabelMap } from '../../../../../src'
+import { createSyncMap, sdk, TableTxLabelMap } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityTransaction } from '../EntityTransaction'
 import { EntityTxLabel } from '../EntityTxLabel'

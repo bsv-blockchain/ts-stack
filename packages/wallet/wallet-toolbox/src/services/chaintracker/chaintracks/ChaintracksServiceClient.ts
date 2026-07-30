@@ -87,8 +87,7 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
   }
 
   async postJsonVoid<T>(path: string, params: T): Promise<void> {
-    const headers = {}
-    headers['Content-Type'] = 'application/json'
+    const headers = { 'Content-Type': 'application/json' }
     const r = await fetch(`${this.serviceUrl}${path}`, {
       body: JSON.stringify(params),
       method: 'POST',

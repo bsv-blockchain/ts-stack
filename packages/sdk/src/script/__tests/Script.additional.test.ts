@@ -75,13 +75,13 @@ describe('Script – additional coverage', () => {
 
   describe('writeBin', () => {
     it('uses OP_PUSHDATA1 for data 76..255 bytes', () => {
-      const data = new Array(76).fill(0x01)
+      const data = Array.from({ length: 76 }).fill(0x01)
       const script = new Script().writeBin(data)
       expect(script.chunks[0].op).toBe(OP.OP_PUSHDATA1)
     })
 
     it('uses OP_PUSHDATA2 for data 256..65535 bytes', () => {
-      const data = new Array(256).fill(0x02)
+      const data = Array.from({ length: 256 }).fill(0x02)
       const script = new Script().writeBin(data)
       expect(script.chunks[0].op).toBe(OP.OP_PUSHDATA2)
     })
@@ -89,7 +89,7 @@ describe('Script – additional coverage', () => {
 
   describe('findAndDelete – PUSHDATA1 target', () => {
     it('deletes chunks encoded with OP_PUSHDATA1 (76-255 bytes)', () => {
-      const data = new Array(76).fill(0xab)
+      const data = Array.from({ length: 76 }).fill(0xab)
       const target = new Script().writeBin(data)
       const source = new Script().writeBin(data).writeBin(data).writeOpCode(OP.OP_1)
       source.findAndDelete(target)

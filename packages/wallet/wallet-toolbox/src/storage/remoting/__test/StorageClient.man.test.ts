@@ -149,7 +149,7 @@ describe('StorageClient to tagged revision manual tests', () => {
     const auth = createAuthMiddleware(options)
 
     // Currently processIntitialRequest in Peer.js must be edited to use a constant sessionNonce so the two requests will share the same session
-    for (const [wellKnownAuth, makeAvailable, nonce] of [
+    for (const [wellKnownAuth, makeAvailable, _nonce] of [
       //      [wellKnownAuth0, makeAvailable0, "/RrUGlYwjOkxaQEOClkuEZUCQCWAXA9lUKOzxuJvVhfox6AFXeE/jkXUu9AnqHc/"],
       //      [wellKnownAuth1, makeAvailable1, 'zzEWA7yPnnD1dcy689jdQlV6lQD1pu9XhtrzTJw+ndw/6/d6VFOXJbmF4HouaJOA']
       [wellKnownAuth2, makeAvailable2, 'qEH+mrEcyA+ZOLy0NQtyybGcRiHjp4eHtHHJQLxzYqosbGsSrcWvTY2kLdaRq9dQ']
@@ -170,7 +170,7 @@ describe('StorageClient to tagged revision manual tests', () => {
           return res
         }
       }
-      let authNextCalled = 0
+      let _authNextCalled = 0
       auth(req as any, res as any, () => {
         authNextCalled++
       })
@@ -199,7 +199,7 @@ describe('StorageClient to tagged revision manual tests', () => {
   })
 })
 
-const wellKnownAuth0: any = {
+const _wellKnownAuth0: any = {
   body: '{"version":"0.1","messageType":"initialRequest","identityKey":"030edf8ae22d7e55fe3de7f9edbeb8b1e59d9a5adae8916fa39dc8142f491bc40d","initialNonce":"0GZ7LeI3HrbeWRLvTYiSp8Z3zpLCY0W/eROUo3x7TY3QRswJYRpwMvmT9OiDIyMD","requestedCertificates":{"certifiers":[],"types":{}}}',
   bodyJson: {
     version: '0.1',
@@ -227,7 +227,7 @@ const wellKnownAuth0: any = {
     'x-real-ip': '169.254.169.126'
   }
 }
-const makeAvailable0: any = {
+const _makeAvailable0: any = {
   headers: {
     'accept-encoding': 'br, gzip, deflate',
     'accept-language': '*',
@@ -259,7 +259,7 @@ const makeAvailable0: any = {
 /**
  * 2026-02-16 13:30:50.573 https://storage.babbage.systems/.well-known/auth
  */
-const wellKnownAuth1: any = {
+const _wellKnownAuth1: any = {
   body: '{"version":"0.1","messageType":"initialRequest","identityKey":"02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132","initialNonce":"lGlQHqNqFSxKhBBtNBPMYqXDJQADlBCbGPapoq+Yuyx7q8in7QRGHbB5s1Gt8tYU","requestedCertificates":{"certifiers":[],"types":{}}}',
   bodyJson: {
     version: '0.1',
@@ -290,7 +290,7 @@ const wellKnownAuth1: any = {
 /**
  * 2026-02-16 13:30:50.762 https://storage.babbage.systems/
  */
-const makeAvailable1: any = {
+const _makeAvailable1: any = {
   headers: {
     'accept-encoding': 'br, gzip, deflate',
     'accept-language': '*',

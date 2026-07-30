@@ -46,7 +46,7 @@ describe('createActionToGenerateBeefs test', () => {
     for (const { wallet, activeStorage: storage } of ctxs) {
       const {
         txidPair: [txid1, txid2],
-        Beef: beef1
+        Beef: _beef1
       } = await createAndConsume(wallet, root, kp)
 
       {
@@ -86,14 +86,14 @@ describe('createActionToGenerateBeefs test', () => {
     for (const { wallet, activeStorage: storage } of ctxs) {
       const {
         txidPair: [txid1, txid2],
-        Beef: beef1
+        Beef: _beef1
       } = await createAndConsume(wallet, root1, kp1)
       expect(txid1).toBeTruthy()
       expect(txid2).toBeTruthy()
 
       const {
         txidPair: [txid3, txid4],
-        Beef: beef2
+        Beef: _beef2
       } = await createAndConsume(wallet, root2, kp2)
       expect(txid3).toBeTruthy()
       expect(txid4).toBeTruthy()

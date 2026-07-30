@@ -1,5 +1,5 @@
 import * as bsv from '@bsv/sdk'
-import { StorageKnex, wait, WalletStorageManager } from '../..'
+import { wait } from '../..'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 
 import * as dotenv from 'dotenv'
@@ -32,7 +32,7 @@ describe('WalletStorageManager tests', () => {
     })
 
     interface Result {
-      i: Number
+      i: number
       t: 'reader' | 'writer' | 'sync'
       start: number
       end: number
@@ -44,7 +44,7 @@ describe('WalletStorageManager tests', () => {
 
     const makeReader = (i: number, duration: number): void => {
       promises.push(
-        storage.runAsReader(async reader => {
+        storage.runAsReader(async _reader => {
           const start = Date.now() - now
           await wait(duration)
           const end = Date.now() - now
@@ -57,7 +57,7 @@ describe('WalletStorageManager tests', () => {
 
     const makeWriter = (i: number, duration: number): void => {
       promises.push(
-        storage.runAsWriter(async sync => {
+        storage.runAsWriter(async _sync => {
           const start = Date.now() - now
           await wait(duration)
           const end = Date.now() - now
@@ -70,7 +70,7 @@ describe('WalletStorageManager tests', () => {
 
     const makeSync = (i: number, duration: number): void => {
       promises.push(
-        storage.runAsSync(async sync => {
+        storage.runAsSync(async _sync => {
           const start = Date.now() - now
           await wait(duration)
           const end = Date.now() - now
@@ -119,7 +119,7 @@ describe('WalletStorageManager tests', () => {
     })
 
     interface Result {
-      i: Number
+      i: number
       t: 'reader' | 'writer' | 'sync'
       start: number
       end: number
@@ -131,7 +131,7 @@ describe('WalletStorageManager tests', () => {
 
     const makeReader = (i: number, duration: number): void => {
       promises.push(
-        storage.runAsReader(async reader => {
+        storage.runAsReader(async _reader => {
           const start = Date.now() - now
           await wait(duration)
           const end = Date.now() - now
@@ -144,7 +144,7 @@ describe('WalletStorageManager tests', () => {
 
     const makeWriter = (i: number, duration: number): void => {
       promises.push(
-        storage.runAsWriter(async sync => {
+        storage.runAsWriter(async _sync => {
           const start = Date.now() - now
           await wait(duration)
           const end = Date.now() - now
@@ -157,7 +157,7 @@ describe('WalletStorageManager tests', () => {
 
     const makeSync = (i: number, duration: number): void => {
       promises.push(
-        storage.runAsSync(async sync => {
+        storage.runAsSync(async _sync => {
           const start = Date.now() - now
           await wait(duration)
           const end = Date.now() - now
@@ -209,7 +209,7 @@ describe('WalletStorageManager tests', () => {
         dropAll: true
       })
       const promises: Array<Promise<number>> = []
-      const result: Array<{ i: number, r: any }> = []
+      const result: Array<{ i: number; r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
       /** * maxI = 6 test PASS ***/
       const maxI = 7
@@ -218,7 +218,7 @@ describe('WalletStorageManager tests', () => {
         fred: TestWalletNoSetup,
         cr: bsv.CreateActionResult,
         i: number,
-        result: Array<{ i: number, r: any }>
+        result: Array<{ i: number; r: any }>
       ): Promise<number> => {
         logger(`writer${i}`)
         const internalizeArgs: bsv.InternalizeActionArgs = {
@@ -302,9 +302,11 @@ describe('WalletStorageManager tests', () => {
       expect(cr.txid).toBeTruthy()
       if (cr.tx == null || cr.txid == null) throw new Error('createAction did not return a signed transaction')
 
-      const existingTx = (await activeStorage.findTransactions({
-        partial: { userId, txid: cr.txid }
-      }))[0]
+      const existingTx = (
+        await activeStorage.findTransactions({
+          partial: { userId, txid: cr.txid }
+        })
+      )[0]
       expect(existingTx).toBeTruthy()
       await activeStorage.updateTransaction(existingTx.transactionId, { status: 'sending' })
 
@@ -340,13 +342,15 @@ describe('WalletStorageManager tests', () => {
       expect(ir.accepted).toBe(true)
       expect(ir.isMerge).toBe(true)
 
-      const updatedTx = (await activeStorage.findTransactions({
-        partial: { transactionId: existingTx.transactionId }
-      }))[0]
+      const updatedTx = (
+        await activeStorage.findTransactions({
+          partial: { transactionId: existingTx.transactionId }
+        })
+      )[0]
       expect(updatedTx.status).toBe('sending')
     }
   })
 })
-function logger (s: string) {
+function logger(s: string) {
   process.stdout.write(`${s}\n`)
 }

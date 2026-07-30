@@ -10,7 +10,7 @@ const makeContext = (wallet: WalletInterface): ModuleContext => ({
 
 describe('Brc29RemittanceModule', () => {
   // Prevent console.log output during tests
-  const consoleErrorSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+  const _consoleErrorSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
   describe('unsolicited settlements (no invoice)', () => {
     it('builds a settlement artifact for unsolicited payment', async () => {
@@ -25,9 +25,7 @@ describe('Brc29RemittanceModule', () => {
         description: 'Test payment',
         outputDescription: 'Test output',
         nonceProvider: {
-          createNonce: jest.fn()
-            .mockResolvedValueOnce('prefix')
-            .mockResolvedValueOnce('suffix')
+          createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
         },
         lockingScriptProvider: {
           pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
@@ -35,11 +33,17 @@ describe('Brc29RemittanceModule', () => {
       })
 
       const option = { amountSatoshis: 1000, payee: 'payee-key' }
-      const result = await module.buildSettlement({ threadId: 'thread-1', option, note: 'unsolicited payment' }, makeContext(wallet))
+      const result = await module.buildSettlement(
+        { threadId: 'thread-1', option, note: 'unsolicited payment' },
+        makeContext(wallet)
+      )
       expect(result.action).toBe('settle')
       if (result.action !== 'settle') return
 
-      expect(result.artifact.customInstructions).toEqual({ derivationPrefix: 'prefix', derivationSuffix: 'suffix' })
+      expect(result.artifact.customInstructions).toEqual({
+        derivationPrefix: 'prefix',
+        derivationSuffix: 'suffix'
+      })
       expect(result.artifact.amountSatoshis).toBe(1000)
       expect(result.artifact.outputIndex).toBe(0)
       expect(result.artifact.transaction).toEqual([1, 2, 3])
@@ -73,7 +77,10 @@ describe('Brc29RemittanceModule', () => {
 
       const module = new Brc29RemittanceModule()
       const option = { amountSatoshis: 0, payee: 'payee-key' }
-      const result = await module.buildSettlement({ threadId: 'thread-1', option }, makeContext(wallet))
+      const result = await module.buildSettlement(
+        { threadId: 'thread-1', option },
+        makeContext(wallet)
+      )
       expect(result.action).toBe('terminate')
     })
 
@@ -85,7 +92,10 @@ describe('Brc29RemittanceModule', () => {
 
       const module = new Brc29RemittanceModule()
       const option = { amountSatoshis: -5, payee: 'payee-key', outputIndex: -1 }
-      const result = await module.buildSettlement({ threadId: 'thread-1', option }, makeContext(wallet))
+      const result = await module.buildSettlement(
+        { threadId: 'thread-1', option },
+        makeContext(wallet)
+      )
       expect(result.action).toBe('terminate')
       if (result.action === 'terminate') {
         expect(result.termination.code).toBe('brc29.invalid_option')
@@ -102,16 +112,17 @@ describe('Brc29RemittanceModule', () => {
 
       const module = new Brc29RemittanceModule({
         nonceProvider: {
-          createNonce: jest.fn()
-            .mockResolvedValueOnce('prefix')
-            .mockResolvedValueOnce('suffix')
+          createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
         },
         lockingScriptProvider: {
           pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
         }
       })
       const option = { amountSatoshis: 1000, payee: 'payee-key' }
-      const result = await module.buildSettlement({ threadId: 'thread-1', option }, makeContext(wallet))
+      const result = await module.buildSettlement(
+        { threadId: 'thread-1', option },
+        makeContext(wallet)
+      )
       expect(result.action).toBe('terminate')
       if (result.action === 'terminate') {
         expect(result.termination.code).toBe('brc29.missing_tx')

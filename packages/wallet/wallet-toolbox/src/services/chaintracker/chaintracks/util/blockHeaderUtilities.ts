@@ -260,12 +260,7 @@ export function deserializeBlockHeaders(
  *
  * @returns true if the header is correctly formatted
  */
-function validateUnsignedHeaderInteger(
-  value: unknown,
-  field: string,
-  maximum: number,
-  rangeField = field
-): void {
+function validateUnsignedHeaderInteger(value: unknown, field: string, maximum: number, rangeField = field): void {
   if (typeof value !== 'number') {
     throw new TypeError(`Header ${field} must be a number.`)
   }
@@ -300,7 +295,7 @@ export function validateHeaderFormat(header: BlockHeader): void {
   if (typeof header !== 'object') {
     throw new TypeError('Header must be an object.')
   }
-  if (!Object.keys(header).every(key => ALLOWED_KEYS[key])) {
+  if (!Object.keys(header).every(key => key in ALLOWED_KEYS)) {
     throw new Error('Header contains extra properties.')
   }
 

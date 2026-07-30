@@ -2,9 +2,9 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.3.2'
-last_updated: '2026-07-28'
-last_verified: '2026-07-28'
+version: '1.3.3'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -47,6 +47,13 @@ pre-consolidation public package pages.
 measurements for CI, conformance, lint, TypeScript, coverage, security,
 SonarCloud, governance, and published package versions. Update a measurement
 only from authoritative evidence and retain the evidence URL.
+
+The lint record retains the original 846-warning baseline while ratcheting the
+current authored-code result to zero across 1,909 files. The TypeScript record
+tracks all 121 governed configurations and their effective strict options,
+including seven self-contained deployable-service contexts. `pnpm lint` and
+`pnpm typescript:check` are executable zero-debt gates; the historical counts
+are evidence, not allowances.
 
 `governance/repository-health/contract-baseline.json` contains the exact package
 contract debt present when the control was introduced. The health check rejects

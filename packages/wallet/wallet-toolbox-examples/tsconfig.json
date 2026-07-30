@@ -1,4 +1,5 @@
 {
+  "extends": "../../../config/typescript/test.json",
   "compilerOptions": {
     "types": ["jest", "node"],
     "rootDir": ".", // Include both src and test directories

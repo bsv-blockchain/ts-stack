@@ -946,7 +946,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     storeName: string,
     trx?: TrxToken
   ): Promise<number> {
-    if (update[keyProp] !== undefined && (Array.isArray(id) || update[keyProp] !== id)) {
+    const indexedUpdate = update as Partial<T> & Record<string, unknown>
+    if (indexedUpdate[keyProp] !== undefined && (Array.isArray(id) || indexedUpdate[keyProp] !== id)) {
       throw new WERR_INVALID_PARAMETER(`update.${keyProp}`, 'undefined')
     }
     const u = this.validatePartialForUpdate(update)
@@ -984,11 +985,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     storeName: string,
     trx?: TrxToken
   ): Promise<number> {
+    const indexedUpdate = update as Partial<T> & Record<string, unknown>
     if (key.length !== keyProps.length) {
       throw new WERR_INTERNAL(`key.length ${key.length} !== keyProps.length ${keyProps.length}`)
     }
     for (let i = 0; i < key.length; i++) {
-      if (update[keyProps[i]] !== undefined && update[keyProps[i]] !== key[i]) {
+      if (indexedUpdate[keyProps[i]] !== undefined && indexedUpdate[keyProps[i]] !== key[i]) {
         throw new WERR_INVALID_PARAMETER(`update.${keyProps[i]}`, 'undefined')
       }
     }

@@ -38,7 +38,7 @@ interface TestPaymentContext {
 
 const createNonceMock = createNonce as jest.MockedFunction<typeof createNonce>
 
-function createWalletStub (): any {
+function createWalletStub(): any {
   const identityKey = new PrivateKey(10).toPublicKey().toString()
   const derivedKey = new PrivateKey(11).toPublicKey().toString()
 
@@ -53,12 +53,12 @@ function createWalletStub (): any {
       tx: Utils.toArray('mock-transaction', 'utf8')
     })),
     createHmac: jest.fn(async () => ({
-      hmac: new Array(32).fill(7)
+      hmac: Array.from({ length: 32 }).fill(7)
     }))
   }
 }
 
-function createPaymentRequiredResponse (overrides: Record<string, string> = {}): Response {
+function createPaymentRequiredResponse(overrides: Record<string, string> = {}): Response {
   const headers: Record<string, string> = {
     'x-bsv-payment-version': '1.0',
     'x-bsv-payment-satoshis-required': '5',
@@ -87,19 +87,21 @@ describe('AuthFetch payment handling', () => {
       body: { hello: 'world' }
     }
 
-    const context = await (authFetch as any).createPaymentContext(
+    const context = (await (authFetch as any).createPaymentContext(
       'https://api.example.com/resource',
       config,
       42,
       'remote-identity-key',
       'test-prefix'
-    ) as TestPaymentContext
+    )) as TestPaymentContext
 
     expect(context.satoshisRequired).toBe(42)
     expect(context.serverIdentityKey).toBe('remote-identity-key')
     expect(context.derivationPrefix).toBe('test-prefix')
     expect(context.derivationSuffix).toBe('suffix-from-test')
-    expect(context.transactionBase64).toBe(Utils.toBase64(Utils.toArray('mock-transaction', 'utf8')))
+    expect(context.transactionBase64).toBe(
+      Utils.toBase64(Utils.toArray('mock-transaction', 'utf8'))
+    )
     expect(context.clientIdentityKey).toEqual(expect.any(String))
     expect(context.attempts).toBe(0)
     expect(context.maxAttempts).toBe(3)
@@ -195,7 +197,8 @@ describe('AuthFetch payment handling', () => {
 
     const firstError = new Error('payment attempt 1 failed')
     const secondError = new Error('payment attempt 2 failed')
-    jest.spyOn(authFetch, 'fetch')
+    jest
+      .spyOn(authFetch, 'fetch')
       .mockRejectedValueOnce(firstError)
       .mockRejectedValueOnce(secondError)
 
@@ -221,40 +224,48 @@ describe('AuthFetch payment handling', () => {
     const config: Mutable<any> = { paymentContext }
     const response = createPaymentRequiredResponse()
 
-    await expect((async () => {
-      try {
-        await (authFetch as any).handlePaymentAndRetry(
-          'https://api.example.com/resource',
-          config,
-          response
-        )
-      } catch (error) {
-        const err = error as any
-        expect(err.message).toBe(
-          'Paid request to https://api.example.com/resource failed after 2/2 attempts. Sent 5 satoshis to server-key.'
-        )
-        expect(err.details).toMatchObject({
-          attempts: { used: 2, max: 2 },
-          payment: expect.objectContaining({
-            satoshis: 5,
-            serverIdentityKey: 'server-key',
-            clientIdentityKey: 'client-key'
+    await expect(
+      (async () => {
+        try {
+          await (authFetch as any).handlePaymentAndRetry(
+            'https://api.example.com/resource',
+            config,
+            response
+          )
+        } catch (error) {
+          const err = error as any
+          expect(err.message).toBe(
+            'Paid request to https://api.example.com/resource failed after 2/2 attempts. Sent 5 satoshis to server-key.'
+          )
+          expect(err.details).toMatchObject({
+            attempts: { used: 2, max: 2 },
+            payment: expect.objectContaining({
+              satoshis: 5,
+              serverIdentityKey: 'server-key',
+              clientIdentityKey: 'client-key'
+            })
           })
-        })
-        expect(err.details.errors).toHaveLength(2)
-        expect(err.details.errors[0]).toEqual(expect.objectContaining({
-          attempt: 1,
-          message: 'payment attempt 1 failed'
-        }))
-        expect(err.details.errors[1]).toEqual(expect.objectContaining({
-          attempt: 2,
-          message: 'payment attempt 2 failed'
-        }))
-        expect(typeof err.details.errors[0].timestamp).toBe('string')
-        expect(err.cause).toBe(secondError)
-        throw error
-      }
-    })()).rejects.toThrow('Paid request to https://api.example.com/resource failed after 2/2 attempts. Sent 5 satoshis to server-key.')
+          expect(err.details.errors).toHaveLength(2)
+          expect(err.details.errors[0]).toEqual(
+            expect.objectContaining({
+              attempt: 1,
+              message: 'payment attempt 1 failed'
+            })
+          )
+          expect(err.details.errors[1]).toEqual(
+            expect.objectContaining({
+              attempt: 2,
+              message: 'payment attempt 2 failed'
+            })
+          )
+          expect(typeof err.details.errors[0].timestamp).toBe('string')
+          expect(err.cause).toBe(secondError)
+          throw error
+        }
+      })()
+    ).rejects.toThrow(
+      'Paid request to https://api.example.com/resource failed after 2/2 attempts. Sent 5 satoshis to server-key.'
+    )
 
     expect(paymentContext.attempts).toBe(2)
     expect(paymentContext.errors).toHaveLength(2)
@@ -278,20 +289,25 @@ describe('AuthFetch certificate request handling', () => {
     })
 
     const peerStub = {
-      listenForCertificatesReceived: jest.fn((listener: (senderPublicKey: string, certs: any[]) => void) => {
-        certificatesListener = listener
-        return 7
-      }),
+      listenForCertificatesReceived: jest.fn(
+        (listener: (senderPublicKey: string, certs: any[]) => void) => {
+          certificatesListener = listener
+          return 7
+        }
+      ),
       stopListeningForCertificatesReceived,
       requestCertificates
     }
 
-    ; (authFetch as any).peers['https://api.example.com'] = {
+    ;(authFetch as any).peers['https://api.example.com'] = {
       peer: peerStub,
       pendingCertificateRequests: []
     }
 
-    const certs = await authFetch.sendCertificateRequest('https://api.example.com', requestedCertificates as any)
+    const certs = await authFetch.sendCertificateRequest(
+      'https://api.example.com',
+      requestedCertificates as any
+    )
     expect(certs).toHaveLength(1)
     expect(requestCertificates).toHaveBeenCalledWith(requestedCertificates, undefined)
     expect(stopListeningForCertificatesReceived).toHaveBeenCalledWith(7)
@@ -313,7 +329,7 @@ describe('AuthFetch certificate request handling', () => {
       requestCertificates
     }
 
-    ; (authFetch as any).peers['https://api.example.com'] = {
+    ;(authFetch as any).peers['https://api.example.com'] = {
       peer: peerStub,
       pendingCertificateRequests: []
     }
@@ -339,12 +355,15 @@ describe('AuthFetch certificate request handling', () => {
         requestCertificates
       }
 
-      ; (authFetch as any).peers['https://api.example.com'] = {
+      ;(authFetch as any).peers['https://api.example.com'] = {
         peer: peerStub,
         pendingCertificateRequests: []
       }
 
-      const pending = authFetch.sendCertificateRequest('https://api.example.com', requestedCertificates as any)
+      const pending = authFetch.sendCertificateRequest(
+        'https://api.example.com',
+        requestedCertificates as any
+      )
       const timeoutAssertion = expect(pending).rejects.toThrow(
         'sendCertificateRequest timed out after 30000ms waiting for certificate response from https://api.example.com'
       )

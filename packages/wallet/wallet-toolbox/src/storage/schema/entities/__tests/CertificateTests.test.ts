@@ -1,4 +1,4 @@
-import { createSyncMap, sdk, TableCertificate } from '../../../../../src'
+import { createSyncMap, TableCertificate } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityCertificate } from '../EntityCertificate'
 
@@ -279,7 +279,7 @@ describe('Certificate class method tests', () => {
   })
 
   test('4_Certificate class getters and setters', async () => {
-    for (const { activeStorage } of ctxs) {
+    for (const { activeStorage: _activeStorage } of ctxs) {
       const now = new Date()
 
       // Initial test data

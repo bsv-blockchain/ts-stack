@@ -41,8 +41,8 @@ export default class Signature {
    * @example
    * const signature = Signature.fromDER('30440220018c1f5502f8...', 'hex');
    */
-  static fromDER (data: number[] | string, enc?: 'hex' | 'base64'): Signature {
-    const getLength = (buf, p): number => {
+  static fromDER(data: number[] | string, enc?: 'hex' | 'base64'): Signature {
+    const getLength = (buf: number[], p: { place: number }): number => {
       const initial = buf[p.place++]
       if ((initial & 0x80) === 0) {
         return initial
@@ -114,10 +114,7 @@ export default class Signature {
    * @example
    * const signature = Signature.fromCompact('1b18c1f5502f8...', 'hex');
    */
-  static fromCompact (
-    data: number[] | string,
-    enc?: 'hex' | 'base64'
-  ): Signature {
+  static fromCompact(data: number[] | string, enc?: 'hex' | 'base64'): Signature {
     data = toArray(data, enc)
     if (data.length !== 65) {
       throw new Error('Invalid Compact Signature')
@@ -126,10 +123,7 @@ export default class Signature {
     if (compactByte < 27 || compactByte >= 35) {
       throw new Error('Invalid Compact Byte')
     }
-    return new Signature(
-      new BigNumber(data.slice(1, 33)),
-      new BigNumber(data.slice(33, 65))
-    )
+    return new Signature(new BigNumber(data.slice(1, 33)), new BigNumber(data.slice(33, 65)))
   }
 
   /**
@@ -144,7 +138,7 @@ export default class Signature {
    * const s = new BigNumber('564745627577...');
    * const signature = new Signature(r, s);
    */
-  constructor (r: BigNumber, s: BigNumber) {
+  constructor(r: BigNumber, s: BigNumber) {
     this.r = r
     this.s = s
   }
@@ -166,7 +160,7 @@ export default class Signature {
    * const publicKey = PublicKey.fromString('04188ca1050...');
    * const isVerified = signature.verify(msg, publicKey);
    */
-  verify (msg: number[] | string, key: PublicKey, enc?: 'hex'): boolean {
+  verify(msg: number[] | string, key: PublicKey, enc?: 'hex'): boolean {
     const msgHash = new BigNumber(sha256(msg, enc), 16)
     return verify(msgHash, this, key)
   }
@@ -186,7 +180,7 @@ export default class Signature {
    * @example
    * const der = signature.toString('base64');
    */
-  toString (enc?: 'hex' | 'base64'): number[] | string {
+  toString(enc?: 'hex' | 'base64'): number[] | string {
     return this.toDER(enc)
   }
 
@@ -204,8 +198,8 @@ export default class Signature {
    * @example
    * const der = signature.toDER('hex');
    */
-  toDER (enc?: 'hex' | 'base64'): number[] | string {
-    const constructLength = (arr, len): void => {
+  toDER(enc?: 'hex' | 'base64'): number[] | string {
+    const constructLength = (arr: number[], len: number): void => {
       if (len < 0x80) {
         arr.push(len)
       } else {
@@ -275,11 +269,7 @@ export default class Signature {
    * @example
    * const compact = signature.toCompact(3, true, 'base64');
    */
-  toCompact (
-    recovery: number,
-    compressed: boolean,
-    enc?: 'hex' | 'base64'
-  ): number[] | string {
+  toCompact(recovery: number, compressed: boolean, enc?: 'hex' | 'base64'): number[] | string {
     if (recovery < 0 || recovery > 3) throw new Error('Invalid recovery param')
     if (typeof compressed !== 'boolean') {
       throw new TypeError('Invalid compressed param')
@@ -313,7 +303,7 @@ export default class Signature {
    * @example
    * const publicKey = signature.RecoverPublicKey(0, msgHash);
    */
-  RecoverPublicKey (recovery: number, e: BigNumber): PublicKey {
+  RecoverPublicKey(recovery: number, e: BigNumber): PublicKey {
     const r = this.r
     const s = this.s
 
@@ -369,7 +359,7 @@ export default class Signature {
    * @example
    * const recovery = signature.CalculateRecoveryFactor(publicKey, msgHash);
    */
-  CalculateRecoveryFactor (pubkey: PublicKey, msgHash: BigNumber): number {
+  CalculateRecoveryFactor(pubkey: PublicKey, msgHash: BigNumber): number {
     for (let recovery = 0; recovery < 4; recovery++) {
       let Qprime
       try {

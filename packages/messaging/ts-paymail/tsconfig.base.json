@@ -1,4 +1,5 @@
 {
+  "extends": "../../../config/typescript/dual-runtime.json",
   "compilerOptions": {
     "lib": ["DOM", "ESNext"],
     "module": "NodeNext",

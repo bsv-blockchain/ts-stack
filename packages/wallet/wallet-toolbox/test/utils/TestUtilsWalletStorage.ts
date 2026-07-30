@@ -523,7 +523,7 @@ export abstract class TestUtilsWalletStorage {
     await activeStorage.makeAvailable()
     const setup = await args.insertSetup(activeStorage, wo.identityKey)
     await wo.storage.addWalletStorageProvider(activeStorage)
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey)
+    const { user, isNew: _isNew } = await activeStorage.findOrInsertUser(wo.identityKey)
     const userId = user.userId
     const r: TestWallet<T> = {
       ...wo,
@@ -880,13 +880,13 @@ export abstract class TestUtilsWalletStorage {
       const f = await fsp.open(file, 'r')
       await f.close()
       return true
-    } catch (eu: unknown) {
+    } catch {
       return false
     }
   }
 
   //if (await _tu.fileExists(walletFile))
-  static async createLegacyWalletSQLiteCopy (
+  static async createLegacyWalletSQLiteCopy(
     databaseName: string,
     actionBatchMode: 'auto' | 'legacy' = 'auto'
   ): Promise<TestWalletNoSetup> {
@@ -895,7 +895,7 @@ export abstract class TestUtilsWalletStorage {
     return await _tu.createLegacyWalletCopy(databaseName, walletKnex, walletFile, actionBatchMode)
   }
 
-  static async createLegacyWalletMySQLCopy (
+  static async createLegacyWalletMySQLCopy(
     databaseName: string,
     actionBatchMode: 'auto' | 'legacy' = 'auto'
   ): Promise<TestWalletNoSetup> {
@@ -993,8 +993,8 @@ export abstract class TestUtilsWalletStorage {
     return r
   }
 
-  static wrapProfiling(o: Object, name: string): Record<string, { count: number; totalMsecs: number }> {
-    const getFunctionsNames = (obj: Object) => {
+  static wrapProfiling(o: object, name: string): Record<string, { count: number; totalMsecs: number }> {
+    const getFunctionsNames = (obj: object) => {
       let fNames: string[] = []
       do {
         fNames = fNames.concat(
@@ -1039,7 +1039,7 @@ export abstract class TestUtilsWalletStorage {
       s.totalMsecs += args.endTime - args.startTime
     }
 
-    const performanceWrapper = (obj: Object, objectName: string, performanceNotificationCallback: any) => {
+    const performanceWrapper = (obj: object, objectName: string, performanceNotificationCallback: any) => {
       let _notifyPerformance = notifyPerformance.bind(null, performanceNotificationCallback)
       let fNames = getFunctionsNames(obj)
       for (let fName of fNames) {
@@ -1092,7 +1092,7 @@ export abstract class TestUtilsWalletStorage {
       return obj
     }
 
-    const functionNames = getFunctionsNames(o)
+    const _functionNames = getFunctionsNames(o)
 
     performanceWrapper(o, name, logger)
 
@@ -1164,10 +1164,10 @@ export abstract class TestUtilsWalletStorage {
   } {
     subject ||= PrivateKey.fromRandom().toPublicKey().toString()
     const certifier = PrivateKey.fromRandom()
-    const verifier = PrivateKey.fromRandom()
+    const _verifier = PrivateKey.fromRandom()
     const cert: WalletCertificate = {
-      type: Utils.toBase64(new Array(32).fill(1)),
-      serialNumber: Utils.toBase64(new Array(32).fill(2)),
+      type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
+      serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
       revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
       subject,
       certifier: certifier.toPublicKey().toString(),
@@ -1299,7 +1299,7 @@ export abstract class TestUtilsWalletStorage {
       numberOfDesiredUTXOs: 42,
       minimumDesiredUTXOValue: 1642,
       isDeleted: false,
-      ...(partial || {})
+      ...partial
     }
     await storage.insertOutputBasket(e)
     return e
@@ -1330,7 +1330,7 @@ export abstract class TestUtilsWalletStorage {
       txid: onlyRequired ? undefined : randomBytesHex(32),
       inputBEEF: onlyRequired ? undefined : new Beef().toBinary(),
       rawTx: onlyRequired ? undefined : [1, 2, 3],
-      ...(partial || {})
+      ...partial
     }
     await storage.insertTransaction(e)
     return { tx: e, user: u }
@@ -1371,7 +1371,7 @@ export abstract class TestUtilsWalletStorage {
       scriptLength: requiredOnly ? undefined : 36,
       scriptOffset: requiredOnly ? undefined : 12,
       lockingScript: requiredOnly ? undefined : asArray(randomBytesHex(36)),
-      ...(partial || {})
+      ...partial
     }
     await storage.insertOutput(e)
     return e
@@ -1386,7 +1386,7 @@ export abstract class TestUtilsWalletStorage {
       userId: u.userId,
       tag: randomBytesHex(6),
       isDeleted: false,
-      ...(partial || {})
+      ...partial
     }
     await storage.insertOutputTag(e)
     return e
@@ -1414,7 +1414,7 @@ export abstract class TestUtilsWalletStorage {
       userId: u.userId,
       label: randomBytesHex(6),
       isDeleted: false,
-      ...(partial || {})
+      ...partial
     }
     await storage.insertTxLabel(e)
     return e
@@ -1433,7 +1433,7 @@ export abstract class TestUtilsWalletStorage {
       txLabelId: label.txLabelId,
       transactionId: tx.transactionId,
       isDeleted: false,
-      ...(partial || {})
+      ...partial
     }
     await storage.insertTxLabelMap(e)
     return e
@@ -2015,7 +2015,7 @@ export interface TestWalletOnly {
   wallet: Wallet
 }
 
-async function insertEmptySetup(storage: StorageKnex, identityKey: string): Promise<object> {
+async function insertEmptySetup(_storage: StorageKnex, _identityKey: string): Promise<object> {
   return {}
 }
 

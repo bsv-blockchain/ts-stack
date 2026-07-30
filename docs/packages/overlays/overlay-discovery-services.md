@@ -4,9 +4,9 @@ title: '@bsv/overlay-discovery-services'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-discovery-services'
-version: '2.1.4'
-last_updated: '2026-07-28'
-last_verified: '2026-07-28'
+version: '2.1.5'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services'
 status: stable

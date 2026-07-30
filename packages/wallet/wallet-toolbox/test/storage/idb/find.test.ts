@@ -9,7 +9,7 @@ describe('idb find tests', () => {
   jest.setTimeout(99999999)
 
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnv(chain)
+  const _env = _tu.getEnv(chain)
   let setups: { setup: TestSetup1; storage: StorageProvider }[] = []
 
   beforeEach(async () => {
@@ -29,19 +29,19 @@ describe('idb find tests', () => {
   })
 
   test('0 find ProvenTx', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findProvenTxs({ partial: {} })).length).toBe(1)
     }
   })
 
   test('1 find ProvenTxReq', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findProvenTxReqs({ partial: {} })).length).toBe(2)
     }
   })
 
   test('2 find User', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findUsers({ partial: {} })).length).toBe(2)
     }
   })
@@ -122,55 +122,55 @@ describe('idb find tests', () => {
   })
 
   test('6 find Transaction', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findTransactions({ partial: {} })).length).toBe(3)
     }
   })
 
   test('7 find Commission', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findCommissions({ partial: {} })).length).toBe(3)
     }
   })
 
   test('8 find Output', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findOutputs({ partial: {} })).length).toBe(3)
     }
   })
 
   test('9 find OutputTag', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findOutputTags({ partial: {} })).length).toBe(2)
     }
   })
 
   test('10 find OutputTagMap', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findOutputTagMaps({ partial: {} })).length).toBe(3)
     }
   })
 
   test('11 find TxLabel', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findTxLabels({ partial: {} })).length).toBe(3)
     }
   })
 
   test('12 find TxLabelMap', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findTxLabelMaps({ partial: {} })).length).toBe(3)
     }
   })
 
   test('13 find MonitorEvent', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findMonitorEvents({ partial: {} })).length).toBe(1)
     }
   })
 
   test('14 find SyncState', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect((await storage.findSyncStates({ partial: {} })).length).toBe(1)
     }
   })

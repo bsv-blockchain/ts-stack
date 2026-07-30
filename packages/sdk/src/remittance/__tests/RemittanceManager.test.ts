@@ -12,7 +12,7 @@ class MessageBus {
   private messages: StoredMessage[] = []
   private nextId = 1
 
-  send (sender: PubKeyHex, recipient: PubKeyHex, messageBox: string, body: string): string {
+  send(sender: PubKeyHex, recipient: PubKeyHex, messageBox: string, body: string): string {
     const messageId = `msg-${this.nextId++}`
     this.messages.push({
       messageId,
@@ -24,36 +24,44 @@ class MessageBus {
     return messageId
   }
 
-  list (recipient: PubKeyHex, messageBox: string): StoredMessage[] {
-    return this.messages.filter((msg) => msg.recipient === recipient && msg.messageBox === messageBox)
+  list(recipient: PubKeyHex, messageBox: string): StoredMessage[] {
+    return this.messages.filter(msg => msg.recipient === recipient && msg.messageBox === messageBox)
   }
 
-  ack (recipient: PubKeyHex, messageIds: string[]): void {
+  ack(recipient: PubKeyHex, messageIds: string[]): void {
     this.messages = this.messages.filter(
-      (msg) => msg.recipient !== recipient || !messageIds.includes(msg.messageId)
+      msg => msg.recipient !== recipient || !messageIds.includes(msg.messageId)
     )
   }
 }
 
 class TestComms implements CommsLayer {
-  constructor (private readonly owner: PubKeyHex, private readonly bus: MessageBus) {}
+  constructor(
+    private readonly owner: PubKeyHex,
+    private readonly bus: MessageBus
+  ) {}
 
-  async sendMessage (args: { recipient: PubKeyHex; messageBox: string; body: string }): Promise<string> {
+  async sendMessage(args: {
+    recipient: PubKeyHex
+    messageBox: string
+    body: string
+  }): Promise<string> {
     return this.bus.send(this.owner, args.recipient, args.messageBox, args.body)
   }
 
-  async listMessages (args: { messageBox: string }): Promise<PeerMessage[]> {
+  async listMessages(args: { messageBox: string }): Promise<PeerMessage[]> {
     return this.bus.list(this.owner, args.messageBox)
   }
 
-  async acknowledgeMessage (args: { messageIds: string[] }): Promise<void> {
+  async acknowledgeMessage(args: { messageIds: string[] }): Promise<void> {
     this.bus.ack(this.owner, args.messageIds)
   }
 }
 
-const makeWallet = (identityKey: PubKeyHex): WalletInterface => ({
-  getPublicKey: async () => ({ publicKey: identityKey })
-} as unknown as WalletInterface)
+const makeWallet = (identityKey: PubKeyHex): WalletInterface =>
+  ({
+    getPublicKey: async () => ({ publicKey: identityKey })
+  }) as unknown as WalletInterface
 
 const makeInvoiceInput = (overrides: Partial<ComposeInvoiceInput> = {}): ComposeInvoiceInput => ({
   lineItems: [],
@@ -63,7 +71,8 @@ const makeInvoiceInput = (overrides: Partial<ComposeInvoiceInput> = {}): Compose
   ...overrides
 })
 
-const parseEnvelope = (msg: StoredMessage): RemittanceEnvelope => JSON.parse(msg.body) as RemittanceEnvelope
+const parseEnvelope = (msg: StoredMessage): RemittanceEnvelope =>
+  JSON.parse(msg.body) as RemittanceEnvelope
 
 const makeIdentityLayer = (): IdentityLayer => ({
   determineCertificatesToRequest: async ({ threadId }) => ({
@@ -104,7 +113,7 @@ const makeThreadIdFactory = (): (() => ThreadId) => {
   return () => `thread-${++i}` as ThreadId
 }
 
-const tick = async (): Promise<void> => await new Promise((resolve) => setTimeout(resolve, 0))
+const tick = async (): Promise<void> => await new Promise(resolve => setTimeout(resolve, 0))
 
 const waitForKind = async (
   bus: MessageBus,
@@ -114,7 +123,9 @@ const waitForKind = async (
 ): Promise<void> => {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    const found = bus.list(recipient, 'remittance_inbox').some((msg) => parseEnvelope(msg).kind === kind)
+    const found = bus
+      .list(recipient, 'remittance_inbox')
+      .some(msg => parseEnvelope(msg).kind === kind)
     if (found) return
     await tick()
   }
@@ -125,23 +136,38 @@ describe('RemittanceManager base flows', () => {
   it('processes an invoice, settlement, and receipt end-to-end', async () => {
     const bus = new MessageBus()
     const moduleProcessReceipt = jest.fn()
-    const module: RemittanceModule<{ amountSatoshis: number }, { amountSatoshis: number }, { accepted: true }> = {
+    const module: RemittanceModule<
+      { amountSatoshis: number },
+      { amountSatoshis: number },
+      { accepted: true }
+    > = {
       id: 'basic-module',
       name: 'Basic Module',
       allowUnsolicitedSettlements: false,
       createOption: async ({ invoice }) => ({ amountSatoshis: Number(invoice.total.value) }),
       buildSettlement: async ({ option }) => ({ action: 'settle', artifact: option }),
-      acceptSettlement: async ({ settlement }) => ({ action: 'accept', receiptData: { accepted: true } }),
+      acceptSettlement: async ({ settlement: _settlement }) => ({
+        action: 'accept',
+        receiptData: { accepted: true }
+      }),
       processReceipt: moduleProcessReceipt
     }
 
     const maker = new RemittanceManager(
-      { remittanceModules: [module], options: { receiptProvided: true, autoIssueReceipt: true }, threadIdFactory: makeThreadIdFactory() },
+      {
+        remittanceModules: [module],
+        options: { receiptProvided: true, autoIssueReceipt: true },
+        threadIdFactory: makeThreadIdFactory()
+      },
       makeWallet('maker-key'),
       new TestComms('maker-key', bus)
     )
     const taker = new RemittanceManager(
-      { remittanceModules: [module], options: { receiptProvided: true }, threadIdFactory: makeThreadIdFactory() },
+      {
+        remittanceModules: [module],
+        options: { receiptProvided: true },
+        threadIdFactory: makeThreadIdFactory()
+      },
       makeWallet('taker-key'),
       new TestComms('taker-key', bus)
     )
@@ -172,17 +198,28 @@ describe('RemittanceManager base flows', () => {
     }
 
     const maker = new RemittanceManager(
-      { remittanceModules: [module], options: { receiptProvided: true, autoIssueReceipt: true }, threadIdFactory: makeThreadIdFactory() },
+      {
+        remittanceModules: [module],
+        options: { receiptProvided: true, autoIssueReceipt: true },
+        threadIdFactory: makeThreadIdFactory()
+      },
       makeWallet('maker-key'),
       new TestComms('maker-key', bus)
     )
     const taker = new RemittanceManager(
-      { remittanceModules: [module], options: { receiptProvided: true }, threadIdFactory: makeThreadIdFactory() },
+      {
+        remittanceModules: [module],
+        options: { receiptProvided: true },
+        threadIdFactory: makeThreadIdFactory()
+      },
       makeWallet('taker-key'),
       new TestComms('taker-key', bus)
     )
 
-    const threadHandle = await taker.sendUnsolicitedSettlement('maker-key', { moduleId: module.id, option: { note: 'hello' } })
+    const threadHandle = await taker.sendUnsolicitedSettlement('maker-key', {
+      moduleId: module.id,
+      option: { note: 'hello' }
+    })
     await maker.syncThreads()
     await taker.syncThreads()
 
@@ -209,7 +246,10 @@ describe('RemittanceManager base flows', () => {
         remittanceModules: [module],
         identityLayer,
         options: {
-          identityOptions: { makerRequestIdentity: 'beforeInvoicing', takerRequestIdentity: 'never' },
+          identityOptions: {
+            makerRequestIdentity: 'beforeInvoicing',
+            takerRequestIdentity: 'never'
+          },
           identityTimeoutMs: 2000,
           identityPollIntervalMs: 5
         },
@@ -223,7 +263,10 @@ describe('RemittanceManager base flows', () => {
         remittanceModules: [module],
         identityLayer,
         options: {
-          identityOptions: { makerRequestIdentity: 'beforeInvoicing', takerRequestIdentity: 'never' },
+          identityOptions: {
+            makerRequestIdentity: 'beforeInvoicing',
+            takerRequestIdentity: 'never'
+          },
           identityTimeoutMs: 2000,
           identityPollIntervalMs: 5
         },
@@ -242,7 +285,7 @@ describe('RemittanceManager base flows', () => {
     await taker.syncThreads()
     const invoiceHandle = await sendPromise
     const postIdentity = bus.list('taker-key', 'remittance_inbox')
-    const kinds = postIdentity.map((msg) => parseEnvelope(msg).kind)
+    const kinds = postIdentity.map(msg => parseEnvelope(msg).kind)
     expect(kinds).toContain('invoice')
     expect(kinds).toContain('identityVerificationAcknowledgment')
 
@@ -273,7 +316,10 @@ describe('RemittanceManager base flows', () => {
         remittanceModules: [module],
         identityLayer,
         options: {
-          identityOptions: { makerRequestIdentity: 'never', takerRequestIdentity: 'beforeSettlement' },
+          identityOptions: {
+            makerRequestIdentity: 'never',
+            takerRequestIdentity: 'beforeSettlement'
+          },
           receiptProvided: false,
           identityTimeoutMs: 2000,
           identityPollIntervalMs: 5
@@ -296,7 +342,7 @@ describe('RemittanceManager base flows', () => {
     await maker.syncThreads()
     await payPromise
     const postSettlement = bus.list('maker-key', 'remittance_inbox')
-    const kinds = postSettlement.map((msg) => parseEnvelope(msg).kind)
+    const kinds = postSettlement.map(msg => parseEnvelope(msg).kind)
     expect(kinds).toContain('settlement')
   })
 
@@ -318,7 +364,11 @@ describe('RemittanceManager base flows', () => {
       new TestComms('maker-key', bus)
     )
     const taker = new RemittanceManager(
-      { remittanceModules: [module], options: { receiptProvided: false }, threadIdFactory: makeThreadIdFactory() },
+      {
+        remittanceModules: [module],
+        options: { receiptProvided: false },
+        threadIdFactory: makeThreadIdFactory()
+      },
       makeWallet('taker-key'),
       new TestComms('taker-key', bus)
     )
@@ -351,7 +401,7 @@ describe('RemittanceManager base flows', () => {
         remittanceModules: [module],
         events: {
           onThreadCreated: () => events.push('threadCreated'),
-          onStateChanged: (event) => events.push(`state:${event.next}`),
+          onStateChanged: event => events.push(`state:${event.next}`),
           onInvoiceSent: () => events.push('invoiceSent')
         },
         threadIdFactory: makeThreadIdFactory()

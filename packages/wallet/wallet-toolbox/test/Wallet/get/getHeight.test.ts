@@ -1,5 +1,4 @@
-import { _tu, expectToThrowWERR } from '../../utils/TestUtilsWalletStorage'
-import { sdk } from '../../../src/index.client'
+import { _tu } from '../../utils/TestUtilsWalletStorage'
 
 const includeTestChaintracks = false
 

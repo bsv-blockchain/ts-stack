@@ -21,7 +21,7 @@ export default class PublicKeyInfrastructureRoute extends PaymailRoute {
     })
   }
 
-  protected serializeResponse(domainLogicResponse: PkiResponse): string {
+  protected override serializeResponse(domainLogicResponse: PkiResponse): string {
     return JSON.stringify({
       bsvalias: '1.0',
       handle: domainLogicResponse.handle,

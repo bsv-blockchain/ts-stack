@@ -8,7 +8,7 @@ describe('idb count tests', () => {
   jest.setTimeout(99999999)
 
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnv(chain)
+  const _env = _tu.getEnv(chain)
   let setups: { setup: TestSetup1; storage: StorageProvider }[] = []
 
   beforeEach(async () => {
@@ -28,19 +28,19 @@ describe('idb count tests', () => {
   })
 
   test('0 count ProvenTx', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countProvenTxs({ partial: {} })).toBe(1)
     }
   })
 
   test('1 count ProvenTxReq', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countProvenTxReqs({ partial: {} })).toBe(2)
     }
   })
 
   test('2 count User', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countUsers({ partial: {} })).toBe(2)
     }
   })
@@ -103,55 +103,55 @@ describe('idb count tests', () => {
   })
 
   test('6 count Transaction', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countTransactions({ partial: {} })).toBe(3)
     }
   })
 
   test('7 count Commission', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countCommissions({ partial: {} })).toBe(3)
     }
   })
 
   test('8 count Output', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countOutputs({ partial: {} })).toBe(3)
     }
   })
 
   test('9 count OutputTag', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countOutputTags({ partial: {} })).toBe(2)
     }
   })
 
   test('10 count OutputTagMap', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countOutputTagMaps({ partial: {} })).toBe(3)
     }
   })
 
   test('11 count TxLabel', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countTxLabels({ partial: {} })).toBe(3)
     }
   })
 
   test('12 count TxLabelMap', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countTxLabelMaps({ partial: {} })).toBe(3)
     }
   })
 
   test('13 count MonitorEvent', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countMonitorEvents({ partial: {} })).toBe(1)
     }
   })
 
   test('14 count SyncState', async () => {
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       expect(await storage.countSyncStates({ partial: {} })).toBe(1)
     }
   })

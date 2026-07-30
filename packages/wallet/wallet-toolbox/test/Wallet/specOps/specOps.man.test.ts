@@ -233,7 +233,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     const setup = await createSetup('test')
 
     try {
-      const r = await setup.wallet.createAction({
+      const _r = await setup.wallet.createAction({
         labels: [specOpThrowReviewActions],
         description: 'must throw'
       })
@@ -251,7 +251,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     const wallet = new WalletClient(undefined, '6.specOps.man.test')
 
     try {
-      const r = await wallet.createAction({
+      const _r = await wallet.createAction({
         labels: [specOpThrowReviewActions],
         description: 'must throw'
       })

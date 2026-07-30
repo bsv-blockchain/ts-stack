@@ -1,11 +1,14 @@
-import {
-  WalletInterface,
-  WalletLoggerInterface
-} from '@bsv/sdk'
+import { WalletInterface, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { logWalletError } from '../../WalletLogger'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
-import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
+import {
+  BINARY_ENCODING,
+  BINARY_ENCODING_HEADER,
+  BINARY_REQUEST_ENCODING_HEADER,
+  parseJsonRpc,
+  stringifyJsonRpc
+} from './BinaryJson'
 
 /**
  * `StorageClient` implements the `WalletStorageProvider` interface which allows it to
@@ -22,7 +25,7 @@ import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER
  * For details of the API implemented, follow the "See also" link for the `WalletStorageProvider` interface.
  */
 export class StorageClient extends StorageClientBase {
-  constructor (wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
+  constructor(wallet: WalletInterface, endpointUrl: string, options: StorageClientOptions = {}) {
     super(wallet, endpointUrl, options)
   }
 
@@ -36,7 +39,9 @@ export class StorageClient extends StorageClientBase {
    * @param params The array of parameters to pass to the method in order.
    */
   protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
-    const logger: WalletLoggerInterface | undefined = params[1]?.['logger']
+    const requestOptions =
+      typeof params[1] === 'object' && params[1] !== null ? (params[1] as Record<string, unknown>) : undefined
+    const logger = requestOptions?.logger as WalletLoggerInterface | undefined
 
     try {
       const id = this.nextId++
@@ -44,7 +49,7 @@ export class StorageClient extends StorageClientBase {
       if (logger != null) {
         // Replace logger object with seed json object to continue logging on request server.
         logger.group(`StorageClient ${method}`)
-        params[1]!['logger'] = { indent: logger.indent || 0 }
+        requestOptions!.logger = { indent: logger.indent || 0 }
       }
 
       const body = {
@@ -97,7 +102,7 @@ export class StorageClient extends StorageClientBase {
     } finally {
       if (logger != null) {
         // Restore original logger in params
-        params[1]!['logger'] = logger
+        requestOptions!.logger = logger
       }
     }
   }

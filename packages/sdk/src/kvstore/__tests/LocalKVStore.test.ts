@@ -11,7 +11,6 @@ import {
   SignActionResult
 } from '../../wallet/Wallet.interfaces.js'
 import Transaction from '../../transaction/Transaction.js'
-import { mock } from 'node:test'
 
 // --- Constants for Mock Values ---
 const testLockingScriptHex = 'mockLockingScriptHex'
@@ -57,19 +56,21 @@ jest.mock('../../script/templates/PushDrop.js', () => {
 })
 jest.mock('../../transaction/Transaction.js', () => ({
   // Static method returns a minimal mock object
-  fromAtomicBEEF: jest.fn(() => ({ /* mock tx object if needed */ }))
+  fromAtomicBEEF: jest.fn(() => ({/* mock tx object if needed */}))
 }))
 
 jest.mock('../../primitives/utils.js', () => ({
   // Ensure toArray returns Array<number> or Uint8Array
-  toArray: jest.fn((str: string, encoding = 'utf8') => Array.from(Buffer.from(str, encoding as BufferEncoding))),
+  toArray: jest.fn((str: string, encoding = 'utf8') =>
+    Array.from(Buffer.from(str, encoding as BufferEncoding))
+  ),
   toUTF8: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8'))
 }))
 
 jest.mock('../../wallet/WalletClient.js', () => jest.fn())
 
 // --- Typed Mocks for SDK Components ---
-const MockedLockingScript = LockingScript as jest.Mocked<typeof LockingScript>
+const _MockedLockingScript = LockingScript as jest.Mocked<typeof LockingScript>
 // Use MockedClass for the constructor and add static methods separately
 const MockedPushDrop = PushDrop as jest.MockedClass<typeof PushDrop> & {
   decode: jest.Mock<any, any>
@@ -80,14 +81,15 @@ const MockedUtils = Utils as jest.Mocked<typeof Utils>
 const MockedTransaction = Transaction as jest.Mocked<typeof Transaction>
 
 // --- Mock Wallet Setup ---
-const createMockWallet = (): jest.Mocked<WalletInterface> => ({
-  listOutputs: jest.fn(),
-  encrypt: jest.fn(),
-  decrypt: jest.fn(),
-  createAction: jest.fn(),
-  signAction: jest.fn(),
-  relinquishOutput: jest.fn()
-} as unknown as jest.Mocked<WalletInterface>)
+const createMockWallet = (): jest.Mocked<WalletInterface> =>
+  ({
+    listOutputs: jest.fn(),
+    encrypt: jest.fn(),
+    decrypt: jest.fn(),
+    createAction: jest.fn(),
+    signAction: jest.fn(),
+    relinquishOutput: jest.fn()
+  }) as unknown as jest.Mocked<WalletInterface>
 
 describe('localKVStore', () => {
   let mockWallet: jest.Mocked<WalletInterface>
@@ -97,7 +99,7 @@ describe('localKVStore', () => {
   const testValue = 'myTestDataValue' // Raw value string used in tests
   // Use the constants defined above for mock results
   // const testEncryptedValue = Buffer.from('encryptedData'); // Defined above
-  const testOutpoint = 'txid123.0'
+  const _testOutpoint = 'txid123.0'
   // const testLockingScriptHex = 'mockLockingScriptHex'; // Defined above
   // const testUnlockingScriptHex = 'mockUnlockingScriptHex'; // Defined above
 
@@ -139,8 +141,12 @@ describe('localKVStore', () => {
     })
 
     it('should throw an error if context is missing or empty', () => {
-      expect(() => new LocalKVStore(mockWallet, '')).toThrow('A context in which to operate is required.')
-      expect(() => new LocalKVStore(mockWallet, null as any)).toThrow('A context in which to operate is required.')
+      expect(() => new LocalKVStore(mockWallet, '')).toThrow(
+        'A context in which to operate is required.'
+      )
+      expect(() => new LocalKVStore(mockWallet, null as any)).toThrow(
+        'A context in which to operate is required.'
+      )
     })
   })
 
@@ -161,7 +167,6 @@ describe('localKVStore', () => {
         outpoint: undefined,
         lor: mockedLor
       })
-
 
       const result = await kvStore.get(testKey, defaultValue)
       kvStore['lookupValue'] = lookupValueReal
@@ -185,7 +190,6 @@ describe('localKVStore', () => {
         lor: mockedLor
       })
 
-
       const result = await kvStore.get(testKey, defaultValue)
       kvStore['lookupValue'] = lookupValueReal
 
@@ -195,7 +199,7 @@ describe('localKVStore', () => {
 
   // --- Set Method Tests ---
   describe('set', () => {
-    let pushDropInstance: PushDrop // To access the instance methods
+    let _pushDropInstance: PushDrop // To access the instance methods
 
     beforeEach(() => {
       // Get the mock instance that will be created by `new PushDrop()`
@@ -217,38 +221,46 @@ describe('localKVStore', () => {
 
       expect(result).toBe('newTxId.0')
       expect(MockedUtils.toArray).toHaveBeenCalledWith(testValue, 'utf8')
-      expect(mockWallet.encrypt).toHaveBeenCalledWith({
-        plaintext: valueArray, // Should be Array<number>
-        protocolID: [2, testContext],
-        keyID: testKey
-      }, undefined)
+      expect(mockWallet.encrypt).toHaveBeenCalledWith(
+        {
+          plaintext: valueArray, // Should be Array<number>
+          protocolID: [2, testContext],
+          keyID: testKey
+        },
+        undefined
+      )
       // Check the mock instance's lock method
       expect(mockPDInstance.lock).toHaveBeenCalledWith(
         // The lock function expects Array<number[] | Uint8Array>
         // Ensure the encrypted value is passed correctly (as Uint8Array or Array<number>)
-        [(encryptedArray)], // Pass buffer derived from encrypted array
+        [encryptedArray], // Pass buffer derived from encrypted array
         [2, testContext],
         testKey,
         'self'
       )
       //expect(mockWallet.listOutputs).toHaveBeenCalledWith({ basket: testContext, tags: [testKey], include: 'entire transactions' })
       // Verify createAction for NEW output
-      expect(mockWallet.createAction).toHaveBeenCalledWith({
-        description: `Update ${testKey} in ${testContext}`,
-        inputBEEF: undefined,
-        inputs: [],
-        outputs: [{
-          basket: 'test-kv-context',
-          tags: ['myTestKey'],
-          lockingScript: testLockingScriptHex, // From the mock lock result
-          satoshis: 1,
-          outputDescription: 'Key-value token'
-        }],
-        options: {
-          acceptDelayedBroadcast: false,
-          randomizeOutputs: false
-        }
-      }, undefined)
+      expect(mockWallet.createAction).toHaveBeenCalledWith(
+        {
+          description: `Update ${testKey} in ${testContext}`,
+          inputBEEF: undefined,
+          inputs: [],
+          outputs: [
+            {
+              basket: 'test-kv-context',
+              tags: ['myTestKey'],
+              lockingScript: testLockingScriptHex, // From the mock lock result
+              satoshis: 1,
+              outputDescription: 'Key-value token'
+            }
+          ],
+          options: {
+            acceptDelayedBroadcast: false,
+            randomizeOutputs: false
+          }
+        },
+        undefined
+      )
       expect(mockWallet.signAction).not.toHaveBeenCalled()
       expect(mockWallet.relinquishOutput).not.toHaveBeenCalled()
     })
@@ -270,35 +282,45 @@ describe('localKVStore', () => {
       expect(mockWallet.encrypt).not.toHaveBeenCalled()
       // Check the mock instance's lock method
       expect(mockPDInstance.lock).toHaveBeenCalledWith(
-        [(valueArray)], // Pass raw value buffer
+        [valueArray], // Pass raw value buffer
         [2, testContext],
         testKey,
         'self'
       )
       //expect(mockWallet.listOutputs).toHaveBeenCalledWith({ basket: testContext, tags: [testKey], include: 'entire transactions' })
-      expect(mockWallet.createAction).toHaveBeenCalledWith({
-        description: `Update ${testKey} in ${testContext}`,
-        inputBEEF: undefined,
-        inputs: [],
-        outputs: [{
-          basket: "test-kv-context",
-          tags: ['myTestKey'],
-          lockingScript: testLockingScriptHex, // From mock lock
-          satoshis: 1,
-          outputDescription: 'Key-value token'
-        }],
-        options: {
-          acceptDelayedBroadcast: false,
-          randomizeOutputs: false
-        }
-      }, undefined)
+      expect(mockWallet.createAction).toHaveBeenCalledWith(
+        {
+          description: `Update ${testKey} in ${testContext}`,
+          inputBEEF: undefined,
+          inputs: [],
+          outputs: [
+            {
+              basket: 'test-kv-context',
+              tags: ['myTestKey'],
+              lockingScript: testLockingScriptHex, // From mock lock
+              satoshis: 1,
+              outputDescription: 'Key-value token'
+            }
+          ],
+          options: {
+            acceptDelayedBroadcast: false,
+            randomizeOutputs: false
+          }
+        },
+        undefined
+      )
       expect(mockWallet.signAction).not.toHaveBeenCalled()
       expect(mockWallet.relinquishOutput).not.toHaveBeenCalled()
     })
 
     it('should update an existing output (spend and create)', async () => {
       const existingOutpoint = 'oldTxId.0'
-      const existingOutput = { outpoint: existingOutpoint, txid: 'oldTxId', vout: 0, lockingScript: 'oldScriptHex' } // Added script
+      const existingOutput = {
+        outpoint: existingOutpoint,
+        txid: 'oldTxId',
+        vout: 0,
+        lockingScript: 'oldScriptHex'
+      } // Added script
       const mockBEEF = [1, 2, 3, 4, 5, 6]
       const signableRef = 'signableTxRef123'
       const signableTx: any[] = []
@@ -309,7 +331,11 @@ describe('localKVStore', () => {
 
       MockedUtils.toArray.mockReturnValue(valueArray)
       mockWallet.encrypt.mockResolvedValue({ ciphertext: encryptedArray } as WalletEncryptResult)
-      mockWallet.listOutputs.mockResolvedValue({ outputs: [existingOutput], totalOutputs: 1, BEEF: mockBEEF } as any)
+      mockWallet.listOutputs.mockResolvedValue({
+        outputs: [existingOutput],
+        totalOutputs: 1,
+        BEEF: mockBEEF
+      } as any)
 
       // Mock createAction to return a signable transaction structure
       mockWallet.createAction.mockResolvedValue({
@@ -317,7 +343,7 @@ describe('localKVStore', () => {
       } as CreateActionResult)
 
       // Mock Transaction.fromAtomicBEEF to return a mock TX object
-      const mockTxObject = { /* Can add mock properties/methods if SUT uses them */ }
+      const mockTxObject = {/* Can add mock properties/methods if SUT uses them */}
       MockedTransaction.fromAtomicBEEF.mockReturnValue(mockTxObject as any)
 
       mockWallet.signAction.mockResolvedValue({ txid: updatedTxId } as SignActionResult)
@@ -327,11 +353,13 @@ describe('localKVStore', () => {
 
       const mockedLor: ListOutputsResult = {
         totalOutputs: 1,
-        outputs: [{
-          satoshis: 0,
-          spendable: true,
-          outpoint: existingOutpoint
-        }],
+        outputs: [
+          {
+            satoshis: 0,
+            spendable: true,
+            outpoint: existingOutpoint
+          }
+        ],
         BEEF: mockBEEF
       }
 
@@ -352,19 +380,30 @@ describe('localKVStore', () => {
 
       expect(result).toBe(`${updatedTxId}.0`) // Assuming output 0 is the new KV token
       expect(mockWallet.encrypt).toHaveBeenCalled()
-      expect(mockPDInstance.lock).toHaveBeenCalledWith([(encryptedArray)], [2, testContext], testKey, 'self')
+      expect(mockPDInstance.lock).toHaveBeenCalledWith(
+        [encryptedArray],
+        [2, testContext],
+        testKey,
+        'self'
+      )
 
       // Verify createAction for UPDATE
-      expect(mockWallet.createAction).toHaveBeenCalledWith(expect.objectContaining({ // Use objectContaining for flexibility
-        description: `Update ${testKey} in ${testContext}`,
-        inputBEEF: mockBEEF,
-        inputs: expect.arrayContaining([ // Check inputs array
-          expect.objectContaining({ outpoint: existingOutpoint }) // Check specific input
-        ]),
-        outputs: expect.arrayContaining([ // Check outputs array
-          expect.objectContaining({ lockingScript: testLockingScriptHex }) // Check the new output script
-        ])
-      }), undefined)
+      expect(mockWallet.createAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // Use objectContaining for flexibility
+          description: `Update ${testKey} in ${testContext}`,
+          inputBEEF: mockBEEF,
+          inputs: expect.arrayContaining([
+            // Check inputs array
+            expect.objectContaining({ outpoint: existingOutpoint }) // Check specific input
+          ]),
+          outputs: expect.arrayContaining([
+            // Check outputs array
+            expect.objectContaining({ lockingScript: testLockingScriptHex }) // Check the new output script
+          ])
+        }),
+        undefined
+      )
 
       // Verify signing steps
       expect(MockedTransaction.fromAtomicBEEF).toHaveBeenCalledWith(signableTx)
@@ -376,12 +415,15 @@ describe('localKVStore', () => {
       expect(mockUnlocker.sign).toHaveBeenCalledWith(mockTxObject, 0) // Check sign args
 
       // Verify signAction call
-      expect(mockWallet.signAction).toHaveBeenCalledWith({
-        reference: signableRef,
-        spends: {
-          0: { unlockingScript: testUnlockingScriptHex } // Check unlocking script from mock sign result
-        }
-      }, undefined)
+      expect(mockWallet.signAction).toHaveBeenCalledWith(
+        {
+          reference: signableRef,
+          spends: {
+            0: { unlockingScript: testUnlockingScriptHex } // Check unlocking script from mock sign result
+          }
+        },
+        undefined
+      )
       expect(mockWallet.relinquishOutput).not.toHaveBeenCalled()
     })
 
@@ -391,8 +433,18 @@ describe('localKVStore', () => {
        */
       const existingOutpoint1 = 'oldTxId1.0'
       const existingOutpoint2 = 'oldTxId2.1'
-      const existingOutput1 = { outpoint: existingOutpoint1, txid: 'oldTxId1', vout: 0, lockingScript: 's1' }
-      const existingOutput2 = { outpoint: existingOutpoint2, txid: 'oldTxId2', vout: 1, lockingScript: 's2' }
+      const existingOutput1 = {
+        outpoint: existingOutpoint1,
+        txid: 'oldTxId1',
+        vout: 0,
+        lockingScript: 's1'
+      }
+      const existingOutput2 = {
+        outpoint: existingOutpoint2,
+        txid: 'oldTxId2',
+        vout: 1,
+        lockingScript: 's2'
+      }
       const mockBEEF = [1, 2, 3, 4, 5, 6]
       const signableRef = 'signableTxRefMulti'
       const signableTx: any[] = []
@@ -404,7 +456,11 @@ describe('localKVStore', () => {
 
       MockedUtils.toArray.mockReturnValue(valueArray)
       mockWallet.encrypt.mockResolvedValue({ ciphertext: encryptedArray } as WalletEncryptResult)
-      mockWallet.listOutputs.mockResolvedValue({ outputs: [existingOutput1, existingOutput2], totalOutputs: 2, BEEF: mockBEEF } as any)
+      mockWallet.listOutputs.mockResolvedValue({
+        outputs: [existingOutput1, existingOutput2],
+        totalOutputs: 2,
+        BEEF: mockBEEF
+      } as any)
       mockWallet.createAction.mockResolvedValue({
         signableTransaction: { reference: signableRef, tx: signableTx }
       } as CreateActionResult)
@@ -446,16 +502,19 @@ describe('localKVStore', () => {
       expect(mockPDInstance.lock).toHaveBeenCalled()
 
       // Verify createAction with multiple inputs
-      expect(mockWallet.createAction).toHaveBeenCalledWith(expect.objectContaining({
-        inputBEEF: mockBEEF,
-        inputs: expect.arrayContaining([
-          expect.objectContaining({ outpoint: existingOutpoint1 }),
-          expect.objectContaining({ outpoint: existingOutpoint2 })
-        ]),
-        outputs: expect.arrayContaining([
-          expect.objectContaining({ lockingScript: testLockingScriptHex })
-        ])
-      }), undefined)
+      expect(mockWallet.createAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inputBEEF: mockBEEF,
+          inputs: expect.arrayContaining([
+            expect.objectContaining({ outpoint: existingOutpoint1 }),
+            expect.objectContaining({ outpoint: existingOutpoint2 })
+          ]),
+          outputs: expect.arrayContaining([
+            expect.objectContaining({ lockingScript: testLockingScriptHex })
+          ])
+        }),
+        undefined
+      )
 
       // Verify signing loop
       expect(MockedTransaction.fromAtomicBEEF).toHaveBeenCalledWith(signableTx)
@@ -470,13 +529,16 @@ describe('localKVStore', () => {
       expect(mockUnlocker.sign).toHaveBeenNthCalledWith(2, mockTxObject, 1) // Input index 1
 
       // Verify signAction call with multiple spends
-      expect(mockWallet.signAction).toHaveBeenCalledWith({
-        reference: signableRef,
-        spends: {
-          0: { unlockingScript: testUnlockingScriptHex }, // Same mock script for both
-          1: { unlockingScript: testUnlockingScriptHex }
-        }
-      }, undefined)
+      expect(mockWallet.signAction).toHaveBeenCalledWith(
+        {
+          reference: signableRef,
+          spends: {
+            0: { unlockingScript: testUnlockingScriptHex }, // Same mock script for both
+            1: { unlockingScript: testUnlockingScriptHex }
+          }
+        },
+        undefined
+      )
       expect(mockWallet.relinquishOutput).not.toHaveBeenCalled()
     })
 
@@ -528,7 +590,7 @@ describe('localKVStore', () => {
 
   // --- Remove Method Tests ---
   describe('remove', () => {
-    let pushDropInstance: PushDrop // To access the instance methods
+    let _pushDropInstance: PushDrop // To access the instance methods
 
     beforeEach(() => {
       // Get the mock instance that will be created by `new PushDrop()`
@@ -558,15 +620,29 @@ describe('localKVStore', () => {
     it('should remove an existing key by spending its output(s)', async () => {
       const existingOutpoint1 = 'removeTxId1.0'
       const existingOutpoint2 = 'removeTxId2.1'
-      const existingOutput1 = { outpoint: existingOutpoint1, txid: 'removeTxId1', vout: 0, lockingScript: 's1' }
-      const existingOutput2 = { outpoint: existingOutpoint2, txid: 'removeTxId2', vout: 1, lockingScript: 's2' }
+      const existingOutput1 = {
+        outpoint: existingOutpoint1,
+        txid: 'removeTxId1',
+        vout: 0,
+        lockingScript: 's1'
+      }
+      const existingOutput2 = {
+        outpoint: existingOutpoint2,
+        txid: 'removeTxId2',
+        vout: 1,
+        lockingScript: 's2'
+      }
       const mockBEEF = Buffer.from('mockBEEFRemove')
       const signableRef = 'signableTxRefRemove'
       const signableTx: any[] = []
       const removalTxId = 'removalTxId'
       const mockTxObject = {}
 
-      mockWallet.listOutputs.mockResolvedValue({ outputs: [existingOutput1, existingOutput2], totalOutputs: 2, BEEF: mockBEEF } as any)
+      mockWallet.listOutputs.mockResolvedValue({
+        outputs: [existingOutput1, existingOutput2],
+        totalOutputs: 2,
+        BEEF: mockBEEF
+      } as any)
       mockWallet.createAction.mockResolvedValue({
         signableTransaction: { reference: signableRef, tx: signableTx }
       } as CreateActionResult) // Note: removal tx has NO outputs field in result
@@ -582,21 +658,24 @@ describe('localKVStore', () => {
       //expect(mockWallet.listOutputs).toHaveBeenCalledWith({ basket: testContext, tags: [testKey], include: 'entire transactions', limit: undefined, tagsQueryMode: 'all' })
 
       // Verify createAction for REMOVE (no outputs in the action)
-      expect(mockWallet.createAction).toHaveBeenCalledWith({
-        // The description might still say "Update" depending on implementation reuse
-        // description: `Remove ${testKey} from ${testContext}`, // Ideal description
-        description: expect.stringContaining(testKey), // More general check
-        inputBEEF: mockBEEF,
-        inputs: expect.arrayContaining([
-          expect.objectContaining({ outpoint: existingOutpoint1 }),
-          expect.objectContaining({ outpoint: existingOutpoint2 })
-        ]),
-        // IMPORTANT: No 'outputs' key should be present for removal action
-        outputs: undefined, // Or check that the key is not present
-        options: {
-          acceptDelayedBroadcast: false
-        }
-      }, undefined)
+      expect(mockWallet.createAction).toHaveBeenCalledWith(
+        {
+          // The description might still say "Update" depending on implementation reuse
+          // description: `Remove ${testKey} from ${testContext}`, // Ideal description
+          description: expect.stringContaining(testKey), // More general check
+          inputBEEF: mockBEEF,
+          inputs: expect.arrayContaining([
+            expect.objectContaining({ outpoint: existingOutpoint1 }),
+            expect.objectContaining({ outpoint: existingOutpoint2 })
+          ]),
+          // IMPORTANT: No 'outputs' key should be present for removal action
+          outputs: undefined, // Or check that the key is not present
+          options: {
+            acceptDelayedBroadcast: false
+          }
+        },
+        undefined
+      )
       // Check that outputs key is absent
       expect(mockWallet.createAction.mock.calls[0][0]).not.toHaveProperty('outputs')
 
@@ -611,25 +690,37 @@ describe('localKVStore', () => {
       expect(mockUnlocker.sign).toHaveBeenNthCalledWith(2, mockTxObject, 1)
 
       // Verify signAction call
-      expect(mockWallet.signAction).toHaveBeenCalledWith({
-        reference: signableRef,
-        spends: {
-          0: { unlockingScript: testUnlockingScriptHex },
-          1: { unlockingScript: testUnlockingScriptHex }
-        }
-      }, undefined)
+      expect(mockWallet.signAction).toHaveBeenCalledWith(
+        {
+          reference: signableRef,
+          spends: {
+            0: { unlockingScript: testUnlockingScriptHex },
+            1: { unlockingScript: testUnlockingScriptHex }
+          }
+        },
+        undefined
+      )
       expect(mockWallet.relinquishOutput).not.toHaveBeenCalled()
     })
 
     it('should relinquish outputs if signing fails during removal', async () => {
       const existingOutpoint1 = 'failRemoveTxId1.0'
-      const existingOutput1 = { outpoint: existingOutpoint1, txid: 'failRemoveTxId1', vout: 0, lockingScript: 's1' }
+      const existingOutput1 = {
+        outpoint: existingOutpoint1,
+        txid: 'failRemoveTxId1',
+        vout: 0,
+        lockingScript: 's1'
+      }
       const mockBEEF = Buffer.from('mockBEEFFailRemove')
       const signableRef = 'signableTxRefFailRemove'
       const signableTx: any[] = []
       const mockTxObject = {}
 
-      mockWallet.listOutputs.mockResolvedValue({ outputs: [existingOutput1], totalOutputs: 1, BEEF: mockBEEF } as any)
+      mockWallet.listOutputs.mockResolvedValue({
+        outputs: [existingOutput1],
+        totalOutputs: 1,
+        BEEF: mockBEEF
+      } as any)
       mockWallet.createAction.mockResolvedValue({
         signableTransaction: { reference: signableRef, tx: signableTx }
       } as CreateActionResult)
@@ -651,7 +742,6 @@ describe('localKVStore', () => {
       const mockUnlocker = (mockPDInstance.unlock as jest.Mock).mock.results[0].value
       expect(mockUnlocker.sign).toHaveBeenCalledTimes(1) // sign was called
       expect(mockWallet.signAction).toHaveBeenCalled() // Called but failed
-
     })
 
     it('should preserve original error message when wallet operations fail during removal', async () => {
@@ -659,11 +749,20 @@ describe('localKVStore', () => {
       const originalError = new Error(originalErrorMessage)
 
       const existingOutpoint = 'failTxId.0'
-      const existingOutput = { outpoint: existingOutpoint, txid: 'failTxId', vout: 0, lockingScript: 's1' }
+      const existingOutput = {
+        outpoint: existingOutpoint,
+        txid: 'failTxId',
+        vout: 0,
+        lockingScript: 's1'
+      }
       const mockBEEF = Buffer.from('mockBEEFFail')
 
       // Mock wallet to have outputs but createAction fails
-      mockWallet.listOutputs.mockResolvedValue({ outputs: [existingOutput], totalOutputs: 1, BEEF: mockBEEF } as any)
+      mockWallet.listOutputs.mockResolvedValue({
+        outputs: [existingOutput],
+        totalOutputs: 1,
+        BEEF: mockBEEF
+      } as any)
       mockWallet.createAction.mockRejectedValue(originalError)
 
       try {

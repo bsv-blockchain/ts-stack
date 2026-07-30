@@ -796,6 +796,29 @@ function isPlaceholderCheck(command) {
   )
 }
 
+function firstShellArgument(fragment) {
+  let value = fragment.trimStart()
+  if (value.startsWith('=')) value = value.slice(1).trimStart()
+  const quote = value[0]
+  if (quote === "'" || quote === '"') {
+    const end = value.indexOf(quote, 1)
+    return end === -1 ? value.slice(1) : value.slice(1, end)
+  }
+  const end = value.search(/\s/)
+  return end === -1 ? value : value.slice(0, end)
+}
+
+export function lintScriptExcludesAuthoredCode(command) {
+  if (typeof command !== 'string') return false
+  return command
+    .split('--ignore-pattern')
+    .slice(1)
+    .map(firstShellArgument)
+    .some(pattern =>
+      ['__test__', '__tests__', '.test.', 'benchmark'].some(marker => pattern.includes(marker))
+    )
+}
+
 function collectScriptFindings(project, configured, profile) {
   const findings = []
   const scripts = project.manifest.scripts ?? {}
@@ -822,6 +845,30 @@ function collectScriptFindings(project, configured, profile) {
         )
       )
     }
+  }
+  if (
+    typeof scripts.lint === 'string' &&
+    /\boxlint\b/.test(scripts.lint) &&
+    !/(?:^|\s)--deny-warnings(?:\s|$)/.test(scripts.lint)
+  ) {
+    findings.push(
+      finding(
+        project,
+        'lint-warnings-allowed',
+        'Oxlint scripts must fail on every warning with --deny-warnings',
+        'lint'
+      )
+    )
+  }
+  if (lintScriptExcludesAuthoredCode(scripts.lint)) {
+    findings.push(
+      finding(
+        project,
+        'lint-authored-code-excluded',
+        'Lint scripts must not exclude authored tests or benchmarks',
+        'lint'
+      )
+    )
   }
   for (const disabledScript of Object.keys(scripts).filter(name => name.endsWith('-disabled'))) {
     findings.push(

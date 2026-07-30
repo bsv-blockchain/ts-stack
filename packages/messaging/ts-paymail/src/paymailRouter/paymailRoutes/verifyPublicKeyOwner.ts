@@ -21,7 +21,7 @@ export default class VerifyPublicKeyOwnerRoute extends PaymailRoute {
     })
   }
 
-  protected serializeResponse(domainLogicResponse: VerifyPublicKeyOwnerResponse): string {
+  protected override serializeResponse(domainLogicResponse: VerifyPublicKeyOwnerResponse): string {
     return JSON.stringify({
       bsvalias: '1.0',
       handle: domainLogicResponse.handle,

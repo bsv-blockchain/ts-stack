@@ -16,7 +16,7 @@ const includeTestChaintracks = false
 describe('listOutputs test', () => {
   jest.setTimeout(99999999)
 
-  const amount = 1319
+  const _amount = 1319
   const env = _tu.getEnv('test')
   const ctxs: TestWalletProviderNoSetup[] = []
   const testName = () => expect.getState().currentTestName || 'test'
@@ -62,7 +62,8 @@ describe('listOutputs test', () => {
             throw new Error('Expected method to throw.')
           } catch (e) {
             const error = e as Error
-            if (error.name != 'WERR_INVALID_PARAMETER') debugger
+            if (error.name != 'WERR_INVALID_PARAMETER') {
+            }
 
             // Validate error
             expect(error.name).toBe('WERR_INVALID_PARAMETER')
@@ -124,7 +125,7 @@ describe('listOutputs test', () => {
         }
         const validOriginators = ['example.com', 'localhost', 'subdomain.example.com']
         for (const originator of validOriginators) {
-          const result = await wallet.listOutputs(args, originator as OriginatorDomainNameStringUnder250Bytes)
+          const _result = await wallet.listOutputs(args, originator as OriginatorDomainNameStringUnder250Bytes)
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
@@ -143,7 +144,7 @@ describe('listOutputs test', () => {
   test('3_include basket tags labels customInstructions', async () => {
     for (const { wallet } of ctxs) {
       {
-        let log = `\n${testName()}\n`
+        let _log = `\n${testName()}\n`
         const args: ListOutputsArgs = {
           basket: 'default',
           includeTags: true,
@@ -285,7 +286,7 @@ describe('listOutputs test', () => {
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
         expect(r.outputs.length).toBeLessThan(16)
         expect(r.outputs.length).toBe(15)
-        let i = 0
+        let _i = 0
         for (const a of r.outputs) {
           expect(Array.isArray(a.tags)).toBe(true)
           expect(a.tags?.indexOf('babbage_action_originator projectbabbage.com')).toBeGreaterThan(-1)
@@ -305,7 +306,7 @@ describe('listOutputs test', () => {
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
         expect(r.outputs.length).toBe(args.limit || 10)
-        let i = 0
+        let _i = 0
         for (const a of r.outputs) {
           expect(Array.isArray(a.tags)).toBe(true)
           let count = 0

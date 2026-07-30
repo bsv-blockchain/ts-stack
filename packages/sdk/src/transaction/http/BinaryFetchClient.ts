@@ -93,10 +93,12 @@ export function binaryHttpClient(): HttpClient {
 
   if (globalThis.window !== undefined && typeof globalThis.window.fetch === 'function') {
     // Browser tab/page context
-    return new BinaryFetchClient(globalThis.window.fetch.bind(globalThis.window))
+    return new BinaryFetchClient(
+      globalThis.window.fetch.bind(globalThis.window) as unknown as Fetch
+    )
   } else if (typeof globalThis.fetch === 'function') {
     // Service workers, Deno, Node 18+ (any environment with global fetch)
-    return new BinaryFetchClient(globalThis.fetch.bind(globalThis))
+    return new BinaryFetchClient(globalThis.fetch.bind(globalThis) as unknown as Fetch)
   }
 
   const nodeRequire = typeof require === 'function' ? require : undefined

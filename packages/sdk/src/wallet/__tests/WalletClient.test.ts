@@ -6,7 +6,7 @@ describe('WalletClient', () => {
 
     async function testArgs(args: CreateActionArgs, parameter: string) {
       try {
-        const r = await wallet.createAction(args)
+        const _r = await wallet.createAction(args)
         expect(true).toBe(false)
       } catch (e: any) {
         expect(e.name).toBe('WERR_INVALID_PARAMETER')
@@ -19,11 +19,13 @@ describe('WalletClient', () => {
     }
     testArgs(args, 'description')
     args.description = '12345'
-    args.outputs = [{
-      lockingScript: '',
-      satoshis: 0,
-      outputDescription: ''
-    }]
+    args.outputs = [
+      {
+        lockingScript: '',
+        satoshis: 0,
+        outputDescription: ''
+      }
+    ]
     testArgs(args, 'lockingScript')
     args.outputs[0].lockingScript = '1234'
     testArgs(args, 'outputDescription')

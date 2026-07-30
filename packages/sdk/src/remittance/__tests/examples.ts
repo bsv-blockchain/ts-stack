@@ -10,7 +10,7 @@ import {
 } from '../types.js'
 
 /** Example invoice envelope. */
-const exampleInvoice: RemittanceEnvelope<'invoice', Invoice> = {
+const _exampleInvoice: RemittanceEnvelope<'invoice', Invoice> = {
   v: 1,
   id: '123',
   kind: 'invoice',
@@ -32,12 +32,15 @@ const exampleInvoice: RemittanceEnvelope<'invoice', Invoice> = {
       'module-1': { someOptionField: 'someValue' },
       'module-2': { anotherOptionField: 42 }
     },
-    createdAt: Date.now(),
+    createdAt: Date.now()
   }
 }
 
 /** Example identity verification request envelope. */
-const exampleIdentityVerificationRequest: RemittanceEnvelope<'identityVerificationRequest', IdentityVerificationRequest> = {
+const _exampleIdentityVerificationRequest: RemittanceEnvelope<
+  'identityVerificationRequest',
+  IdentityVerificationRequest
+> = {
   v: 1,
   id: 'identity-verification-request-123',
   kind: 'identityVerificationRequest',
@@ -54,7 +57,10 @@ const exampleIdentityVerificationRequest: RemittanceEnvelope<'identityVerificati
 }
 
 /** Example identity verification response envelope. */
-const exampleIdentityVerificationResponse: RemittanceEnvelope<'identityVerificationResponse', IdentityVerificationResponse> = {
+const _exampleIdentityVerificationResponse: RemittanceEnvelope<
+  'identityVerificationResponse',
+  IdentityVerificationResponse
+> = {
   v: 1,
   id: 'identity-verification-response-123',
   kind: 'identityVerificationResponse',
@@ -63,23 +69,28 @@ const exampleIdentityVerificationResponse: RemittanceEnvelope<'identityVerificat
   payload: {
     kind: 'identityVerificationResponse',
     threadId: 'thread-abc',
-    certificates: [{
-      type: 'personalId',
-      certifier: 'certifier1',
-      subject: 'identity-key-2',
-      fields: { name: 'Alice', dob: '1990-01-01' },
-      signature: 'signature1',
-      serialNumber: 'serial1',
-      revocationOutpoint: 'outpoint1',
-      keyringForVerifier: {
-        name: 'key-for-name'
+    certificates: [
+      {
+        type: 'personalId',
+        certifier: 'certifier1',
+        subject: 'identity-key-2',
+        fields: { name: 'Alice', dob: '1990-01-01' },
+        signature: 'signature1',
+        serialNumber: 'serial1',
+        revocationOutpoint: 'outpoint1',
+        keyringForVerifier: {
+          name: 'key-for-name'
+        }
       }
-    }]
+    ]
   }
 }
 
 /** Example identity verification acknowledgment envelope. */
-const exampleIdentityVerificationAcknowledgment: RemittanceEnvelope<'identityVerificationAcknowledgment', IdentityVerificationAcknowledgment> = {
+const _exampleIdentityVerificationAcknowledgment: RemittanceEnvelope<
+  'identityVerificationAcknowledgment',
+  IdentityVerificationAcknowledgment
+> = {
   v: 1,
   id: 'identity-verification-ack-123',
   kind: 'identityVerificationAcknowledgment',
@@ -92,7 +103,7 @@ const exampleIdentityVerificationAcknowledgment: RemittanceEnvelope<'identityVer
 }
 
 /** Example settlement envelope. */
-const exampleSettlement: RemittanceEnvelope<'settlement', Settlement> = {
+const _exampleSettlement: RemittanceEnvelope<'settlement', Settlement> = {
   v: 1,
   id: 'settlement-123',
   kind: 'settlement',
@@ -111,7 +122,7 @@ const exampleSettlement: RemittanceEnvelope<'settlement', Settlement> = {
 }
 
 /** Example receipt envelope. */
-const exampleReceipt: RemittanceEnvelope<'receipt', Receipt> = {
+const _exampleReceipt: RemittanceEnvelope<'receipt', Receipt> = {
   v: 1,
   id: 'receipt-123',
   kind: 'receipt',

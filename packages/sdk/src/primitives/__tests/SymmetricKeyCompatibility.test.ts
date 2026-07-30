@@ -21,19 +21,22 @@ describe('Cross-SDK Compatibility Tests', () => {
       const testCases = [
         {
           name: 'Go 31-byte ciphertext 1',
-          ciphertextHex: '7604d5bdb0eb843051d21873c871c9b1507c3de7ba222e1b407c163c2c166277df95de73be9534a2caf9d4b72157f78e5e2e69d97bc25b18ff4cfbd61a1306c02c0b8b2d165e'
+          ciphertextHex:
+            '7604d5bdb0eb843051d21873c871c9b1507c3de7ba222e1b407c163c2c166277df95de73be9534a2caf9d4b72157f78e5e2e69d97bc25b18ff4cfbd61a1306c02c0b8b2d165e'
         },
         {
           name: 'Go 31-byte ciphertext 2',
-          ciphertextHex: 'ab74fa03d7b2d308f007e21fbae056cfde6e3e5fbea7032880e0482b0b5fbe8583d5221b985a8cdfdff1f70c2bb28c9a3149a34dde3b56f54ecd4728d2dd70c1212642b18bc4'
+          ciphertextHex:
+            'ab74fa03d7b2d308f007e21fbae056cfde6e3e5fbea7032880e0482b0b5fbe8583d5221b985a8cdfdff1f70c2bb28c9a3149a34dde3b56f54ecd4728d2dd70c1212642b18bc4'
         },
         {
           name: 'Go 31-byte ciphertext 3',
-          ciphertextHex: '6c64ae72a1371084347983568d25515ca75599f747236be6971267fa4b48e518855ce4f8380cc479bb75835641f2173b7932b93be5cd40f54cd84aaff053dbc94c3748e427af'
+          ciphertextHex:
+            '6c64ae72a1371084347983568d25515ca75599f747236be6971267fa4b48e518855ce4f8380cc479bb75835641f2173b7932b93be5cd40f54cd84aaff053dbc94c3748e427af'
         }
       ]
 
-      testCases.forEach(({name, ciphertextHex}) => {
+      testCases.forEach(({ name: _name, ciphertextHex }) => {
         // Convert hex to byte array
         const ciphertext: number[] = []
         for (let i = 0; i < ciphertextHex.length; i += 2) {
@@ -67,19 +70,22 @@ describe('Cross-SDK Compatibility Tests', () => {
       const testCases = [
         {
           name: 'Go 32-byte ciphertext 1',
-          ciphertextHex: 'd7744c85ad3dafcb9fc5752ab0d04c40f87084e8a466f6b6013ebe0fc5170daab8184aaef66ab2c2733f01c0dc3de322ba3ddeea976499548bc6ec166581181f919c69aa2de5'
+          ciphertextHex:
+            'd7744c85ad3dafcb9fc5752ab0d04c40f87084e8a466f6b6013ebe0fc5170daab8184aaef66ab2c2733f01c0dc3de322ba3ddeea976499548bc6ec166581181f919c69aa2de5'
         },
         {
           name: 'Go 32-byte ciphertext 2',
-          ciphertextHex: 'bed1fc660bb7219d05a0115bc3c8dfb063fceb07c6571e0a21af1a052988dfd8911f625ae747ae6dad4cadb872dbd1d1bdc4b78bf7817e90bc5df718d77b247805eb06773d13'
+          ciphertextHex:
+            'bed1fc660bb7219d05a0115bc3c8dfb063fceb07c6571e0a21af1a052988dfd8911f625ae747ae6dad4cadb872dbd1d1bdc4b78bf7817e90bc5df718d77b247805eb06773d13'
         },
         {
           name: 'Go 32-byte ciphertext 3',
-          ciphertextHex: '7411f0e9ff2b6ebbb804614fcf11db548a92baeea9cd769e8ee11bd7853a2d055799df476655b7d30f11be17f9513a16b72b6c73f85edd4b6e7548fae68fb47252ff72ace4cf'
+          ciphertextHex:
+            '7411f0e9ff2b6ebbb804614fcf11db548a92baeea9cd769e8ee11bd7853a2d055799df476655b7d30f11be17f9513a16b72b6c73f85edd4b6e7548fae68fb47252ff72ace4cf'
         }
       ]
 
-      testCases.forEach(({name, ciphertextHex}) => {
+      testCases.forEach(({ name: _name, ciphertextHex }) => {
         // Convert hex to byte array
         const ciphertext: number[] = []
         for (let i = 0; i < ciphertextHex.length; i += 2) {
@@ -100,19 +106,23 @@ describe('Cross-SDK Compatibility Tests', () => {
           name: '31-byte key bidirectional',
           wif: 'L4B2postXdaP7TiUrUBYs53Fqzheu7WhSoQVPuY8qBdoBeEwbmZx',
           expectedKeyLength: 31,
-          goCiphertext: '7604d5bdb0eb843051d21873c871c9b1507c3de7ba222e1b407c163c2c166277df95de73be9534a2caf9d4b72157f78e5e2e69d97bc25b18ff4cfbd61a1306c02c0b8b2d165e',
-          tsCiphertext: 'c374d70a4623036f1dd7b971dbeeea375630dc1da40e7068f4c4aa03487d3b19de3afb26a29173deccfbb1ece4fee6c92406b25948e6fe9cb53383057cb826d0a20269e290bd'
+          goCiphertext:
+            '7604d5bdb0eb843051d21873c871c9b1507c3de7ba222e1b407c163c2c166277df95de73be9534a2caf9d4b72157f78e5e2e69d97bc25b18ff4cfbd61a1306c02c0b8b2d165e',
+          tsCiphertext:
+            'c374d70a4623036f1dd7b971dbeeea375630dc1da40e7068f4c4aa03487d3b19de3afb26a29173deccfbb1ece4fee6c92406b25948e6fe9cb53383057cb826d0a20269e290bd'
         },
         {
           name: '32-byte key bidirectional',
           wif: 'KyLGEhYicSoGchHKmVC2fUx2MRrHzWqvwBFLLT4DZB93Nv5DxVR9',
           expectedKeyLength: 32,
-          goCiphertext: 'd7744c85ad3dafcb9fc5752ab0d04c40f87084e8a466f6b6013ebe0fc5170daab8184aaef66ab2c2733f01c0dc3de322ba3ddeea976499548bc6ec166581181f919c69aa2de5',
-          tsCiphertext: '2059fc32910bef280d89c4c7edbbc587b31be22339e609fdcc23319bf458840a91ad1b2da87aea13a5dc5cb3469b41c52001070b8003863843978acbdf57755b24491581a059'
+          goCiphertext:
+            'd7744c85ad3dafcb9fc5752ab0d04c40f87084e8a466f6b6013ebe0fc5170daab8184aaef66ab2c2733f01c0dc3de322ba3ddeea976499548bc6ec166581181f919c69aa2de5',
+          tsCiphertext:
+            '2059fc32910bef280d89c4c7edbbc587b31be22339e609fdcc23319bf458840a91ad1b2da87aea13a5dc5cb3469b41c52001070b8003863843978acbdf57755b24491581a059'
         }
       ]
 
-      testCases.forEach(({name, wif, expectedKeyLength, goCiphertext, tsCiphertext}) => {
+      testCases.forEach(({ name: _name, wif, expectedKeyLength, goCiphertext, tsCiphertext }) => {
         // Create symmetric key
         const privKey = PrivateKey.fromWif(wif)
         const pubKey = privKey.toPublicKey()

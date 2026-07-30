@@ -1,9 +1,10 @@
 {
+  "extends": "../../../config/typescript/dual-runtime.json",
   "files": [],
   "compilerOptions": {
     "types": ["jest", "node"],
     "esModuleInterop": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "allowJs": true,
     "isolatedModules": true,
     "lib": ["es2022", "dom"],

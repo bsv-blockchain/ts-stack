@@ -2589,10 +2589,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (decoded?.fields == null || decoded.fields.length < 3) return undefined
     const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[0]))
     if (this.normalizeOriginator(domainDecoded) !== originator) return undefined
-    const expiryDecoded = Number.parseInt(
-      Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[1])),
-      10
-    )
+    const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[1])), 10)
     const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(decoded.fields[2]))
     if (basketDecoded !== basket) return undefined
     return {
@@ -2626,21 +2623,13 @@ export class WalletPermissionsManager implements WalletInterface {
     const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = decoded.fields
     const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
     if (this.normalizeOriginator(domainDecoded) !== expected.originator) return undefined
-    const expiryDecoded = Number.parseInt(
-      Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)),
-      10
-    )
-    const privileged =
-      Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
+    const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+    const privileged = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
     const certType = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
     const verifier = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
-    const allFields = JSON.parse(
-      Utils.toUTF8(await this.decryptPermissionTokenField(fieldsRaw))
-    ) as string[]
+    const allFields = JSON.parse(Utils.toUTF8(await this.decryptPermissionTokenField(fieldsRaw))) as string[]
     const metadataMatches =
-      privileged === !!expected.privileged &&
-      certType === expected.certType &&
-      verifier === expected.verifier
+      privileged === !!expected.privileged && certType === expected.certType && verifier === expected.verifier
     if (!metadataMatches) return undefined
     const availableFields = new Set(allFields)
     if (expected.fields.some(field => !availableFields.has(field))) return undefined
@@ -4380,7 +4369,7 @@ export class WalletPermissionsManager implements WalletInterface {
         usageType: 'insertion'
       })
       if (customInstructions == null || customInstructions === '') continue
-      requestArgs.outputs[outIndex].insertionRemittance!.customInstructions =
+      requestArgs.outputs[outIndex as unknown as number].insertionRemittance!.customInstructions =
         await this.maybeEncryptMetadata(customInstructions)
     }
   }
@@ -4400,15 +4389,12 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
-  private async encryptInternalizeActionModuleMetadata(
-    requestArgs: InternalizeActionArgs
-  ): Promise<void> {
+  private async encryptInternalizeActionModuleMetadata(requestArgs: InternalizeActionArgs): Promise<void> {
     for (const outIndex in requestArgs.outputs) {
       const output = requestArgs.outputs[outIndex]
       const customInstructions = output.insertionRemittance?.customInstructions
       if (output.protocol !== 'basket insertion' || !customInstructions) continue
-      output.insertionRemittance!.customInstructions =
-        await this.maybeEncryptMetadata(customInstructions)
+      output.insertionRemittance!.customInstructions = await this.maybeEncryptMetadata(customInstructions)
     }
   }
 
@@ -4426,13 +4412,8 @@ export class WalletPermissionsManager implements WalletInterface {
       })
       transformedArgs = transformed.args
     }
-    await this.encryptInternalizeActionModuleMetadata(
-      transformedArgs as InternalizeActionArgs
-    )
-    let result = await this.underlying.internalizeAction(
-      transformedArgs as InternalizeActionArgs,
-      originator
-    )
+    await this.encryptInternalizeActionModuleMetadata(transformedArgs as InternalizeActionArgs)
+    let result = await this.underlying.internalizeAction(transformedArgs as InternalizeActionArgs, originator)
     for (let index = modules.length - 1; index >= 0; index--) {
       result = await modules[index].onResponse(result, {
         method: 'internalizeAction',
@@ -4456,11 +4437,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
     // 4) Call underlying wallet, with P-module transformations if needed
     if (pModulesByScheme.size > 0) {
-      return await this.runInternalizeActionModules(
-        requestArgs,
-        originator!,
-        Array.from(pModulesByScheme.values())
-      )
+      return await this.runInternalizeActionModules(requestArgs, originator!, Array.from(pModulesByScheme.values()))
     }
 
     // No P-modules - call underlying wallet directly

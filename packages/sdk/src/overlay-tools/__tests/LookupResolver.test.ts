@@ -28,7 +28,7 @@ const sampleBeef3 = new Transaction(
   [{ lockingScript: LockingScript.fromHex('88'), satoshis: 3 }],
   0
 ).toBEEF()
-const sampleBeef4 = new Transaction(
+const _sampleBeef4 = new Transaction(
   1,
   [],
   [{ lockingScript: LockingScript.fromHex('88'), satoshis: 4 }],

@@ -4,14 +4,12 @@ import { Utils, PrivateKey } from '../../../primitives/index'
 
 describe('Certificate', () => {
   // Sample data for testing
-  const sampleType = Utils.toBase64(new Array(32).fill(1))
-  const sampleSerialNumber = Utils.toBase64(new Array(32).fill(2))
+  const sampleType = Utils.toBase64(Array.from({ length: 32 }).fill(1))
+  const sampleSerialNumber = Utils.toBase64(Array.from({ length: 32 }).fill(2))
   const sampleSubjectPrivateKey = PrivateKey.fromRandom()
   const sampleSubjectPubKey = sampleSubjectPrivateKey.toPublicKey().toString()
   const sampleCertifierPrivateKey = PrivateKey.fromRandom()
-  const sampleCertifierPubKey = sampleCertifierPrivateKey
-    .toPublicKey()
-    .toString()
+  const sampleCertifierPubKey = sampleCertifierPrivateKey.toPublicKey().toString()
   const sampleRevocationOutpoint =
     'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1'
   const sampleFields = {
@@ -59,9 +57,7 @@ describe('Certificate', () => {
     expect(deserializedCertificate.serialNumber).toEqual(sampleSerialNumber)
     expect(deserializedCertificate.subject).toEqual(sampleSubjectPubKey)
     expect(deserializedCertificate.certifier).toEqual(sampleCertifierPubKey)
-    expect(deserializedCertificate.revocationOutpoint).toEqual(
-      sampleRevocationOutpoint
-    )
+    expect(deserializedCertificate.revocationOutpoint).toEqual(sampleRevocationOutpoint)
     expect(deserializedCertificate.signature).toBeUndefined()
     expect(deserializedCertificate.fields).toEqual(sampleFields)
   })
@@ -88,9 +84,7 @@ describe('Certificate', () => {
     expect(deserializedCertificate.serialNumber).toEqual(sampleSerialNumber)
     expect(deserializedCertificate.subject).toEqual(sampleSubjectPubKey)
     expect(deserializedCertificate.certifier).toEqual(sampleCertifierPubKey)
-    expect(deserializedCertificate.revocationOutpoint).toEqual(
-      sampleRevocationOutpoint
-    )
+    expect(deserializedCertificate.revocationOutpoint).toEqual(sampleRevocationOutpoint)
     expect(deserializedCertificate.signature).toEqual(certificate.signature)
     expect(deserializedCertificate.fields).toEqual(sampleFields)
   })
@@ -164,9 +158,9 @@ describe('Certificate', () => {
     )
 
     // Verify the signature
-    await expect(
-      certificate.verify()
-    ).rejects.toThrowErrorMatchingInlineSnapshot('"Signature is not valid"')
+    await expect(certificate.verify()).rejects.toThrowErrorMatchingInlineSnapshot(
+      '"Signature is not valid"'
+    )
   })
 
   it('should handle certificates with empty fields', async () => {
@@ -218,7 +212,8 @@ describe('Certificate', () => {
     const longFieldName = 'longFieldName_'.repeat(10) // ✅ Removed `as any`
     const longFieldValue = 'longFieldValue_'.repeat(20)
 
-    const fields: Record<string, string> = { // ✅ Explicitly type `fields`
+    const fields: Record<string, string> = {
+      // ✅ Explicitly type `fields`
       [longFieldName]: longFieldValue
     }
 
@@ -261,9 +256,7 @@ describe('Certificate', () => {
     const serialized = certificate.toBinary(false)
     const deserializedCertificate = Certificate.fromBinary(serialized)
 
-    expect(deserializedCertificate.revocationOutpoint).toEqual(
-      sampleRevocationOutpoint
-    )
+    expect(deserializedCertificate.revocationOutpoint).toEqual(sampleRevocationOutpoint)
   })
 
   it('should correctly handle certificates with no fields', async () => {
@@ -311,9 +304,7 @@ describe('Certificate', () => {
     )
 
     // Scenario 2: The certifier property is set to something different from the wallet's public key
-    const mismatchedCertifierPubKey = PrivateKey.fromRandom()
-      .toPublicKey()
-      .toString()
+    const mismatchedCertifierPubKey = PrivateKey.fromRandom().toPublicKey().toString()
     const certificateWithMismatch = new Certificate(
       sampleType,
       sampleSerialNumber,
@@ -325,9 +316,7 @@ describe('Certificate', () => {
 
     // Sign the certificate; it should automatically update
     // the certifier field to match the wallet's actual public key
-    const certifierPubKey = (
-      await certifierWallet.getPublicKey({ identityKey: true })
-    ).publicKey
+    const certifierPubKey = (await certifierWallet.getPublicKey({ identityKey: true })).publicKey
     await certificateWithMismatch.sign(certifierWallet)
     expect(certificateWithMismatch.certifier).toBe(certifierPubKey)
     expect(await certificateWithMismatch.verify()).toBe(true)
@@ -340,11 +329,13 @@ describe('Certificate', () => {
       serialNumber: 'UegX3uufsqHsbEKeBSxUd9AziLSyru86TnwfhPoZJYE=',
       certifier: '03c644fe2fd97673a5d86555a58587e7936390be6582ece262bc387014bcff6fe4',
       revocationOutpoint: '0245242bd144a85053b4c1e4a0ed5467c79a4d172680ca77a970ebabd682d564.0',
-      signature: '304402202c86ef816c469fe657289ddea12d2c444f006ef5ab5851f00107c7724eb67ea602202786244c077567c8f3ec5da78bd61ce0c35bf1eeac0488e026c03b21c403b0fd',
+      signature:
+        '304402202c86ef816c469fe657289ddea12d2c444f006ef5ab5851f00107c7724eb67ea602202786244c077567c8f3ec5da78bd61ce0c35bf1eeac0488e026c03b21c403b0fd',
       fields: {
         displayName: 'eqsSpUgTKk891y1EkyCPPg+C4YoVZJvB0EQ4iore7VofkM5TB9Ctj7x2PgBaWI0A9tfATDO9',
         email: 'n6HVUvyHkIDMvB4ERxVGxmX6lgRBM+e7kbbC5DiRCKe5a60BJeXr05g4POq6OHYO9Wl/b1Xxe+JKsejl',
-        phoneNumber: '5yWyN9kOGaZs5G6yvXUWnWj4rm7kDAug4YIsn4BQLKGYRzDx8s1dytb43ega6BnSp0gUTnskcjiM8ekqul2a',
+        phoneNumber:
+          '5yWyN9kOGaZs5G6yvXUWnWj4rm7kDAug4YIsn4BQLKGYRzDx8s1dytb43ega6BnSp0gUTnskcjiM8ekqul2a',
         lat: 'lc3u6SFKQ5Mpxp5vc+6s4aXe7lOyQQLfN+CbOu4XlBYsj7Jlc78gt4sGCwDSxbzvA41eElCjlc2Our5bpLcsg1I6',
         lng: 'FmY3iM/2/LDfYNEeXpcj7Epn933tRHz50WoBkBrqYv6jmZ6dXE6RRYId9TcaxIvB0D7Y14aD5vjSV6Bx48hdic5g'
       }

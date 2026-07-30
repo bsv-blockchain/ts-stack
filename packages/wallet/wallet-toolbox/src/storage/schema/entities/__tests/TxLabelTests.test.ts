@@ -1,5 +1,5 @@
 import { EntityTxLabel } from '../EntityTxLabel'
-import { createSyncMap, sdk, SyncMap, TableTxLabel } from '../../../../../src'
+import { createSyncMap, TableTxLabel } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 
 describe('TxLabel Class Tests', () => {

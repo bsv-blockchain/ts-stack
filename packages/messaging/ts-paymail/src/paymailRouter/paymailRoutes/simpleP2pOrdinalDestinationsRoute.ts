@@ -25,7 +25,7 @@ export default class OrdinalP2pPaymentDestinationRoute extends PaymailRoute {
     })
   }
 
-  protected async validateBody(body: unknown): Promise<unknown> {
+  protected override async validateBody(body: unknown): Promise<unknown> {
     const schema = joi.object({
       ordinals: joi.number().integer().min(1).required()
     })
@@ -36,7 +36,9 @@ export default class OrdinalP2pPaymentDestinationRoute extends PaymailRoute {
     return value
   }
 
-  protected serializeResponse(domainLogicResponse: OrdinalP2pDestinationsResponse): string {
+  protected override serializeResponse(
+    domainLogicResponse: OrdinalP2pDestinationsResponse
+  ): string {
     return JSON.stringify({
       outputs: domainLogicResponse.outputs.map(output => ({
         script: output.script

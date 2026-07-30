@@ -1,6 +1,5 @@
-import { Knex } from 'knex'
 import * as bsv from '@bsv/sdk'
-import { createSyncMap, sdk, SyncMap, TableTransaction } from '../../../../../src'
+import { createSyncMap, sdk, TableTransaction } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 import { EntityTransaction } from '../EntityTransaction'
 
@@ -177,7 +176,7 @@ describe('Transaction class method tests', () => {
       })
 
       // Debugging: Log inserted outputs
-      const outputs = await activeStorage.findOutputs({
+      const _outputs = await activeStorage.findOutputs({
         partial: { spentBy: tx.transactionId }
       })
       // console.log('Inserted Outputs:', outputs)
@@ -483,13 +482,14 @@ describe('Transaction class method tests', () => {
 
       // Step 4: Query the inputs from storage individually
       const inputs = await Promise.all(
-        rawTxInputs.map(async input =>
-          await activeStorage.findOutputs({
-            partial: {
-              transactionId: tx.transactionId,
-              vout: input.sourceOutputIndex
-            }
-          })
+        rawTxInputs.map(
+          async input =>
+            await activeStorage.findOutputs({
+              partial: {
+                transactionId: tx.transactionId,
+                vout: input.sourceOutputIndex
+              }
+            })
         )
       )
 

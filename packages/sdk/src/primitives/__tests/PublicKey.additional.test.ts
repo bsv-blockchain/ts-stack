@@ -44,7 +44,7 @@ describe('PublicKey – additional coverage', () => {
       expect(typeof hex).toBe('string')
       expect((hex as string).length).toBe(66)
       // Compressed keys start with 02 or 03
-      expect((hex as string)).toMatch(/^0[23][0-9a-f]{64}$/)
+      expect(hex as string).toMatch(/^0[23][0-9a-f]{64}$/)
     })
 
     it('returns a 33-byte number array when enc is undefined', () => {
@@ -95,7 +95,7 @@ describe('PublicKey – additional coverage', () => {
       expect(typeof hex).toBe('string')
       // hash160 = 20 bytes = 40 hex chars
       expect((hex as string).length).toBe(40)
-      expect((hex as string)).toMatch(/^[0-9a-f]{40}$/)
+      expect(hex as string).toMatch(/^[0-9a-f]{40}$/)
     })
 
     it('toHash() and toHash("hex") represent the same bytes', () => {
@@ -211,7 +211,11 @@ describe('PublicKey – additional coverage', () => {
      *   bytes 1-32  = r (big-endian, 32 bytes)
      *   bytes 33-64 = s (big-endian, 32 bytes)
      */
-    function makeCompactBytes (sig: Signature, recoveryParam: number, compressed: boolean): number[] {
+    function makeCompactBytes(
+      sig: Signature,
+      recoveryParam: number,
+      compressed: boolean
+    ): number[] {
       const compactByte = (compressed ? 31 : 27) + recoveryParam
       const rBytes = sig.r.toArray('be', 32)
       const sBytes = sig.s.toArray('be', 32)
@@ -245,33 +249,33 @@ describe('PublicKey – additional coverage', () => {
     it('throws for a signature array that is not 65 bytes', () => {
       const msgHash = new BigNumber(1)
       expect(() =>
-        PublicKey.fromMsgHashAndCompactSignature(msgHash, new Array(64).fill(0))
+        PublicKey.fromMsgHashAndCompactSignature(msgHash, Array.from({ length: 64 }).fill(0))
       ).toThrow('Invalid Compact Signature')
     })
 
     it('throws for a signature array that is 66 bytes', () => {
       const msgHash = new BigNumber(1)
       expect(() =>
-        PublicKey.fromMsgHashAndCompactSignature(msgHash, new Array(66).fill(0))
+        PublicKey.fromMsgHashAndCompactSignature(msgHash, Array.from({ length: 66 }).fill(0))
       ).toThrow('Invalid Compact Signature')
     })
 
     it('throws for a compact byte below the valid range (< 27)', () => {
       const msgHash = new BigNumber(1)
-      const compact = new Array(65).fill(0)
+      const compact = Array.from({ length: 65 }).fill(0)
       compact[0] = 26 // just below 27
-      expect(() =>
-        PublicKey.fromMsgHashAndCompactSignature(msgHash, compact)
-      ).toThrow('Invalid Compact Byte')
+      expect(() => PublicKey.fromMsgHashAndCompactSignature(msgHash, compact)).toThrow(
+        'Invalid Compact Byte'
+      )
     })
 
     it('throws for a compact byte at or above 35', () => {
       const msgHash = new BigNumber(1)
-      const compact = new Array(65).fill(0)
+      const compact = Array.from({ length: 65 }).fill(0)
       compact[0] = 35 // >= 35
-      expect(() =>
-        PublicKey.fromMsgHashAndCompactSignature(msgHash, compact)
-      ).toThrow('Invalid Compact Byte')
+      expect(() => PublicKey.fromMsgHashAndCompactSignature(msgHash, compact)).toThrow(
+        'Invalid Compact Byte'
+      )
     })
 
     it('handles hex-encoded compact signature string', () => {

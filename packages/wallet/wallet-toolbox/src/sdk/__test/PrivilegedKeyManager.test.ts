@@ -4,7 +4,7 @@ import { Utils, PrivateKey, Hash, Random } from '@bsv/sdk'
 const sampleData = [3, 1, 4, 1, 5, 9]
 
 // A helper function to get a 32-byte hex
-function getRandom32ByteHex (): string {
+function getRandom32ByteHex(): string {
   const rawBytes = Random(32)
   return Utils.toHex(rawBytes)
 }
@@ -544,7 +544,7 @@ describe('PrivilegedKeyManager', () => {
     })
     it('Calls keyGetter only once if getPrivilegedKey is invoked multiple times within retention period', async () => {
       // Create a mock keyGetter that returns a PrivateKey
-      const keyGetterMock = jest.fn(async (reason: string) => {
+      const keyGetterMock = jest.fn(async (_reason: string) => {
         return new PrivateKey(getRandom32ByteHex(), 'hex')
       })
 
@@ -565,7 +565,7 @@ describe('PrivilegedKeyManager', () => {
     })
 
     it('Destroys key after retention period elapses', async () => {
-      const keyGetterMock = jest.fn(async (reason: string) => {
+      const keyGetterMock = jest.fn(async (_reason: string) => {
         return new PrivateKey(getRandom32ByteHex(), 'hex')
       })
 
@@ -589,7 +589,7 @@ describe('PrivilegedKeyManager', () => {
     })
 
     it('Explicitly calls destroyKey() and removes all chunk properties', async () => {
-      const keyGetterMock = jest.fn(async (reason: string) => {
+      const keyGetterMock = jest.fn(async (_reason: string) => {
         return new PrivateKey(getRandom32ByteHex(), 'hex')
       })
       const km = new PrivilegedKeyManager(keyGetterMock, 5000)

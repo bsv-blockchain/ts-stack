@@ -19,7 +19,7 @@ const MAX_DOUBLE_SPEND_RETRIES = 5
  * @returns The result of the successful operation
  * @throws If max retries exceeded or non-double-spend error occurs
  */
-export async function withDoubleSpendRetry<T> (
+export async function withDoubleSpendRetry<T>(
   operation: () => Promise<T>,
   broadcaster: TopicBroadcaster,
   maxRetries: number = MAX_DOUBLE_SPEND_RETRIES
@@ -32,18 +32,19 @@ export async function withDoubleSpendRetry<T> (
     try {
       return await operation()
     } catch (error) {
+      const reviewError = error as WERR_REVIEW_ACTIONS
       // Only handle double-spend errors on non-final attempts
-      if (attempts < maxRetries && error.name === 'WERR_REVIEW_ACTIONS') {
-        const reviewError = error as WERR_REVIEW_ACTIONS
-
+      if (attempts < maxRetries && reviewError.name === 'WERR_REVIEW_ACTIONS') {
         // Check if any action in the batch has a double-spend
         const doubleSpendResult = reviewError.reviewActionResults.find(
           (result: ReviewActionResult) => result.status === 'doubleSpend'
         )
 
-        if (doubleSpendResult?.competingBeef != null &&
+        if (
+          doubleSpendResult?.competingBeef != null &&
           doubleSpendResult?.competingTxs != null &&
-          doubleSpendResult?.competingTxs.length > 0) {
+          doubleSpendResult?.competingTxs.length > 0
+        ) {
           const competingTx = Transaction.fromBEEF(
             doubleSpendResult.competingBeef,
             doubleSpendResult.competingTxs[0]

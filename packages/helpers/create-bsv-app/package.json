@@ -1,6 +1,6 @@
 {
   "name": "create-bsv-app",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "sideEffects": false,
   "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",

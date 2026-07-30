@@ -23,10 +23,10 @@ async function measure(useSnapshot: boolean): Promise<number> {
   )
   try {
     const start = performance.now()
-    main.PrepareVerification()
+    main.PrepareVerification!()
     let snapshot: Uint8Array | null = null
     if (useSnapshot) {
-      const exported = main.ExportVerificationTables()
+      const exported = main.ExportVerificationTables!()
       const shared = new SharedArrayBuffer(exported.byteLength)
       snapshot = new Uint8Array(shared)
       snapshot.set(exported)

@@ -1,7 +1,19 @@
 import BigNumber from './BigNumber.js'
 import Signature from './Signature.js'
 import Curve from './Curve.js'
-import Point, { scalarMultiplyWNAF, biModInv, BI_ZERO, biModMul, GX_BIGINT, GY_BIGINT, jpAdd, N_BIGINT, modInvN, modMulN, modN } from './Point.js'
+import Point, {
+  scalarMultiplyWNAF,
+  biModInv,
+  BI_ZERO,
+  biModMul,
+  GX_BIGINT,
+  GY_BIGINT,
+  jpAdd,
+  N_BIGINT,
+  modInvN,
+  modMulN,
+  modN
+} from './Point.js'
 import DRBG from './DRBG.js'
 
 /**
@@ -25,11 +37,7 @@ import DRBG from './DRBG.js'
  *
  * This behavior follows the message truncation rules defined in FIPS 186-4.
  */
-function truncateToN (
-  msg: BigNumber,
-  truncOnly?: boolean,
-  curve = new Curve()
-): BigNumber {
+function truncateToN(msg: BigNumber, truncOnly?: boolean, curve = new Curve()): BigNumber {
   const delta = msg.byteLength() * 8 - curve.n.bitLength()
   if (delta > 0) {
     msg.iushrn(delta)
@@ -41,7 +49,7 @@ function truncateToN (
   }
 }
 
-function bnToBigInt (bn: BigNumber): bigint {
+function bnToBigInt(bn: BigNumber): bigint {
   const bytes = bn.toArray('be')
   let x = 0n
   for (const byte of bytes) {
@@ -55,7 +63,7 @@ const bytes = curve.n.byteLength()
 const ns1 = curve.n.subn(1)
 const halfN = N_BIGINT >> 1n
 
-function selectK (
+function selectK(
   customK: BigNumber | ((iter: number) => BigNumber) | undefined,
   iter: number,
   drbg: DRBG
@@ -63,7 +71,7 @@ function selectK (
   let selected: BigNumber
   if (typeof customK === 'function') {
     selected = customK(iter)
-  } else if (BigNumber.isBN(customK)) {
+  } else if (customK !== undefined && BigNumber.isBN(customK)) {
     selected = customK
   } else {
     selected = new BigNumber(drbg.generate(bytes), 16)
@@ -72,12 +80,12 @@ function selectK (
   return truncateToN(selected, true)
 }
 
-function retryOrRejectFixedK (fixedK: boolean, message: string): undefined {
+function retryOrRejectFixedK(fixedK: boolean, message: string): undefined {
   if (fixedK) throw new Error(message)
   return undefined
 }
 
-function signatureFromK (
+function signatureFromK(
   kBN: BigNumber,
   msgBig: bigint,
   keyBig: bigint,
@@ -106,10 +114,7 @@ function signatureFromK (
   }
   if (forceLowS && sBig > halfN) sBig = N_BIGINT - sBig
 
-  return new Signature(
-    new BigNumber(rBig.toString(16), 16),
-    new BigNumber(sBig.toString(16), 16)
-  )
+  return new Signature(new BigNumber(rBig.toString(16), 16), new BigNumber(sBig.toString(16), 16))
 }
 
 /**
@@ -212,7 +217,7 @@ export const verify = (msg: BigNumber, sig: Signature, key: Point): boolean => {
 
   // Convert inputs to BigInt
   const hash = bnToBigInt(msg)
-  if ((key.x == null) || (key.y == null)) {
+  if (key.x == null || key.y == null) {
     throw new Error('Invalid public key: missing coordinates.')
   }
 

@@ -10,14 +10,13 @@ import {
 import { StorageIdb } from '../../../src/storage/StorageIdb'
 
 import 'fake-indexeddb/auto'
-import { openDB } from 'idb'
 
 describe('idb insert tests', () => {
   jest.setTimeout(99999999)
 
   let storages: StorageProvider[] = []
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnv(chain)
+  const _env = _tu.getEnv(chain)
 
   beforeEach(async () => {
     storages = []
@@ -131,7 +130,7 @@ describe('idb insert tests', () => {
 
   test('6 insert Transaction', async () => {
     for (const storage of storages) {
-      const { tx: e, user } = await _tu.insertTestTransaction(storage)
+      const { tx: e, user: _user } = await _tu.insertTestTransaction(storage)
       const id = e.transactionId
       expect(id).toBeGreaterThan(0)
       e.transactionId = 0
@@ -147,7 +146,7 @@ describe('idb insert tests', () => {
 
   test('7 insert Commission', async () => {
     for (const storage of storages) {
-      const { tx: t, user } = await _tu.insertTestTransaction(storage)
+      const { tx: t, user: _user } = await _tu.insertTestTransaction(storage)
       const e: TableCommission = await _tu.insertTestCommission(storage, t)
       const id = e.commissionId
       expect(id).toBeGreaterThan(0)
@@ -166,7 +165,7 @@ describe('idb insert tests', () => {
 
   test('8 insert Output', async () => {
     for (const storage of storages) {
-      const { tx: t, user } = await _tu.insertTestTransaction(storage)
+      const { tx: t, user: _user } = await _tu.insertTestTransaction(storage)
       const e = await _tu.insertTestOutput(storage, t, 0, 101)
       const id = e.outputId
       expect(id).toBeGreaterThan(0)
@@ -213,7 +212,7 @@ describe('idb insert tests', () => {
       // duplicate must throw
       await expect(storage.insertOutputTagMap(e)).rejects.toThrow()
       const tag2 = await _tu.insertTestOutputTag(storage, user)
-      const e2 = await _tu.insertTestOutputTagMap(storage, o, tag2)
+      const _e2 = await _tu.insertTestOutputTagMap(storage, o, tag2)
     }
   })
 
@@ -245,7 +244,7 @@ describe('idb insert tests', () => {
       // duplicate must throw
       await expect(storage.insertTxLabelMap(e)).rejects.toThrow()
       const label2 = await _tu.insertTestTxLabel(storage, user)
-      const e2 = await _tu.insertTestTxLabelMap(storage, tx, label2)
+      const _e2 = await _tu.insertTestTxLabelMap(storage, tx, label2)
     }
   })
 
