@@ -111,6 +111,7 @@ export const NAV: NavSection[] = [
           { label: '@bsv/did-client', href: '/packages/helpers/did-client/' },
           { label: '@bsv/wallet-helper', href: '/packages/helpers/wallet-helper/' },
           { label: '@bsv/amountinator', href: '/packages/helpers/amountinator/' },
+          { label: '@bsv/air-gap', href: '/packages/helpers/air-gap/' },
           { label: '@bsv/fund-wallet', href: '/packages/helpers/fund-wallet/' }
         ]
       }

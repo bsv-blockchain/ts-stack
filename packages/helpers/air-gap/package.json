@@ -1,0 +1,78 @@
+{
+  "name": "@bsv/air-gap",
+  "version": "0.1.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "One-directional optical air-gap transport: fountain-coded QR parts for arbitrary bytes",
+  "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "type": "commonjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "jest",
+    "test:property": "jest --runInBand tests/airGapCodec.property.test.ts",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/air-gap/{src,tests}/**/*.ts\" \"packages/helpers/air-gap/*.{cjs,json,ts}\"",
+    "lint": "oxlint src tests --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports AIR_GAP_PREFIX,DEFAULT_BLOCK_BYTES,MAX_MESSAGE_BYTES,AirGapError,crc32,AirGapEncoder,AirGapDecoder,isAirGapPart,estimatePartCharLength",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/air-gap"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/air-gap#readme",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.4.2",
+    "oxlint": "^1.76.0",
+    "ts-jest": "^29.4.12",
+    "tsdown": "0.22.14",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "keywords": [
+    "bsv",
+    "air-gap",
+    "qr",
+    "fountain-code",
+    "luby",
+    "optical",
+    "transport"
+  ]
+}

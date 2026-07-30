@@ -11,6 +11,13 @@
       "migration": "No consumer migration is required; client and server exports, payment protocol behavior, and runtime defaults are unchanged."
     },
     {
+      "name": "@bsv/air-gap",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the zero-dependency one-directional optical air-gap transport: fountain-coded wire parts for arbitrary bytes, CRC32 payload integrity, a camera-safe decoder that never throws, and dual CJS/ESM builds.",
+      "migration": "No consumer migration is required; this is the first published release of a new package with no prior public API."
+    },
+    {
       "name": "@bsv/amountinator",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",

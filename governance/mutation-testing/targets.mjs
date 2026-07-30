@@ -232,6 +232,15 @@ export function buildMutationTargets(repositoryRoot) {
         { esm: true }
       )
     },
+    'air-gap-codec': {
+      packageDirectory: 'packages/helpers/air-gap',
+      manifest: 'packages/helpers/air-gap/package.json',
+      propertyTest: 'packages/helpers/air-gap/tests/airGapCodec.property.test.ts',
+      mutate: ['src/decoder.ts', 'src/encoder.ts', 'src/coding.ts', 'src/base64url.ts'],
+      // No testMatch override: the whole suite is fast and every file bears on
+      // the wire boundary, so every file gets to kill mutants.
+      ...jestTarget('jest.config.cjs')
+    },
     'amount-format': {
       packageDirectory: 'packages/helpers/amountinator',
       manifest: 'packages/helpers/amountinator/package.json',

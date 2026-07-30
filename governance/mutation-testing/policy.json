@@ -168,6 +168,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "air-gap-codec",
+      "manifest": "packages/helpers/air-gap/package.json",
+      "propertyTest": "packages/helpers/air-gap/tests/airGapCodec.property.test.ts",
+      "risk": "high",
+      "boundary": "Camera-supplied optical wire parts decoded into application payload bytes",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "amount-format",
       "manifest": "packages/helpers/amountinator/package.json",
       "propertyTest": "packages/helpers/amountinator/tests/amountFormat.property.test.ts",

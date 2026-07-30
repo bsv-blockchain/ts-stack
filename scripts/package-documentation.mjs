@@ -219,7 +219,7 @@ tags: [reference, packages, api, declarations, migrations, release-notes]
 
 # Package API, Declarations, and Migration Ledger
 
-This page is generated from all 30 public manifests, package documentation, and
+This page is generated from all 31 public manifests, package documentation, and
 \`governance/package-release-notes.json\`. It records source candidates without
 publishing them. CI rejects a version change unless its release classification,
 summary, and migration guidance are updated at the same time.
