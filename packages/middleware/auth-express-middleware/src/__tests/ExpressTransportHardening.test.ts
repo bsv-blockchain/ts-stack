@@ -787,4 +787,100 @@ describe('ExpressTransport hardening', () => {
     expect(JSON.stringify(events)).not.toContain('customer-record')
     expect(JSON.stringify(events)).not.toContain('never-report-this')
   })
+
+  it('reports middleware errors and response completion without changing next semantics', async () => {
+    const events: any[] = []
+    const telemetry = {
+      sink: { capture: (event: unknown) => events.push(event) },
+      traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      spanIdFactory: () => 'bbbbbbbbbbbbbbbb'
+    }
+    const handleIncomingRequest = jest.spyOn(ExpressTransport.prototype, 'handleIncomingRequest')
+
+    handleIncomingRequest.mockImplementationOnce(async (_req, _res, next) => {
+      next(new Error('continued with error'))
+    })
+    const continued = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry
+    })
+    const continuedNext = jest.fn()
+    continued(
+      {
+        path: '/public',
+        method: 'GET',
+        headers: {
+          traceparent: `00-${'0'.repeat(32)}-${'0'.repeat(16)}-01`
+        }
+      } as any,
+      responseMock(),
+      continuedNext
+    )
+    await flushPromises()
+    expect(continuedNext).toHaveBeenCalledWith(expect.any(Error))
+    expect(events.at(-1)).toMatchObject({
+      spanStatus: 'error',
+      attributes: { 'auth.disposition': 'continued' }
+    })
+
+    handleIncomingRequest.mockRejectedValueOnce(new Error('transport failed'))
+    const rejected = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry
+    })
+    const rejectedNext = jest.fn()
+    rejected(
+      {
+        path: '/public',
+        method: 'GET',
+        headers: { traceparent: 'not-a-traceparent' }
+      } as any,
+      responseMock(),
+      rejectedNext
+    )
+    await flushPromises()
+    expect(rejectedNext).toHaveBeenCalledWith(expect.any(Error))
+    expect(events.at(-1)).toMatchObject({
+      spanStatus: 'error',
+      attributes: { 'auth.disposition': 'middleware_error' }
+    })
+
+    handleIncomingRequest.mockReturnValue(new Promise(() => {}))
+    const pending = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry
+    })
+    for (const [statusCode, writableEnded, eventName, status] of [
+      [503, true, 'finish', 'error'],
+      [200, false, 'close', 'cancelled']
+    ] as const) {
+      const res = responseMock()
+      res.statusCode = statusCode
+      res.writableEnded = writableEnded
+      pending(
+        {
+          path: '/public',
+          method: 'GET',
+          headers: {}
+        } as any,
+        res,
+        jest.fn()
+      )
+      const callback = res.once.mock.calls.find(([name]: [string]) => name === eventName)?.[1]
+      callback()
+      callback()
+      expect(events.at(-1)).toMatchObject({
+        spanStatus: status,
+        attributes: {
+          'auth.disposition': eventName === 'finish' ? 'responded' : 'connection_closed',
+          'http.response.status_code': statusCode
+        }
+      })
+    }
+
+    handleIncomingRequest.mockRestore()
+  })
 })

@@ -330,4 +330,75 @@ describe('Telemetry', () => {
     expect(captured[0].traceId).toBeUndefined()
     expect(captured[0].durationMs).toBeUndefined()
   })
+
+  it('keeps every defensive tracing fallback isolated from application work', () => {
+    const captured: TelemetryEvent[] = []
+    const telemetry = new Telemetry({
+      sink: {
+        capture: event => {
+          captured.push(event)
+        }
+      },
+      minimumSeverity: 'debug',
+      correlationIdFactory: () => {
+        throw new Error('correlation id unavailable')
+      },
+      traceIdFactory: () => {
+        throw new Error('trace id unavailable')
+      },
+      spanIdFactory: () => {
+        throw new Error('span id unavailable')
+      },
+      contextManager: {
+        active: () => {
+          throw new Error('context unavailable')
+        },
+        run: (_context, callback) => callback()
+      },
+      runtimeMetrics: {
+        snapshot: () => {
+          throw new Error('runtime snapshot unavailable')
+        },
+        diff: () => {
+          throw new Error('runtime diff unavailable')
+        }
+      }
+    })
+
+    expect(telemetry.createCorrelationId()).toMatch(/^[a-z0-9]+-[a-z0-9]+$/)
+    expect(telemetry.createTraceId()).toMatch(/^[0-9a-f]{32}$/)
+    expect(telemetry.createSpanId()).toMatch(/^[0-9a-f]{16}$/)
+    expect(telemetry.activeContext()).toBeUndefined()
+    expect(telemetry.runtimeSnapshot()).toBeUndefined()
+    expect(telemetry.runtimeDiff(undefined, undefined)).toBeUndefined()
+
+    const unbound = {}
+    const target = {}
+    telemetry.linkContext(undefined, target)
+    telemetry.linkContext(unbound, target)
+    expect(telemetry.contextFor(target)).toBeUndefined()
+
+    const span = telemetry.startSpan('defensive', { component: 'test' })
+    telemetry.bindContext(unbound, span.context)
+    telemetry.linkContext(unbound, target)
+    expect(telemetry.contextFor(target)).toEqual(span.context)
+    span.capture('defensive.event', { disposition: 'observed' }, 'debug')
+    span.end({ status: 'cancelled' })
+    span.end({ status: 'error' })
+
+    expect(captured.map(event => event.name)).toEqual(['defensive.event', 'defensive'])
+    expect(captured[1]).toMatchObject({ spanStatus: 'cancelled' })
+    expect(captured[1]).not.toHaveProperty('attributes')
+
+    expect(() =>
+      telemetry.withSpan('sync.failure', { component: 'test' }, () => {
+        throw new Error('synchronous failure')
+      })
+    ).toThrow('synchronous failure')
+    expect(captured.at(-1)).toMatchObject({
+      name: 'sync.failure',
+      spanStatus: 'error',
+      error: { message: 'synchronous failure' }
+    })
+  })
 })

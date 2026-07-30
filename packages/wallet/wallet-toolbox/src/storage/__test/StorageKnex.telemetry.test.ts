@@ -66,4 +66,57 @@ describe('StorageKnex telemetry', () => {
     expect(events.at(-1)?.spanStatus).toBe('cancelled')
     expect(knex.destroy).toHaveBeenCalled()
   })
+
+  it.each([
+    ['mysql2', 'mysql'],
+    ['pg', 'postgresql'],
+    ['custom-adapter', 'unknown']
+  ])('normalizes the %s client without depending on query payloads', async (client, system) => {
+    const events: TelemetryEvent[] = []
+    const knex = new EventEmitter() as any
+    knex.client = { config: { client } }
+    knex.destroy = jest.fn(async () => undefined)
+    const storage = new StorageKnex({
+      ...StorageKnex.defaultOptions(),
+      chain: 'test',
+      knex,
+      telemetry: {
+        sink: { capture: event => events.push(event) }
+      }
+    })
+
+    knex.emit('query', { method: 'select' })
+    knex.emit('query-response', undefined, { __knexQueryUid: 'not-started' })
+    knex.emit('query', { __knexQueryUid: 'query', method: undefined })
+    knex.emit('query-response', undefined, { __knexQueryUid: 'query' })
+    knex.emit('query-error', new Error('late error'), { __knexQueryUid: 'query' })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      spanStatus: 'ok',
+      attributes: {
+        'db.system': system,
+        'db.operation': 'unknown'
+      }
+    })
+    await storage.destroy()
+  })
+
+  it('does not install query listeners when telemetry is disabled', async () => {
+    const knex = new EventEmitter() as any
+    knex.client = { config: {} }
+    knex.destroy = jest.fn(async () => undefined)
+    const storage = new StorageKnex({
+      ...StorageKnex.defaultOptions(),
+      chain: 'test',
+      knex,
+      telemetry: {
+        enabled: false,
+        sink: { capture: jest.fn() }
+      }
+    })
+
+    expect(knex.listenerCount('query')).toBe(0)
+    await storage.destroy()
+  })
 })

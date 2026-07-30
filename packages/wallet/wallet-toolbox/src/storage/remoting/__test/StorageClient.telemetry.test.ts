@@ -68,4 +68,74 @@ describe('StorageClient telemetry', () => {
     expect(JSON.stringify(events)).not.toContain('userId')
     expect(JSON.stringify(events)).not.toContain('available')
   })
+
+  it('preserves caller logging while reporting remote and protocol failures', async () => {
+    const events: TelemetryEvent[] = []
+    const client = new StorageClient(
+      {} as WalletInterface,
+      'https://storage.example.test/rpc',
+      {
+        telemetry: {
+          sink: { capture: event => events.push(event) }
+        }
+      }
+    )
+    const logger = {
+      indent: 2,
+      group: jest.fn(),
+      merge: jest.fn(),
+      groupEnd: jest.fn(),
+      error: jest.fn()
+    }
+    const params: unknown[] = [{ userId: 1 }, { logger }]
+    const fetch = jest.fn()
+    Reflect.set(client, 'authClient', { fetch })
+
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { log: { logs: [] }, available: true }
+    })))
+    await expect(
+      Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)
+    ).resolves.toMatchObject({ available: true })
+    expect(logger.group).toHaveBeenCalled()
+    expect(logger.merge).toHaveBeenCalledWith({ logs: [] })
+    expect(logger.groupEnd).toHaveBeenCalled()
+    expect((params[1] as { logger: unknown }).logger).toBe(logger)
+
+    fetch.mockRejectedValueOnce(new Error('fetch unavailable'))
+    await expect(
+      Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)
+    ).rejects.toThrow('fetch unavailable')
+    expect((params[1] as { logger: unknown }).logger).toBe(logger)
+
+    fetch.mockResolvedValueOnce(new Response('unavailable', {
+      status: 503,
+      statusText: 'Service Unavailable'
+    }))
+    await expect(
+      Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)
+    ).rejects.toThrow('network error 503')
+
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      jsonrpc: '2.0',
+      id: 4,
+      error: {
+        code: 1,
+        message: 'remote failure',
+        name: 'Error'
+      }
+    })))
+    await expect(
+      Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)
+    ).rejects.toThrow('remote failure')
+
+    expect(events.filter(event => event.name === 'wallet.storage.rpc')).toHaveLength(4)
+    expect(events.filter(event => event.name === 'wallet.storage.rpc').slice(1)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ spanStatus: 'error' })
+      ])
+    )
+  })
 })

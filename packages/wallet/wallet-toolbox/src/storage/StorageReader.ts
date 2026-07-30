@@ -42,75 +42,74 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   readonly telemetry: Telemetry
   _settings?: TableSettings
   whenLastAccess?: Date
-  get dbtype(): DBType | undefined {
+  get dbtype (): DBType | undefined {
     return this._settings?.dbtype
   }
 
-  constructor(options: StorageReaderOptions) {
+  constructor (options: StorageReaderOptions) {
     this.chain = options.chain
     this.telemetry = new Telemetry(options.telemetry)
   }
 
-  isAvailable(): boolean {
+  isAvailable (): boolean {
     return this._settings != null
   }
 
-  async makeAvailable(): Promise<TableSettings> {
+  async makeAvailable (): Promise<TableSettings> {
     if (this._settings != null) return this._settings
     this._settings = await this.readSettings()
     return this._settings
   }
 
-  getSettings(): TableSettings {
-    if (this._settings == null)
-      throw new sdk.WERR_INVALID_OPERATION('must call "makeAvailable" before accessing "settings"')
+  getSettings (): TableSettings {
+    if (this._settings == null) throw new sdk.WERR_INVALID_OPERATION('must call "makeAvailable" before accessing "settings"')
     return this._settings
   }
 
-  isStorageProvider(): boolean {
+  isStorageProvider (): boolean {
     return false
   }
 
-  abstract destroy(): Promise<void>
+  abstract destroy (): Promise<void>
 
   abstract transaction<T>(scope: (trx: sdk.TrxToken) => Promise<T>, trx?: sdk.TrxToken): Promise<T>
 
-  abstract readSettings(trx?: sdk.TrxToken): Promise<TableSettings>
+  abstract readSettings (trx?: sdk.TrxToken): Promise<TableSettings>
 
-  abstract findCertificateFields(args: sdk.FindCertificateFieldsArgs): Promise<TableCertificateField[]>
-  abstract findCertificates(args: sdk.FindCertificatesArgs): Promise<TableCertificateX[]>
-  abstract findCommissions(args: sdk.FindCommissionsArgs): Promise<TableCommission[]>
-  abstract findMonitorEvents(args: sdk.FindMonitorEventsArgs): Promise<TableMonitorEvent[]>
-  abstract findOutputBaskets(args: sdk.FindOutputBasketsArgs): Promise<TableOutputBasket[]>
-  abstract findOutputs(args: sdk.FindOutputsArgs): Promise<TableOutput[]>
-  abstract findOutputTags(args: sdk.FindOutputTagsArgs): Promise<TableOutputTag[]>
-  abstract findSyncStates(args: sdk.FindSyncStatesArgs): Promise<TableSyncState[]>
-  abstract findTransactions(args: sdk.FindTransactionsArgs): Promise<TableTransaction[]>
-  abstract findTxLabels(args: sdk.FindTxLabelsArgs): Promise<TableTxLabel[]>
-  abstract findUsers(args: sdk.FindUsersArgs): Promise<TableUser[]>
+  abstract findCertificateFields (args: sdk.FindCertificateFieldsArgs): Promise<TableCertificateField[]>
+  abstract findCertificates (args: sdk.FindCertificatesArgs): Promise<TableCertificateX[]>
+  abstract findCommissions (args: sdk.FindCommissionsArgs): Promise<TableCommission[]>
+  abstract findMonitorEvents (args: sdk.FindMonitorEventsArgs): Promise<TableMonitorEvent[]>
+  abstract findOutputBaskets (args: sdk.FindOutputBasketsArgs): Promise<TableOutputBasket[]>
+  abstract findOutputs (args: sdk.FindOutputsArgs): Promise<TableOutput[]>
+  abstract findOutputTags (args: sdk.FindOutputTagsArgs): Promise<TableOutputTag[]>
+  abstract findSyncStates (args: sdk.FindSyncStatesArgs): Promise<TableSyncState[]>
+  abstract findTransactions (args: sdk.FindTransactionsArgs): Promise<TableTransaction[]>
+  abstract findTxLabels (args: sdk.FindTxLabelsArgs): Promise<TableTxLabel[]>
+  abstract findUsers (args: sdk.FindUsersArgs): Promise<TableUser[]>
 
-  abstract countCertificateFields(args: sdk.FindCertificateFieldsArgs): Promise<number>
-  abstract countCertificates(args: sdk.FindCertificatesArgs): Promise<number>
-  abstract countCommissions(args: sdk.FindCommissionsArgs): Promise<number>
-  abstract countMonitorEvents(args: sdk.FindMonitorEventsArgs): Promise<number>
-  abstract countOutputBaskets(args: sdk.FindOutputBasketsArgs): Promise<number>
-  abstract countOutputs(args: sdk.FindOutputsArgs): Promise<number>
-  abstract countOutputTags(args: sdk.FindOutputTagsArgs): Promise<number>
-  abstract countSyncStates(args: sdk.FindSyncStatesArgs): Promise<number>
-  abstract countTransactions(args: sdk.FindTransactionsArgs): Promise<number>
-  abstract countTxLabels(args: sdk.FindTxLabelsArgs): Promise<number>
-  abstract countUsers(args: sdk.FindUsersArgs): Promise<number>
+  abstract countCertificateFields (args: sdk.FindCertificateFieldsArgs): Promise<number>
+  abstract countCertificates (args: sdk.FindCertificatesArgs): Promise<number>
+  abstract countCommissions (args: sdk.FindCommissionsArgs): Promise<number>
+  abstract countMonitorEvents (args: sdk.FindMonitorEventsArgs): Promise<number>
+  abstract countOutputBaskets (args: sdk.FindOutputBasketsArgs): Promise<number>
+  abstract countOutputs (args: sdk.FindOutputsArgs): Promise<number>
+  abstract countOutputTags (args: sdk.FindOutputTagsArgs): Promise<number>
+  abstract countSyncStates (args: sdk.FindSyncStatesArgs): Promise<number>
+  abstract countTransactions (args: sdk.FindTransactionsArgs): Promise<number>
+  abstract countTxLabels (args: sdk.FindTxLabelsArgs): Promise<number>
+  abstract countUsers (args: sdk.FindUsersArgs): Promise<number>
 
-  abstract getProvenTxsForUser(args: sdk.FindForUserSincePagedArgs): Promise<TableProvenTx[]>
-  abstract getProvenTxReqsForUser(args: sdk.FindForUserSincePagedArgs): Promise<TableProvenTxReq[]>
-  abstract getTxLabelMapsForUser(args: sdk.FindForUserSincePagedArgs): Promise<TableTxLabelMap[]>
-  abstract getOutputTagMapsForUser(args: sdk.FindForUserSincePagedArgs): Promise<TableOutputTagMap[]>
+  abstract getProvenTxsForUser (args: sdk.FindForUserSincePagedArgs): Promise<TableProvenTx[]>
+  abstract getProvenTxReqsForUser (args: sdk.FindForUserSincePagedArgs): Promise<TableProvenTxReq[]>
+  abstract getTxLabelMapsForUser (args: sdk.FindForUserSincePagedArgs): Promise<TableTxLabelMap[]>
+  abstract getOutputTagMapsForUser (args: sdk.FindForUserSincePagedArgs): Promise<TableOutputTagMap[]>
 
-  async findUserByIdentityKey(key: string): Promise<TableUser | undefined> {
+  async findUserByIdentityKey (key: string): Promise<TableUser | undefined> {
     return verifyOneOrNone(await this.findUsers({ partial: { identityKey: key } }))
   }
 
-  async getSyncChunk(args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {
+  async getSyncChunk (args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {
     return await getSyncChunk(this, args)
   }
 
@@ -119,7 +118,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * @param date
    * @returns
    */
-  validateEntityDate(date: DateInput): StorageDate {
+  validateEntityDate (date: DateInput): StorageDate {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     let r: StorageDate = this.validateDate(date)
     switch (this.dbtype) {
@@ -141,10 +140,13 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * @param useNowAsDefault if true and date is null or undefiend, set to current time.
    * @returns
    */
-  validateOptionalEntityDate(date: OptionalDateInput, useNowAsDefault?: boolean): StorageDate | undefined {
+  validateOptionalEntityDate (
+    date: OptionalDateInput,
+    useNowAsDefault?: boolean
+  ): StorageDate | undefined {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     let r: StorageDate | undefined = this.validateOptionalDate(date)
-    if (r == null && useNowAsDefault === true) r = new Date()
+    if ((r == null) && (useNowAsDefault === true)) r = new Date()
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':
@@ -158,19 +160,19 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     return r
   }
 
-  validateDate(date: DateInput): Date {
+  validateDate (date: DateInput): Date {
     let r: Date
     if (date instanceof Date) r = date
     else r = new Date(date)
     return r
   }
 
-  validateOptionalDate(date: OptionalDateInput): Date | undefined {
+  validateOptionalDate (date: OptionalDateInput): Date | undefined {
     if (date === null || date === undefined) return undefined
     return this.validateDate(date)
   }
 
-  validateDateForWhere(date: DateInput): DateInput {
+  validateDateForWhere (date: DateInput): DateInput {
     if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     if (typeof date === 'number') date = validateSecondsSinceEpoch(date)
     const vdate = verifyTruthy(this.validateDate(date))

@@ -1,5 +1,5 @@
 import { type Request, type Response } from 'express'
-import { WalletLoggerInterface } from '@bsv/sdk'
+import { TelemetryEvent, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletLogger } from '../../../WalletLogger'
 import { SyncChunk } from '../../../sdk/WalletStorage.interfaces'
 import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
@@ -139,6 +139,102 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
     expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('trace-id'))
   })
+
+  test('correlates the HTTP, authorization, handler, and RPC spans', async () => {
+    const events: TelemetryEvent[] = []
+    let nextSpanId = 1
+    const server = makeServer({}, {
+      logRpcRequests: true,
+      telemetry: {
+        sink: { capture: event => events.push(event) },
+        spanIdFactory: () => (nextSpanId++).toString(16).padStart(16, '0')
+      }
+    })
+    const captured = makeResponse()
+    const request = makeRequest({
+      jsonrpc: '2.0',
+      method: 'getSettings',
+      params: [],
+      id: 8
+    }, {
+      traceparent: '00-0123456789abcdef0123456789abcdef-fedcba9876543210-01'
+    })
+    Reflect.get(server, 'telemetry').bindContext(request, {
+      traceId: '0123456789abcdef0123456789abcdef',
+      spanId: 'fedcba9876543210',
+      traceFlags: 1
+    })
+
+    await invoke(server, 'handleRpcRequest', request, captured.response)
+
+    const byName = new Map(events.map(event => [event.name, event]))
+    expect(byName.get('wallet.storage.rpc')).toMatchObject({
+      traceId: '0123456789abcdef0123456789abcdef',
+      parentSpanId: 'fedcba9876543210',
+      spanStatus: 'ok',
+      attributes: { 'rpc.method': 'getSettings' }
+    })
+    expect(byName.get('wallet.storage.authorize')?.parentSpanId).toBe(
+      byName.get('wallet.storage.rpc')?.spanId
+    )
+    expect(byName.get('wallet.storage.handler')?.parentSpanId).toBe(
+      byName.get('wallet.storage.rpc')?.spanId
+    )
+    expect(consoleLog).toHaveBeenCalledWith(
+      expect.stringContaining('0123456789abcdef0123456789abcdef')
+    )
+
+    const invalid = makeResponse()
+    await invoke(server, 'handleRpcRequest', makeRequest({
+      jsonrpc: '1.0',
+      params: [],
+      id: 9
+    }), invalid.response)
+    expect(events.find(event => event.attributes?.['rpc.method'] === 'invalid')).toBeDefined()
+  })
+
+  test.each([
+    [204, true, 'finish', 'ok'],
+    [503, true, 'finish', 'error'],
+    [200, false, 'close', 'cancelled']
+  ])(
+    'records HTTP completion status %i on %s',
+    (statusCode, writableEnded, completionEvent, expectedStatus) => {
+      const events: TelemetryEvent[] = []
+      const server = makeServer({}, {
+        telemetry: { sink: { capture: event => events.push(event) } }
+      })
+      const listeners = new Map<string, () => void>()
+      const response = {
+        statusCode,
+        writableEnded,
+        once: (name: string, callback: () => void) => {
+          listeners.set(name, callback)
+        }
+      } as unknown as Response
+      const request = makeRequest({}, {
+        'content-length': '42',
+        traceparent: '00-0123456789abcdef0123456789abcdef-fedcba9876543210-01'
+      })
+      const next = jest.fn()
+
+      void invoke(server, 'traceHttpRequest', request, response, next)
+      listeners.get(completionEvent)?.()
+      listeners.get(completionEvent)?.()
+
+      expect(next).toHaveBeenCalledTimes(1)
+      expect(events[0]).toMatchObject({
+        name: 'wallet.storage.http.request',
+        traceId: '0123456789abcdef0123456789abcdef',
+        spanStatus: expectedStatus,
+        attributes: {
+          'http.request.method': 'POST',
+          'http.request.body_size': 42,
+          'http.response.status_code': statusCode
+        }
+      })
+    }
+  )
 
   test('returns protocol and method errors without invoking storage', async () => {
     const server = makeServer()
