@@ -74,19 +74,8 @@ describe('SatoshisPerKilobyte', () => {
   // Constructor
   // -------------------------------------------------------------------------
   describe('constructor', () => {
-    it('stores the satoshis-per-kilobyte value', () => {
-      const model = new SatoshisPerKilobyte(50)
-      expect(model.value).toBe(50)
-    })
-
-    it('accepts value of 0', () => {
-      const model = new SatoshisPerKilobyte(0)
-      expect(model.value).toBe(0)
-    })
-
-    it('accepts fractional values', () => {
-      const model = new SatoshisPerKilobyte(0.5)
-      expect(model.value).toBe(0.5)
+    it.each([50, 0, 0.5])('stores an accepted value of %s', value => {
+      expect(new SatoshisPerKilobyte(value).value).toBe(value)
     })
   })
 

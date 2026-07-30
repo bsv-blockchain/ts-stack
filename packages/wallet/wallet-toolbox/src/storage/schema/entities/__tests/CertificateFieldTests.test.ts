@@ -219,7 +219,7 @@ describe('CertificateField class method tests', () => {
       const updatedRecord = await activeStorage.findCertificateFields({
         partial: { certificateId, fieldName: 'field1' }
       })
-      expect(updatedRecord.length).toBe(1)
+      expect(updatedRecord).toHaveLength(1)
       expect(updatedRecord[0]).toBeDefined()
       expect(updatedRecord[0].fieldValue).toBe('updatedValue')
       expect(updatedRecord[0].masterKey).toBe('updatedMasterKey')
@@ -293,7 +293,7 @@ describe('CertificateField class method tests', () => {
       const unchangedRecord = await activeStorage.findCertificateFields({
         partial: { certificateId, fieldName: 'field1' }
       })
-      expect(unchangedRecord.length).toBe(1)
+      expect(unchangedRecord).toHaveLength(1)
       expect(unchangedRecord[0]).toBeDefined()
       expect(unchangedRecord[0].fieldValue).toBe('value1')
       expect(unchangedRecord[0].masterKey).toBe('masterKey1')

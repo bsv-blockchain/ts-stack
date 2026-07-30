@@ -167,7 +167,7 @@ describe('PrivilegedKeyManager', () => {
       counterparty: userKey.toPublicKey().toString()
     })
     expect(valid).toEqual(true)
-    expect(signature.length).not.toEqual(0)
+    expect(signature).not.toHaveLength(0)
     await user.destroyKey()
     await counterparty.destroyKey()
   })
@@ -198,7 +198,7 @@ describe('PrivilegedKeyManager', () => {
       counterparty: userKey.toPublicKey().toString()
     })
     expect(hashValid).toEqual(true)
-    expect(signature.length).not.toEqual(0)
+    expect(signature).not.toHaveLength(0)
     await user.destroyKey()
     await counterparty.destroyKey()
   })
@@ -275,7 +275,7 @@ describe('PrivilegedKeyManager', () => {
       counterparty: userKey.toPublicKey().toString()
     })
     expect(valid).toEqual(true)
-    expect(hmac.length).toEqual(32)
+    expect(hmac).toHaveLength(32)
     await user.destroyKey()
     await counterparty.destroyKey()
   })
@@ -356,7 +356,7 @@ describe('PrivilegedKeyManager', () => {
       counterparty: 'self'
     })
     expect(explicitSelfHmacValid).toEqual(true)
-    expect(hmac.length).toEqual(32)
+    expect(hmac).toHaveLength(32)
     const { signature: anyoneSig } = await user.createSignature({
       data: sampleData,
       protocolID: [2, 'tests'],
@@ -582,9 +582,9 @@ describe('PrivilegedKeyManager', () => {
       jest.advanceTimersByTime(retentionMs + 1)
 
       // The destroyKey logic should have run
-      expect((km as any).chunkPropNames.length).toBe(0)
-      expect((km as any).chunkPadPropNames.length).toBe(0)
-      expect((km as any).decoyPropNamesDestroy.length).toBe(0)
+      expect((km as any).chunkPropNames).toHaveLength(0)
+      expect((km as any).chunkPadPropNames).toHaveLength(0)
+      expect((km as any).decoyPropNamesDestroy).toHaveLength(0)
       await km.destroyKey()
     })
 
@@ -605,8 +605,8 @@ describe('PrivilegedKeyManager', () => {
       ;(km as any).destroyKey()
 
       // Now chunkPropNames and chunkPadPropNames should be cleared
-      expect((km as any).chunkPropNames.length).toBe(0)
-      expect((km as any).chunkPadPropNames.length).toBe(0)
+      expect((km as any).chunkPropNames).toHaveLength(0)
+      expect((km as any).chunkPadPropNames).toHaveLength(0)
       await km.destroyKey()
     })
 
@@ -644,14 +644,14 @@ describe('PrivilegedKeyManager', () => {
       })
 
       const chunks = (km as any).splitKeyIntoChunks(testBytes)
-      expect(chunks.length).toBe((km as any).CHUNK_COUNT)
+      expect(chunks).toHaveLength((km as any).CHUNK_COUNT)
 
       // By default CHUNK_COUNT = 4
       // Typically each chunk would be 8 bytes (for a 32-byte key).
       chunks.forEach((chunk: Uint8Array) => {
         // For a 32-byte key with CHUNK_COUNT = 4, every chunk (including the
         // last one which picks up any leftover) is 8 bytes.
-        expect(chunk.length).toBe(8)
+        expect(chunk).toHaveLength(8)
       })
 
       // Reassemble logic typically is done by reassembleKeyFromChunks,
@@ -674,7 +674,7 @@ describe('PrivilegedKeyManager', () => {
         ;(km as any)[padProp] = pad[i]
       })
       const reassembled = (km as any).reassembleKeyFromChunks()
-      expect(reassembled.length).toBe(32)
+      expect(reassembled).toHaveLength(32)
       expect(Array.from(reassembled)).toEqual(Array.from(testBytes))
       await km.destroyKey()
     })
@@ -709,11 +709,11 @@ describe('PrivilegedKeyManager', () => {
     it('Sets up initial decoy properties in the constructor', async () => {
       const km = new PrivilegedKeyManager(async () => new PrivateKey(1), 5000)
       // decoyPropNamesRemain has length 2
-      expect((km as any).decoyPropNamesRemain.length).toBe(2)
+      expect((km as any).decoyPropNamesRemain).toHaveLength(2)
       // Validate those properties actually exist on the object
       for (const propName of (km as any).decoyPropNamesRemain) {
         expect((km as any)[propName]).toBeInstanceOf(Uint8Array)
-        expect((km as any)[propName].length).toBe(16)
+        expect((km as any)[propName]).toHaveLength(16)
       }
       await km.destroyKey()
     })
@@ -723,12 +723,12 @@ describe('PrivilegedKeyManager', () => {
       await (km as any).getPrivilegedKey('decoy test')
 
       // We should have 2 decoy props that remain, plus 2 that are "destroyable"
-      expect((km as any).decoyPropNamesRemain.length).toBe(2)
-      expect((km as any).decoyPropNamesDestroy.length).toBe(2)
+      expect((km as any).decoyPropNamesRemain).toHaveLength(2)
+      expect((km as any).decoyPropNamesDestroy).toHaveLength(2)
 
       // Destroy them
       ;(km as any).destroyKey()
-      expect((km as any).decoyPropNamesDestroy.length).toBe(0)
+      expect((km as any).decoyPropNamesDestroy).toHaveLength(0)
       await km.destroyKey()
     })
   })

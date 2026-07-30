@@ -272,7 +272,7 @@ describe('Point – additional coverage', () => {
       const g = Point.fromString(G_COMPRESSED)
       const encoded = g.encode(false) as number[]
       expect(encoded[0]).toBe(0x04)
-      expect(encoded.length).toBe(65)
+      expect(encoded).toHaveLength(65)
     })
 
     it('returns hex when enc=hex', () => {

@@ -81,7 +81,7 @@ describe('OutputBasket class method tests', () => {
     const updatedRecord = await ctx.activeStorage.findOutputBaskets({
       partial: { basketId: 100 }
     })
-    expect(updatedRecord.length).toBe(1)
+    expect(updatedRecord).toHaveLength(1)
     expect(updatedRecord[0]).toBeDefined() // Ensure record exists
     expect(updatedRecord[0].numberOfDesiredUTXOs).toBe(20)
     expect(updatedRecord[0].minimumDesiredUTXOValue).toBe(10000)
@@ -142,7 +142,7 @@ describe('OutputBasket class method tests', () => {
     const updatedRecord = await ctx.activeStorage.findOutputBaskets({
       partial: { basketId: 200 }
     })
-    expect(updatedRecord.length).toBe(1)
+    expect(updatedRecord).toHaveLength(1)
     expect(updatedRecord[0]).toBeDefined() // Ensure record exists
     expect(updatedRecord[0].numberOfDesiredUTXOs).toBe(10)
     expect(updatedRecord[0].minimumDesiredUTXOValue).toBe(5000)

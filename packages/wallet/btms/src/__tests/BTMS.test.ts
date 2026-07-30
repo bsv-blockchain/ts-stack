@@ -358,7 +358,7 @@ describe('BTMS', () => {
 
       // The originator should be passed to getPublicKey
       // Note: originator is passed as second argument, not in args
-      expect(mockWallet.calls.getPublicKey.length).toBe(1)
+      expect(mockWallet.calls.getPublicKey).toHaveLength(1)
     })
   })
 
@@ -381,7 +381,7 @@ describe('BTMS', () => {
       await btms.getIdentityKey()
 
       // Should only call wallet once due to caching
-      expect(mockWallet.calls.getPublicKey.length).toBe(1)
+      expect(mockWallet.calls.getPublicKey).toHaveLength(1)
     })
   })
 
@@ -397,7 +397,7 @@ describe('BTMS', () => {
 
       // Note: The issue method broadcasts to overlay which fails in test environment
       // We verify the wallet was called correctly even if broadcast fails
-      expect(mockWallet.calls.createAction.length).toBe(1)
+      expect(mockWallet.calls.createAction).toHaveLength(1)
       const createActionCall = mockWallet.calls.createAction[0] as CreateActionArgs
       expect(createActionCall.description).toContain('GOLD')
       // Basket is no longer set in createAction - it's set via internalizeAction with assetId
@@ -589,7 +589,7 @@ describe('BTMS', () => {
       await btms.getSpendableTokens(assetId)
 
       // Should query the BTMS basket with tag filtering
-      expect(mockWallet.calls.listOutputs.length).toBe(1)
+      expect(mockWallet.calls.listOutputs).toHaveLength(1)
       const listOutputsCall = mockWallet.calls.listOutputs[0] as ListOutputsArgs
       expect(listOutputsCall.basket).toBe(BTMS_BASKET)
       expect(listOutputsCall.tags).toEqual([
@@ -908,7 +908,7 @@ describe('BTMS', () => {
       const utxos = createMockUTXOs([20, 30, 10])
       const result = BTMS.selectUTXOs(utxos, 30)
 
-      expect(result.selected.length).toBe(1)
+      expect(result.selected).toHaveLength(1)
       expect(result.selected[0].token.amount).toBe(30)
       expect(result.totalInput).toBe(30)
     })
@@ -921,7 +921,7 @@ describe('BTMS', () => {
       const utxos = createMockUTXOs([20, 30, 10])
       const result = BTMS.selectUTXOs(utxos, 31)
 
-      expect(result.selected.length).toBe(2)
+      expect(result.selected).toHaveLength(2)
       expect(result.selected.map(u => u.token.amount)).toEqual([30, 20])
       expect(result.totalInput).toBe(50)
       // Change would be 50 - 31 = 19
@@ -932,7 +932,7 @@ describe('BTMS', () => {
       const utxos = createMockUTXOs([20, 30, 10])
       const result = BTMS.selectUTXOs(utxos, 60)
 
-      expect(result.selected.length).toBe(3)
+      expect(result.selected).toHaveLength(3)
       expect(result.selected.map(u => u.token.amount)).toEqual([30, 20, 10])
       expect(result.totalInput).toBe(60)
     })
@@ -943,7 +943,7 @@ describe('BTMS', () => {
       const result = BTMS.selectUTXOs(utxos, 61)
 
       // selectUTXOs returns all UTXOs but totalInput < amount
-      expect(result.selected.length).toBe(3)
+      expect(result.selected).toHaveLength(3)
       expect(result.totalInput).toBe(60)
       // Caller (BTMS.send) checks totalInput < amount and throws error
     })
@@ -958,7 +958,7 @@ describe('BTMS', () => {
       const utxos = createMockUTXOs([5, 15, 25, 35])
       const result = BTMS.selectUTXOs(utxos, 40)
 
-      expect(result.selected.length).toBe(2)
+      expect(result.selected).toHaveLength(2)
       expect(result.selected.map(u => u.token.amount)).toEqual([35, 25])
       expect(result.totalInput).toBe(60)
     })
@@ -972,7 +972,7 @@ describe('BTMS', () => {
       const utxos = createMockUTXOs([100, 50, 25])
       const result = BTMS.selectUTXOs(utxos, 20)
 
-      expect(result.selected.length).toBe(1)
+      expect(result.selected).toHaveLength(1)
       expect(result.selected[0].token.amount).toBe(100)
       expect(result.totalInput).toBe(100)
     })
@@ -983,14 +983,14 @@ describe('BTMS', () => {
       const utxos = createMockUTXOs(Array.from({ length: 10 }, () => 10))
       const result = BTMS.selectUTXOs(utxos, 55)
 
-      expect(result.selected.length).toBe(6)
+      expect(result.selected).toHaveLength(6)
       expect(result.totalInput).toBe(60)
     })
 
     it('should handle empty UTXO array', () => {
       const result = BTMS.selectUTXOs([], 100)
 
-      expect(result.selected.length).toBe(0)
+      expect(result.selected).toHaveLength(0)
       expect(result.totalInput).toBe(0)
     })
 
@@ -1349,7 +1349,7 @@ describe('BTMS', () => {
 
       // Originator is passed as second argument to wallet methods
       // The mock captures the first argument (args), but originator is second
-      expect(mockWallet.calls.createAction.length).toBe(1)
+      expect(mockWallet.calls.createAction).toHaveLength(1)
     })
 
     it('should pass originator to getPublicKey', async () => {
@@ -1359,7 +1359,7 @@ describe('BTMS', () => {
 
       await btms.getIdentityKey()
 
-      expect(mockWallet.calls.getPublicKey.length).toBe(1)
+      expect(mockWallet.calls.getPublicKey).toHaveLength(1)
     })
   })
 

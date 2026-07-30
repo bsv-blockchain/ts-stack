@@ -237,8 +237,8 @@ describe('createAction test', () => {
         expect(cr.noSendChange).not.toBeTruthy()
         expect(cr.sendWithResults?.length).toBe(2)
         const [swr1, swr2] = cr.sendWithResults!
-        expect(swr1.status !== 'failed').toBe(true)
-        expect(swr2.status !== 'failed').toBe(true)
+        expect(swr1.status).not.toBe(true)
+        expect(swr2.status).not.toBe(true)
         expect(swr1.txid).toBe(txid1)
         expect(swr2.txid).toBe(txid2)
       }

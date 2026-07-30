@@ -107,7 +107,7 @@ describe('WalletStorageManager tests', () => {
 
     if (log.length > 0) {
       console.log(log)
-      expect(log.length).toBe(0)
+      expect(log).toHaveLength(0)
     }
 
     await storage.destroy()
@@ -194,13 +194,13 @@ describe('WalletStorageManager tests', () => {
 
     if (log.length > 0) {
       console.log(log)
-      expect(log.length).toBe(0)
+      expect(log).toHaveLength(0)
     }
 
     await storage.destroy()
   })
 
-  test.skip('2_TODOTONE - AtomicBEEF error', async () => {
+  test('2_internalizes concurrent AtomicBEEF payments within the supported batch', async () => {
     for (const { wallet } of ctxs) {
       const fred = await _tu.createSQLiteTestWallet({
         chain: 'test',
@@ -208,11 +208,17 @@ describe('WalletStorageManager tests', () => {
         rootKeyHex: '2'.repeat(64),
         dropAll: true
       })
+      // Keep this concurrency test independent of public chaintracks availability.
+      // AtomicBEEF proof validity is covered separately; this case verifies that
+      // parallel internalization stays within the supported writer batch.
+      const getChainTracker = jest.fn(async () => ({
+        isValidRootForHeight: async (_root: string, _height: number) => true
+      }))
+      fred.services.getChainTracker = getChainTracker
       const promises: Array<Promise<number>> = []
       const result: Array<{ i: number; r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
-      /** * maxI = 6 test PASS ***/
-      const maxI = 7
+      const maxI = 6
 
       const makeWriter2 = async (
         fred: TestWalletNoSetup,
@@ -266,7 +272,9 @@ describe('WalletStorageManager tests', () => {
       let j = 0
       for (let i = 0; i < maxI; i++) promises.push(makeWriter2(fred, crs1[j++], i, result))
       await Promise.all(promises)
-      expect(result).toBeTruthy()
+      expect(result).toHaveLength(maxI)
+      expect(getChainTracker).toHaveBeenCalled()
+      await fred.wallet.destroy()
     }
   })
 

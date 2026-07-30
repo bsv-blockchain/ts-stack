@@ -275,8 +275,8 @@ describe('ShamirWalletManager', () => {
       })
 
       // Should get 2 user shares (totalShares - 1 for server)
-      expect(result.userShares.length).toBe(2)
-      expect(capturedShares.length).toBe(2)
+      expect(result.userShares).toHaveLength(2)
+      expect(capturedShares).toHaveLength(2)
       expect(result.threshold).toBe(2)
       expect(result.totalShares).toBe(3)
       expect(result.userIdHash).toBeDefined()
@@ -298,11 +298,11 @@ describe('ShamirWalletManager', () => {
       }
 
       const result = await manager.createNewWallet({ otp: '123456' }, async userShares => {
-        expect(userShares.length).toBe(4) // 5 - 1 = 4 user shares
+        expect(userShares).toHaveLength(4) // 5 - 1 = 4 user shares
         return true
       })
 
-      expect(result.userShares.length).toBe(4)
+      expect(result.userShares).toHaveLength(4)
     })
   })
 

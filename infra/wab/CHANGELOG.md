@@ -35,6 +35,11 @@ All notable changes to this project will be documented in this file.
 - Validate presentation keys, user hashes, auth method names, numeric IDs, and
   Shamir share envelopes at every public controller boundary.
 
+### Fixed
+
+- Give account-deletion migration indexes explicit MySQL-compatible names so a
+  fresh production schema can migrate successfully.
+
 ## [1.1.0] - 2025-08-08
 
 ### Changed

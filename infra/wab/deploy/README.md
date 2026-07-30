@@ -25,6 +25,12 @@ readiness, and liveness checks use the public `/info` endpoint; reaching it prov
 the process completed startup and bound port 8080. The application container runs
 as an unprivileged user with a read-only root filesystem and no Linux
 capabilities.
+The five-second pre-stop delay lets endpoint withdrawal propagate before
+`SIGTERM`; WAB then drains HTTP and closes Knex. The sample records its
+disruption and autoscaling posture explicitly but does not install a
+PodDisruptionBudget or HPA until shared abuse-control and session behavior has
+been operator-validated. The hostname topology preference is ready for that
+replica-safe deployment.
 
 WAB remains a public protocol service. Wildcard, credential-free CORS is the
 default so deployed apps, webviews, mobile clients, and future callers can use it.

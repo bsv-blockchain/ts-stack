@@ -69,9 +69,7 @@ describe('WriterUint8Array', () => {
     it('should write 1', () => {
       const bw = new WriterUint8Array()
       expect(encode(bw.writeInt16BE(1).toArray(), 'hex')).toEqual('0001')
-      expect(encode(new WriterUint8Array().writeInt16BE(-1).toArray(), 'hex')).toEqual(
-        'ffff'
-      )
+      expect(encode(new WriterUint8Array().writeInt16BE(-1).toArray(), 'hex')).toEqual('ffff')
     })
   })
 
@@ -86,9 +84,7 @@ describe('WriterUint8Array', () => {
     it('should write 1', () => {
       const bw = new WriterUint8Array()
       expect(encode(bw.writeInt16LE(1).toArray(), 'hex')).toEqual('0100')
-      expect(encode(new WriterUint8Array().writeInt16LE(-1).toArray(), 'hex')).toEqual(
-        'ffff'
-      )
+      expect(encode(new WriterUint8Array().writeInt16LE(-1).toArray(), 'hex')).toEqual('ffff')
     })
   })
 
@@ -103,9 +99,7 @@ describe('WriterUint8Array', () => {
     it('should write 1', () => {
       const bw = new WriterUint8Array()
       expect(encode(bw.writeInt32BE(1).toArray(), 'hex')).toEqual('00000001')
-      expect(encode(new WriterUint8Array().writeInt32BE(-1).toArray(), 'hex')).toEqual(
-        'ffffffff'
-      )
+      expect(encode(new WriterUint8Array().writeInt32BE(-1).toArray(), 'hex')).toEqual('ffffffff')
     })
   })
 
@@ -120,27 +114,25 @@ describe('WriterUint8Array', () => {
     it('should write 1', () => {
       const bw = new WriterUint8Array()
       expect(encode(bw.writeInt32LE(1).toArray(), 'hex')).toEqual('01000000')
-      expect(encode(new WriterUint8Array().writeInt32LE(-1).toArray(), 'hex')).toEqual(
-        'ffffffff'
-      )
+      expect(encode(new WriterUint8Array().writeInt32LE(-1).toArray(), 'hex')).toEqual('ffffffff')
     })
   })
 
   describe('#writeUInt64BEBn', () => {
     it('should write 1', () => {
       const bw = new WriterUint8Array()
-      expect(
-        encode(bw.writeUInt64BEBn(new BigNumber(1)).toArray(), 'hex')
-      ).toEqual('0000000000000001')
+      expect(encode(bw.writeUInt64BEBn(new BigNumber(1)).toArray(), 'hex')).toEqual(
+        '0000000000000001'
+      )
     })
   })
 
   describe('#writeUInt64LEBn', () => {
     it('should write 1', () => {
       const bw = new WriterUint8Array()
-      expect(
-        encode(bw.writeUInt64LEBn(new BigNumber(1)).toArray(), 'hex')
-      ).toEqual('0100000000000000')
+      expect(encode(bw.writeUInt64LEBn(new BigNumber(1)).toArray(), 'hex')).toEqual(
+        '0100000000000000'
+      )
     })
   })
 
@@ -148,25 +140,25 @@ describe('WriterUint8Array', () => {
     it('should write a 1 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntNum(1)
-      expect(bw.toArray().length).toEqual(1)
+      expect(bw.toArray()).toHaveLength(1)
     })
 
     it('should write a 3 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntNum(1000)
-      expect(bw.toArray().length).toEqual(3)
+      expect(bw.toArray()).toHaveLength(3)
     })
 
     it('should write a 5 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntNum(Math.pow(2, 16 + 1))
-      expect(bw.toArray().length).toEqual(5)
+      expect(bw.toArray()).toHaveLength(5)
     })
 
     it('should write a 9 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntNum(Math.pow(2, 32 + 1))
-      expect(bw.toArray().length).toEqual(9)
+      expect(bw.toArray()).toHaveLength(9)
     })
 
     it('should read back the same value it wrote for a 9 byte varInt', () => {
@@ -183,26 +175,26 @@ describe('WriterUint8Array', () => {
     it('should write a 1 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntBn(new BigNumber(1))
-      expect(bw.toArray().length).toEqual(1)
+      expect(bw.toArray()).toHaveLength(1)
     })
 
     it('should write a 3 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntBn(new BigNumber(1000))
-      expect(bw.toArray().length).toEqual(3)
+      expect(bw.toArray()).toHaveLength(3)
     })
 
     it('should write a 5 byte varInt', () => {
       const bw = new WriterUint8Array()
       const bn = new BigNumber(Math.pow(2, 16 + 1))
       bw.writeVarIntBn(bn)
-      expect(bw.toArray().length).toEqual(5)
+      expect(bw.toArray()).toHaveLength(5)
     })
 
     it('should write a 9 byte varInt', () => {
       const bw = new WriterUint8Array()
       bw.writeVarIntBn(new BigNumber(Math.pow(2, 32 + 1)))
-      expect(bw.toArray().length).toEqual(9)
+      expect(bw.toArray()).toHaveLength(9)
     })
   })
 })

@@ -9,6 +9,10 @@ import { REPOSITORY_ROOT } from './repository-health.mjs'
 const REGISTRY_PATH = join(REPOSITORY_ROOT, 'governance/container-images.json')
 const BASE_REFRESH_DOCKERFILE_PATH = join(REPOSITORY_ROOT, 'governance/Dockerfile.container-bases')
 const INFRA_RELEASE_PATH = join(REPOSITORY_ROOT, '.github/workflows/infra-release.yaml')
+const RUNTIME_CONTRACT_PATH = join(
+  REPOSITORY_ROOT,
+  '.github/workflows/container-runtime-contract.yml'
+)
 const MARKETPLACE_RELEASE_PATH = join(
   REPOSITORY_ROOT,
   '.github/workflows/wab-marketplace-release.yml'
@@ -186,6 +190,25 @@ test('container release workflows scan before push and publish signed evidence',
   assert.match(ci, /Reject high and critical image vulnerabilities/)
   assert.match(ci, /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/)
   assert.doesNotMatch(`${infraRelease}\n${marketplaceRelease}\n${ci}`, /ignore-unfixed:\s*true/)
+})
+
+test('hosted CI exercises every governed image through the complete runtime contract', () => {
+  const registry = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'))
+  const workflow = readFileSync(RUNTIME_CONTRACT_PATH, 'utf8')
+  const runtimeContract = readRepositoryFile('scripts/container-runtime-contract.mjs')
+
+  assert.match(workflow, /platforms: linux\/amd64/)
+  assert.match(workflow, /push: false/)
+  assert.match(workflow, /scripts\/container-runtime-contract\.mjs/)
+  assert.match(workflow, /mysql@sha256:[a-f0-9]{64}/)
+  assert.match(workflow, /mongo@sha256:[a-f0-9]{64}/)
+  assert.match(runtimeContract, /configuration-failure/)
+  assert.match(runtimeContract, /minimal-transaction/)
+  assert.match(runtimeContract, /graceful-shutdown/)
+  assert.match(runtimeContract, /access-control-allow-origin/)
+  for (const component of registry.components) {
+    assert.match(workflow, new RegExp(`name: ${component.name}(?:\\s|$)`))
+  }
 })
 
 test('Docker refreshes and OpenSSF posture checks remain automated', () => {

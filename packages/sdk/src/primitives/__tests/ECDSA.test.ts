@@ -5,10 +5,7 @@ import Signature from '../../primitives/Signature'
 import Point from '../../primitives/Point'
 
 const msg = new BigNumber('deadbeef', 16)
-const key = new BigNumber(
-  '1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5',
-  16
-)
+const key = new BigNumber('1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5', 16)
 const curve = new Curve()
 const pub = curve.g.mul(key)
 const wrongPub = curve.g.mul(new BigNumber(33))
@@ -22,7 +19,7 @@ describe('ECDSA', () => {
   it('should encode and decode with DER', () => {
     const signature = ECDSA.sign(msg, key)
     const encoded = signature.toDER()
-    expect(encoded.length).toBe(71)
+    expect(encoded).toHaveLength(71)
     const decoded = Signature.fromDER(encoded)
     expect(decoded.r.toString(16)).toEqual(signature.r.toString(16))
     expect(decoded.s.toString(16)).toEqual(signature.s.toString(16))
@@ -31,7 +28,7 @@ describe('ECDSA', () => {
   it('should encode and decode with hex DER', () => {
     const signature = ECDSA.sign(msg, key)
     const encoded = signature.toDER('hex')
-    expect(encoded.length).toBe(142)
+    expect(encoded).toHaveLength(142)
     const decoded = Signature.fromDER(encoded, 'hex')
     expect(decoded.r.toString(16)).toEqual(signature.r.toString(16))
     expect(decoded.s.toString(16)).toEqual(signature.s.toString(16))
@@ -82,14 +79,10 @@ describe('ECDSA', () => {
     const n = curve.n
 
     // k = 0 → invalid
-    expect(() =>
-      ECDSA.sign(msg, key, undefined, new BigNumber(0))
-    ).toThrow()
+    expect(() => ECDSA.sign(msg, key, undefined, new BigNumber(0))).toThrow()
 
     // k = n → invalid
-    expect(() =>
-      ECDSA.sign(msg, key, undefined, n)
-    ).toThrow()
+    expect(() => ECDSA.sign(msg, key, undefined, n)).toThrow()
   })
 
   it('k·G + (−k·G) results in point at infinity (TOB-25)', () => {
@@ -113,9 +106,7 @@ describe('ECDSA', () => {
     const signature = ECDSA.sign(msg, key)
     const infinityPub = new Point(null, null)
 
-    expect(() =>
-      ECDSA.verify(msg, signature, infinityPub)
-    ).toThrow()
+    expect(() => ECDSA.verify(msg, signature, infinityPub)).toThrow()
   })
 
   it('sign/verify works with large private key (mulCT stress)', () => {
@@ -134,9 +125,7 @@ describe('ECDSA', () => {
     // Create a message definitely larger than secp256k1 order size
     const tooLargeMsg = new BigNumber(1).iushln(curve.n.bitLength() + 1)
 
-    expect(() =>
-      ECDSA.sign(tooLargeMsg, key)
-    ).toThrow(/message is too large/i)
+    expect(() => ECDSA.sign(tooLargeMsg, key)).toThrow(/message is too large/i)
   })
 
   it('verify should return false for messages larger than curve order bit length (TOB-22)', () => {

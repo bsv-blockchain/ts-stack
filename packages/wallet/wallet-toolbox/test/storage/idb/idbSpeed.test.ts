@@ -23,7 +23,7 @@ describe('idbSpeed tests', () => {
       labels: ['babbage_protocol_perm']
     }
     const r = await setup.wallet.listActions(args)
-    expect(r.actions.length).toBe(args.limit || 10)
+    expect(r.actions).toHaveLength(args.limit || 10)
 
     let log = 'function,count,totalMsecs,avgMsecs\n'
     for (const [key, value] of Object.entries(stats)) {

@@ -2,7 +2,6 @@ import { Random, Telemetry, TelemetrySpan, Validation, WalletLoggerInterface } f
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
-import { formatUnknownForLog } from '../../utility/formatUnknown'
 import { validateStorageFeeModel } from '../StorageProvider'
 import { transactionSize } from './utils'
 /**
@@ -497,18 +496,10 @@ async function generateChangeSdkCore(
       throw new WERR_INTERNAL(`generateChangeSdk error: ${log}`)
     }
 
-    if (r.allocatedChangeInputs.length > 4 && r.changeOutputs.length > 4) {
-      console.log('generateChangeSdk_Capture_too_many_ins_and_outs')
-      logGenerateChangeSdkParams(params)
-    }
-
     return r
   } catch (error_: unknown) {
     const e = WalletError.fromUnknown(error_)
     if (e.code === 'WERR_INSUFFICIENT_FUNDS') throw error_
-
-    // Capture the params in cloud run log which has a 100k text length limit per line.
-    // logGenerateChangeSdkParams(params, eu)
 
     throw error_
   }
@@ -542,21 +533,15 @@ export function validateGenerateChangeSdkResult(
   return { ok, log }
 }
 
-function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknown) {
-  let s = JSON.stringify(params)
-  let euStr = ''
-  if (eu != null) {
-    euStr = ` error: ${formatUnknownForLog(eu)}`
-  }
-  console.log(`generateChangeSdk params length ${s.length}${euStr}`)
-  let i = -1
-  const maxlen = 99900
-  for (;;) {
-    i++
-    console.log(`generateChangeSdk params ${i} XXX${s.slice(0, maxlen)}XXX`)
-    s = s.slice(maxlen)
-    if (!s || i > 100) break
-  }
+function logGenerateChangeSdkParams(params: GenerateChangeSdkParams) {
+  console.log('generateChangeSdk parameter summary', {
+    fixedInputCount: params.fixedInputs.length,
+    fixedOutputCount: params.fixedOutputs.length,
+    targetNetCount: params.targetNetCount,
+    changeInitialSatoshis: params.changeInitialSatoshis,
+    changeFirstSatoshis: params.changeFirstSatoshis,
+    randomValsCount: params.randomVals?.length ?? 0
+  })
 }
 
 export interface GenerateChangeSdkParams {

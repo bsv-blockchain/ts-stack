@@ -2,9 +2,9 @@
 id: release-operations
 title: 'Release and Operations Guide'
 kind: reference
-version: '1.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '1.1.0'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, releases, operations, rollback, npm, containers]
@@ -31,6 +31,8 @@ explicitly requests it.
 - Keep public services reachable by default when that is their product
   contract. CORS and CSP are configurable deployment controls, not
   authentication or authorization.
+- Treat an unpublished source manifest as a visible release-held candidate,
+  never as evidence that a package or image is available to consumers.
 
 ## 1. Decide the release scope
 
@@ -120,6 +122,23 @@ PR like source code:
 
 Do not merge an independent Dependabot PR that fights the release-sync graph.
 Consolidate it into the reviewed baseline or close it as superseded.
+
+The read-only dependency/release verification workflow runs after successful
+release workflows and monthly. Confirm that its artifact records:
+
+- every source version, npm `latest`, recorded published baseline, tarball
+  integrity, and provenance result;
+- every remaining source candidate that is still intentionally held from
+  publication;
+- a clean lifecycle-disabled install plus `npm audit signatures`;
+- every deployment image pulled by immutable digest; and
+- generated package/support/conformance/coverage-reporting facts with no drift.
+
+Do not close a release wave by copying version numbers from source manifests.
+Use this artifact and the release workflow evidence to distinguish what is
+published from what remains held. If publication was explicitly not
+authorized, close the implementation work with the held-candidate inventory
+and leave publication as a separate operator action.
 
 ## 5. Infrastructure images and deployment
 

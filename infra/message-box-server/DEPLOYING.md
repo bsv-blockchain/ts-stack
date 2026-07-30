@@ -116,6 +116,13 @@ Enforce an aggregate policy at the trusted ingress or configure a shared store.
 WebSocket routing is also process-local; use sticky sessions or an
 authenticated shared broker.
 
+`SIGTERM` and `SIGINT` first disconnect authenticated WebSockets, then drain
+HTTP, close the database pool, and flush telemetry. Set a termination grace
+period that includes ingress withdrawal and active-request drain time; the
+service lifecycle is idempotent. Scale or permit voluntary disruption only
+after the deployment supplies shared BRC-103 session, rate-limit, and
+WebSocket-routing behavior.
+
 ## Firebase
 
 Firebase is off unless `ENABLE_FIREBASE=true`. Prefer workload identity or a

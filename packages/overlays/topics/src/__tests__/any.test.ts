@@ -202,7 +202,7 @@ describe('AnyLookupService (MongoDB)', () => {
       query: {}
     } as LookupQuestion)) as any[]
 
-    expect(result.length).toBe(3)
+    expect(result).toHaveLength(3)
   })
 
   it('lookup throws for unsupported service', async () => {

@@ -229,7 +229,7 @@ describe('Commission class method tests', () => {
       const updatedRecord = await activeStorage.findCommissions({
         partial: { commissionId: 803 }
       })
-      expect(updatedRecord.length).toBe(1)
+      expect(updatedRecord).toHaveLength(1)
       expect(updatedRecord[0]).toBeDefined()
       expect(updatedRecord[0].isRedeemed).toBe(true)
     }
@@ -305,7 +305,7 @@ describe('Commission class method tests', () => {
       const record = await activeStorage.findCommissions({
         partial: { commissionId: 802 }
       })
-      expect(record.length).toBe(1)
+      expect(record).toHaveLength(1)
       expect(record[0]).toBeDefined()
       expect(record[0].isRedeemed).toBe(false)
     }

@@ -31,7 +31,7 @@ describe('mandala-encoding', () => {
     const txid = 'a'.repeat(64)
     const assetId = `${txid}.3`
     const bytes = encodeAssetId(assetId)
-    expect(bytes.length).toBe(36)
+    expect(bytes).toHaveLength(36)
     expect(decodeAssetId(bytes)).toBe(assetId)
   })
 

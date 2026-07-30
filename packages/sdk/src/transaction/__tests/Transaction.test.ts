@@ -73,8 +73,8 @@ describe('Transaction', () => {
 
     // should set known defaults
     expect(tx.version).toEqual(1)
-    expect(tx.inputs.length).toEqual(0)
-    expect(tx.outputs.length).toEqual(0)
+    expect(tx.inputs).toHaveLength(0)
+    expect(tx.outputs).toHaveLength(0)
     expect(tx.lockTime).toEqual(0)
   })
 
@@ -82,8 +82,8 @@ describe('Transaction', () => {
     it('should set these known defaults', () => {
       const tx = new Transaction()
       expect(tx.version).toEqual(1)
-      expect(tx.inputs.length).toEqual(0)
-      expect(tx.outputs.length).toEqual(0)
+      expect(tx.inputs).toHaveLength(0)
+      expect(tx.outputs).toHaveLength(0)
       expect(tx.lockTime).toEqual(0)
     })
   })
@@ -113,8 +113,8 @@ describe('Transaction', () => {
       const tx = Transaction.fromBinary(tx2buf)
       expect(tx.id('hex')).toBe(tx2idhex)
       const r = Transaction.parseScriptOffsets(tx2buf)
-      expect(r.inputs.length).toBe(2)
-      expect(r.outputs.length).toBe(2)
+      expect(r.inputs).toHaveLength(2)
+      expect(r.outputs).toHaveLength(2)
       for (let vin = 0; vin < 2; vin++) {
         const i = r.inputs[vin]
         const script = tx2buf.slice(i.offset, i.length + i.offset)
@@ -165,9 +165,9 @@ describe('Transaction', () => {
         sequence: 0xffffffff
       }
       const tx = new Transaction()
-      expect(tx.inputs.length).toEqual(0)
+      expect(tx.inputs).toHaveLength(0)
       tx.addInput(txIn)
-      expect(tx.inputs.length).toEqual(1)
+      expect(tx.inputs).toHaveLength(1)
     })
   })
 
@@ -178,9 +178,9 @@ describe('Transaction', () => {
         satoshis: 1
       }
       const tx = new Transaction()
-      expect(tx.outputs.length).toEqual(0)
+      expect(tx.outputs).toHaveLength(0)
       tx.addOutput(txOut)
-      expect(tx.outputs.length).toEqual(1)
+      expect(tx.outputs).toHaveLength(1)
     })
   })
 
@@ -1239,7 +1239,7 @@ describe('Transaction', () => {
         })
         tx.addP2PKHOutput(testPrivateKey.toAddress(), 10000)
         tx.addP2PKHOutput(pubKeyHash, 10000)
-        expect(tx.outputs.length).toEqual(2)
+        expect(tx.outputs).toHaveLength(2)
         expect(tx.outputs[0].satoshis).toEqual(10000)
         expect(tx.outputs[1].satoshis).toEqual(10000)
         expect(tx.outputs[0].lockingScript.toHex() === testP2PKHScript.toHex()).toBeTruthy()

@@ -5,7 +5,9 @@ import { Beef, BeefTx } from '@bsv/sdk'
 import { arcGorillaPoolUrl } from '../createDefaultWalletServicesOptions'
 import { Setup } from '../../index.all'
 
-describe('ArcGorillaPool tests', () => {
+// This file is excluded from normal Jest discovery and is run only through the
+// explicit `pnpm test:manual -- <path>` operator boundary.
+describe('ArcGorillaPool manual integration tests', () => {
   jest.setTimeout(99999999)
 
   const env = _tu.getEnv('main')
@@ -13,15 +15,15 @@ describe('ArcGorillaPool tests', () => {
     apiKey: ''
   })
 
-  test.skip('0 double spend', async () => {
+  test('0 double spend', async () => {
     const beef = Beef.fromString(testnetDoubleSpendBeef)
     const txids = [beef.txs.slice(-1)[0].txid]
     const r = await arc.postBeef(beef, txids)
-    expect(r.status === 'error').toBe(true)
+    expect(r.status).toBe(true)
     expect(r.txidResults[0].doubleSpend).toBe(true)
   })
 
-  test.skip('1 postRawTx', async () => {
+  test('1 postRawTx', async () => {
     const r = await postRawTxTest('main', arc)
     logger(`2 postBeef mainnet done ${r}`)
   })
@@ -32,7 +34,7 @@ describe('ArcGorillaPool tests', () => {
   })
 })
 
-async function postBeefTest (chain: sdk.Chain, arc: ARC): Promise<string> {
+async function postBeefTest(chain: sdk.Chain, arc: ARC): Promise<string> {
   if (Setup.noEnv(chain)) return 'skipped'
   const c = await _tu.createNoSendTxPair(chain)
 
@@ -67,7 +69,7 @@ async function postBeefTest (chain: sdk.Chain, arc: ARC): Promise<string> {
   return 'passed'
 }
 
-async function postRawTxTest (chain: sdk.Chain, arc: ARC): Promise<void> {
+async function postRawTxTest(chain: sdk.Chain, arc: ARC): Promise<void> {
   if (Setup.noEnv(chain)) return
   const c = await _tu.createNoSendTxPair(chain)
 

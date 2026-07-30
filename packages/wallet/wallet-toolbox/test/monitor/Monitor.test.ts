@@ -210,7 +210,7 @@ describe('Monitor tests', () => {
       {
         for (const txid of expectedTxids) {
           // no matching ProvenTx exists.
-          expect((await storage.findProvenTxs({ partial: { txid } })).length).toBe(0)
+          expect(await storage.findProvenTxs({ partial: { txid } })).toHaveLength(0)
           const req = verifyTruthy(await EntityProvenTxReq.fromStorageTxid(storage, txid))
           expect(req.status).toBe('unmined')
         }
@@ -263,7 +263,7 @@ describe('Monitor tests', () => {
 
         for (const txid of expectedTxids) {
           // no matching ProvenTx exists.
-          expect((await storage.findProvenTxs({ partial: { txid } })).length).toBe(0)
+          expect(await storage.findProvenTxs({ partial: { txid } })).toHaveLength(0)
           const req = verifyTruthy(await EntityProvenTxReq.fromStorageTxid(storage, txid))
           expect(req.status).toBe('unmined')
           attempts.push(req.attempts)
@@ -278,7 +278,7 @@ describe('Monitor tests', () => {
         for (const txid of expectedTxids) {
           i++
           // no matching ProvenTx exists.
-          expect((await storage.findProvenTxs({ partial: { txid } })).length).toBe(0)
+          expect(await storage.findProvenTxs({ partial: { txid } })).toHaveLength(0)
           const req = verifyTruthy(await EntityProvenTxReq.fromStorageTxid(storage, txid))
           expect(req.status).toBe('unmined')
           expect(req.attempts).toBeGreaterThanOrEqual(attempts[i])
@@ -758,7 +758,7 @@ describe('Monitor tests', () => {
 
       for (const txid of expectedTxids) {
         // no matching ProvenTx exists.
-        expect((await storage.findProvenTxs({ partial: { txid } })).length).toBe(0)
+        expect(await storage.findProvenTxs({ partial: { txid } })).toHaveLength(0)
         const req = verifyTruthy(await EntityProvenTxReq.fromStorageTxid(storage, txid))
         expect(req.status).toBe('unmined')
       }

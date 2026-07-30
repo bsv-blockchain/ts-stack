@@ -39,6 +39,50 @@ type HttpMethod = 'get' | 'post' | 'put' | 'delete'
 /** Express app or router — embed mounts pieces on whichever it owns. */
 export type MessageBoxRouter = IRouter
 
+interface WebSocketState {
+  authenticatedSockets: Map<string, string>
+  connectedSockets: Map<string, AuthSocket>
+}
+
+const webSocketState = new WeakMap<AuthSocketServer, WebSocketState>()
+
+type ClosableAuthSocketServer = AuthSocketServer & {
+  close?: () => Promise<void>
+}
+
+type DisconnectableAuthSocket = Pick<AuthSocket, 'ioSocket'>
+
+export function disconnectAuthenticatedSockets(
+  sockets: Iterable<DisconnectableAuthSocket>
+): void {
+  for (const socket of sockets) {
+    socket.ioSocket.disconnect(true)
+  }
+}
+
+/**
+ * Close authenticated WebSockets without requiring an unpublished dependency.
+ *
+ * New AuthSocket releases own the complete close lifecycle. The compatibility
+ * path disconnects the public underlying Socket.IO sockets used by 2.1.1, then
+ * lets the standalone owner drain its HTTP server. Remove that path after the
+ * governed published baseline exposes AuthSocketServer.close().
+ */
+export async function closeMessageBoxWebSockets(io: AuthSocketServer | null): Promise<void> {
+  if (io === null) return
+
+  const state = webSocketState.get(io)
+  const nativeClose = (io as ClosableAuthSocketServer).close
+  if (typeof nativeClose === 'function') {
+    await nativeClose.call(io)
+  } else {
+    disconnectAuthenticatedSockets(state?.connectedSockets.values() ?? [])
+  }
+  state?.authenticatedSockets.clear()
+  state?.connectedSockets.clear()
+  webSocketState.delete(io)
+}
+
 export function createMessageBoxApp(): Express {
   return express()
 }
@@ -125,6 +169,7 @@ export function attachMessageBoxWebSockets(
   // Map to store authenticated identity keys
   const authenticatedSockets = new Map<string, string>()
   const connectedSockets = new Map<string, AuthSocket>()
+  webSocketState.set(io, { authenticatedSockets, connectedSockets })
 
   io.on('connection', socket => {
     connectedSockets.set(socket.id, socket)

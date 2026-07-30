@@ -9,30 +9,30 @@ class FakeEventSource {
   private listeners: Record<string, Array<(event: any) => void>> = {}
   closed = false
 
-  constructor (url: string, opts: any) {
+  constructor(url: string, opts: any) {
     this.url = url
     this.opts = opts
     FakeEventSource.instances.push(this)
   }
 
-  addEventListener (type: string, fn: (event: any) => void): void {
+  addEventListener(type: string, fn: (event: any) => void): void {
     if (this.listeners[type] == null) this.listeners[type] = []
     this.listeners[type].push(fn)
   }
 
   /** Helper used by tests to simulate an incoming server event */
-  emit (type: string, event: any = {}): void {
+  emit(type: string, event: any = {}): void {
     for (const fn of this.listeners[type] ?? []) {
       fn(event)
     }
   }
 
-  close (): void {
+  close(): void {
     this.closed = true
   }
 }
 
-function makeClient (overrides: Partial<ArcSSEClientOptions> = {}): {
+function makeClient(overrides: Partial<ArcSSEClientOptions> = {}): {
   client: ArcSSEClient
   events: ArcSSEEvent[]
   errors: Error[]
@@ -114,7 +114,7 @@ describe('ArcSSEClient', () => {
       const { client } = makeClient()
       client.connect()
       client.connect()
-      expect(FakeEventSource.instances.length).toBe(1)
+      expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     test('does not log callbackToken while connecting', () => {
@@ -230,7 +230,7 @@ describe('ArcSSEClient', () => {
       client.connect()
       client.close()
       client.connect()
-      expect(FakeEventSource.instances.length).toBe(2)
+      expect(FakeEventSource.instances).toHaveLength(2)
     })
   })
 
@@ -246,7 +246,7 @@ describe('ArcSSEClient', () => {
     test('opens connection if not already connected', async () => {
       const { client } = makeClient()
       await client.fetchEvents()
-      expect(FakeEventSource.instances.length).toBe(1)
+      expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     test('does not open a second connection when already connected', async () => {
@@ -254,7 +254,7 @@ describe('ArcSSEClient', () => {
       client.connect()
       FakeEventSource.instances[0].emit('open') // mark as connected
       await client.fetchEvents()
-      expect(FakeEventSource.instances.length).toBe(1)
+      expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     test('does not reconnect while connecting (open not yet fired)', async () => {
@@ -264,7 +264,7 @@ describe('ArcSSEClient', () => {
       await client.fetchEvents()
       // should NOT tear down — still in connecting state
       expect(FakeEventSource.instances[0].closed).toBeFalsy()
-      expect(FakeEventSource.instances.length).toBe(1)
+      expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     test('reconnects with stale (errored) EventSource by closing first', async () => {
@@ -275,7 +275,7 @@ describe('ArcSSEClient', () => {
       // Now es exists, connected=false, connecting=false — should reconnect
       await client.fetchEvents()
       expect(FakeEventSource.instances[0].closed).toBe(true)
-      expect(FakeEventSource.instances.length).toBe(2)
+      expect(FakeEventSource.instances).toHaveLength(2)
     })
   })
 

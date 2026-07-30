@@ -658,13 +658,13 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
   it('should call discoverByIdentityKey after ensuring identity resolution permission', async () => {
     const result = await manager.discoverByIdentityKey({ identityKey: '0222fff...' }, 'someone-trying-lookup.com')
     expect(underlying.discoverByIdentityKey).toHaveBeenCalledTimes(1)
-    expect(result.certificates.length).toBe(0)
+    expect(result.certificates).toHaveLength(0)
   })
 
   it('should call discoverByAttributes after ensuring identity resolution permission', async () => {
     const result = await manager.discoverByAttributes({ attributes: { name: 'Bob' } }, 'someone-trying-lookup.com')
     expect(underlying.discoverByAttributes).toHaveBeenCalledTimes(1)
-    expect(result.certificates.length).toBe(0)
+    expect(result.certificates).toHaveLength(0)
   })
 
   /* -------------------------------------------------------------------------

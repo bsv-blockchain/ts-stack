@@ -6,21 +6,15 @@ import * as ECDSA from '../dist/esm/src/primitives/ECDSA.js'
 
 const curve = new Curve()
 
-const scalar = new BigNumber(
-  '1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5',
-  16
-)
+const scalar = new BigNumber('1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5', 16)
 
 const msg = new BigNumber('deadbeefcafebabe', 16)
 
-const priv = new BigNumber(
-  '8a2f85e08360a04c8a36b7c22c5e9e9a0d3bcf2f95c97db2b8bd90fc5f5ff66a',
-  16
-)
+const priv = new BigNumber('8a2f85e08360a04c8a36b7c22c5e9e9a0d3bcf2f95c97db2b8bd90fc5f5ff66a', 16)
 
 const pub = curve.g.mul(priv)
 
-async function main () {
+async function main() {
   const options = {
     minSampleMs: 400,
     samples: 8
@@ -60,7 +54,9 @@ async function main () {
   )
 }
 
-main().catch((err) => {
+try {
+  await main()
+} catch (err) {
   console.error(err)
   process.exit(1)
-})
+}

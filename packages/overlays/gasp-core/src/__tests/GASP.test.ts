@@ -287,7 +287,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage2.findKnownUTXOs(0)).length).toBe(1)
+    expect(await storage2.findKnownUTXOs(0)).toHaveLength(1)
     compareUTXOs(await storage2.findKnownUTXOs(0), await storage1.findKnownUTXOs(0))
   })
   it('Synchronizes a single UTXO from Bob to Alice', async () => {
@@ -297,7 +297,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
+    expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
     compareUTXOs(await storage1.findKnownUTXOs(0), await storage2.findKnownUTXOs(0))
   })
   it('Discards graphs that do not validate from Alice to Bob', async () => {
@@ -310,7 +310,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage2.findKnownUTXOs(0)).length).toBe(0)
+    expect(await storage2.findKnownUTXOs(0)).toHaveLength(0)
     expect(storage2.discardGraph).toHaveBeenCalledWith('mock_sender1_txid1.0')
   })
   it('Discards graphs that do not validate from Bob to Alice', async () => {
@@ -323,7 +323,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage1.findKnownUTXOs(0)).length).toBe(0)
+    expect(await storage1.findKnownUTXOs(0)).toHaveLength(0)
     expect(storage1.discardGraph).toHaveBeenCalledWith('mock_sender1_txid1.0')
   })
   it('Synchronizes a deep UTXO from Bob to Alice', async () => {
@@ -348,7 +348,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
+    expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
     compareUTXOs(await storage1.findKnownUTXOs(0), await storage2.findKnownUTXOs(0))
   })
   it('Synchronizes a deep UTXO from Alice to Bob', async () => {
@@ -373,7 +373,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage2.findKnownUTXOs(0)).length).toBe(1)
+    expect(await storage2.findKnownUTXOs(0)).toHaveLength(1)
     compareUTXOs(await storage2.findKnownUTXOs(0), await storage1.findKnownUTXOs(0))
   })
   it('Synchronizes multiple graphs from Alice to Bob', async () => {
@@ -392,7 +392,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage2.findKnownUTXOs(0)).length).toBe(2)
+    expect(await storage2.findKnownUTXOs(0)).toHaveLength(2)
     compareUTXOs(await storage2.findKnownUTXOs(0), await storage1.findKnownUTXOs(0))
   })
   it('Synchronizes a graph with recursive inputs from Bob to Alice', async () => {
@@ -444,7 +444,7 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
+    expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
     compareUTXOs(await storage1.findKnownUTXOs(0), await storage2.findKnownUTXOs(0))
   })
   it('Synchronizes only UTXOs created after the specified since timestamp', async () => {
@@ -475,7 +475,7 @@ describe('GASP', () => {
 
     // Ensure only the new UTXO is synchronized
     const syncedUTXOs = await storage2.findKnownUTXOs(0)
-    expect(syncedUTXOs.length).toBe(1)
+    expect(syncedUTXOs).toHaveLength(1)
     expect(syncedUTXOs.map(u => ({ txid: u.txid, outputIndex: u.outputIndex }))).toEqual([
       { txid: 'new_txid', outputIndex: 1 }
     ])
@@ -487,8 +487,8 @@ describe('GASP', () => {
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
     await gasp1.sync('test-host')
-    expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
-    expect((await storage2.findKnownUTXOs(0)).length).toBe(1)
+    expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
+    expect(await storage2.findKnownUTXOs(0)).toHaveLength(1)
     expect(storage1.finalizeGraph).not.toHaveBeenCalled()
     expect(storage2.finalizeGraph).not.toHaveBeenCalled()
     compareUTXOs(await storage2.findKnownUTXOs(0), await storage1.findKnownUTXOs(0))
@@ -548,7 +548,7 @@ describe('GASP', () => {
     await gasp1.sync('test-host')
 
     const syncedUTXOs = await storage2.findKnownUTXOs(0)
-    expect(syncedUTXOs.length).toBe(1)
+    expect(syncedUTXOs).toHaveLength(1)
     expect(syncedUTXOs.map(u => ({ txid: u.txid, outputIndex: u.outputIndex }))).toEqual([
       { txid: 'mock_sender1_txid1', outputIndex: 0 }
     ])
@@ -635,7 +635,7 @@ describe('GASP', () => {
       // Two nodes were appended to the temporary graph
       expect(storage2.appendToGraph).toHaveBeenCalledTimes(2)
       // Two nodes are in temporary storage, the ones that were sent
-      expect(Object.keys(storage2.tempGraphStore).length).toEqual(2)
+      expect(Object.keys(storage2.tempGraphStore)).toHaveLength(2)
     })
     it('Prevents infinite recursion with cyclically referencing nodes the other direction', async () => {
       const cyclicNode1 = {
@@ -710,8 +710,8 @@ describe('GASP', () => {
       await gasp1.sync('test-host')
 
       // This direction, the UTXO does sync because the recipient is able to proceed to graph finalization after refusing to process duplicative data.
-      expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
-      expect((await storage1.findKnownUTXOs(0)).length).toBe(1)
+      expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
+      expect(await storage1.findKnownUTXOs(0)).toHaveLength(1)
       expect(storage1.appendToGraph).toHaveBeenCalledTimes(2)
     })
     it('Prevents infinite recursion with complex cyclic dependencies', async () => {

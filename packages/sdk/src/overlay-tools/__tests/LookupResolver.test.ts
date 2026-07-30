@@ -1566,7 +1566,7 @@ describe('LookupResolver', () => {
         'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
       )
 
-      expect(mockFacilitator.lookup.mock.calls.length).toBe(2)
+      expect(mockFacilitator.lookup.mock.calls).toHaveLength(2)
     })
 
     it('should continue to aggregate outputs when some hosts return invalid outputs', async () => {
@@ -1638,7 +1638,7 @@ describe('LookupResolver', () => {
         outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
       })
 
-      expect(mockFacilitator.lookup.mock.calls.length).toBe(3)
+      expect(mockFacilitator.lookup.mock.calls).toHaveLength(3)
     })
 
     it('should continue to aggregate outputs when some hosts return malformed malarkie', async () => {
@@ -1710,7 +1710,7 @@ describe('LookupResolver', () => {
         outputs: [{ beef: sampleBeef3, outputIndex: 0 }]
       })
 
-      expect(mockFacilitator.lookup.mock.calls.length).toBe(3)
+      expect(mockFacilitator.lookup.mock.calls).toHaveLength(3)
     })
   })
 })

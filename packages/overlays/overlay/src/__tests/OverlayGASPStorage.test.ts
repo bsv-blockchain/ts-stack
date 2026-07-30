@@ -7,7 +7,10 @@ describe('OverlayGASPStorage', () => {
   let mockEngine: any
 
   beforeEach(() => {
-    mockEngine = { storage: { findOutput: jest.fn(() => undefined), findUTXOsForTopic: jest.fn() }, managers: {} }
+    mockEngine = {
+      storage: { findOutput: jest.fn(() => undefined), findUTXOsForTopic: jest.fn() },
+      managers: {}
+    }
     overlayStorage = new OverlayGASPStorage('test-topic', mockEngine)
   })
 
@@ -24,13 +27,19 @@ describe('OverlayGASPStorage', () => {
 
       await overlayStorage.appendToGraph(mockTx)
 
-      expect(Object.keys(overlayStorage.temporaryGraphNodeRefs).length).toBe(1)
+      expect(Object.keys(overlayStorage.temporaryGraphNodeRefs)).toHaveLength(1)
       expect(overlayStorage.temporaryGraphNodeRefs['txid123.0'].txid).toBe(parsedTx.id('hex'))
     })
 
     it('throws error when max nodes are exceeded', async () => {
       overlayStorage.maxNodesInGraph = 1
-      const graphNode: GraphNode = { txid: 'txid123', children: [], rawTx: '', graphID: 'txid4321.2', outputIndex: 0 }
+      const graphNode: GraphNode = {
+        txid: 'txid123',
+        children: [],
+        rawTx: '',
+        graphID: 'txid4321.2',
+        outputIndex: 0
+      }
       overlayStorage.temporaryGraphNodeRefs['txid123.0'] = graphNode
 
       const mockTx = {
@@ -39,13 +48,18 @@ describe('OverlayGASPStorage', () => {
         graphID: 'txid234.1'
       }
 
-      await expect(overlayStorage.appendToGraph(mockTx)).rejects.toThrow('The max number of nodes in transaction graph has been reached!')
+      await expect(overlayStorage.appendToGraph(mockTx)).rejects.toThrow(
+        'The max number of nodes in transaction graph has been reached!'
+      )
     })
   })
 
   describe('findKnownUTXOs', () => {
     it('should return known UTXOs since a given timestamp', async () => {
-      const mockUTXOs = [{ txid: 'txid1', outputIndex: 0, score: 0 }, { txid: 'txid2', outputIndex: 1, score: 0 }]
+      const mockUTXOs = [
+        { txid: 'txid1', outputIndex: 0, score: 0 },
+        { txid: 'txid2', outputIndex: 1, score: 0 }
+      ]
       mockEngine.storage.findUTXOsForTopic.mockResolvedValue(mockUTXOs)
 
       const result = await overlayStorage.findKnownUTXOs(1234567890)
@@ -66,13 +80,13 @@ describe('OverlayGASPStorage', () => {
 
   describe('hydrateGASPNode', () => {
     it('should throw an error if no output is found', async () => {
-      await expect(overlayStorage.hydrateGASPNode('graphID', 'txid', 0, false)).rejects.toThrow('No matching output found!')
+      await expect(overlayStorage.hydrateGASPNode('graphID', 'txid', 0, false)).rejects.toThrow(
+        'No matching output found!'
+      )
     })
-    // TODO: Further test coverage
   })
 
   describe('findNeededInputs', () => {
-    // TODO: Write more complicated test cases
     it('should return inputs needed for further verification when no proof is present', async () => {
       const mockTx: GASPNode = {
         rawTx: '001122',
@@ -129,36 +143,39 @@ describe('OverlayGASPStorage', () => {
     it.each([
       [new Error('manager failed'), 'manager failed'],
       ['manager failed as a string', 'manager failed as a string']
-    ])('terminates the graph and logs normalized identifyNeededInputs errors', async (failure, message) => {
-      const mockTx: GASPNode = {
-        rawTx: '001122',
-        proof: 'someproof',
-        graphID: 'txid123.0',
-        outputIndex: 0
-      }
-      const parsedTx = {
-        inputs: [],
-        toBEEF: jest.fn().mockReturnValue([1, 2, 3]),
-        id: jest.fn().mockReturnValue('txid123'),
-        merklePath: {}
-      }
-      Transaction.fromHex = jest.fn().mockReturnValue(parsedTx)
-      MerklePath.fromHex = jest.fn().mockReturnValue(parsedTx.merklePath)
-      mockEngine.managers['test-topic'] = {
-        identifyAdmissibleOutputs: jest.fn().mockResolvedValue({
-          outputsToAdmit: []
-        }),
-        identifyNeededInputs: jest.fn().mockRejectedValue(failure)
-      }
-      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+    ])(
+      'terminates the graph and logs normalized identifyNeededInputs errors',
+      async (failure, message) => {
+        const mockTx: GASPNode = {
+          rawTx: '001122',
+          proof: 'someproof',
+          graphID: 'txid123.0',
+          outputIndex: 0
+        }
+        const parsedTx = {
+          inputs: [],
+          toBEEF: jest.fn().mockReturnValue([1, 2, 3]),
+          id: jest.fn().mockReturnValue('txid123'),
+          merklePath: {}
+        }
+        Transaction.fromHex = jest.fn().mockReturnValue(parsedTx)
+        MerklePath.fromHex = jest.fn().mockReturnValue(parsedTx.merklePath)
+        mockEngine.managers['test-topic'] = {
+          identifyAdmissibleOutputs: jest.fn().mockResolvedValue({
+            outputsToAdmit: []
+          }),
+          identifyNeededInputs: jest.fn().mockRejectedValue(failure)
+        }
+        const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
 
-      await expect(overlayStorage.findNeededInputs(mockTx)).resolves.toBeUndefined()
+        await expect(overlayStorage.findNeededInputs(mockTx)).resolves.toBeUndefined()
 
-      expect(consoleError).toHaveBeenCalledWith(
-        `An error occurred when identifying needed inputs for transaction: txid123.0: ${message}`
-      )
-      consoleError.mockRestore()
-    })
+        expect(consoleError).toHaveBeenCalledWith(
+          `An error occurred when identifying needed inputs for transaction: txid123.0: ${message}`
+        )
+        consoleError.mockRestore()
+      }
+    )
   })
 
   describe('validateGraphAnchor', () => {
@@ -302,6 +319,6 @@ describe('OverlayGASPStorage', () => {
   it('should handle non-existent graphID', async () => {
     await overlayStorage.discardGraph('nonexistent.0')
 
-    expect(Object.keys(overlayStorage.temporaryGraphNodeRefs).length).toBe(0)
+    expect(Object.keys(overlayStorage.temporaryGraphNodeRefs)).toHaveLength(0)
   })
 })

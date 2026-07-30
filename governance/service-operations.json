@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "lastReviewed": "2026-07-28",
+  "lastReviewed": "2026-07-29",
   "owner": "ts-stack-maintainers",
   "policy": {
     "publicEdge": {
@@ -70,7 +70,8 @@
       "terminationGracePeriodSeconds": 30,
       "productionDisruptionPolicy": "Stateful or singleton-safe services require an explicit maintenance strategy; horizontally safe services require a PodDisruptionBudget that preserves at least one ready replica.",
       "productionTopologyPolicy": "Spread ready replicas across failure domains where the service's shared state and session model support horizontal operation.",
-      "productionAutoscalingPolicy": "Scale only from measured saturation and latency signals, with bounded minimum and maximum replicas and a verified shared-state/session design."
+      "productionAutoscalingPolicy": "Scale only from measured saturation and latency signals, with bounded minimum and maximum replicas and a verified shared-state/session design.",
+      "runtimeContract": "Hosted Linux/amd64 CI builds every governed image and requires non-root and health metadata, closed invalid-configuration behavior, successful startup, liveness, readiness after any startup-owned migration, credential-free wildcard CORS, one minimal public protocol transaction, and clean SIGTERM shutdown. Disposable MySQL, MongoDB, and source-built Wallet Infrastructure dependencies are used where the real service requires them; no image is pushed."
     }
   },
   "manifestRoots": [
@@ -183,8 +184,8 @@
       "rto": "4 hours from a verified database backup and wallet configuration.",
       "restoreValidation": "Verify migration state, authenticated list/send/acknowledge, duplicate handling, and optional push delivery.",
       "lifecycle": {
-        "status": "partial",
-        "shutdown": "SIGTERM/SIGINT drain HTTP and close Knex when WebSockets are disabled. Authenticated WebSocket shutdown is release-ordered behind publication and adoption of the implemented AuthSocket close API; until then the service retains default signal termination when WebSockets are enabled.",
+        "status": "implemented",
+        "shutdown": "SIGTERM/SIGINT disconnect authenticated WebSockets, drain HTTP, close Knex, and flush telemetry. The standalone compatibility adapter uses only the published AuthSocket public socket surface and automatically delegates to AuthSocketServer.close() when that API is available.",
         "scaling": "Multiple replicas require shared BRC-103 sessions, database-backed rate limits, and a verified WebSocket routing strategy.",
         "disruption": "Preserve at least one ready replica only after shared session and WebSocket behavior is proven.",
         "topology": "Spread replicas after shared-state requirements are met; otherwise operate as an explicit singleton."
@@ -261,8 +262,8 @@
       "rto": "4 hours from mutually consistent backups and verified provider configuration.",
       "restoreValidation": "Verify schema versions, topic and lookup counts, submit/lookup, provider callbacks, GASP/BASM anchors, and readiness.",
       "lifecycle": {
-        "status": "release-ordered",
-        "shutdown": "The source @bsv/overlay-express candidate now provides idempotent close of HTTP, synchronization, Knex, and MongoDB. Publish that package before adopting it in the standalone image; telemetry flush remains active now.",
+        "status": "implemented",
+        "shutdown": "SIGTERM/SIGINT idempotently stop synchronization and maintenance work, drain HTTP, close Knex and MongoDB, and flush telemetry. The standalone compatibility adapter delegates to OverlayExpress.close() when available without requiring an unpublished dependency.",
         "scaling": "Background GASP/BASM/maintenance ownership and BRC-103 sessions must be coordinated before adding replicas.",
         "disruption": "Operate as a singleton unless leader election and shared sessions are proven; record a maintenance window for voluntary disruption.",
         "topology": "After coordination is implemented, spread ready replicas and database replicas across independent failure domains."
@@ -514,19 +515,31 @@
       "service": "overlay-server",
       "manifest": "infra/overlay-server/deploy/app-deployment.yaml",
       "container": "overlay",
-      "terminationGracePeriodSeconds": 30
+      "terminationGracePeriodSeconds": 30,
+      "preStopDelaySeconds": 5,
+      "topologyKey": "kubernetes.io/hostname",
+      "disruptionMode": "maintenance-controlled-singleton",
+      "autoscalingMode": "operator-gated-until-leadership-and-shared-sessions"
     },
     {
       "service": "wab",
       "manifest": "infra/wab/deploy/web-deployment.yaml",
       "container": "web",
-      "terminationGracePeriodSeconds": 30
+      "terminationGracePeriodSeconds": 30,
+      "preStopDelaySeconds": 5,
+      "topologyKey": "kubernetes.io/hostname",
+      "disruptionMode": "operator-validated-ready-capacity",
+      "autoscalingMode": "operator-gated-until-shared-abuse-controls"
     },
     {
       "service": "wallet-infra",
       "manifest": "infra/wallet-infra/guides/kube_samples/wallet.yaml",
       "container": "wallet-infra",
-      "terminationGracePeriodSeconds": 30
+      "terminationGracePeriodSeconds": 30,
+      "preStopDelaySeconds": 5,
+      "topologyKey": "kubernetes.io/hostname",
+      "disruptionMode": "maintenance-controlled-monitor-leader",
+      "autoscalingMode": "operator-gated-until-monitor-leadership-and-shared-sessions"
     }
   ],
   "statefulExamples": [

@@ -3,8 +3,8 @@ id: service-operations
 title: 'Service Operations Contract'
 kind: reference
 version: '2.0.0'
-last_updated: '2026-07-28'
-last_verified: '2026-07-28'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, operations, observability, slo, recovery]
@@ -26,15 +26,15 @@ and CSP remains an independent document/UI policy rather than API authorization.
 
 ## Runtime endpoints and lifecycle
 
-| Service                    | Port contract                                            | Liveness       | Readiness       | Lifecycle       | Operations                                                                                                     |
-| -------------------------- | -------------------------------------------------------- | -------------- | --------------- | --------------- | -------------------------------------------------------------------------------------------------------------- |
-| `chaintracks-server`       | PORT (default 3011; CDN is port + 1)                     | `/getInfo`     | `/getInfo`      | implemented     | [guide](../infrastructure/chaintracks-server.md)                                                               |
-| `message-box-server`       | PORT, then HTTP_PORT (default 8080)                      | `/health`      | `/ready`        | partial         | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/message-box-server/DEPLOYING.md)            |
-| `overlay-server`           | 8080                                                     | `/health/live` | `/health/ready` | release-ordered | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/overlay-server/deploy/README.md)            |
-| `uhrp-server-basic`        | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented     | [guide](../infrastructure/uhrp-server-basic.md)                                                                |
-| `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented     | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
-| `wab`                      | PORT (default 8080)                                      | `/info`        | `/info`         | implemented     | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
-| `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/`            | `/`             | implemented     | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
+| Service                    | Port contract                                            | Liveness       | Readiness       | Lifecycle   | Operations                                                                                                     |
+| -------------------------- | -------------------------------------------------------- | -------------- | --------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `chaintracks-server`       | PORT (default 3011; CDN is port + 1)                     | `/getInfo`     | `/getInfo`      | implemented | [guide](../infrastructure/chaintracks-server.md)                                                               |
+| `message-box-server`       | PORT, then HTTP_PORT (default 8080)                      | `/health`      | `/ready`        | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/message-box-server/DEPLOYING.md)            |
+| `overlay-server`           | 8080                                                     | `/health/live` | `/health/ready` | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/overlay-server/deploy/README.md)            |
+| `uhrp-server-basic`        | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-basic.md)                                                                |
+| `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
+| `wab`                      | PORT (default 8080)                                      | `/info`        | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
+| `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/`            | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
 
 Health endpoints are public and non-sensitive. They do not replace protocol
 authentication, administrative authorization, rate limits, or dependency-aware
@@ -155,7 +155,7 @@ Incident handling follows this evidence-preserving sequence:
 - RPO starting point: 15 minutes for messages and permissions; device registrations follow the same backup boundary when enabled.
 - RTO starting point: 4 hours from a verified database backup and wallet configuration.
 - Restore validation: Verify migration state, authenticated list/send/acknowledge, duplicate handling, and optional push delivery.
-- Lifecycle status: **partial** — SIGTERM/SIGINT drain HTTP and close Knex when WebSockets are disabled. Authenticated WebSocket shutdown is release-ordered behind publication and adoption of the implemented AuthSocket close API; until then the service retains default signal termination when WebSockets are enabled.
+- Lifecycle status: **implemented** — SIGTERM/SIGINT disconnect authenticated WebSockets, drain HTTP, close Knex, and flush telemetry. The standalone compatibility adapter uses only the published AuthSocket public socket surface and automatically delegates to AuthSocketServer.close() when that API is available.
 - Scaling: Multiple replicas require shared BRC-103 sessions, database-backed rate limits, and a verified WebSocket routing strategy.
 - Disruption: Preserve at least one ready replica only after shared session and WebSocket behavior is proven.
 - Topology: Spread replicas after shared-state requirements are met; otherwise operate as an explicit singleton.
@@ -186,7 +186,7 @@ Incident handling follows this evidence-preserving sequence:
 - RPO starting point: 15 minutes across a coordinated SQL and MongoDB backup boundary.
 - RTO starting point: 4 hours from mutually consistent backups and verified provider configuration.
 - Restore validation: Verify schema versions, topic and lookup counts, submit/lookup, provider callbacks, GASP/BASM anchors, and readiness.
-- Lifecycle status: **release-ordered** — The source @bsv/overlay-express candidate now provides idempotent close of HTTP, synchronization, Knex, and MongoDB. Publish that package before adopting it in the standalone image; telemetry flush remains active now.
+- Lifecycle status: **implemented** — SIGTERM/SIGINT idempotently stop synchronization and maintenance work, drain HTTP, close Knex and MongoDB, and flush telemetry. The standalone compatibility adapter delegates to OverlayExpress.close() when available without requiring an unpublished dependency.
 - Scaling: Background GASP/BASM/maintenance ownership and BRC-103 sessions must be coordinated before adding replicas.
 - Disruption: Operate as a singleton unless leader election and shared sessions are proven; record a maintenance window for voluntary disruption.
 - Topology: After coordination is implemented, spread ready replicas and database replicas across independent failure domains.
@@ -335,6 +335,8 @@ image digests, startup/readiness/liveness probes, resources, and the registered
 termination grace. Production disruption, topology, and autoscaling choices must
 follow the service-specific shared-state and leadership constraints above.
 
+Hosted Linux/amd64 CI builds every governed image and requires non-root and health metadata, closed invalid-configuration behavior, successful startup, liveness, readiness after any startup-owned migration, credential-free wildcard CORS, one minimal public protocol transaction, and clean SIGTERM shutdown. Disposable MySQL, MongoDB, and source-built Wallet Infrastructure dependencies are used where the real service requires them; no image is pushed.
+
 ## Release and change procedure
 
 1. Change a service, package, Dockerfile, manifest, configuration example, or
@@ -343,11 +345,10 @@ follow the service-specific shared-state and leadership constraints above.
    signal, SLO, alert, recovery, lifecycle, or deployment behavior changes.
 3. Run `pnpm ops:docs`, then `pnpm ops:check`; run affected builds, tests,
    audits, package gates, and the full repository merge gates.
-4. Release dependency candidates before consumers. In particular, release the
-   new `@bsv/overlay-express` `OverlayExpress.close()` contract before
-   adopting it in the standalone Overlay image. Release `@bsv/authsocket`
-   `AuthSocketServer.close()` before a separately authorized Message Box
-   deployment.
+4. Release dependency candidates before consumers. The standalone Overlay and
+   Message Box lifecycle adapters remain compatible with the current published
+   dependencies and automatically delegate to their package-owned close APIs
+   once those independently reviewed packages are available.
 5. Deploy only through a separately authorized release. Record exact source and
    image digests, configuration and secret names, probe and critical-journey
    evidence, migration result, telemetry delivery, backup/restore evidence, and

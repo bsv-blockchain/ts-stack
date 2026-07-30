@@ -365,28 +365,8 @@ export abstract class TestUtilsWalletStorage {
    * @returns {TestWalletNoSetup}
    */
   static async createTestWallet(args: Chain | CreateTestWalletArgs): Promise<TestWalletNoSetup> {
-    let chain: Chain
-    let rootKeyHex: string
-    let filePath: string
-    let addLocalBackup = false
-    let setActiveClient = false
-    let useMySQLConnectionForClient = false
-    if (typeof args === 'string') {
-      chain = args
-      const env = _tu.getEnv(chain)
-      if (!env.testIdentityKey || !env.testFilePath) {
-        throw new WERR_INVALID_PARAMETER('env.testIdentityKey and env.testFilePath', 'valid')
-      }
-      rootKeyHex = env.devKeys[env.testIdentityKey!]
-      filePath = env.testFilePath
-    } else {
-      chain = args.chain
-      rootKeyHex = args.rootKeyHex
-      filePath = args.filePath
-      addLocalBackup = args.addLocalBackup === true
-      setActiveClient = args.setActiveClient === true
-      useMySQLConnectionForClient = args.useMySQLConnectionForClient === true
-    }
+    const config = resolveTestWalletConfig(args)
+    const { chain, rootKeyHex, filePath } = config
 
     const databaseName = path.parse(filePath).name
     const setup = await _tu.createSQLiteTestWallet({
@@ -397,81 +377,18 @@ export abstract class TestUtilsWalletStorage {
     })
     setup.localStorageIdentityKey = setup.storage.getActiveStore()
 
-    let client: WalletStorageProvider
-    if (useMySQLConnectionForClient) {
-      const env = _tu.getEnv(chain)
-      if (!env.cloudMySQLConnection) throw new WERR_INVALID_PARAMETER('env.cloundMySQLConnection', 'valid')
-      const connection = JSON.parse(env.cloudMySQLConnection)
-      client = new StorageKnex({
-        ...StorageKnex.defaultOptions(),
-        knex: _tu.createMySQLFromConnection(connection),
-        chain: env.chain
-      })
-    } else {
-      const endpointUrl =
-        chain === 'main' ? 'https://storage.babbage.systems' : 'https://staging-storage.babbage.systems'
-
-      client = new StorageClient(setup.wallet, endpointUrl)
-    }
+    const client = createTestWalletClient(setup, config)
     setup.clientStorageIdentityKey = (await client.makeAvailable()).storageIdentityKey
     await setup.wallet.storage.addWalletStorageProvider(client)
 
-    if (addLocalBackup) {
-      const backupName = `${databaseName}_backup`
-      const backupPath = filePath.replace(databaseName, backupName)
-      const localBackup = new StorageKnex({
-        ...StorageKnex.defaultOptions(),
-        knex: _tu.createLocalSQLite(backupPath),
-        chain
-      })
-      await localBackup.migrate(backupName, randomBytesHex(33))
-      setup.localBackupStorageIdentityKey = (await localBackup.makeAvailable()).storageIdentityKey
-      await setup.wallet.storage.addWalletStorageProvider(localBackup)
-    }
+    if (config.addLocalBackup) await addTestWalletBackup(setup, config, databaseName)
 
-    // SETTING ACTIVE
-    // SETTING ACTIVE
-    // SETTING ACTIVE
     const log = await setup.storage.setActive(
-      setActiveClient ? setup.clientStorageIdentityKey : setup.localStorageIdentityKey
+      config.setActiveClient ? setup.clientStorageIdentityKey : setup.localStorageIdentityKey
     )
     logger(log)
 
-    let needsBackup = false
-
-    if (setup.storage.getActiveStore() === setup.localStorageIdentityKey) {
-      const basket = verifyOne(
-        await setup.activeStorage.findOutputBaskets({
-          partial: {
-            userId: setup.storage.getActiveUser().userId,
-            name: 'default'
-          }
-        })
-      )
-      if (basket.minimumDesiredUTXOValue !== 5 || basket.numberOfDesiredUTXOs < 32) {
-        needsBackup = true
-        await setup.activeStorage.updateOutputBasket(basket.basketId, {
-          minimumDesiredUTXOValue: 5,
-          numberOfDesiredUTXOs: 32
-        })
-      }
-    }
-
-    const balance = await setup.wallet.balanceAndUtxos()
-
-    if (balance.total < 1000) {
-      throw new WERR_INSUFFICIENT_FUNDS(1000, 1000 - balance.total)
-    }
-
-    if (balance.utxos.length <= 10) {
-      const args: CreateActionArgs = {
-        description: 'spread change'
-      }
-      await setup.wallet.createAction(args)
-      needsBackup = true
-    }
-
-    if (needsBackup) {
+    if (await prepareTestWallet(setup)) {
       const log2 = await setup.storage.updateBackups()
       console.log(log2)
     }
@@ -568,8 +485,8 @@ export abstract class TestUtilsWalletStorage {
     if (!reuseExisting && (tryToDelete || copyToTmp))
       try {
         await fsp.unlink(dstPath)
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         if (e.name !== 'ENOENT') {
           throw e
         }
@@ -927,7 +844,8 @@ export abstract class TestUtilsWalletStorage {
     })
   }
 
-  static legacyRootKeyHex = '153a3df216' + '686f55b253991c' + '7039da1f648' + 'ffc5bfe93d6ac2c25ac' + '2d4070918d'
+  static readonly legacyRootKeyHex =
+    '153a3df216' + '686f55b253991c' + '7039da1f648' + 'ffc5bfe93d6ac2c25ac' + '2d4070918d'
 
   static async createLegacyWalletCopy(
     databaseName: string,
@@ -996,11 +914,16 @@ export abstract class TestUtilsWalletStorage {
   static wrapProfiling(o: object, name: string): Record<string, { count: number; totalMsecs: number }> {
     const getFunctionsNames = (obj: object) => {
       let fNames: string[] = []
-      do {
+      let current: object | null = obj
+      while (current !== null && current !== Object.prototype) {
         fNames = fNames.concat(
-          Object.getOwnPropertyNames(obj).filter(p => p !== 'constructor' && typeof obj[p] === 'function')
+          Object.getOwnPropertyNames(current).filter(
+            property =>
+              property !== 'constructor' && typeof (current as Record<string, unknown>)[property] === 'function'
+          )
         )
-      } while ((obj = Object.getPrototypeOf(obj)) && obj !== Object.prototype)
+        current = Object.getPrototypeOf(current)
+      }
 
       return fNames
     }
@@ -1047,18 +970,18 @@ export abstract class TestUtilsWalletStorage {
         let wrapperFunction = (...args) => {
           let callbackFnIndex = -1
           let startTime = Date.now()
-          let _callBack = args.filter((arg, i) => {
-            let _isFunction = typeof arg === 'function'
+          const _callBack = args.find((arg, i) => {
+            const _isFunction = typeof arg === 'function'
             if (_isFunction) {
               callbackFnIndex = i
             }
             return _isFunction
-          })[0]
+          })
           if (_callBack) {
             let callbackWrapper = (...callbackArgs) => {
               let endTime = Date.now()
               _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
-              _callBack.apply(null, callbackArgs)
+              _callBack(...callbackArgs)
             }
             args[callbackFnIndex] = callbackWrapper
           }
@@ -1072,12 +995,12 @@ export abstract class TestUtilsWalletStorage {
               .then(resolveArgs => {
                 let endTime = Date.now()
                 _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
-                return Promise.resolve(resolveArgs)
+                return resolveArgs
               })
-              .catch((...rejectArgs) => {
+              .catch(error => {
                 let endTime = Date.now()
                 _notifyPerformance({ functionName: `${objectName}.${fName}`, args, startTime, endTime })
-                return Promise.reject(...rejectArgs)
+                throw error
               })
           }
           if (!_callBack && !isPromiseType) {
@@ -1576,165 +1499,13 @@ export abstract class TestUtilsWalletStorage {
     mockData?: MockData
   ): Promise<TestSetup2> {
     mockData ??= { actions: [] }
-    if (!mockData.actions) {
-      throw new Error('mockData.actions is required')
-    }
-
+    if (!mockData.actions) throw new Error('mockData.actions is required')
     const now = new Date()
-    const inputTxMap: Record<string, any> = {}
-    const outputMap: Record<string, any> = {}
-
-    // only one user
     const user = await _tu.insertTestUser(storage, identityKey)
-
-    // First create your output that represent your inputs
+    const outputMap: Record<string, TableOutput> = {}
+    await insertMockSourceOutputs(storage, user, mockData.actions, outputMap)
     for (const action of mockData.actions) {
-      for (const input of action.inputs || []) {
-        let prevOutput = outputMap[input.sourceOutpoint]
-
-        if (!prevOutput) {
-          const { tx: transaction } = await _tu.insertTestTransaction(storage, user, false, {
-            txid: input.sourceOutpoint.split('.')[0],
-            satoshis: input.sourceSatoshis,
-            status: 'confirmed' as TransactionStatus,
-            description: 'Generated transaction for input',
-            lockTime: 0,
-            version: 1,
-            inputBEEF: [1, 2, 3, 4],
-            rawTx: [4, 3, 2, 1]
-          })
-
-          const basket = await _tu.insertTestOutputBasket(storage, user, {
-            name: randomBytesHex(6)
-          })
-
-          // Need to convert
-          const lockingScriptValue = input.sourceLockingScript
-            ? Utils.toArray(input.sourceLockingScript, 'hex')
-            : undefined
-
-          prevOutput = await _tu.insertTestOutput(
-            storage,
-            transaction,
-            0,
-            input.sourceSatoshis,
-            basket,
-            true, // Needs to be spendable
-            {
-              outputDescription: input.inputDescription,
-              spendable: true,
-              vout: Number(input.sourceOutpoint.split('.')[1]),
-              lockingScript: lockingScriptValue,
-              txid: transaction.txid
-            }
-          )
-
-          // Store in maps for later use
-          inputTxMap[input.sourceOutpoint] = transaction
-          outputMap[input.sourceOutpoint] = prevOutput
-        }
-      }
-    }
-
-    // Process transactions that spend those previous outputs
-    for (const action of mockData.actions) {
-      const { tx: transaction } = await _tu.insertTestTransaction(storage, user, false, {
-        txid: `${action.txid}` || `tx_${action.satoshis}_${Date.now()}`,
-        satoshis: action.satoshis,
-        status: action.status as TransactionStatus,
-        description: action.description,
-        lockTime: action.lockTime,
-        version: action.version,
-        inputBEEF: [1, 2, 3, 4],
-        rawTx: [4, 3, 2, 1]
-      })
-
-      // Loop through action inputs and update chosen outputs
-      for (const input of action.inputs || []) {
-        // Output must exist before updating
-        const prevOutput = outputMap[input.sourceOutpoint]
-
-        if (!prevOutput) {
-          throw new Error(`UTXO not found in outputMap for sourceOutpoint: ${input.sourceOutpoint}`)
-        }
-
-        // Set correct output fields as per input fields
-        await storage.updateOutput(prevOutput.outputId, {
-          spendable: false, // Mark output as spent
-          spentBy: transaction.transactionId, // Reference the new transaction
-          spendingDescription: input.inputDescription, // Store description
-          sequenceNumber: input.sequenceNumber // Store sequence number
-        })
-      }
-
-      // Insert any new outputs for the transaction
-      if (action.outputs) {
-        for (const output of action.outputs) {
-          const basket = await _tu.insertTestOutputBasket(storage, user, {
-            name: output.basket
-          })
-          const insertedOutput = await _tu.insertTestOutput(
-            storage,
-            transaction,
-            output.outputIndex,
-            output.satoshis,
-            basket,
-            false,
-            {
-              outputDescription: output.outputDescription,
-              spendable: output.spendable,
-              txid: transaction.txid
-            }
-          )
-
-          // Store this output in the map for future transactions to reference
-          outputMap[`${action.txid}.${output.outputIndex}`] = insertedOutput
-        }
-      }
-
-      // Labels inserted
-      if (action.labels) {
-        for (const label of action.labels) {
-          const l = await _tu.insertTestTxLabel(storage, user, {
-            label,
-            isDeleted: false,
-            created_at: now,
-            updated_at: now,
-            txLabelId: 0,
-            userId: user.userId
-          })
-          await _tu.insertTestTxLabelMap(storage, transaction, l)
-        }
-      }
-
-      // Tags inserted for outputs
-      if (action.outputs) {
-        for (const output of action.outputs) {
-          if (output.tags) {
-            // Ensure we fetch the correct inserted output for the current transaction
-            const insertedOutput = outputMap[`${action.txid}.${output.outputIndex}`]
-
-            if (!insertedOutput) {
-              throw new Error(`Output not found for txid: ${action.txid}, vout: ${output.outputIndex}`)
-            }
-
-            for (const tag of output.tags) {
-              // Insert the output tag into the database
-              const insertedTag = await _tu.insertTestOutputTag(storage, user, {
-                tag: tag,
-                isDeleted: false,
-                created_at: now,
-                updated_at: now,
-                outputTagId: 0, // Will be auto-incremented by the DB
-                userId: user.userId
-              })
-
-              // Map the inserted tag to the correct output
-              await _tu.insertTestOutputTagMap(storage, insertedOutput, insertedTag)
-            }
-          }
-        }
-      }
+      await insertMockAction(storage, user, action, outputMap, now)
     }
 
     return mockData
@@ -1916,7 +1687,162 @@ export abstract class TestUtilsWalletStorage {
   }
 }
 
-export abstract class _tu extends TestUtilsWalletStorage {}
+export const _tu = TestUtilsWalletStorage
+
+async function insertMockSourceOutputs(
+  storage: StorageProvider,
+  user: TableUser,
+  actions: WalletAction[],
+  outputMap: Record<string, TableOutput>
+): Promise<void> {
+  for (const action of actions) {
+    for (const input of action.inputs ?? []) {
+      if (outputMap[input.sourceOutpoint] !== undefined) continue
+      outputMap[input.sourceOutpoint] = await insertMockSourceOutput(storage, user, input)
+    }
+  }
+}
+
+async function insertMockSourceOutput(
+  storage: StorageProvider,
+  user: TableUser,
+  input: WalletActionInput
+): Promise<TableOutput> {
+  const { tx: transaction } = await _tu.insertTestTransaction(storage, user, false, {
+    txid: input.sourceOutpoint.split('.')[0],
+    satoshis: input.sourceSatoshis,
+    status: 'confirmed' as TransactionStatus,
+    description: 'Generated transaction for input',
+    lockTime: 0,
+    version: 1,
+    inputBEEF: [1, 2, 3, 4],
+    rawTx: [4, 3, 2, 1]
+  })
+  const basket = await _tu.insertTestOutputBasket(storage, user, {
+    name: randomBytesHex(6)
+  })
+  return await _tu.insertTestOutput(storage, transaction, 0, input.sourceSatoshis, basket, true, {
+    outputDescription: input.inputDescription,
+    spendable: true,
+    vout: Number(input.sourceOutpoint.split('.')[1]),
+    lockingScript: input.sourceLockingScript ? Utils.toArray(input.sourceLockingScript, 'hex') : undefined,
+    txid: transaction.txid
+  })
+}
+
+async function insertMockAction(
+  storage: StorageProvider,
+  user: TableUser,
+  action: WalletAction,
+  outputMap: Record<string, TableOutput>,
+  now: Date
+): Promise<void> {
+  const { tx: transaction } = await _tu.insertTestTransaction(storage, user, false, {
+    txid: `${action.txid}` || `tx_${action.satoshis}_${Date.now()}`,
+    satoshis: action.satoshis,
+    status: action.status as TransactionStatus,
+    description: action.description,
+    lockTime: action.lockTime,
+    version: action.version,
+    inputBEEF: [1, 2, 3, 4],
+    rawTx: [4, 3, 2, 1]
+  })
+  await markMockInputsSpent(storage, transaction, action.inputs ?? [], outputMap)
+  await insertMockOutputs(storage, user, transaction, action, outputMap)
+  await insertMockLabels(storage, user, transaction, action.labels ?? [], now)
+  await insertMockOutputTags(storage, user, action, outputMap, now)
+}
+
+async function markMockInputsSpent(
+  storage: StorageProvider,
+  transaction: TableTransaction,
+  inputs: WalletActionInput[],
+  outputMap: Record<string, TableOutput>
+): Promise<void> {
+  for (const input of inputs) {
+    const previousOutput = outputMap[input.sourceOutpoint]
+    if (previousOutput === undefined) {
+      throw new Error(`UTXO not found in outputMap for sourceOutpoint: ${input.sourceOutpoint}`)
+    }
+    await storage.updateOutput(previousOutput.outputId, {
+      spendable: false,
+      spentBy: transaction.transactionId,
+      spendingDescription: input.inputDescription,
+      sequenceNumber: input.sequenceNumber
+    })
+  }
+}
+
+async function insertMockOutputs(
+  storage: StorageProvider,
+  user: TableUser,
+  transaction: TableTransaction,
+  action: WalletAction,
+  outputMap: Record<string, TableOutput>
+): Promise<void> {
+  for (const output of action.outputs ?? []) {
+    const basket = await _tu.insertTestOutputBasket(storage, user, { name: output.basket })
+    outputMap[`${action.txid}.${output.outputIndex}`] = await _tu.insertTestOutput(
+      storage,
+      transaction,
+      output.outputIndex,
+      output.satoshis,
+      basket,
+      false,
+      {
+        outputDescription: output.outputDescription,
+        spendable: output.spendable,
+        txid: transaction.txid
+      }
+    )
+  }
+}
+
+async function insertMockLabels(
+  storage: StorageProvider,
+  user: TableUser,
+  transaction: TableTransaction,
+  labels: string[],
+  now: Date
+): Promise<void> {
+  for (const label of labels) {
+    const insertedLabel = await _tu.insertTestTxLabel(storage, user, {
+      label,
+      isDeleted: false,
+      created_at: now,
+      updated_at: now,
+      txLabelId: 0,
+      userId: user.userId
+    })
+    await _tu.insertTestTxLabelMap(storage, transaction, insertedLabel)
+  }
+}
+
+async function insertMockOutputTags(
+  storage: StorageProvider,
+  user: TableUser,
+  action: WalletAction,
+  outputMap: Record<string, TableOutput>,
+  now: Date
+): Promise<void> {
+  for (const output of action.outputs ?? []) {
+    const insertedOutput = outputMap[`${action.txid}.${output.outputIndex}`]
+    if (insertedOutput === undefined) {
+      throw new Error(`Output not found for txid: ${action.txid}, vout: ${output.outputIndex}`)
+    }
+    for (const tag of output.tags ?? []) {
+      const insertedTag = await _tu.insertTestOutputTag(storage, user, {
+        tag,
+        isDeleted: false,
+        created_at: now,
+        updated_at: now,
+        outputTagId: 0,
+        userId: user.userId
+      })
+      await _tu.insertTestOutputTagMap(storage, insertedOutput, insertedTag)
+    }
+  }
+}
 
 export interface TestSetup1 {
   u1: TableUser
@@ -2031,8 +1957,8 @@ export async function expectToThrowWERR<R>(
 ): Promise<void> {
   try {
     await fn()
-  } catch (eu: unknown) {
-    const e = WalletError.fromUnknown(eu)
+  } catch (error_: unknown) {
+    const e = WalletError.fromUnknown(error_)
     if (e.name !== expectedClass.name || !e.isError)
       console.log(`Error name ${e.name} vs class name ${expectedClass.name}\n${e.stack}\n`)
     // The output above may help debugging this situation or put a breakpoint
@@ -2200,10 +2126,8 @@ export const validateUpdateTime = (
       `UTC Match: ${utcMatch}\n`,
       `Human-Readable Match: ${humanReadableMatch}`
     )
-  } else {
-    if (logEnabled) {
-      logger(`Validation succeeded:\n`, `Actual Time: ${actualTime.toISOString()} (Timestamp: ${actualTimestamp})`)
-    }
+  } else if (logEnabled) {
+    logger(`Validation succeeded:\n`, `Actual Time: ${actualTime.toISOString()} (Timestamp: ${actualTimestamp})`)
   }
 
   return isValid
@@ -2242,7 +2166,8 @@ export const logUniqueConstraintError = (
   // The unique constraint error message differs between sqlite3 and better-sqlite3:
   // - sqlite3: "SQLITE_CONSTRAINT: UNIQUE constraint failed: table.column"
   // - better-sqlite3: "UNIQUE constraint failed: table.column"
-  const constraintPart = `UNIQUE constraint failed: ${columnNames.map(col => `${tableName}.${col}`).join(', ')}`
+  const qualifiedColumns = columnNames.map(columnName => [tableName, columnName].join('.')).join(', ')
+  const constraintPart = `UNIQUE constraint failed: ${qualifiedColumns}`
 
   if (logEnabled) {
     logger('constraintPart=', constraintPart)
@@ -2311,15 +2236,28 @@ const logForeignConstraintError = (
  *
  * @example await triggerUniqueConstraintError(storage, 'ProvenTxReq', 'proven_tx_reqs', 'provenTxReqId', { provenTxReqId: 42 }, 1, true)
  */
-export const triggerUniqueConstraintError = async (
+type ConstraintTestArguments = [
   storage: any,
   findMethod: string,
   updateMethod: string,
   tableName: string,
   columnName: string,
-  invalidValue: any, // This remains an object passed in by the caller
-  id: number = 1,
-  logEnabled: boolean = false
+  invalidValue: any,
+  id?: number,
+  logEnabled?: boolean
+]
+
+export const triggerUniqueConstraintError = async (
+  ...[
+    storage,
+    findMethod,
+    updateMethod,
+    tableName,
+    columnName,
+    invalidValue,
+    id = 1,
+    logEnabled = false
+  ]: ConstraintTestArguments
 ): Promise<boolean> => {
   setLogging(logEnabled)
 
@@ -2385,14 +2323,16 @@ export const triggerUniqueConstraintError = async (
  * @example await triggerForeignKeyConstraintError(storage, 'findProvenTxReqs', 'updateProvenTxReq', 'proven_tx_reqs', 'provenTxId', { provenTxId: 42 })
  */
 export const triggerForeignKeyConstraintError = async (
-  storage: any,
-  findMethod: string,
-  updateMethod: string,
-  tableName: string,
-  columnName: string,
-  invalidValue: any,
-  id: number = 1,
-  logEnabled: boolean = false
+  ...[
+    storage,
+    findMethod,
+    updateMethod,
+    tableName,
+    columnName,
+    invalidValue,
+    id = 1,
+    logEnabled = false
+  ]: ConstraintTestArguments
 ): Promise<boolean> => {
   // Set logging state based on the argument
   setLogging(logEnabled)
@@ -2508,53 +2448,66 @@ export const normalizeDate = (value: any): string | null => {
   return null
 }
 
+async function logTransactionLabels(storage: StorageKnex, transaction: TableTransaction): Promise<string> {
+  const labelMaps = await storage.findTxLabelMaps({
+    partial: { transactionId: transaction.transactionId }
+  })
+  if (labelMaps.length === 0) return `Labels: N/A\n`
+
+  let log = `Labels:\n`
+  for (const labelMap of labelMaps) {
+    const labels = await storage.findTxLabels({
+      partial: { txLabelId: labelMap.txLabelId }
+    })
+    if (labels.length > 0) log += `  - ${labels[0].label}\n`
+  }
+  return log
+}
+
+async function logTransactionInputs(storage: StorageKnex, transaction: TableTransaction): Promise<string> {
+  let log = ''
+  const inputs = await storage.findOutputs({
+    partial: { transactionId: transaction.transactionId }
+  })
+  for (const input of inputs) log += await logInput(storage, input.txid!, input.vout)
+  return log
+}
+
+async function logTransactionOutputs(
+  storage: StorageKnex,
+  transaction: TableTransaction
+): Promise<{ log: string; amount: SatoshiValue }> {
+  let log = ''
+  let amount: SatoshiValue = 0
+  const outputs = await storage.findOutputs({
+    partial: { transactionId: transaction.transactionId }
+  })
+  for (const output of outputs) {
+    log += await logOutput(storage, output)
+    amount += output.spendable ? output.satoshis : 0
+  }
+  return { log, amount }
+}
+
+async function logTransactionBeef(storage: StorageKnex, txid: HexString): Promise<string> {
+  const beef = await storage.getBeefForTransaction(txid, {})
+  return beef == null ? `Beef Data: N/A\n` : `Beef Data:\n${beef.toLogString()}\n${beef.toHex()}\n`
+}
+
 export async function logTransaction(storage: StorageKnex, txid: HexString): Promise<string> {
   let amount: SatoshiValue = 0
   let log = `\n==== Transaction Log ====\ntxid: ${txid}\n`
 
   const transactions = await storage.findTransactions({ partial: { txid } })
-  for (const tx of transactions) {
-    log += `Status: ${tx.status}\n`
-    log += `Description: ${tx.description}\n`
-
-    const txLabelMaps = await storage.findTxLabelMaps({
-      partial: { transactionId: tx.transactionId }
-    })
-    if (txLabelMaps.length > 0) {
-      log += `Labels:\n`
-      for (const txLabelMap of txLabelMaps) {
-        const labels = await storage.findTxLabels({
-          partial: { txLabelId: txLabelMap.txLabelId }
-        })
-        if (labels.length > 0) {
-          log += `  - ${labels[0].label}\n`
-        }
-      }
-    } else {
-      log += `Labels: N/A\n`
-    }
-
-    const inputs = await storage.findOutputs({
-      partial: { transactionId: tx.transactionId }
-    })
-    for (const input of inputs) {
-      log += await logInput(storage, input.txid!, input.vout)
-    }
-
-    const outputs = await storage.findOutputs({
-      partial: { transactionId: tx.transactionId }
-    })
-    for (const output of outputs) {
-      log += await logOutput(storage, output)
-      amount += output.spendable ? output.satoshis : 0
-    }
-
-    const beef = await storage.getBeefForTransaction(txid, {})
-    if (beef) {
-      log += `Beef Data:\n${beef.toLogString()}\n${beef.toHex()}\n`
-    } else {
-      log += `Beef Data: N/A\n`
-    }
+  for (const transaction of transactions) {
+    log += `Status: ${transaction.status}\n`
+    log += `Description: ${transaction.description}\n`
+    log += await logTransactionLabels(storage, transaction)
+    log += await logTransactionInputs(storage, transaction)
+    const outputLog = await logTransactionOutputs(storage, transaction)
+    log += outputLog.log
+    amount += outputLog.amount
+    log += await logTransactionBeef(storage, txid)
   }
 
   log += `-------------\nTotal Amount: ${amount} satoshis\n=============\n`
@@ -2661,4 +2614,105 @@ export interface CreateTestWalletArgs {
   addLocalBackup?: boolean
   setActiveClient?: boolean
   useMySQLConnectionForClient?: boolean
+}
+
+interface ResolvedTestWalletConfig {
+  chain: Chain
+  rootKeyHex: string
+  filePath: string
+  addLocalBackup: boolean
+  setActiveClient: boolean
+  useMySQLConnectionForClient: boolean
+}
+
+function resolveTestWalletConfig(args: Chain | CreateTestWalletArgs): ResolvedTestWalletConfig {
+  if (typeof args !== 'string') {
+    return {
+      chain: args.chain,
+      rootKeyHex: args.rootKeyHex,
+      filePath: args.filePath,
+      addLocalBackup: args.addLocalBackup === true,
+      setActiveClient: args.setActiveClient === true,
+      useMySQLConnectionForClient: args.useMySQLConnectionForClient === true
+    }
+  }
+
+  const env = _tu.getEnv(args)
+  if (!env.testIdentityKey || !env.testFilePath) {
+    throw new WERR_INVALID_PARAMETER('env.testIdentityKey and env.testFilePath', 'valid')
+  }
+  return {
+    chain: args,
+    rootKeyHex: env.devKeys[env.testIdentityKey],
+    filePath: env.testFilePath,
+    addLocalBackup: false,
+    setActiveClient: false,
+    useMySQLConnectionForClient: false
+  }
+}
+
+function createTestWalletClient(setup: TestWalletNoSetup, config: ResolvedTestWalletConfig): WalletStorageProvider {
+  if (!config.useMySQLConnectionForClient) {
+    const endpointUrl =
+      config.chain === 'main' ? 'https://storage.babbage.systems' : 'https://staging-storage.babbage.systems'
+    return new StorageClient(setup.wallet, endpointUrl)
+  }
+
+  const env = _tu.getEnv(config.chain)
+  if (!env.cloudMySQLConnection) {
+    throw new WERR_INVALID_PARAMETER('env.cloundMySQLConnection', 'valid')
+  }
+  return new StorageKnex({
+    ...StorageKnex.defaultOptions(),
+    knex: _tu.createMySQLFromConnection(JSON.parse(env.cloudMySQLConnection)),
+    chain: env.chain
+  })
+}
+
+async function addTestWalletBackup(
+  setup: TestWalletNoSetup,
+  config: ResolvedTestWalletConfig,
+  databaseName: string
+): Promise<void> {
+  const backupName = `${databaseName}_backup`
+  const backupPath = config.filePath.replace(databaseName, backupName)
+  const localBackup = new StorageKnex({
+    ...StorageKnex.defaultOptions(),
+    knex: _tu.createLocalSQLite(backupPath),
+    chain: config.chain
+  })
+  await localBackup.migrate(backupName, randomBytesHex(33))
+  setup.localBackupStorageIdentityKey = (await localBackup.makeAvailable()).storageIdentityKey
+  await setup.wallet.storage.addWalletStorageProvider(localBackup)
+}
+
+async function prepareTestWallet(setup: TestWalletNoSetup): Promise<boolean> {
+  let needsBackup = await normalizeDefaultBasket(setup)
+  const balance = await setup.wallet.balanceAndUtxos()
+  if (balance.total < 1000) {
+    throw new WERR_INSUFFICIENT_FUNDS(1000, 1000 - balance.total)
+  }
+  if (balance.utxos.length <= 10) {
+    await setup.wallet.createAction({ description: 'spread change' })
+    needsBackup = true
+  }
+  return needsBackup
+}
+
+async function normalizeDefaultBasket(setup: TestWalletNoSetup): Promise<boolean> {
+  if (setup.storage.getActiveStore() !== setup.localStorageIdentityKey) return false
+  const basket = verifyOne(
+    await setup.activeStorage.findOutputBaskets({
+      partial: {
+        userId: setup.storage.getActiveUser().userId,
+        name: 'default'
+      }
+    })
+  )
+  if (basket.minimumDesiredUTXOValue === 5 && basket.numberOfDesiredUTXOs >= 32) return false
+  await setup.activeStorage.updateOutputBasket(basket.basketId, {
+    minimumDesiredUTXOValue: 5,
+    numberOfDesiredUTXOs: 32
+  })
+  return true
 }

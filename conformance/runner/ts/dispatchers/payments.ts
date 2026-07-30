@@ -49,164 +49,144 @@ function assertPaymentAckShape(msg: Record<string, unknown>): void {
   expect(typeof msg.accepted).toBe('boolean')
 }
 
+function assertRequiredFields(
+  value: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const requiredFields = expected.required_fields as string[] | undefined
+  if (requiredFields === undefined) return
+  for (const field of requiredFields) expect(value).toHaveProperty(field)
+}
+
+function dispatchInvoiceSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const prefix = getString(input, 'derivationPrefix')
+  const suffix = getString(input, 'derivationSuffix')
+  const wantInvoice = getString(expected, 'invoice_number')
+  const wantProtocol = expected.protocol_id as unknown[]
+
+  if (wantInvoice !== '') expect(`2-3241645161d8-${prefix} ${suffix}`).toBe(wantInvoice)
+  if (Array.isArray(wantProtocol)) {
+    expect(wantProtocol[0]).toBe(2)
+    expect(wantProtocol[1]).toBe('3241645161d8')
+  }
+}
+
+function dispatchEncodingSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const examples = input.valid_examples as string[]
+  if (getString(expected, 'encoding') === 'base64') {
+    for (const example of examples) expect(isBase64(example)).toBe(true)
+  }
+  expect(getString(expected, 'scope')).toBeTruthy()
+}
+
+function dispatchSenderKeySchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const pattern = getString(expected, 'pattern')
+  if (pattern === '') return
+  const regularExpression = new RegExp(pattern)
+  for (const example of input.valid_examples as string[]) {
+    expect(regularExpression.test(example)).toBe(true)
+  }
+}
+
+function dispatchTxidSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const regularExpression = new RegExp(getString(expected, 'pattern'))
+  for (const txid of input.valid_txids as string[]) {
+    expect(regularExpression.test(txid)).toBe(true)
+  }
+}
+
+function dispatchBRC29Schema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  channel: string
+): boolean {
+  if (input.message !== undefined && channel === '') {
+    assertRequiredFields(input.message as Record<string, unknown>, expected)
+    expect(getBool(expected, 'valid')).toBe(true)
+    return true
+  }
+  if ('derivationPrefix' in input && 'derivationSuffix' in input && !('message' in input)) {
+    dispatchInvoiceSchema(input, expected)
+    return true
+  }
+  if ('internalizeActionArgs' in input) {
+    assertRequiredFields(input.internalizeActionArgs as Record<string, unknown>, expected)
+    expect(getBool(expected, 'valid')).toBe(true)
+    return true
+  }
+  if ('valid_examples' in input && '_note' in input) {
+    dispatchEncodingSchema(input, expected)
+    return true
+  }
+  if ('valid_examples' in input) {
+    dispatchSenderKeySchema(input, expected)
+    return true
+  }
+  if ('output_descriptor' in input) {
+    assertRequiredFields(input.output_descriptor as Record<string, unknown>, expected)
+    expect(getBool(expected, 'valid')).toBe(true)
+    return true
+  }
+  if (input._schema_note === 'deprecated') {
+    expect(getBool(expected, 'deprecated')).toBe(true)
+    expect(getString(expected, 'use_instead')).toBeTruthy()
+    return true
+  }
+  if ('transaction_encoding' in input) {
+    expect(getString(expected, 'transport_encoding')).toBe('base64')
+    expect(getString(expected, 'format')).toMatch(/Atomic BEEF/)
+    return true
+  }
+  if ('valid_txids' in input) {
+    dispatchTxidSchema(input, expected)
+    return true
+  }
+  return false
+}
+
+function dispatchBRC29Channel(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>,
+  channel: string
+): void {
+  const message = input.message as Record<string, unknown> | undefined
+  if (channel === 'payment/send' && message !== undefined) {
+    expect(message).toHaveProperty('derivationPrefix')
+    expect(message).toHaveProperty('transaction')
+    expect(getBool(expected, 'valid')).toBe(true)
+    return
+  }
+  if (channel === 'payment/acknowledge' && message !== undefined) {
+    assertPaymentAckShape(message)
+    assertRequiredFields(message, expected)
+    expect(getBool(expected, 'valid')).toBe(true)
+    return
+  }
+  if (getBool(expected, 'valid') && message !== undefined) {
+    assertRequiredFields(message, expected)
+  }
+}
+
 function dispatchBRC29PaymentProtocol(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   const channel = getString(input, 'channel')
 
-  // ── Schema-check vectors ──────────────────────────────────────────────────
-
-  // Vector 1: PaymentMessage required fields
-  if (input._schema_check === true && input.message !== undefined && channel === '') {
-    const msg = input.message as Record<string, unknown>
-    const requiredFields = expected.required_fields as string[] | undefined
-    if (requiredFields !== undefined) {
-      for (const field of requiredFields) {
-        expect(msg).toHaveProperty(field)
-      }
-    }
-    expect(getBool(expected, 'valid')).toBe(true)
-    return
-  }
-
-  // Vector 6: BRC-42 invoice number format
-  if (
-    input._schema_check === true &&
-    'derivationPrefix' in input &&
-    'derivationSuffix' in input &&
-    !('message' in input)
-  ) {
-    const prefix = getString(input, 'derivationPrefix')
-    const suffix = getString(input, 'derivationSuffix')
-    const wantInvoice = getString(expected, 'invoice_number')
-    const wantProtocol = expected.protocol_id as unknown[]
-
-    if (wantInvoice !== '') {
-      const actualInvoice = `2-3241645161d8-${prefix} ${suffix}`
-      expect(actualInvoice).toBe(wantInvoice)
-    }
-
-    if (Array.isArray(wantProtocol)) {
-      expect(wantProtocol[0]).toBe(2)
-      expect(wantProtocol[1]).toBe('3241645161d8')
-    }
-    return
-  }
-
-  // Vector 7 & 8: internalizeAction args shape
-  if (input._schema_check === true && 'internalizeActionArgs' in input) {
-    const args = input.internalizeActionArgs as Record<string, unknown>
-    const requiredFields = expected.required_fields as string[] | undefined
-    if (requiredFields !== undefined) {
-      for (const field of requiredFields) {
-        expect(args).toHaveProperty(field)
-      }
-    }
-    expect(getBool(expected, 'valid')).toBe(true)
-    return
-  }
-
-  // Vectors 9 & 10: derivationPrefix / derivationSuffix encoding + scope
-  if (input._schema_check === true && 'valid_examples' in input && '_note' in input) {
-    const examples = input.valid_examples as string[]
-    const wantEncoding = getString(expected, 'encoding')
-    if (wantEncoding === 'base64') {
-      for (const ex of examples) {
-        expect(isBase64(ex)).toBe(true)
-      }
-    }
-    expect(getString(expected, 'scope')).toBeTruthy()
-    return
-  }
-
-  // Vector 11: senderIdentityKey format pattern
-  if (input._schema_check === true && 'valid_examples' in input && !('_note' in input)) {
-    const examples = input.valid_examples as string[]
-    const pattern = getString(expected, 'pattern')
-    if (pattern !== '') {
-      const re = new RegExp(pattern)
-      for (const ex of examples) {
-        expect(re.test(ex)).toBe(true)
-      }
-    }
-    return
-  }
-
-  // Vector 12: PaymentOutputDescriptor required fields
-  if (input._schema_check === true && 'output_descriptor' in input) {
-    const od = input.output_descriptor as Record<string, unknown>
-    const requiredFields = expected.required_fields as string[] | undefined
-    if (requiredFields !== undefined) {
-      for (const field of requiredFields) {
-        expect(od).toHaveProperty(field)
-      }
-    }
-    expect(getBool(expected, 'valid')).toBe(true)
-    return
-  }
-
-  // Vector 13: legacy envelope deprecated
-  if ('_schema_note' in input && input._schema_note === 'deprecated') {
-    expect(getBool(expected, 'deprecated')).toBe(true)
-    expect(getString(expected, 'use_instead')).toBeTruthy()
-    return
-  }
-
-  // Vector 14: transaction encoding
-  if (input._schema_check === true && 'transaction_encoding' in input) {
-    expect(getString(expected, 'transport_encoding')).toBe('base64')
-    expect(getString(expected, 'format')).toMatch(/Atomic BEEF/)
-    return
-  }
-
-  // Vector 15: PaymentAck txid pattern
-  if (input._schema_check === true && 'valid_txids' in input) {
-    const txids = input.valid_txids as string[]
-    const pattern = getString(expected, 'pattern')
-    const re = new RegExp(pattern)
-    for (const txid of txids) {
-      expect(re.test(txid)).toBe(true)
-    }
-    return
-  }
-
-  // ── Channel-based message vectors ────────────────────────────────────────
-
-  // Vectors 2 & 3: payment/send channel — PaymentMessage shape
-  if (channel === 'payment/send') {
-    const msg = input.message as Record<string, unknown>
-    // Must have derivationPrefix and transaction
-    expect(msg).toHaveProperty('derivationPrefix')
-    expect(msg).toHaveProperty('transaction')
-    expect(getBool(expected, 'valid')).toBe(true)
-    return
-  }
-
-  // Vectors 4 & 5: payment/acknowledge channel — PaymentAck shape
-  if (channel === 'payment/acknowledge') {
-    const msg = input.message as Record<string, unknown>
-    assertPaymentAckShape(msg)
-    const requiredFields = expected.required_fields as string[] | undefined
-    if (requiredFields !== undefined) {
-      for (const field of requiredFields) {
-        expect(msg).toHaveProperty(field)
-      }
-    }
-    expect(getBool(expected, 'valid')).toBe(true)
-    return
-  }
-
-  // Fallback: if valid=true is expected and we have a message, check required_fields
-  if (getBool(expected, 'valid') && 'message' in input) {
-    const msg = input.message as Record<string, unknown>
-    const requiredFields = expected.required_fields as string[] | undefined
-    if (requiredFields !== undefined) {
-      for (const field of requiredFields) {
-        expect(msg).toHaveProperty(field)
-      }
-    }
-  }
+  if (input._schema_check === true && dispatchBRC29Schema(input, expected, channel)) return
+  dispatchBRC29Channel(input, expected, channel)
 }
 
 // ── BRC-121 HTTP 402 Payments ─────────────────────────────────────────────────

@@ -1,57 +1,34 @@
-# BENCHMARK — @bsv/sdk
+# Performance benchmarks — `@bsv/sdk`
 
-> Baselines not yet captured. Run benchmark suite to populate numbers column.
-> Per MBGA §1.5: performance regression is a CI failure once baselines exist.
+The SDK has twelve dependency-free Node benchmark programs under
+`benchmarks/`. They exercise atomic BEEF, BigNumber arithmetic and
+serialization, elliptic-curve scalar/signature work, hashing, large wallet
+payloads, readers/writers, script deletion and serialization, symmetric
+encryption, transaction operations, and the end-to-end transaction pipeline.
 
-> Coverage baseline captured: Stmts 66.57%, Branch 59.53%, Funcs 74.16%, Lines 66.68% (2026-04-24)
+Build the ESM artifact before running a benchmark:
 
-## Hot Paths (Tier 0)
-
-| Operation | Function | Module | Baseline (ops/sec) | Notes |
-|-----------|----------|--------|--------------------|-------|
-| ECDSA sign | `ECDSA.sign(msg, privKey)` | `src/primitives/ECDSA.ts` | TBD | Core signing path; deterministic k via DRBG |
-| ECDSA verify | `ECDSA.verify(msg, sig, pubKey)` | `src/primitives/ECDSA.ts` | TBD | Must be faster than sign |
-| Schnorr sign | `Schnorr.sign(msg, privKey)` | `src/primitives/Schnorr.ts` | TBD | Used in auth protocol |
-| Schnorr verify | `Schnorr.verify(msg, sig, pubKey)` | `src/primitives/Schnorr.ts` | TBD | Used in auth protocol |
-| Key derivation (BRC-42) | `PrivateKey.deriveChild(pubKey, invoiceNumber)` | `src/primitives/PrivateKey.ts` | TBD | Called per payment; hot path in wallet |
-| Key derivation (BRC-42 public) | `PublicKey.deriveChild(privKey, invoiceNumber)` | `src/primitives/PublicKey.ts` | TBD | Client-side derivation |
-| Transaction serialize | `Transaction.toBinary()` / `Transaction.toHex()` | `src/transaction/Transaction.ts` | TBD | Hot path on every broadcast |
-| Transaction deserialize | `Transaction.fromBinary(bytes)` / `Transaction.fromHex(hex)` | `src/transaction/Transaction.ts` | TBD | Hot path on every received tx |
-| Transaction ID compute | `Transaction.id('hex')` | `src/transaction/Transaction.ts` | TBD | Double-SHA256; called frequently |
-| Script evaluation | `Spend.validate()` | `src/script/Spend.ts` | TBD | Called per input during verification |
-| Script assembly (ASM→hex) | `Script.fromASM(asm).toHex()` | `src/script/Script.ts` | TBD | Template compilation |
-| P2PKH lock script creation | `new P2PKH().lock(hash)` | `src/script/templates/P2PKH.ts` | TBD | Most common locking script |
-| BEEF encode | `Beef.toBinary()` / `Beef.toHex()` | `src/transaction/Beef.ts` | TBD | Envelope format; sent on every payment |
-| BEEF decode | `Beef.fromBinary(bytes)` | `src/transaction/Beef.ts` | TBD | Received on every payment |
-| MerklePath verify | `MerklePath.verify(txid, chainTracker)` | `src/transaction/MerklePath.ts` | TBD | SPV proof verification |
-| SHA-256 hash | `sha256(data)` | `src/primitives/Hash.ts` | TBD | Used everywhere; benchmark as reference |
-| Hash-160 (SHA256+RIPEMD160) | `hash160(data)` | `src/primitives/Hash.ts` | TBD | Used in P2PKH address derivation |
-| Point scalar multiply | `Point.mul(scalar)` | `src/primitives/Point.ts` | TBD | Underlying EC operation; drives sign/verify cost |
-
-## Benchmark Suite
-
-TODO: add `bench/` directory with a runner (e.g. tinybench or benchmark.js).
-Command to run all benchmarks: `npm run bench` (not yet wired).
-Hash benchmark: `npm run build:ts && node benchmarks/hash-bench.js`.
-
-Suggested runner: [tinybench](https://github.com/tinylibs/tinybench) — zero-dependency, ESM-native.
-
-Example structure:
-```
-packages/sdk/ts-sdk/bench/
-  ecdsa.bench.ts
-  keys.bench.ts
-  transactions.bench.ts
-  scripts.bench.ts
-  hash.bench.ts
-  run.ts          ← entry point, aggregates results
+```bash
+pnpm build:ts
+node benchmarks/hash-bench.js
+node benchmarks/transaction-bench.js
+node benchmarks/transaction-pipeline-bench.js
 ```
 
-## Regression Gate
+Every `*-bench.js` file is independently runnable. Most use
+`benchmarks/lib/benchmark-runner.js`, whose sampling can be adjusted with
+`BENCH_WARMUP`, `BENCH_SAMPLES`, `BENCH_MIN_SAMPLE_MS`, and
+`BENCH_MIN_ITERATIONS`. The large-data programs use fixed scenarios and emit
+their own timing summaries.
 
-Once baselines are captured, a 10% regression in any hot path is a CI failure (MBGA §1.5).
+These programs are diagnostics, not a blocking performance claim. Hardware,
+power mode, thermal state, Node/V8 patch level, and background load materially
+affect results. The final QA phase tracked by GitHub issue #324 owns stable
+hosted hardware, machine-readable baselines, variance policy, historical
+artifacts, and any future regression threshold. Until that work is complete,
+do not copy a local result into documentation as a universal SDK baseline.
 
-The CI step should:
-1. Run `npm run bench` and emit results as JSON.
-2. Compare against committed baseline JSON in `bench/baselines/`.
-3. Fail if any operation regresses by more than 10%.
+Correctness, public API compatibility, serialization, and consensus behavior
+remain blocking regardless of benchmark movement. A performance
+“optimization” must pass the complete cryptographic, transaction, script,
+packed-consumer, browser, and conformance gates before it can be accepted.

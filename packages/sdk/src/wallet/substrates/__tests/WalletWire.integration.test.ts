@@ -133,7 +133,7 @@ describe('WalletWire Integration Tests', () => {
       await expect(() => {
         return (wallet as any).getHeaderForHeight()
       }).rejects.toThrow()
-      // TODO: Remove these two from the throw list once they are implemented.
+      // These two fixture methods are intentionally unsupported and remain rejection cases.
       await expect(() => {
         return (wallet as any).discoverByIdentityKey()
       }).rejects.toThrow()
@@ -323,7 +323,7 @@ describe('WalletWire Integration Tests', () => {
         counterparty: userKey.toPublicKey().toString()
       })
       expect(valid).toEqual(true)
-      expect(signature.length).not.toEqual(0)
+      expect(signature).not.toHaveLength(0)
     })
     it('Directly signs hash of message verifiable by the counterparty', async () => {
       const userKey = PrivateKey.fromRandom()
@@ -356,7 +356,7 @@ describe('WalletWire Integration Tests', () => {
         counterparty: userKey.toPublicKey().toString()
       })
       expect(hashValid).toEqual(true)
-      expect(signature.length).not.toEqual(0)
+      expect(signature).not.toHaveLength(0)
     })
     it('Fails to verify signature for the wrong data, protocol, key, and counterparty', async () => {
       const userKey = PrivateKey.fromRandom()
@@ -437,7 +437,7 @@ describe('WalletWire Integration Tests', () => {
         counterparty: userKey.toPublicKey().toString()
       })
       expect(valid).toEqual(true)
-      expect(hmac.length).toEqual(32)
+      expect(hmac).toHaveLength(32)
     })
     it('Fails to verify HMAC for the wrong data, protocol, key, and counterparty', async () => {
       const userKey = PrivateKey.fromRandom()
@@ -520,7 +520,7 @@ describe('WalletWire Integration Tests', () => {
         counterparty: 'self'
       })
       expect(explicitSelfHmacValid).toEqual(true)
-      expect(hmac.length).toEqual(32)
+      expect(hmac).toHaveLength(32)
       const { signature: anyoneSig } = await user.createSignature({
         data: sampleData,
         protocolID: [2, 'tests'],
@@ -1579,7 +1579,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.getPublicKey({ identityKey: true })
       expect(result).toHaveProperty('publicKey')
       expect(typeof result.publicKey).toBe('string')
-      expect(result.publicKey.length).toBe(66) // Compressed public key hex length
+      expect(result.publicKey).toHaveLength(66) // Compressed public key hex length
     })
 
     it('should get a derived public key with valid inputs', async () => {
@@ -1594,7 +1594,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.getPublicKey(args)
       expect(result).toHaveProperty('publicKey')
       expect(typeof result.publicKey).toBe('string')
-      expect(result.publicKey.length).toBe(66)
+      expect(result.publicKey).toHaveLength(66)
     })
 
     it('should get the public key with counterparty "anyone"', async () => {
@@ -1607,7 +1607,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.getPublicKey(args)
       expect(result).toHaveProperty('publicKey')
       expect(typeof result.publicKey).toBe('string')
-      expect(result.publicKey.length).toBe(66) // Compressed public key hex length
+      expect(result.publicKey).toHaveLength(66) // Compressed public key hex length
     })
 
     it('should get the public key with missing optional parameters', async () => {
@@ -1620,7 +1620,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.getPublicKey(args)
       expect(result).toHaveProperty('publicKey')
       expect(typeof result.publicKey).toBe('string')
-      expect(result.publicKey.length).toBe(66)
+      expect(result.publicKey).toHaveLength(66)
     })
   })
 
@@ -1684,7 +1684,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const createHmacResult = await userWallet.createHmac(createHmacArgs)
       expect(createHmacResult).toHaveProperty('hmac')
-      expect(createHmacResult.hmac.length).toBe(32)
+      expect(createHmacResult.hmac).toHaveLength(32)
 
       const verifyHmacArgs = {
         data,
@@ -2159,7 +2159,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.listCertificates(args)
       expect(result).toHaveProperty('totalCertificates', 2)
-      expect(result.certificates.length).toBe(2)
+      expect(result.certificates).toHaveLength(2)
       expect(result.certificates[0].fields).toEqual({
         field1: 'value1',
         field2: 'value2'
@@ -2317,7 +2317,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.proveCertificate(args)
       expect(result).toHaveProperty('keyringForVerifier')
-      expect(Object.keys(result.keyringForVerifier).length).toBe(0)
+      expect(Object.keys(result.keyringForVerifier)).toHaveLength(0)
       expect(proveCertificateMock).toHaveBeenCalledWith(args, '')
     })
   })
@@ -2387,7 +2387,7 @@ describe('WalletWire Integration Tests', () => {
       const result = await wallet.getHeaderForHeight(args)
       expect(result).toHaveProperty('header')
       expect(typeof result.header).toBe('string')
-      expect(result.header.length).toBe(80 * 2) // 80 bytes in hex
+      expect(result.header).toHaveLength(80 * 2) // 80 bytes in hex
       expect(getHeaderForHeightMock).toHaveBeenCalledWith(args, '')
     })
 
@@ -2488,7 +2488,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.discoverByIdentityKey(args)
       expect(result).toHaveProperty('totalCertificates')
-      expect(result.certificates.length).toBe(1)
+      expect(result.certificates).toHaveLength(1)
       expect(result.certificates[0].publiclyRevealedKeyring).toEqual({})
       expect(result.certificates[0].decryptedFields).toEqual({})
       expect(discoverByIdentityKeyMock).toHaveBeenCalledWith(args, '')
@@ -2559,7 +2559,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.discoverByIdentityKey(args)
       expect(result).toHaveProperty('totalCertificates', 2)
-      expect(result.certificates.length).toBe(2)
+      expect(result.certificates).toHaveLength(2)
       expect(result.certificates[0].certifierInfo.name).toBe('Certifier One')
       expect(result.certificates[1].certifierInfo.name).toBe('Certifier Two')
       expect(discoverByIdentityKeyMock).toHaveBeenCalledWith(args, '')
@@ -2689,7 +2689,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.discoverByAttributes(args)
       expect(result).toHaveProperty('totalCertificates', 1)
-      expect(result.certificates.length).toBe(1)
+      expect(result.certificates).toHaveLength(1)
       expect(result.certificates[0].certifierInfo.name).toBe('Certifier Three')
       expect(result.certificates[0].decryptedFields.fieldY).toBe('decryptedValueY')
       expect(discoverByAttributesMock).toHaveBeenCalledWith(args, '')
@@ -2716,7 +2716,7 @@ describe('WalletWire Integration Tests', () => {
       }
       const result = await wallet.discoverByAttributes(args)
       expect(result).toHaveProperty('totalCertificates', 0)
-      expect(result.certificates.length).toBe(0)
+      expect(result.certificates).toHaveLength(0)
       expect(discoverByAttributesMock).toHaveBeenCalledWith(args, '')
     })
   })

@@ -4,7 +4,7 @@ import P2PKH from '../dist/esm/src/script/templates/P2PKH.js'
 import MerklePath from '../dist/esm/src/transaction/MerklePath.js'
 import { runBenchmark } from './lib/benchmark-runner.js'
 
-async function deepInputChain () {
+async function deepInputChain() {
   const privateKey = new PrivateKey(1)
   const publicKey = privateKey.toPublicKey()
   const publicKeyHash = publicKey.toHash()
@@ -47,7 +47,7 @@ async function deepInputChain () {
   await tx.verify('scripts only')
 }
 
-async function wideInputSet () {
+async function wideInputSet() {
   const privateKey = new PrivateKey(1)
   const publicKeyHash = privateKey.toPublicKey().toHash()
   const p2pkh = new P2PKH()
@@ -91,7 +91,7 @@ async function wideInputSet () {
   await tx.verify('scripts only')
 }
 
-async function largeInputsOutputs () {
+async function largeInputsOutputs() {
   const privateKey = new PrivateKey(1)
   const publicKeyHash = privateKey.toPublicKey().toHash()
   const p2pkh = new P2PKH()
@@ -138,7 +138,7 @@ async function largeInputsOutputs () {
   await tx.verify('scripts only')
 }
 
-async function nestedInputs () {
+async function nestedInputs() {
   const privateKey = new PrivateKey(1)
   const publicKeyHash = privateKey.toPublicKey().toHash()
   const p2pkh = new P2PKH()
@@ -193,7 +193,7 @@ async function nestedInputs () {
   await finalTx.verify('scripts only')
 }
 
-async function main () {
+async function main() {
   const options = { samples: 3, minSampleMs: 150, warmupIterations: 1 }
   await runBenchmark('deep chain verify', () => deepInputChain(), options)
   await runBenchmark('wide transaction verify', () => wideInputSet(), options)
@@ -201,7 +201,9 @@ async function main () {
   await runBenchmark('nested inputs verify', () => nestedInputs(), options)
 }
 
-main().catch((err) => {
+try {
+  await main()
+} catch (err) {
   console.error(err)
   process.exit(1)
-})
+}

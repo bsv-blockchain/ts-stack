@@ -85,19 +85,19 @@ describe('ChaintracksStorageIdb tests', () => {
     expect(maxId).toBe(5)
 
     const hfbs = await storage.liveHeadersForBulk(3)
-    expect(hfbs.length).toBe(3)
+    expect(hfbs).toHaveLength(3)
 
     const lhs = await storage.getHeaders(0, 10)
-    expect(lhs.length).toBe(10)
+    expect(lhs).toHaveLength(10)
 
     const lhs2 = await storage.getHeaders(0 + ranges.bulk.maxHeight + 1, 10)
-    expect(lhs2.length).toBe(5)
+    expect(lhs2).toHaveLength(5)
 
     const lhs3 = await storage.getHeaders(0 + ranges.bulk.maxHeight - 2, 10)
-    expect(lhs3.length).toBe(8)
+    expect(lhs3).toHaveLength(8)
 
     const data = await storage.getHeadersUint8Array(0, 10)
-    expect(data.length).toBe(10 * 80)
+    expect(data).toHaveLength(10 * 80)
 
     const deleteCount = await storage.deleteOlderLiveBlockHeaders(3 + ranges.bulk.maxHeight)
     expect(deleteCount).toBe(3)

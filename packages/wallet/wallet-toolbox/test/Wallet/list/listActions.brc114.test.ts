@@ -193,7 +193,7 @@ describe('listActions BRC-114 action time label tests', () => {
         for (const act of r.actions) {
           expect(act.labels).toBeTruthy()
           expect(hasReservedTimeControlLabel(act.labels)).toBe(false)
-          expect(injectedTimeLabels(act.labels).length).toBe(1)
+          expect(injectedTimeLabels(act.labels)).toHaveLength(1)
         }
         const byTxid: Record<string, any> = Object.fromEntries(r.actions.map((x: any) => [x.txid, x]))
         expect(byTxid[a.txid].labels.includes(makeTimeLabel(a.createdAtMs))).toBe(true)
@@ -208,7 +208,7 @@ describe('listActions BRC-114 action time label tests', () => {
           limit: 2,
           offset: 2
         })
-        expect(r.actions.length).toBe(1)
+        expect(r.actions).toHaveLength(1)
         expect(r.totalActions).toBe(3)
       }
 

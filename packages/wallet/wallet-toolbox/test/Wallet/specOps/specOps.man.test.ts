@@ -107,8 +107,8 @@ describeWithSpecOpEnvironments('specOps tests', () => {
 
     const r = await setup.wallet.balanceAndUtxos('default')
 
-    expect(r.total > 0).toBe(true)
-    expect(r.utxos.length === 0).toBe(true)
+    expect(r.total).toBeGreaterThan(true)
+    expect(r.utxos).toHaveLength(true)
 
     await setup.wallet.destroy()
   })
@@ -122,7 +122,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     })
 
     expect(r.totalOutputs).toBe(0)
-    expect(r.outputs.length).toBe(0)
+    expect(r.outputs).toHaveLength(0)
 
     await setup.wallet.destroy()
   })
@@ -133,7 +133,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     const r = await setup.wallet.reviewSpendableOutputs(false, false, {})
 
     expect(r.totalOutputs).toBe(0)
-    expect(r.outputs.length).toBe(0)
+    expect(r.outputs).toHaveLength(0)
 
     await setup.wallet.destroy()
   })
@@ -159,7 +159,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     )
 
     expect(r.totalOutputs).toBe(0)
-    expect(r.outputs.length).toBe(0)
+    expect(r.outputs).toHaveLength(0)
     expect(after.minimumDesiredUTXOValue).toBe(6)
     expect(after.numberOfDesiredUTXOs).toBe(33)
 
@@ -208,7 +208,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     })
 
     expect(r.totalActions).toBeGreaterThanOrEqual(0)
-    expect(r.actions.length).toBe(r.totalActions)
+    expect(r.actions).toHaveLength(r.totalActions)
 
     await setup.wallet.destroy()
   })
@@ -224,7 +224,7 @@ describeWithSpecOpEnvironments('specOps tests', () => {
     })
 
     expect(r.totalActions).toBeGreaterThanOrEqual(0)
-    expect(r.actions.length).toBe(r.totalActions)
+    expect(r.actions).toHaveLength(r.totalActions)
 
     await setup.wallet.destroy()
   })

@@ -297,49 +297,17 @@ describe('sendMessage', () => {
     )
   })
 
-  it('Returns base price for an empty message', () => {
-    const price = calculateMessagePrice('')
-    expect(price).toBe(2) // Base price only
-  })
-
-  it('Calculates price for a small message (below 1KB)', () => {
-    const price = calculateMessagePrice('Hello, world!')
-    expect(price).toBe(5) // Base price only
-  })
-
-  it('Calculates price for a 2KB message', () => {
-    const message = 'a'.repeat(2048) // 2KB
-    const price = calculateMessagePrice(message)
-    expect(price).toBe(8) // Base price + 2KB
-  })
-
-  it('Adds priority fee when enabled', () => {
-    const price = calculateMessagePrice('Hello', true)
-    expect(price).toBe(5) // Base price
-  })
-
-  it('Handles large messages (5KB)', () => {
-    const message = 'a'.repeat(5120) // 5KB
-    const price = calculateMessagePrice(message)
-    expect(price).toBe(17) // Base price + 5KB
-  })
-
-  it('Handles edge case of exactly 1KB message', () => {
-    const message = 'a'.repeat(1024) // Exactly 1KB
-    const price = calculateMessagePrice(message)
-    expect(price).toBe(5) // Base price + 1KB
-  })
-
-  it('Handles edge case of 1KB + 1 byte message', () => {
-    const message = 'a'.repeat(1025) // 1KB + 1 byte
-    const price = calculateMessagePrice(message)
-    expect(price).toBe(8) // Rounded up to 2KB
-  })
-
-  it('Handles messages larger than 10KB', () => {
-    const message = 'a'.repeat(10240) // 10KB
-    const price = calculateMessagePrice(message)
-    expect(price).toBe(32) // Base price + 10KB
+  it.each([
+    ['an empty message', '', false, 2],
+    ['a small message below 1 KiB', 'Hello, world!', false, 5],
+    ['a 2 KiB message', 'a'.repeat(2048), false, 8],
+    ['priority mode', 'Hello', true, 5],
+    ['a 5 KiB message', 'a'.repeat(5120), false, 17],
+    ['an exact 1 KiB boundary', 'a'.repeat(1024), false, 5],
+    ['one byte above 1 KiB', 'a'.repeat(1025), false, 8],
+    ['a 10 KiB message', 'a'.repeat(10240), false, 32]
+  ])('calculates the expected price for %s', (_case, message, priority, expectedPrice) => {
+    expect(calculateMessagePrice(message, priority)).toBe(expectedPrice)
   })
 
   it('Returns error if messageId is missing', async () => {

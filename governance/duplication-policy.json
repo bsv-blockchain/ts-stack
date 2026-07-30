@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-29",
+  "owner": "ts-stack-maintainers",
+  "reviewCadenceDays": 90,
+  "principle": "Consolidate only when one implementation can preserve package independence, runtime support, public API and wire/storage/consensus behavior. Similar syntax is not sufficient evidence for a shared abstraction.",
+  "baseline": {
+    "source": "SonarCloud exact main",
+    "duplicatedLines": 9474,
+    "densityPercent": 1.5,
+    "status": "measured-debt-not-issue-records"
+  },
+  "resolved": [
+    {
+      "id": "overlay-express",
+      "evidence": "The tracker estimate is stale: current exact-main Sonar reports zero duplicated lines for authored Overlay Express source."
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "sdk-curve-formulas",
+      "disposition": "compatibility-boundary",
+      "paths": ["packages/sdk/src/primitives/Curve.ts"],
+      "reason": "The similar short-Weierstrass formulas encode distinct affine/Jacobian operations and edge cases. A cosmetic abstraction would place consensus-sensitive cryptography behind shared branching without reducing protocol behavior.",
+      "removalProof": "Independent vector, differential, property, serialization, and downstream compatibility evidence must prove an extracted primitive is bit-for-bit equivalent for every supported curve operation.",
+      "owner": "sdk-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "btms-public-private-implementations",
+      "disposition": "package-boundary",
+      "paths": [
+        "packages/overlays/topics/src/btms/BTMSLookupService.ts",
+        "packages/overlays/topics/src/btms/BTMSStorageManager.ts",
+        "packages/overlays/topics/src/btms/BTMSTopicManager.ts",
+        "packages/overlays/btms-backend/src/lookup-services/BTMSLookupServiceFactory.ts",
+        "packages/overlays/btms-backend/src/lookup-services/BTMSStorageManager.ts",
+        "packages/overlays/btms-backend/src/topic-managers/BTMSTopicManager.ts"
+      ],
+      "reason": "The public overlay-topics implementation and private backend workbench have materially different parsing, safe-integer, admittance, history, module-format, and publication contracts. Making either import the other would silently select behavior rather than remove mechanical duplication.",
+      "removalProof": "Prove protocol equivalence with shared vectors, select the canonical behavior explicitly, preserve overlay-topics exports, and either retire the private workbench or make it a tested wrapper.",
+      "owner": "overlay-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "uhrp-standalone-services",
+      "disposition": "standalone-deployment-boundary",
+      "paths": ["infra/uhrp-server-basic/src", "infra/uhrp-server-cloud-bucket/src"],
+      "reason": "The two independently built Docker contexts deliberately retain provider-local routes and bootstraps. A source import outside either context would make its image unreproducible; a new shared runtime package would require publication and coordinated deployment authority.",
+      "removalProof": "A shared package must preserve filesystem versus cloud-provider behavior, independent image builds, public CORS/auth/payment semantics, and standalone rollback before either service adopts it.",
+      "owner": "infrastructure-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "wallet-arc-providers",
+      "disposition": "semantic-peer-implementations",
+      "paths": [
+        "packages/wallet/wallet-toolbox/src/services/providers/ARC.ts",
+        "packages/wallet/wallet-toolbox/src/services/providers/Arcade.ts"
+      ],
+      "reason": "ARC and Arcade expose similar transaction-provider workflows but different APIs, callbacks, authentication, status vocabularies, retry behavior, and error normalization. A generic base would couple provider-specific semantics through conditionals.",
+      "removalProof": "Characterize every provider state/error transition and extract only a demonstrably identical private helper with no public, retry, timing, or error change.",
+      "owner": "wallet-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "wallet-setup-lifecycles",
+      "disposition": "runtime-boundary",
+      "paths": [
+        "packages/wallet/wallet-toolbox/src/Setup.ts",
+        "packages/wallet/wallet-toolbox/src/SetupClient.ts"
+      ],
+      "reason": "Server and remote-client setup share vocabulary while owning different storage, environment, transport, and destruction lifecycles. Keeping those contracts explicit avoids browser/server coupling and accidental initialization changes.",
+      "removalProof": "Packed Node and browser consumers must prove an extracted helper adds no runtime dependency, side effect, environment read, or lifecycle change.",
+      "owner": "wallet-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "wallet-bulk-header-validation",
+      "disposition": "algorithmic-boundary",
+      "paths": [
+        "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/util/BulkFileDataManager.ts",
+        "packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/util/BulkFilesReader.ts"
+      ],
+      "reason": "Writer/manager validation and reader validation operate at different trust and persistence boundaries. Their repeated checks remain intentionally local so a change to one path cannot weaken the other.",
+      "removalProof": "Adversarial corrupt-file vectors must prove a shared pure validator retains ordering, error classes, bounds, and independent trust-boundary enforcement.",
+      "owner": "wallet-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "conformance-wallet-storage-vectors",
+      "disposition": "protocol-fixture-boundary",
+      "paths": ["conformance/vectors/wallet/storage"],
+      "reason": "Repeated JSON shapes are independent protocol vectors and expected outcomes, not executable implementations. Deduplicating them through references would make vectors non-portable for other-language runners.",
+      "removalProof": "Only a language-neutral conformance schema with portable inheritance semantics and identical runner output may replace explicit vectors.",
+      "owner": "conformance-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "simple-token-protocols",
+      "disposition": "protocol-variant-boundary",
+      "paths": [
+        "packages/helpers/simple/src/modules/credentials.ts",
+        "packages/helpers/simple/src/modules/certification.ts"
+      ],
+      "reason": "Credential and certification flows intentionally repeat protocol-shaped construction while differing in key derivation, basket, certificate, and verification semantics. Explicit flows keep the user-facing helper behavior reviewable.",
+      "removalProof": "Characterization across packed browser and Node consumers must prove a private helper preserves protocol IDs, key IDs, baskets, labels, outputs, errors, and return types.",
+      "owner": "helpers-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "big-number-vector-fixtures",
+      "disposition": "test-vector-boundary",
+      "paths": ["packages/sdk/src/primitives/__tests/BigNumber.fixtures.ts"],
+      "reason": "Repeated limbs and expected values are explicit cryptographic arithmetic fixtures. Factoring them into generated patterns would make edge-case provenance and failures harder to inspect.",
+      "removalProof": "A deterministic checked-in generator must retain every named edge case and produce byte-identical fixtures.",
+      "owner": "sdk-maintainers",
+      "reviewBy": "2026-10-27"
+    },
+    {
+      "id": "wallet-map-entities",
+      "disposition": "schema-boundary",
+      "paths": [
+        "packages/wallet/wallet-toolbox/src/storage/schema/entities/EntityOutputTagMap.ts",
+        "packages/wallet/wallet-toolbox/src/storage/schema/entities/EntityTxLabelMap.ts"
+      ],
+      "reason": "The similar map entities bind different persisted tables, key fields, API types, and migration histories. A generic persistence class would obscure schema-specific contracts for negligible runtime reduction.",
+      "removalProof": "All supported databases, migrations, serialization, row conversion, and public entity behavior must remain exact under any shared private helper.",
+      "owner": "wallet-maintainers",
+      "reviewBy": "2026-10-27"
+    }
+  ]
+}

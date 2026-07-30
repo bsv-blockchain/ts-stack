@@ -80,164 +80,99 @@ describe('ghash', () => {
 })
 
 describe('AESGCM', () => {
-  it('should encrypt: Test Case 1', () => {
-    const plainText = new Uint8Array(0)
-    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
-    const key = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
+  const longPlainText =
+    'd9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956' +
+    '809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255'
 
-    const output = AESGCM(plainText, iv, key)
-
-    expect([]).toEqual(Array.from(output.result))
-    expect(toArray('58e2fccefa7e3061367f1d57a4e7455a', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 2', () => {
-    const plainText = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
-    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
-    const key = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect(toArray('0388dace60b6a392f328c2b971b2fe78', 'hex')).toEqual(Array.from(output.result))
-    expect(toArray('ab6e47d42cec13bdf53a67b21257bddf', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 3', () => {
-    const plainText = new Uint8Array(
-      toArray(
-        'd9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956' +
-          '809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255',
-        'hex'
+  it.each([
+    [
+      1,
+      '',
+      '000000000000000000000000',
+      '00000000000000000000000000000000',
+      '',
+      '58e2fccefa7e3061367f1d57a4e7455a'
+    ],
+    [
+      2,
+      '00000000000000000000000000000000',
+      '000000000000000000000000',
+      '00000000000000000000000000000000',
+      '0388dace60b6a392f328c2b971b2fe78',
+      'ab6e47d42cec13bdf53a67b21257bddf'
+    ],
+    [
+      3,
+      longPlainText,
+      'cafebabefacedbaddecaf888',
+      'feffe9928665731c6d6a8f9467308308',
+      '42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8' +
+        'f6a5aac84aa051ba30b396a0aac973d58e091473f5985',
+      '4d5c2af327cd64a62cf35abd2ba6fab4'
+    ],
+    [
+      7,
+      '',
+      '000000000000000000000000',
+      '000000000000000000000000000000000000000000000000',
+      '',
+      'cd33b28ac773f74ba00ed1f312572435'
+    ],
+    [
+      8,
+      '00000000000000000000000000000000',
+      '000000000000000000000000',
+      '000000000000000000000000000000000000000000000000',
+      '98e7247c07f0fe411c267e4384b0f600',
+      '2ff58d80033927ab8ef4d4587514f0fb'
+    ],
+    [
+      9,
+      longPlainText,
+      'cafebabefacedbaddecaf888',
+      'feffe9928665731c6d6a8f9467308308feffe9928665731c',
+      '3980ca0b3c00e841eb06fac4872a2757859e1ceaa6efd984628593b40ca1e19c7d773d00c144c525ac6' +
+        '19d18c84a3f4718e2448b2fe324d9ccda2710acade256',
+      '9924a7c8587336bfb118024db8674a14'
+    ],
+    [
+      13,
+      '',
+      '000000000000000000000000',
+      '0000000000000000000000000000000000000000000000000000000000000000',
+      '',
+      '530f8afbc74536b9a963b4f1c4cb738b'
+    ],
+    [
+      14,
+      '00000000000000000000000000000000',
+      '000000000000000000000000',
+      '0000000000000000000000000000000000000000000000000000000000000000',
+      'cea7403d4d606b6e074ec5d3baf39d18',
+      'd0d1c8a799996bf0265b98b5d48ab919'
+    ],
+    [
+      15,
+      longPlainText,
+      'cafebabefacedbaddecaf888',
+      'feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308',
+      '522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b' +
+        '08b1056828838c5f61e6393ba7a0abcc9f662898015ad',
+      'b094dac5d93471bdec1a502270e3cc6c'
+    ]
+  ])(
+    'should encrypt NIST test case %i',
+    (_caseNumber, plainTextHex, ivHex, keyHex, expectedResultHex, expectedTagHex) => {
+      const output = AESGCM(
+        new Uint8Array(toArray(plainTextHex, 'hex')),
+        new Uint8Array(toArray(ivHex, 'hex')),
+        new Uint8Array(toArray(keyHex, 'hex'))
       )
-    )
-    const iv = new Uint8Array(toArray('cafebabefacedbaddecaf888', 'hex'))
-    const key = new Uint8Array(toArray('feffe9928665731c6d6a8f9467308308', 'hex'))
 
-    const output = AESGCM(plainText, iv, key)
-
-    expect(
-      toArray(
-        '42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8' +
-          'f6a5aac84aa051ba30b396a0aac973d58e091473f5985',
-        'hex'
-      )
-    ).toEqual(Array.from(output.result))
-    expect(toArray('4d5c2af327cd64a62cf35abd2ba6fab4', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 7', () => {
-    const plainText = new Uint8Array(0)
-    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
-    const key = new Uint8Array(toArray('000000000000000000000000000000000000000000000000', 'hex'))
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect([]).toEqual(Array.from(output.result))
-    expect(toArray('cd33b28ac773f74ba00ed1f312572435', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 8', () => {
-    const plainText = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
-    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
-    const key = new Uint8Array(toArray('000000000000000000000000000000000000000000000000', 'hex'))
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect(toArray('98e7247c07f0fe411c267e4384b0f600', 'hex')).toEqual(Array.from(output.result))
-    expect(toArray('2ff58d80033927ab8ef4d4587514f0fb', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 9', () => {
-    const plainText = new Uint8Array(
-      toArray(
-        'd9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956' +
-          '809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255',
-        'hex'
-      )
-    )
-    const iv = new Uint8Array(toArray('cafebabefacedbaddecaf888', 'hex'))
-    const key = new Uint8Array(toArray('feffe9928665731c6d6a8f9467308308feffe9928665731c', 'hex'))
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect(
-      toArray(
-        '3980ca0b3c00e841eb06fac4872a2757859e1ceaa6efd984628593b40ca1e19c7d773d00c144c525ac6' +
-          '19d18c84a3f4718e2448b2fe324d9ccda2710acade256',
-        'hex'
-      )
-    ).toEqual(Array.from(output.result))
-    expect(toArray('9924a7c8587336bfb118024db8674a14', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 13', () => {
-    const plainText = new Uint8Array(0)
-    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
-    const key = new Uint8Array(
-      toArray('0000000000000000000000000000000000000000000000000000000000000000', 'hex')
-    )
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect([]).toEqual(Array.from(output.result))
-    expect(toArray('530f8afbc74536b9a963b4f1c4cb738b', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 14', () => {
-    const plainText = new Uint8Array(toArray('00000000000000000000000000000000', 'hex'))
-    const iv = new Uint8Array(toArray('000000000000000000000000', 'hex'))
-    const key = new Uint8Array(
-      toArray('0000000000000000000000000000000000000000000000000000000000000000', 'hex')
-    )
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect(toArray('cea7403d4d606b6e074ec5d3baf39d18', 'hex')).toEqual(Array.from(output.result))
-    expect(toArray('d0d1c8a799996bf0265b98b5d48ab919', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
-
-  it('should encrypt: Test Case 15', () => {
-    const plainText = new Uint8Array(
-      toArray(
-        'd9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956' +
-          '809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255',
-        'hex'
-      )
-    )
-    const iv = new Uint8Array(toArray('cafebabefacedbaddecaf888', 'hex'))
-    const key = new Uint8Array(
-      toArray('feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308', 'hex')
-    )
-
-    const output = AESGCM(plainText, iv, key)
-
-    expect(
-      toArray(
-        '522dc1f099567d07f47f37a32a84427d643a8cdcbfe5c0c97598a2bd2555d1aa8cb08e48590dbb3da7b' +
-          '08b1056828838c5f61e6393ba7a0abcc9f662898015ad',
-        'hex'
-      )
-    ).toEqual(Array.from(output.result))
-    expect(toArray('b094dac5d93471bdec1a502270e3cc6c', 'hex')).toEqual(
-      Array.from(output.authenticationTag)
-    )
-  })
+      expect(Array.from(output.result)).toEqual(toArray(expectedResultHex, 'hex'))
+      expect(Array.from(output.authenticationTag)).toEqual(toArray(expectedTagHex, 'hex'))
+    }
+  )
 })
 
 describe('exclusiveOR', () => {

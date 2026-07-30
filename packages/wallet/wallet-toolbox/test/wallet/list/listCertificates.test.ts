@@ -69,7 +69,7 @@ describe('listCertificates tests', () => {
 
       for (const tc of tcs) {
         const r = await wallet.listCertificates(tc.args)
-        expect(r.certificates.length).toBe(Math.min(tc.args.limit!, tc.count))
+        expect(r.certificates).toHaveLength(Math.min(tc.args.limit!, tc.count))
         expect(r.totalCertificates).toBe(tc.count)
       }
     }
@@ -110,7 +110,7 @@ describe('listCertificates tests', () => {
 
       for (const tc of tcs) {
         const r = await wallet.listCertificates(tc.args)
-        expect(r.certificates.length).toBe(Math.min(tc.args.limit!, tc.count))
+        expect(r.certificates).toHaveLength(Math.min(tc.args.limit!, tc.count))
         expect(r.totalCertificates).toBe(tc.count)
       }
     }

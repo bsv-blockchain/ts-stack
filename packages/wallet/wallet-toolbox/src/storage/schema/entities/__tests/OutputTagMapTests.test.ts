@@ -183,7 +183,7 @@ describe('OutputTagMap class method tests', () => {
     // console.log('Updted Redord length:', updatedRecord.length)
 
     // Verify that the database is updated
-    expect(updatedRecord.length).toBe(1)
+    expect(updatedRecord).toHaveLength(1)
     expect(updatedRecord[0]).toBeDefined()
     expect(updatedRecord[0].isDeleted).toBe(true)
   })
@@ -235,7 +235,7 @@ describe('OutputTagMap class method tests', () => {
     const record = await ctx.activeStorage.findOutputTagMaps({
       partial: { outputId: 2, outputTagId: 11 }
     })
-    expect(record.length).toBe(1)
+    expect(record).toHaveLength(1)
     expect(record[0].isDeleted).toBe(false)
   })
 })

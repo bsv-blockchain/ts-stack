@@ -87,7 +87,7 @@ describe('nosend orphan-output failure mode', () => {
    * The tx carries a fabricated txid so we can observe per-row chain-check
    * behavior without depending on real BEEF/signing.
    */
-  async function seedNoSendTx (
+  async function seedNoSendTx(
     storage: StorageProvider,
     txid: string,
     existingUser?: { userId?: number; identityKey: string }
@@ -120,20 +120,15 @@ describe('nosend orphan-output failure mode', () => {
    * (where Fix 3's protection set is the gap — see "Residual edge
    * case" in PR description).
    */
-  function mockServices (
-    fn: (txids: string[]) =>
-      | GetStatusForTxidsResult
-      | Promise<GetStatusForTxidsResult>
+  function mockServices(
+    fn: (txids: string[]) => GetStatusForTxidsResult | Promise<GetStatusForTxidsResult>
   ): sdk.WalletServices {
     return {
       getStatusForTxids: async (txids: string[]) => fn(txids)
     } as unknown as sdk.WalletServices
   }
 
-  const successResult = (
-    txids: string[],
-    statuses: Array<StatusForTxidResult['status']>
-  ): GetStatusForTxidsResult => ({
+  const successResult = (txids: string[], statuses: Array<StatusForTxidResult['status']>): GetStatusForTxidsResult => ({
     name: 'mock',
     status: 'success',
     results: txids.map((txid, i) => ({
@@ -148,16 +143,16 @@ describe('nosend orphan-output failure mode', () => {
   // what's being verified, not the boilerplate that triggers the path.
   const ABORT_LABELS = ['ac6b20a3bb320adafecd637b25c84b792ad828d3aa510d05dc841481f664277d', 'abort']
 
-  async function getTxStatus (storage: StorageProvider, transactionId: number) {
+  async function getTxStatus(storage: StorageProvider, transactionId: number) {
     const tx = (await storage.findTransactions({ partial: { transactionId } }))[0]
     return tx.status
   }
 
-  async function getReq (storage: StorageProvider, provenTxReqId: number) {
+  async function getReq(storage: StorageProvider, provenTxReqId: number) {
     return (await storage.findProvenTxReqs({ partial: { provenTxReqId } }))[0]
   }
 
-  async function expectStatuses (
+  async function expectStatuses(
     storage: StorageProvider,
     seed: { transactionId: number; provenTxReqId: number },
     txStatus: string,
@@ -169,21 +164,15 @@ describe('nosend orphan-output failure mode', () => {
     }
   }
 
-  async function runBulkAbort (
-    storage: StorageProvider,
-    auth: { userId: number; identityKey: string }
-  ) {
-    return await storage.listActions(
-      auth,
-      {
-        labels: ABORT_LABELS,
-        labelQueryMode: 'all',
-        limit: 1000
-      } as never
-    )
+  async function runBulkAbort(storage: StorageProvider, auth: { userId: number; identityKey: string }) {
+    return await storage.listActions(auth, {
+      labels: ABORT_LABELS,
+      labelQueryMode: 'all',
+      limit: 1000
+    } as never)
   }
 
-  function countHistoryNotes (req: { history: string }, what: string): number {
+  function countHistoryNotes(req: { history: string }, what: string): number {
     const history = JSON.parse(req.history)
     return (history.notes || []).filter((n: { what?: string }) => n.what === what).length
   }
@@ -194,7 +183,7 @@ describe('nosend orphan-output failure mode', () => {
     test('returns aborted:false for a nosend tx whose txid the chain says is mined; storage state preserved', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '11'.repeat(32))
-        storage.setServices(mockServices((txids) => successResult(txids, ['mined'])))
+        storage.setServices(mockServices(txids => successResult(txids, ['mined'])))
 
         const result = await storage.abortAction(seed.auth, { reference: seed.reference })
         expect(result.aborted).toBe(false)
@@ -208,7 +197,7 @@ describe('nosend orphan-output failure mode', () => {
       // to fire here for several minutes per tx.
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '22'.repeat(32))
-        storage.setServices(mockServices((txids) => successResult(txids, ['known'])))
+        storage.setServices(mockServices(txids => successResult(txids, ['known'])))
 
         const result = await storage.abortAction(seed.auth, { reference: seed.reference })
         expect(result.aborted).toBe(false)
@@ -219,7 +208,7 @@ describe('nosend orphan-output failure mode', () => {
     test('PROCEEDS normally when chain reports the tx as unknown (genuinely off-chain)', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '33'.repeat(32))
-        storage.setServices(mockServices((txids) => successResult(txids, ['unknown'])))
+        storage.setServices(mockServices(txids => successResult(txids, ['unknown'])))
 
         const result = await storage.abortAction(seed.auth, { reference: seed.reference })
         expect(result.aborted).toBe(true)
@@ -237,7 +226,9 @@ describe('nosend orphan-output failure mode', () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '44'.repeat(32))
         storage.setServices(
-          mockServices(() => { throw new Error('indexer down') })
+          mockServices(() => {
+            throw new Error('indexer down')
+          })
         )
 
         const result = await storage.abortAction(seed.auth, { reference: seed.reference })
@@ -254,9 +245,7 @@ describe('nosend orphan-output failure mode', () => {
       // reading results, treating it as service-unreachable.
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '55'.repeat(32))
-        storage.setServices(
-          mockServices(() => ({ name: 'mock', status: 'error', results: [] }))
-        )
+        storage.setServices(mockServices(() => ({ name: 'mock', status: 'error', results: [] })))
 
         const result = await storage.abortAction(seed.auth, { reference: seed.reference })
         expect(result.aborted).toBe(true)
@@ -269,7 +258,7 @@ describe('nosend orphan-output failure mode', () => {
     test('records an abortAction-skipped-onchain history note on the proven_tx_req', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '66'.repeat(32))
-        storage.setServices(mockServices((txids) => successResult(txids, ['mined'])))
+        storage.setServices(mockServices(txids => successResult(txids, ['mined'])))
 
         const result = await storage.abortAction(seed.auth, { reference: seed.reference })
         expect(result.aborted).toBe(false)
@@ -279,7 +268,7 @@ describe('nosend orphan-output failure mode', () => {
         const skippedNotes = (history.notes || []).filter(
           (n: { what?: string; chainStatus?: string }) => n.what === 'abortAction-skipped-onchain'
         )
-        expect(skippedNotes.length).toBe(1)
+        expect(skippedNotes).toHaveLength(1)
         expect(skippedNotes[0].chainStatus).toBe('mined')
       }
     })
@@ -292,7 +281,7 @@ describe('nosend orphan-output failure mode', () => {
       for (const storage of storages) {
         const txid = '77'.repeat(32)
         const seed = await seedNoSendTx(storage, txid)
-        storage.setServices(mockServices((txids) => successResult(txids, ['mined'])))
+        storage.setServices(mockServices(txids => successResult(txids, ['mined'])))
 
         const result = await runBulkAbort(storage, seed.auth)
         // The returned row reflects the skip — status stays 'nosend',
@@ -307,7 +296,7 @@ describe('nosend orphan-output failure mode', () => {
     test('processes per-row when chain says unknown — abort fires and tx becomes failed', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '88'.repeat(32))
-        storage.setServices(mockServices((txids) => successResult(txids, ['unknown'])))
+        storage.setServices(mockServices(txids => successResult(txids, ['unknown'])))
 
         await runBulkAbort(storage, seed.auth)
         await expectStatuses(storage, seed, 'failed', 'invalid')
@@ -326,8 +315,11 @@ describe('nosend orphan-output failure mode', () => {
         const offChain = await seedNoSendTx(storage, 'aa'.repeat(32), sharedUser)
         const onChain = await seedNoSendTx(storage, onChainTxid, sharedUser)
         storage.setServices(
-          mockServices((txids) =>
-            successResult(txids, txids.map((t) => (t === onChainTxid ? 'mined' : 'unknown')))
+          mockServices(txids =>
+            successResult(
+              txids,
+              txids.map(t => (t === onChainTxid ? 'mined' : 'unknown'))
+            )
           )
         )
 
@@ -350,7 +342,9 @@ describe('nosend orphan-output failure mode', () => {
         const seedA = await seedNoSendTx(storage, 'cc'.repeat(32), sharedUser)
         const seedB = await seedNoSendTx(storage, 'dd'.repeat(32), sharedUser)
         storage.setServices(
-          mockServices(() => { throw new Error('indexer down') })
+          mockServices(() => {
+            throw new Error('indexer down')
+          })
         )
 
         await runBulkAbort(storage, seedA.auth)
@@ -364,9 +358,7 @@ describe('nosend orphan-output failure mode', () => {
     test('proceeds with per-row aborts on graceful batched service error (status="error")', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, 'ee'.repeat(32))
-        storage.setServices(
-          mockServices(() => ({ name: 'mock', status: 'error', results: [] }))
-        )
+        storage.setServices(mockServices(() => ({ name: 'mock', status: 'error', results: [] })))
 
         await runBulkAbort(storage, seed.auth)
         expect(await getTxStatus(storage, seed.transactionId)).toBe('failed')
@@ -387,12 +379,15 @@ describe('nosend orphan-output failure mode', () => {
 
         let call = 0
         storage.setServices(
-          mockServices((txids) => {
+          mockServices(txids => {
             call += 1
             // Call 1: bulk pre-filter — say 'unknown'.
             // Call 2+: per-row check inside abortAction — say 'mined'.
             const status: StatusForTxidResult['status'] = call === 1 ? 'unknown' : 'mined'
-            return successResult(txids, txids.map(() => status))
+            return successResult(
+              txids,
+              txids.map(() => status)
+            )
           })
         )
 
@@ -473,9 +468,9 @@ describe('nosend orphan-output failure mode', () => {
         await storage.updateTransaction(seed.transactionId, { status: 'unproven' })
 
         // Now any abortAction must refuse via the existing gate.
-        await expect(
-          storage.abortAction(seed.auth, { reference: seed.reference })
-        ).rejects.toThrow(/has not been signed and shared/)
+        await expect(storage.abortAction(seed.auth, { reference: seed.reference })).rejects.toThrow(
+          /has not been signed and shared/
+        )
         expect(await getTxStatus(storage, seed.transactionId)).toBe('unproven')
       }
     })

@@ -33,7 +33,7 @@ const testLockUnlockDecode = async (
   // --- Decode ---
   const decoded = MultiPushDrop.decode(lockingScript)
   expect(decoded.fields).toEqual(fields)
-  expect(decoded.lockingPublicKeys.length).toEqual(ownerPrivateKeys.length)
+  expect(decoded.lockingPublicKeys).toHaveLength(ownerPrivateKeys.length)
 
   // Verify decoded keys match derived keys
   const derivedKeys: PubKeyHex[] = []
@@ -90,7 +90,7 @@ const testLockUnlockDecode = async (
     // Sign to get the unlocking script
     const unlockingScript = await unlockingTemplate.sign(spendTx, 0)
     expect(unlockingScript).toBeInstanceOf(UnlockingScript)
-    expect(unlockingScript.chunks.length).toBe(2) // Signature + Index
+    expect(unlockingScript.chunks).toHaveLength(2) // Signature + Index
     // Verify index chunk
     const indexChunk = unlockingScript.chunks[1]
     let decodedIndex: number

@@ -160,23 +160,14 @@ describe('makeUserInterface', () => {
   })
 
   describe('JavaScript functions', () => {
-    it('should include returnHome function', () => {
-      const html = makeUserInterface()
+    it.each(['window.returnHome', 'window.managerDocumentation', 'window.topicDocumentation'])(
+      'should include the %s function',
+      functionName => {
+        const html = makeUserInterface()
 
-      expect(html).toContain('window.returnHome')
-    })
-
-    it('should include managerDocumentation function', () => {
-      const html = makeUserInterface()
-
-      expect(html).toContain('window.managerDocumentation')
-    })
-
-    it('should include topicDocumentation function', () => {
-      const html = makeUserInterface()
-
-      expect(html).toContain('window.topicDocumentation')
-    })
+        expect(html).toContain(functionName)
+      }
+    )
 
     it('should include syntax highlighting setup', () => {
       const html = makeUserInterface()

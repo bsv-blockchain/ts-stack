@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-07-29",
+  "owner": "ts-stack-maintainers",
+  "routineUpdates": {
+    "dependabotConfig": ".github/dependabot.yml",
+    "multiEcosystemGroup": "monthly-stack-maintenance",
+    "cadence": "monthly",
+    "versionPullRequestLimit": 1,
+    "securityUpdates": {
+      "response": "immediate",
+      "groupedWithinEcosystem": true,
+      "independentOfVersionPullRequestLimit": true
+    }
+  },
+  "dependencyPullRequestEvidence": {
+    "template": ".github/pull_request_template.md",
+    "heading": "Dependency evidence",
+    "requiredFields": [
+      "Release notes and necessity",
+      "Runtime, build, and peer compatibility",
+      "Deduplicated lockfile",
+      "Audit and CodeQL",
+      "Package and consumer tests",
+      "Bundle and performance impact",
+      "Affected public package versions"
+    ]
+  },
+  "directLatestInventory": {
+    "cadence": "monthly-and-after-release",
+    "command": "node scripts/dependency-release-governance.mjs inventory",
+    "classifications": [
+      "current",
+      "compatible-update",
+      "security-urgent",
+      "major-migration",
+      "first-party-release-held"
+    ]
+  },
+  "firstParty": {
+    "pattern": "@bsv/*",
+    "owner": "ts-stack-maintainers",
+    "dependabotPolicy": "ignored",
+    "updateMechanism": "scripts/sync-versions.mjs",
+    "releaseWorkflow": ".github/workflows/release.yaml",
+    "verification": "scripts/check-versions.mjs",
+    "publicationHold": "Source candidates may remain ahead of npm only while publication is explicitly unauthorized. Registry versions may never be ahead of or diverge from source ownership, and release reconciliation must record every held or published package.",
+    "closeImplementationWaveAfterPublication": false
+  },
+  "overrideRegistry": [
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "brace-expansion@<=5.0.7",
+      "value": "5.0.8",
+      "exceptionId": "brace-expansion-jest-override"
+    },
+    {
+      "source": "pnpm-workspace.yaml",
+      "selector": "typed-rest-client@2.3.1>qs",
+      "value": "6.15.3",
+      "exceptionId": "typed-rest-client-qs-override"
+    },
+    {
+      "source": "tools/codegen/node/package.json",
+      "selector": "@redocly/openapi-core@1.34.17",
+      "value": {
+        "js-yaml": "4.3.0",
+        "minimatch": "10.2.5"
+      },
+      "exceptionId": "openapi-typescript-redocly-overrides"
+    },
+    {
+      "source": "tools/codegen/node/package.json",
+      "selector": "minimatch@10.2.5",
+      "value": {
+        "brace-expansion": "5.0.8"
+      },
+      "exceptionId": "openapi-typescript-redocly-overrides"
+    },
+    {
+      "source": "infra/chaintracks-server/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/message-box-server/package.json",
+      "selector": "brace-expansion",
+      "value": "5.0.8",
+      "exceptionId": "brace-expansion-jest-override"
+    },
+    {
+      "source": "infra/message-box-server/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/message-box-server/package.json",
+      "selector": "uuid",
+      "value": "11.1.1",
+      "exceptionId": "standalone-uuid-advisory-override"
+    },
+    {
+      "source": "infra/overlay-server/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/uhrp-server-basic/package.json",
+      "selector": "brace-expansion",
+      "value": "5.0.8",
+      "exceptionId": "brace-expansion-jest-override"
+    },
+    {
+      "source": "infra/uhrp-server-basic/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/uhrp-server-cloud-bucket/package.json",
+      "selector": "brace-expansion",
+      "value": "5.0.8",
+      "exceptionId": "brace-expansion-jest-override"
+    },
+    {
+      "source": "infra/uhrp-server-cloud-bucket/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/uhrp-server-cloud-bucket/package.json",
+      "selector": "uuid",
+      "value": "11.1.1",
+      "exceptionId": "standalone-uuid-advisory-override"
+    },
+    {
+      "source": "infra/uhrp-server-cloud-bucket/notifier/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/uhrp-server-cloud-bucket/notifier/package.json",
+      "selector": "uuid",
+      "value": "11.1.1",
+      "exceptionId": "standalone-uuid-advisory-override"
+    },
+    {
+      "source": "infra/wab/package.json",
+      "selector": "brace-expansion",
+      "value": "5.0.8",
+      "exceptionId": "brace-expansion-jest-override"
+    },
+    {
+      "source": "infra/wab/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    },
+    {
+      "source": "infra/wallet-infra/package.json",
+      "selector": "gaxios",
+      "value": "7.3.0",
+      "exceptionId": "standalone-gaxios-advisory-override"
+    }
+  ],
+  "scheduledVerification": {
+    "workflow": ".github/workflows/dependency-release-verification.yml",
+    "schedule": "17 14 1 * *",
+    "checks": [
+      "direct/latest dependency inventory",
+      "source manifest versus npm latest reconciliation",
+      "published tarball clean install",
+      "registry signature and provenance verification",
+      "immutable deployment image pull",
+      "package and infrastructure version evidence",
+      "generated documentation facts"
+    ],
+    "artifactRetentionDays": 90
+  }
+}

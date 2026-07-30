@@ -207,7 +207,7 @@ describe('StorageDownloader', () => {
 
       const result = await downloader.download(uhrpUrl)
       expect(result.mimeType).toBe('application/octet-stream')
-      expect(result.data.length).toBe(size)
+      expect(result.data).toHaveLength(size)
       expect(result.data).toEqual(data)
     })
   })

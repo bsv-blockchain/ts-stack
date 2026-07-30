@@ -11,7 +11,7 @@ jest.mock('@bsv/sdk', () => MockedBSV_SDK)
  * We do this so we can reliably test the request flow (i.e., that it truly initiates
  * a new permission request if no token is found).
  */
-function mockNoTokensFound (manager: WalletPermissionsManager): void {
+function mockNoTokensFound(manager: WalletPermissionsManager): void {
   jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(undefined)
   jest.spyOn(manager as any, 'findBasketToken').mockResolvedValue(undefined)
   jest.spyOn(manager as any, 'findCertificateToken').mockResolvedValue(undefined)
@@ -95,7 +95,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
 
       const activeRequests = (manager as any).activeRequests as Map<string, any>
       const queued = activeRequests.get(requestID)
-      expect(queued.request.permissions.protocolPermissions.length).toBe(2)
+      expect(queued.request.permissions.protocolPermissions).toHaveLength(2)
       expect(queued.request.permissions.protocolPermissions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ protocolID: [2, 'l2-proto-A'], counterparty: 'peer-123' }),

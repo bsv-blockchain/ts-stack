@@ -1,6 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    ts-stack.bsvblockchain.org/autoscaling-policy: operator-gated-until-shared-abuse-controls
+    ts-stack.bsvblockchain.org/disruption-policy: operator-validated-ready-capacity
   labels:
     service: web
     app: wab
@@ -12,6 +15,9 @@ spec:
       service: web
   template:
     metadata:
+      annotations:
+        ts-stack.bsvblockchain.org/autoscaling-policy: operator-gated-until-shared-abuse-controls
+        ts-stack.bsvblockchain.org/disruption-policy: operator-validated-ready-capacity
       labels:
         service: web
     spec:
@@ -21,6 +27,13 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              service: web
       containers:
         # General image from infra-release.yaml (GHCR). Keep tag and digest together.
         - image: ghcr.io/bsv-blockchain/wab:v1.4.10@sha256:b770900fcdfd151eca342d0e3d9b1ed49dc987f961b68d38e112f136d1fe10e5
@@ -61,6 +74,10 @@ spec:
             - name: PORT
               value: '8080'
           name: web
+          lifecycle:
+            preStop:
+              exec:
+                command: ['/bin/sh', '-c', 'sleep 5']
           ports:
             - containerPort: 8080
               name: http

@@ -41,6 +41,20 @@ through the release workflow after approval):
       and removal condition
 - [ ] Workflow permissions and lifecycle-script behavior remain least privilege
 
+## Dependency evidence
+
+Complete every field when a dependency manifest, lockfile, container base, code
+generator dependency, Dependabot configuration, or pinned workflow action
+changes. Use “Not applicable — <reason>” only when the reason is concrete.
+
+- Release notes and necessity:
+- Runtime, build, and peer compatibility:
+- Deduplicated lockfile:
+- Audit and CodeQL:
+- Package and consumer tests:
+- Bundle and performance impact:
+- Affected public package versions:
+
 ## Release and operations
 
 - [ ] No npm publication was performed from a workstation or from this PR

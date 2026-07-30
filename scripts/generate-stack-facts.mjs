@@ -53,7 +53,12 @@ const projects = await Promise.all(
     const manifest = await readJson(
       project.path === '.' ? 'package.json' : `${project.path}/package.json`
     )
-    return { ...project, version: manifest.version, engines: manifest.engines ?? {} }
+    return {
+      ...project,
+      version: manifest.version,
+      engines: manifest.engines ?? {},
+      scripts: manifest.scripts ?? {}
+    }
   })
 )
 const publicPackages = projects
@@ -78,6 +83,9 @@ if (!sdk) throw new Error('Governed project inventory is missing @bsv/sdk')
 const sdkManifest = await readJson(`${sdk.path}/package.json`)
 const publicNodeRanges = [...new Set(publicPackages.map(project => project.engines.node))]
 const infrastructureNodeRanges = [...new Set(infrastructure.map(project => project.engines.node))]
+const coverageProjects = projects.filter(
+  project => typeof project.scripts['test:coverage'] === 'string'
+)
 
 if (publicPackages.length !== baseline.workspace.publicPackages) {
   throw new Error('Public-package inventory and repository-health baseline disagree')
@@ -225,6 +233,43 @@ ${table(
 Structural runner pass/skip results and parity classifications answer different questions:
 the former is the current runner outcome, while the latter records cross-language
 implementation intent. Neither count may be silently presented as the other.
+
+## Coverage reporting
+
+Coverage numbers below come from the latest committed CI-artifact snapshot, while package
+participation comes directly from current manifests. Codecov is the aggregate and
+changed-line authority. These are reporting facts, not a claim that the final QA coverage
+targets have been completed.
+
+${table(
+  ['Metric', 'Current value', 'Authority'],
+  [
+    ['Projects with a test:coverage script', coverageProjects.length, 'current package manifests'],
+    ['Aggregate line coverage', `${baseline.coverage.totalPercent}%`, baseline.coverage.source],
+    ['Reported source files', baseline.coverage.files, baseline.coverage.source],
+    [
+      'Reported lines (hit / missed / partial)',
+      `${baseline.coverage.hit} / ${baseline.coverage.missed} / ${baseline.coverage.partial}`,
+      baseline.coverage.source
+    ],
+    [
+      'Project threshold',
+      `80% for ${baseline.coverage.projectThresholdScope}`,
+      'codecov.yml and .github/workflows/ci.yml'
+    ],
+    [
+      'Changed-line threshold',
+      `${baseline.coverage.patchThresholdPercent}%`,
+      'codecov.yml and .github/workflows/ci.yml'
+    ]
+  ]
+)}
+
+The CI workflow generates package-specific LCOV artifacts in parallel, normalizes their
+repository paths, combines them in the coverage-upload job, and requires the aggregate
+Codecov status before the merge gate succeeds. Updating the committed aggregate snapshot
+requires a linked exact-main CI artifact; it must never be estimated from local partial
+runs.
 
 ## Change procedure
 

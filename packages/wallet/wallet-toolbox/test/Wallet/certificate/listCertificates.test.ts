@@ -153,7 +153,7 @@ describe('listCertificates', () => {
     expect(mockStorage.findCertificateFields).toHaveBeenCalledTimes(2)
     expect(mockStorage.countCertificates).not.toHaveBeenCalled() // Because 2 < 10
 
-    expect(result.certificates.length).toBe(2)
+    expect(result.certificates).toHaveLength(2)
     expect(result.totalCertificates).toBe(2)
 
     // Ensure the fields are included
@@ -234,7 +234,7 @@ describe('listCertificates', () => {
 
     // We expect totalCertificates = 25 from countCertificates
     expect(result.totalCertificates).toBe(25)
-    expect(result.certificates.length).toBe(2)
+    expect(result.certificates).toHaveLength(2)
   })
 
   test('should handle transaction failure by throwing an error', async () => {
@@ -340,7 +340,7 @@ describe('listCertificates', () => {
 
     const result = await listCertificates(mockStorage, auth, vargs)
 
-    expect(result.certificates.length).toBe(3)
+    expect(result.certificates).toHaveLength(3)
     expect(result.totalCertificates).toBe(999) // from countCertificates
   })
 })

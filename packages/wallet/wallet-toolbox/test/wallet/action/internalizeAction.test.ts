@@ -346,12 +346,12 @@ describe('internalizeAction tests', () => {
         const rfbs = await fred.activeStorage.findOutputBaskets({
           partial: { name: 'default' }
         })
-        expect(rfbs.length).toBe(1)
+        expect(rfbs).toHaveLength(1)
 
         const rfos = await fred.activeStorage.findOutputs({
           partial: { basketId: rfbs[0].basketId }
         })
-        expect(rfos.length).toBe(1)
+        expect(rfos).toHaveLength(1)
         expect(rfos[0].satoshis).toBe(outputSatoshis)
         expect(rfos[0].type).toBe('P2PKH')
         expect(rfos[0].purpose).toBe('change')
@@ -461,12 +461,12 @@ describe('internalizeAction tests', () => {
         const rfbs = await fred.activeStorage.findOutputBaskets({
           partial: { name: 'default' }
         })
-        expect(rfbs.length).toBe(1)
+        expect(rfbs).toHaveLength(1)
 
         const rfos = await fred.activeStorage.findOutputs({
           partial: { basketId: rfbs[0].basketId }
         })
-        expect(rfos.length).toBe(2)
+        expect(rfos).toHaveLength(2)
         expect(rfos[0].satoshis).toBe(outputSatoshis1)
         expect(rfos[0].type).toBe('P2PKH')
         expect(rfos[0].purpose).toBe('change')
@@ -614,12 +614,12 @@ describe('internalizeAction tests', () => {
         const rfbs = await fred.activeStorage.findOutputBaskets({
           partial: { name: 'default' }
         })
-        expect(rfbs.length).toBe(1)
+        expect(rfbs).toHaveLength(1)
 
         const rfos = await fred.activeStorage.findOutputs({
           partial: { basketId: rfbs[0].basketId }
         })
-        expect(rfos.length).toBe(2)
+        expect(rfos).toHaveLength(2)
         expect(rfos[0].satoshis).toBe(outputSatoshis1)
         expect(rfos[0].type).toBe('P2PKH')
         expect(rfos[0].purpose).toBe('change')

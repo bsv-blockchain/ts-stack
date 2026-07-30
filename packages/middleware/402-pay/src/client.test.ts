@@ -232,51 +232,14 @@ describe('create402Fetch', () => {
   // ---------------------------------------------------------------------------
 
   describe('402 with malformed payment headers', () => {
-    it('returns the 402 directly when x-bsv-sats is missing', async () => {
-      fetchMock.mockResolvedValue(makeResponse(402, '', { [HEADERS.SERVER]: SERVER_KEY }))
-      const fetch402 = create402Fetch({ wallet: makeWallet() })
-      const res = await fetch402(TEST_URL)
-      expect(res.status).toBe(402)
-    })
-
-    it('returns the 402 directly when x-bsv-server is missing', async () => {
-      fetchMock.mockResolvedValue(makeResponse(402, '', { [HEADERS.SATS]: '100' }))
-      const fetch402 = create402Fetch({ wallet: makeWallet() })
-      const res = await fetch402(TEST_URL)
-      expect(res.status).toBe(402)
-    })
-
-    it('returns the 402 directly when sats is not a valid number', async () => {
-      fetchMock.mockResolvedValue(
-        makeResponse(402, '', {
-          [HEADERS.SATS]: 'not-a-number',
-          [HEADERS.SERVER]: SERVER_KEY
-        })
-      )
-      const fetch402 = create402Fetch({ wallet: makeWallet() })
-      const res = await fetch402(TEST_URL)
-      expect(res.status).toBe(402)
-    })
-
-    it('returns the 402 directly when sats is zero', async () => {
-      fetchMock.mockResolvedValue(
-        makeResponse(402, '', {
-          [HEADERS.SATS]: '0',
-          [HEADERS.SERVER]: SERVER_KEY
-        })
-      )
-      const fetch402 = create402Fetch({ wallet: makeWallet() })
-      const res = await fetch402(TEST_URL)
-      expect(res.status).toBe(402)
-    })
-
-    it('returns the 402 directly when sats is negative', async () => {
-      fetchMock.mockResolvedValue(
-        makeResponse(402, '', {
-          [HEADERS.SATS]: '-10',
-          [HEADERS.SERVER]: SERVER_KEY
-        })
-      )
+    it.each([
+      ['missing price', { [HEADERS.SERVER]: SERVER_KEY }],
+      ['missing server identity', { [HEADERS.SATS]: '100' }],
+      ['non-numeric price', { [HEADERS.SATS]: 'not-a-number', [HEADERS.SERVER]: SERVER_KEY }],
+      ['zero price', { [HEADERS.SATS]: '0', [HEADERS.SERVER]: SERVER_KEY }],
+      ['negative price', { [HEADERS.SATS]: '-10', [HEADERS.SERVER]: SERVER_KEY }]
+    ])('returns the 402 directly for a %s', async (_case, responseHeaders) => {
+      fetchMock.mockResolvedValue(makeResponse(402, '', responseHeaders))
       const fetch402 = create402Fetch({ wallet: makeWallet() })
       const res = await fetch402(TEST_URL)
       expect(res.status).toBe(402)

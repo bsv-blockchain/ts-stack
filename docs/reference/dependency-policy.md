@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.2.0'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '1.3.0'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -55,7 +55,11 @@ commands are documented in
 Dependabot proposes one coordinated multi-ecosystem maintenance PR each month.
 Patch and minor updates remain automated across the root workspace, standalone
 infrastructure lockfiles, deployment images, code generators, and GitHub
-Actions. First-party `@bsv/*` versions remain owned by the release graph.
+Actions. The single open version-maintenance slot does not apply to security
+updates, so an old monthly PR cannot block immediate advisory remediation.
+Security updates are grouped only within a package-manager ecosystem and are
+never delayed into the monthly cross-ecosystem version update. First-party
+`@bsv/*` versions remain owned by the release graph.
 
 Major changes that alter a runtime, compiler, or persisted-data contract are
 held from the routine monthly PR until their focused migration is ready:
@@ -81,7 +85,11 @@ maintainer must establish why each change is needed, inspect changelogs and
 runtime/deployment effects, remove obsolete dependencies, and require the same
 tests, security analysis, and package checks as human-authored work. Bot noise,
 conflicting single-package bumps, and first-party version PRs are consolidated
-or closed rather than merged piecemeal.
+or closed rather than merged piecemeal. CI recognizes dependency-shaped diffs
+and requires the pull request's dependency-evidence section to record release
+notes and necessity, runtime/build/peer compatibility, lockfile deduplication,
+audit and CodeQL results, package and consumer tests, bundle/performance
+impact, and affected public versions.
 
 ## Supply-chain controls
 
@@ -124,8 +132,12 @@ The root workspace carries two narrow audited dependency overrides:
 
 Both substitutions are verified through the affected Jest/mutation paths and
 have owners, evidence, review dates, and upstream removal conditions in the
-repository-health exception registry. Any future temporary override must meet
-the same standard.
+repository-health exception registry. Standalone service locks also need
+temporary `gaxios` substitutions, and Message Box plus UHRP cloud storage need
+`uuid`; the Wave 37 review removed every substitution from a service where the
+frozen graph stayed clean without it. The machine-readable registry now maps
+every remaining selector and exact value to its exception. CI rejects a new,
+changed, stale, expired, unowned, or upstream-unlinked override.
 
 The independently locked OpenAPI generator also carries a narrow Redocly
 compatibility override. It is isolated from runtime packages, registered with
@@ -138,6 +150,31 @@ dependency with a deterministic
 renderer built on the maintained `yaml` parser. This removes the legacy parser,
 `brace-expansion`, and `jsonpath-plus` chains instead of masking them with
 transitive substitutions.
+
+## Persistent reconciliation
+
+`governance/dependency-release-policy.json` is the machine-readable authority
+for cadence, evidence, release ownership, temporary substitutions, and
+scheduled verification. On the first day of every month and after successful
+npm or infrastructure release workflows, the read-only verification workflow:
+
+- generates a direct-versus-latest inventory and separates compatible updates
+  from major migration projects;
+- reconciles all 30 source manifests, recorded published baselines, and npm
+  `latest`, explicitly reporting source candidates held by an operator's
+  publication decision;
+- installs every published package with lifecycle scripts disabled and runs
+  npm registry signature/provenance verification;
+- pulls every checked-in deployment image by its immutable digest; and
+- verifies generated package, support, conformance, coverage-reporting, and
+  version facts.
+
+The resulting JSON and frozen install evidence is retained for 90 days. A
+registry version ahead of or divergent from source ownership, a missing
+integrity/provenance record, an unavailable immutable image, or documentation
+drift fails the workflow. A source candidate ahead of the recorded npm
+baseline is not silently presented as published; it remains visibly
+`first-party-release-held` until an operator authorizes the release.
 
 ## Advisory disposition
 
@@ -171,6 +208,9 @@ consumer and development graphs first.
 6. Publish through the OIDC release workflow. Never publish from a workstation.
 7. Merge the generated version-sync PR, then release any infra images whose
    first-party dependency ranges changed.
+8. Run or inspect the dependency/release verification workflow and retain its
+   package versions, integrity/provenance records, image digests, and
+   direct/latest inventory with the release evidence.
 
 The generated sync PR may refresh infrastructure lockfiles with
 `npm install --package-lock-only --ignore-scripts`. That command names no

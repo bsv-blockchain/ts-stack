@@ -7,7 +7,7 @@ describe('utilityHelpers.noBuffer tests', () => {
     const a = new Uint8Array([1, 2, 3, 4])
     {
       const r = asUint8Array(a)
-      expect(r.length).toBe(4)
+      expect(r).toHaveLength(4)
       expect(r.every((v, i) => v === a[i])).toBe(true)
     }
     {
@@ -32,7 +32,7 @@ describe('utilityHelpers.noBuffer tests', () => {
     const a = [1, 2, 3, 4]
     {
       const r = asUint8Array(a)
-      expect(r.length).toBe(4)
+      expect(r).toHaveLength(4)
       expect(r.every((v, i) => v === a[i])).toBe(true)
     }
     {
@@ -57,7 +57,7 @@ describe('utilityHelpers.noBuffer tests', () => {
     const a = '01020304'
     {
       const r = asUint8Array(a)
-      expect(r.length).toBe(4)
+      expect(r).toHaveLength(4)
       expect(r.every((v, i) => v === Number.parseInt(a.slice(i * 2, i * 2 + 2), 16))).toBe(true)
     }
     {
@@ -86,7 +86,7 @@ describe('utilityHelpers.noBuffer tests', () => {
     const a = '\x01\x02\x03\x04'
     {
       const r = asUint8Array(a, 'utf8')
-      expect(r.length).toBe(4)
+      expect(r).toHaveLength(4)
       expect(r.every((v, i) => v === i + 1)).toBe(true)
     }
     {

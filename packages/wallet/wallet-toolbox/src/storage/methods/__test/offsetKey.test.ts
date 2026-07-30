@@ -158,7 +158,7 @@ async function signAndBroadcastRedemption(
   })
   expect(cr.noSendChange).not.toBeTruthy()
   expect(cr.sendWithResults?.length).toBe(1)
-  expect(cr.sendWithResults![0].status !== 'failed').toBe(true)
+  expect(cr.sendWithResults![0].status).not.toBe(true)
 }
 
 /**
@@ -257,7 +257,7 @@ describe('offsetKey tests', () => {
     expect(address).toBe('1EZz5oxwXoG6LgGLxeYPeg1NfzQrP1vL6M')
   })
 
-  test.skip('4_redeemServiceCharges', async () => {
+  test('4_redeemServiceCharges', async () => {
     if (_tu.noEnv('main')) return
 
     const { env, storage, setup } = await createRedemptionTestContext()
@@ -282,7 +282,7 @@ describe('offsetKey tests', () => {
     await setup.wallet.destroy()
   })
 
-  test.skip('4a_redeemServiceCharges optimized', async () => {
+  test('4a_redeemServiceCharges optimized', async () => {
     if (_tu.noEnv('main')) return
 
     const { env, storage, setup } = await createRedemptionTestContext()

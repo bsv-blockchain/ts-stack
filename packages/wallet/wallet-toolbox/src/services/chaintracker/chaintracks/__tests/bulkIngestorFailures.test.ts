@@ -69,7 +69,7 @@ describe('Chaintracks bulk ingestor failure handling', () => {
 
     await expect(Promise.race([syncPromise, timeoutPromise])).resolves.toBeUndefined()
     expect(synchronizeCalls).toBe(2)
-    expect((chaintracks as any).liveHeaders.length).toBe(2)
+    expect((chaintracks as any).liveHeaders).toHaveLength(2)
   })
 
   test('treats post-startup bulk sync errors as transient and returns without setting startupError', async () => {

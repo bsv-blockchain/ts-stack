@@ -13,12 +13,7 @@ import { LockingScript } from '../../script/index'
 // --------------------------------------------------------------------------
 
 const makeBeef = (satoshis: number): number[] =>
-  new Transaction(
-    1,
-    [],
-    [{ lockingScript: LockingScript.fromHex('88'), satoshis }],
-    0
-  ).toBEEF()
+  new Transaction(1, [], [{ lockingScript: LockingScript.fromHex('88'), satoshis }], 0).toBEEF()
 
 const beefs = Array.from({ length: 6 }, (_, i) => makeBeef(i + 1))
 
@@ -30,12 +25,14 @@ interface HostScript {
   /** ms to wait before resolving (uses jest fake timers). */
   delayMs: number
   /** Outputs to return; if undefined, the host throws. */
-  outputs?: Array<{ beef: number[], outputIndex: number }>
+  outputs?: Array<{ beef: number[]; outputIndex: number }>
   /** Error to throw instead of returning outputs. */
   throws?: Error
 }
 
-const makeFacilitator = (scripts: Record<string, HostScript>): {
+const makeFacilitator = (
+  scripts: Record<string, HostScript>
+): {
   lookup: jest.Mock
   callOrder: string[]
 } => {
@@ -44,7 +41,7 @@ const makeFacilitator = (scripts: Record<string, HostScript>): {
     callOrder.push(url)
     const script = scripts[url]
     if (script === undefined) throw new Error(`Unscripted host: ${url}`)
-    await new Promise<void>((resolve) => setTimeout(resolve, script.delayMs))
+    await new Promise<void>(resolve => setTimeout(resolve, script.delayMs))
     if (script.throws !== undefined) throw script.throws
     return { type: 'output-list', outputs: script.outputs ?? [] }
   })
@@ -97,7 +94,7 @@ describe('LookupResolver resilience', () => {
       const queryPromise = resolver.query({ service: 'ls_topic', query: { i } })
       await jest.advanceTimersByTimeAsync(3000)
       const res = await queryPromise
-      expect(res.outputs.length).toBe(5)
+      expect(res.outputs).toHaveLength(5)
     }
 
     const slowSnap = getOverlayHostReputationTracker().snapshot(slowCompleteHost)
@@ -152,10 +149,10 @@ describe('LookupResolver resilience', () => {
     expect(emissions.length).toBeGreaterThanOrEqual(2)
     const finalEmission = emissions[emissions.length - 1]
     expect(finalEmission.isFinal).toBe(true)
-    expect(finalEmission.outputs.length).toBe(3) // all 3 unique outputs across both hosts
+    expect(finalEmission.outputs).toHaveLength(3) // all 3 unique outputs across both hosts
     expect(finalEmission.completedHosts).toBe(2)
     // First emission was post-grace, containing only the fast host's contribution.
-    expect(emissions[0].outputs.length).toBe(1)
+    expect(emissions[0].outputs).toHaveLength(1)
   })
 
   // -----------------------------------------------------------------------
@@ -183,17 +180,17 @@ describe('LookupResolver resilience', () => {
 
     const calls: UnreachableHostInfo[] = []
     const queryPromise = (async () => {
-      for await (const _ of resolver.query$(
-        { service: 'ls_topic', query: {} },
-        undefined,
-        { onUnreachableHost: (info) => calls.push(info) }
-      )) { /* drain */ }
+      for await (const _ of resolver.query$({ service: 'ls_topic', query: {} }, undefined, {
+        onUnreachableHost: info => calls.push(info)
+      })) {
+        /* drain */
+      }
     })()
 
     await jest.advanceTimersByTimeAsync(500)
     await queryPromise
 
-    expect(calls.length).toBe(1)
+    expect(calls).toHaveLength(1)
     expect(calls[0].host).toBe(badHost)
     expect(calls[0].service).toBe('ls_topic')
     expect(calls[0].error).toBe('connection refused')
@@ -202,12 +199,9 @@ describe('LookupResolver resilience', () => {
 
   it('populates advertisedBy when failing hosts come from SLAP', async () => {
     const { PrivateKey } = await import('../../primitives/index')
-    const { CompletedProtoWallet } = await import(
-      '../../auth/certificates/__tests/CompletedProtoWallet'
-    )
-    const OverlayAdminTokenTemplate = (
-      await import('../OverlayAdminTokenTemplate')
-    ).default
+    const { CompletedProtoWallet } =
+      await import('../../auth/certificates/__tests/CompletedProtoWallet')
+    const OverlayAdminTokenTemplate = (await import('../OverlayAdminTokenTemplate')).default
 
     const badHost = 'https://bad.host'
     const slapTrackerUrl = 'https://slap.tracker'
@@ -216,12 +210,7 @@ describe('LookupResolver resilience', () => {
     const slapWallet = new CompletedProtoWallet(slapKey)
     const slapLib = new OverlayAdminTokenTemplate(slapWallet)
     const slapScript = await slapLib.lock('SLAP', badHost, 'ls_topic')
-    const slapTx = new Transaction(
-      1,
-      [],
-      [{ lockingScript: slapScript, satoshis: 1 }],
-      0
-    )
+    const slapTx = new Transaction(1, [], [{ lockingScript: slapScript, satoshis: 1 }], 0)
 
     const lookup = jest.fn(async (url: string) => {
       if (url === slapTrackerUrl) {
@@ -241,17 +230,17 @@ describe('LookupResolver resilience', () => {
     })
 
     const queryPromise = (async () => {
-      for await (const _ of resolver.query$(
-        { service: 'ls_topic', query: {} },
-        undefined,
-        { onUnreachableHost: (info) => calls.push(info) }
-      )) { /* drain */ }
+      for await (const _ of resolver.query$({ service: 'ls_topic', query: {} }, undefined, {
+        onUnreachableHost: info => calls.push(info)
+      })) {
+        /* drain */
+      }
     })()
 
     await jest.advanceTimersByTimeAsync(500)
     await queryPromise
 
-    expect(calls.length).toBe(1)
+    expect(calls).toHaveLength(1)
     expect(calls[0].host).toBe(badHost)
     expect(calls[0].advertisedBy).toBe(slapTrackerUrl)
   })
@@ -261,12 +250,9 @@ describe('LookupResolver resilience', () => {
   // -----------------------------------------------------------------------
   it('self-heals when warm-cache hosts have all slid into backoff', async () => {
     const { PrivateKey } = await import('../../primitives/index')
-    const { CompletedProtoWallet } = await import(
-      '../../auth/certificates/__tests/CompletedProtoWallet'
-    )
-    const OverlayAdminTokenTemplate = (
-      await import('../OverlayAdminTokenTemplate')
-    ).default
+    const { CompletedProtoWallet } =
+      await import('../../auth/certificates/__tests/CompletedProtoWallet')
+    const OverlayAdminTokenTemplate = (await import('../OverlayAdminTokenTemplate')).default
 
     const slapTrackerUrl = 'https://slap.tracker'
     const oldDeadHost = 'https://old-dead.host'
@@ -276,12 +262,7 @@ describe('LookupResolver resilience', () => {
     const slapWallet = new CompletedProtoWallet(slapKey)
     const slapLib = new OverlayAdminTokenTemplate(slapWallet)
     const slapScript = await slapLib.lock('SLAP', newHealthyHost, 'ls_topic')
-    const slapTx = new Transaction(
-      1,
-      [],
-      [{ lockingScript: slapScript, satoshis: 1 }],
-      0
-    )
+    const slapTx = new Transaction(1, [], [{ lockingScript: slapScript, satoshis: 1 }], 0)
 
     const lookup = jest.fn(async (url: string, q: any) => {
       if (q.service === 'ls_slap') {
@@ -317,8 +298,8 @@ describe('LookupResolver resilience', () => {
     await jest.advanceTimersByTimeAsync(1000)
     const res = await queryPromise
 
-    expect(res.outputs.length).toBe(1)
-    const calledUrls = lookup.mock.calls.map((c) => c[0])
+    expect(res.outputs).toHaveLength(1)
+    const calledUrls = lookup.mock.calls.map(c => c[0])
     expect(calledUrls).toContain(slapTrackerUrl)
     expect(calledUrls).toContain(newHealthyHost)
   })
@@ -336,7 +317,10 @@ describe('LookupResolver resilience', () => {
       json: async () => ({})
     })
     const { HTTPSOverlayLookupFacilitator } = await import('../LookupResolver')
-    const realFacilitator = new HTTPSOverlayLookupFacilitator(fakeFetch as unknown as typeof fetch, true)
+    const realFacilitator = new HTTPSOverlayLookupFacilitator(
+      fakeFetch as unknown as typeof fetch,
+      true
+    )
 
     const resolver = new LookupResolver({
       facilitator: realFacilitator,
@@ -347,7 +331,7 @@ describe('LookupResolver resilience', () => {
       const queryPromise = resolver.query({ service: 'ls_kvstore', query: { i } })
       await jest.advanceTimersByTimeAsync(50)
       const res = await queryPromise
-      expect(res.outputs.length).toBe(0)
+      expect(res.outputs).toHaveLength(0)
     }
 
     const snap = getOverlayHostReputationTracker().snapshot(partialHost)
@@ -371,8 +355,11 @@ describe('LookupResolver adversarial review regressions', () => {
     const hungHost = 'https://hung.deadline'
     const callback = jest.fn()
     const lookup = jest.fn(async (url: string) => {
-      if (url === hungHost) return await new Promise(() => { /* never settles */ })
-      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      if (url === hungHost)
+        return await new Promise(() => {
+          /* never settles */
+        })
+      await new Promise<void>(resolve => setTimeout(resolve, 5))
       return { type: 'output-list', outputs: [{ beef: beefs[0], outputIndex: 0 }] }
     })
     const resolver = new LookupResolver({
@@ -380,18 +367,18 @@ describe('LookupResolver adversarial review regressions', () => {
       hostOverrides: { ls_deadline: [goodHost, hungHost] }
     })
 
-    const query = resolver.query(
-      { service: 'ls_deadline', query: {} },
-      20,
-      { onUnreachableHost: callback }
-    )
+    const query = resolver.query({ service: 'ls_deadline', query: {} }, 20, {
+      onUnreachableHost: callback
+    })
     await jest.advanceTimersByTimeAsync(100)
 
     await expect(query).resolves.toMatchObject({ outputs: [{ outputIndex: 0 }] })
-    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
-      host: hungHost,
-      error: 'Request timed out'
-    }))
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: hungHost,
+        error: 'Request timed out'
+      })
+    )
   })
 
   it.each([
@@ -399,7 +386,7 @@ describe('LookupResolver adversarial review regressions', () => {
     { type: 'output-list', outputs: 'broken' },
     { type: 'output-list', outputs: [{ beef: [300], outputIndex: 0 }] },
     { type: 'freeform' }
-  ])('rejects malformed response %# before recording success', async (response) => {
+  ])('rejects malformed response %# before recording success', async response => {
     const host = `https://malformed-${JSON.stringify(response).length}.host`
     const callback = jest.fn()
     const resolver = new LookupResolver({
@@ -407,21 +394,21 @@ describe('LookupResolver adversarial review regressions', () => {
       hostOverrides: { ls_malformed: [host] }
     })
 
-    const query = resolver.query(
-      { service: 'ls_malformed', query: {} },
-      undefined,
-      { onUnreachableHost: callback }
-    )
+    const query = resolver.query({ service: 'ls_malformed', query: {} }, undefined, {
+      onUnreachableHost: callback
+    })
     await jest.advanceTimersByTimeAsync(100)
     await expect(query).resolves.toMatchObject({ outputs: [] })
 
     const snap = getOverlayHostReputationTracker().snapshot(host)
     expect(snap?.totalSuccesses).toBe(0)
     expect(snap?.totalFailures).toBe(1)
-    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
-      host,
-      error: 'Malformed lookup response'
-    }))
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host,
+        error: 'Malformed lookup response'
+      })
+    )
   })
 
   it('does not let a late freeform response clear an active availability backoff', async () => {
@@ -429,7 +416,7 @@ describe('LookupResolver adversarial review regressions', () => {
     const resolver = new LookupResolver({
       facilitator: {
         lookup: async () => {
-          await new Promise<void>((resolve) => setTimeout(resolve, 100))
+          await new Promise<void>(resolve => setTimeout(resolve, 100))
           return { type: 'freeform', result: { found: false } }
         }
       },
@@ -454,18 +441,18 @@ describe('LookupResolver adversarial review regressions', () => {
 
   it('isolates rejected async callbacks and deduplicates notification storms', async () => {
     const host = 'https://notify.host'
-    const callback = jest.fn(async () => { throw new Error('notification API down') })
+    const callback = jest.fn(async () => {
+      throw new Error('notification API down')
+    })
     const resolver = new LookupResolver({
       facilitator: { lookup: jest.fn().mockRejectedValue(new Error('host down')) },
       hostOverrides: { ls_notify: [host] }
     })
 
     for (let i = 0; i < 2; i++) {
-      const query = resolver.query(
-        { service: 'ls_notify', query: { i } },
-        undefined,
-        { onUnreachableHost: callback }
-      )
+      const query = resolver.query({ service: 'ls_notify', query: { i } }, undefined, {
+        onUnreachableHost: callback
+      })
       await jest.advanceTimersByTimeAsync(100)
       await expect(query).resolves.toMatchObject({ outputs: [] })
     }
@@ -475,7 +462,8 @@ describe('LookupResolver adversarial review regressions', () => {
 
   it('keeps recovery discovery open until a tracker advertises an available alternative', async () => {
     const { PrivateKey } = await import('../../primitives/index')
-    const { CompletedProtoWallet } = await import('../../auth/certificates/__tests/CompletedProtoWallet')
+    const { CompletedProtoWallet } =
+      await import('../../auth/certificates/__tests/CompletedProtoWallet')
     const OverlayAdminTokenTemplate = (await import('../OverlayAdminTokenTemplate')).default
     const fastTracker = 'https://fast.tracker'
     const slowTracker = 'https://slow.tracker'
@@ -493,7 +481,7 @@ describe('LookupResolver adversarial review regressions', () => {
 
     const lookup = jest.fn(async (url: string, question: any) => {
       if (question.service === 'ls_slap') {
-        await new Promise<void>((resolve) => setTimeout(resolve, url === fastTracker ? 10 : 100))
+        await new Promise<void>(resolve => setTimeout(resolve, url === fastTracker ? 10 : 100))
         return {
           type: 'output-list',
           outputs: [{ beef: url === fastTracker ? backedOffBeef : healthyBeef, outputIndex: 0 }]
@@ -504,7 +492,10 @@ describe('LookupResolver adversarial review regressions', () => {
       }
       throw new Error(`Unexpected lookup host: ${url}`)
     })
-    const resolver = new LookupResolver({ facilitator: { lookup }, slapTrackers: [fastTracker, slowTracker] })
+    const resolver = new LookupResolver({
+      facilitator: { lookup },
+      slapTrackers: [fastTracker, slowTracker]
+    })
     ;(resolver as any).hostsCache.set('ls_recovery', {
       hosts: [backedOffHost],
       expiresAt: Date.now() + 60_000
@@ -515,7 +506,7 @@ describe('LookupResolver adversarial review regressions', () => {
     const query = resolver.query({ service: 'ls_recovery', query: {} })
     await jest.advanceTimersByTimeAsync(1000)
     await expect(query).resolves.toMatchObject({ outputs: [{ outputIndex: 0 }] })
-    expect(lookup.mock.calls.map((call) => call[0])).toContain(healthyHost)
+    expect(lookup.mock.calls.map(call => call[0])).toContain(healthyHost)
   })
 
   it('classifies HTTP status codes without collapsing distinct 4xx responses', async () => {
@@ -526,7 +517,10 @@ describe('LookupResolver adversarial review regressions', () => {
         statusText: status === 401 ? 'Unauthorized' : '',
         headers: { get: () => 'application/json' }
       })
-      const facilitator = new HTTPSOverlayLookupFacilitator(fetchClient as unknown as typeof fetch, true)
+      const facilitator = new HTTPSOverlayLookupFacilitator(
+        fetchClient as unknown as typeof fetch,
+        true
+      )
       const assertion = expect(
         facilitator.lookup('http://host', { service: 'ls_http', query: {} })
       ).rejects.toMatchObject({
@@ -551,7 +545,10 @@ describe('LookupResolver adversarial review regressions', () => {
         headers: { get: () => 'application/json' }
       }
     })
-    const facilitator = new HTTPSOverlayLookupFacilitator(fetchClient as unknown as typeof fetch, true)
+    const facilitator = new HTTPSOverlayLookupFacilitator(
+      fetchClient as unknown as typeof fetch,
+      true
+    )
     const semanticResolver = new LookupResolver({
       facilitator,
       hostOverrides: { ls_http_semantic: [semanticHost] }
@@ -640,15 +637,16 @@ describe('LookupResolver accuracy-first blocking query', () => {
 
     let settled = false
     const p = completeFast
-      .query(
-        { service: 'ls_kvstore', query: { fastpath: true } },
-        undefined,
-        { waitForAllHosts: false }
-      )
-      .then((res) => { settled = true; return res })
+      .query({ service: 'ls_kvstore', query: { fastpath: true } }, undefined, {
+        waitForAllHosts: false
+      })
+      .then(res => {
+        settled = true
+        return res
+      })
     await jest.advanceTimersByTimeAsync(400)
     expect(settled).toBe(true)
-    expect((await p).outputs.length).toBe(40)
+    expect((await p).outputs).toHaveLength(40)
     await jest.advanceTimersByTimeAsync(2000) // let the slow host settle
   })
 
@@ -669,18 +667,21 @@ describe('LookupResolver accuracy-first blocking query', () => {
 
     // First emission arrives post-grace with only the fast host's data; the
     // final emission carries the complete merge.
-    expect(emissions[0].outputs.length).toBe(2)
+    expect(emissions[0].outputs).toHaveLength(2)
     expect(emissions[emissions.length - 1].isFinal).toBe(true)
-    expect(emissions[emissions.length - 1].outputs.length).toBe(40)
+    expect(emissions[emissions.length - 1].outputs).toHaveLength(40)
   })
 
   it('audits an equally successful peer when current data drifts', async () => {
     const fourOutputs = slowOutputs.slice(0, 4)
     let drifted = false
     const lookup = jest.fn(async (url: string) => {
-      await new Promise<void>((resolve) => setTimeout(resolve, url === fastHost ? 100 : 400))
+      await new Promise<void>(resolve => setTimeout(resolve, url === fastHost ? 100 : 400))
       if (!drifted) return { type: 'output-list', outputs: fourOutputs }
-      return { type: 'output-list', outputs: url === fastHost ? fourOutputs.slice(0, 1) : fourOutputs }
+      return {
+        type: 'output-list',
+        outputs: url === fastHost ? fourOutputs.slice(0, 1) : fourOutputs
+      }
     })
     const resolver = makeResolver({
       [fastHost]: { delayMs: 0, outputs: [] },
@@ -725,11 +726,14 @@ describe('LookupResolver accuracy-first blocking query', () => {
       .query({ service: 'ls_kvstore', query: { threeHosts: true } }, 5000, {
         holdForUnknownHosts: false
       })
-      .then((res) => { settled = true; return res })
+      .then(res => {
+        settled = true
+        return res
+      })
 
     await jest.advanceTimersByTimeAsync(300)
     expect(settled).toBe(true)
-    expect((await p).outputs.length).toBe(2)
+    expect((await p).outputs).toHaveLength(2)
     await jest.advanceTimersByTimeAsync(3000) // let the straggler settle
   })
 
@@ -740,14 +744,12 @@ describe('LookupResolver accuracy-first blocking query', () => {
     })
     // Caller explicitly asks to bail out early — the explicit latency budget
     // overrides wait-for-all behavior.
-    const p = resolver.query(
-      { service: 'ls_kvstore', query: { soft: true } },
-      undefined,
-      { softTimeoutMs: 200 }
-    )
+    const p = resolver.query({ service: 'ls_kvstore', query: { soft: true } }, undefined, {
+      softTimeoutMs: 200
+    })
     await jest.advanceTimersByTimeAsync(3000)
     const res = await p
-    expect(res.outputs.length).toBe(2)
+    expect(res.outputs).toHaveLength(2)
   })
 
   it('query$() can explicitly wait for all hosts before its first emission', async () => {
@@ -768,7 +770,7 @@ describe('LookupResolver accuracy-first blocking query', () => {
     await jest.advanceTimersByTimeAsync(3000)
     await p
 
-    expect(emissions[0].outputs.length).toBe(40)
+    expect(emissions[0].outputs).toHaveLength(40)
     expect(emissions[emissions.length - 1].isFinal).toBe(true)
   })
 })

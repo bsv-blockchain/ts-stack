@@ -24,7 +24,7 @@ describe('find tests', () => {
           partial: { userId: 1, basketId: 1 },
           txStatus: ['sending']
         })
-        expect(r.length).toBe(1)
+        expect(r).toHaveLength(1)
         expect(r[0].txid).toBe('a3a8fe7f541c1383ff7b975af49b27284ae720af5f2705d8409baaf519190d26')
         expect(r[0].vout).toBe(2)
       }

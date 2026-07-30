@@ -42,7 +42,7 @@ describe('PublicKey – additional coverage', () => {
     it('returns a 66-char hex string when enc is "hex"', () => {
       const hex = publicKey.toDER('hex')
       expect(typeof hex).toBe('string')
-      expect((hex as string).length).toBe(66)
+      expect(hex as string).toHaveLength(66)
       // Compressed keys start with 02 or 03
       expect(hex as string).toMatch(/^0[23][0-9a-f]{64}$/)
     })
@@ -50,7 +50,7 @@ describe('PublicKey – additional coverage', () => {
     it('returns a 33-byte number array when enc is undefined', () => {
       const bytes = publicKey.toDER()
       expect(Array.isArray(bytes)).toBe(true)
-      expect((bytes as number[]).length).toBe(33)
+      expect(bytes as number[]).toHaveLength(33)
     })
 
     it('toDER hex and toDER array encode the same key', () => {
@@ -94,7 +94,7 @@ describe('PublicKey – additional coverage', () => {
       const hex = publicKey.toHash('hex')
       expect(typeof hex).toBe('string')
       // hash160 = 20 bytes = 40 hex chars
-      expect((hex as string).length).toBe(40)
+      expect(hex as string).toHaveLength(40)
       expect(hex as string).toMatch(/^[0-9a-f]{40}$/)
     })
 

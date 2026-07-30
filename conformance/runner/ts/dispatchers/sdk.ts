@@ -406,49 +406,55 @@ function dispatchKeyDerivation(
   if (getString(input, 'operation') === 'direct_constructor') return
 }
 
+function parsePrivateKey(
+  parse: () => PrivateKey,
+  expected: Record<string, unknown>
+): PrivateKey | undefined {
+  try {
+    return parse()
+  } catch (error) {
+    if (getString(expected, 'error') !== '') return undefined
+    throw error
+  }
+}
+
+function assertPrivateKeyFields(
+  privateKey: PrivateKey | undefined,
+  expected: Record<string, unknown>,
+  roundtripField: 'privkey_hex' | 'privkey_hex_roundtrip'
+): void {
+  if (privateKey === undefined) return
+  if (getString(expected, roundtripField) !== '') {
+    expect(privateKey.toHex()).toBe(getString(expected, roundtripField))
+  }
+  if (getString(expected, 'pubkey_hex') !== '') {
+    expect(bytesToHex(privateKey.toPublicKey().encode(true) as number[])).toBe(
+      getString(expected, 'pubkey_hex')
+    )
+  }
+}
+
 function dispatchPrivateKey(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
-  // Shape: fromWif → privkey_hex + pubkey_hex
   const wif = getString(input, 'wif')
   if (wif !== '') {
-    let privKey: PrivateKey
-    try {
-      privKey = PrivateKey.fromWif(wif)
-    } catch (e) {
-      if (getString(expected, 'error') !== '') return
-      throw e
-    }
-    if (getString(expected, 'privkey_hex') !== '') {
-      expect(privKey.toHex()).toBe(getString(expected, 'privkey_hex'))
-    }
-    if (getString(expected, 'pubkey_hex') !== '') {
-      expect(bytesToHex(privKey.toPublicKey().encode(true) as number[])).toBe(
-        getString(expected, 'pubkey_hex')
-      )
-    }
+    assertPrivateKeyFields(
+      parsePrivateKey(() => PrivateKey.fromWif(wif), expected),
+      expected,
+      'privkey_hex'
+    )
     return
   }
 
-  // Shape: privkey_hex → round-trip + optional pubkey_hex
-  const privHex = getString(input, 'privkey_hex')
-  if (privHex !== '') {
-    let privKey: PrivateKey
-    try {
-      privKey = PrivateKey.fromHex(privHex)
-    } catch (e) {
-      if (getString(expected, 'error') !== '') return
-      throw e
-    }
-    if (getString(expected, 'privkey_hex_roundtrip') !== '') {
-      expect(privKey.toHex()).toBe(getString(expected, 'privkey_hex_roundtrip'))
-    }
-    if (getString(expected, 'pubkey_hex') !== '') {
-      expect(bytesToHex(privKey.toPublicKey().encode(true) as number[])).toBe(
-        getString(expected, 'pubkey_hex')
-      )
-    }
+  const privateKeyHex = getString(input, 'privkey_hex')
+  if (privateKeyHex !== '') {
+    assertPrivateKeyFields(
+      parsePrivateKey(() => PrivateKey.fromHex(privateKeyHex), expected),
+      expected,
+      'privkey_hex_roundtrip'
+    )
     return
   }
 
@@ -515,35 +521,41 @@ function dispatchMerklePath(
   const bumpHex = getString(input, 'bump_hex') || getString(input, 'combined_bump_hex')
 
   if (bumpHex === '') {
-    if ('height' in input) {
-      merklePathCoinbase(input, expected)
-      return
-    }
-    if ('txids' in input) {
-      const txids = (input['txids'] as unknown[]).map(String)
-      const root = computeMerkleRootFromDisplayTxids(txids)
-      if (getString(expected, 'merkle_root') !== '')
-        expect(root).toBe(getString(expected, 'merkle_root'))
-      return
-    }
-    if ('full_block_txids' in input) {
-      const txids = (input['full_block_txids'] as unknown[]).map(String)
-      const root = computeMerkleRootFromDisplayTxids(txids)
-      if (getString(expected, 'merkle_root') !== '')
-        expect(root).toBe(getString(expected, 'merkle_root'))
-      if (getBool(expected, 'extracted_smaller_than_full'))
-        expect(txids.length).toBeGreaterThanOrEqual(2)
-      return
-    }
-    if ('txids_to_extract' in input) {
-      const toExt = input['txids_to_extract'] as unknown[]
-      if (toExt.length === 0 && getBool(expected, 'throws')) return
-      return
-    }
+    dispatchMerklePathWithoutBump(input, expected)
     return
   }
 
   merklePathFromBump(MerklePath.fromHex(bumpHex), input, expected)
+}
+
+function assertMerkleRoot(txids: string[], expected: Record<string, unknown>): void {
+  const expectedRoot = getString(expected, 'merkle_root')
+  if (expectedRoot !== '') {
+    expect(computeMerkleRootFromDisplayTxids(txids)).toBe(expectedRoot)
+  }
+}
+
+function dispatchMerklePathWithoutBump(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  if ('height' in input) return merklePathCoinbase(input, expected)
+  if ('txids' in input) {
+    assertMerkleRoot((input['txids'] as unknown[]).map(String), expected)
+    return
+  }
+  if ('full_block_txids' in input) {
+    const txids = (input['full_block_txids'] as unknown[]).map(String)
+    assertMerkleRoot(txids, expected)
+    if (getBool(expected, 'extracted_smaller_than_full')) {
+      expect(txids.length).toBeGreaterThanOrEqual(2)
+    }
+    return
+  }
+  if ('txids_to_extract' in input) {
+    const txidsToExtract = input['txids_to_extract'] as unknown[]
+    if (txidsToExtract.length === 0 && getBool(expected, 'throws')) return
+  }
 }
 
 function dispatchBEEF(input: Record<string, unknown>, expected: Record<string, unknown>): void {

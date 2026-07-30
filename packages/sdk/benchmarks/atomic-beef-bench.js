@@ -3,7 +3,7 @@ import PrivateKey from '../dist/esm/src/primitives/PrivateKey.js'
 import P2PKH from '../dist/esm/src/script/templates/P2PKH.js'
 import { runBenchmark } from './lib/benchmark-runner.js'
 
-async function buildChain (depth) {
+async function buildChain(depth) {
   const privateKey = new PrivateKey(1)
   const publicKeyHash = privateKey.toPublicKey().toHash()
   const p2pkh = new P2PKH()
@@ -34,7 +34,7 @@ async function buildChain (depth) {
 
   return currentTx
 }
-async function run () {
+async function run() {
   const depth = Number.parseInt(process.argv[2] ?? '200', 10)
   const iterations = Number.parseInt(process.argv[3] ?? '5', 10)
   console.log(`Building transaction chain with depth ${depth} ...`)
@@ -55,7 +55,9 @@ async function run () {
   })
 }
 
-run().catch((err) => {
+try {
+  await run()
+} catch (err) {
   console.error(err)
   process.exit(1)
-})
+}

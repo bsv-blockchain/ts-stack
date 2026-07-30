@@ -5,7 +5,9 @@ import { Beef, BeefTx } from '@bsv/sdk'
 import { arcDefaultUrl } from '../createDefaultWalletServicesOptions'
 import { Setup } from '../../index.all'
 
-describe('ARC tests', () => {
+// This file is excluded from normal Jest discovery and is run only through the
+// explicit `pnpm test:manual -- <path>` operator boundary.
+describe('ARC manual integration tests', () => {
   jest.setTimeout(99999999)
 
   const envTest = _tu.getEnv('test')
@@ -18,36 +20,36 @@ describe('ARC tests', () => {
     apiKey: envMain.taalApiKey
   })
 
-  test.skip('0 double spend', async () => {
+  test('0 double spend', async () => {
     const arc = arcTest
 
     const beef = Beef.fromString(testnetDoubleSpendBeef)
     const txids = [beef.txs.slice(-1)[0].txid]
     const r = await arc.postBeef(beef, txids)
-    expect(r.status === 'error').toBe(true)
+    expect(r.status).toBe(true)
     expect(r.txidResults[0].doubleSpend).toBe(true)
   })
 
-  test.skip('7 postRawTx testnet', async () => {
+  test('7 postRawTx testnet', async () => {
     await postRawTxTest('test', arcTest)
   })
 
-  test.skip('8 postRawTx mainnet', async () => {
+  test('8 postRawTx mainnet', async () => {
     await postRawTxTest('main', arcMain)
   })
 
-  test.skip('9 postBeef testnet', async () => {
+  test('9 postBeef testnet', async () => {
     const r = await postBeefTest('test', arcTest)
     console.log(`9 postBeef testnet done ${r}`)
   })
 
-  test.skip('10 postBeef mainnet', async () => {
+  test('10 postBeef mainnet', async () => {
     const r = await postBeefTest('main', arcMain)
     console.log(`10 postBeef mainnet done ${r}`)
   })
 })
 
-async function postBeefTest (chain: sdk.Chain, arc: ARC): Promise<string> {
+async function postBeefTest(chain: sdk.Chain, arc: ARC): Promise<string> {
   if (Setup.noEnv(chain)) return 'skipped'
   const c = await _tu.createNoSendTxPair(chain)
 
@@ -82,7 +84,7 @@ async function postBeefTest (chain: sdk.Chain, arc: ARC): Promise<string> {
   return 'passed'
 }
 
-async function postRawTxTest (chain: sdk.Chain, arc: ARC): Promise<void> {
+async function postRawTxTest(chain: sdk.Chain, arc: ARC): Promise<void> {
   if (Setup.noEnv(chain)) return
   const c = await _tu.createNoSendTxPair(chain)
 
