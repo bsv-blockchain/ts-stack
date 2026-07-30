@@ -11,7 +11,11 @@ export const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const EXCLUDED_SOURCE_PATTERNS = [
   /(?:^|\/)__tests__(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
-  /\.(?:spec|test)\.[cm]?[jt]sx?$/
+  /\.(?:spec|test)\.[cm]?[jt]sx?$/,
+  // Build and test configuration is never instrumented, so requiring it in
+  // LCOV is unsatisfiable: a package that adds or edits jest.config.cjs,
+  // vitest.config.ts or similar could never clear this gate.
+  /(?:^|\/)[^/]*\.config\.[cm]?[jt]s$/
 ]
 
 function normalizedPath(value) {

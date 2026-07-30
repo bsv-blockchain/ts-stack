@@ -76,3 +76,19 @@ test('patch coverage fails closed when a changed production file is absent from 
     missingFiles: ['packages/sdk/src/missing.ts']
   })
 })
+
+test('patch coverage ignores build and test configuration, which is never instrumented', () => {
+  const changed =
+    changedLinesFromDiff(`diff --git a/packages/helpers/example/jest.config.cjs b/packages/helpers/example/jest.config.cjs
++++ b/packages/helpers/example/jest.config.cjs
+@@ -0,0 +1,24 @@
+diff --git a/packages/helpers/example/vitest.config.ts b/packages/helpers/example/vitest.config.ts
++++ b/packages/helpers/example/vitest.config.ts
+@@ -0,0 +1,12 @@
+diff --git a/packages/helpers/example/src/index.ts b/packages/helpers/example/src/index.ts
++++ b/packages/helpers/example/src/index.ts
+@@ -0,0 +1 @@
+`)
+
+  assert.deepEqual([...changed.keys()], ['packages/helpers/example/src/index.ts'])
+})
