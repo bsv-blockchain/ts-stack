@@ -43,11 +43,7 @@ function parseTraceparent(
 ): { traceId: string; spanId: string; traceFlags: number } | undefined {
   if (typeof value !== 'string' || value.length > 128) return undefined
   const match = TRACEPARENT_PATTERN.exec(value.trim())
-  if (
-    match == null ||
-    /^0{32}$/.test(match[1]) ||
-    /^0{16}$/.test(match[2])
-  ) {
+  if (match == null || /^0{32}$/.test(match[1]) || /^0{16}$/.test(match[2])) {
     return undefined
   }
   return {
