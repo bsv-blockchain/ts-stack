@@ -193,36 +193,51 @@ export class AirGapDecoder {
   accept(text: string): AirGapProgress {
     const part = this.parse(text)
     if (part === null) return this.rejected()
-
-    if (this.key === '') {
-      this.startSession(part.key, part.total, part.msgLen, part.crc)
-    } else if (part.key !== this.key) {
-      // Foreign session: never let one stray frame erase progress. Count
-      // consecutive sightings of the same candidate; a camera genuinely
-      // pointed at a new sender produces them back to back.
-      if (part.key === this.candidateKey) this.candidateCount++
-      else {
-        this.candidateKey = part.key
-        this.candidateCount = 1
-      }
-      if (this.candidateCount < SESSION_SWITCH_PARTS) return this.rejected()
-      this.startSession(part.key, part.total, part.msgLen, part.crc)
-    } else {
-      // A part of the locked session interrupts any foreign-candidate run.
-      this.candidateKey = ''
-      this.candidateCount = 0
-    }
+    if (!this.enterSession(part)) return this.rejected()
 
     // A completed session is immutable: acknowledge and change nothing.
     if (this.isDone()) return this.accepted()
 
-    // The agreement check above admits a *range* of payload lengths for a given
-    // (msgLen, K); only the pin can tell two block sizes apart.
+    // The agreement check in parse admits a *range* of payload lengths for a
+    // given (msgLen, K); only the pin can tell two block sizes apart.
     if (this.blockBytes === 0) this.blockBytes = part.payload.length
     else if (part.payload.length !== this.blockBytes) return this.rejected()
 
     if (this.seen.has(part.seq)) return this.accepted()
+    return this.ingest(part)
+  }
 
+  /**
+   * Route `part` into the right session, locking and switching as documented
+   * on {@link accept}. Returns `false` when the part belongs to a foreign
+   * session that has not yet earned the switch.
+   */
+  private enterSession(part: ParsedPart): boolean {
+    if (this.key === '') {
+      this.startSession(part.key, part.total, part.msgLen, part.crc)
+      return true
+    }
+    if (part.key === this.key) {
+      // A part of the locked session interrupts any foreign-candidate run.
+      this.candidateKey = ''
+      this.candidateCount = 0
+      return true
+    }
+    // Foreign session: never let one stray frame erase progress. Count
+    // consecutive sightings of the same candidate; a camera genuinely
+    // pointed at a new sender produces them back to back.
+    if (part.key === this.candidateKey) this.candidateCount++
+    else {
+      this.candidateKey = part.key
+      this.candidateCount = 1
+    }
+    if (this.candidateCount < SESSION_SWITCH_PARTS) return false
+    this.startSession(part.key, part.total, part.msgLen, part.crc)
+    return true
+  }
+
+  /** Feed one new in-session part into the peeling state, within budgets. */
+  private ingest(part: ParsedPart): AirGapProgress {
     const indices =
       part.seq < this.total ? new Set([part.seq]) : new Set(blocksForPart(part.seq, this.total))
     const candidate: PendingPart = { indices, payload: part.payload }
@@ -239,14 +254,11 @@ export class AirGapDecoder {
       }
       this.pending.push(candidate)
       this.pendingIndices += candidate.indices.size
-      this.remember(part.seq)
-      return this.accepted()
-    }
-    this.remember(part.seq)
-    if (candidate.indices.size === 1) {
+    } else if (candidate.indices.size === 1) {
       this.solve(candidate)
       this.cascade()
     }
+    this.remember(part.seq)
     return this.accepted()
   }
 
