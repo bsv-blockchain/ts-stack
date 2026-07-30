@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const TEST_PRIVATE_KEY = `${'0'.repeat(63)}1`
+const TEST_ENCRYPTION_KEY = 'ab'.repeat(32)
 const DATABASE_CONNECTION = JSON.stringify({
   host: '127.0.0.1',
   port: 3306,
@@ -136,7 +137,7 @@ const contracts = {
       NODE_ENV: 'production',
       PORT: '8080',
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
-      SHARE_ENCRYPTION_KEY: 'container-contract-only-not-a-secret',
+      SHARE_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
       STORAGE_URL: WALLET_URL
     },
     invalidEnvironment: { NODE_ENV: 'production' },
@@ -180,6 +181,11 @@ const docker = async (...arguments_) =>
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024
   })
+
+const containerLogs = async name => {
+  const { stdout, stderr } = await docker('logs', name)
+  return `${stdout}${stderr}`
+}
 
 const environmentArguments = environment =>
   Object.entries({ ...COMMON_ENVIRONMENT, ...environment }).flatMap(([name, value]) => [
@@ -235,7 +241,7 @@ const assertInvalidConfigurationFails = async (component, image, contract) => {
     image
   )
   const exitCode = await waitForExit(name, 30_000)
-  const logs = (await docker('logs', name)).stdout
+  const logs = await containerLogs(name)
   await removeContainer(name)
   if (exitCode === undefined) {
     throw new Error(`${component} accepted an intentionally invalid configuration\n${logs}`)
@@ -281,8 +287,9 @@ const waitForEndpoint = async (container, port, request, timeoutMilliseconds = 1
   let lastError
   while (Date.now() < deadline) {
     if ((await inspectContainer(container, '{{.State.Running}}')) === 'false') {
-      const logs = (await docker('logs', container)).stdout
-      throw new Error(`${container} exited before ${request.path} became ready\n${logs}`)
+      const state = await inspectContainer(container, '{{json .State}}')
+      const logs = await containerLogs(container)
+      throw new Error(`${container} exited before ${request.path} became ready\n${state}\n${logs}`)
     }
     try {
       const response = await responseAt(port, request)
@@ -293,7 +300,7 @@ const waitForEndpoint = async (container, port, request, timeoutMilliseconds = 1
     }
     await new Promise(resolve => setTimeout(resolve, 1_000))
   }
-  const logs = (await docker('logs', container)).stdout
+  const logs = await containerLogs(container)
   throw new Error(`${container} did not become ready: ${String(lastError)}\n${logs}`)
 }
 
@@ -307,7 +314,7 @@ const assertPublicResponse = async (component, response) => {
 const stopGracefully = async name => {
   await docker('kill', '--signal', 'SIGTERM', name)
   const exitCode = await waitForExit(name, 30_000)
-  const logs = (await docker('logs', name)).stdout
+  const logs = await containerLogs(name)
   await removeContainer(name)
   if (exitCode !== 0) {
     throw new Error(`${name} did not shut down cleanly (exit ${String(exitCode)})\n${logs}`)
