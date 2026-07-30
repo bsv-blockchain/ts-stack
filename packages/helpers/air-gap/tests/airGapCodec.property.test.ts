@@ -43,6 +43,20 @@ const blockBytes = fc.integer({ min: 1, max: 1200 })
 /** An arbitrary but explicit 8-byte session identity. */
 const sessionId = fc.uint8Array({ minLength: 8, maxLength: 8 })
 
+/** The smallest prime ≥ n, for pairing a sender loop with a co-prime mask. */
+function smallestPrimeAtLeast(n: number): number {
+  for (let candidate = Math.max(2, n); ; candidate++) {
+    let prime = true
+    for (let divisor = 2; divisor * divisor <= candidate; divisor++) {
+      if (candidate % divisor === 0) {
+        prime = false
+        break
+      }
+    }
+    if (prime) return candidate
+  }
+}
+
 describe('air-gap wire properties', () => {
   it('round-trips arbitrary bytes through one systematic cycle', () => {
     fc.assert(
@@ -72,14 +86,15 @@ describe('air-gap wire properties', () => {
           // A mask that drops every frame is a camera pointed at the floor.
           if (!mask.includes(true)) return
           // Otherwise a repeating keep/drop mask stands in for a camera that
-          // misses frames. The sender loops through its systematic cycle
-          // (seq wraps over 4K), so recovery is guaranteed eventually even if
-          // the fountain parts that get through are linearly dependent.
-          const cycle = 4 * enc.blockCount
-          const budget = 30 * enc.blockCount + 200
-          for (let tick = 0, seen = 0; seen < budget; tick++) {
+          // misses frames while the sender loops its sequence. The loop
+          // length is a prime larger than the mask period, so the two can
+          // never resonate: by CRT every (mask offset, seq) pair occurs
+          // within mask.length * cycle ticks, which guarantees every
+          // systematic part is eventually kept and completion is
+          // deterministic — no matter how pathological the mask.
+          const cycle = smallestPrimeAtLeast(Math.max(4 * enc.blockCount, mask.length + 1))
+          for (let tick = 0; tick < mask.length * cycle; tick++) {
             if (!mask[tick % mask.length]) continue
-            seen++
             if (dec.accept(enc.partAt(tick % cycle)).done) break
           }
           expect(Array.from(dec.message()!)).toEqual(Array.from(bytes))
