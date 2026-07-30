@@ -46,16 +46,15 @@ jobs:
           node scripts/dependency-release-governance.mjs verify-published
           --output published-package-verification.json
 
+      - name: Prepare the locked published-package install
+        run: >-
+          node scripts/dependency-release-governance.mjs prepare-published-install
+          --report published-package-verification.json
+          --directory published-install
+
       - name: Install every published package tarball without lifecycle scripts
-        run: |
-          node scripts/dependency-release-governance.mjs prepare-published-install \
-            --report published-package-verification.json \
-            --directory published-install
-          npm ci \
-            --prefix published-install \
-            --ignore-scripts \
-            --no-audit \
-            --no-fund
+        working-directory: published-install
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify registry signatures and npm provenance
         working-directory: published-install
