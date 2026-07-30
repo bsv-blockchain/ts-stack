@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -93,12 +93,12 @@
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "4.1.10",
     "fast-check": "^4.9.0",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.76.0",
     "tsdown": "0.22.14",
-    "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "^4.1.10"
   },

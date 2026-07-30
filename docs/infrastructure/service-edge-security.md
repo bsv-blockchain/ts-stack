@@ -3,8 +3,8 @@ id: infra-service-edge-security
 title: "Public Service Edge Security"
 kind: reference
 version: "1.0.0"
-last_updated: "2026-07-25"
-last_verified: "2026-07-25"
+last_updated: "2026-07-30"
+last_verified: "2026-07-30"
 review_cadence_days: 30
 status: stable
 tags: [infrastructure, security, cors, rate-limits, authentication, operations]
@@ -68,6 +68,14 @@ Public CORS does not make a protected endpoint anonymous. It only lets browser
 JavaScript attempt the same signed or token-authenticated protocol call that a
 mobile or server client can attempt. No service in this inventory uses ambient
 browser cookies as its authorization boundary.
+
+`governance/service-edge-browser-policy.json` records this contract and every
+WAB, UHRP, Message Box, Chaintracks, OverlayExpress, and Wallet Storage
+integration. Repository health verifies the public wildcard/no-credentials
+default, opaque-origin support, opt-in exact allowlists and credentials,
+disabled mode, service/global precedence, and the independence of CSP and
+CORS. The canonical tests are synchronized across the reusable Overlay and
+Storage implementations.
 
 ### CSP and other response headers
 

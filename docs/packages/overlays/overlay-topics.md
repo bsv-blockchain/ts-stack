@@ -4,9 +4,9 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '1.6.7'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+version: '1.6.8'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics'
 status: stable

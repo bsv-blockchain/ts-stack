@@ -27,13 +27,7 @@
       "per-job and per-step duration",
       "job queue time",
       "artifact upload/download step duration"
-    ],
-    "unavailableFromActionsApi": [
-      "hosted-runner CPU utilization",
-      "hosted-runner memory utilization",
-      "action-internal cache hit rate"
-    ],
-    "note": "Unavailable metrics require explicit in-run instrumentation; they are not inferred from the GitHub Actions REST API."
+    ]
   },
   "reference": {
     "fullScope": {

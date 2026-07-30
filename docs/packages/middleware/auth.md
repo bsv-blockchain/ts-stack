@@ -3,9 +3,9 @@ id: pkg-auth
 title: '@bsv/auth'
 kind: package
 domain: middleware
-version: '0.1.2'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+version: '0.1.3'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth'

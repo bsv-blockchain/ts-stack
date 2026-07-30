@@ -62,7 +62,7 @@ test('workspace discovery exactly matches the 37-project registry', () => {
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
-  const result = evaluateRepositoryHealth({ today: '2026-07-28' })
+  const result = evaluateRepositoryHealth({ today: '2026-07-30' })
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.projects.length, 37)
@@ -73,10 +73,11 @@ test('current repository health controls and ratchet are internally consistent',
 test('CI performance baseline retains representative full and targeted cohorts', () => {
   const baseline = readJson(path.join(REPOSITORY_ROOT, 'governance/ci-performance-baseline.json'))
   assert.deepEqual(validateCiPerformanceBaseline(baseline), [])
-  assert.deepEqual(baseline.observability.unavailableFromActionsApi, [
-    'hosted-runner CPU utilization',
-    'hosted-runner memory utilization',
-    'action-internal cache hit rate'
+  assert.deepEqual(baseline.observability.captured, [
+    'run duration and variance',
+    'per-job and per-step duration',
+    'job queue time',
+    'artifact upload/download step duration'
   ])
 })
 

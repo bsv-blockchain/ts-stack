@@ -132,6 +132,161 @@ function identityErrors(packResult, manifest) {
   return errors
 }
 
+function escapeRegularExpression(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function exportTargets(value, location = 'exports') {
+  if (value === null) return []
+  if (typeof value === 'string') return [{ location, target: value }]
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => exportTargets(item, `${location}[${index}]`))
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value).flatMap(([condition, target]) =>
+      exportTargets(target, `${location}.${condition}`)
+    )
+  }
+  return [{ location, target: value }]
+}
+
+function exportSubpathEntries(exports_) {
+  if (exports_ === undefined || exports_ === null) return []
+  if (typeof exports_ === 'object' && exports_ !== null && !Array.isArray(exports_)) {
+    const keys = Object.keys(exports_)
+    if (keys.some(key => key.startsWith('.'))) {
+      return Object.entries(exports_).filter(([key]) => key.startsWith('.'))
+    }
+  }
+  return [['.', exports_]]
+}
+
+function wildcardExpression(pattern) {
+  return new RegExp(`^${pattern.split('*').map(escapeRegularExpression).join('(.+)')}$`)
+}
+
+function expandExportTarget(subpath, target, files) {
+  if (!target.includes('*')) return files.includes(target.slice(2)) ? [subpath] : []
+  const expression = wildcardExpression(target.slice(2))
+  return files.flatMap(file => {
+    const match = expression.exec(file)
+    if (!match) return []
+    let expanded = subpath
+    for (const value of match.slice(1)) expanded = expanded.replace('*', value)
+    return [expanded]
+  })
+}
+
+export function validateManifestArtifactContract(manifest, files) {
+  const errors = []
+  if (
+    typeof manifest.sideEffects !== 'boolean' &&
+    !(
+      Array.isArray(manifest.sideEffects) &&
+      manifest.sideEffects.every(value => typeof value === 'string' && value.length > 0)
+    )
+  ) {
+    errors.push('package.json sideEffects must be an explicit boolean or string array')
+  }
+
+  const peerNames = new Set(Object.keys(manifest.peerDependencies ?? {}))
+  for (const [name, metadata] of Object.entries(manifest.peerDependenciesMeta ?? {})) {
+    if (!peerNames.has(name)) errors.push(`peerDependenciesMeta contains undeclared peer ${name}`)
+    if (
+      typeof metadata !== 'object' ||
+      metadata === null ||
+      Array.isArray(metadata) ||
+      Object.keys(metadata).some(key => key !== 'optional') ||
+      (metadata.optional !== undefined && typeof metadata.optional !== 'boolean')
+    ) {
+      errors.push(`peerDependenciesMeta.${name} must contain only an optional boolean`)
+    }
+  }
+
+  const optionalNames = new Set(Object.keys(manifest.optionalDependencies ?? {}))
+  for (const name of Object.keys(manifest.dependencies ?? {})) {
+    if (optionalNames.has(name)) {
+      errors.push(`${name} cannot be both a dependency and optionalDependency`)
+    }
+  }
+
+  for (const [subpath, value] of exportSubpathEntries(manifest.exports)) {
+    const targets = exportTargets(value, `exports.${subpath}`)
+    if (targets.length === 0) errors.push(`${subpath} has no export target`)
+    for (const { location, target } of targets) {
+      if (typeof target !== 'string') {
+        errors.push(`${location} must resolve to a string or null`)
+        continue
+      }
+      if (
+        !target.startsWith('./') ||
+        target.includes('\\') ||
+        target.split('/').some(segment => segment === '..')
+      ) {
+        errors.push(`${location} has unsafe package target ${JSON.stringify(target)}`)
+        continue
+      }
+      if (expandExportTarget(subpath, target, files).length === 0) {
+        errors.push(`${location} target ${target} does not match a packed file`)
+      }
+    }
+  }
+  return errors
+}
+
+export function concretePublicEntrypoints(manifest, files) {
+  const entrypoints = new Set()
+  for (const [subpath, value] of exportSubpathEntries(manifest.exports)) {
+    for (const { target } of exportTargets(value)) {
+      if (typeof target !== 'string' || !target.startsWith('./')) continue
+      if (isDeclarationFile(target.replaceAll('*', 'entry'))) continue
+      for (const entrypoint of expandExportTarget(subpath, target, files)) {
+        entrypoints.add(entrypoint)
+      }
+    }
+  }
+  return [...entrypoints].sort()
+}
+
+export async function validateReferencedSourceMaps(packageDirectory, manifest, files) {
+  const errors = []
+  const javascriptTargets = new Set()
+  for (const [, value] of exportSubpathEntries(manifest.exports)) {
+    for (const { target } of exportTargets(value)) {
+      if (typeof target !== 'string' || !target.startsWith('./')) continue
+      const targetPattern = target.slice(2)
+      const expression = target.includes('*') ? wildcardExpression(targetPattern) : undefined
+      for (const file of files) {
+        if (
+          (expression ? expression.test(file) : file === targetPattern) &&
+          /\.[cm]?js$/i.test(file)
+        ) {
+          javascriptTargets.add(file)
+        }
+      }
+    }
+  }
+  for (const file of javascriptTargets) {
+    const source = await fs.readFile(path.join(packageDirectory, file), 'utf8')
+    const match = /\/\/[#@]\s*sourceMappingURL=([^\s]+)\s*$/.exec(source)
+    if (!match || match[1].startsWith('data:')) continue
+    const mapFile = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1]))
+    if (mapFile.startsWith('../') || !files.includes(mapFile)) {
+      errors.push(`${file} references missing packed source map ${match[1]}`)
+      continue
+    }
+    try {
+      const sourceMap = JSON.parse(await fs.readFile(path.join(packageDirectory, mapFile), 'utf8'))
+      if (!Array.isArray(sourceMap.sources) || sourceMap.sources.length === 0) {
+        errors.push(`${mapFile} must contain at least one source`)
+      }
+    } catch (error) {
+      errors.push(`${mapFile} is not a valid source map: ${error.message}`)
+    }
+  }
+  return errors
+}
+
 export function validatePackedFiles(packResult, manifest, allowedSourcePrefixes = []) {
   const normalizedSourcePrefixes = normalizeSourcePrefixes(allowedSourcePrefixes)
   const files = (packResult.files ?? []).map(file => file.path)
@@ -139,7 +294,8 @@ export function validatePackedFiles(packResult, manifest, allowedSourcePrefixes 
     ...requiredFileErrors(files),
     ...readmeErrors(files),
     ...files.flatMap(file => packedFileErrors(file, normalizedSourcePrefixes)),
-    ...identityErrors(packResult, manifest)
+    ...identityErrors(packResult, manifest),
+    ...validateManifestArtifactContract(manifest, files)
   ]
 }
 
@@ -268,7 +424,9 @@ async function checkConsumer({
   binName,
   binArguments,
   consumerDependencies,
-  localConsumerDependencyTarballs
+  localConsumerDependencyTarballs,
+  publicEntrypoints,
+  esmOnlyEntrypoints
 }) {
   const consumerDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ts-stack-package-consumer-'))
   try {
@@ -312,6 +470,25 @@ async function checkConsumer({
           ['--eval', `const loaded = require(${JSON.stringify(specifier)});\n${validation}`],
           { cwd: consumerDirectory }
         )
+      }
+    }
+    for (const subpath of publicEntrypoints) {
+      const specifier = packageSpecifier(manifest.name, subpath)
+      if (modes.includes('esm')) {
+        await run(
+          'node',
+          [
+            '--input-type=module',
+            '--eval',
+            `await import.meta.resolve(${JSON.stringify(specifier)})`
+          ],
+          { cwd: consumerDirectory }
+        )
+      }
+      if (modes.includes('cjs') && !esmOnlyEntrypoints.includes(subpath)) {
+        await run('node', ['--eval', `require.resolve(${JSON.stringify(specifier)})`], {
+          cwd: consumerDirectory
+        })
       }
     }
     await checkInstalledBin(consumerDirectory, manifest, binName, binArguments)
@@ -373,7 +550,11 @@ export async function checkPackageArtifact({
     )) {
       localDependencies.push(await packPackage(dependencyDirectory))
     }
-    const payloadErrors = validatePackedFiles(packed.result, manifest, allowedSourcePrefixes)
+    const packedFiles = (packed.result.files ?? []).map(file => file.path)
+    const payloadErrors = [
+      ...validatePackedFiles(packed.result, manifest, allowedSourcePrefixes),
+      ...(await validateReferencedSourceMaps(packageDirectory, manifest, packedFiles))
+    ]
     const publintErrors = await checkPublint(packed.tarballPath)
     const errors = [...payloadErrors, ...publintErrors]
     if (errors.length > 0) {
@@ -390,7 +571,9 @@ export async function checkPackageArtifact({
       binName,
       binArguments,
       consumerDependencies,
-      localConsumerDependencyTarballs: localDependencies.map(dependency => dependency.tarballPath)
+      localConsumerDependencyTarballs: localDependencies.map(dependency => dependency.tarballPath),
+      publicEntrypoints: concretePublicEntrypoints(manifest, packedFiles),
+      esmOnlyEntrypoints
     })
     return manifest
   } finally {
@@ -447,6 +630,8 @@ async function main(arguments_) {
   })
   const validations = [
     'packed payload',
+    'all conditional and wildcard exports',
+    'referenced source maps',
     'publint',
     ...(validateTypes ? ['strict type resolution'] : []),
     `${modes.join('/')} clean consumers`,

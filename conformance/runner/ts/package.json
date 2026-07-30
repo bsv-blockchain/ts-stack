@@ -11,12 +11,12 @@
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "jest": "^30.4.2",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.76.0",
     "prettier": "^3.9.6",
     "ts-jest": "^29.4.12",
-    "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "license": "SEE LICENSE IN LICENSE.txt"

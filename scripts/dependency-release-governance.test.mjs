@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
 
 import {
+  classifyDirectDependency,
   collectOverrides,
   immutableDeploymentImages,
   parsePnpmOverrides,
   validateDependencyReleaseGovernance,
   validatePullRequestEvidence
 } from './dependency-release-governance.mjs'
+
+const dependencyPolicy = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), 'governance/dependency-release-policy.json'), 'utf8')
+)
 
 test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
@@ -32,6 +39,48 @@ trustPolicy: no-downgrade
       { selector: 'brace-expansion@<=5.0.7', value: '5.0.8' },
       { selector: 'typed-rest-client@2.3.1>qs', value: '6.15.3' }
     ]
+  )
+})
+
+test('direct dependency inventory distinguishes freshness holds and governed compatibility', () => {
+  const declaration = {
+    name: 'example',
+    declared: '^1.0.0',
+    field: 'dependencies',
+    manifest: 'package.json'
+  }
+  const now = new Date('2026-07-30T18:00:00.000Z')
+  assert.equal(
+    classifyDirectDependency(
+      declaration,
+      { latest: '1.1.0', publishedAt: '2026-07-30T17:30:00.000Z' },
+      dependencyPolicy,
+      now
+    ),
+    'release-age-hold'
+  )
+  assert.equal(
+    classifyDirectDependency(
+      declaration,
+      { latest: '1.1.0', publishedAt: '2026-07-28T17:30:00.000Z' },
+      dependencyPolicy,
+      now
+    ),
+    'compatible-update'
+  )
+  assert.equal(
+    classifyDirectDependency(
+      {
+        name: 'typescript',
+        declared: 'npm:@typescript/typescript6@6.0.2',
+        field: 'devDependencies',
+        manifest: 'packages/sdk/package.json'
+      },
+      { latest: '7.0.2', publishedAt: '2026-07-01T00:00:00.000Z' },
+      dependencyPolicy,
+      now
+    ),
+    'toolchain-bridge'
   )
 })
 

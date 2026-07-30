@@ -83,22 +83,15 @@ describe('SatoshisPerKilobyte', () => {
   // computeFee – happy path
   // -------------------------------------------------------------------------
   describe('computeFee', () => {
-    it('returns 0 for empty transaction with value 0', async () => {
-      const model = new SatoshisPerKilobyte(0)
+    it.each([
+      { rate: 0, expected: 0, scenario: 'zero rate' },
+      { rate: 1, expected: 1, scenario: 'fractional fee rounded up' },
+      { rate: 1000, expected: 10, scenario: 'one satoshi per byte' }
+    ])('computes the empty-transaction fee for $scenario', async ({ rate, expected }) => {
+      const model = new SatoshisPerKilobyte(rate)
       const tx = makeTx([], [])
-      // size = 4 (version) + 1 (input count varint) + 1 (output count varint) + 4 (locktime) = 10
-      // fee = ceil(10/1000 * 0) = 0
-      const fee = await model.computeFee(tx)
-      expect(fee).toBe(0)
-    })
-
-    it('computes correct fee for an empty transaction (no inputs, no outputs)', async () => {
-      const model = new SatoshisPerKilobyte(1000) // 1 sat/byte
-      const tx = makeTx([], [])
-      // size = 4 + 1 + 1 + 4 = 10 bytes
-      // fee = ceil(10/1000 * 1000) = ceil(10) = 10
-      const fee = await model.computeFee(tx)
-      expect(fee).toBe(10)
+      // Empty size = 4-byte version + two 1-byte counts + 4-byte lock time.
+      expect(await model.computeFee(tx)).toBe(expected)
     })
 
     it('computes fee for one input with an unlocking script', async () => {
@@ -138,15 +131,6 @@ describe('SatoshisPerKilobyte', () => {
       //      = 4 + 1 + 148 + 1 + 34 + 4 = 192 bytes
       const fee = await model.computeFee(tx)
       expect(fee).toBe(Math.ceil((192 / 1000) * 1000))
-    })
-
-    it('uses Math.ceil to round up fractional fees', async () => {
-      // Choose a value where the result is not a whole satoshi
-      const model = new SatoshisPerKilobyte(1) // very small rate
-      const tx = makeTx([], [])
-      // size = 10 bytes → fee = ceil(10/1000 * 1) = ceil(0.01) = 1
-      const fee = await model.computeFee(tx)
-      expect(fee).toBe(1)
     })
 
     it('fee scales proportionally with sat/kb rate', async () => {

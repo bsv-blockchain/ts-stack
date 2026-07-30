@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.2.13",
+  "version": "2.2.14",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -51,6 +51,16 @@
         "default": "./dist/cjs/src/primitives/index.js"
       }
     },
+    "./primitives/*.ts": {
+      "import": {
+        "types": "./dist/types/src/primitives/*.d.ts",
+        "default": "./dist/esm/src/primitives/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/primitives/*.d.ts",
+        "default": "./dist/cjs/src/primitives/*.js"
+      }
+    },
     "./primitives/*": {
       "import": {
         "types": "./dist/types/src/primitives/*.d.ts",
@@ -69,6 +79,16 @@
       "require": {
         "types": "./dist/cjs/src/script/index.d.ts",
         "default": "./dist/cjs/src/script/index.js"
+      }
+    },
+    "./script/*.ts": {
+      "import": {
+        "types": "./dist/types/src/script/*.d.ts",
+        "default": "./dist/esm/src/script/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/script/*.d.ts",
+        "default": "./dist/cjs/src/script/*.js"
       }
     },
     "./script/*": {
@@ -91,6 +111,16 @@
         "default": "./dist/cjs/src/script/templates/index.js"
       }
     },
+    "./script/templates/*.ts": {
+      "import": {
+        "types": "./dist/types/src/script/templates/*.d.ts",
+        "default": "./dist/esm/src/script/templates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/script/templates/*.d.ts",
+        "default": "./dist/cjs/src/script/templates/*.js"
+      }
+    },
     "./script/templates/*": {
       "import": {
         "types": "./dist/types/src/script/templates/*.d.ts",
@@ -109,6 +139,16 @@
       "require": {
         "types": "./dist/cjs/src/transaction/index.d.ts",
         "default": "./dist/cjs/src/transaction/index.js"
+      }
+    },
+    "./transaction/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/*.d.ts",
+        "default": "./dist/esm/src/transaction/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/*.d.ts",
+        "default": "./dist/cjs/src/transaction/*.js"
       }
     },
     "./transaction/*": {
@@ -131,6 +171,16 @@
         "default": "./dist/cjs/src/transaction/broadcasters/index.js"
       }
     },
+    "./transaction/broadcaster/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/esm/src/transaction/broadcasters/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/cjs/src/transaction/broadcasters/*.js"
+      }
+    },
     "./transaction/broadcaster/*": {
       "import": {
         "types": "./dist/types/src/transaction/broadcasters/*.d.ts",
@@ -149,6 +199,16 @@
       "require": {
         "types": "./dist/cjs/src/transaction/broadcasters/index.d.ts",
         "default": "./dist/cjs/src/transaction/broadcasters/index.js"
+      }
+    },
+    "./transaction/broadcasters/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/esm/src/transaction/broadcasters/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/broadcasters/*.d.ts",
+        "default": "./dist/cjs/src/transaction/broadcasters/*.js"
       }
     },
     "./transaction/broadcasters/*": {
@@ -171,6 +231,16 @@
         "default": "./dist/cjs/src/transaction/chaintrackers/index.js"
       }
     },
+    "./transaction/chaintrackers/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/chaintrackers/*.d.ts",
+        "default": "./dist/esm/src/transaction/chaintrackers/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/chaintrackers/*.d.ts",
+        "default": "./dist/cjs/src/transaction/chaintrackers/*.js"
+      }
+    },
     "./transaction/chaintrackers/*": {
       "import": {
         "types": "./dist/types/src/transaction/chaintrackers/*.d.ts",
@@ -189,6 +259,16 @@
       "require": {
         "types": "./dist/cjs/src/transaction/http/index.d.ts",
         "default": "./dist/cjs/src/transaction/http/index.js"
+      }
+    },
+    "./transaction/http/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/http/*.d.ts",
+        "default": "./dist/esm/src/transaction/http/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/http/*.d.ts",
+        "default": "./dist/cjs/src/transaction/http/*.js"
       }
     },
     "./transaction/http/*": {
@@ -211,6 +291,16 @@
         "default": "./dist/cjs/src/transaction/fee-models/index.js"
       }
     },
+    "./transaction/fee-model/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/esm/src/transaction/fee-models/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/cjs/src/transaction/fee-models/*.js"
+      }
+    },
     "./transaction/fee-model/*": {
       "import": {
         "types": "./dist/types/src/transaction/fee-models/*.d.ts",
@@ -229,6 +319,16 @@
       "require": {
         "types": "./dist/cjs/src/transaction/fee-models/index.d.ts",
         "default": "./dist/cjs/src/transaction/fee-models/index.js"
+      }
+    },
+    "./transaction/fee-models/*.ts": {
+      "import": {
+        "types": "./dist/types/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/esm/src/transaction/fee-models/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/transaction/fee-models/*.d.ts",
+        "default": "./dist/cjs/src/transaction/fee-models/*.js"
       }
     },
     "./transaction/fee-models/*": {
@@ -251,6 +351,16 @@
         "default": "./dist/cjs/src/messages/index.js"
       }
     },
+    "./messages/*.ts": {
+      "import": {
+        "types": "./dist/types/src/messages/*.d.ts",
+        "default": "./dist/esm/src/messages/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/messages/*.d.ts",
+        "default": "./dist/cjs/src/messages/*.js"
+      }
+    },
     "./messages/*": {
       "import": {
         "types": "./dist/types/src/messages/*.d.ts",
@@ -269,6 +379,16 @@
       "require": {
         "types": "./dist/cjs/src/compat/index.d.ts",
         "default": "./dist/cjs/src/compat/index.js"
+      }
+    },
+    "./compat/*.ts": {
+      "import": {
+        "types": "./dist/types/src/compat/*.d.ts",
+        "default": "./dist/esm/src/compat/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/compat/*.d.ts",
+        "default": "./dist/cjs/src/compat/*.js"
       }
     },
     "./compat/*": {
@@ -291,6 +411,16 @@
         "default": "./dist/cjs/src/totp/index.js"
       }
     },
+    "./totp/*.ts": {
+      "import": {
+        "types": "./dist/types/src/totp/*.d.ts",
+        "default": "./dist/esm/src/totp/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/totp/*.d.ts",
+        "default": "./dist/cjs/src/totp/*.js"
+      }
+    },
     "./totp/*": {
       "import": {
         "types": "./dist/types/src/totp/*.d.ts",
@@ -309,6 +439,16 @@
       "require": {
         "types": "./dist/cjs/src/wallet/index.d.ts",
         "default": "./dist/cjs/src/wallet/index.js"
+      }
+    },
+    "./wallet/*.ts": {
+      "import": {
+        "types": "./dist/types/src/wallet/*.d.ts",
+        "default": "./dist/esm/src/wallet/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/wallet/*.d.ts",
+        "default": "./dist/cjs/src/wallet/*.js"
       }
     },
     "./wallet/*": {
@@ -331,6 +471,16 @@
         "default": "./dist/cjs/src/wallet/substrates/index.js"
       }
     },
+    "./wallet/substrates/*.ts": {
+      "import": {
+        "types": "./dist/types/src/wallet/substrates/*.d.ts",
+        "default": "./dist/esm/src/wallet/substrates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/wallet/substrates/*.d.ts",
+        "default": "./dist/cjs/src/wallet/substrates/*.js"
+      }
+    },
     "./wallet/substrates/*": {
       "import": {
         "types": "./dist/types/src/wallet/substrates/*.d.ts",
@@ -349,6 +499,16 @@
       "require": {
         "types": "./dist/cjs/src/auth/index.d.ts",
         "default": "./dist/cjs/src/auth/index.js"
+      }
+    },
+    "./auth/*.ts": {
+      "import": {
+        "types": "./dist/types/src/auth/*.d.ts",
+        "default": "./dist/esm/src/auth/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/*.d.ts",
+        "default": "./dist/cjs/src/auth/*.js"
       }
     },
     "./auth/*": {
@@ -371,6 +531,16 @@
         "default": "./dist/cjs/src/auth/certificates/index.js"
       }
     },
+    "./auth/certificate/*.ts": {
+      "import": {
+        "types": "./dist/types/src/auth/certificates/*.d.ts",
+        "default": "./dist/esm/src/auth/certificates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/certificates/*.d.ts",
+        "default": "./dist/cjs/src/auth/certificates/*.js"
+      }
+    },
     "./auth/certificate/*": {
       "import": {
         "types": "./dist/types/src/auth/certificates/*.d.ts",
@@ -389,6 +559,16 @@
       "require": {
         "types": "./dist/cjs/src/auth/certificates/index.d.ts",
         "default": "./dist/cjs/src/auth/certificates/index.js"
+      }
+    },
+    "./auth/certificates/*.ts": {
+      "import": {
+        "types": "./dist/types/src/auth/certificates/*.d.ts",
+        "default": "./dist/esm/src/auth/certificates/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/auth/certificates/*.d.ts",
+        "default": "./dist/cjs/src/auth/certificates/*.js"
       }
     },
     "./auth/certificates/*": {
@@ -411,6 +591,16 @@
         "default": "./dist/cjs/src/overlay-tools/index.js"
       }
     },
+    "./overlay-tools/*.ts": {
+      "import": {
+        "types": "./dist/types/src/overlay-tools/*.d.ts",
+        "default": "./dist/esm/src/overlay-tools/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/overlay-tools/*.d.ts",
+        "default": "./dist/cjs/src/overlay-tools/*.js"
+      }
+    },
     "./overlay-tools/*": {
       "import": {
         "types": "./dist/types/src/overlay-tools/*.d.ts",
@@ -429,6 +619,16 @@
       "require": {
         "types": "./dist/cjs/src/telemetry/index.d.ts",
         "default": "./dist/cjs/src/telemetry/index.js"
+      }
+    },
+    "./telemetry/*.ts": {
+      "import": {
+        "types": "./dist/types/src/telemetry/*.d.ts",
+        "default": "./dist/esm/src/telemetry/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/telemetry/*.d.ts",
+        "default": "./dist/cjs/src/telemetry/*.js"
       }
     },
     "./telemetry/*": {
@@ -451,6 +651,16 @@
         "default": "./dist/cjs/src/storage/index.js"
       }
     },
+    "./storage/*.ts": {
+      "import": {
+        "types": "./dist/types/src/storage/*.d.ts",
+        "default": "./dist/esm/src/storage/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/storage/*.d.ts",
+        "default": "./dist/cjs/src/storage/*.js"
+      }
+    },
     "./storage/*": {
       "import": {
         "types": "./dist/types/src/storage/*.d.ts",
@@ -471,6 +681,16 @@
         "default": "./dist/cjs/src/kvstore/index.js"
       }
     },
+    "./kvstore/*.ts": {
+      "import": {
+        "types": "./dist/types/src/kvstore/*.d.ts",
+        "default": "./dist/esm/src/kvstore/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/kvstore/*.d.ts",
+        "default": "./dist/cjs/src/kvstore/*.js"
+      }
+    },
     "./kvstore/*": {
       "import": {
         "types": "./dist/types/src/kvstore/*.d.ts",
@@ -489,6 +709,16 @@
       "require": {
         "types": "./dist/cjs/src/remittance/index.d.ts",
         "default": "./dist/cjs/src/remittance/index.js"
+      }
+    },
+    "./remittance/*.ts": {
+      "import": {
+        "types": "./dist/types/src/remittance/*.d.ts",
+        "default": "./dist/esm/src/remittance/*.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/remittance/*.d.ts",
+        "default": "./dist/cjs/src/remittance/*.js"
       }
     },
     "./remittance/*": {
@@ -547,20 +777,20 @@
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk#readme",
   "devDependencies": {
     "@jest/globals": "^30.4.1",
-    "@rspack/cli": "^2.1.5",
-    "@rspack/core": "^2.1.5",
+    "@rspack/cli": "^2.1.7",
+    "@rspack/core": "^2.1.7",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
+    "oxlint": "^1.76.0",
     "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "@typescript/native": "npm:typescript@7.0.2",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
-    "oxlint": "^1.75.0"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "typesVersions": {
     "*": {

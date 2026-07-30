@@ -15,13 +15,20 @@ import {
 describe('generateChange tests', () => {
   jest.setTimeout(99999999)
 
-  test('logs only a redacted parameter summary when diagnostics are enabled', async () => {
+  test.each([
+    { randomVals: [...randomValsUsed1], randomValsCount: randomValsUsed1.length },
+    { randomVals: undefined, randomValsCount: 0 }
+  ])('logs only a redacted parameter summary when diagnostics are enabled', async ({
+    randomVals,
+    randomValsCount
+  }) => {
     const params: GenerateChangeSdkParams = {
       ...defParams,
       fixedOutputs: [
         { satoshis: 1234, lockingScriptLength: 1739091 },
         { satoshis: 2, lockingScriptLength: 25 }
       ],
+      randomVals,
       noLogging: false
     }
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([...defAvailableChange()])
@@ -36,10 +43,11 @@ describe('generateChange tests', () => {
         targetNetCount: undefined,
         changeInitialSatoshis: 1000,
         changeFirstSatoshis: 285,
-        randomValsCount: params.randomVals?.length
+        randomValsCount
       })
       expect(JSON.stringify(log.mock.calls)).not.toContain('lockingScriptLength')
-      expect(JSON.stringify(log.mock.calls)).not.toContain(JSON.stringify(params.randomVals))
+      expect(JSON.stringify(log.mock.calls))
+        .not.toContain(JSON.stringify(params.randomVals) ?? 'undefined')
     } finally {
       log.mockRestore()
     }

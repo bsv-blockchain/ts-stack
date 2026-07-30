@@ -17,13 +17,13 @@ importers:
         version: 0.18.5
       '@stryker-mutator/core':
         specifier: 9.6.1
-        version: 9.6.1(@types/node@26.1.1)
+        version: 9.6.1(@types/node@26.1.2)
       '@stryker-mutator/jest-runner':
         specifier: 9.6.1
-        version: 9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.1))
+        version: 9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.2))
       '@stryker-mutator/vitest-runner':
         specifier: 9.6.1
-        version: 9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.1))(vitest@4.1.10)
+        version: 9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.2))(vitest@4.1.10)
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
@@ -41,7 +41,7 @@ importers:
         version: 0.3.22
       vite:
         specifier: 8.1.5
-        version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -56,8 +56,8 @@ importers:
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -74,23 +74,23 @@ importers:
         specifier: ^30.4.1
         version: 30.4.1
       '@types/node':
-        specifier: ^24.13.3
-        version: 24.13.3
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@24.13.3)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@24.13.3))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -127,7 +127,7 @@ importers:
         version: typescript@7.0.2
       '@vitejs/plugin-react':
         specifier: ^6.0.4
-        version: 6.0.4(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 6.0.4(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -141,8 +141,8 @@ importers:
         specifier: ^11.16.0
         version: 11.16.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       pagefind:
         specifier: ^1.5.2
         version: 1.5.2
@@ -172,7 +172,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: ^8.1.5
-        version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/helpers/amountinator:
     dependencies:
@@ -187,8 +187,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -197,16 +197,16 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)
+        version: 10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -230,8 +230,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -240,13 +240,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -270,8 +270,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -280,13 +280,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -304,8 +304,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -317,13 +317,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -347,23 +347,23 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       jest-environment-jsdom:
         specifier: ^30.4.1
         version: 30.4.1
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -374,11 +374,11 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
       webpack:
-        specifier: ^5.109.0
-        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
+        specifier: ^5.109.2
+        version: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-cli:
-        specifier: ^7.2.1
-        version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack@5.109.0)
+        specifier: ^7.2.2
+        version: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
 
   packages/helpers/fund-wallet:
     dependencies:
@@ -393,8 +393,8 @@ importers:
         specifier: workspace:^
         version: link:../../sdk
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -405,8 +405,8 @@ importers:
         specifier: ^4.9.0
         version: 4.9.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -415,7 +415,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/helpers/simple:
     dependencies:
@@ -436,8 +436,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -446,13 +446,13 @@ importers:
         version: 17.4.2
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -472,8 +472,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -482,13 +482,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -509,20 +509,20 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -546,20 +546,20 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -570,11 +570,11 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
       webpack:
-        specifier: ^5.109.0
-        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
+        specifier: ^5.109.2
+        version: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-cli:
-        specifier: ^7.2.1
-        version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack@5.109.0)
+        specifier: ^7.2.2
+        version: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
 
   packages/messaging/message-box-client:
     dependencies:
@@ -589,8 +589,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -599,16 +599,16 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       rimraf:
         specifier: ^6.1.3
         version: 6.1.3
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -616,11 +616,11 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
       webpack:
-        specifier: ^5.109.0
-        version: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
+        specifier: ^5.109.2
+        version: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-cli:
-        specifier: ^7.2.1
-        version: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack@5.109.0)
+        specifier: ^7.2.2
+        version: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
 
   packages/messaging/ts-paymail:
     dependencies:
@@ -647,8 +647,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@types/supertest':
         specifier: ^7.2.1
         version: 7.2.1
@@ -660,16 +660,16 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       supertest:
         specifier: ^7.2.2
         version: 7.2.2
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -696,14 +696,14 @@ importers:
         version: 0.5.6
     devDependencies:
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -714,8 +714,8 @@ importers:
         specifier: workspace:^
         version: link:../../sdk
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -726,8 +726,8 @@ importers:
         specifier: ^4.9.0
         version: 4.9.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -736,7 +736,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/middleware/auth:
     devDependencies:
@@ -750,8 +750,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -760,13 +760,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -802,8 +802,8 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -812,13 +812,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -851,8 +851,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -861,13 +861,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -936,8 +936,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -946,13 +946,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsx:
         specifier: ^4.23.1
         version: 4.23.1
@@ -979,8 +979,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -989,19 +989,19 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       mongodb-memory-server:
         specifier: ^11.2.0
         version: 11.2.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)
+        version: 10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1028,13 +1028,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1052,7 +1052,7 @@ importers:
         version: link:../gasp-core
       knex:
         specifier: ^3.3.0
-        version: 3.3.0(better-sqlite3@13.0.1)(mysql2@3.23.2(@types/node@26.1.1))
+        version: 3.3.0(better-sqlite3@13.0.2)(mysql2@3.23.2(@types/node@26.1.2))
     devDependencies:
       '@bsv/sdk':
         specifier: workspace:^
@@ -1061,8 +1061,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1071,13 +1071,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1110,8 +1110,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1120,16 +1120,16 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       mongodb-memory-server:
         specifier: ^11.2.0
         version: 11.2.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1168,7 +1168,7 @@ importers:
         version: 5.2.1
       knex:
         specifier: ^3.3.0
-        version: 3.3.0(better-sqlite3@13.0.1)(mysql2@3.23.2(@types/node@26.1.1))
+        version: 3.3.0(better-sqlite3@13.0.2)(mysql2@3.23.2(@types/node@26.1.2))
       mongodb:
         specifier: ^7.5.0
         version: 7.5.0
@@ -1189,8 +1189,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1199,13 +1199,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1238,8 +1238,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1248,16 +1248,16 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       mongodb-memory-server:
         specifier: ^11.2.0
         version: 11.2.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -1268,17 +1268,17 @@ importers:
         specifier: ^30.4.1
         version: 30.4.1
       '@rspack/cli':
-        specifier: ^2.1.5
-        version: 2.1.5(@rspack/core@2.1.5)
+        specifier: ^2.1.7
+        version: 2.1.7(@rspack/core@2.1.7)
       '@rspack/core':
-        specifier: ^2.1.5
-        version: 2.1.5
+        specifier: ^2.1.7
+        version: 2.1.7
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1287,19 +1287,19 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       jest-environment-jsdom:
         specifier: ^30.4.1
         version: 30.4.1
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts-loader:
         specifier: ^9.6.2
-        version: 9.6.2(@typescript/typescript6@6.0.2)(webpack@5.109.0(esbuild@0.28.1))
+        version: 9.6.2(@typescript/typescript6@6.0.2)(webpack@5.109.2(esbuild@0.28.1))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1319,17 +1319,17 @@ importers:
         specifier: ^30.4.1
         version: 30.4.1
       '@rspack/cli':
-        specifier: ^2.1.5
-        version: 2.1.5(@rspack/core@2.1.5)
+        specifier: ^2.1.7
+        version: 2.1.7(@rspack/core@2.1.7)
       '@rspack/core':
-        specifier: ^2.1.5
-        version: 2.1.5
+        specifier: ^2.1.7
+        version: 2.1.7
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1338,19 +1338,19 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       puppeteer-core:
         specifier: ^25.4.0
         version: 25.4.0(yauzl@3.4.0)
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts-loader:
         specifier: ^9.6.2
-        version: 9.6.2(@typescript/typescript6@6.0.2)(webpack@5.109.0(esbuild@0.28.1))
+        version: 9.6.2(@typescript/typescript6@6.0.2)(webpack@5.109.2(esbuild@0.28.1))
       tsx:
         specifier: ^4.23.1
         version: 4.23.1
@@ -1359,7 +1359,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: ^8.1.5
-        version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/wallet/btms:
     devDependencies:
@@ -1373,8 +1373,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1383,13 +1383,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1418,8 +1418,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1428,13 +1428,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -1467,8 +1467,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -1492,13 +1492,13 @@ importers:
         version: 4.9.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       jest-environment-jsdom:
         specifier: ^30.4.1
         version: 30.4.1
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -1510,7 +1510,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -1527,8 +1527,8 @@ importers:
         specifier: ^5.0.6
         version: 5.0.6
       better-sqlite3:
-        specifier: ^13.0.1
-        version: 13.0.1
+        specifier: ^13.0.2
+        version: 13.0.2
       body-parser:
         specifier: ^2.3.0
         version: 2.3.0
@@ -1549,10 +1549,10 @@ importers:
         version: 8.0.3
       knex:
         specifier: ^3.3.0
-        version: 3.3.0(better-sqlite3@13.0.1)(mysql2@3.23.2(@types/node@26.1.1))
+        version: 3.3.0(better-sqlite3@13.0.2)(mysql2@3.23.2(@types/node@26.1.2))
       mysql2:
         specifier: ^3.23.2
-        version: 3.23.2(@types/node@26.1.1)
+        version: 3.23.2(@types/node@26.1.2)
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -1576,8 +1576,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -1598,19 +1598,19 @@ importers:
         version: 11.4.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)
+        version: 10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1634,8 +1634,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.0
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@types/node-fetch':
         specifier: ^2.6.13
         version: 2.6.13
@@ -1656,13 +1656,13 @@ importers:
         version: 11.4.0
       jest:
         specifier: ^30.4.2
-        version: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+        version: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       jest-diff:
         specifier: ^30.4.1
         version: 30.4.1
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -1671,10 +1671,10 @@ importers:
         version: 6.0.1
       ts-jest:
         specifier: ^29.4.12
-        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)))
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)))
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)
+        version: 10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)
       ts2md:
         specifier: ^0.2.8
         version: 0.2.8
@@ -1695,8 +1695,8 @@ importers:
         specifier: workspace:^
         version: link:../../../sdk
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1707,8 +1707,8 @@ importers:
         specifier: 0.28.1
         version: 0.28.1
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -1717,10 +1717,10 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: 8.1.5
-        version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/wallet/wallet-toolbox/mobile:
     dependencies:
@@ -1744,8 +1744,8 @@ importers:
         specifier: 0.86.2
         version: 0.86.2(@babel/core@7.29.7)
       '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
+        specifier: ^26.1.2
+        version: 26.1.2
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1762,8 +1762,8 @@ importers:
         specifier: 0.87.0
         version: 0.87.0
       oxlint:
-        specifier: ^1.75.0
-        version: 1.75.0
+        specifier: ^1.76.0
+        version: 1.76.0
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)(tsx@4.23.1)
@@ -1772,7 +1772,7 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
 packages:
 
@@ -2909,22 +2909,10 @@ packages:
   '@oxc-project/types@0.140.0':
     resolution: {integrity: sha512-h5LUOzGArYemnW1NMz/DuuQhBi96J6JL2Bk8zE4kvqxB5Sg3jxmCiH4uyOWHDkiKSt5vWlG4FIwCR/DbstcNRQ==}
 
-  '@oxlint/binding-android-arm-eabi@1.75.0':
-    resolution: {integrity: sha512-lutovtFzJqlRaqpZrCqSSGaHZzl9nIxxpjLzhSRLunN6dCLylj0uzlCyQGaQDIys7rrv8kVXiFO+R4Zpn0bX7g==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm]
-    os: [android]
-
   '@oxlint/binding-android-arm-eabi@1.76.0':
     resolution: {integrity: sha512-ZHIE5Zt9AsPDcY4nOlofXt0YfneEeo+QrKMPcPzLf2Z6Q8VtV2W73d7SFJ920WUwyik783u/doKCs3KXdwG+7w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
-    os: [android]
-
-  '@oxlint/binding-android-arm64@1.75.0':
-    resolution: {integrity: sha512-hXI0hDgHkw4w5nfru72aG7y+2iQJmC4waH/KV6H/hbgA6yAP5jYNx0P9yug15Hs0tWl/+mda3Jjn/2gmDT48tw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
     os: [android]
 
   '@oxlint/binding-android-arm64@1.76.0':
@@ -2933,22 +2921,10 @@ packages:
     cpu: [arm64]
     os: [android]
 
-  '@oxlint/binding-darwin-arm64@1.75.0':
-    resolution: {integrity: sha512-D91BWbK/dMYfCcrghspPIuKs2D9LF4Z/OabVSQjw1AO6PWxArD7teDA48bm0ySFqWDaPVqmQRl5GMWNglTXyrQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [darwin]
-
   '@oxlint/binding-darwin-arm64@1.76.0':
     resolution: {integrity: sha512-rvJmrAPKSQ9aWJ6wIS6CK2tJjwzfW0ApQH9qokq6sfDvmHwoyIHxHFMq7z7i7GiV6fdE6s8qvBqWKPTu8RmT6Q==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
-    os: [darwin]
-
-  '@oxlint/binding-darwin-x64@1.75.0':
-    resolution: {integrity: sha512-02mpwzf12BonZ6PT0TuQoomvEh2kVl2WGBIKWezCyToIS+rYkQZ6GXnARBAl9A4Ovm2V+Xe7M4KretyqmmcnJQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [darwin]
 
   '@oxlint/binding-darwin-x64@1.76.0':
@@ -2957,32 +2933,14 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@oxlint/binding-freebsd-x64@1.75.0':
-    resolution: {integrity: sha512-qZJgLnDaBsiL5YESx2t/TZ8eXkL9fEkKoXEdzegROhlz9A0lgyGnZ0dAzJrh7LJAHQl2K9RdRueN2s/9N7+odg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [freebsd]
-
   '@oxlint/binding-freebsd-x64@1.76.0':
     resolution: {integrity: sha512-WvKG9CAriuo0XNiFzpXjDngUZcRGFNpaK2kLyMUsnJlShxkT96u+BpJQ3KqdQwGOrvI14L6V8bAwXwAYNNY6Jg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
 
-  '@oxlint/binding-linux-arm-gnueabihf@1.75.0':
-    resolution: {integrity: sha512-7XlaWA5BJD3XpCfrEqjEe6Zseeb14S7QGa304XfwKignRaKQ+eIj775BQ7nIslggWickl4IsPUFqJ+/gAyNHVg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm]
-    os: [linux]
-
   '@oxlint/binding-linux-arm-gnueabihf@1.76.0':
     resolution: {integrity: sha512-qJ5+RH99TqFRq3UCDxkW0zJJu9c+OAHFY72vGlxZLEpuO+MpKo3POgqb8sYipL9KYm8XY6ofb0HsOuvY6hQNqQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm]
-    os: [linux]
-
-  '@oxlint/binding-linux-arm-musleabihf@1.75.0':
-    resolution: {integrity: sha512-av6Tpv8yrcMMMOadOqENBhlsLRcGFXXwoQ0hzHhsmS9FJ4Wioy8we427GbcMe2XTxmL2e60T67H1Dyr3up+tAA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm]
     os: [linux]
@@ -2993,26 +2951,12 @@ packages:
     cpu: [arm]
     os: [linux]
 
-  '@oxlint/binding-linux-arm64-gnu@1.75.0':
-    resolution: {integrity: sha512-WcUhd8fHT5plrA14lANevl+hOl815mVI5t2hU21oFWrZKFXIVV/Sr4rWQV0NzSvzBupbMLNc5ErEA6Ehxh5jMg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
   '@oxlint/binding-linux-arm64-gnu@1.76.0':
     resolution: {integrity: sha512-3KeFDx8Bu4HPAXbuHZOr/oHvN+QT+JQhMw/NYPz7Z071xLSsG27Jfh9PIQVEY7hk1I+jr43ExqRIeJ6VKk2yLw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
-
-  '@oxlint/binding-linux-arm64-musl@1.75.0':
-    resolution: {integrity: sha512-UWzp5wRHFe/ESO3+eEaxXsTkYTGLYjnTsi/I5neEacXSItQ6WNleapfOAeA4x2b8nyhJ4uQxqvtv9pHv8kWJtQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
 
   '@oxlint/binding-linux-arm64-musl@1.76.0':
     resolution: {integrity: sha512-oPFkkKTgl0K/EIg9fQ8oA3IGcI05/Mq1en04iFa41mmNPT+6KEiByVazTOZZJiHMBBrbsns1YJ2e1Scqwzesjw==}
@@ -3021,24 +2965,10 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@oxlint/binding-linux-ppc64-gnu@1.75.0':
-    resolution: {integrity: sha512-XEVRwGMLKCUKrvhLAz4F6AIh8MJrQVdSZtAmPpRZt9tGPsUnamPOcl3dS/ZQzJnar/Ymgc//+xho0L60Emzuxg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [ppc64]
-    os: [linux]
-    libc: [glibc]
-
   '@oxlint/binding-linux-ppc64-gnu@1.76.0':
     resolution: {integrity: sha512-gN7yZ0eqflA5Fhf1wvHxGUltIV3FsvmB1zhNMDEK9vSHhc7E6qg9CuPeBgPZab66Tjzq6w6kHAtNEvnTHf4cyw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
-    os: [linux]
-    libc: [glibc]
-
-  '@oxlint/binding-linux-riscv64-gnu@1.75.0':
-    resolution: {integrity: sha512-mAG4DUXqfLC8cTjMD2kt3jDmVzFREYtDyeLNdLdsCcBc4Zbl2EMuiFektGBilQwkNjYnMvCqJs55U+Hyb+b+jw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
@@ -3049,13 +2979,6 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@oxlint/binding-linux-riscv64-musl@1.75.0':
-    resolution: {integrity: sha512-95hrAvriAlI+pekSomTFIn0+bawMDlDwTNVmdjsFusTHyL2JWh7TWvRNG/Lkim72uN8OiCcO9wcaC6omLP5E3w==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [riscv64]
-    os: [linux]
-    libc: [musl]
-
   '@oxlint/binding-linux-riscv64-musl@1.76.0':
     resolution: {integrity: sha512-ZIga3097VJZolGZk6SrIAUokIGfRkxRlhiHDUznZptGBfwrhD7pNfD1rzEzsCwvk/1DX0A1bLz+liuNh5QKIVQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -3063,24 +2986,10 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@oxlint/binding-linux-s390x-gnu@1.75.0':
-    resolution: {integrity: sha512-4b6f2+FrtruAESrCqIKcrarzfrSx+wk2QNcp+RT91/Prc+pMQMAfyZ1rG1c3tFQNl8Bc616tx40uNXyxNBRPbQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [s390x]
-    os: [linux]
-    libc: [glibc]
-
   '@oxlint/binding-linux-s390x-gnu@1.76.0':
     resolution: {integrity: sha512-ZGiiA7pFzMJSyMWYZTVlPgbTsx+Vl8ihLGMIujPwaslUF7kIPPWAbVmAlTc+9lWDV+DCiB8Ikixu+lSHeOIIWQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [s390x]
-    os: [linux]
-    libc: [glibc]
-
-  '@oxlint/binding-linux-x64-gnu@1.75.0':
-    resolution: {integrity: sha512-nshAhrUvXFUWOvqQ2soIw7HFNWvpvEV4o0cYSqPtzLiPF5gKyYTDOOTJ6Rn8g8K/iGvPIrbDA4v8+5MvnjJrrg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [linux]
     libc: [glibc]
 
@@ -3091,13 +3000,6 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@oxlint/binding-linux-x64-musl@1.75.0':
-    resolution: {integrity: sha512-e4jNxLKnxLC6sYBQRxrI2pgIIxnmMtF8U/VwNYcjTT/CLS+spH624cYVnj07bTKwaEWT37/e025isOs6j/0xqA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
   '@oxlint/binding-linux-x64-musl@1.76.0':
     resolution: {integrity: sha512-z7lgKQtbo/I1NIe8G5NHLesxJDv0tRSUWTpXKb9Pm3E9nKFKfO4IOSDtFroKgXtOYb0jQbcdH+0wzTyMXVes+A==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -3105,23 +3007,11 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@oxlint/binding-openharmony-arm64@1.75.0':
-    resolution: {integrity: sha512-hZ2lH+1qLf/DiEP9UWuQTK2JWj/BgvMB4jhIV4SmNU1wfEiYYX4TynQyAZXx0j9X4qRYizAL042SKaV+8ynh4w==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [openharmony]
-
   '@oxlint/binding-openharmony-arm64@1.76.0':
     resolution: {integrity: sha512-JOjKymIpb9QcYfEhZsN6h4V9Ivd474W38cNIBRv6bg2TbIvogbMTH0Mg6YWW9TiRDqfcX+/Hyfsbo5vcSE5guQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
-
-  '@oxlint/binding-win32-arm64-msvc@1.75.0':
-    resolution: {integrity: sha512-Ilj6PNzGDS3bCU0MSJH7Msh0NhH+T/mRp2shwg+q+GHeVlPwP5LEboW96aW+3kVKFk6zYZy1Xi5pZkqZh6X8KQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [arm64]
-    os: [win32]
 
   '@oxlint/binding-win32-arm64-msvc@1.76.0':
     resolution: {integrity: sha512-pqDWZiwcmByWUEm1NFUBNiT6aentCcaoMWJv0HbXEmuYermJ4sg8ppVrshubYP2MZ6SHccJJcpr6x469PuDFIw==}
@@ -3129,22 +3019,10 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@oxlint/binding-win32-ia32-msvc@1.75.0':
-    resolution: {integrity: sha512-QVit2nOEOiPhkmsrksPSkoGCdnZRNkspt8fwoYyP09te1VEbnSj4LAxua4rc8FKTmWkySVe05j8iz9GXYfF1AQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [ia32]
-    os: [win32]
-
   '@oxlint/binding-win32-ia32-msvc@1.76.0':
     resolution: {integrity: sha512-Ba0O659kgMv6pwO3z9PdO+K3aMxQRaw9HnG+e6AtOfgwcKFvYilciQYBoUBmxfQvOCKZe1SwjMkuB542NkuDMQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ia32]
-    os: [win32]
-
-  '@oxlint/binding-win32-x64-msvc@1.75.0':
-    resolution: {integrity: sha512-DSxnNkBUAYARPwJtR12Ig3deWr8w0H997xP6jy33i+e0SyYJw8FKuz4+cZtpmPEhQmvlPJE3X/2vNxDmLkd/rA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
     os: [win32]
 
   '@oxlint/binding-win32-x64-msvc@1.76.0':
@@ -3575,76 +3453,76 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@rspack/binding-darwin-arm64@2.1.5':
-    resolution: {integrity: sha512-XLAN6YSU36qkciJtV9DY9z57pdHOjKy/f1HyoqpZenRg8p46jnXPziV45lfrTZpG+FF6g/jtTUc4dKbeyoWqPw==}
+  '@rspack/binding-darwin-arm64@2.1.7':
+    resolution: {integrity: sha512-DwxzrXRctueP/3Pyom9JHcIsRShuEAlHb+mrE5OPT+4cdHI1UnJpbzEvEDLTo4IKJhDb3vjXdHLtjqtL0SYbeA==}
     cpu: [arm64]
     os: [darwin]
 
-  '@rspack/binding-darwin-x64@2.1.5':
-    resolution: {integrity: sha512-KLW7PV86jyCOyqJSqrkZdvYUWYCFX/Q4LsGmVc8tyDA8jBYLMHJDewC/lNf9ot3rU2SoLDZKhDUh7q7dX0FRmg==}
+  '@rspack/binding-darwin-x64@2.1.7':
+    resolution: {integrity: sha512-kPbrYvR/XUHfAMgRVq3QnC71DW/qjwsPj+3hEUuEnRmlploPNy9u8Szf1IHKSVUSrVZBTgDyMoZQdxYLfhResw==}
     cpu: [x64]
     os: [darwin]
 
-  '@rspack/binding-linux-arm64-gnu@2.1.5':
-    resolution: {integrity: sha512-KOooAC8L+Ljx5sY7ZuMeaXCQ310FNWaPWXcYQJpFPApF3qyLeSfuOftUGwxcxeo5U0mS5OY3zxp7/5CaHWKYjg==}
+  '@rspack/binding-linux-arm64-gnu@2.1.7':
+    resolution: {integrity: sha512-VFB+YXM3kZ6IIuLV64H3vgnwqvQIIaqfR/aeGwuxYvwcZsrgblSBmXMeDULdgDjqP8Yr0VaFMBBiD9OtG5KdFw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@rspack/binding-linux-arm64-musl@2.1.5':
-    resolution: {integrity: sha512-0GFc07gT71+uRbHtejDecBfSL0fs7dQAwCtXYieXboACauL7UvS3Hwr6v8A91aGtAcvLotnCaIa3CWWYwtYlYQ==}
+  '@rspack/binding-linux-arm64-musl@2.1.7':
+    resolution: {integrity: sha512-Mzbxyg0aJ+ITj526Iuz0enEDYY6WxhFIwEKXqwjQh+Vpd5v/+aPzPo83sSQVX/3puBV1sbmviTURbh6N9e1fvA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@rspack/binding-linux-riscv64-gnu@2.1.5':
-    resolution: {integrity: sha512-isQQDp3fBzPSZpLVFzPqVXIVA4I9b9mKs58TfUgOzDP/1g1582YSV3iFopgFogvEliihXDuuXvM6aAkP+w8Z+Q==}
+  '@rspack/binding-linux-riscv64-gnu@2.1.7':
+    resolution: {integrity: sha512-mpazwgT/Pse1720mvEJsoXfPkJ+enj0xUqpbe/wL6aedwjGT+9jJNB8HTJXE4XBX0UO7umGqcJMeKA6YsD2CDA==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@rspack/binding-linux-riscv64-musl@2.1.5':
-    resolution: {integrity: sha512-/SP6VknY4kH60BYplI2FDNAJCo4U4DUszLxhKsgVlgA5ImgHC8Ew2AsKgidk7ceiYV9OcKzYuWYe9tVpysBYVA==}
+  '@rspack/binding-linux-riscv64-musl@2.1.7':
+    resolution: {integrity: sha512-oU/l3soPRsDEWn7KZic+npyTMM2N1kRdHjoJ+L5IUBXs8bjdTXPLoyTbTdIOza5ZSoT4+UeEiEryj4BB0tQE5w==}
     cpu: [riscv64]
     os: [linux]
     libc: [musl]
 
-  '@rspack/binding-linux-x64-gnu@2.1.5':
-    resolution: {integrity: sha512-/GJmS+buA4pilT10gs5mfAhAZxSHXpDD8veZ3QpYvNUuoU9gvempAq9TgjbyNN/vc5pf76GdXPXKFMiehudYSA==}
+  '@rspack/binding-linux-x64-gnu@2.1.7':
+    resolution: {integrity: sha512-7Gtpl3h3jtnOpk1mYQE8mRndXAO2ibI8mnAbs7klevdKey+ZHneWMoMi2yOMQhhI/ifWEFxDzyGJ8bdxo0XTsA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@rspack/binding-linux-x64-musl@2.1.5':
-    resolution: {integrity: sha512-iwS3t75nZ2TnUjB05KtvpvjpdkOy/nLxbaOnwjbdnNZZXpUaMadLbllGAWayHPGCMsL2yKBEhVEESZpR7tK3SA==}
+  '@rspack/binding-linux-x64-musl@2.1.7':
+    resolution: {integrity: sha512-w+whI2Uy+DYkGN+MVkzMFWweL7B/s1gMqX+nvTE1vhOy3hGV0VyA9H6lqWjSD3I+eGkpYhN9Pr244cYnLpZOUQ==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@rspack/binding-wasm32-wasi@2.1.5':
-    resolution: {integrity: sha512-jOhW69t1H/jcRaSMB5U8jVzWP18j0YQIlo0nT8W+KvNVScJeyOze4FFc+5RIS7VmuT8/jid7hUyydZOfm6UgqA==}
+  '@rspack/binding-wasm32-wasi@2.1.7':
+    resolution: {integrity: sha512-cDVgvzRdTgxaeM+a5Lx0+7/VAvunvwO0wNtQ3ATQGOtFCW5b7cUzhNPcytH5ZSJTnFWuxinlGwtar5yfcnkdZQ==}
     cpu: [wasm32]
 
-  '@rspack/binding-win32-arm64-msvc@2.1.5':
-    resolution: {integrity: sha512-OLfMXmtFBcrWr9BRGKXJYrWgYR0JSaoAWr3EVFDjKGi/YR5aUwQSGc3AJPBph9g0YsdSqRuUhtQGtCk84DeeEA==}
+  '@rspack/binding-win32-arm64-msvc@2.1.7':
+    resolution: {integrity: sha512-JDd85+iYwUvaG9Zrt5X7oIxRZRiTW+76FwkRakoXNy/5VAWQW32Jq4ESjSVz6l6mh0KnZxPq3TLMugacCPnLjw==}
     cpu: [arm64]
     os: [win32]
 
-  '@rspack/binding-win32-ia32-msvc@2.1.5':
-    resolution: {integrity: sha512-p4OSmnj21+AY8vpIADveLEBXfXJRXonOTYim2VLVWV4TbXfhYNMLiX3qESHCdNnn6lVJM0q6zxxzEUfTyAKydw==}
+  '@rspack/binding-win32-ia32-msvc@2.1.7':
+    resolution: {integrity: sha512-y9PKEs6v9BLHV0i/4eaIRtxpATvSgcf/VYQkMT8mp+qWlPjUwDQNwU2ueWVGpff6INO+YAa7zobzziNFRgO7Lg==}
     cpu: [ia32]
     os: [win32]
 
-  '@rspack/binding-win32-x64-msvc@2.1.5':
-    resolution: {integrity: sha512-YCkLLDGMkHsw5CpcsFtFhzCu+JZEsNrcH9O1GpWMkyxR2ku2Fq1i2wEHYSm26HyW+PJ3+Fv347MPWMFZIz9q2g==}
+  '@rspack/binding-win32-x64-msvc@2.1.7':
+    resolution: {integrity: sha512-BjkOzcPY/K8YlRRvyywz0mDWk89MMxqAMhDmgBXCWorh1IjgKTsWDJ2lCGIM8M9CZXUG3khom8AfrOGwRT2I+g==}
     cpu: [x64]
     os: [win32]
 
-  '@rspack/binding@2.1.5':
-    resolution: {integrity: sha512-lF3ZLeeyV0AN3BL0m2jAmNZD5pP9IHsQ8gUXN7mo0g4xsW6nf6hsN7o9CnEHECz5uUZb+EoWsuWzAAmnA9Ip8Q==}
+  '@rspack/binding@2.1.7':
+    resolution: {integrity: sha512-wYqi8TY30hsIzLry503o/Uqu7y9Ec7pEwN5TVmB7Pb3xHrR2eHsQPzdpF/GkCLUjQSgD2Es3CDVV1mr6zO/78g==}
 
-  '@rspack/cli@2.1.5':
-    resolution: {integrity: sha512-N6Bm8sxHwatNoiZR68+/VKvVMDh19ya39t2Nfxu1/fBmGCrQX1ct8uPooVSysLtUF2Qx31sSRl1DX1SS0eYt2A==}
+  '@rspack/cli@2.1.7':
+    resolution: {integrity: sha512-1hmCC6OsJM4zJC7gWi122/kbl2h7lxZl4Wi1kdPYak0pqth6FGTmyHV+bwB+3yzAb6e/B2ttNqvXU1Zbj+Z+gQ==}
     hasBin: true
     peerDependencies:
       '@rspack/core': ^2.0.0-0
@@ -3653,8 +3531,8 @@ packages:
       '@rspack/dev-server':
         optional: true
 
-  '@rspack/core@2.1.5':
-    resolution: {integrity: sha512-YHjL7xVXycAWsjJtF39cRZ2u+ddiNFxY+FcNgEBe6Y8OaLeUfMfjba3gK+B1Oj32UcKD6BmXGsPfu9p+OII/Yw==}
+  '@rspack/core@2.1.7':
+    resolution: {integrity: sha512-d5Ju3zXzGgbqQWvlMlLUtek2eFPIzsFe2QOF4nwTAknxo/4OZ64t+kPT9nM6fr3aZX93VK0R3v02/kZYIRrV9Q==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@module-federation/runtime-tools': ^0.24.1 || ^2.0.0
@@ -3990,11 +3868,8 @@ packages:
   '@types/node-fetch@2.6.13':
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
 
-  '@types/node@24.13.3':
-    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
-
-  '@types/node@26.1.1':
-    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+  '@types/node@26.1.2':
+    resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
 
   '@types/qrcode@1.5.6':
     resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
@@ -4561,6 +4436,11 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
+  acorn@8.18.0:
+    resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
+    engines: {node: '>=0.4.0'}
+    hasBin: true
+
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
@@ -4774,8 +4654,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-sqlite3@13.0.1:
-    resolution: {integrity: sha512-LYpmOXdkpQYf4wmlxkdzW01XGlOXNIbjLg45yNkh0FQ4814VbK9PdOFmhZpYbej+EZtR/i3FDdhEG98HqZdgnA==}
+  better-sqlite3@13.0.2:
+    resolution: {integrity: sha512-jW6oufeDhXZaiX9Lw5A+oerVClx4iFrI6uDj1zu7SqUAjak9vbJvA0NEcKLNxHiQHb6kYCoFzzXYV0YOauhV3g==}
     engines: {node: '>=22'}
 
   bindings@1.5.0:
@@ -5414,8 +5294,8 @@ packages:
     resolution: {integrity: sha512-clKkw4C7nJ22mGgoVcCg6V/W/TxdNyIOTr89k2ONZu81qqkddPFDF0LXcbAwhzPD8DjkiRCjzuiO6Y+fkpD4vg==}
     engines: {node: '>=10.2.0'}
 
-  enhanced-resolve@5.24.3:
-    resolution: {integrity: sha512-PwKooW9JUzh5chmYfHM3IQl5OkK2u2Nm011MgeZrss3JmFraUx/fqrf78kk8GUMYoibx/14MdwTl/1WKkG7TpQ==}
+  enhanced-resolve@5.24.4:
+    resolution: {integrity: sha512-GVoi+ICHocoOIU7qVVM48wOJziRsqrsyqlI0Ce0LdowRn6v3bcH2zUa9kp85ncx0nwIb9/HOCOLS3fdThDG/XQ==}
     engines: {node: '>=10.13.0'}
 
   entities@6.0.1:
@@ -7173,19 +7053,6 @@ packages:
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
 
-  oxlint@1.75.0:
-    resolution: {integrity: sha512-m9WzjRcRYA/uqIZDa9tclrieoPJ/ln1QYTKdFx6NUOs8uY5DiHlIwRQoCrHT6OM6O3ww3l2skY5gO7G7ZphE7g==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    hasBin: true
-    peerDependencies:
-      oxlint-tsgolint: '>=7.0.2001'
-      vite-plus: '*'
-    peerDependenciesMeta:
-      oxlint-tsgolint:
-        optional: true
-      vite-plus:
-        optional: true
-
   oxlint@1.76.0:
     resolution: {integrity: sha512-6QoFioEU4fNdiUx/2Eo6TRd6NG7H7njnRCz8rhB66cZmMHDTqcm1Rjvl8Wry+ZTQMBAmyb4Mlf62Mk5X+eHSOw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -8246,9 +8113,6 @@ packages:
   underscore@1.13.8:
     resolution: {integrity: sha512-DXtD3ZtEQzc7M8m4cXotyHR+FAS18C64asBYY5vqZexfYryNNnDc02W4hKg3rdQuqOYas1jkseX0+nZXjTXnvQ==}
 
-  undici-types@7.18.2:
-    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
-
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
@@ -8473,8 +8337,8 @@ packages:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
     engines: {node: '>=12'}
 
-  webpack-cli@7.2.1:
-    resolution: {integrity: sha512-YwSGbcZdfz12DM8JIseVPr3oBb09IgVCVc4vY3oDvZnI/mALTGPAP1QiqOi4/bBLSJrRHaqDIXeHcNA0+G38aw==}
+  webpack-cli@7.2.2:
+    resolution: {integrity: sha512-lD0pALneslq8FfV+rwvm1BMW0AFAJrHHhNupAGN4asYjMvqrtRsenU4iKpiBo09gS4ntMxKGUxl9jhTEzVt0oA==}
     engines: {node: '>=20.9.0'}
     hasBin: true
     peerDependencies:
@@ -8504,8 +8368,8 @@ packages:
     resolution: {integrity: sha512-jyuiGJdtvY434z5bUZrjz67v76/ePNvFZTp9Mdz29IlH4+GPsgyGjiv0fKI+M7BdkU6ADjulUcKAd3tUK3WlEw==}
     engines: {node: '>=10.13.0'}
 
-  webpack@5.109.0:
-    resolution: {integrity: sha512-vomrngskVVXEZF9sMZfYAd4pXZUnfaWdJGlF+BTNF+gJBCKYCQBnOeVPlrh39Ewl7nlCsirDplMy6o5g9xJHBg==}
+  webpack@5.109.2:
+    resolution: {integrity: sha512-U9/cvLzxObKNEZ9+TtdqrHM5/9z3lgl2c+c4BzbqGxFQvQvBAq87yql5A8pQ+rrMbS496MZJeF5enVBndIy2hw==}
     engines: {node: '>=10.13.0'}
     hasBin: true
     peerDependencies:
@@ -9471,122 +9335,122 @@ snapshots:
 
   '@inquirer/ansi@2.0.7': {}
 
-  '@inquirer/checkbox@5.2.1(@types/node@26.1.1)':
+  '@inquirer/checkbox@5.2.1(@types/node@26.1.2)':
     dependencies:
       '@inquirer/ansi': 2.0.7
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
       '@inquirer/figures': 2.0.7
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/confirm@6.1.1(@types/node@26.1.1)':
+  '@inquirer/confirm@6.1.1(@types/node@26.1.2)':
     dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/core@11.2.1(@types/node@26.1.1)':
+  '@inquirer/core@11.2.1(@types/node@26.1.2)':
     dependencies:
       '@inquirer/ansi': 2.0.7
       '@inquirer/figures': 2.0.7
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
       cli-width: 4.1.0
       fast-wrap-ansi: 0.2.2
       mute-stream: 3.0.0
       signal-exit: 4.1.0
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/editor@5.2.2(@types/node@26.1.1)':
+  '@inquirer/editor@5.2.2(@types/node@26.1.2)':
     dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/external-editor': 3.0.3(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/external-editor': 3.0.3(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/expand@5.1.1(@types/node@26.1.1)':
+  '@inquirer/expand@5.1.1(@types/node@26.1.2)':
     dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/external-editor@3.0.3(@types/node@26.1.1)':
+  '@inquirer/external-editor@3.0.3(@types/node@26.1.2)':
     dependencies:
       chardet: 2.2.0
       iconv-lite: 0.7.3
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@inquirer/figures@2.0.7': {}
 
-  '@inquirer/input@5.1.2(@types/node@26.1.1)':
+  '@inquirer/input@5.1.2(@types/node@26.1.2)':
     dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/number@4.1.1(@types/node@26.1.1)':
+  '@inquirer/number@4.1.1(@types/node@26.1.2)':
     dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/password@5.1.1(@types/node@26.1.1)':
-    dependencies:
-      '@inquirer/ansi': 2.0.7
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
-    optionalDependencies:
-      '@types/node': 26.1.1
-
-  '@inquirer/prompts@8.5.2(@types/node@26.1.1)':
-    dependencies:
-      '@inquirer/checkbox': 5.2.1(@types/node@26.1.1)
-      '@inquirer/confirm': 6.1.1(@types/node@26.1.1)
-      '@inquirer/editor': 5.2.2(@types/node@26.1.1)
-      '@inquirer/expand': 5.1.1(@types/node@26.1.1)
-      '@inquirer/input': 5.1.2(@types/node@26.1.1)
-      '@inquirer/number': 4.1.1(@types/node@26.1.1)
-      '@inquirer/password': 5.1.1(@types/node@26.1.1)
-      '@inquirer/rawlist': 5.3.1(@types/node@26.1.1)
-      '@inquirer/search': 4.2.1(@types/node@26.1.1)
-      '@inquirer/select': 5.2.1(@types/node@26.1.1)
-    optionalDependencies:
-      '@types/node': 26.1.1
-
-  '@inquirer/rawlist@5.3.1(@types/node@26.1.1)':
-    dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
-    optionalDependencies:
-      '@types/node': 26.1.1
-
-  '@inquirer/search@4.2.1(@types/node@26.1.1)':
-    dependencies:
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/figures': 2.0.7
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
-    optionalDependencies:
-      '@types/node': 26.1.1
-
-  '@inquirer/select@5.2.1(@types/node@26.1.1)':
+  '@inquirer/password@5.1.1(@types/node@26.1.2)':
     dependencies:
       '@inquirer/ansi': 2.0.7
-      '@inquirer/core': 11.2.1(@types/node@26.1.1)
-      '@inquirer/figures': 2.0.7
-      '@inquirer/type': 4.0.7(@types/node@26.1.1)
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
-  '@inquirer/type@4.0.7(@types/node@26.1.1)':
+  '@inquirer/prompts@8.5.2(@types/node@26.1.2)':
+    dependencies:
+      '@inquirer/checkbox': 5.2.1(@types/node@26.1.2)
+      '@inquirer/confirm': 6.1.1(@types/node@26.1.2)
+      '@inquirer/editor': 5.2.2(@types/node@26.1.2)
+      '@inquirer/expand': 5.1.1(@types/node@26.1.2)
+      '@inquirer/input': 5.1.2(@types/node@26.1.2)
+      '@inquirer/number': 4.1.1(@types/node@26.1.2)
+      '@inquirer/password': 5.1.1(@types/node@26.1.2)
+      '@inquirer/rawlist': 5.3.1(@types/node@26.1.2)
+      '@inquirer/search': 4.2.1(@types/node@26.1.2)
+      '@inquirer/select': 5.2.1(@types/node@26.1.2)
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
+
+  '@inquirer/rawlist@5.3.1(@types/node@26.1.2)':
+    dependencies:
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
+    optionalDependencies:
+      '@types/node': 26.1.2
+
+  '@inquirer/search@4.2.1(@types/node@26.1.2)':
+    dependencies:
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/figures': 2.0.7
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
+    optionalDependencies:
+      '@types/node': 26.1.2
+
+  '@inquirer/select@5.2.1(@types/node@26.1.2)':
+    dependencies:
+      '@inquirer/ansi': 2.0.7
+      '@inquirer/core': 11.2.1(@types/node@26.1.2)
+      '@inquirer/figures': 2.0.7
+      '@inquirer/type': 4.0.7(@types/node@26.1.2)
+    optionalDependencies:
+      '@types/node': 26.1.2
+
+  '@inquirer/type@4.0.7(@types/node@26.1.2)':
+    optionalDependencies:
+      '@types/node': 26.1.2
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -9614,13 +9478,13 @@ snapshots:
   '@jest/console@30.4.1':
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       jest-message-util: 30.4.1
       jest-util: 30.4.1
       slash: 3.0.0
 
-  '@jest/core@30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))':
+  '@jest/core@30.4.2(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))':
     dependencies:
       '@jest/console': 30.4.1
       '@jest/pattern': 30.4.0
@@ -9628,7 +9492,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       ci-info: 4.4.0
@@ -9636,7 +9500,7 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       graceful-fs: 4.2.11
       jest-changed-files: 30.4.1
-      jest-config: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+      jest-config: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       jest-haste-map: 30.4.1
       jest-message-util: 30.4.1
       jest-regex-util: 30.4.0
@@ -9664,7 +9528,7 @@ snapshots:
       '@jest/fake-timers': 30.4.1
       '@jest/types': 30.4.1
       '@types/jsdom': 21.1.7
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-mock: 30.4.1
       jest-util: 30.4.1
       jsdom: 26.1.0
@@ -9673,7 +9537,7 @@ snapshots:
     dependencies:
       '@jest/fake-timers': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-mock: 30.4.1
 
   '@jest/expect-utils@30.4.1':
@@ -9691,7 +9555,7 @@ snapshots:
     dependencies:
       '@jest/types': 30.4.1
       '@sinonjs/fake-timers': 15.4.0
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-message-util: 30.4.1
       jest-mock: 30.4.1
       jest-util: 30.4.1
@@ -9709,7 +9573,7 @@ snapshots:
 
   '@jest/pattern@30.4.0':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-regex-util: 30.4.0
 
   '@jest/reporters@30.4.1':
@@ -9720,7 +9584,7 @@ snapshots:
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
       '@jridgewell/trace-mapping': 0.3.31
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
@@ -9799,7 +9663,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -9809,7 +9673,7 @@ snapshots:
       '@jest/schemas': 30.4.1
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -10318,115 +10182,58 @@ snapshots:
 
   '@oxc-project/types@0.140.0': {}
 
-  '@oxlint/binding-android-arm-eabi@1.75.0':
-    optional: true
-
   '@oxlint/binding-android-arm-eabi@1.76.0':
-    optional: true
-
-  '@oxlint/binding-android-arm64@1.75.0':
     optional: true
 
   '@oxlint/binding-android-arm64@1.76.0':
     optional: true
 
-  '@oxlint/binding-darwin-arm64@1.75.0':
-    optional: true
-
   '@oxlint/binding-darwin-arm64@1.76.0':
-    optional: true
-
-  '@oxlint/binding-darwin-x64@1.75.0':
     optional: true
 
   '@oxlint/binding-darwin-x64@1.76.0':
     optional: true
 
-  '@oxlint/binding-freebsd-x64@1.75.0':
-    optional: true
-
   '@oxlint/binding-freebsd-x64@1.76.0':
-    optional: true
-
-  '@oxlint/binding-linux-arm-gnueabihf@1.75.0':
     optional: true
 
   '@oxlint/binding-linux-arm-gnueabihf@1.76.0':
     optional: true
 
-  '@oxlint/binding-linux-arm-musleabihf@1.75.0':
-    optional: true
-
   '@oxlint/binding-linux-arm-musleabihf@1.76.0':
-    optional: true
-
-  '@oxlint/binding-linux-arm64-gnu@1.75.0':
     optional: true
 
   '@oxlint/binding-linux-arm64-gnu@1.76.0':
     optional: true
 
-  '@oxlint/binding-linux-arm64-musl@1.75.0':
-    optional: true
-
   '@oxlint/binding-linux-arm64-musl@1.76.0':
-    optional: true
-
-  '@oxlint/binding-linux-ppc64-gnu@1.75.0':
     optional: true
 
   '@oxlint/binding-linux-ppc64-gnu@1.76.0':
     optional: true
 
-  '@oxlint/binding-linux-riscv64-gnu@1.75.0':
-    optional: true
-
   '@oxlint/binding-linux-riscv64-gnu@1.76.0':
-    optional: true
-
-  '@oxlint/binding-linux-riscv64-musl@1.75.0':
     optional: true
 
   '@oxlint/binding-linux-riscv64-musl@1.76.0':
     optional: true
 
-  '@oxlint/binding-linux-s390x-gnu@1.75.0':
-    optional: true
-
   '@oxlint/binding-linux-s390x-gnu@1.76.0':
-    optional: true
-
-  '@oxlint/binding-linux-x64-gnu@1.75.0':
     optional: true
 
   '@oxlint/binding-linux-x64-gnu@1.76.0':
     optional: true
 
-  '@oxlint/binding-linux-x64-musl@1.75.0':
-    optional: true
-
   '@oxlint/binding-linux-x64-musl@1.76.0':
-    optional: true
-
-  '@oxlint/binding-openharmony-arm64@1.75.0':
     optional: true
 
   '@oxlint/binding-openharmony-arm64@1.76.0':
     optional: true
 
-  '@oxlint/binding-win32-arm64-msvc@1.75.0':
-    optional: true
-
   '@oxlint/binding-win32-arm64-msvc@1.76.0':
     optional: true
 
-  '@oxlint/binding-win32-ia32-msvc@1.75.0':
-    optional: true
-
   '@oxlint/binding-win32-ia32-msvc@1.76.0':
-    optional: true
-
-  '@oxlint/binding-win32-x64-msvc@1.75.0':
     optional: true
 
   '@oxlint/binding-win32-x64-msvc@1.76.0':
@@ -10716,68 +10523,68 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.3':
     optional: true
 
-  '@rspack/binding-darwin-arm64@2.1.5':
+  '@rspack/binding-darwin-arm64@2.1.7':
     optional: true
 
-  '@rspack/binding-darwin-x64@2.1.5':
+  '@rspack/binding-darwin-x64@2.1.7':
     optional: true
 
-  '@rspack/binding-linux-arm64-gnu@2.1.5':
+  '@rspack/binding-linux-arm64-gnu@2.1.7':
     optional: true
 
-  '@rspack/binding-linux-arm64-musl@2.1.5':
+  '@rspack/binding-linux-arm64-musl@2.1.7':
     optional: true
 
-  '@rspack/binding-linux-riscv64-gnu@2.1.5':
+  '@rspack/binding-linux-riscv64-gnu@2.1.7':
     optional: true
 
-  '@rspack/binding-linux-riscv64-musl@2.1.5':
+  '@rspack/binding-linux-riscv64-musl@2.1.7':
     optional: true
 
-  '@rspack/binding-linux-x64-gnu@2.1.5':
+  '@rspack/binding-linux-x64-gnu@2.1.7':
     optional: true
 
-  '@rspack/binding-linux-x64-musl@2.1.5':
+  '@rspack/binding-linux-x64-musl@2.1.7':
     optional: true
 
-  '@rspack/binding-wasm32-wasi@2.1.5':
+  '@rspack/binding-wasm32-wasi@2.1.7':
     dependencies:
       '@emnapi/core': 1.11.2
       '@emnapi/runtime': 1.11.2
       '@napi-rs/wasm-runtime': 1.1.6(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)
     optional: true
 
-  '@rspack/binding-win32-arm64-msvc@2.1.5':
+  '@rspack/binding-win32-arm64-msvc@2.1.7':
     optional: true
 
-  '@rspack/binding-win32-ia32-msvc@2.1.5':
+  '@rspack/binding-win32-ia32-msvc@2.1.7':
     optional: true
 
-  '@rspack/binding-win32-x64-msvc@2.1.5':
+  '@rspack/binding-win32-x64-msvc@2.1.7':
     optional: true
 
-  '@rspack/binding@2.1.5':
+  '@rspack/binding@2.1.7':
     optionalDependencies:
-      '@rspack/binding-darwin-arm64': 2.1.5
-      '@rspack/binding-darwin-x64': 2.1.5
-      '@rspack/binding-linux-arm64-gnu': 2.1.5
-      '@rspack/binding-linux-arm64-musl': 2.1.5
-      '@rspack/binding-linux-riscv64-gnu': 2.1.5
-      '@rspack/binding-linux-riscv64-musl': 2.1.5
-      '@rspack/binding-linux-x64-gnu': 2.1.5
-      '@rspack/binding-linux-x64-musl': 2.1.5
-      '@rspack/binding-wasm32-wasi': 2.1.5
-      '@rspack/binding-win32-arm64-msvc': 2.1.5
-      '@rspack/binding-win32-ia32-msvc': 2.1.5
-      '@rspack/binding-win32-x64-msvc': 2.1.5
+      '@rspack/binding-darwin-arm64': 2.1.7
+      '@rspack/binding-darwin-x64': 2.1.7
+      '@rspack/binding-linux-arm64-gnu': 2.1.7
+      '@rspack/binding-linux-arm64-musl': 2.1.7
+      '@rspack/binding-linux-riscv64-gnu': 2.1.7
+      '@rspack/binding-linux-riscv64-musl': 2.1.7
+      '@rspack/binding-linux-x64-gnu': 2.1.7
+      '@rspack/binding-linux-x64-musl': 2.1.7
+      '@rspack/binding-wasm32-wasi': 2.1.7
+      '@rspack/binding-win32-arm64-msvc': 2.1.7
+      '@rspack/binding-win32-ia32-msvc': 2.1.7
+      '@rspack/binding-win32-x64-msvc': 2.1.7
 
-  '@rspack/cli@2.1.5(@rspack/core@2.1.5)':
+  '@rspack/cli@2.1.7(@rspack/core@2.1.7)':
     dependencies:
-      '@rspack/core': 2.1.5
+      '@rspack/core': 2.1.7
 
-  '@rspack/core@2.1.5':
+  '@rspack/core@2.1.7':
     dependencies:
-      '@rspack/binding': 2.1.5
+      '@rspack/binding': 2.1.7
 
   '@sec-ant/readable-stream@0.4.1': {}
 
@@ -10857,9 +10664,9 @@ snapshots:
       tslib: 2.8.1
       typed-inject: 5.0.0
 
-  '@stryker-mutator/core@9.6.1(@types/node@26.1.1)':
+  '@stryker-mutator/core@9.6.1(@types/node@26.1.2)':
     dependencies:
-      '@inquirer/prompts': 8.5.2(@types/node@26.1.1)
+      '@inquirer/prompts': 8.5.2(@types/node@26.1.2)
       '@stryker-mutator/api': 9.6.1
       '@stryker-mutator/instrumenter': 9.6.1
       '@stryker-mutator/util': 9.6.1
@@ -10906,24 +10713,24 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@stryker-mutator/jest-runner@9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.1))':
+  '@stryker-mutator/jest-runner@9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.2))':
     dependencies:
       '@stryker-mutator/api': 9.6.1
-      '@stryker-mutator/core': 9.6.1(@types/node@26.1.1)
+      '@stryker-mutator/core': 9.6.1(@types/node@26.1.2)
       '@stryker-mutator/util': 9.6.1
       semver: 7.7.4
       tslib: 2.8.1
 
   '@stryker-mutator/util@9.6.1': {}
 
-  '@stryker-mutator/vitest-runner@9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.1))(vitest@4.1.10)':
+  '@stryker-mutator/vitest-runner@9.6.1(@stryker-mutator/core@9.6.1(@types/node@26.1.2))(vitest@4.1.10)':
     dependencies:
       '@stryker-mutator/api': 9.6.1
-      '@stryker-mutator/core': 9.6.1(@types/node@26.1.1)
+      '@stryker-mutator/core': 9.6.1(@types/node@26.1.2)
       '@stryker-mutator/util': 9.6.1
       semver: 7.8.5
       tslib: 2.8.1
-      vitest: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -10995,7 +10802,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/chai@5.2.3':
     dependencies:
@@ -11004,13 +10811,13 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/cookiejar@2.1.5': {}
 
   '@types/cors@2.8.19':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/d3-array@3.2.2': {}
 
@@ -11143,7 +10950,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.2':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -11157,7 +10964,7 @@ snapshots:
   '@types/fs-extra@11.0.4':
     dependencies:
       '@types/jsonfile': 6.1.4
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/geojson@7946.0.16': {}
 
@@ -11184,7 +10991,7 @@ snapshots:
 
   '@types/jsdom@21.1.7':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@types/tough-cookie': 4.0.5
       parse5: 7.3.0
 
@@ -11192,7 +10999,7 @@ snapshots:
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -11208,20 +11015,16 @@ snapshots:
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       form-data: 4.0.6
 
-  '@types/node@24.13.3':
-    dependencies:
-      undici-types: 7.18.2
-
-  '@types/node@26.1.1':
+  '@types/node@26.1.2':
     dependencies:
       undici-types: 8.3.0
 
   '@types/qrcode@1.5.6':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/qs@6.15.1': {}
 
@@ -11237,12 +11040,12 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/stack-utils@2.0.3': {}
 
@@ -11250,7 +11053,7 @@ snapshots:
     dependencies:
       '@types/cookiejar': 2.1.5
       '@types/methods': 1.1.4
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       form-data: 4.0.6
 
   '@types/supertest@7.2.1':
@@ -11275,7 +11078,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -11424,10 +11227,10 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-react@6.0.4(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.0.4(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   '@vitest/coverage-v8@4.1.10(vitest@4.1.10)':
     dependencies:
@@ -11441,7 +11244,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -11452,13 +11255,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.10(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vitest/mocker@4.1.10(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -11656,6 +11459,8 @@ snapshots:
       acorn: 8.17.0
 
   acorn@8.17.0: {}
+
+  acorn@8.18.0: {}
 
   agent-base@7.1.4: {}
 
@@ -11872,7 +11677,7 @@ snapshots:
 
   baseline-browser-mapping@2.11.1: {}
 
-  better-sqlite3@13.0.1:
+  better-sqlite3@13.0.2:
     dependencies:
       node-addon-api: 8.9.0
 
@@ -12468,7 +12273,7 @@ snapshots:
   engine.io@6.6.9:
     dependencies:
       '@types/cors': 2.8.19
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@types/ws': 8.18.1
       accepts: 1.3.8
       base64id: 2.0.0
@@ -12482,7 +12287,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  enhanced-resolve@5.24.3:
+  enhanced-resolve@5.24.4:
     dependencies:
       graceful-fs: 4.2.11
       tapable: 2.3.3
@@ -13367,7 +13172,7 @@ snapshots:
       '@jest/expect': 30.4.1
       '@jest/test-result': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       co: 4.6.0
       dedent: 1.7.2
@@ -13387,15 +13192,15 @@ snapshots:
       - babel-plugin-macros
       - supports-color
 
-  jest-cli@30.4.2(@types/node@24.13.3):
+  jest-cli@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)):
     dependencies:
-      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       '@jest/test-result': 30.4.1
       '@jest/types': 30.4.1
       chalk: 4.1.2
       exit-x: 0.2.2
       import-local: 3.2.0
-      jest-config: 30.4.2(@types/node@24.13.3)
+      jest-config: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       jest-util: 30.4.1
       jest-validate: 30.4.1
       yargs: 17.7.3
@@ -13406,45 +13211,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  jest-cli@30.4.2(@types/node@26.1.1):
-    dependencies:
-      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      '@jest/test-result': 30.4.1
-      '@jest/types': 30.4.1
-      chalk: 4.1.2
-      exit-x: 0.2.2
-      import-local: 3.2.0
-      jest-config: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      jest-util: 30.4.1
-      jest-validate: 30.4.1
-      yargs: 17.7.3
-    transitivePeerDependencies:
-      - '@types/node'
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
-  jest-cli@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)):
-    dependencies:
-      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      '@jest/test-result': 30.4.1
-      '@jest/types': 30.4.1
-      chalk: 4.1.2
-      exit-x: 0.2.2
-      import-local: 3.2.0
-      jest-config: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      jest-util: 30.4.1
-      jest-validate: 30.4.1
-      yargs: 17.7.3
-    transitivePeerDependencies:
-      - '@types/node'
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
-  jest-config@30.4.2(@types/node@24.13.3):
+  jest-config@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)):
     dependencies:
       '@babel/core': 7.29.7
       '@jest/get-type': 30.1.0
@@ -13470,39 +13237,8 @@ snapshots:
       slash: 3.0.0
       strip-json-comments: 3.1.1
     optionalDependencies:
-      '@types/node': 24.13.3
-    transitivePeerDependencies:
-      - babel-plugin-macros
-      - supports-color
-
-  jest-config@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)):
-    dependencies:
-      '@babel/core': 7.29.7
-      '@jest/get-type': 30.1.0
-      '@jest/pattern': 30.4.0
-      '@jest/test-sequencer': 30.4.1
-      '@jest/types': 30.4.1
-      babel-jest: 30.4.1(@babel/core@7.29.7)
-      chalk: 4.1.2
-      ci-info: 4.4.0
-      deepmerge: 4.3.1
-      glob: 10.5.0
-      graceful-fs: 4.2.11
-      jest-circus: 30.4.2
-      jest-docblock: 30.4.0
-      jest-environment-node: 30.4.1
-      jest-regex-util: 30.4.0
-      jest-resolve: 30.4.1
-      jest-runner: 30.4.2
-      jest-util: 30.4.1
-      jest-validate: 30.4.1
-      parse-json: 5.2.0
-      pretty-format: 30.4.1
-      slash: 3.0.0
-      strip-json-comments: 3.1.1
-    optionalDependencies:
-      '@types/node': 26.1.1
-      ts-node: 10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)
+      '@types/node': 26.1.2
+      ts-node: 10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color
@@ -13541,7 +13277,7 @@ snapshots:
       '@jest/environment': 30.4.1
       '@jest/fake-timers': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-mock: 30.4.1
       jest-util: 30.4.1
       jest-validate: 30.4.1
@@ -13551,7 +13287,7 @@ snapshots:
   jest-haste-map@30.4.1:
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       graceful-fs: 4.2.11
@@ -13591,7 +13327,7 @@ snapshots:
   jest-mock@30.4.1:
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-util: 30.4.1
 
   jest-pnp-resolver@1.2.3(jest-resolve@30.4.1):
@@ -13625,7 +13361,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       emittery: 0.13.1
       exit-x: 0.2.2
@@ -13654,7 +13390,7 @@ snapshots:
       '@jest/test-result': 30.4.1
       '@jest/transform': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
@@ -13701,7 +13437,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -13710,7 +13446,7 @@ snapshots:
   jest-util@30.4.1:
     dependencies:
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
@@ -13738,7 +13474,7 @@ snapshots:
     dependencies:
       '@jest/test-result': 30.4.1
       '@jest/types': 30.4.1
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       emittery: 0.13.1
@@ -13747,57 +13483,31 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
   jest-worker@29.7.0:
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
   jest-worker@30.4.1:
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@ungap/structured-clone': 1.3.3
       jest-util: 30.4.1
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
-  jest@30.4.2(@types/node@24.13.3):
+  jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2)):
     dependencies:
-      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       '@jest/types': 30.4.1
       import-local: 3.2.0
-      jest-cli: 30.4.2(@types/node@24.13.3)
-    transitivePeerDependencies:
-      - '@types/node'
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
-  jest@30.4.2(@types/node@26.1.1):
-    dependencies:
-      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      '@jest/types': 30.4.1
-      import-local: 3.2.0
-      jest-cli: 30.4.2(@types/node@26.1.1)
-    transitivePeerDependencies:
-      - '@types/node'
-      - babel-plugin-macros
-      - esbuild-register
-      - supports-color
-      - ts-node
-
-  jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2)):
-    dependencies:
-      '@jest/core': 30.4.2(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      '@jest/types': 30.4.1
-      import-local: 3.2.0
-      jest-cli: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
+      jest-cli: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
     transitivePeerDependencies:
       - '@types/node'
       - babel-plugin-macros
@@ -13881,7 +13591,7 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex@3.3.0(better-sqlite3@13.0.1)(mysql2@3.23.2(@types/node@26.1.1)):
+  knex@3.3.0(better-sqlite3@13.0.2)(mysql2@3.23.2(@types/node@26.1.2)):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -13898,8 +13608,8 @@ snapshots:
       tarn: 3.1.2
       tildify: 2.0.0
     optionalDependencies:
-      better-sqlite3: 13.0.1
-      mysql2: 3.23.2(@types/node@26.1.1)
+      better-sqlite3: 13.0.2
+      mysql2: 3.23.2(@types/node@26.1.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -14753,23 +14463,23 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(webpack@5.109.0(esbuild@0.28.1)):
+  minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(webpack@5.109.2(esbuild@0.28.1)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.49.0
-      webpack: 5.109.0(esbuild@0.28.1)
+      webpack: 5.109.2(esbuild@0.28.1)
     optionalDependencies:
       esbuild: 0.28.1
 
-  minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(webpack@5.109.0):
+  minimizer-webpack-plugin@5.6.1(esbuild@0.28.1)(webpack@5.109.2):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.49.0
-      webpack: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
+      webpack: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
     optionalDependencies:
       esbuild: 0.28.1
 
@@ -14874,9 +14584,9 @@ snapshots:
 
   mute-stream@3.0.0: {}
 
-  mysql2@3.23.2(@types/node@26.1.1):
+  mysql2@3.23.2(@types/node@26.1.2):
     dependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       aws-ssl-profiles: 1.1.2
       denque: 2.1.0
       generate-function: 2.3.1
@@ -14993,28 +14703,6 @@ snapshots:
       oniguruma-parser: 0.12.2
       regex: 6.1.0
       regex-recursion: 6.0.2
-
-  oxlint@1.75.0:
-    optionalDependencies:
-      '@oxlint/binding-android-arm-eabi': 1.75.0
-      '@oxlint/binding-android-arm64': 1.75.0
-      '@oxlint/binding-darwin-arm64': 1.75.0
-      '@oxlint/binding-darwin-x64': 1.75.0
-      '@oxlint/binding-freebsd-x64': 1.75.0
-      '@oxlint/binding-linux-arm-gnueabihf': 1.75.0
-      '@oxlint/binding-linux-arm-musleabihf': 1.75.0
-      '@oxlint/binding-linux-arm64-gnu': 1.75.0
-      '@oxlint/binding-linux-arm64-musl': 1.75.0
-      '@oxlint/binding-linux-ppc64-gnu': 1.75.0
-      '@oxlint/binding-linux-riscv64-gnu': 1.75.0
-      '@oxlint/binding-linux-riscv64-musl': 1.75.0
-      '@oxlint/binding-linux-s390x-gnu': 1.75.0
-      '@oxlint/binding-linux-x64-gnu': 1.75.0
-      '@oxlint/binding-linux-x64-musl': 1.75.0
-      '@oxlint/binding-openharmony-arm64': 1.75.0
-      '@oxlint/binding-win32-arm64-msvc': 1.75.0
-      '@oxlint/binding-win32-ia32-msvc': 1.75.0
-      '@oxlint/binding-win32-x64-msvc': 1.75.0
 
   oxlint@1.76.0:
     optionalDependencies:
@@ -16088,12 +15776,12 @@ snapshots:
 
   ts-dedent@2.3.0: {}
 
-  ts-jest@29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@24.13.3)):
+  ts-jest@29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))):
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
       handlebars: 4.7.9
-      jest: 30.4.2(@types/node@24.13.3)
+      jest: 30.4.2(@types/node@26.1.2)(ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2))
       json5: 2.2.3
       lodash.memoize: 4.1.2
       make-error: 1.3.6
@@ -16109,64 +15797,22 @@ snapshots:
       esbuild: 0.28.1
       jest-util: 30.4.1
 
-  ts-jest@29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))):
-    dependencies:
-      bs-logger: 0.2.6
-      fast-json-stable-stringify: 2.1.0
-      handlebars: 4.7.9
-      jest: 30.4.2(@types/node@26.1.1)(ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2))
-      json5: 2.2.3
-      lodash.memoize: 4.1.2
-      make-error: 1.3.6
-      semver: 7.8.5
-      type-fest: 4.41.0
-      typescript: '@typescript/typescript6@6.0.2'
-      yargs-parser: 21.1.1
-    optionalDependencies:
-      '@babel/core': 7.29.7
-      '@jest/transform': 30.4.1
-      '@jest/types': 30.4.1
-      babel-jest: 30.4.1(@babel/core@7.29.7)
-      esbuild: 0.28.1
-      jest-util: 30.4.1
-
-  ts-jest@29.4.12(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@26.1.1)):
-    dependencies:
-      bs-logger: 0.2.6
-      fast-json-stable-stringify: 2.1.0
-      handlebars: 4.7.9
-      jest: 30.4.2(@types/node@26.1.1)
-      json5: 2.2.3
-      lodash.memoize: 4.1.2
-      make-error: 1.3.6
-      semver: 7.8.5
-      type-fest: 4.41.0
-      typescript: '@typescript/typescript6@6.0.2'
-      yargs-parser: 21.1.1
-    optionalDependencies:
-      '@babel/core': 7.29.7
-      '@jest/transform': 30.4.1
-      '@jest/types': 30.4.1
-      babel-jest: 30.4.1(@babel/core@7.29.7)
-      esbuild: 0.28.1
-      jest-util: 30.4.1
-
-  ts-loader@9.6.2(@typescript/typescript6@6.0.2)(webpack@5.109.0(esbuild@0.28.1)):
+  ts-loader@9.6.2(@typescript/typescript6@6.0.2)(webpack@5.109.2(esbuild@0.28.1)):
     dependencies:
       chalk: 4.1.2
       picomatch: 4.0.5
       source-map: 0.7.6
       typescript: '@typescript/typescript6@6.0.2'
-      webpack: 5.109.0(esbuild@0.28.1)
+      webpack: 5.109.2(esbuild@0.28.1)
 
-  ts-node@10.9.2(@types/node@26.1.1)(@typescript/typescript6@6.0.2):
+  ts-node@10.9.2(@types/node@26.1.2)(@typescript/typescript6@6.0.2):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.12
       '@tsconfig/node12': 1.0.11
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.4
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       acorn: 8.17.0
       acorn-walk: 8.3.5
       arg: 4.1.3
@@ -16318,8 +15964,6 @@ snapshots:
 
   underscore@1.13.8: {}
 
-  undici-types@7.18.2: {}
-
   undici-types@8.3.0: {}
 
   undici@6.28.0:
@@ -16456,7 +16100,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0):
+  vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
@@ -16464,17 +16108,17 @@ snapshots:
       rolldown: 1.1.5
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       esbuild: 0.28.1
       fsevents: 2.3.3
       terser: 5.49.0
       tsx: 4.23.1
       yaml: 2.9.0
 
-  vitest@4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0):
+  vitest@4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(esbuild@0.28.1)(jsdom@26.1.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+      '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -16491,10 +16135,10 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 26.1.1
+      '@types/node': 26.1.2
       '@vitest/coverage-v8': 4.1.10(vitest@4.1.10)
       jsdom: 26.1.0
     transitivePeerDependencies:
@@ -16538,7 +16182,7 @@ snapshots:
 
   webidl-conversions@7.0.0: {}
 
-  webpack-cli@7.2.1(json5@2.2.3)(toml@3.0.0)(webpack@5.109.0):
+  webpack-cli@7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2):
     dependencies:
       '@discoveryjs/json-ext': 1.1.0
       commander: 14.0.3
@@ -16547,7 +16191,7 @@ snapshots:
       import-local: 3.2.0
       interpret: 3.1.1
       rechoir: 0.8.0
-      webpack: 5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1)
+      webpack: 5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2)
       webpack-merge: 6.0.1
     optionalDependencies:
       json5: 2.2.3
@@ -16561,23 +16205,23 @@ snapshots:
 
   webpack-sources@3.5.1: {}
 
-  webpack@5.109.0(esbuild@0.28.1):
+  webpack@5.109.2(esbuild@0.28.1):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
       '@webassemblyjs/ast': 1.14.1
       '@webassemblyjs/wasm-edit': 1.14.1
       '@webassemblyjs/wasm-parser': 1.14.1
-      acorn: 8.17.0
+      acorn: 8.18.0
       browserslist: 4.28.7
       chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.24.3
+      enhanced-resolve: 5.24.4
       es-module-lexer: 2.3.1
       eslint-scope: 5.1.1
       events: 3.3.0
       graceful-fs: 4.2.11
       mime-db: 1.54.0
-      minimizer-webpack-plugin: 5.6.1(esbuild@0.28.1)(webpack@5.109.0(esbuild@0.28.1))
+      minimizer-webpack-plugin: 5.6.1(esbuild@0.28.1)(webpack@5.109.2(esbuild@0.28.1))
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
@@ -16597,30 +16241,30 @@ snapshots:
       - postcss
       - uglify-js
 
-  webpack@5.109.0(esbuild@0.28.1)(webpack-cli@7.2.1):
+  webpack@5.109.2(esbuild@0.28.1)(webpack-cli@7.2.2):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
       '@webassemblyjs/ast': 1.14.1
       '@webassemblyjs/wasm-edit': 1.14.1
       '@webassemblyjs/wasm-parser': 1.14.1
-      acorn: 8.17.0
+      acorn: 8.18.0
       browserslist: 4.28.7
       chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.24.3
+      enhanced-resolve: 5.24.4
       es-module-lexer: 2.3.1
       eslint-scope: 5.1.1
       events: 3.3.0
       graceful-fs: 4.2.11
       mime-db: 1.54.0
-      minimizer-webpack-plugin: 5.6.1(esbuild@0.28.1)(webpack@5.109.0)
+      minimizer-webpack-plugin: 5.6.1(esbuild@0.28.1)(webpack@5.109.2)
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
       watchpack: 2.5.2
       webpack-sources: 3.5.1
     optionalDependencies:
-      webpack-cli: 7.2.1(json5@2.2.3)(toml@3.0.0)(webpack@5.109.0)
+      webpack-cli: 7.2.2(json5@2.2.3)(toml@3.0.0)(webpack@5.109.2)
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'

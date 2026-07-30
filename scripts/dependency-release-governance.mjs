@@ -198,6 +198,61 @@ function validateOverrideRegistry(policy, exceptions, errors) {
   for (const registration of policy.overrideRegistry) {
     validateOverrideException(registration, byId, policy.owner, today, errors)
   }
+  const review = policy.overrideRemovalReview
+  if (
+    review?.reviewedAt !== policy.lastReviewed ||
+    review?.retainedCount !== actual.length ||
+    !isNonEmptyString(review?.method) ||
+    !isNonEmptyString(review?.result) ||
+    !isNonEmptyString(review?.nextReview)
+  ) {
+    errors.push('overrideRemovalReview must record the current complete removal rehearsal')
+  }
+}
+
+function dispositionMatches(disposition, declaration) {
+  return (
+    disposition.dependency === declaration.name &&
+    (disposition.field === undefined || disposition.field === declaration.field) &&
+    (disposition.manifest === undefined || disposition.manifest === declaration.manifest) &&
+    (disposition.manifestPrefix === undefined ||
+      declaration.manifest.startsWith(disposition.manifestPrefix)) &&
+    (disposition.declared === undefined || disposition.declared === declaration.declared) &&
+    (disposition.declaredPrefix === undefined ||
+      declaration.declared.startsWith(disposition.declaredPrefix))
+  )
+}
+
+function validateDirectInventoryPolicy(policy, errors) {
+  const inventory = policy.directLatestInventory
+  if (
+    !Number.isSafeInteger(inventory.minimumReleaseAgeMinutes) ||
+    inventory.minimumReleaseAgeMinutes < 1
+  ) {
+    errors.push('directLatestInventory.minimumReleaseAgeMinutes must be positive')
+  }
+  const classifications = new Set(inventory.classifications)
+  const declarations = dependencyDeclarations()
+  for (const disposition of inventory.dispositions ?? []) {
+    for (const field of [
+      'dependency',
+      'classification',
+      'rationale',
+      'owner',
+      'reviewBy',
+      'removeWhen'
+    ]) {
+      if (!isNonEmptyString(disposition[field])) {
+        errors.push(`dependency disposition must define ${field}`)
+      }
+    }
+    if (!classifications.has(disposition.classification)) {
+      errors.push(`unknown dependency disposition classification ${disposition.classification}`)
+    }
+    if (!declarations.some(declaration => dispositionMatches(disposition, declaration))) {
+      errors.push(`stale dependency disposition for ${disposition.dependency}`)
+    }
+  }
 }
 
 function validateOverrideException(registration, exceptionsById, owner, today, errors) {
@@ -252,6 +307,7 @@ export function validateDependencyReleaseGovernance(root = ROOT) {
   validateRoutinePolicy(policy, errors)
   validateEvidenceTemplate(policy, errors)
   validateFirstParty(policy, projects, errors)
+  validateDirectInventoryPolicy(policy, errors)
   validateOverrideRegistry(policy, exceptions, errors)
   validateScheduledVerification(policy, errors)
   return errors
@@ -304,13 +360,53 @@ function declaredMajor(value) {
   return match ? Number(match[1]) : undefined
 }
 
-export async function createDirectLatestInventory() {
+function releaseAgeMinutes(publishedAt, now) {
+  if (!publishedAt) return undefined
+  const milliseconds = now.getTime() - new Date(publishedAt).getTime()
+  return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 60_000) : undefined
+}
+
+export function classifyDirectDependency(declaration, registry, policy, now = new Date()) {
+  if (declaration.name.startsWith('@bsv/')) return 'first-party-release-held'
+  const disposition = (policy.directLatestInventory.dispositions ?? []).find(candidate =>
+    dispositionMatches(candidate, declaration)
+  )
+  if (disposition) return disposition.classification
+
+  const declared = declaredMajor(declaration.declared)
+  const latest = declaredMajor(registry.latest)
+  if (registry.latest && !String(declaration.declared).includes(registry.latest)) {
+    const age = releaseAgeMinutes(registry.publishedAt, now)
+    if (
+      age !== undefined &&
+      age >= 0 &&
+      age < policy.directLatestInventory.minimumReleaseAgeMinutes
+    ) {
+      return 'release-age-hold'
+    }
+  }
+  if (declared !== undefined && latest !== undefined && declared < latest) {
+    return 'major-migration'
+  }
+  if (registry.latest && !String(declaration.declared).includes(registry.latest)) {
+    return 'compatible-update'
+  }
+  return 'current'
+}
+
+export async function createDirectLatestInventory(now = new Date()) {
+  const policy = readJson(POLICY_PATH)
   const declarations = dependencyDeclarations()
   const names = [...new Set(declarations.map(item => item.name))].sort(compareText)
   const metadata = await mapWithConcurrency(names, 8, async name => {
     try {
-      const latest = await npmView(name, ['name', 'version'])
-      return { name, latest: latest.version, queryStatus: 'ok' }
+      const latest = await npmView(name, ['name', 'version', 'time'])
+      return {
+        name,
+        latest: latest.version,
+        publishedAt: latest.time?.[latest.version],
+        queryStatus: 'ok'
+      }
     } catch (error) {
       return { name, queryStatus: 'unavailable', error: String(error.message).slice(0, 500) }
     }
@@ -318,16 +414,12 @@ export async function createDirectLatestInventory() {
   const byName = new Map(metadata.map(item => [item.name, item]))
   const rows = declarations.map(declaration => {
     const registry = byName.get(declaration.name)
-    const declared = declaredMajor(declaration.declared)
-    const latest = declaredMajor(registry.latest)
-    let classification = 'current'
-    if (declaration.name.startsWith('@bsv/')) classification = 'first-party-release-held'
-    else if (declared !== undefined && latest !== undefined && declared < latest) {
-      classification = 'major-migration'
-    } else if (registry.latest && !String(declaration.declared).includes(registry.latest)) {
-      classification = 'compatible-update'
+    return {
+      ...declaration,
+      latest: registry.latest,
+      latestPublishedAt: registry.publishedAt,
+      classification: classifyDirectDependency(declaration, registry, policy, now)
     }
-    return { ...declaration, latest: registry.latest, classification }
   })
   return {
     schemaVersion: 1,

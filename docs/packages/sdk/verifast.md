@@ -3,9 +3,9 @@ id: pkg-verifast
 title: '@bsv/verifast'
 kind: package
 domain: sdk
-version: '0.3.3'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+version: '0.3.4'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/verifast'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast'

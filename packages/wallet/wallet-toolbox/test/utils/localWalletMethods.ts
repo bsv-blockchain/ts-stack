@@ -145,7 +145,7 @@ export async function createOneSatTestOutput(
 
   let noSendChange: OutpointString[] | undefined = undefined
   let txids: string[] = []
-  let vargs: Validation.ValidCreateActionArgs
+  let isNoSend = false
 
   for (let i = 0; i < howMany; i++) {
     const args: CreateActionArgs = {
@@ -167,7 +167,8 @@ export async function createOneSatTestOutput(
         noSendChange
       }
     }
-    Validation.validateCreateActionArgs(args)
+    const validatedArgs = Validation.validateCreateActionArgs(args)
+    isNoSend = validatedArgs.isNoSend
     car = await setup.wallet.createAction(args)
     expect(car.txid).toMatch(/^[0-9a-f]{64}$/)
     txids.push(car.txid!)
@@ -176,7 +177,7 @@ export async function createOneSatTestOutput(
     const req = await EntityProvenTxReq.fromStorageTxid(setup.activeStorage, car.txid!)
     expect(req?.history.notes).toBeDefined()
     if (req?.history.notes) {
-      if (vargs.isNoSend) {
+      if (isNoSend) {
         expect(req.status === 'nosend').toBe(true)
         expect(req.history.notes.length).toBe(1)
         const n = req.history.notes[0]
@@ -190,7 +191,7 @@ export async function createOneSatTestOutput(
     }
   }
 
-  if (vargs!.isNoSend) {
+  if (isNoSend) {
     // Create final sending transaction
     const args: CreateActionArgs = {
       description: 'send batch',
@@ -199,7 +200,7 @@ export async function createOneSatTestOutput(
         sendWith: txids
       }
     }
-    vargs = Validation.validateCreateActionArgs(args)
+    Validation.validateCreateActionArgs(args)
     car = await setup.wallet.createAction(args)
   }
 

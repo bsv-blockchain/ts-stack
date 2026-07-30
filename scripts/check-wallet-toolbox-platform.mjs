@@ -101,6 +101,20 @@ function compareText(left, right) {
   return left.localeCompare(right)
 }
 
+function packageNames(moduleIds) {
+  return [
+    ...new Set(
+      moduleIds.flatMap(moduleId => {
+        const normalized = moduleId.replaceAll('\\', '/')
+        const installed = normalized.split('/node_modules/').at(-1)
+        if (!installed || installed === normalized) return []
+        const parts = installed.split('/')
+        return [parts[0].startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]]
+      })
+    )
+  ].sort(compareText)
+}
+
 const run = createCommandRunner({
   timeoutMs: COMMAND_TIMEOUT_MS,
   maxBufferBytes: MAX_BUFFER_BYTES,
@@ -345,7 +359,22 @@ async function checkBrowser(consumerDirectory, budget) {
   const esbuildSizes = sizes(esbuildBundle.code)
   validateBudget(esbuildSizes, budget.esbuild, 'esbuild browser bundle')
 
-  return { vite: viteSizes, esbuild: esbuildSizes }
+  return {
+    vite: {
+      bytes: viteSizes,
+      composition: {
+        modules: viteModules.size,
+        packages: packageNames([...viteModules])
+      }
+    },
+    esbuild: {
+      bytes: esbuildSizes,
+      composition: {
+        modules: Object.keys(esbuildResult.metafile.inputs).length,
+        packages: packageNames(Object.keys(esbuildResult.metafile.inputs))
+      }
+    }
+  }
 }
 
 function hermesCompilerPath() {
@@ -486,6 +515,23 @@ async function main() {
       profile === 'browser'
         ? await checkBrowser(consumerDirectory, budget.maximumBytes)
         : await checkMobile(consumerDirectory, budget.maximumBytes)
+    if (profile === 'browser' && process.env.BROWSER_COMPOSITION_DIRECTORY) {
+      await fs.mkdir(process.env.BROWSER_COMPOSITION_DIRECTORY, { recursive: true })
+      await fs.writeFile(
+        path.join(process.env.BROWSER_COMPOSITION_DIRECTORY, 'bsv-wallet-toolbox-client.json'),
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            package: manifest.name,
+            version: manifest.version,
+            entry: '.',
+            measurements
+          },
+          null,
+          2
+        )}\n`
+      )
+    }
     console.log(
       `Verified ${manifest.name}@${manifest.version} ${profile} platform contract: ` +
         `${JSON.stringify(measurements)}`
