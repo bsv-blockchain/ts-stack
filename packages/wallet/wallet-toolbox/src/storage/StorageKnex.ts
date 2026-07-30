@@ -1,4 +1,4 @@
-import { ListActionsResult, ListOutputsResult, Validation } from '@bsv/sdk'
+import { ListActionsResult, ListOutputsResult, TelemetrySpan, Validation } from '@bsv/sdk'
 import {
   outputColumnsWithoutLockingScript,
   TableCertificate,
@@ -73,22 +73,71 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 // ceilings. The surrounding transaction still makes a complete pack atomic.
 const ACTION_BATCH_BLOB_SQL_CHUNK = 500
 
+interface KnexTelemetryQuery {
+  __knexQueryUid?: string
+  method?: string
+}
+
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
+  private readonly querySpans = new Map<string, TelemetrySpan>()
+  private readonly onQuery = (query: KnexTelemetryQuery): void => {
+    if (!this.telemetry.enabled || query.__knexQueryUid == null) return
+    const span = this.telemetry.startSpan('wallet.storage.db.query', {
+      component: 'wallet-storage-knex',
+      kind: 'client',
+      attributes: {
+        'db.system': this.databaseSystem(),
+        'db.operation': query.method ?? 'unknown'
+      }
+    })
+    this.querySpans.set(query.__knexQueryUid, span)
+  }
 
-  constructor (options: StorageKnexOptions) {
+  private readonly onQueryResponse = (_response: unknown, query: KnexTelemetryQuery): void => {
+    this.endQuerySpan(query)
+  }
+
+  private readonly onQueryError = (error: unknown, query: KnexTelemetryQuery): void => {
+    this.endQuerySpan(query, error)
+  }
+
+  constructor(options: StorageKnexOptions) {
     super(options)
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
+    if (this.telemetry.enabled) {
+      this.knex.on('query', this.onQuery)
+      this.knex.on('query-response', this.onQueryResponse)
+      this.knex.on('query-error', this.onQueryError)
+    }
   }
 
-  protected override supportsActionBatchPersistence (): boolean { return true }
+  private databaseSystem(): string {
+    const clientName = (this.knex.client as { config?: { client?: string } }).config?.client ?? ''
+    if (clientName.includes('sqlite')) return 'sqlite'
+    if (clientName.includes('mysql')) return 'mysql'
+    if (clientName.includes('pg') || clientName.includes('postgres')) return 'postgresql'
+    return 'unknown'
+  }
 
-  async readSettings (): Promise<TableSettings> {
+  private endQuerySpan(query: KnexTelemetryQuery, error?: unknown): void {
+    if (query.__knexQueryUid == null) return
+    const span = this.querySpans.get(query.__knexQueryUid)
+    if (span == null) return
+    this.querySpans.delete(query.__knexQueryUid)
+    span.end(error == null ? {} : { status: 'error', error })
+  }
+
+  protected override supportsActionBatchPersistence(): boolean {
+    return true
+  }
+
+  async readSettings(): Promise<TableSettings> {
     return this.validateEntity(verifyOne(await this.toDb()<TableSettings>('settings')))
   }
 
-  override async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
+  override async getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
     const k = this.toDb(trx)
     const r: ProvenOrRawTx = {
       proven: undefined,
@@ -112,17 +161,22 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r
   }
 
-  dbTypeSubstring (source: string, fromOffset: number, forLength?: number): string {
+  dbTypeSubstring(source: string, fromOffset: number, forLength?: number): string {
     if (this.dbtype === 'MySQL') return `substring(${source} from ${fromOffset} for ${String(forLength)})`
     return `substr(${source}, ${fromOffset}, ${String(forLength)})`
   }
 
-  private normaliseKnexRawResult (rs: unknown): Array<{ rawTx: Buffer | null }> {
+  private normaliseKnexRawResult(rs: unknown): Array<{ rawTx: Buffer | null }> {
     if (this.dbtype === 'MySQL') return (rs as Array<Array<{ rawTx: Buffer | null }>>)[0]
     return rs as Array<{ rawTx: Buffer | null }>
   }
 
-  private async getRawTxSlice (txid: string, offset: number, length: number, trx?: TrxToken): Promise<number[] | undefined> {
+  private async getRawTxSlice(
+    txid: string,
+    offset: number,
+    length: number,
+    trx?: TrxToken
+  ): Promise<number[] | undefined> {
     const sub = this.dbTypeSubstring('rawTx', offset + 1, length)
     let rs = await this.toDb(trx).raw(`select ${sub} as rawTx from proven_txs where txid = '${txid}'`)
     const proven = verifyOneOrNone(this.normaliseKnexRawResult(rs))
@@ -134,7 +188,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return req?.rawTx != null ? Array.from(req.rawTx) : undefined
   }
 
-  override async getRawTxOfKnownValidTransaction (
+  override async getRawTxOfKnownValidTransaction(
     txid?: string,
     offset?: number,
     length?: number,
@@ -149,7 +203,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r.proven != null ? r.proven.rawTx : r.rawTx
   }
 
-  getProvenTxsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getProvenTxsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('proven_txs').where(function () {
       void this.whereExists(
@@ -167,13 +221,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  override async getProvenTxsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
+  override async getProvenTxsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
     const q = this.getProvenTxsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs)
   }
 
-  getProvenTxReqsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getProvenTxReqsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('proven_tx_reqs').where(function () {
       void this.whereExists(
@@ -191,13 +245,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  override async getProvenTxReqsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
+  override async getProvenTxReqsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
     const q = this.getProvenTxReqsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs, undefined, ['notified'])
   }
 
-  getTxLabelMapsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getTxLabelMapsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('tx_labels_map').whereExists(
       k
@@ -213,13 +267,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  override async getTxLabelMapsForUser (args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
+  override async getTxLabelMapsForUser(args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
     const q = this.getTxLabelMapsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
 
-  getOutputTagMapsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getOutputTagMapsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('output_tags_map').whereExists(
       k
@@ -235,23 +289,23 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  override async getOutputTagMapsForUser (args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
+  override async getOutputTagMapsForUser(args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
     const q = this.getOutputTagMapsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
 
-  override async listActions (auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
+  override async listActions(auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
     if (auth.userId == null) throw new WERR_UNAUTHORIZED()
     return await listActions(this, auth, vargs)
   }
 
-  override async listOutputs (auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
+  override async listOutputs(auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
     if (auth.userId == null) throw new WERR_UNAUTHORIZED()
     return await listOutputs(this, auth, vargs)
   }
 
-  override async insertProvenTx (tx: TableProvenTx, trx?: TrxToken): Promise<number> {
+  override async insertProvenTx(tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxId === 0) delete e.provenTxId
     const [id] = await this.toDb(trx)<TableProvenTx>('proven_txs').insert(e)
@@ -259,7 +313,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return tx.provenTxId
   }
 
-  override async insertActionBatch (batch: TableActionBatch, trx?: TrxToken): Promise<number> {
+  override async insertActionBatch(batch: TableActionBatch, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(batch, trx, ['expiresAt', 'hardExpiresAt'])
     if (e.actionBatchId === 0) delete e.actionBatchId
     const [id] = await this.toDb(trx)<TableActionBatch>('action_batches').insert(e)
@@ -267,7 +321,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return id
   }
 
-  override async findActionBatch (
+  override async findActionBatch(
     userId: number,
     batchId: string,
     trx?: TrxToken
@@ -276,19 +330,16 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return row == null ? undefined : this.validateEntity(row, ['expiresAt', 'hardExpiresAt'])
   }
 
-  override async findActionBatchForUpdate (
+  override async findActionBatchForUpdate(
     userId: number,
     batchId: string,
     trx: TrxToken
   ): Promise<TableActionBatch | undefined> {
-    const row = await this.toDb(trx)<TableActionBatch>('action_batches')
-      .where({ userId, batchId })
-      .forUpdate()
-      .first()
+    const row = await this.toDb(trx)<TableActionBatch>('action_batches').where({ userId, batchId }).forUpdate().first()
     return row == null ? undefined : this.validateEntity(row, ['expiresAt', 'hardExpiresAt'])
   }
 
-  override async findExpiredActionBatches (now: Date, trx?: TrxToken): Promise<TableActionBatch[]> {
+  override async findExpiredActionBatches(now: Date, trx?: TrxToken): Promise<TableActionBatch[]> {
     const rows = await this.toDb(trx)<TableActionBatch>('action_batches')
       .whereIn('status', ['active', 'prepared'])
       .andWhere(builder => {
@@ -299,7 +350,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(rows, ['expiresAt', 'hardExpiresAt'])
   }
 
-  override async updateActionBatch (
+  override async updateActionBatch(
     actionBatchId: number,
     update: Partial<TableActionBatch>,
     trx?: TrxToken
@@ -309,27 +360,24 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .update(this.validatePartialForUpdate(update, ['expiresAt', 'hardExpiresAt']))
   }
 
-  override async deleteActionBatch (actionBatchId: number, trx?: TrxToken): Promise<void> {
+  override async deleteActionBatch(actionBatchId: number, trx?: TrxToken): Promise<void> {
     await this.toDb(trx)<TableActionBatch>('action_batches').where({ actionBatchId }).delete()
   }
 
-  override async reserveActionBatchOutputs (
-    reservations: TableActionBatchOutput[],
-    trx?: TrxToken
-  ): Promise<void> {
+  override async reserveActionBatchOutputs(reservations: TableActionBatchOutput[], trx?: TrxToken): Promise<void> {
     if (reservations.length === 0) return
     const rows = await Promise.all(reservations.map(async r => await this.validateEntityForInsert(r, trx)))
     await this.toDb(trx)<TableActionBatchOutput>('action_batch_outputs').insert(rows)
   }
 
-  override async findActionBatchOutputIds (actionBatchId: number, trx?: TrxToken): Promise<number[]> {
+  override async findActionBatchOutputIds(actionBatchId: number, trx?: TrxToken): Promise<number[]> {
     const rows = await this.toDb(trx)<TableActionBatchOutput>('action_batch_outputs')
       .where({ actionBatchId })
       .select('outputId')
     return rows.map(r => r.outputId)
   }
 
-  override async findReservedActionBatchOutputIds (outputIds: number[], trx?: TrxToken): Promise<number[]> {
+  override async findReservedActionBatchOutputIds(outputIds: number[], trx?: TrxToken): Promise<number[]> {
     if (outputIds.length === 0) return []
     const rows = await this.toDb(trx)<TableActionBatchOutput>('action_batch_outputs')
       .whereIn('outputId', outputIds)
@@ -337,11 +385,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return rows.map(r => r.outputId)
   }
 
-  override async deleteActionBatchOutputReservations (actionBatchId: number, trx?: TrxToken): Promise<void> {
+  override async deleteActionBatchOutputReservations(actionBatchId: number, trx?: TrxToken): Promise<void> {
     await this.toDb(trx)<TableActionBatchOutput>('action_batch_outputs').where({ actionBatchId }).delete()
   }
 
-  override async putActionBatchBlobRecord (blob: TableActionBatchBlob, trx?: TrxToken): Promise<void> {
+  override async putActionBatchBlobRecord(blob: TableActionBatchBlob, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(blob, trx)
     if (e.actionBatchBlobId === 0) delete e.actionBatchBlobId
     await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs')
@@ -350,7 +398,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .ignore()
   }
 
-  override async findActionBatchBlobRecord (
+  override async findActionBatchBlobRecord(
     actionBatchId: number,
     digest: string,
     trx?: TrxToken
@@ -366,7 +414,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntity(row)
   }
 
-  override async findActionBatchBlobRecords (
+  override async findActionBatchBlobRecords(
     actionBatchId: number,
     digests: string[],
     trx?: TrxToken
@@ -375,9 +423,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const rows: TableActionBatchBlob[] = []
     const uniqueDigests = [...new Set(digests)]
     for (let offset = 0; offset < uniqueDigests.length; offset += ACTION_BATCH_BLOB_SQL_CHUNK) {
-      rows.push(...await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs')
-        .where({ actionBatchId })
-        .whereIn('digest', uniqueDigests.slice(offset, offset + ACTION_BATCH_BLOB_SQL_CHUNK)))
+      rows.push(
+        ...(await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs')
+          .where({ actionBatchId })
+          .whereIn('digest', uniqueDigests.slice(offset, offset + ACTION_BATCH_BLOB_SQL_CHUNK)))
+      )
     }
     for (const row of rows) {
       if (Buffer.isBuffer(row.bytes)) {
@@ -388,16 +438,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(rows)
   }
 
-  override async putActionBatchBlobRecords (
-    blobs: TableActionBatchBlob[],
-    trx?: TrxToken
-  ): Promise<void> {
+  override async putActionBatchBlobRecords(blobs: TableActionBatchBlob[], trx?: TrxToken): Promise<void> {
     if (blobs.length === 0) return
-    const rows = await Promise.all(blobs.map(async blob => {
-      const row = await this.validateEntityForInsert(blob, trx)
-      if (row.actionBatchBlobId === 0) delete row.actionBatchBlobId
-      return row
-    }))
+    const rows = await Promise.all(
+      blobs.map(async blob => {
+        const row = await this.validateEntityForInsert(blob, trx)
+        if (row.actionBatchBlobId === 0) delete row.actionBatchBlobId
+        return row
+      })
+    )
     for (let offset = 0; offset < rows.length; offset += ACTION_BATCH_BLOB_SQL_CHUNK) {
       await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs')
         .insert(rows.slice(offset, offset + ACTION_BATCH_BLOB_SQL_CHUNK))
@@ -406,11 +455,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
   }
 
-  override async deleteActionBatchBlobRecords (actionBatchId: number, trx?: TrxToken): Promise<void> {
+  override async deleteActionBatchBlobRecords(actionBatchId: number, trx?: TrxToken): Promise<void> {
     await this.toDb(trx)<TableActionBatchBlob>('action_batch_blobs').where({ actionBatchId }).delete()
   }
 
-  override async insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
+  override async insertProvenTxReq(tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
     const [id] = await this.toDb(trx)<TableProvenTxReq>('proven_tx_reqs').insert(e)
@@ -418,7 +467,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return tx.provenTxReqId
   }
 
-  override async insertUser (user: TableUser, trx?: TrxToken): Promise<number> {
+  override async insertUser(user: TableUser, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(user, trx)
     if (e.userId === 0) delete e.userId
     const [id] = await this.toDb(trx)<TableUser>('users').insert(e)
@@ -426,13 +475,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return user.userId
   }
 
-  override async insertCertificateAuth (auth: AuthId, certificate: TableCertificateX): Promise<number> {
-    if (auth.userId == null || (certificate.userId != null && certificate.userId !== 0 && certificate.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
+  override async insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number> {
+    if (
+      auth.userId == null ||
+      (certificate.userId != null && certificate.userId !== 0 && certificate.userId !== auth.userId)
+    )
+      throw new WERR_UNAUTHORIZED()
     certificate.userId = auth.userId
     return await this.insertCertificate(certificate)
   }
 
-  override async insertCertificate (certificate: TableCertificateX, trx?: TrxToken): Promise<number> {
+  override async insertCertificate(certificate: TableCertificateX, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(certificate, trx, undefined, ['isDeleted'])
     if (e.certificateId === 0) delete e.certificateId
 
@@ -455,12 +508,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return certificate.certificateId
   }
 
-  override async insertCertificateField (certificateField: TableCertificateField, trx?: TrxToken): Promise<void> {
+  override async insertCertificateField(certificateField: TableCertificateField, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(certificateField, trx)
     await this.toDb(trx)<TableCertificate>('certificate_fields').insert(e)
   }
 
-  override async insertOutputBasket (basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
+  override async insertOutputBasket(basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(basket, trx, undefined, ['isDeleted'])
     if (e.basketId === 0) delete e.basketId
     const [id] = await this.toDb(trx)<TableOutputBasket>('output_baskets').insert(e)
@@ -468,7 +521,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return basket.basketId
   }
 
-  override async insertTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
+  override async insertTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.transactionId === 0) delete e.transactionId
     const [id] = await this.toDb(trx)<TableTransaction>('transactions').insert(e)
@@ -476,7 +529,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return tx.transactionId
   }
 
-  override async insertCommission (commission: TableCommission, trx?: TrxToken): Promise<number> {
+  override async insertCommission(commission: TableCommission, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(commission, trx)
     if (e.commissionId === 0) delete e.commissionId
     const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
@@ -484,7 +537,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return commission.commissionId
   }
 
-  override async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
+  override async insertOutput(output: TableOutput, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(output, trx)
     if (e.outputId === 0) delete e.outputId
     const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
@@ -492,7 +545,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return output.outputId
   }
 
-  override async insertOutputTag (tag: TableOutputTag, trx?: TrxToken): Promise<number> {
+  override async insertOutputTag(tag: TableOutputTag, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tag, trx, undefined, ['isDeleted'])
     if (e.outputTagId === 0) delete e.outputTagId
     const [id] = await this.toDb(trx)<TableOutputTag>('output_tags').insert(e)
@@ -500,12 +553,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return tag.outputTagId
   }
 
-  override async insertOutputTagMap (tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
+  override async insertOutputTagMap(tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(tagMap, trx, undefined, ['isDeleted'])
     await this.toDb(trx)<TableOutputTagMap>('output_tags_map').insert(e)
   }
 
-  override async insertTxLabel (label: TableTxLabel, trx?: TrxToken): Promise<number> {
+  override async insertTxLabel(label: TableTxLabel, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(label, trx, undefined, ['isDeleted'])
     if (e.txLabelId === 0) delete e.txLabelId
     const [id] = await this.toDb(trx)<TableTxLabel>('tx_labels').insert(e)
@@ -513,12 +566,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return label.txLabelId
   }
 
-  override async insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
+  override async insertTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
     await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
   }
 
-  override async insertMonitorEvent (event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
+  override async insertMonitorEvent(event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(event, trx)
     if (e.id === 0) delete e.id
     const [id] = await this.toDb(trx)<TableMonitorEvent>('monitor_events').insert(e)
@@ -526,7 +579,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return event.id
   }
 
-  override async insertSyncState (syncState: TableSyncState, trx?: TrxToken): Promise<number> {
+  override async insertSyncState(syncState: TableSyncState, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(syncState, trx, ['when'], ['init'])
     if (e.syncStateId === 0) delete e.syncStateId
     const [id] = await this.toDb(trx)<TableSyncState>('sync_states').insert(e)
@@ -534,7 +587,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return syncState.syncStateId
   }
 
-  override async updateCertificateField (
+  override async updateCertificateField(
     certificateId: number,
     fieldName: string,
     update: Partial<TableCertificateField>,
@@ -546,35 +599,35 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .update(this.validatePartialForUpdate(update))
   }
 
-  override async updateCertificate (id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> {
+  override async updateCertificate(id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableCertificate>('certificates')
       .where({ certificateId: id })
       .update(this.validatePartialForUpdate(update, undefined, ['isDeleted']))
   }
 
-  override async updateCommission (id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
+  override async updateCommission(id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableCommission>('commissions')
       .where({ commissionId: id })
       .update(this.validatePartialForUpdate(update))
   }
 
-  override async updateOutputBasket (id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
+  override async updateOutputBasket(id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableOutputBasket>('output_baskets')
       .where({ basketId: id })
       .update(this.validatePartialForUpdate(update, undefined, ['isDeleted']))
   }
 
-  override async updateOutput (id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
+  override async updateOutput(id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableOutput>('outputs')
       .where({ outputId: id })
       .update(this.validatePartialForUpdate(update))
   }
 
-  override async updateOutputTagMap (
+  override async updateOutputTagMap(
     outputId: number,
     tagId: number,
     update: Partial<TableOutputTagMap>,
@@ -586,14 +639,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .update(this.validatePartialForUpdate(update, undefined, ['isDeleted']))
   }
 
-  override async updateOutputTag (id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> {
+  override async updateOutputTag(id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableOutputTag>('output_tags')
       .where({ outputTagId: id })
       .update(this.validatePartialForUpdate(update, undefined, ['isDeleted']))
   }
 
-  override async updateProvenTxReq (
+  override async updateProvenTxReq(
     id: number | number[],
     update: Partial<TableProvenTxReq>,
     trx?: TrxToken
@@ -614,21 +667,21 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r
   }
 
-  override async updateProvenTx (id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
+  override async updateProvenTx(id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableProvenTx>('proven_txs')
       .where({ provenTxId: id })
       .update(this.validatePartialForUpdate(update))
   }
 
-  override async updateSyncState (id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
+  override async updateSyncState(id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableSyncState>('sync_states')
       .where({ syncStateId: id })
       .update(this.validatePartialForUpdate(update, ['when'], ['init']))
   }
 
-  override async updateTransaction (
+  override async updateTransaction(
     id: number | number[],
     update: Partial<TableTransaction>,
     trx?: TrxToken
@@ -649,7 +702,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r
   }
 
-  override async updateTxLabelMap (
+  override async updateTxLabelMap(
     transactionId: number,
     txLabelId: number,
     update: Partial<TableTxLabelMap>,
@@ -661,19 +714,19 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .update(this.validatePartialForUpdate(update, undefined, ['isDeleted']))
   }
 
-  override async updateTxLabel (id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
+  override async updateTxLabel(id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableTxLabel>('tx_labels')
       .where({ txLabelId: id })
       .update(this.validatePartialForUpdate(update, undefined, ['isDeleted']))
   }
 
-  override async updateUser (id: number, update: Partial<TableUser>, trx?: TrxToken): Promise<number> {
+  override async updateUser(id: number, update: Partial<TableUser>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableUser>('users').where({ userId: id }).update(this.validatePartialForUpdate(update))
   }
 
-  override async updateMonitorEvent (id: number, update: Partial<TableMonitorEvent>, trx?: TrxToken): Promise<number> {
+  override async updateMonitorEvent(id: number, update: Partial<TableMonitorEvent>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     return await this.toDb(trx)<TableMonitorEvent>('monitor_events')
       .where({ id })
@@ -737,18 +790,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  findCertificateFieldsQuery (args: FindCertificateFieldsArgs): Knex.QueryBuilder {
+  findCertificateFieldsQuery(args: FindCertificateFieldsArgs): Knex.QueryBuilder {
     return this.setupQuery('certificate_fields', args)
   }
 
-  findCertificatesQuery (args: FindCertificatesArgs): Knex.QueryBuilder {
+  findCertificatesQuery(args: FindCertificatesArgs): Knex.QueryBuilder {
     const q = this.setupQuery('certificates', args)
-    if ((args.certifiers != null) && args.certifiers.length > 0) void q.whereIn('certifier', args.certifiers)
-    if ((args.types != null) && args.types.length > 0) void q.whereIn('type', args.types)
+    if (args.certifiers != null && args.certifiers.length > 0) void q.whereIn('certifier', args.certifiers)
+    if (args.types != null && args.types.length > 0) void q.whereIn('type', args.types)
     return q
   }
 
-  findCommissionsQuery (args: FindCommissionsArgs): Knex.QueryBuilder {
+  findCommissionsQuery(args: FindCommissionsArgs): Knex.QueryBuilder {
     if (args.partial.lockingScript != null) {
       throw new WERR_INVALID_PARAMETER(
         'partial.lockingScript',
@@ -758,11 +811,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.setupQuery('commissions', args)
   }
 
-  findOutputBasketsQuery (args: FindOutputBasketsArgs): Knex.QueryBuilder {
+  findOutputBasketsQuery(args: FindOutputBasketsArgs): Knex.QueryBuilder {
     return this.setupQuery('output_baskets', args)
   }
 
-  findOutputsQuery (args: FindOutputsArgs, count?: boolean): Knex.QueryBuilder {
+  findOutputsQuery(args: FindOutputsArgs, count?: boolean): Knex.QueryBuilder {
     if (args.partial.lockingScript != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.lockingScript',
@@ -770,30 +823,32 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     }
     const q = this.setupQuery('outputs', args)
-    if ((args.txStatus != null) && args.txStatus.length > 0) {
+    if (args.txStatus != null && args.txStatus.length > 0) {
       void q.whereRaw(
         `(select status from transactions where transactions.transactionId = outputs.transactionId) in (${args.txStatus.map(s => "'" + s + "'").join(',')})`
       )
     }
-    if ((args.noScript === true) && count !== true) {
+    if (args.noScript === true && count !== true) {
       const columns = outputColumnsWithoutLockingScript.map(c => `outputs.${c}`)
       void q.select(columns)
     }
     return q
   }
 
-  findOutputTagMapsQuery (args: FindOutputTagMapsArgs): Knex.QueryBuilder {
+  findOutputTagMapsQuery(args: FindOutputTagMapsArgs): Knex.QueryBuilder {
     const q = this.setupQuery('output_tags_map', args)
-    if ((args.tagIds != null) && args.tagIds.length > 0) void q.whereIn('outputTagId', args.tagIds)
+    if (args.tagIds != null && args.tagIds.length > 0) void q.whereIn('outputTagId', args.tagIds)
     return q
   }
 
-  findOutputTagsQuery (args: FindOutputTagsArgs): Knex.QueryBuilder {
+  findOutputTagsQuery(args: FindOutputTagsArgs): Knex.QueryBuilder {
     return this.setupQuery('output_tags', args)
   }
 
-  findProvenTxReqsQuery (args: FindProvenTxReqsArgs): Knex.QueryBuilder {
-    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxReqs may not be found by rawTx value.') }
+  findProvenTxReqsQuery(args: FindProvenTxReqsArgs): Knex.QueryBuilder {
+    if (args.partial.rawTx != null) {
+      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxReqs may not be found by rawTx value.')
+    }
     if (args.partial.inputBEEF != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.inputBEEF',
@@ -801,7 +856,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     }
     const q = this.setupQuery('proven_tx_reqs', args)
-    if ((args.status != null) && args.status.length > 0) void q.whereIn('status', args.status)
+    if (args.status != null && args.status.length > 0) void q.whereIn('status', args.status)
     if (args.txids != null) {
       const txids = args.txids.filter(txid => txid !== undefined)
       if (txids.length > 0) void q.whereIn('txid', txids)
@@ -809,8 +864,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  findProvenTxsQuery (args: FindProvenTxsArgs): Knex.QueryBuilder {
-    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxs may not be found by rawTx value.') }
+  findProvenTxsQuery(args: FindProvenTxsArgs): Knex.QueryBuilder {
+    if (args.partial.rawTx != null) {
+      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxs may not be found by rawTx value.')
+    }
     if (args.partial.merklePath != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.merklePath',
@@ -820,7 +877,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.setupQuery('proven_txs', args)
   }
 
-  findStaleMerkleRootsQuery (args: FindStaleMerkleRootsArgs): Knex.QueryBuilder {
+  findStaleMerkleRootsQuery(args: FindStaleMerkleRootsArgs): Knex.QueryBuilder {
     const q = this.toDb(args.trx)('proven_txs')
     void q.where('height', '=', args.height)
     void q.where('merkleRoot', '!=', args.merkleRoot)
@@ -829,12 +886,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  findSyncStatesQuery (args: FindSyncStatesArgs): Knex.QueryBuilder {
+  findSyncStatesQuery(args: FindSyncStatesArgs): Knex.QueryBuilder {
     return this.setupQuery('sync_states', args)
   }
 
-  findTransactionsQuery (args: FindTransactionsArgs, count?: boolean): Knex.QueryBuilder {
-    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. Transactions may not be found by rawTx value.') }
+  findTransactionsQuery(args: FindTransactionsArgs, count?: boolean): Knex.QueryBuilder {
+    if (args.partial.rawTx != null) {
+      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. Transactions may not be found by rawTx value.')
+    }
     if (args.partial.inputBEEF != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.inputBEEF',
@@ -842,57 +901,69 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     }
     const q = this.setupQuery('transactions', args)
-    if ((args.status != null) && args.status.length > 0) void q.whereIn('status', args.status)
+    if (args.status != null && args.status.length > 0) void q.whereIn('status', args.status)
     if (args.from != null) void q.where('created_at', '>=', this.validateDateForWhere(args.from))
     if (args.to != null) void q.where('created_at', '<', this.validateDateForWhere(args.to))
-    if ((args.noRawTx === true) && count !== true) {
+    if (args.noRawTx === true && count !== true) {
       const columns = transactionColumnsWithoutRawTx.map(c => `transactions.${c}`)
       void q.select(columns)
     }
     return q
   }
 
-  findTxLabelMapsQuery (args: FindTxLabelMapsArgs): Knex.QueryBuilder {
+  findTxLabelMapsQuery(args: FindTxLabelMapsArgs): Knex.QueryBuilder {
     const q = this.setupQuery('tx_labels_map', args)
-    if ((args.labelIds != null) && args.labelIds.length > 0) void q.whereIn('txLabelId', args.labelIds)
+    if (args.labelIds != null && args.labelIds.length > 0) void q.whereIn('txLabelId', args.labelIds)
     return q
   }
 
-  findTxLabelsQuery (args: FindTxLabelsArgs): Knex.QueryBuilder {
+  findTxLabelsQuery(args: FindTxLabelsArgs): Knex.QueryBuilder {
     return this.setupQuery('tx_labels', args)
   }
 
-  findUsersQuery (args: FindUsersArgs): Knex.QueryBuilder {
+  findUsersQuery(args: FindUsersArgs): Knex.QueryBuilder {
     return this.setupQuery('users', args)
   }
 
-  findMonitorEventsQuery (args: FindMonitorEventsArgs): Knex.QueryBuilder {
+  findMonitorEventsQuery(args: FindMonitorEventsArgs): Knex.QueryBuilder {
     return this.setupQuery('monitor_events', args)
   }
 
-  override async findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
-    if (auth.userId == null || (args.partial.userId != null && args.partial.userId !== 0 && args.partial.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
+  override async findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+    if (
+      auth.userId == null ||
+      (args.partial.userId != null && args.partial.userId !== 0 && args.partial.userId !== auth.userId)
+    )
+      throw new WERR_UNAUTHORIZED()
     args.partial.userId = auth.userId
     return await this.findCertificates(args)
   }
 
-  override async findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
-    if (auth.userId == null || (args.partial.userId != null && args.partial.userId !== 0 && args.partial.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
+  override async findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+    if (
+      auth.userId == null ||
+      (args.partial.userId != null && args.partial.userId !== 0 && args.partial.userId !== auth.userId)
+    )
+      throw new WERR_UNAUTHORIZED()
     args.partial.userId = auth.userId
     return await this.findOutputBaskets(args)
   }
 
-  override async findOutputsAuth (auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
-    if (auth.userId == null || (args.partial.userId != null && args.partial.userId !== 0 && args.partial.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
+  override async findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
+    if (
+      auth.userId == null ||
+      (args.partial.userId != null && args.partial.userId !== 0 && args.partial.userId !== auth.userId)
+    )
+      throw new WERR_UNAUTHORIZED()
     args.partial.userId = auth.userId
     return await this.findOutputs(args)
   }
 
-  override async findCertificateFields (args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
+  override async findCertificateFields(args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
     return this.validateEntities(await this.findCertificateFieldsQuery(args))
   }
 
-  override async findCertificates (args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+  override async findCertificates(args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     const q = this.findCertificatesQuery(args)
     let r: TableCertificateX[] = await q
     r = this.validateEntities(r, undefined, ['isDeleted'])
@@ -909,19 +980,19 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r
   }
 
-  override async findCommissions (args: FindCommissionsArgs): Promise<TableCommission[]> {
+  override async findCommissions(args: FindCommissionsArgs): Promise<TableCommission[]> {
     const q = this.findCommissionsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['isRedeemed'])
   }
 
-  override async findOutputBaskets (args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+  override async findOutputBaskets(args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     const q = this.findOutputBasketsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['isDeleted'])
   }
 
-  override async findOutputs (args: FindOutputsArgs): Promise<TableOutput[]> {
+  override async findOutputs(args: FindOutputsArgs): Promise<TableOutput[]> {
     const q = this.findOutputsQuery(args)
     const r = await q
     if (args.noScript !== true) {
@@ -932,43 +1003,43 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(r, undefined, ['spendable', 'change'])
   }
 
-  override async findOutputTagMaps (args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
+  override async findOutputTagMaps(args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
     const q = this.findOutputTagMapsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['isDeleted'])
   }
 
-  override async findOutputTags (args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
+  override async findOutputTags(args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
     const q = this.findOutputTagsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['isDeleted'])
   }
 
-  override async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+  override async findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
     const q = this.findProvenTxReqsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['notified', 'wasBroadcast'])
   }
 
-  override async findProvenTxs (args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
+  override async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     const q = this.findProvenTxsQuery(args)
     const r = await q
     return this.validateEntities(r)
   }
 
-  override async findStaleMerkleRoots (args: FindStaleMerkleRootsArgs): Promise<string[]> {
+  override async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> {
     const q = this.findStaleMerkleRootsQuery(args)
     const r = await q
     return r.map((row: { merkleRoot: string }) => row.merkleRoot)
   }
 
-  override async findSyncStates (args: FindSyncStatesArgs): Promise<TableSyncState[]> {
+  override async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const q = this.findSyncStatesQuery(args)
     const r = await q
     return this.validateEntities(r, ['when'], ['init'])
   }
 
-  override async findTransactions (args: FindTransactionsArgs): Promise<TableTransaction[]> {
+  override async findTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> {
     const q = this.findTransactionsQuery(args)
     const r = await q
     if (args.noRawTx !== true) {
@@ -979,25 +1050,25 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(r, undefined, ['isOutgoing'])
   }
 
-  override async findTxLabelMaps (args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
+  override async findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
     const q = this.findTxLabelMapsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['isDeleted'])
   }
 
-  override async findTxLabels (args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
+  override async findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
     const q = this.findTxLabelsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['isDeleted'])
   }
 
-  override async findUsers (args: FindUsersArgs): Promise<TableUser[]> {
+  override async findUsers(args: FindUsersArgs): Promise<TableUser[]> {
     const q = this.findUsersQuery(args)
     const r = await q
     return this.validateEntities(r)
   }
 
-  override async recentlyActiveUsers (limit = 50, trx?: TrxToken): Promise<TableUser[]> {
+  override async recentlyActiveUsers(limit = 50, trx?: TrxToken): Promise<TableUser[]> {
     await this.verifyReadyForDatabaseAccess(trx)
     const latestOutputs = this.toDb(trx)('outputs as o')
       .select('o.userId')
@@ -1014,7 +1085,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(rows as TableUser[])
   }
 
-  override async findMonitorEvents (args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
+  override async findMonitorEvents(args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
     const q = this.findMonitorEventsQuery(args)
     const r = await q
     return this.validateEntities(r, ['when'])
@@ -1026,71 +1097,76 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r[0]['count(*)']
   }
 
-  override async countCertificateFields (args: FindCertificateFieldsArgs): Promise<number> {
+  override async countCertificateFields(args: FindCertificateFieldsArgs): Promise<number> {
     return await this.getCount(this.findCertificateFieldsQuery(args))
   }
 
-  override async countCertificates (args: FindCertificatesArgs): Promise<number> {
+  override async countCertificates(args: FindCertificatesArgs): Promise<number> {
     return await this.getCount(this.findCertificatesQuery(args))
   }
 
-  override async countCommissions (args: FindCommissionsArgs): Promise<number> {
+  override async countCommissions(args: FindCommissionsArgs): Promise<number> {
     return await this.getCount(this.findCommissionsQuery(args))
   }
 
-  override async countOutputBaskets (args: FindOutputBasketsArgs): Promise<number> {
+  override async countOutputBaskets(args: FindOutputBasketsArgs): Promise<number> {
     return await this.getCount(this.findOutputBasketsQuery(args))
   }
 
-  override async countOutputs (args: FindOutputsArgs): Promise<number> {
+  override async countOutputs(args: FindOutputsArgs): Promise<number> {
     return await this.getCount(this.findOutputsQuery(args, true))
   }
 
-  override async countOutputTagMaps (args: FindOutputTagMapsArgs): Promise<number> {
+  override async countOutputTagMaps(args: FindOutputTagMapsArgs): Promise<number> {
     return await this.getCount(this.findOutputTagMapsQuery(args))
   }
 
-  override async countOutputTags (args: FindOutputTagsArgs): Promise<number> {
+  override async countOutputTags(args: FindOutputTagsArgs): Promise<number> {
     return await this.getCount(this.findOutputTagsQuery(args))
   }
 
-  override async countProvenTxReqs (args: FindProvenTxReqsArgs): Promise<number> {
+  override async countProvenTxReqs(args: FindProvenTxReqsArgs): Promise<number> {
     return await this.getCount(this.findProvenTxReqsQuery(args))
   }
 
-  override async countProvenTxs (args: FindProvenTxsArgs): Promise<number> {
+  override async countProvenTxs(args: FindProvenTxsArgs): Promise<number> {
     return await this.getCount(this.findProvenTxsQuery(args))
   }
 
-  override async countSyncStates (args: FindSyncStatesArgs): Promise<number> {
+  override async countSyncStates(args: FindSyncStatesArgs): Promise<number> {
     return await this.getCount(this.findSyncStatesQuery(args))
   }
 
-  override async countTransactions (args: FindTransactionsArgs): Promise<number> {
+  override async countTransactions(args: FindTransactionsArgs): Promise<number> {
     return await this.getCount(this.findTransactionsQuery(args, true))
   }
 
-  override async countTxLabelMaps (args: FindTxLabelMapsArgs): Promise<number> {
+  override async countTxLabelMaps(args: FindTxLabelMapsArgs): Promise<number> {
     return await this.getCount(this.findTxLabelMapsQuery(args))
   }
 
-  override async countTxLabels (args: FindTxLabelsArgs): Promise<number> {
+  override async countTxLabels(args: FindTxLabelsArgs): Promise<number> {
     return await this.getCount(this.findTxLabelsQuery(args))
   }
 
-  override async countUsers (args: FindUsersArgs): Promise<number> {
+  override async countUsers(args: FindUsersArgs): Promise<number> {
     return await this.getCount(this.findUsersQuery(args))
   }
 
-  override async countMonitorEvents (args: FindMonitorEventsArgs): Promise<number> {
+  override async countMonitorEvents(args: FindMonitorEventsArgs): Promise<number> {
     return await this.getCount(this.findMonitorEventsQuery(args))
   }
 
-  override async destroy (): Promise<void> {
+  override async destroy(): Promise<void> {
+    this.knex.off('query', this.onQuery)
+    this.knex.off('query-response', this.onQueryResponse)
+    this.knex.off('query-error', this.onQueryError)
+    for (const span of this.querySpans.values()) span.end({ status: 'cancelled' })
+    this.querySpans.clear()
     await this.knex?.destroy()
   }
 
-  override async migrate (storageName: string, storageIdentityKey: string): Promise<string> {
+  override async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
     // Check if this is a SQLite database by looking at the Knex client config
     const clientName = (this.knex.client as { config?: { client?: string } }).config?.client ?? ''
     const isSQLite = clientName.includes('sqlite')
@@ -1118,7 +1194,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return version
   }
 
-  override async dropAllData (): Promise<void> {
+  override async dropAllData(): Promise<void> {
     // Only using migrations to migrate down, don't need valid properties for settings table.
     const migrationSource = new KnexMigrations('test', '', '', 1024)
 
@@ -1177,14 +1253,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * or a Knex.Transaction as appropriate.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  toDb (trx?: TrxToken): Knex | Knex.Transaction<any, any[]> {
+  toDb(trx?: TrxToken): Knex | Knex.Transaction<any, any[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = (trx == null) ? this.knex : trx as Knex.Transaction<any, any[]>
+    const db = trx == null ? this.knex : (trx as Knex.Transaction<any, any[]>)
     this.whenLastAccess = new Date()
     return db
   }
 
-  async validateRawTransaction (t: TableTransaction, trx?: TrxToken): Promise<void> {
+  async validateRawTransaction(t: TableTransaction, trx?: TrxToken): Promise<void> {
     // if there is no txid or there is a rawTransaction return what we have.
     if (t.rawTx != null || t.txid == null || t.txid === '') return
 
@@ -1205,7 +1281,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    *
    * @param trx
    */
-  async verifyReadyForDatabaseAccess (trx?: TrxToken): Promise<DBType> {
+  async verifyReadyForDatabaseAccess(trx?: TrxToken): Promise<DBType> {
     this._settings ??= await this.readSettings()
 
     // Always run the PRAGMA for SQLite to ensure foreign key constraints are enabled.
@@ -1223,7 +1299,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /** Convert every byte-array value to a Buffer and every undefined to null on an arbitrary object. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private serialiseForKnex (v: any): void {
+  private serialiseForKnex(v: any): void {
     for (const key of Object.keys(v)) {
       const val = v[key]
       if (Array.isArray(val) && (val.length === 0 || typeof val[0] === 'number')) {
@@ -1238,7 +1314,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /** Apply optional date-field coercion list in-place. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private coerceDateFields (v: any, dateFields?: string[]): void {
+  private coerceDateFields(v: any, dateFields?: string[]): void {
     if (dateFields == null) return
     for (const df of dateFields) {
       if (v[df] != null) v[df] = this.validateOptionalEntityDate(v[df])
@@ -1247,7 +1323,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /** Apply optional boolean-field coercion list in-place. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private coerceBooleanFields (v: any, booleanFields?: string[]): void {
+  private coerceBooleanFields(v: any, booleanFields?: string[]): void {
     if (booleanFields == null) return
     for (const df of booleanFields) {
       if (v[df] !== undefined) v[df] = (v[df] as unknown) != null && (v[df] as unknown) !== false ? 1 : 0
@@ -1286,7 +1362,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     trx?: TrxToken,
     dateFields?: string[],
     booleanFields?: string[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     await this.verifyReadyForDatabaseAccess(trx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1302,7 +1378,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return v
   }
 
-  override async getLabelsForTransactionId (transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]> {
+  override async getLabelsForTransactionId(transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]> {
     if (transactionId === undefined) return []
     const labels = await this.toDb(trx)<TableTxLabel>('tx_labels')
       .join('tx_labels_map', 'tx_labels_map.txLabelId', 'tx_labels.txLabelId')
@@ -1312,7 +1388,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(labels, undefined, ['isDeleted'])
   }
 
-  override async getTagsForOutputId (outputId: number, trx?: TrxToken): Promise<TableOutputTag[]> {
+  override async getTagsForOutputId(outputId: number, trx?: TrxToken): Promise<TableOutputTag[]> {
     const tags = await this.toDb(trx)<TableOutputTag>('output_tags')
       .join('output_tags_map', 'output_tags_map.outputTagId', 'output_tags.outputTagId')
       .where('output_tags_map.outputId', outputId)
@@ -1321,11 +1397,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(tags, undefined, ['isDeleted'])
   }
 
-  override async purgeData (params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
+  override async purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
     return await purgeData(this, params, trx)
   }
 
-  override async reviewStatus (args: { agedLimit: Date, trx?: TrxToken }): Promise<{ log: string }> {
+  override async reviewStatus(args: { agedLimit: Date; trx?: TrxToken }): Promise<{ log: string }> {
     return await reviewStatus(this, args)
   }
 
@@ -1337,7 +1413,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * - unproven
    * - sending (if excludeSending is false)
    */
-  async countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number> {
+  async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
     const q = this.knex<TableOutput>('outputs as o')
@@ -1361,7 +1437,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return count
   }
 
-  override async findOutputsByIds (outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
+  override async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
     const byId: Record<number, TableOutput> = {}
     if (outputIds.length < 1) return byId
     const rows = await this.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).select('*')
@@ -1375,9 +1451,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byId
   }
 
-  override async findOutputsByOutpoints (
+  override async findOutputsByOutpoints(
     userId: number,
-    outpoints: Array<{ txid: string, vout: number }>,
+    outpoints: Array<{ txid: string; vout: number }>,
     trx?: TrxToken
   ): Promise<Record<string, TableOutput>> {
     const byOutpoint: Record<string, TableOutput> = {}
@@ -1400,9 +1476,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byOutpoint
   }
 
-  override async findOutputsByOutpointsForUpdate (
+  override async findOutputsByOutpointsForUpdate(
     userId: number,
-    outpoints: Array<{ txid: string, vout: number }>,
+    outpoints: Array<{ txid: string; vout: number }>,
     trx: TrxToken
   ): Promise<Record<string, TableOutput>> {
     const byOutpoint: Record<string, TableOutput> = {}
@@ -1422,7 +1498,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byOutpoint
   }
 
-  override async findOrInsertOutputBasketsBulk (
+  override async findOrInsertOutputBasketsBulk(
     userId: number,
     names: string[],
     trx?: TrxToken
@@ -1444,7 +1520,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byName
   }
 
-  override async findOrInsertOutputTagsBulk (
+  override async findOrInsertOutputTagsBulk(
     userId: number,
     tags: string[],
     trx?: TrxToken
@@ -1466,7 +1542,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byTag
   }
 
-  override async findOrInsertTxLabelsBulk (
+  override async findOrInsertTxLabelsBulk(
     userId: number,
     labels: string[],
     trx?: TrxToken
@@ -1488,7 +1564,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byLabel
   }
 
-  override async sumSpendableSatoshisInBasket (
+  override async sumSpendableSatoshisInBasket(
     userId: number,
     basketId: number,
     excludeSending: boolean,
@@ -1503,7 +1579,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereIn('t.status', status)
       .sum({ totalSatoshis: 'o.satoshis' })
       .first()
-    const total = (row != null) ? (row as Record<string, unknown>).totalSatoshis : undefined
+    const total = row != null ? (row as Record<string, unknown>).totalSatoshis : undefined
     return Number(total ?? 0)
   }
 
@@ -1512,7 +1588,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    *
    * Transactionally allocate the output such that
    */
-  async allocateChangeInput (
+  async allocateChangeInput(
     userId: number,
     basketId: number,
     targetSatoshis: number,
@@ -1542,9 +1618,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .whereNot('o.derivationSuffix', '')
           .whereNull('o.spentBy')
           .whereNotExists(function () {
-            void this.select(1)
-              .from('action_batch_outputs as abo')
-              .whereRaw('abo.outputId = o.outputId')
+            void this.select(1).from('action_batch_outputs as abo').whereRaw('abo.outputId = o.outputId')
           })
           .whereIn('t.status', status)
           .select('o.*')
@@ -1622,7 +1696,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (booleanFields != null) {
       for (const df of booleanFields) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if ((entity as any)[df] !== undefined) (entity as any)[df] = (entity as any)[df] !== 0 && (entity as any)[df] != null && (entity as any)[df] !== false
+        if ((entity as any)[df] !== undefined)
+          (entity as any)[df] =
+            (entity as any)[df] !== 0 && (entity as any)[df] != null && (entity as any)[df] !== false
       }
     }
     this.deserialiseFromKnex(entity)
@@ -1641,7 +1717,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return entities
   }
 
-  async adminStats (adminIdentityKey: string): Promise<AdminStatsResult> {
+  async adminStats(adminIdentityKey: string): Promise<AdminStatsResult> {
     if (this.dbtype !== 'MySQL') throw new WERR_NOT_IMPLEMENTED('adminStats, only MySQL is supported')
 
     const monitorEvent = verifyOneOrNone(
@@ -1651,7 +1727,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         paged: { limit: 1 }
       })
     )
-    const monitorStats: ServicesCallHistory | undefined = (monitorEvent != null) ? JSON.parse(monitorEvent.details as string) : undefined
+    const monitorStats: ServicesCallHistory | undefined =
+      monitorEvent != null ? JSON.parse(monitorEvent.details as string) : undefined
     const servicesStats = this.getServices().getServicesCallHistory(true)
 
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()

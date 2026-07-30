@@ -5,10 +5,12 @@ import {
   Peer,
   SessionManager,
   PublicKey,
+  Telemetry,
   type AsyncSessionManager,
   type AuthMessage,
   type PubKeyHex,
   type RequestedCertificateSet,
+  type TelemetryConfig,
   type Transport,
   type VerifiableCertificate,
   type WalletInterface
@@ -34,6 +36,26 @@ const WELL_KNOWN_AUTH_PATH = '/.well-known/auth'
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_PENDING_REQUESTS = 1_000
 const MAX_AUTH_HEADER_LENGTH = 4_096
+const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i
+
+function parseTraceparent(
+  value: unknown
+): { traceId: string; spanId: string; traceFlags: number } | undefined {
+  if (typeof value !== 'string' || value.length > 128) return undefined
+  const match = TRACEPARENT_PATTERN.exec(value.trim())
+  if (
+    match == null ||
+    /^0{32}$/.test(match[1]) ||
+    /^0{16}$/.test(match[2])
+  ) {
+    return undefined
+  }
+  return {
+    traceId: match[1].toLowerCase(),
+    spanId: match[2].toLowerCase(),
+    traceFlags: Number.parseInt(match[3], 16)
+  }
+}
 
 interface PendingHandle {
   res: Response
@@ -100,6 +122,12 @@ export interface AuthMiddlewareOptions {
    * 30-second timeout and 1,000 concurrent request records per process.
    */
   transportLimits?: Partial<AuthTransportLimits>
+
+  /**
+   * Optional provider-neutral authentication timing. Header values, signatures,
+   * certificate contents, wallet data, and peer identities are never emitted.
+   */
+  telemetry?: TelemetryConfig
 }
 
 class AuthProtocolError extends Error {
@@ -1318,7 +1346,8 @@ export function createAuthMiddleware(
     onCertificatesReceived,
     logger,
     logLevel,
-    transportLimits
+    transportLimits,
+    telemetry: telemetryConfig
   } = options
 
   if (wallet === null || typeof wallet !== 'object') {
@@ -1362,6 +1391,7 @@ export function createAuthMiddleware(
 
   const peer = new Peer(wallet, transport, certificatesToRequest, sessionMgr)
   transport.setPeer(peer)
+  const telemetry = new Telemetry(telemetryConfig)
 
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
@@ -1371,6 +1401,59 @@ export function createAuthMiddleware(
         hasAuthRequestId: typeof req.headers['x-bsv-auth-request-id'] === 'string'
       })
     }
-    void transport.handleIncomingRequest(req, res, next, onCertificatesReceived).catch(next)
+    if (!telemetry.enabled) {
+      void transport.handleIncomingRequest(req, res, next, onCertificatesReceived).catch(next)
+      return
+    }
+
+    const parent = telemetry.contextFor(req) ?? parseTraceparent(req.headers.traceparent)
+    const span = telemetry.startSpan('wallet.auth.middleware', {
+      component: 'auth-express-middleware',
+      kind: 'server',
+      parent,
+      carrier: req,
+      attributes: {
+        'http.request.method': req.method,
+        'auth.handshake': req.path === WELL_KNOWN_AUTH_PATH,
+        'auth.signed_request': typeof req.headers['x-bsv-auth-request-id'] === 'string'
+      }
+    })
+    span.bind(req)
+    let ended = false
+    const end = (
+      status: 'ok' | 'error' | 'cancelled',
+      error?: unknown,
+      disposition?: string
+    ): void => {
+      if (ended) return
+      ended = true
+      span.end({
+        status,
+        error,
+        attributes: {
+          ...(disposition == null ? {} : { 'auth.disposition': disposition }),
+          ...(res.statusCode > 0 ? { 'http.response.status_code': res.statusCode } : {})
+        }
+      })
+    }
+    const tracedNext = ((argument?: unknown) => {
+      end(argument instanceof Error ? 'error' : 'ok', argument, 'continued')
+      if (argument === undefined) next()
+      else next(argument)
+    }) as NextFunction
+
+    res.once('finish', () => {
+      end(res.statusCode >= 500 ? 'error' : 'ok', undefined, 'responded')
+    })
+    res.once('close', () => {
+      end(res.writableEnded ? 'ok' : 'cancelled', undefined, 'connection_closed')
+    })
+
+    void transport
+      .handleIncomingRequest(req, res, tracedNext, onCertificatesReceived)
+      .catch(error => {
+        end('error', error, 'middleware_error')
+        next(error)
+      })
   }
 }

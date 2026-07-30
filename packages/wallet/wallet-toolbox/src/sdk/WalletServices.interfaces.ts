@@ -3,6 +3,7 @@ import {
   Transaction as BsvTransaction,
   ChainTracker,
   MerklePath,
+  TelemetryConfig,
   WalletLoggerInterface
 } from '@bsv/sdk'
 // ArcConfig is sourced from the local ARC provider (a superset of the @bsv/sdk ArcConfig
@@ -207,27 +208,15 @@ export interface FiatExchangeRates {
 }
 
 export type FiatCurrencyCode =
-  | 'USD'
-  | 'EUR'
-  | 'GBP'
-  | 'JPY'
-  | 'CNY'
-  | 'INR'
-  | 'AUD'
-  | 'CAD'
-  | 'CHF'
-  | 'HKD'
-  | 'SGD'
-  | 'NZD'
-  | 'SEK'
-  | 'NOK'
-  | 'MXN'
+  'USD' | 'EUR' | 'GBP' | 'JPY' | 'CNY' | 'INR' | 'AUD' | 'CAD' | 'CHF' | 'HKD' | 'SGD' | 'NZD' | 'SEK' | 'NOK' | 'MXN'
 
 export interface WalletServicesOptions {
   /**
    * 'main' or 'test': which BSV chain to use
    */
   chain: Chain
+  /** Optional provider-neutral service and ChainTracks tracing. */
+  telemetry?: TelemetryConfig
   /**
    * As of 2025-08-31 the `taalApiKey` is unused for default configured services.
    * See `arcConfig` instead.
@@ -679,7 +668,7 @@ export interface ServiceCall {
   /**
    * Error code and message iff success is false and a exception was thrown.
    */
-  error?: { message: string, code: string }
+  error?: { message: string; code: string }
 }
 
 /**

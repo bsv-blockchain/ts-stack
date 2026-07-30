@@ -1,4 +1,4 @@
-import { Random, Validation, WalletLoggerInterface } from '@bsv/sdk'
+import { Random, Telemetry, TelemetrySpan, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -113,6 +113,80 @@ function removeDustOutputs(changeOutputs: GenerateChangeSdkChangeOutput[], dustF
  * @returns
  */
 export async function generateChangeSdk(
+  params: GenerateChangeSdkParams,
+  allocateChangeInput: (
+    targetSatoshis: number,
+    exactSatoshis?: number
+  ) => Promise<GenerateChangeSdkChangeInput | undefined>,
+  releaseChangeInput: (outputId: number) => Promise<void>,
+  logger?: WalletLoggerInterface,
+  telemetry?: Telemetry
+): Promise<GenerateChangeSdkResult> {
+  if (telemetry?.enabled !== true) {
+    return await generateChangeSdkCore(params, allocateChangeInput, releaseChangeInput, logger)
+  }
+
+  return await telemetry.withSpan(
+    'wallet.storage.generate_change',
+    {
+      component: 'wallet-storage',
+      carrier: params,
+      attributes: {
+        'change.fixed_input_count': params.fixedInputs.length,
+        'change.fixed_output_count': params.fixedOutputs.length,
+        'change.target_net_count': params.targetNetCount ?? 0
+      }
+    },
+    async span => {
+      const allocate = async (
+        targetSatoshis: number,
+        exactSatoshis?: number
+      ): Promise<GenerateChangeSdkChangeInput | undefined> =>
+        await traceGenerateChangeStep(
+          telemetry,
+          span,
+          'wallet.storage.generate_change.allocate',
+          async () => await allocateChangeInput(targetSatoshis, exactSatoshis)
+        )
+      const release = async (outputId: number): Promise<void> => {
+        await traceGenerateChangeStep(
+          telemetry,
+          span,
+          'wallet.storage.generate_change.release',
+          async () => await releaseChangeInput(outputId)
+        )
+      }
+      const result = await generateChangeSdkCore(params, allocate, release, logger)
+      span.end({
+        attributes: {
+          'change.allocated_input_count': result.allocatedChangeInputs.length,
+          'change.output_count': result.changeOutputs.length,
+          'change.transaction_size_bytes': result.size,
+          'change.fee_satoshis': result.fee
+        }
+      })
+      return result
+    }
+  )
+}
+
+async function traceGenerateChangeStep<T>(
+  telemetry: Telemetry,
+  parent: TelemetrySpan,
+  name: string,
+  callback: () => Promise<T>
+): Promise<T> {
+  return await telemetry.withSpan(
+    name,
+    {
+      component: 'wallet-storage',
+      parent: parent.context
+    },
+    callback
+  )
+}
+
+async function generateChangeSdkCore(
   params: GenerateChangeSdkParams,
   allocateChangeInput: (
     targetSatoshis: number,
@@ -287,12 +361,12 @@ export async function generateChangeSdk(
       // per-transaction cap and ensure each output meets the dust floor.
       while (
         r.changeOutputs.length < maxChangeOutputs &&
-        ((hasTargetNetCount && targetNetCount > netChangeCount()) ||
-          (r.changeOutputs.length === 0 && feeExcess() > 0))
+        ((hasTargetNetCount && targetNetCount > netChangeCount()) || (r.changeOutputs.length === 0 && feeExcess() > 0))
       ) {
-        const satoshis = r.changeOutputs.length === 0
-          ? Math.max(dustFloor, params.changeFirstSatoshis)
-          : Math.max(dustFloor, params.changeInitialSatoshis)
+        const satoshis =
+          r.changeOutputs.length === 0
+            ? Math.max(dustFloor, params.changeFirstSatoshis)
+            : Math.max(dustFloor, params.changeInitialSatoshis)
         r.changeOutputs.push({
           satoshis,
           lockingScriptLength: params.changeLockingScriptLength

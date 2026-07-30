@@ -1,4 +1,12 @@
-import { Transaction as BsvTransaction, Beef, ChainTracker, Utils, WalletLoggerInterface } from '@bsv/sdk'
+import {
+  Transaction as BsvTransaction,
+  Beef,
+  ChainTracker,
+  Telemetry,
+  TelemetrySpan,
+  Utils,
+  WalletLoggerInterface
+} from '@bsv/sdk'
 import { ServiceCollection, ServiceToCall } from './ServiceCollection'
 import { createDefaultWalletServicesOptions } from './createDefaultWalletServicesOptions'
 import { WhatsOnChain } from './providers/WhatsOnChain'
@@ -62,6 +70,7 @@ export class Services implements WalletServices {
   updateFiatExchangeRateServices!: ServiceCollection<UpdateFiatExchangeRateService>
 
   chain: Chain
+  readonly telemetry: Telemetry
 
   constructor(optionsOrChain: Chain | WalletServicesOptions) {
     this.chain = typeof optionsOrChain === 'string' ? optionsOrChain : optionsOrChain.chain
@@ -71,6 +80,7 @@ export class Services implements WalletServices {
     }
 
     this.options = typeof optionsOrChain === 'string' ? Services.createDefaultOptions(this.chain) : optionsOrChain
+    this.telemetry = new Telemetry(this.options.telemetry)
 
     this.whatsonchain = new WhatsOnChain(this.chain, { apiKey: this.options.whatsOnChainApiKey }, this)
 
@@ -205,7 +215,9 @@ export class Services implements WalletServices {
     if (this.options.chaintracks == null) {
       throw new WERR_INVALID_PARAMETER('options.chaintracks', "valid to enable 'getChainTracker' service.")
     }
-    return new ChaintracksChainTracker(this.chain, this.options.chaintracks)
+    return new ChaintracksChainTracker(this.chain, this.options.chaintracks, {
+      telemetry: this.options.telemetry
+    })
   }
 
   async getBsvExchangeRate(): Promise<number> {
@@ -592,13 +604,42 @@ export class Services implements WalletServices {
     return false
   }
 
-  async invokeChaintracksWithRetry<R>(method: () => Promise<R>): Promise<R> {
+  async invokeChaintracksWithRetry<R>(method: () => Promise<R>, operation: string = 'unknown'): Promise<R> {
     if (this.options.chaintracks == null) {
       throw new WERR_INVALID_PARAMETER('options.chaintracks', 'valid for this service operation.')
     }
+    if (!this.telemetry.enabled) return await this.invokeChaintracksWithRetryCore(method)
+    return await this.telemetry.withSpan(
+      'wallet.chaintracks.request',
+      {
+        component: 'wallet-services',
+        kind: 'client',
+        attributes: {
+          'chaintracks.operation': operation
+        }
+      },
+      async span => await this.invokeChaintracksWithRetryCore(method, span)
+    )
+  }
+
+  private async invokeChaintracksWithRetryCore<R>(method: () => Promise<R>, parent?: TelemetrySpan): Promise<R> {
     for (let retry = 0; retry < 3; retry++) {
       try {
-        const r: R = await method()
+        const r: R =
+          parent == null
+            ? await method()
+            : await this.telemetry.withSpan(
+                'wallet.chaintracks.attempt',
+                {
+                  component: 'wallet-services',
+                  kind: 'client',
+                  parent: parent.context,
+                  attributes: {
+                    'retry.attempt': retry + 1
+                  }
+                },
+                method
+              )
         return r
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
@@ -616,7 +657,7 @@ export class Services implements WalletServices {
         throw new WERR_INVALID_PARAMETER('hash', `valid height '${height}' on mined chain ${this.chain}`)
       return toBinaryBaseBlockHeader(header)
     }
-    return await this.invokeChaintracksWithRetry(method)
+    return await this.invokeChaintracksWithRetry(method, 'find_header_for_height')
   }
 
   async getHeight(): Promise<number> {
@@ -624,7 +665,7 @@ export class Services implements WalletServices {
       const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
       return await chaintracks.currentHeight()
     }
-    return await this.invokeChaintracksWithRetry(method)
+    return await this.invokeChaintracksWithRetry(method, 'current_height')
   }
 
   async hashToHeader(hash: string): Promise<BlockHeader> {
@@ -633,7 +674,7 @@ export class Services implements WalletServices {
       const header = await chaintracks.findHeaderForBlockHash(hash)
       return header
     }
-    let header = await this.invokeChaintracksWithRetry(method)
+    let header = await this.invokeChaintracksWithRetry(method, 'find_header_for_hash')
     header ??= await this.whatsonchain.getBlockHeaderByHash(hash)
     if (header == null)
       throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${hash}' on mined chain ${this.chain}`)

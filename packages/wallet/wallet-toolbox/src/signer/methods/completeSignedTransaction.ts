@@ -1,13 +1,10 @@
-import {
-  SignActionSpend,
-  Transaction
-} from '@bsv/sdk'
+import { SignActionSpend, Transaction } from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 
-export async function completeSignedTransaction (
+export async function completeSignedTransaction(
   prior: PendingSignAction,
   spends: Record<number, SignActionSpend>,
   wallet: Wallet
@@ -57,7 +54,21 @@ export async function completeSignedTransaction (
   /// //////////////////
   // Sign wallet signed inputs making transaction fully valid.
   /// //////////////////
-  await prior.tx.sign()
+  if (wallet.telemetry.enabled) {
+    await wallet.telemetry.withSpan(
+      'wallet.crypto.transaction_sign',
+      {
+        component: 'wallet-toolbox',
+        carrier: prior.args,
+        attributes: {
+          'crypto.input_count': prior.tx.inputs.length
+        }
+      },
+      async () => await prior.tx.sign()
+    )
+  } else {
+    await prior.tx.sign()
+  }
 
   return prior.tx
 }

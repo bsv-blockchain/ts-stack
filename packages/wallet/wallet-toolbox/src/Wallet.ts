@@ -68,7 +68,9 @@ import {
   KeyDeriverApi,
   Validation,
   WalletLoggerInterface,
-  MakeWalletLogger
+  MakeWalletLogger,
+  Telemetry,
+  TelemetryConfig
 } from '@bsv/sdk'
 import type { SpendVerifierInterface } from '@bsv/sdk'
 import { acquireDirectCertificate } from './signer/methods/acquireDirectCertificate'
@@ -213,6 +215,11 @@ export interface WalletArgs {
    * not change the BRC-100 wallet interface.
    */
   scriptVerifier?: SpendVerifierInterface
+  /**
+   * Optional provider-neutral tracing shared by wallet, lookup, storage, and
+   * permission layers. Disabled unless an enabled sink is supplied.
+   */
+  telemetry?: TelemetryConfig
 }
 
 function isWalletSigner(args: WalletArgs | WalletSigner): args is WalletSigner {
@@ -266,6 +273,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   pendingSignActions: Record<string, PendingSignAction>
   readonly actionBatch: ActionBatchController
   readonly scriptVerifier?: SpendVerifierInterface
+  readonly telemetry: Telemetry
 
   /**
    * For repeatability testing, set to an array of random numbers from [0..1).
@@ -298,12 +306,14 @@ export class Wallet implements WalletInterface, ProtoWallet {
       )
     }
 
+    this.telemetry = new Telemetry(args.telemetry)
     this.settingsManager = args.settingsManager || new WalletSettingsManager(this)
     this.chain = args.chain
     this.lookupResolver =
       args.lookupResolver ||
       new LookupResolver({
-        networkPreset: toLookupNetworkPreset(this.chain)
+        networkPreset: toLookupNetworkPreset(this.chain),
+        telemetry: args.telemetry
       })
     this.keyDeriver = args.keyDeriver
     this.storage = args.storage
@@ -498,9 +508,32 @@ export class Wallet implements WalletInterface, ProtoWallet {
     validate: (args: A, logger?: WalletLoggerInterface) => T,
     logger?: WalletLoggerInterface
   ): { vargs: T; auth: AuthId } {
-    const vargs = validate(args, logger)
-    const auth: AuthId = { identityKey: this.identityKey }
-    return { vargs, auth }
+    if (!this.telemetry.enabled || typeof args !== 'object' || args == null) {
+      const vargs = validate(args, logger)
+      const auth: AuthId = { identityKey: this.identityKey }
+      return { vargs, auth }
+    }
+
+    const span = this.telemetry.startSpan('wallet.validate_args', {
+      component: 'wallet-toolbox',
+      carrier: args
+    })
+    try {
+      const vargs = validate(args, logger)
+      if (typeof vargs === 'object' && vargs != null) {
+        this.telemetry.bindContext(vargs, span.context)
+      }
+      const auth: AuthId = { identityKey: this.identityKey }
+      span.end({ attributes: { 'validation.result': 'ok' } })
+      return { vargs, auth }
+    } catch (error) {
+      span.end({
+        status: 'error',
+        error,
+        attributes: { 'validation.result': 'rejected' }
+      })
+      throw error
+    }
   }
 
   /// ///////////////

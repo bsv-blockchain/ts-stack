@@ -1,6 +1,6 @@
 import { mockUnderlyingWallet, MockedBSV_SDK } from './WalletPermissionsManager.fixtures'
 import { WalletPermissionsManager, GroupedPermissions } from '../WalletPermissionsManager'
-import { WalletProtocol } from '@bsv/sdk'
+import { TelemetryEvent, WalletProtocol } from '@bsv/sdk'
 
 import { jest } from '@jest/globals'
 
@@ -191,6 +191,59 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     void manager.denyPermission(callArg.requestID)
 
     await expect(signPromise).rejects.toThrow(/Permission denied/)
+  })
+
+  it('correlates permission callbacks without reporting request details', async () => {
+    const events: TelemetryEvent[] = []
+    manager = new WalletPermissionsManager(underlying, 'admin.domain.com', {
+      telemetry: {
+        sink: {
+          capture: event => {
+            events.push(event)
+          }
+        }
+      }
+    })
+
+    let requestID = ''
+    manager.bindCallback('onProtocolPermissionRequested', param => {
+      requestID = param.requestID
+    })
+
+    const signPromise = manager.createSignature(
+      {
+        protocolID: [1, 'private-protocol-name'],
+        keyID: 'private-key-id',
+        data: [0x01, 0x02],
+        privileged: false
+      },
+      'private-origin.example.com'
+    )
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await manager.denyPermission(requestID)
+    await expect(signPromise).rejects.toThrow(/Permission denied/)
+
+    const requestSpan = events.find(event => event.name === 'wallet.permission.request')
+    const callbackSpan = events.find(event => event.name === 'wallet.permission.callback')
+    expect(requestSpan).toMatchObject({
+      spanStatus: 'error',
+      attributes: {
+        'permission.type': 'protocol',
+        'permission.renewal': false
+      }
+    })
+    expect(callbackSpan).toMatchObject({
+      traceId: requestSpan?.traceId,
+      parentSpanId: requestSpan?.spanId,
+      attributes: {
+        'permission.callback': 'onProtocolPermissionRequested',
+        'permission.callback_index': 0
+      }
+    })
+    expect(JSON.stringify(events)).not.toContain('private-origin.example.com')
+    expect(JSON.stringify(events)).not.toContain('private-protocol-name')
+    expect(JSON.stringify(events)).not.toContain('private-key-id')
+    expect(JSON.stringify(events)).not.toContain(requestID)
   })
 
   it('should resolve the original caller promise when requests are granted', async () => {

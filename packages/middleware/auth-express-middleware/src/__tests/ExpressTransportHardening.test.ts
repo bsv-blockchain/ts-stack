@@ -15,7 +15,8 @@ function responseMock(): any {
     json: jest.fn(),
     text: jest.fn(),
     end: jest.fn(),
-    sendFile: jest.fn()
+    sendFile: jest.fn(),
+    once: jest.fn()
   }
   response.status.mockReturnValue(response)
   response.set.mockReturnValue(response)
@@ -739,5 +740,51 @@ describe('ExpressTransport hardening', () => {
       }
     )
     expect(JSON.stringify(debug.mock.calls)).not.toContain('/public')
+  })
+
+  it('emits a traceparent-linked auth span without request secrets', async () => {
+    const events: any[] = []
+    const middleware = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry: {
+        sink: {
+          capture: event => events.push(event)
+        },
+        traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        spanIdFactory: () => 'bbbbbbbbbbbbbbbb'
+      }
+    })
+    const req = {
+      path: '/private/customer-record',
+      method: 'GET',
+      headers: {
+        authorization: 'Bearer never-report-this',
+        traceparent: '00-0123456789abcdef0123456789abcdef-fedcba9876543210-01'
+      }
+    } as any
+    const res = responseMock()
+    const next = jest.fn()
+
+    middleware(req, res, next)
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(next).toHaveBeenCalled()
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      type: 'span',
+      name: 'wallet.auth.middleware',
+      traceId: '0123456789abcdef0123456789abcdef',
+      parentSpanId: 'fedcba9876543210',
+      spanStatus: 'ok',
+      attributes: {
+        'http.request.method': 'GET',
+        'auth.handshake': false,
+        'auth.signed_request': false,
+        'auth.disposition': 'continued'
+      }
+    })
+    expect(JSON.stringify(events)).not.toContain('customer-record')
+    expect(JSON.stringify(events)).not.toContain('never-report-this')
   })
 })

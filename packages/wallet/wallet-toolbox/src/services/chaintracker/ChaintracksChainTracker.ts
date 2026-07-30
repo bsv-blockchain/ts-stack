@@ -1,4 +1,4 @@
-import { ChainTracker } from '@bsv/sdk'
+import { ChainTracker, Telemetry, TelemetryConfig, TelemetrySpan } from '@bsv/sdk'
 import { ChaintracksServiceClient } from './chaintracks/ChaintracksServiceClient'
 import { Chain } from '../../sdk/types'
 import { WalletError } from '../../sdk/WalletError'
@@ -9,28 +9,57 @@ import { ChaintracksClientApi } from './chaintracks/Api/ChaintracksClientApi'
 export interface ChaintracksChainTrackerOptions {
   maxRetries?: number
   retryDelayMs?: number
+  telemetry?: TelemetryConfig
 }
 
 export class ChaintracksChainTracker implements ChainTracker {
   chaintracks: ChaintracksClientApi
   cache: Record<number, string>
   options: ChaintracksChainTrackerOptions
+  readonly telemetry: Telemetry
 
-  constructor (chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions) {
+  constructor(chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions) {
     chain ||= 'main'
     this.chaintracks =
       chaintracks ?? new ChaintracksServiceClient(chain, `https://${chain}net-chaintracks.babbage.systems`)
     this.cache = {}
     this.options = options || {}
+    this.telemetry = new Telemetry(this.options.telemetry)
   }
 
-  async currentHeight (): Promise<number> {
-    return await this.chaintracks.getPresentHeight()
+  async currentHeight(): Promise<number> {
+    if (!this.telemetry.enabled) return await this.chaintracks.getPresentHeight()
+    return await this.telemetry.withSpan(
+      'wallet.chaintracks.current_height',
+      {
+        component: 'chaintracks-chain-tracker',
+        kind: 'client'
+      },
+      async () => await this.chaintracks.getPresentHeight()
+    )
   }
 
-  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    if (!this.telemetry.enabled) return await this.isValidRootForHeightCore(root, height)
+    return await this.telemetry.withSpan(
+      'wallet.chaintracks.validate_root',
+      {
+        component: 'chaintracks-chain-tracker',
+        kind: 'client'
+      },
+      async span => await this.isValidRootForHeightCore(root, height, span)
+    )
+  }
+
+  private async isValidRootForHeightCore(root: string, height: number, parent?: TelemetrySpan): Promise<boolean> {
     const cachedRoot = this.cache[height]
     if (cachedRoot) {
+      parent?.end({
+        attributes: {
+          'chaintracks.cache_hit': true,
+          'chaintracks.valid': cachedRoot === root
+        }
+      })
       return cachedRoot === root
     }
 
@@ -43,7 +72,21 @@ export class ChaintracksChainTracker implements ChainTracker {
 
     for (let tryCount = 1; tryCount <= retries; tryCount++) {
       try {
-        header = await this.chaintracks.findHeaderForHeight(height)
+        header =
+          parent == null
+            ? await this.chaintracks.findHeaderForHeight(height)
+            : await this.telemetry.withSpan(
+                'wallet.chaintracks.find_header',
+                {
+                  component: 'chaintracks-chain-tracker',
+                  kind: 'client',
+                  parent: parent.context,
+                  attributes: {
+                    'retry.attempt': tryCount
+                  }
+                },
+                async () => await this.chaintracks.findHeaderForHeight(height)
+              )
 
         if (header == null) {
           if (tryCount >= retries) return false
@@ -65,10 +108,13 @@ export class ChaintracksChainTracker implements ChainTracker {
 
     this.cache[height] = header.merkleRoot
 
-    if (header.merkleRoot !== root) {
-      return false
-    }
-
-    return true
+    const valid = header.merkleRoot === root
+    parent?.end({
+      attributes: {
+        'chaintracks.cache_hit': false,
+        'chaintracks.valid': valid
+      }
+    })
+    return valid
   }
 }
