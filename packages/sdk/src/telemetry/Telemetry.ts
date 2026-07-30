@@ -280,46 +280,38 @@ function sanitizeAttributes(
   return count > 0 ? safe : undefined
 }
 
+interface ErrorCandidate {
+  name?: unknown
+  message?: unknown
+  code?: unknown
+  stack?: unknown
+}
+
+function sanitizeOptionalErrorText(value: unknown, maxLength: number): string | undefined {
+  return typeof value === 'string' ? sanitizeTelemetryText(value, maxLength) : undefined
+}
+
+function sanitizeErrorCandidate(candidate: ErrorCandidate, includeStack: boolean): TelemetryError {
+  const message =
+    typeof candidate.message === 'string' && candidate.message.length > 0
+      ? candidate.message
+      : 'Unknown error'
+  const code = sanitizeOptionalErrorText(candidate.code, 120)
+  const stack = includeStack
+    ? sanitizeOptionalErrorText(candidate.stack, MAX_STACK_LENGTH)
+    : undefined
+  return {
+    name: sanitizeName(candidate.name, 'Error'),
+    message: sanitizeTelemetryText(message),
+    ...(code !== undefined ? { code } : {}),
+    ...(stack !== undefined ? { stack } : {})
+  }
+}
+
 function sanitizeError(error: unknown, includeStack: boolean): TelemetryError | undefined {
   if (error == null) return undefined
-  if (error instanceof Error) {
-    const withCode = error as Error & { code?: unknown }
-    const code =
-      typeof withCode.code === 'string' ? sanitizeTelemetryText(withCode.code, 120) : undefined
-    const stack =
-      includeStack && typeof error.stack === 'string'
-        ? sanitizeTelemetryText(error.stack, MAX_STACK_LENGTH)
-        : undefined
-    return {
-      name: sanitizeName(error.name, 'Error'),
-      message: sanitizeTelemetryText(error.message.length > 0 ? error.message : 'Unknown error'),
-      ...(code !== undefined ? { code } : {}),
-      ...(stack !== undefined ? { stack } : {})
-    }
-  }
-  if (typeof error === 'object') {
-    const candidate = error as {
-      name?: unknown
-      message?: unknown
-      code?: unknown
-      stack?: unknown
-    }
-    const code =
-      typeof candidate.code === 'string' ? sanitizeTelemetryText(candidate.code, 120) : undefined
-    const stack =
-      includeStack && typeof candidate.stack === 'string'
-        ? sanitizeTelemetryText(candidate.stack, MAX_STACK_LENGTH)
-        : undefined
-    return {
-      name: sanitizeName(candidate.name, 'Error'),
-      message: sanitizeTelemetryText(
-        typeof candidate.message === 'string' && candidate.message.length > 0
-          ? candidate.message
-          : 'Unknown error'
-      ),
-      ...(code !== undefined ? { code } : {}),
-      ...(stack !== undefined ? { stack } : {})
-    }
+  if (error instanceof Error || typeof error === 'object') {
+    return sanitizeErrorCandidate(error as ErrorCandidate, includeStack)
   }
   return {
     name: 'Error',
@@ -553,12 +545,9 @@ export class Telemetry {
 
   activeContext(): TelemetrySpanContext | undefined {
     try {
-      return (
-        this.config.contextManager?.active() ??
-        synchronousContextStack[synchronousContextStack.length - 1]
-      )
+      return this.config.contextManager?.active() ?? synchronousContextStack.at(-1)
     } catch {
-      return synchronousContextStack[synchronousContextStack.length - 1]
+      return synchronousContextStack.at(-1)
     }
   }
 
