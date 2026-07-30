@@ -233,6 +233,7 @@ jobs:
 
       - name: Verify npm package attestations
         env:
+          GH_TOKEN: ${{ github.token }}
           SOURCE_DIGEST: ${{ github.sha }}
           SOURCE_REF: ${{ github.ref }}
         run: |
