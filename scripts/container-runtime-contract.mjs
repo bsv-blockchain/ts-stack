@@ -78,7 +78,7 @@ const contracts = {
     invalidEnvironment: { HOSTING_URL: 'http://127.0.0.1:8080' },
     liveness: '/health/live',
     readiness: '/health/ready',
-    transaction: { method: 'GET', path: '/version', status: 200 },
+    transaction: { method: 'GET', path: '/listTopicManagers', status: 200 },
     migration: 'readiness-after-startup-migration'
   },
   'uhrp-server-basic': {
