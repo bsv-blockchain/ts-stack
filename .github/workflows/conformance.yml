@@ -26,7 +26,7 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build TS runner dependencies
-        run: pnpm -r --filter '@bsv/wallet-toolbox...' run build
+        run: pnpm -r --filter '@bsv/wallet-toolbox...' --filter '@bsv/air-gap' run build
       - name: Check TS conformance runner quality
         run: |
           pnpm --filter @bsv/conformance-runner-ts format:check
