@@ -119,6 +119,11 @@ function collectPageErrors(page) {
   return errors
 }
 
+function errorMessage(error) {
+  if (error instanceof Error) return error.message
+  return typeof error === 'string' ? error : 'Unknown browser interception failure'
+}
+
 async function forceStreamingFallback(page) {
   const session = await page.createCDPSession()
   let interceptions = 0
@@ -151,7 +156,7 @@ async function forceStreamingFallback(page) {
         })
         interceptions += 1
       } catch (error) {
-        failures.push(error instanceof Error ? error.message : String(error))
+        failures.push(errorMessage(error))
       }
     })()
   })

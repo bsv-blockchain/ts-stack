@@ -189,9 +189,8 @@ export function createBaseline(report) {
   }
 }
 
-export function validateBaseline(baseline) {
+function validateBaselineSource(baseline) {
   const errors = []
-  if (baseline?.schemaVersion !== 1) errors.push('baseline schemaVersion must be 1')
   if (
     baseline?.source?.repository !== DEFAULT_REPOSITORY ||
     baseline?.source?.workflow !== 'ci.yml' ||
@@ -200,56 +199,75 @@ export function validateBaseline(baseline) {
   ) {
     errors.push('baseline source must be successful ts-stack pull-request ci.yml runs')
   }
+  return errors
+}
+
+function validateBaselineClassification(baseline) {
+  const errors = []
   if (baseline?.classification?.sampleSizePerClass !== DEFAULT_SAMPLE_SIZE) {
     errors.push(`baseline sampleSizePerClass must be ${DEFAULT_SAMPLE_SIZE}`)
   }
   if (baseline?.classification?.fullScopeMinimumJobs !== FULL_SCOPE_MINIMUM_JOBS) {
     errors.push(`baseline fullScopeMinimumJobs must be ${FULL_SCOPE_MINIMUM_JOBS}`)
   }
-  for (const name of ['fullScope', 'targeted']) {
-    const reference = baseline?.reference?.[name]
-    if (reference?.runs?.length !== DEFAULT_SAMPLE_SIZE) {
-      errors.push(`baseline ${name} must retain ${DEFAULT_SAMPLE_SIZE} run samples`)
-    }
-    if (reference?.summary?.runCount !== DEFAULT_SAMPLE_SIZE) {
-      errors.push(`baseline ${name} summary runCount must be ${DEFAULT_SAMPLE_SIZE}`)
-    }
-    const runs = Array.isArray(reference?.runs) ? reference.runs : []
-    const expectedFullScope = name === 'fullScope'
-    for (const run of runs) {
-      if (
-        !Number.isSafeInteger(run?.id) ||
-        run.id <= 0 ||
-        run.url !== `https://github.com/${DEFAULT_REPOSITORY}/actions/runs/${run.id}` ||
-        !/^[0-9a-f]{40}$/.test(run?.headSha ?? '') ||
-        !Number.isFinite(Date.parse(run?.createdAt))
-      ) {
-        errors.push(`baseline ${name} contains an invalid exact run reference`)
-        break
-      }
-      if (run.jobCount >= FULL_SCOPE_MINIMUM_JOBS !== expectedFullScope) {
-        errors.push(`baseline ${name} contains a run in the wrong job-count class`)
-        break
-      }
-    }
-    if (
-      runs.length === DEFAULT_SAMPLE_SIZE &&
-      JSON.stringify(reference.summary) !== JSON.stringify(groupSummary(runs))
-    ) {
-      errors.push(`baseline ${name} summary must match its retained run samples`)
-    }
-    for (const metric of ['median', 'p95']) {
-      if (!Number.isFinite(reference?.summary?.durationSeconds?.[metric])) {
-        errors.push(`baseline ${name} duration ${metric} must be finite`)
-      }
-    }
-    for (const metric of ['medianPercent', 'p95Percent']) {
-      const value = baseline?.regressionBudget?.[name]?.[metric]
-      if (!Number.isFinite(value) || value <= 0 || value > 100) {
-        errors.push(`baseline ${name} ${metric} must be between 1 and 100`)
-      }
+  return errors
+}
+
+function exactRunError(run, expectedFullScope) {
+  if (
+    !Number.isSafeInteger(run?.id) ||
+    run.id <= 0 ||
+    run.url !== `https://github.com/${DEFAULT_REPOSITORY}/actions/runs/${run.id}` ||
+    !/^[0-9a-f]{40}$/.test(run?.headSha ?? '') ||
+    !Number.isFinite(Date.parse(run?.createdAt))
+  ) {
+    return 'contains an invalid exact run reference'
+  }
+  if (run.jobCount >= FULL_SCOPE_MINIMUM_JOBS !== expectedFullScope) {
+    return 'contains a run in the wrong job-count class'
+  }
+  return undefined
+}
+
+function validateBaselineReference(baseline, name) {
+  const errors = []
+  const reference = baseline?.reference?.[name]
+  if (reference?.runs?.length !== DEFAULT_SAMPLE_SIZE) {
+    errors.push(`baseline ${name} must retain ${DEFAULT_SAMPLE_SIZE} run samples`)
+  }
+  if (reference?.summary?.runCount !== DEFAULT_SAMPLE_SIZE) {
+    errors.push(`baseline ${name} summary runCount must be ${DEFAULT_SAMPLE_SIZE}`)
+  }
+  const runs = Array.isArray(reference?.runs) ? reference.runs : []
+  for (const run of runs) {
+    const runError = exactRunError(run, name === 'fullScope')
+    if (runError) {
+      errors.push(`baseline ${name} ${runError}`)
+      break
     }
   }
+  if (
+    runs.length === DEFAULT_SAMPLE_SIZE &&
+    JSON.stringify(reference.summary) !== JSON.stringify(groupSummary(runs))
+  ) {
+    errors.push(`baseline ${name} summary must match its retained run samples`)
+  }
+  for (const metric of ['median', 'p95']) {
+    if (!Number.isFinite(reference?.summary?.durationSeconds?.[metric])) {
+      errors.push(`baseline ${name} duration ${metric} must be finite`)
+    }
+  }
+  for (const metric of ['medianPercent', 'p95Percent']) {
+    const value = baseline?.regressionBudget?.[name]?.[metric]
+    if (!Number.isFinite(value) || value <= 0 || value > 100) {
+      errors.push(`baseline ${name} ${metric} must be between 1 and 100`)
+    }
+  }
+  return errors
+}
+
+function validateUniqueRuns(baseline) {
+  const errors = []
   const allRuns = Object.values(baseline?.reference ?? {}).flatMap(reference =>
     Array.isArray(reference?.runs) ? reference.runs : []
   )
@@ -260,6 +278,17 @@ export function validateBaseline(baseline) {
     errors.push('baseline run head SHAs must be unique')
   }
   return errors
+}
+
+export function validateBaseline(baseline) {
+  return [
+    ...(baseline?.schemaVersion === 1 ? [] : ['baseline schemaVersion must be 1']),
+    ...validateBaselineSource(baseline),
+    ...validateBaselineClassification(baseline),
+    ...validateBaselineReference(baseline, 'fullScope'),
+    ...validateBaselineReference(baseline, 'targeted'),
+    ...validateUniqueRuns(baseline)
+  ]
 }
 
 export function compareToBaseline(report, baseline) {
@@ -373,11 +402,14 @@ function renderSummary(report, comparisons) {
         `${seconds(summary.artifactTransferSeconds.median)} |`
     )
   }
-  lines.push(
-    '',
+  const comparisonDetails = comparisons.map(error => `- ${error}`).join('\n')
+  const budgetStatus =
     comparisons.length === 0
       ? 'Performance budget: passed.'
-      : `Performance budget: failed.\n\n${comparisons.map(error => `- ${error}`).join('\n')}`,
+      : ['Performance budget: failed.', '', comparisonDetails].join('\n')
+  lines.push(
+    '',
+    budgetStatus,
     '',
     'GitHub-hosted CPU, memory, and action-internal cache-hit data are not exposed by the Actions REST API and remain an explicit instrumentation gap.'
   )
@@ -427,8 +459,8 @@ async function main(arguments_) {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     await main(process.argv.slice(2))
-  } catch (error) {
-    console.error(error.message)
+  } catch {
+    console.error('CI performance command failed.')
     process.exitCode = 1
   }
 }

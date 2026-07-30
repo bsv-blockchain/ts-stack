@@ -70,6 +70,10 @@ const EXCEPTION_CATEGORIES = new Set([
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
+function compareText(left, right) {
+  return left.localeCompare(right)
+}
+
 function relativePath(filePath, root = REPOSITORY_ROOT) {
   const relative = path.relative(root, filePath).split(path.sep).join('/')
   return relative === '' ? '.' : relative
@@ -212,8 +216,8 @@ function validateConsumerProfileDefinitions(registry) {
   }
 
   const errors = []
-  const expectedNames = Object.keys(CONSUMER_PROFILE_CONTRACTS).sort()
-  const actualNames = Object.keys(definitions).sort()
+  const expectedNames = Object.keys(CONSUMER_PROFILE_CONTRACTS).sort(compareText)
+  const actualNames = Object.keys(definitions).sort(compareText)
   if (JSON.stringify(actualNames) !== JSON.stringify(expectedNames)) {
     errors.push(`${prefix} must define exactly: ${expectedNames.join(', ')}`)
   }
@@ -335,6 +339,118 @@ function runtimePackageForTypes(dependency) {
     : `@${name.slice(0, scopedSeparator)}/${name.slice(scopedSeparator + 2)}`
 }
 
+function validateRequiredConsumerContracts(project, actual, prefix) {
+  const errors = []
+  for (const consumerProfile of project.consumerProfiles ?? []) {
+    const contract = CONSUMER_PROFILE_CONTRACTS[consumerProfile]
+    if (!contract) continue
+    for (const target of contract.requiredRuntimeTargets) {
+      if (!project.runtimeTargets.includes(target)) {
+        errors.push(
+          `${prefix} consumer profile ${consumerProfile} requires runtime target ${target}`
+        )
+      }
+    }
+    if (!isNonEmptyString(actual.manifest.scripts?.[contract.requiredScript])) {
+      errors.push(
+        `${prefix} consumer profile ${consumerProfile} requires script ${contract.requiredScript}`
+      )
+    }
+  }
+  return errors
+}
+
+function configuredPackModes(packScript) {
+  if (typeof packScript !== 'string') return []
+  const match = /(?:^|\s)--modes\s+([^\s]+)/.exec(packScript)
+  return match?.[1]?.split(',') ?? ['cjs', 'esm']
+}
+
+function validateNodeConsumerProfiles(profiles, packScript, prefix) {
+  const errors = []
+  const packModes = configuredPackModes(packScript)
+  for (const mode of ['cjs', 'esm']) {
+    if (profiles.has(`node-${mode}`) && !packModes.includes(mode)) {
+      errors.push(
+        `${prefix} consumer profile node-${mode} is not exercised by the pack:check modes`
+      )
+    }
+  }
+  return errors
+}
+
+function validateCliConsumerProfile(profiles, packScript, manifest, prefix) {
+  if (!profiles.has('cli')) return []
+  const errors = []
+  if (typeof packScript !== 'string' || !/(?:^|\s)--bin(?:\s|$)/.test(packScript)) {
+    errors.push(`${prefix} consumer profile cli requires pack:check to exercise --bin`)
+  }
+  if (!manifest.bin) errors.push(`${prefix} consumer profile cli requires a package bin entry`)
+  return errors
+}
+
+function validateBrowserConsumerProfiles(profiles, browserScript, prefix) {
+  if (!profiles.has('browser-bundler') && !profiles.has('browser-esm')) return []
+  if (
+    typeof browserScript === 'string' &&
+    /(?:check-browser-package|check-wallet-toolbox-platform)\.mjs/.test(browserScript)
+  ) {
+    return []
+  }
+  return [`${prefix} browser consumer profiles require an exact-package browser checker`]
+}
+
+function validateUmdConsumerProfile(profiles, manifestPath, prefix) {
+  if (!profiles.has('umd-global')) return []
+  const budgetPath = path.join(path.dirname(manifestPath), 'browser-budget.json')
+  if (!fs.existsSync(budgetPath)) {
+    return [`${prefix} consumer profile umd-global requires browser-budget.json`]
+  }
+  const budget = readJson(budgetPath)
+  if (!budget.umd || !isNonEmptyString(budget.umd.path) || !isNonEmptyString(budget.umd.global)) {
+    return [`${prefix} consumer profile umd-global requires an exact UMD budget contract`]
+  }
+  return []
+}
+
+function validateMobileConsumerProfile(profiles, mobileScript, prefix) {
+  if (!profiles.has('react-native-metro')) return []
+  if (
+    typeof mobileScript === 'string' &&
+    /check-wallet-toolbox-platform\.mjs mobile/.test(mobileScript)
+  ) {
+    return []
+  }
+  return [`${prefix} consumer profile react-native-metro requires the exact Metro checker`]
+}
+
+function validateWasmWorkerConsumerProfile(profiles, consumerScript, prefix) {
+  if (!profiles.has('wasm-worker')) return []
+  if (
+    typeof consumerScript === 'string' &&
+    consumerScript.includes('test-node-consumers.mjs') &&
+    consumerScript.includes('browser/test.mjs')
+  ) {
+    return []
+  }
+  return [`${prefix} consumer profile wasm-worker requires Node and browser worker checks`]
+}
+
+function validateConsumerProfileContracts(project, actual, prefix) {
+  const profiles = new Set(project.consumerProfiles ?? [])
+  const scripts = actual.manifest.scripts ?? {}
+  const packScript = scripts['pack:check']
+  return [
+    ...validateRequiredConsumerContracts(project, actual, prefix),
+    ...validateNodeConsumerProfiles(profiles, packScript, prefix),
+    ...validateCliConsumerProfile(profiles, packScript, actual.manifest, prefix),
+    ...validateBrowserConsumerProfiles(profiles, scripts['test:browser'], prefix),
+    ...validateUmdConsumerProfile(profiles, actual.manifestPath, prefix),
+    ...validateMobileConsumerProfile(profiles, scripts['test:mobile'], prefix),
+    ...validateWasmWorkerConsumerProfile(profiles, scripts['test:consumers'], prefix)
+  ]
+}
+
 function validateProjectManifest(project, actual) {
   const prefix = `projects.json entry ${project.path ?? '<missing path>'}`
   if (!actual) return [`${prefix} has no discovered workspace package.json`]
@@ -353,85 +469,7 @@ function validateProjectManifest(project, actual) {
   if (!isPrivate && project.release !== 'npm-oidc') {
     errors.push(`${prefix} is public but release is not npm-oidc`)
   }
-  for (const consumerProfile of project.consumerProfiles ?? []) {
-    const contract = CONSUMER_PROFILE_CONTRACTS[consumerProfile]
-    if (!contract) continue
-    for (const target of contract.requiredRuntimeTargets) {
-      if (!project.runtimeTargets.includes(target)) {
-        errors.push(
-          `${prefix} consumer profile ${consumerProfile} requires runtime target ${target}`
-        )
-      }
-    }
-    if (!isNonEmptyString(actual.manifest.scripts?.[contract.requiredScript])) {
-      errors.push(
-        `${prefix} consumer profile ${consumerProfile} requires script ${contract.requiredScript}`
-      )
-    }
-  }
-  const packScript = actual.manifest.scripts?.['pack:check']
-  const configuredPackModes =
-    typeof packScript === 'string'
-      ? (packScript.match(/(?:^|\s)--modes\s+([^\s]+)/)?.[1]?.split(',') ?? ['cjs', 'esm'])
-      : []
-  for (const mode of ['cjs', 'esm']) {
-    if (project.consumerProfiles?.includes(`node-${mode}`) && !configuredPackModes.includes(mode)) {
-      errors.push(
-        `${prefix} consumer profile node-${mode} is not exercised by the pack:check modes`
-      )
-    }
-  }
-  if (
-    project.consumerProfiles?.includes('cli') &&
-    (typeof packScript !== 'string' || !/(?:^|\s)--bin(?:\s|$)/.test(packScript))
-  ) {
-    errors.push(`${prefix} consumer profile cli requires pack:check to exercise --bin`)
-  }
-  if (project.consumerProfiles?.includes('cli') && !actual.manifest.bin) {
-    errors.push(`${prefix} consumer profile cli requires a package bin entry`)
-  }
-  const browserScript = actual.manifest.scripts?.['test:browser']
-  if (
-    project.consumerProfiles?.some(profile =>
-      ['browser-bundler', 'browser-esm'].includes(profile)
-    ) &&
-    (typeof browserScript !== 'string' ||
-      !/(?:check-browser-package|check-wallet-toolbox-platform)\.mjs/.test(browserScript))
-  ) {
-    errors.push(`${prefix} browser consumer profiles require an exact-package browser checker`)
-  }
-  if (project.consumerProfiles?.includes('umd-global')) {
-    const budgetPath = path.join(path.dirname(actual.manifestPath), 'browser-budget.json')
-    if (!fs.existsSync(budgetPath)) {
-      errors.push(`${prefix} consumer profile umd-global requires browser-budget.json`)
-    } else {
-      const budget = readJson(budgetPath)
-      if (
-        !budget.umd ||
-        !isNonEmptyString(budget.umd.path) ||
-        !isNonEmptyString(budget.umd.global)
-      ) {
-        errors.push(`${prefix} consumer profile umd-global requires an exact UMD budget contract`)
-      }
-    }
-  }
-  const mobileScript = actual.manifest.scripts?.['test:mobile']
-  if (
-    project.consumerProfiles?.includes('react-native-metro') &&
-    (typeof mobileScript !== 'string' ||
-      !/check-wallet-toolbox-platform\.mjs mobile/.test(mobileScript))
-  ) {
-    errors.push(`${prefix} consumer profile react-native-metro requires the exact Metro checker`)
-  }
-  const consumerScript = actual.manifest.scripts?.['test:consumers']
-  if (
-    project.consumerProfiles?.includes('wasm-worker') &&
-    (typeof consumerScript !== 'string' ||
-      !consumerScript.includes('test-node-consumers.mjs') ||
-      !consumerScript.includes('browser/test.mjs'))
-  ) {
-    errors.push(`${prefix} consumer profile wasm-worker requires Node and browser worker checks`)
-  }
+  errors.push(...validateConsumerProfileContracts(project, actual, prefix))
   for (const dependency of project.declarationDependencies ?? []) {
     if (!Object.hasOwn(actual.manifest.dependencies ?? {}, dependency)) {
       errors.push(`${prefix} must publish declaration dependency ${dependency}`)
