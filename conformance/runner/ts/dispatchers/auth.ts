@@ -351,6 +351,73 @@ function dispatchResponseSigningFailure(
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
+function dispatchWellKnownAuth(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): boolean {
+  const body = (input['body'] ?? {}) as Record<string, unknown>
+  const messageType = getString(body, 'messageType')
+  const expectedStatus = expected['status'] as number | undefined
+
+  if (expectedStatus === 401 && messageType === 'initialRequest') {
+    dispatchMissingHeaderError(input, expected)
+    return true
+  }
+  if (expectedStatus === 408) {
+    dispatchCertificateTimeout(input, expected)
+    return true
+  }
+  if ('response_headers_includes' in expected) {
+    dispatchRequestedCertificatesHeader(input, expected)
+    return true
+  }
+  if ('response_headers_required' in expected && messageType === 'initialRequest') {
+    if ('body_shape' in expected) dispatchInitialRequest(input, expected)
+    else dispatchInitialResponseHeaders(input, expected)
+    return true
+  }
+  if ('body_shape' in expected && messageType === 'initialRequest') {
+    dispatchInitialRequest(input, expected)
+    return true
+  }
+  if (expectedStatus === 401 && '_scenario' in input) {
+    dispatchReplayPrevention(input, expected)
+    return true
+  }
+  return false
+}
+
+function dispatchProtectedResource(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): boolean {
+  const expectedStatus = expected['status'] as number | undefined
+  const headers = (input['headers'] as Record<string, unknown>) ?? {}
+  const body = (expected['body'] ?? {}) as Record<string, unknown>
+
+  if ('req_auth_identity_key' in expected) {
+    dispatchAllowUnauthenticated(input, expected)
+    return true
+  }
+  if (expectedStatus === 401 && !('x-bsv-auth-signature' in headers)) {
+    dispatchMissingSignatureError(input, expected)
+    return true
+  }
+  if (expectedStatus === 401 && getString(body, 'code') === 'ERR_AUTH_FAILED') {
+    dispatchBadSignatureError(input, expected)
+    return true
+  }
+  if (expectedStatus === 500) {
+    dispatchResponseSigningFailure(input, expected)
+    return true
+  }
+  if ('response_headers_required' in expected) {
+    dispatchGeneralRequestHeaders(input, expected)
+    return true
+  }
+  return false
+}
+
 export function dispatch(
   category: string,
   input: Record<string, unknown>,
@@ -389,98 +456,14 @@ function dispatchBRC31Handshake(
     return
   }
 
-  // HTTP-shaped vectors: route by path + body.messageType / expected shape
-  if (path === '/.well-known/auth') {
-    const body = (input['body'] ?? {}) as Record<string, unknown>
-    const messageType = getString(body, 'messageType')
+  if (path === '/.well-known/auth' && dispatchWellKnownAuth(input, expected)) return
 
-    // Missing identity-key or nonce → 401 (vectors 3, 4)
-    const expectedStatus = expected['status'] as number | undefined
-    if (expectedStatus === 401 && messageType === 'initialRequest') {
-      dispatchMissingHeaderError(input, expected)
-      return
-    }
-
-    // Certificate timeout → 408 (vector 10)
-    if (expectedStatus === 408) {
-      dispatchCertificateTimeout(input, expected)
-      return
-    }
-
-    // requestedCertificates header check (vector 11)
-    if ('response_headers_includes' in expected) {
-      dispatchRequestedCertificatesHeader(input, expected)
-      return
-    }
-
-    // initialResponse headers (vector 2)
-    if ('response_headers_required' in expected && messageType === 'initialRequest') {
-      // If body_shape present → vector 1 (initialRequest shape check)
-      if ('body_shape' in expected) {
-        dispatchInitialRequest(input, expected)
-        return
-      }
-      dispatchInitialResponseHeaders(input, expected)
-      return
-    }
-
-    // initialRequest body_shape (vector 1)
-    if ('body_shape' in expected && messageType === 'initialRequest') {
-      dispatchInitialRequest(input, expected)
-      return
-    }
-
-    // Replay prevention → 401 (vector 14)
-    if (expectedStatus === 401 && '_scenario' in input) {
-      dispatchReplayPrevention(input, expected)
-      return
-    }
-  }
-
-  if (
+  const isProtectedResource =
     path === '/api/resource' ||
     path === '/api/public-resource' ||
     path === '/sendMessage' ||
     (method !== '' && path !== '' && path !== '/.well-known/auth')
-  ) {
-    const expectedStatus = expected['status'] as number | undefined
-
-    // allowUnauthenticated (vector 9)
-    if ('req_auth_identity_key' in expected) {
-      dispatchAllowUnauthenticated(input, expected)
-      return
-    }
-
-    // Missing signature → 401 (vector 7)
-    if (
-      expectedStatus === 401 &&
-      !('x-bsv-auth-signature' in ((input['headers'] as Record<string, unknown>) ?? {}))
-    ) {
-      dispatchMissingSignatureError(input, expected)
-      return
-    }
-
-    // Bad signature → 401 (vector 8)
-    if (expectedStatus === 401) {
-      const body = (expected['body'] ?? {}) as Record<string, unknown>
-      if (getString(body, 'code') === 'ERR_AUTH_FAILED') {
-        dispatchBadSignatureError(input, expected)
-        return
-      }
-    }
-
-    // Response signing failure → 500 (vector 16)
-    if (expectedStatus === 500) {
-      dispatchResponseSigningFailure(input, expected)
-      return
-    }
-
-    // General request response headers (vectors 5, 6)
-    if ('response_headers_required' in expected) {
-      dispatchGeneralRequestHeaders(input, expected)
-      return
-    }
-  }
+  if (isProtectedResource && dispatchProtectedResource(input, expected)) return
 
   // Fallback: if we reach here, the vector shape is unrecognised.
   // Rather than throwing 'not implemented', make a minimal assertion

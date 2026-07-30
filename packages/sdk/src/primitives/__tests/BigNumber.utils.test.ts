@@ -8,7 +8,7 @@ describe('BN.js/Utils', () => {
         let hex = '1'
         for (let i = 1; i <= 128; i++) {
           const n = new BigNumber(hex, 16)
-          expect(n.toString(16).length).toEqual(i)
+          expect(n.toString(16)).toHaveLength(i)
           hex = hex + '0'
         }
       })
@@ -17,26 +17,26 @@ describe('BN.js/Utils', () => {
       it('should have a length of 256', () => {
         const a = new BigNumber(0)
 
-        expect(a.toString(2, 256).length).toEqual(256)
+        expect(a.toString(2, 256)).toHaveLength(256)
       })
     })
     describe('hex padding', () => {
       it('should have length of 8 from leading 15', () => {
         const a = new BigNumber('ffb9602', 16)
 
-        expect(a.toString('hex', 2).length).toEqual(8)
+        expect(a.toString('hex', 2)).toHaveLength(8)
       })
 
       it('should have length of 8 from leading zero', () => {
         const a = new BigNumber('fb9604', 16)
 
-        expect(a.toString('hex', 8).length).toEqual(8)
+        expect(a.toString('hex', 8)).toHaveLength(8)
       })
 
       it('should have length of 8 from leading zeros', () => {
         const a = new BigNumber(0)
 
-        expect(a.toString('hex', 8).length).toEqual(8)
+        expect(a.toString('hex', 8)).toHaveLength(8)
       })
 
       it('should have length of 64 from leading 15', () => {
@@ -45,7 +45,7 @@ describe('BN.js/Utils', () => {
           16
         )
 
-        expect(a.toString('hex', 2).length).toEqual(64)
+        expect(a.toString('hex', 2)).toHaveLength(64)
       })
 
       it('should have length of 64 from leading zero', () => {
@@ -54,7 +54,7 @@ describe('BN.js/Utils', () => {
           16
         )
 
-        expect(a.toString('hex', 64).length).toEqual(64)
+        expect(a.toString('hex', 64)).toHaveLength(64)
       })
     })
   })
@@ -156,21 +156,13 @@ describe('BN.js/Utils', () => {
       expect(new BigNumber(0x123456).toNumber()).toEqual(0x123456)
       expect(new BigNumber(0x3ffffff).toNumber()).toEqual(0x3ffffff)
       expect(new BigNumber(0x4000000).toNumber()).toEqual(0x4000000)
-      expect(new BigNumber(0x10000000000000).toNumber()).toEqual(
-        0x10000000000000
-      )
-      expect(new BigNumber(0x10040004004000).toNumber()).toEqual(
-        0x10040004004000
-      )
+      expect(new BigNumber(0x10000000000000).toNumber()).toEqual(0x10000000000000)
+      expect(new BigNumber(0x10040004004000).toNumber()).toEqual(0x10040004004000)
       expect(new BigNumber(-0x123456).toNumber()).toEqual(-0x123456)
       expect(new BigNumber(-0x3ffffff).toNumber()).toEqual(-0x3ffffff)
       expect(new BigNumber(-0x4000000).toNumber()).toEqual(-0x4000000)
-      expect(new BigNumber(-0x10000000000000).toNumber()).toEqual(
-        -0x10000000000000
-      )
-      expect(new BigNumber(-0x10040004004000).toNumber()).toEqual(
-        -0x10040004004000
-      )
+      expect(new BigNumber(-0x10000000000000).toNumber()).toEqual(-0x10000000000000)
+      expect(new BigNumber(-0x10040004004000).toNumber()).toEqual(-0x10040004004000)
     })
 
     it('should throw when number exceeds 53 bits', () => {
@@ -226,13 +218,9 @@ describe('BN.js/Utils', () => {
       expect(new BigNumber(42).cmp(new BigNumber(43))).toEqual(-1)
       expect(new BigNumber(42).cmp(new BigNumber(41))).toEqual(1)
       expect(new BigNumber(0x3fffffe).cmp(new BigNumber(0x3fffffe))).toEqual(0)
-      expect(new BigNumber(0x3fffffe).cmp(new BigNumber(0x3ffffff))).toEqual(
-        -1
-      )
+      expect(new BigNumber(0x3fffffe).cmp(new BigNumber(0x3ffffff))).toEqual(-1)
       expect(new BigNumber(0x3fffffe).cmp(new BigNumber(0x3fffffd))).toEqual(1)
-      expect(new BigNumber(0x3fffffe).cmp(new BigNumber(0x4000000))).toEqual(
-        -1
-      )
+      expect(new BigNumber(0x3fffffe).cmp(new BigNumber(0x4000000))).toEqual(-1)
       expect(new BigNumber(42).cmp(new BigNumber(-42))).toEqual(1)
       expect(new BigNumber(-42).cmp(new BigNumber(42))).toEqual(-1)
       expect(new BigNumber(-42).cmp(new BigNumber(-42))).toEqual(0)
@@ -297,70 +285,42 @@ describe('BN.js/Utils', () => {
     it("should convert from two's complement to negative number", () => {
       expect(new BigNumber('00000000', 16).fromTwos(32).toNumber()).toEqual(0)
       expect(new BigNumber('00000001', 16).fromTwos(32).toNumber()).toEqual(1)
-      expect(new BigNumber('7fffffff', 16).fromTwos(32).toNumber()).toEqual(
-        2147483647
-      )
-      expect(new BigNumber('80000000', 16).fromTwos(32).toNumber()).toEqual(
-        -2147483648
-      )
-      expect(new BigNumber('f0000000', 16).fromTwos(32).toNumber()).toEqual(
-        -268435456
-      )
-      expect(new BigNumber('f1234567', 16).fromTwos(32).toNumber()).toEqual(
-        -249346713
-      )
+      expect(new BigNumber('7fffffff', 16).fromTwos(32).toNumber()).toEqual(2147483647)
+      expect(new BigNumber('80000000', 16).fromTwos(32).toNumber()).toEqual(-2147483648)
+      expect(new BigNumber('f0000000', 16).fromTwos(32).toNumber()).toEqual(-268435456)
+      expect(new BigNumber('f1234567', 16).fromTwos(32).toNumber()).toEqual(-249346713)
       expect(new BigNumber('ffffffff', 16).fromTwos(32).toNumber()).toEqual(-1)
       expect(new BigNumber('fffffffe', 16).fromTwos(32).toNumber()).toEqual(-2)
       expect(
-        new BigNumber('fffffffffffffffffffffffffffffffe', 16)
-          .fromTwos(128)
-          .toNumber()
+        new BigNumber('fffffffffffffffffffffffffffffffe', 16).fromTwos(128).toNumber()
       ).toEqual(-2)
       expect(
-        new BigNumber(
-          'ffffffffffffffffffffffffffffffff' +
-            'fffffffffffffffffffffffffffffffe',
-          16
-        )
+        new BigNumber('ffffffffffffffffffffffffffffffff' + 'fffffffffffffffffffffffffffffffe', 16)
           .fromTwos(256)
           .toNumber()
       ).toEqual(-2)
       expect(
-        new BigNumber(
-          'ffffffffffffffffffffffffffffffff' +
-            'ffffffffffffffffffffffffffffffff',
-          16
-        )
+        new BigNumber('ffffffffffffffffffffffffffffffff' + 'ffffffffffffffffffffffffffffffff', 16)
           .fromTwos(256)
           .toNumber()
       ).toEqual(-1)
       expect(
-        new BigNumber(
-          '7fffffffffffffffffffffffffffffff' +
-            'ffffffffffffffffffffffffffffffff',
-          16
-        )
+        new BigNumber('7fffffffffffffffffffffffffffffff' + 'ffffffffffffffffffffffffffffffff', 16)
           .fromTwos(256)
           .toString(10)
       ).toEqual(
         new BigNumber(
-          '5789604461865809771178549250434395392663499' +
-            '2332820282019728792003956564819967',
+          '5789604461865809771178549250434395392663499' + '2332820282019728792003956564819967',
           10
         ).toString(10)
       )
       expect(
-        new BigNumber(
-          '80000000000000000000000000000000' +
-            '00000000000000000000000000000000',
-          16
-        )
+        new BigNumber('80000000000000000000000000000000' + '00000000000000000000000000000000', 16)
           .fromTwos(256)
           .toString(10)
       ).toEqual(
         new BigNumber(
-          '-578960446186580977117854925043439539266349' +
-            '92332820282019728792003956564819968',
+          '-578960446186580977117854925043439539266349' + '92332820282019728792003956564819968',
           10
         ).toString(10)
       )
@@ -371,24 +331,12 @@ describe('BN.js/Utils', () => {
     it("should convert from negative number to two's complement", () => {
       expect(new BigNumber(0).toTwos(32).toString(16)).toEqual('0')
       expect(new BigNumber(1).toTwos(32).toString(16)).toEqual('1')
-      expect(new BigNumber(2147483647).toTwos(32).toString(16)).toEqual(
-        '7fffffff'
-      )
-      expect(new BigNumber('-2147483648', 10).toTwos(32).toString(16)).toEqual(
-        '80000000'
-      )
-      expect(new BigNumber('-268435456', 10).toTwos(32).toString(16)).toEqual(
-        'f0000000'
-      )
-      expect(new BigNumber('-249346713', 10).toTwos(32).toString(16)).toEqual(
-        'f1234567'
-      )
-      expect(new BigNumber('-1', 10).toTwos(32).toString(16)).toEqual(
-        'ffffffff'
-      )
-      expect(new BigNumber('-2', 10).toTwos(32).toString(16)).toEqual(
-        'fffffffe'
-      )
+      expect(new BigNumber(2147483647).toTwos(32).toString(16)).toEqual('7fffffff')
+      expect(new BigNumber('-2147483648', 10).toTwos(32).toString(16)).toEqual('80000000')
+      expect(new BigNumber('-268435456', 10).toTwos(32).toString(16)).toEqual('f0000000')
+      expect(new BigNumber('-249346713', 10).toTwos(32).toString(16)).toEqual('f1234567')
+      expect(new BigNumber('-1', 10).toTwos(32).toString(16)).toEqual('ffffffff')
+      expect(new BigNumber('-2', 10).toTwos(32).toString(16)).toEqual('fffffffe')
       expect(new BigNumber('-2', 10).toTwos(128).toString(16)).toEqual(
         'fffffffffffffffffffffffffffffffe'
       )
@@ -400,26 +348,20 @@ describe('BN.js/Utils', () => {
       )
       expect(
         new BigNumber(
-          '5789604461865809771178549250434395392663' +
-            '4992332820282019728792003956564819967',
+          '5789604461865809771178549250434395392663' + '4992332820282019728792003956564819967',
           10
         )
           .toTwos(256)
           .toString(16)
-      ).toEqual(
-        '7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-      )
+      ).toEqual('7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
       expect(
         new BigNumber(
-          '-578960446186580977117854925043439539266' +
-            '34992332820282019728792003956564819968',
+          '-578960446186580977117854925043439539266' + '34992332820282019728792003956564819968',
           10
         )
           .toTwos(256)
           .toString(16)
-      ).toEqual(
-        '8000000000000000000000000000000000000000000000000000000000000000'
-      )
+      ).toEqual('8000000000000000000000000000000000000000000000000000000000000000')
     })
   })
 

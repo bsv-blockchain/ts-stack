@@ -139,21 +139,6 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     expect(textResponse).toBeDefined()
   })
 
-  // TODO: Requires modifying the test server to support this.
-  // test('Test 6: Fetch and save video', async () => {
-  //   const walletWithRequests = new CompletedProtoWallet(privKey)
-  //   const authFetch = new AuthFetch(walletWithRequests)
-  //   const videoResponse = await authFetch.fetch('http://localhost:3000/video')
-  //   expect(videoResponse.status).toBe(200)
-  //   const arrayBuffer = await videoResponse.arrayBuffer()
-  //   const buffer = Buffer.from(arrayBuffer)
-  //   const outputPath = path.join(__dirname, 'downloaded_video.mp4')
-  //   fs.writeFileSync(outputPath, buffer)
-  //   expect(fs.existsSync(outputPath)).toBe(true)
-  //   const stats = fs.statSync(outputPath)
-  //   expect(stats.size).toBeGreaterThan(0)
-  // })
-
   test('Test 7: PUT request with JSON', async () => {
     const walletWithRequests = new CompletedProtoWallet(privKey)
     const authFetch = new AuthFetch(walletWithRequests)

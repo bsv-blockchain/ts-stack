@@ -83,8 +83,8 @@ describe('KnexMigrations tests', () => {
       })
       await storage.makeAvailable()
       const r = await storage.getSettings()
-      expect(r.created_at instanceof Date).toBe(true)
-      expect(r.updated_at instanceof Date).toBe(true)
+      expect(r.created_at).toBeInstanceOf(Date)
+      expect(r.updated_at).toBeInstanceOf(Date)
       expect(r.chain).toBe('test')
       expect(r.maxOutputScript).toBe(1000)
     }

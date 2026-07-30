@@ -379,7 +379,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       Utils.toArray('Back on my first device now, Bob! Can you still hear me?')
     )
     await waitForSecondMessage
-    expect(alice1MessageHandler.mock.calls.length).toEqual(2)
+    expect(alice1MessageHandler.mock.calls).toHaveLength(2)
   }, 30000)
 
   it('Bob requests certificates from Alice, Alice does not request any from Bob', async () => {

@@ -280,6 +280,66 @@ function toJUnit(suites) {
 // Main
 // ---------------------------------------------------------------------------
 
+function buildVectorCases(filePath, vectors, allErrors) {
+  return vectors.map((vector, index) => {
+    const vectorErrors = validateVector(filePath, vector, index)
+    const fatalErrors = vectorErrors.filter(error => error.startsWith('ERROR:'))
+    allErrors.push(...fatalErrors)
+    return {
+      name: vector.id ?? vector.description ?? `vector[${index}]`,
+      pass: fatalErrors.length === 0,
+      error: fatalErrors.length === 0 ? null : fatalErrors.join('; ')
+    }
+  })
+}
+
+function warningSuffix(relativePath, warnings) {
+  if (warnings.length === 0) return ''
+  if (relativePath.includes('/regressions/')) {
+    return ` [regression format — ${warnings.length} metadata note(s)]`
+  }
+  return ` (${warnings.length} warn)`
+}
+
+async function processVectorFile(filePath, vectorsDir, allErrors) {
+  const relativePath = filePath.replace(vectorsDir + '/', '')
+  let parsed
+  try {
+    parsed = JSON.parse(await readFile(filePath, 'utf-8'))
+  } catch (error) {
+    allErrors.push(`PARSE ERROR: ${filePath}: ${error.message}`)
+    console.log(`  [FAIL] ${relativePath} — ${error.message}`)
+    return { parseErrors: 1, vectorCount: 0 }
+  }
+
+  const { errors: fileErrors, vectors } = validateFile(filePath, parsed)
+  const cases = buildVectorCases(filePath, vectors, allErrors)
+  const fatalErrors = fileErrors.filter(error => error.startsWith('ERROR:'))
+  const warnings = fileErrors.filter(error => error.startsWith('WARN:'))
+
+  if (fatalErrors.length > 0) {
+    cases.unshift({
+      name: '_file_structure',
+      pass: false,
+      error: fatalErrors.join('; ')
+    })
+    allErrors.push(...fatalErrors)
+  }
+
+  const status = fatalErrors.length === 0 && cases.every(testCase => testCase.pass) ? 'OK' : 'FAIL'
+  console.log(
+    `  [${status}] ${relativePath} — ${vectors.length} vector(s)${warningSuffix(relativePath, warnings)}`
+  )
+  for (const warning of warnings) console.log(`       ${warning}`)
+  for (const error of fatalErrors) console.log(`       ${error}`)
+
+  return {
+    parseErrors: fatalErrors.length > 0 ? 1 : 0,
+    vectorCount: vectors.length,
+    suite: { name: relativePath.replace(/\.json$/, ''), cases }
+  }
+}
+
 async function run() {
   const opts = parseArgs(process.argv)
   const vectorsDir = opts.vectorsDir
@@ -309,73 +369,10 @@ async function run() {
   const allErrors = []
 
   for (const filePath of jsonFiles) {
-    const relPath = filePath.replace(vectorsDir + '/', '')
-    let raw, parsed
-
-    // Parse JSON
-    try {
-      raw = await readFile(filePath, 'utf-8')
-      parsed = JSON.parse(raw)
-    } catch (err) {
-      const msg = `PARSE ERROR: ${filePath}: ${err.message}`
-      allErrors.push(msg)
-      totalParseErrors++
-      console.log(`  [FAIL] ${relPath} — ${err.message}`)
-      continue
-    }
-
-    // Validate file structure
-    const { errors: fileErrors, vectors } = validateFile(filePath, parsed)
-
-    // Validate each vector
-    const cases = []
-    for (let i = 0; i < vectors.length; i++) {
-      const vec = vectors[i]
-      const vecErrors = validateVector(filePath, vec, i)
-      const vecName = vec.id ?? vec.description ?? `vector[${i}]`
-
-      const isFatal = vecErrors.some(e => e.startsWith('ERROR:'))
-      cases.push({
-        name: vecName,
-        pass: !isFatal,
-        error: isFatal ? vecErrors.filter(e => e.startsWith('ERROR:')).join('; ') : null
-      })
-      if (isFatal) allErrors.push(...vecErrors.filter(e => e.startsWith('ERROR:')))
-    }
-
-    const fatalFileErrors = fileErrors.filter(e => e.startsWith('ERROR:'))
-    const warnFileErrors = fileErrors.filter(e => e.startsWith('WARN:'))
-
-    const suiteName = relPath.replace(/\.json$/, '')
-
-    // If the file itself has fatal errors, add a synthetic failing case
-    if (fatalFileErrors.length > 0) {
-      cases.unshift({
-        name: '_file_structure',
-        pass: false,
-        error: fatalFileErrors.join('; ')
-      })
-      allErrors.push(...fatalFileErrors)
-      totalParseErrors++
-    }
-
-    suites.push({ name: suiteName, cases })
-    totalVectors += vectors.length
-
-    const status = fatalFileErrors.length === 0 && cases.every(c => c.pass) ? 'OK' : 'FAIL'
-    const isRegressionFile = relPath.includes('/regressions/')
-    let warnStr = ''
-    if (warnFileErrors.length > 0) {
-      if (isRegressionFile) {
-        warnStr = ` [regression format — ${warnFileErrors.length} metadata note(s)]`
-      } else {
-        warnStr = ` (${warnFileErrors.length} warn)`
-      }
-    }
-    console.log(`  [${status}] ${relPath} — ${vectors.length} vector(s)${warnStr}`)
-
-    for (const w of warnFileErrors) console.log(`       ${w}`)
-    for (const e of fatalFileErrors) console.log(`       ${e}`)
+    const result = await processVectorFile(filePath, vectorsDir, allErrors)
+    totalVectors += result.vectorCount
+    totalParseErrors += result.parseErrors
+    if (result.suite !== undefined) suites.push(result.suite)
   }
 
   console.log()

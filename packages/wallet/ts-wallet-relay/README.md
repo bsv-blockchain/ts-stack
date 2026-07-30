@@ -90,7 +90,11 @@ frontend/
 
 Options: `--nextjs` for a Next.js project, `--backend` / `--frontend` for one side only, `--backend-dir` / `--frontend-dir` to control output directories.
 
-The scaffolded files contain `TODO` comments marking the spots you're expected to customise — wallet method implementations, app-specific UI copy, and the `installUrl` in `WalletConnectionModal` (defaults to `https://desktop.bsvb.tech`, the BSV wallet with desktop and mobile support).
+The scaffolded files contain explicit `CUSTOMIZE` markers for application-owned
+wallet methods, UI copy, and the `installUrl` in `WalletConnectionModal`
+(defaulting to `https://desktop.bsvb.tech`, the BSV wallet with desktop and
+mobile support). These are consumer integration points, not unfinished relay
+library behavior.
 
 **After scaffolding:**
 
@@ -214,7 +218,7 @@ export function App() {
 
   const handleLocalWallet = useCallback((wallet: WalletClient) => {
     setMode('local')
-    // TODO: store wallet and use it in your app
+    // CUSTOMIZE: store the wallet in your application state.
   }, [])
 
   // Stop polling when the user navigates away from the QR screen
@@ -244,7 +248,7 @@ export function App() {
         </>
       )}
 
-      {mode === 'local' && <>{/* TODO: render your app here using the local wallet */}</>}
+      {mode === 'local' && <>{/* CUSTOMIZE: render the local-wallet application. */}</>}
     </>
   )
 }

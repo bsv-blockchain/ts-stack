@@ -14423,8 +14423,9 @@ See also: [BlockHeader](./client.md#interface-blockheader)
 
 ###### Method asyncSetup
 
-TODO: This is a temporary incomplete solution for which a full chaintracker
-with new header and reorg event notification is required.
+This task intentionally polls for new headers. Reorganization notification is
+outside this task's current contract and requires a chaintracker event source
+before it can be added without changing monitor behavior.
 
 New header events drive retrieving merklePaths for newly mined transactions.
 This implementation performs this function.

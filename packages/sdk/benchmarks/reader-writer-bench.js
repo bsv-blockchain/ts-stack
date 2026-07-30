@@ -41,8 +41,9 @@ function rwLarge() {
   }
   const arr = writer.toArray()
   const reader = new Reader(arr)
-  for (let i = 0; i < largePayloads.length; i++) {
+  for (const payload of largePayloads) {
     const len = reader.readVarIntNum()
+    if (len !== payload.length) throw new Error(`Unexpected large payload length: ${len}`)
     reader.read(len)
   }
 }
@@ -55,8 +56,9 @@ function rwSmall() {
   }
   const arr = writer.toArray()
   const reader = new Reader(arr)
-  for (let i = 0; i < smallPayloads.length; i++) {
+  for (const payload of smallPayloads) {
     const len = reader.readVarIntNum()
+    if (len !== payload.length) throw new Error(`Unexpected small payload length: ${len}`)
     reader.read(len)
   }
 }
@@ -69,8 +71,9 @@ function rwMedium() {
   }
   const arr = writer.toArray()
   const reader = new Reader(arr)
-  for (let i = 0; i < mediumPayloads.length; i++) {
+  for (const payload of mediumPayloads) {
     const len = reader.readVarIntNum()
+    if (len !== payload.length) throw new Error(`Unexpected medium payload length: ${len}`)
     reader.read(len)
   }
 }
@@ -83,7 +86,9 @@ async function main() {
   await runBenchmark('400 medium payloads', rwMedium, options)
 }
 
-main().catch(err => {
+try {
+  await main()
+} catch (err) {
   console.error(err)
   process.exit(1)
-})
+}

@@ -24,7 +24,7 @@ describeLive('GoChaintracksServiceClient live Arcade integration', () => {
     expect(byHeight?.hash).toBe(tip.hash)
     expect(byHash?.height).toBe(tip.height)
     expect(headerBytes).toMatch(/^[0-9a-f]+$/)
-    expect(headerBytes.length).toBe(160)
+    expect(headerBytes).toHaveLength(160)
   })
 
   test('receives a real mainnet tip event from Arcade go-chaintracks SSE', async () => {
@@ -35,8 +35,11 @@ describeLive('GoChaintracksServiceClient live Arcade integration', () => {
     let subscriptionId = ''
     const received = new Promise<any>((resolve, reject) => {
       timeout = setTimeout(() => reject(new Error('timed out waiting for tip SSE event')), 15000)
-      client.subscribeHeaders(header => resolve(header))
-        .then(id => { subscriptionId = id })
+      client
+        .subscribeHeaders(header => resolve(header))
+        .then(id => {
+          subscriptionId = id
+        })
         .catch(reject)
     })
 

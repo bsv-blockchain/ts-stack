@@ -87,18 +87,59 @@
     {
       "id": "brace-expansion-jest-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml overrides brace-expansion@<=5.0.7",
+      "target": "pnpm-workspace.yaml and four standalone Jest service manifests overriding brace-expansion <=5.0.7",
       "owner": "ts-stack-maintainers",
       "reason": "Jest 30.4.2 still constrains its reporting and coverage paths to minimatch releases that require brace-expansion 1.x/2.x, while GHSA-mh99-v99m-4gvg is fixed only in brace-expansion 5.0.8.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "infra/message-box-server/package.json#overrides",
+        "infra/uhrp-server-basic/package.json#overrides",
+        "infra/uhrp-server-cloud-bucket/package.json#overrides",
+        "infra/wab/package.json#overrides",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
       "reviewBy": "2026-08-25",
       "removeWhen": "Remove after the supported Jest dependency graph adopts minimatch 10.2.5 or newer and natively resolves brace-expansion 5.0.8 or newer."
+    },
+    {
+      "id": "standalone-gaxios-advisory-override",
+      "category": "override",
+      "target": "All seven standalone service manifests and the cloud-bucket notifier override transitive gaxios 6.x/7.1.3 with 7.3.0",
+      "owner": "ts-stack-maintainers",
+      "reason": "Current supported Google client and OpenTelemetry dependency graphs still select gaxios releases whose obsolete rimraf/glob/minimatch chain reaches high-severity GHSA-mh99-v99m-4gvg. Selecting current gaxios 7.3.0 removes that path without changing a service's direct API; frozen locks, service tests, and hosted image builds verify compatibility.",
+      "evidence": [
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "infra/*/package-lock.json",
+        "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/gcp-metadata",
+        "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-29",
+      "reviewBy": "2026-08-28",
+      "removeWhen": "Remove service by service when its complete supported Google and OpenTelemetry graph natively resolves gaxios 7.3.0 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
+    },
+    {
+      "id": "standalone-uuid-advisory-override",
+      "category": "override",
+      "target": "Message Box, UHRP cloud-bucket, and its notifier manifests override transitive uuid releases below 11.1.1",
+      "owner": "ts-stack-maintainers",
+      "reason": "The supported cloud-storage dependency closures still contain teeny-request and Google client paths that permit uuid releases affected by GHSA-w5hq-g745-h8pq. The override is retained only in the two graphs where removing it reproduces the advisory; it was deleted from the other five service manifests.",
+      "evidence": [
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "infra/message-box-server/package-lock.json",
+        "infra/uhrp-server-cloud-bucket/package-lock.json",
+        "infra/uhrp-server-cloud-bucket/notifier/package-lock.json",
+        "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/teeny-request",
+        "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+        "https://github.com/bsv-blockchain/ts-stack/issues/324"
+      ],
+      "created": "2026-07-29",
+      "reviewBy": "2026-08-28",
+      "removeWhen": "Remove from each remaining service when its supported cloud client closure natively resolves uuid 11.1.1 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
       "id": "typed-rest-client-qs-override",

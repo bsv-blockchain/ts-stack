@@ -205,7 +205,7 @@ describe('createAction2 nosend transactions', () => {
       const fundingResult: CreateActionResult = await wallet.createAction(fundingArgs)
       expect(fundingResult.tx).toBeDefined()
       expect(fundingResult.noSendChange).toBeDefined()
-      expect(fundingResult.noSendChange!.length).toBe(1)
+      expect(fundingResult.noSendChange!).toHaveLength(1)
       log(`noSendChange returned:${JSON.stringify(fundingResult.noSendChange, null, 2)}`)
       const outputSatoshis = 2
       const estimatedFee = 1

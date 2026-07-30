@@ -14,43 +14,53 @@ describe('Signature', () => {
   // fromDER – error paths
   // --------------------------------------------------------------------------
   describe('fromDER error paths', () => {
-    it('throws when DER does not start with 0x30', () => {
-      // Replace leading 0x30 with 0x31
-      const sig = ECDSA.sign(msg, key)
-      const der = sig.toDER() as number[]
-      der[0] = 0x31
-      expect(() => Signature.fromDER(der)).toThrow('Signature DER must start with 0x30')
-    })
+    const validDER = (): number[] => ECDSA.sign(msg, key).toDER() as number[]
 
-    it('throws when outer length byte has high bit set (multi-byte length)', () => {
-      // Set the length byte to 0x81 (high bit set) to trigger 'Invalid DER entity length'
-      const der = [0x30, 0x81, 0x01, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]
-      expect(() => Signature.fromDER(der)).toThrow('Invalid DER entity length')
-    })
-
-    it('throws when outer length does not match data length', () => {
-      const sig = ECDSA.sign(msg, key)
-      const der = sig.toDER() as number[]
-      // Corrupt the length byte to be too small
-      der[1] = 1
-      expect(() => Signature.fromDER(der)).toThrow('Signature DER invalid')
-    })
-
-    it('throws when second marker is not 0x02 (r marker)', () => {
-      const sig = ECDSA.sign(msg, key)
-      const der = sig.toDER() as number[]
-      // Byte at index 2 should be 0x02
-      der[2] = 0x03
-      expect(() => Signature.fromDER(der)).toThrow('Signature DER invalid')
-    })
-
-    it('throws when s marker is not 0x02', () => {
-      const sig = ECDSA.sign(msg, key)
-      const der = sig.toDER() as number[]
-      const rlen = der[3]
-      // s marker is at position 4 + rlen
-      der[4 + rlen] = 0x03
-      expect(() => Signature.fromDER(der)).toThrow('Signature DER invalid')
+    it.each([
+      [
+        'DER does not start with 0x30',
+        () => {
+          const der = validDER()
+          der[0] = 0x31
+          return der
+        },
+        'Signature DER must start with 0x30'
+      ],
+      [
+        'outer length byte has its high bit set',
+        () => [0x30, 0x81, 0x01, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01],
+        'Invalid DER entity length'
+      ],
+      [
+        'outer length does not match data length',
+        () => {
+          const der = validDER()
+          der[1] = 1
+          return der
+        },
+        'Signature DER invalid'
+      ],
+      [
+        'r marker is not 0x02',
+        () => {
+          const der = validDER()
+          der[2] = 0x03
+          return der
+        },
+        'Signature DER invalid'
+      ],
+      [
+        's marker is not 0x02',
+        () => {
+          const der = validDER()
+          const rLength = der[3]
+          der[4 + rLength] = 0x03
+          return der
+        },
+        'Signature DER invalid'
+      ]
+    ])('throws when %s', (_case, makeDER, expectedMessage) => {
+      expect(() => Signature.fromDER(makeDER())).toThrow(expectedMessage)
     })
 
     it('throws when r starts with 0x00 but next byte is not high-bit', () => {
@@ -258,14 +268,14 @@ describe('Signature', () => {
       const sig = ECDSA.sign(msg, key)
       const compact = sig.toCompact(0, true)
       expect(Array.isArray(compact)).toBe(true)
-      expect((compact as number[]).length).toBe(65)
+      expect(compact as number[]).toHaveLength(65)
     })
 
     it('returns hex string when enc="hex"', () => {
       const sig = ECDSA.sign(msg, key)
       const hex = sig.toCompact(0, true, 'hex')
       expect(typeof hex).toBe('string')
-      expect((hex as string).length).toBe(130)
+      expect(hex as string).toHaveLength(130)
     })
 
     it('returns base64 string when enc="base64"', () => {

@@ -459,7 +459,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
       const newProfileId = await manager.addProfile('Work')
       expect(Array.isArray(newProfileId)).toBe(true)
-      expect(newProfileId.length).toBe(16)
+      expect(newProfileId).toHaveLength(16)
 
       const updatedProfiles = manager.listProfiles()
       expect(updatedProfiles).toHaveLength(2)
@@ -568,8 +568,6 @@ describe('CWIStyleWalletManager Tests', () => {
         { plaintext: [1, 2, 3], protocolID: [1, 'tests'], keyID: '1' },
         'mydomain.com'
       )
-
-      // TODO: Test all other proxied methods
     })
 
     test('isAuthenticated() rejects if originator is admin, resolves otherwise', async () => {

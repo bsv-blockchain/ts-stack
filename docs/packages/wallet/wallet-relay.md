@@ -4,7 +4,7 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.3.1'
+version: '0.3.2'
 last_updated: '2026-07-29'
 last_verified: '2026-07-29'
 review_cadence_days: 30

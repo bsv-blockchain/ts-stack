@@ -176,7 +176,7 @@ export const MockUtils = {
     if (encoding === 'hex') {
       const arr: number[] = []
       for (let i = 0; i < str.length; i += 2) {
-        arr.push(Number.parseInt(str.substr(i, 2), 16))
+        arr.push(Number.parseInt(str.slice(i, i + 2), 16))
       }
       return arr
     } else if (encoding === 'base64') {
@@ -271,7 +271,7 @@ export function mockUnderlyingWallet(): jest.Mocked<any> {
 
     createAction: jest.fn(async x => {
       const tx = mockAtomicBEEF(mockCreateActionTransaction(x))
-      if (x.options != null && x.options.signAndProcess === true) {
+      if (x.options?.signAndProcess === true) {
         return {
           tx
         }

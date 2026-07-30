@@ -54,17 +54,12 @@ describe('totp generation and validation', () => {
 
     expect(TOTP.validate(secret, passcode, options)).toEqual(true)
 
-    const checkAdjacentWindow = (
-      timeOfGeneration: number,
-      expected: boolean
-    ): void => {
+    const checkAdjacentWindow = (timeOfGeneration: number, expected: boolean): void => {
       jest.setSystemTime(timeOfGeneration)
       const adjacentTimewindowPasscode = TOTP.generate(secret, options)
 
       jest.setSystemTime(time)
-      expect(
-        TOTP.validate(secret, adjacentTimewindowPasscode, options)
-      ).toEqual(expected)
+      expect(TOTP.validate(secret, adjacentTimewindowPasscode, options)).toEqual(expected)
     }
 
     // because the 'skew' is '1' by default, the passcode for the next window also should be valid
@@ -87,7 +82,7 @@ describe('totp generation and validation', () => {
     // Same length but definitely wrong
     const wrong = correct === '123456' ? '654321' : '123456'
 
-    expect(wrong.length).toBe(correct.length)
+    expect(wrong).toHaveLength(correct.length)
     expect(TOTP.validate(secret, wrong, options)).toBe(false)
   })
 

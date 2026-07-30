@@ -31,10 +31,7 @@ describe('PublicKey', () => {
     describe('Constructor', () => {
       it('Should throw when accidentally passing in DER', () => {
         expect(
-          () =>
-            new PublicKey(
-              '036af279b60aa437d48bb0e2ec0b0c6b5cfaa976663f1f08ad456fd7fff149321d'
-            )
+          () => new PublicKey('036af279b60aa437d48bb0e2ec0b0c6b5cfaa976663f1f08ad456fd7fff149321d')
         ).toThrow()
       })
     })
@@ -61,13 +58,13 @@ describe('PublicKey', () => {
       test('toDER should return DER encoded string of public key', () => {
         const derString = publicKey.toString()
         expect(typeof derString).toBe('string')
-        expect(derString.length).toBe(66)
+        expect(derString).toHaveLength(66)
       })
 
       test('toDER should return DER encoded number[] of public key', () => {
         const der = publicKey.toDER()
         expect(typeof der).toBe('object')
-        expect(der.length).toBe(33)
+        expect(der).toHaveLength(33)
       })
 
       test('fromDER and fromString should result in the same public key', () => {

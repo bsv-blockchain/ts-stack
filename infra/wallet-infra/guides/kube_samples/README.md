@@ -19,6 +19,13 @@ starts serving port 8080. Its public root response is used for startup,
 readiness, and liveness checks. The application runs without capabilities as a
 non-root user on a read-only root filesystem. MySQL retains a writable PVC and
 has separate startup, readiness, and liveness checks.
+The application pre-stop delay allows endpoint withdrawal before `SIGTERM`;
+shutdown then stops monitor tasks, drains the storage server, and closes wallet
+storage. The sample remains a maintenance-controlled monitor singleton and
+records that posture in annotations. Do not add a PodDisruptionBudget or HPA
+until monitor leadership, shared sessions, rate limits, and storage semantics
+are proven. A hostname topology preference is already present for a future
+replica-safe API tier.
 
 Wallet Storage is a public protocol service. Its default browser policy remains
 credential-free wildcard CORS, including opaque origins. Configure an exact

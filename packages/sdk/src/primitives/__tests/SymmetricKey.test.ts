@@ -58,7 +58,7 @@ describe('SymmetricKey', () => {
       const keyArray = pubKey.x!.toArray()
 
       // Verify this is indeed a 31-byte key
-      expect(keyArray.length).toBe(31)
+      expect(keyArray).toHaveLength(31)
 
       const symKey = new SymmetricKey(keyArray)
       const plaintext = 'test message'
@@ -79,7 +79,7 @@ describe('SymmetricKey', () => {
       const keyArray = pubKey.x!.toArray()
 
       // Verify this is indeed a 32-byte key
-      expect(keyArray.length).toBe(32)
+      expect(keyArray).toHaveLength(32)
 
       const symKey = new SymmetricKey(keyArray)
       const plaintext = 'test message'

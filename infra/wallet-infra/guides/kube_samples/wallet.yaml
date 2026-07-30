@@ -2,7 +2,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: wallet-infra
-
   labels:
     app: wallet-infra
 spec:
@@ -18,7 +17,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wallet-infra
-
+  annotations:
+    ts-stack.bsvblockchain.org/autoscaling-policy: operator-gated-until-monitor-leadership-and-shared-sessions
+    ts-stack.bsvblockchain.org/disruption-policy: maintenance-controlled-monitor-leader
   labels:
     app: wallet-infra
 spec:
@@ -28,6 +29,9 @@ spec:
       app: wallet-infra
   template:
     metadata:
+      annotations:
+        ts-stack.bsvblockchain.org/autoscaling-policy: operator-gated-until-monitor-leadership-and-shared-sessions
+        ts-stack.bsvblockchain.org/disruption-policy: maintenance-controlled-monitor-leader
       labels:
         app: wallet-infra
     spec:
@@ -37,10 +41,21 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: wallet-infra
       containers:
         - name: wallet-infra
           image: ghcr.io/bsv-blockchain/wallet-infra:v2.0.13@sha256:373b7a1011ac5e822a8221cc01d50754458c0675413df2013206f6a5ea45a412
           imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              exec:
+                command: ['/bin/sh', '-c', 'sleep 5']
           ports:
             - containerPort: 8080
               name: http

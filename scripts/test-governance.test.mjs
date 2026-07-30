@@ -31,7 +31,7 @@ test('current required, manual, live, resource, and conformance tests are govern
   })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.summary.requiredDirectSkips, 6)
+  assert.equal(result.summary.requiredDirectSkips, 2)
   assert.equal(result.summary.propertySuites, 25)
   assert.equal(result.summary.propertyPackages, 25)
   assert.equal(result.summary.propertyExcludedPackages, 8)

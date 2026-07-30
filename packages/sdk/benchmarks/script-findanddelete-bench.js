@@ -3,7 +3,7 @@ import OP from '../dist/esm/src/script/OP.js'
 import { runBenchmark } from './lib/benchmark-runner.js'
 
 function makeRng(seed) {
-  let x = seed | 0
+  let x = Math.trunc(seed)
   return () => {
     x ^= x << 13
     x ^= x >>> 17

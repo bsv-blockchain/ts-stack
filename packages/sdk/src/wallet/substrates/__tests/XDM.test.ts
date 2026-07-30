@@ -4,7 +4,7 @@ import { Utils } from '../../../primitives/index'
 
 describe('XDMSubstrate', () => {
   let xdmSubstrate: XDMSubstrate
-  let originalWindow: Window & typeof globalThis | undefined
+  let originalWindow: (Window & typeof globalThis) | undefined
   let addEventListenerMock: jest.Mock
 
   beforeEach(() => {
@@ -59,9 +59,7 @@ describe('XDMSubstrate', () => {
       expect(() => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const _ = new XDMSubstrate()
-      }).toThrow(
-        'The window object does not seem to support postMessage calls.'
-      )
+      }).toThrow('The window object does not seem to support postMessage calls.')
     })
 
     it('should construct successfully if window and window.postMessage are defined', () => {
@@ -264,7 +262,11 @@ describe('XDMSubstrate', () => {
       }
     })
 
-    it('should ignore messages with incorrect type', async () => {
+    it.each([
+      ['the type is incorrect', { type: 'WrongType' }, true],
+      ['the invocation ID is incorrect', { id: 'wrongId' }, true],
+      ['the browser event is untrusted', {}, false]
+    ])('should ignore messages when %s', async (_case, messageOverrides, isTrusted) => {
       const call = 'testCall'
       const args = { foo: 'bar' }
       const result = { data: 'some data' }
@@ -274,86 +276,16 @@ describe('XDMSubstrate', () => {
 
       const invokePromise = xdmSubstrate.invoke(call as any, args)
 
-      // Simulate receiving an unrelated message
-      const event = {
-        data: {
-          type: 'WrongType',
-          isInvocation: false,
-          id: mockId,
-          status: 'success',
-          result
-        },
-        isTrusted: true
-      }
-
-      dispatchMessage(event)
-
-      // The promise should still be pending
-      let isResolved = false
-      invokePromise.then(() => {
-        isResolved = true
-      })
-
-      // Wait a bit to ensure no unintended resolution
-      await new Promise((resolve) => setTimeout(resolve, 1))
-      expect(isResolved).toBe(false)
-    })
-
-    it('should ignore messages with incorrect id', async () => {
-      const call = 'testCall'
-      const args = { foo: 'bar' }
-      const result = { data: 'some data' }
-      const mockId = 'mockedId'
-
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
-
-      const invokePromise = xdmSubstrate.invoke(call as any, args)
-
-      // Simulate receiving a message with wrong id
-      const event = {
-        data: {
-          type: 'CWI',
-          isInvocation: false,
-          id: 'wrongId',
-          status: 'success',
-          result
-        },
-        isTrusted: true
-      }
-
-      dispatchMessage(event)
-
-      // The promise should still be pending
-      let isResolved = false
-      invokePromise.then(() => {
-        isResolved = true
-      })
-
-      // Wait a bit to ensure no unintended resolution
-      await new Promise((resolve) => setTimeout(resolve, 1))
-      expect(isResolved).toBe(false)
-    })
-
-    it('should ignore messages where e.isTrusted is false', async () => {
-      const call = 'testCall'
-      const args = { foo: 'bar' }
-      const result = { data: 'some data' }
-      const mockId = 'mockedId'
-
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
-
-      const invokePromise = xdmSubstrate.invoke(call as any, args)
-
-      // Simulate receiving a message with isTrusted false
       const event = {
         data: {
           type: 'CWI',
           isInvocation: false,
           id: mockId,
           status: 'success',
-          result
+          result,
+          ...messageOverrides
         },
-        isTrusted: false
+        isTrusted
       }
 
       dispatchMessage(event)
@@ -365,7 +297,7 @@ describe('XDMSubstrate', () => {
       })
 
       // Wait a bit to ensure no unintended resolution
-      await new Promise((resolve) => setTimeout(resolve, 1))
+      await new Promise(resolve => setTimeout(resolve, 1))
       expect(isResolved).toBe(false)
     })
 
@@ -400,7 +332,7 @@ describe('XDMSubstrate', () => {
       })
 
       // Wait a bit to ensure no unintended resolution
-      await new Promise((resolve) => setTimeout(resolve, 1))
+      await new Promise(resolve => setTimeout(resolve, 1))
       expect(isResolved).toBe(false)
     })
   })
@@ -486,7 +418,7 @@ describe('XDMSubstrate', () => {
 
         await expect(invokePromise).rejects.toThrow(WalletError)
         await expect(invokePromise).rejects.toThrow(errorDescription)
-        await invokePromise.catch((err) => {
+        await invokePromise.catch(err => {
           expect(err.code).toBe(errorCode)
         })
       })

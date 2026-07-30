@@ -1472,7 +1472,6 @@ describe('BSV Overlay Services Engine', () => {
         ).rejects.toThrow('Lookup service not found for provider: HelloWorld')
       })
       it('Calls the lookup function from the lookup service', async () => {
-        // TODO: Make the default storage engine return something...?
         mockLookupService.lookup = jest.fn(async () => [{ txid: exampleTXID, outputIndex: 0 }])
         mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
         const engine = new Engine(
@@ -1531,7 +1530,6 @@ describe('BSV Overlay Services Engine', () => {
       })
       describe('For each returned result', () => {
         it('Finds the identified UTXO by its txid and vout', async () => {
-          // TODO: Make the default storage engine return something...?
           mockLookupService.lookup = jest.fn(async () => [
             {
               txid: 'mockTXID',
@@ -1782,66 +1780,7 @@ describe('BSV Overlay Services Engine', () => {
           type: 'output-list'
         })
       })
-      // it('Traversing history, calls findOutput with any output consumed by this UTXO', async () => {
-      //   mockLookupService.lookup = jest.fn(async () => [{
-      //     txid: 'mockTXID',
-      //     outputIndex: 0,
-      //     history: 1
-      //   }])
-      //   mockStorageEngine.findOutput = jest.fn(async () => ({
-      //     ...mockOutput,
-      //     outputsConsumed: [{
-      //       txid: examplePreviousTXID,
-      //       outputIndex: 0
-      //     }]
-      //   }))
-      //   const engine = new Engine(
-      //     {
-      //       Hello: mockTopicManager
-      //     },
-      //     {
-      //       Hello: mockLookupService
-      //     },
-      //     mockStorageEngine,
-      //     mockChainTracker
-      //   )
-
-      //   // Perform a lookup request
-      //   await engine.lookup({
-      //     service: 'Hello',
-      //     query: { name: 'Bob' }
-      //   })
-
-      //   expect(mockStorageEngine.findOutput).toHaveBeenCalledWith()
-      // })
-      // it('Returns the correct envelope based on the history traversal process', async () => {
-      //   // TODO: Come up with some test data for a simple case, but different than the above code.
-      // })
-      // it('Returns the correct envelope based on the history traversal process for a more complex multi-layer multi-output graph', async () => {
-      //   // TODO: Come up with some test data to test the history traversal process better
-      // })
     })
-    // describe('deleteUTXODeep', () => {
-    //   it('Finds UTXO by ID if no output was provided', async () => {
-
-    //   })
-    //   it('Finds UTXO by TXID and VOUT if no ID was provided', async () => {
-
-    //   })
-    //   it('Throws an error if no output can be found', async () => {
-
-    //   })
-    //   describe('When no more UTXOs are consumed by this UTXO', () => {
-    //     it('Deletes the UTXO by ID from the storage engine', async () => {
-
-    //     })
-    //     it('Notifies all lookup services about the deletion of the UTXO', async () => {
-
-    //     })
-    //   })
-    //   it('For each UTXO that this UTXO consumes, finds the consumed UTXO by its ID and removes reference to this one', async () => {
-
-    //   })
   })
 
   describe('refactored submission helper compatibility', () => {

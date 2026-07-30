@@ -104,7 +104,7 @@ describe('ProvenTxReq class method tests', () => {
     const fetchedProvenTxReqs = await ctx.activeStorage.findProvenTxReqs({
       partial: { txid: 'test-txid' }
     })
-    expect(fetchedProvenTxReqs.length).toBe(1)
+    expect(fetchedProvenTxReqs).toHaveLength(1)
     expect(fetchedProvenTxReqs[0].txid).toBe('test-txid')
   })
 

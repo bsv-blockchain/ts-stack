@@ -1,14 +1,14 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.15",
-  "engines": {
-    "node": ">=24 <25",
-    "npm": ">=11"
-  },
+  "version": "0.2.16",
   "overrides": {
     "brace-expansion": "5.0.8",
     "gaxios": "7.3.0",
     "uuid": "11.1.1"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
   },
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",

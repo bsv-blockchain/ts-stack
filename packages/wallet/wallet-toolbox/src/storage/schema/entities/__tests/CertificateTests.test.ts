@@ -187,7 +187,7 @@ describe('Certificate class method tests', () => {
       const updatedRecord = await activeStorage.findCertificates({
         partial: { certificateId }
       })
-      expect(updatedRecord.length).toBe(1)
+      expect(updatedRecord).toHaveLength(1)
       expect(updatedRecord[0]).toBeDefined()
       expect(updatedRecord[0].type).toBe('updatedType')
       expect(updatedRecord[0].subject).toBe('updatedSubject')
@@ -265,7 +265,7 @@ describe('Certificate class method tests', () => {
       const unchangedRecord = await activeStorage.findCertificates({
         partial: { certificateId }
       })
-      expect(unchangedRecord.length).toBe(1)
+      expect(unchangedRecord).toHaveLength(1)
       expect(unchangedRecord[0]).toBeDefined()
       expect(unchangedRecord[0].type).toBe('exampleType')
       expect(unchangedRecord[0].subject).toBe('02c123eabcdeff1234567890abcdef1234567890abcdef1234567890abcdef5678')

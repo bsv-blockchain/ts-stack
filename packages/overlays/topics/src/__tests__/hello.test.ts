@@ -226,7 +226,7 @@ describe('HelloWorldLookupService (MongoDB)', () => {
       query: {}
     } as LookupQuestion)) as any[]
 
-    expect(result.length).toBe(1)
+    expect(result).toHaveLength(1)
     expect(result[0].txid).toBe('hwtx0001')
   })
 
@@ -270,7 +270,7 @@ describe('HelloWorldLookupService (MongoDB)', () => {
       service: 'ls_helloworld',
       query: {}
     } as LookupQuestion)) as any[]
-    expect(before.length).toBe(1)
+    expect(before).toHaveLength(1)
 
     await service.outputEvicted('hwtx0003', 0)
 

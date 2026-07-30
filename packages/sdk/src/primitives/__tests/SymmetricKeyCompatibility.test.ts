@@ -12,7 +12,7 @@ describe('Cross-SDK Compatibility Tests', () => {
       const keyBytes = pubKey.x!.toArray()
 
       // Verify this is a 31-byte key
-      expect(keyBytes.length).toBe(31)
+      expect(keyBytes).toHaveLength(31)
 
       const symKey = new SymmetricKey(keyBytes)
       const expectedPlaintext = 'cross-sdk test message'
@@ -61,7 +61,7 @@ describe('Cross-SDK Compatibility Tests', () => {
       const keyBytes = pubKey.x!.toArray()
 
       // Verify this is a 32-byte key
-      expect(keyBytes.length).toBe(32)
+      expect(keyBytes).toHaveLength(32)
 
       const symKey = new SymmetricKey(keyBytes)
       const expectedPlaintext = 'cross-sdk test message'
@@ -129,7 +129,7 @@ describe('Cross-SDK Compatibility Tests', () => {
 
         expect(pubKey.x).toBeTruthy()
         const keyBytes = pubKey.x!.toArray()
-        expect(keyBytes.length).toBe(expectedKeyLength)
+        expect(keyBytes).toHaveLength(expectedKeyLength)
 
         const symKey = new SymmetricKey(keyBytes)
         const expectedPlaintext = 'cross-sdk test message'

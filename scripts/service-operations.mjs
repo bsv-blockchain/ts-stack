@@ -11,6 +11,8 @@ const DIGEST_IMAGE = /@sha256:[0-9a-f]{64}$/
 const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/
 const STATEFUL_CLASS_ANNOTATION = 'ts-stack.bsvblockchain.org/workload-class'
 const STATEFUL_CLASS = 'example-not-production'
+const AUTOSCALING_POLICY_ANNOTATION = 'ts-stack.bsvblockchain.org/autoscaling-policy'
+const DISRUPTION_POLICY_ANNOTATION = 'ts-stack.bsvblockchain.org/disruption-policy'
 const SECRET_NAME_TOKENS = [
   'password',
   'privatekey',
@@ -343,6 +345,14 @@ const validateContainerSecurity = (container, prefix, errors) => {
   for (const field of ['startupProbe', 'readinessProbe', 'livenessProbe', 'resources']) {
     if (container[field] === undefined) errors.push(`${prefix} must define ${field}`)
   }
+  const preStop = container.lifecycle?.preStop?.exec?.command
+  if (
+    !Array.isArray(preStop) ||
+    preStop.length < 3 ||
+    preStop.some(value => typeof value !== 'string' || value.trim() === '')
+  ) {
+    errors.push(`${prefix} must define a non-empty exec preStop hook`)
+  }
 }
 
 const validateApplicationWorkload = async (root, workload, errors) => {
@@ -362,6 +372,36 @@ const validateApplicationWorkload = async (root, workload, errors) => {
     errors.push(
       `${prefix} termination grace must be ${workload.terminationGracePeriodSeconds} seconds`
     )
+  }
+  const expectedPreStop = ['/bin/sh', '-c', `sleep ${workload.preStopDelaySeconds}`]
+  if (
+    JSON.stringify(container.lifecycle?.preStop?.exec?.command) !== JSON.stringify(expectedPreStop)
+  ) {
+    errors.push(`${prefix} preStop must be ${JSON.stringify(expectedPreStop)}`)
+  }
+  if (
+    !Array.isArray(spec.topologySpreadConstraints) ||
+    !spec.topologySpreadConstraints.some(
+      constraint => constraint.topologyKey === workload.topologyKey
+    )
+  ) {
+    errors.push(`${prefix} must define a topology spread policy for ${workload.topologyKey}`)
+  }
+  requireStrings(
+    workload,
+    ['disruptionMode', 'autoscalingMode'],
+    `${prefix} deployment posture`,
+    errors
+  )
+  const annotations = deployment.metadata?.annotations ?? {}
+  const podAnnotations = deployment.spec?.template?.metadata?.annotations ?? {}
+  for (const [annotation, expected] of [
+    [DISRUPTION_POLICY_ANNOTATION, workload.disruptionMode],
+    [AUTOSCALING_POLICY_ANNOTATION, workload.autoscalingMode]
+  ]) {
+    if (annotations[annotation] !== expected || podAnnotations[annotation] !== expected) {
+      errors.push(`${prefix} and its pod template must annotate ${annotation}=${expected}`)
+    }
   }
 }
 
@@ -402,7 +442,12 @@ const validatePolicy = (policy, errors) => {
   validateStringArray(policy.incidentResponse, 'incidentResponse', errors)
   requireStrings(
     policy.deployment,
-    ['productionDisruptionPolicy', 'productionTopologyPolicy', 'productionAutoscalingPolicy'],
+    [
+      'productionDisruptionPolicy',
+      'productionTopologyPolicy',
+      'productionAutoscalingPolicy',
+      'runtimeContract'
+    ],
     'deployment policy',
     errors
   )
@@ -585,6 +630,8 @@ image digests, startup/readiness/liveness probes, resources, and the registered
 termination grace. Production disruption, topology, and autoscaling choices must
 follow the service-specific shared-state and leadership constraints above.
 
+${registry.policy.deployment.runtimeContract}
+
 ## Release and change procedure
 
 1. Change a service, package, Dockerfile, manifest, configuration example, or
@@ -593,11 +640,10 @@ follow the service-specific shared-state and leadership constraints above.
    signal, SLO, alert, recovery, lifecycle, or deployment behavior changes.
 3. Run \`pnpm ops:docs\`, then \`pnpm ops:check\`; run affected builds, tests,
    audits, package gates, and the full repository merge gates.
-4. Release dependency candidates before consumers. In particular, release the
-   new \`@bsv/overlay-express\` \`OverlayExpress.close()\` contract before
-   adopting it in the standalone Overlay image. Release \`@bsv/authsocket\`
-   \`AuthSocketServer.close()\` before a separately authorized Message Box
-   deployment.
+4. Release dependency candidates before consumers. The standalone Overlay and
+   Message Box lifecycle adapters remain compatible with the current published
+   dependencies and automatically delegate to their package-owned close APIs
+   once those independently reviewed packages are available.
 5. Deploy only through a separately authorized release. Record exact source and
    image digests, configuration and secret names, probe and critical-journey
    evidence, migration result, telemetry delivery, backup/restore evidence, and

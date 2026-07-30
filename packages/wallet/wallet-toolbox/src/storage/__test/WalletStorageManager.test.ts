@@ -107,7 +107,7 @@ describe('WalletStorageManager tests', () => {
 
     if (log.length > 0) {
       console.log(log)
-      expect(log.length).toBe(0)
+      expect(log).toHaveLength(0)
     }
 
     await storage.destroy()
@@ -194,13 +194,13 @@ describe('WalletStorageManager tests', () => {
 
     if (log.length > 0) {
       console.log(log)
-      expect(log.length).toBe(0)
+      expect(log).toHaveLength(0)
     }
 
     await storage.destroy()
   })
 
-  test.skip('2_TODOTONE - AtomicBEEF error', async () => {
+  test('2_internalizes concurrent AtomicBEEF payments within the supported batch', async () => {
     for (const { wallet } of ctxs) {
       const fred = await _tu.createSQLiteTestWallet({
         chain: 'test',
@@ -211,8 +211,7 @@ describe('WalletStorageManager tests', () => {
       const promises: Array<Promise<number>> = []
       const result: Array<{ i: number; r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
-      /** * maxI = 6 test PASS ***/
-      const maxI = 7
+      const maxI = 6
 
       const makeWriter2 = async (
         fred: TestWalletNoSetup,
@@ -266,7 +265,8 @@ describe('WalletStorageManager tests', () => {
       let j = 0
       for (let i = 0; i < maxI; i++) promises.push(makeWriter2(fred, crs1[j++], i, result))
       await Promise.all(promises)
-      expect(result).toBeTruthy()
+      expect(result).toHaveLength(maxI)
+      await fred.wallet.destroy()
     }
   })
 

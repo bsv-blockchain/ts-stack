@@ -1,6 +1,13 @@
 import { WalletAdvertiser } from '../WalletAdvertiser'
 import { isTokenSignatureCorrectlyLinked } from '../utils/isTokenSignatureCorrectlyLinked'
-import { PrivateKey, Transaction, PushDrop, ProtoWallet, WalletInterface, LockingScript } from '@bsv/sdk'
+import {
+  PrivateKey,
+  Transaction,
+  PushDrop,
+  ProtoWallet,
+  WalletInterface,
+  LockingScript
+} from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
 const mockWallet: WalletInterface = new ProtoWallet(new PrivateKey(42)) as any as WalletInterface
@@ -18,12 +25,10 @@ mockWallet.getNetwork = jest.fn(() => ({ network: 'mainnet' })) as any
 jest.mock('@bsv/wallet-toolbox-client', () => {
   return {
     Services: jest.fn().mockImplementation(() => {
-      return {
-      }
+      return {}
     }),
     WalletSigner: jest.fn().mockImplementation(() => {
-      return {
-      }
+      return {}
     }),
     Wallet: jest.fn().mockImplementation(() => {
       return mockWallet
@@ -40,8 +45,7 @@ jest.mock('@bsv/wallet-toolbox-client', () => {
       }
     }),
     alletStorageManager: jest.fn().mockImplementation(() => {
-      return {
-      }
+      return {}
     })
   }
 })
@@ -58,7 +62,13 @@ describe('WalletAdvertiser', () => {
   describe('Constructor', () => {
     it('throws if provided a non-advertisable URI', () => {
       expect(
-        () => new WalletAdvertiser('test', testPrivateKeyHex, 'https://fake-storage-url.com', 'xyz://bad-protocol.com')
+        () =>
+          new WalletAdvertiser(
+            'test',
+            testPrivateKeyHex,
+            'https://fake-storage-url.com',
+            'xyz://bad-protocol.com'
+          )
       ).toThrow('Refusing to initialize with non-advertisable URI')
     })
 
@@ -106,7 +116,7 @@ describe('WalletAdvertiser', () => {
 
       // Decode the transaction from the returned BEEF
       const tx = (mockWallet.createAction as any).mock.calls[0][0]
-      expect(tx.outputs.length).toBe(1)
+      expect(tx.outputs).toHaveLength(1)
 
       const out = tx.outputs[0]
       expect(out.satoshis).toBe(1)
@@ -115,10 +125,13 @@ describe('WalletAdvertiser', () => {
       // Decode the output with PushDrop
       const decodeResult = PushDrop.decode(LockingScript.fromHex(out.lockingScript))
       // We expect 4 original fields from the code plus the appended signature = 5 total
-      expect(decodeResult.fields.length).toBe(5)
+      expect(decodeResult.fields).toHaveLength(5)
 
       // Confirm the token is valid
-      const isValid = await isTokenSignatureCorrectlyLinked(decodeResult.lockingPublicKey, decodeResult.fields)
+      const isValid = await isTokenSignatureCorrectlyLinked(
+        decodeResult.lockingPublicKey,
+        decodeResult.fields
+      )
       expect(isValid).toBe(true)
     })
 
@@ -154,8 +167,6 @@ describe('WalletAdvertiser', () => {
         identityKey: '02fe8d1eb1bcb3432b1db5833ff5f2226d9cb5e65cee430558c18ed3a3c86ce1af'
       })
     })
-
-    // TODO: Sad testing
   })
 
   describe('findAllAdvertisements', () => {
@@ -165,8 +176,6 @@ describe('WalletAdvertiser', () => {
       const found = await advertiser.findAllAdvertisements('SHIP')
       expect(found).toEqual([])
     })
-
-    // TODO: Complete testing of finding nd parsing
   })
 
   describe('revokeAdvertisements', () => {
@@ -175,7 +184,5 @@ describe('WalletAdvertiser', () => {
         'Must provide advertisements to revoke!'
       )
     })
-
-    // TODO: Complete testing of revocation.
   })
 })

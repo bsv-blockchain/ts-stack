@@ -78,167 +78,175 @@ function walletFromRootKeyHex(rootKeyHex: string): ProtoWallet {
 // These vectors describe the AsyncAPI / BRC-103 protocol shape — no live
 // WebSocket server is required. We validate structural assertions only.
 
+function assertExpectedFields(value: Record<string, unknown>, fields: string[] | undefined): void {
+  if (!Array.isArray(fields)) return
+  for (const field of fields) expect(value).toHaveProperty(field)
+}
+
+function dispatchEnvelopeSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  assertExpectedFields(
+    input.envelope as Record<string, unknown>,
+    expected.required_fields as string[] | undefined
+  )
+  if ('valid' in expected) expect(getBool(expected, 'valid')).toBe(true)
+}
+
+function dispatchMessageTypeSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const validTypes = input.valid_types as string[]
+  const expectedEnum = expected.enum as string[]
+  if (!Array.isArray(expectedEnum) || !Array.isArray(validTypes)) return
+  expect(validTypes.toSorted((a, b) => a.localeCompare(b))).toEqual(
+    [...expectedEnum].toSorted((a, b) => a.localeCompare(b))
+  )
+}
+
+function dispatchRequiredFieldSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const fields = input.required_fields as string[]
+  expect(fields.length).toBeGreaterThan(0)
+  for (const field of fields) expect(typeof field).toBe('string')
+  if ('valid' in expected) expect(getBool(expected, 'valid')).toBe(true)
+}
+
+function dispatchPublicKeySchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const pattern = getString(expected, 'pattern')
+  const validExamples = input.valid_examples as string[]
+  if (pattern === '' || !Array.isArray(validExamples)) return
+  const regularExpression = new RegExp(pattern)
+  for (const example of validExamples) expect(regularExpression.test(example)).toBe(true)
+}
+
+function dispatchAuthSocketSchema(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  if ('envelope' in input) return dispatchEnvelopeSchema(input, expected)
+  if ('valid_types' in input) return dispatchMessageTypeSchema(input, expected)
+  if ('production_url' in expected) {
+    expect(typeof getString(expected, 'production_url')).toBe('string')
+    expect(getString(expected, 'protocol')).toBe('wss')
+    expect(getString(expected, 'transport')).toBe('Socket.IO')
+    return
+  }
+  if ('transport_handles' in expected) {
+    const appSees = expected.application_sees as Record<string, unknown>
+    expect(appSees).toHaveProperty('eventName')
+    expect(appSees).toHaveProperty('data')
+    return
+  }
+  if ('required_fields' in input) return dispatchRequiredFieldSchema(input, expected)
+  if ('valid_examples' in input) dispatchPublicKeySchema(input, expected)
+}
+
+function dispatchInitialRequestShape(expected: Record<string, unknown>): void {
+  const responseShape = expected.response_shape as Record<string, unknown> | undefined
+  if (responseShape !== undefined) {
+    expect(responseShape).toHaveProperty('messageType')
+    expect(responseShape.messageType).toBe('initialResponse')
+    expect(responseShape).toHaveProperty('identityKey')
+    expect(responseShape).toHaveProperty('nonce')
+    expect(responseShape).toHaveProperty('signature')
+  }
+  if ('response_shape_includes' in expected) {
+    expect(expected.response_shape_includes).toBeDefined()
+  }
+}
+
+function dispatchGeneralAuthMessage(
+  payload: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const payloadBytes = payload.payload as number[]
+  if (Array.isArray(payloadBytes) && payloadBytes.length > 0) {
+    try {
+      JSON.parse(new TextDecoder().decode(new Uint8Array(payloadBytes)))
+    } catch {
+      // Partial/stub payload in a shape-only vector is intentionally tolerated.
+    }
+  }
+  if ('server_processes' in expected) {
+    expect(getBool(expected, 'server_processes')).toBe(true)
+  }
+  if ('inner_event_extracted_from_payload' in expected) {
+    expect(getBool(expected, 'inner_event_extracted_from_payload')).toBe(true)
+  }
+}
+
+function dispatchAuthMessageEvent(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): boolean {
+  const payload = input.payload as Record<string, unknown> | undefined
+  const messageType = payload === undefined ? '' : getString(payload, 'messageType')
+  if (messageType === 'initialRequest') {
+    dispatchInitialRequestShape(expected)
+    return true
+  }
+  if (messageType === 'general' && payload !== undefined) {
+    dispatchGeneralAuthMessage(payload, expected)
+    return true
+  }
+  return false
+}
+
+function dispatchMessageEvent(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const payload = input.payload_example as Record<string, unknown> | undefined
+  if (payload !== undefined) {
+    assertExpectedFields(payload, expected.payload_has_fields as string[] | undefined)
+  }
+  if (getString(expected, 'event_received') !== '') {
+    expect(getString(expected, 'event_received')).toBe('message')
+  }
+}
+
+function dispatchKnownIdentity(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  if ('identity_key_known' in expected) expect(getBool(expected, 'identity_key_known')).toBe(true)
+  if ('persists_for' in expected) {
+    expect(getString(expected, 'persists_for')).toBe('connection lifetime')
+  }
+  expect(/^0[23][0-9a-fA-F]{64}$/.test(getString(input, 'expected_identity_key'))).toBe(true)
+}
+
 function dispatchAuthSocket(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
-  // Schema-only checks (no network I/o)
   if (getBool(input, '_schema_check')) {
-    // authsocket.2: EventEnvelope required fields
-    if ('envelope' in input) {
-      const envelope = input.envelope as Record<string, unknown>
-      const requiredFields = expected.required_fields as string[] | undefined
-      if (Array.isArray(requiredFields)) {
-        for (const field of requiredFields) {
-          expect(field in envelope).toBe(true)
-        }
-      }
-      if ('valid' in expected) {
-        expect(getBool(expected, 'valid')).toBe(true)
-      }
-      return
-    }
-
-    // authsocket.4: messageType enum check
-    if ('valid_types' in input) {
-      const validTypes = input.valid_types as string[]
-      const expectedEnum = expected.enum as string[]
-      if (Array.isArray(expectedEnum) && Array.isArray(validTypes)) {
-        expect(validTypes.toSorted((a, b) => a.localeCompare(b))).toEqual(
-          [...expectedEnum].toSorted((a, b) => a.localeCompare(b))
-        )
-      }
-      return
-    }
-
-    // authsocket.9: production server config — assert expected shape
-    if ('production_url' in expected) {
-      expect(typeof getString(expected, 'production_url')).toBe('string')
-      expect(getString(expected, 'protocol')).toBe('wss')
-      expect(getString(expected, 'transport')).toBe('Socket.IO')
-      return
-    }
-
-    // authsocket.10: transport abstraction description
-    if ('transport_handles' in expected) {
-      const appSees = expected.application_sees as Record<string, unknown>
-      expect(appSees).toHaveProperty('eventName')
-      expect(appSees).toHaveProperty('data')
-      return
-    }
-
-    // authsocket.11: AuthMessage required fields
-    if ('required_fields' in input) {
-      const fields = input.required_fields as string[]
-      // Shape check: all required field names are non-empty strings
-      expect(fields.length).toBeGreaterThan(0)
-      for (const f of fields) {
-        expect(typeof f).toBe('string')
-      }
-      if ('valid' in expected) {
-        expect(getBool(expected, 'valid')).toBe(true)
-      }
-      return
-    }
-
-    // authsocket.12: PubKeyHex format pattern
-    if ('valid_examples' in input) {
-      const pattern = getString(expected, 'pattern')
-      const validExamples = input.valid_examples as string[]
-      if (pattern !== '' && Array.isArray(validExamples)) {
-        const re = new RegExp(pattern)
-        for (const ex of validExamples) {
-          expect(re.test(ex)).toBe(true)
-        }
-      }
-      return
-    }
-
-    // Generic schema-only path: just pass
+    dispatchAuthSocketSchema(input, expected)
     return
   }
 
-  // authsocket.1 / authsocket.8: initialRequest shape validation
   const socketEvent = input.socketio_event
-  if (socketEvent === 'authMessage') {
-    const payload = input.payload as Record<string, unknown> | undefined
-    if (payload !== undefined && getString(payload, 'messageType') === 'initialRequest') {
-      const responseShape = expected.response_shape as Record<string, unknown> | undefined
-      if (responseShape !== undefined) {
-        // Assert that the expected response shape includes required BRC-103 fields
-        expect(responseShape).toHaveProperty('messageType')
-        expect(responseShape.messageType).toBe('initialResponse')
-        expect(responseShape).toHaveProperty('identityKey')
-        expect(responseShape).toHaveProperty('nonce')
-        expect(responseShape).toHaveProperty('signature')
-      }
-      if ('response_shape_includes' in expected) {
-        // authsocket.8: certificates option
-        const inc = expected.response_shape_includes as Record<string, unknown>
-        expect(inc).toBeDefined()
-      }
-      return
-    }
+  if (socketEvent === 'authMessage' && dispatchAuthMessageEvent(input, expected)) return
 
-    // authsocket.5: general message post-handshake
-    if (payload !== undefined && getString(payload, 'messageType') === 'general') {
-      // Assert payload bytes can be decoded as a JSON envelope
-      const payloadBytes = payload.payload as number[]
-      if (Array.isArray(payloadBytes) && payloadBytes.length > 0) {
-        try {
-          const decoded = new TextDecoder().decode(new Uint8Array(payloadBytes))
-          JSON.parse(decoded)
-          // Successfully decoded — event envelope is present
-        } catch {
-          // Partial/stub payload in vector — shape check only
-        }
-      }
-      if ('server_processes' in expected) {
-        expect(getBool(expected, 'server_processes')).toBe(true)
-      }
-      if ('inner_event_extracted_from_payload' in expected) {
-        expect(getBool(expected, 'inner_event_extracted_from_payload')).toBe(true)
-      }
-      return
-    }
-  }
-
-  // authsocket.3: message event shape
   if (socketEvent === 'message') {
-    const payloadExample = input.payload_example as Record<string, unknown> | undefined
-    const payloadHasFields = expected.payload_has_fields as string[] | undefined
-    if (payloadExample !== undefined && Array.isArray(payloadHasFields)) {
-      for (const field of payloadHasFields) {
-        expect(payloadExample).toHaveProperty(field)
-      }
-    }
-    if (getString(expected, 'event_received') !== '') {
-      expect(getString(expected, 'event_received')).toBe('message')
-    }
+    dispatchMessageEvent(input, expected)
     return
   }
 
-  // authsocket.6: unauthenticated connection — server disconnects
   if (socketEvent === null || socketEvent === undefined) {
-    if ('server_disconnects' in expected) {
-      expect(getBool(expected, 'server_disconnects')).toBe(true)
-    }
+    if ('server_disconnects' in expected) expect(getBool(expected, 'server_disconnects')).toBe(true)
     return
   }
 
-  // authsocket.7: identity key known after handshake
-  if ('expected_identity_key' in input) {
-    const expectedKey = getString(input, 'expected_identity_key')
-    if ('identity_key_known' in expected) {
-      expect(getBool(expected, 'identity_key_known')).toBe(true)
-    }
-    if ('persists_for' in expected) {
-      expect(getString(expected, 'persists_for')).toBe('connection lifetime')
-    }
-    // Validate the identity key matches the compressed-pubkey format
-    const pubkeyPattern = /^0[23][0-9a-fA-F]{64}$/
-    expect(pubkeyPattern.test(expectedKey)).toBe(true)
-  }
+  if ('expected_identity_key' in input) dispatchKnownIdentity(input, expected)
 }
 
 // ── authrite-signature dispatcher ─────────────────────────────────────────────
@@ -313,6 +321,90 @@ async function dispatchAuthriteSignature(
 // Validates HTTP request/response shapes against the MessageBox API spec.
 // No real backend is contacted — vectors describe the expected shapes.
 
+function dispatchSendMessageResponse(
+  body: Record<string, unknown> | undefined,
+  expectedBody: Record<string, unknown>
+): void {
+  const message = body?.message as Record<string, unknown> | undefined
+  if (message !== undefined) {
+    expect('recipient' in message || 'recipients' in message).toBe(true)
+    expect(typeof getString(message, 'messageBox')).toBe('string')
+  }
+  if (!('results' in expectedBody)) return
+  const results = expectedBody.results as Array<Record<string, unknown>>
+  expect(Array.isArray(results)).toBe(true)
+  for (const result of results) {
+    expect(typeof getString(result, 'recipient')).toBe('string')
+    expect(typeof getString(result, 'messageId')).toBe('string')
+  }
+}
+
+function assertMessageShape(message: Record<string, unknown>): void {
+  if ('messageId' in message) expect(typeof getString(message, 'messageId')).toBe('string')
+  if ('body' in message) expect(typeof getString(message, 'body')).toBe('string')
+  if ('sender' in message) {
+    expect(/^0[23][0-9a-fA-F]{64}$/.test(getString(message, 'sender'))).toBe(true)
+  }
+  if ('created_at' in message) {
+    expect(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(getString(message, 'created_at'))).toBe(true)
+  }
+}
+
+function dispatchListMessagesResponse(
+  body: Record<string, unknown> | undefined,
+  expectedBody: Record<string, unknown>
+): void {
+  if (body !== undefined) expect(typeof getString(body, 'messageBox')).toBe('string')
+  if (!('messages' in expectedBody)) return
+  const messages = expectedBody.messages as Array<Record<string, unknown>>
+  expect(Array.isArray(messages)).toBe(true)
+  for (const message of messages) assertMessageShape(message)
+}
+
+function dispatchAcknowledgeResponse(body: Record<string, unknown> | undefined): void {
+  if (body === undefined) return
+  expect(typeof getString(body, 'messageBox')).toBe('string')
+  const messageIds = body.messageIds as string[] | undefined
+  if (Array.isArray(messageIds)) expect(messageIds.length).toBeGreaterThan(0)
+}
+
+function dispatchPermissionSetResponse(body: Record<string, unknown> | undefined): void {
+  if (body === undefined) return
+  expect(typeof getString(body, 'messageBox')).toBe('string')
+  if ('recipientFee' in body) {
+    expect(typeof body.recipientFee).toBe('number')
+    expect((body.recipientFee as number) >= 0).toBe(true)
+  }
+}
+
+function dispatchPermissionGetResponse(expectedBody: Record<string, unknown>): void {
+  expect('permission' in expectedBody).toBe(true)
+  const permission = expectedBody.permission
+  if (permission !== null && typeof permission === 'object') {
+    expect(typeof getString(permission as Record<string, unknown>, 'messageBox')).toBe('string')
+  }
+}
+
+function dispatchPermissionListResponse(expectedBody: Record<string, unknown>): void {
+  if ('permissions' in expectedBody) {
+    expect(Array.isArray(expectedBody.permissions)).toBe(true)
+  }
+}
+
+function dispatchSuccessfulMessageBoxResponse(
+  path: string,
+  body: Record<string, unknown> | undefined,
+  expectedBody: Record<string, unknown>
+): void {
+  expect(getString(expectedBody, 'status')).toBe('success')
+  if (path.startsWith('/sendMessage')) return dispatchSendMessageResponse(body, expectedBody)
+  if (path.startsWith('/listMessages')) return dispatchListMessagesResponse(body, expectedBody)
+  if (path.startsWith('/acknowledgeMessage')) return dispatchAcknowledgeResponse(body)
+  if (path.startsWith('/permissions/set')) return dispatchPermissionSetResponse(body)
+  if (path.includes('/permissions/get')) return dispatchPermissionGetResponse(expectedBody)
+  if (path.includes('/permissions/list')) dispatchPermissionListResponse(expectedBody)
+}
+
 function dispatchMessageBoxHTTP(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -359,112 +451,8 @@ function dispatchMessageBoxHTTP(
     return
   }
 
-  // ── Per-endpoint happy-path shape validation ───────────────────────────
-
   if (expectedStatus === 200) {
-    const responseStatus = getString(expectedBody, 'status')
-    expect(responseStatus).toBe('success')
-
-    // /sendMessage response: { status, results: [...] }
-    if (path.startsWith('/sendMessage')) {
-      if (body !== undefined) {
-        const msg = body.message as Record<string, unknown> | undefined
-        if (msg !== undefined) {
-          // Must have recipient or recipients
-          const hasRecipient = 'recipient' in msg || 'recipients' in msg
-          expect(hasRecipient).toBe(true)
-          // messageBox must be a non-empty string
-          expect(typeof getString(msg, 'messageBox')).toBe('string')
-        }
-      }
-      if ('results' in expectedBody) {
-        const results = expectedBody.results as Array<Record<string, unknown>>
-        expect(Array.isArray(results)).toBe(true)
-        for (const result of results) {
-          expect(typeof getString(result, 'recipient')).toBe('string')
-          expect(typeof getString(result, 'messageId')).toBe('string')
-        }
-      }
-      return
-    }
-
-    // /listMessages response: { status, messages: [...] }
-    if (path.startsWith('/listMessages')) {
-      if (body !== undefined) {
-        expect(typeof getString(body, 'messageBox')).toBe('string')
-      }
-      if ('messages' in expectedBody) {
-        const messages = expectedBody.messages as Array<Record<string, unknown>>
-        expect(Array.isArray(messages)).toBe(true)
-        for (const msg of messages) {
-          // If messages are present, validate expected shape fields
-          if ('messageId' in msg) {
-            expect(typeof getString(msg, 'messageId')).toBe('string')
-          }
-          if ('body' in msg) {
-            expect(typeof getString(msg, 'body')).toBe('string')
-          }
-          if ('sender' in msg) {
-            // sender must match compressed pubkey format
-            const senderPubkeyPattern = /^0[23][0-9a-fA-F]{64}$/
-            expect(senderPubkeyPattern.test(getString(msg, 'sender'))).toBe(true)
-          }
-          if ('created_at' in msg) {
-            // created_at must be an ISO 8601 timestamp string
-            const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
-            expect(isoPattern.test(getString(msg, 'created_at'))).toBe(true)
-          }
-        }
-      }
-      return
-    }
-
-    // /acknowledgeMessage response: { status: 'success' }
-    if (path.startsWith('/acknowledgeMessage')) {
-      if (body !== undefined) {
-        expect(typeof getString(body, 'messageBox')).toBe('string')
-        const msgIds = body.messageIds as string[] | undefined
-        if (Array.isArray(msgIds)) {
-          expect(msgIds.length).toBeGreaterThan(0)
-        }
-      }
-      // Response is just { status: 'success' }
-      expect(responseStatus).toBe('success')
-      return
-    }
-
-    // /permissions/set response: { status: 'success' }
-    if (path.startsWith('/permissions/set')) {
-      if (body !== undefined) {
-        expect(typeof getString(body, 'messageBox')).toBe('string')
-        if ('recipientFee' in body) {
-          expect(typeof body.recipientFee).toBe('number')
-          expect((body.recipientFee as number) >= 0).toBe(true)
-        }
-      }
-      expect(responseStatus).toBe('success')
-      return
-    }
-
-    // /permissions/get response: { status, permission: {...} | null }
-    if (path.includes('/permissions/get')) {
-      expect('permission' in expectedBody).toBe(true)
-      const permission = expectedBody.permission
-      if (permission !== null && typeof permission === 'object') {
-        const perm = permission as Record<string, unknown>
-        expect(typeof getString(perm, 'messageBox')).toBe('string')
-      }
-      return
-    }
-
-    // /permissions/list response: { status, permissions: [...] }
-    if (path.includes('/permissions/list')) {
-      if ('permissions' in expectedBody) {
-        const perms = expectedBody.permissions as unknown[]
-        expect(Array.isArray(perms)).toBe(true)
-      }
-      return
-    }
+    dispatchSuccessfulMessageBoxResponse(path, body, expectedBody)
   }
 }
 

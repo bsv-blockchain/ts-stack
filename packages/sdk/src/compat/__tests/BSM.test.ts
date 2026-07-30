@@ -10,7 +10,7 @@ describe('BSM', () => {
     it('should return a hash', () => {
       const buf = toArray('001122', 'hex')
       const hashBuf = magicHash(buf)
-      expect(hashBuf.length).toEqual(32)
+      expect(hashBuf).toHaveLength(32)
     })
   })
   describe('sign', () => {
@@ -20,18 +20,17 @@ describe('BSM', () => {
     it('should return a signature', () => {
       const sig = sign(messageBuf, privateKey, 'raw')
 
-      if (sig instanceof Signature) { // ✅ Explicitly check if `sig` is a Signature instance
+      if (sig instanceof Signature) {
+        // ✅ Explicitly check if `sig` is a Signature instance
         const derSignature = sig.toDER()
-        expect(derSignature.length).toEqual(70)
+        expect(derSignature).toHaveLength(70)
       } else {
         throw new Error('Expected a Signature object, but got a different type')
       }
     })
 
     it('Creates the correct base64 signature', () => {
-      const privateKey = PrivateKey.fromWif(
-        'L211enC224G1kV8pyyq7bjVd9SxZebnRYEzzM3i7ZHCc1c5E7dQu'
-      )
+      const privateKey = PrivateKey.fromWif('L211enC224G1kV8pyyq7bjVd9SxZebnRYEzzM3i7ZHCc1c5E7dQu')
       const sig = sign(toArray('hello world', 'utf8'), privateKey, 'base64')
       expect(sig).toEqual(
         'H4T8Asr0WkC6wYfBESR6pCAfECtdsPM4fwiSQ2qndFi8dVtv/mrOFaySx9xQE7j24ugoJ4iGnsRwAC8QwaoHOXk='

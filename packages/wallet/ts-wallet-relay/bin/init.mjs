@@ -125,7 +125,7 @@ if (isNextjs) {
        ORIGIN     http://localhost:3000  (where your Next.js app is served)
        PORT       3000
 
-  4. Open lib/relay.ts and follow the TODO comment to swap in your BSV wallet.
+  4. Open lib/relay.ts and replace the marked example adapter with your BSV wallet.
 
   5. The components use Tailwind CSS. If your project doesn't have Tailwind:
        npm install -D tailwindcss @tailwindcss/postcss
@@ -183,7 +183,7 @@ if (isNextjs) {
        import { DesktopView } from './${fdir}/views/DesktopView'
 
   4. Open ${fdir}/components/WalletActions.tsx and add the wallet methods
-     your app needs (clear TODO block inside).
+     your app needs (replace the marked example block).
 
   5. Make sure your Vite dev server proxies /api and /ws to the backend:
        // vite.config.ts

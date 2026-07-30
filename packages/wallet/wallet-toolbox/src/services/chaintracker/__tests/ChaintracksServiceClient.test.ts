@@ -20,7 +20,7 @@ const HEADER_877595 = {
 const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
-    const url = typeof input === 'string' ? input : input?.url ?? ''
+    const url = typeof input === 'string' ? input : (input?.url ?? '')
     if (url.includes('chaintracks.babbage.systems/findHeaderHexForHeight')) {
       const height = Number(new URL(url).searchParams.get('height'))
       if (height === 877595) {
@@ -54,7 +54,7 @@ describe('ChaintracksServiceClient tests', () => {
     const client = makeClient('main')
     const r = await client.findHeaderForHeight(877595)
     expect(r?.hash).toBe('00000000000000000b010edee7422c59ec9131742e35f3e0d5837d710b961406')
-    expect(await client.findHeaderForHeight(999999999)).toBe(undefined)
+    expect(await client.findHeaderForHeight(999999999)).toBeUndefined(undefined)
   })
 
   test('1 testNet findHeaderForHeight', async () => {
@@ -62,7 +62,7 @@ describe('ChaintracksServiceClient tests', () => {
     const client = makeClient('test')
     const r = await client.findHeaderForHeight(1651723)
     expect(r?.hash).toBe('0000000049686fe721f70614c89df146e410240f838b8f3ef8e6471c6dfdd153')
-    expect(await client.findHeaderForHeight(999999999)).toBe(undefined)
+    expect(await client.findHeaderForHeight(999999999)).toBeUndefined(undefined)
   })
 
   test('2 mainNet findHeaderForBlockHash', async () => {
@@ -83,12 +83,12 @@ describe('ChaintracksServiceClient tests', () => {
   })
 })
 
-function makeClient (chain: sdk.Chain) {
+function makeClient(chain: sdk.Chain) {
   // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
   const chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
   return new ChaintracksServiceClient(chain, chaintracksUrl)
 }
 
-function jsonResponse (body: unknown): any {
+function jsonResponse(body: unknown): any {
   return { ok: true, status: 200, json: async () => body }
 }

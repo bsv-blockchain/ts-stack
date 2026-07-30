@@ -180,8 +180,8 @@ describe('MockMiner', () => {
 
   test('createCoinbaseTransaction', () => {
     const tx = createCoinbaseTransaction(0)
-    expect(tx.inputs.length).toBe(1)
-    expect(tx.outputs.length).toBe(1)
+    expect(tx.inputs).toHaveLength(1)
+    expect(tx.outputs).toHaveLength(1)
     expect(tx.outputs[0].satoshis).toBe(5_000_000_000)
     expect(tx.inputs[0].sourceTXID).toBe('00'.repeat(32))
     expect(tx.inputs[0].sourceOutputIndex).toBe(0xffffffff)
@@ -268,7 +268,7 @@ describe('MockChainTracker', () => {
 
   test('getHeaders returns concatenated hex', async () => {
     const hex = await tracker.getHeaders(0, 2)
-    expect(hex.length).toBe(80 * 2 * 2) // 80 bytes per header, 2 headers, hex = *2
+    expect(hex).toHaveLength(80 * 2 * 2) // 80 bytes per header, 2 headers, hex = *2
   })
 })
 
@@ -299,7 +299,7 @@ describe('MockServices end-to-end', () => {
 
     // Find the coinbase UTXO
     const utxos = await services.storage.knex('mockchain_utxos').where({ isCoinbase: true, blockHeight: 0 })
-    expect(utxos.length).toBe(1)
+    expect(utxos).toHaveLength(1)
     const coinbaseUtxo = utxos[0]
 
     // Try to spend the coinbase
@@ -351,7 +351,7 @@ describe('MockServices end-to-end', () => {
     const utxos = await services.storage
       .knex('mockchain_utxos')
       .where({ isCoinbase: true, blockHeight: 0, spentByTxid: null })
-    expect(utxos.length).toBe(1)
+    expect(utxos).toHaveLength(1)
     const coinbaseUtxo = utxos[0]
 
     // Get the source transaction
@@ -463,7 +463,7 @@ describe('MockServices end-to-end', () => {
 
   test('getHeaderForHeight', async () => {
     const header = await services.getHeaderForHeight(0)
-    expect(header.length).toBe(80)
+    expect(header).toHaveLength(80)
   })
 
   test('hashToHeader', async () => {
@@ -580,7 +580,7 @@ describe('MockServices reorg', () => {
 
     // Reorg from height 101: replace with 1 new block, tx NOT in map -> returns to mempool
     const result = await services.reorg(101, 1)
-    expect(result.deactivatedHeaders.length).toBe(1)
+    expect(result.deactivatedHeaders).toHaveLength(1)
     expect(result.deactivatedHeaders[0].height).toBe(101)
 
     const txAfter = await services.storage.getTransaction(spendTxid)
@@ -612,7 +612,7 @@ describe('MockServices reorg', () => {
 
     // Reorg from height 3, create only 1 new block (shortens from 5 to 3)
     const result = await services.reorg(3, 1)
-    expect(result.deactivatedHeaders.length).toBe(3) // heights 3, 4, 5
+    expect(result.deactivatedHeaders).toHaveLength(3) // heights 3, 4, 5
     expect(result.newTip.height).toBe(3)
 
     const heightAfter = await services.getHeight()
@@ -627,7 +627,7 @@ describe('MockServices reorg', () => {
 
     // Reorg from height 3, create 3 new blocks (lengthens from 3 to 5)
     const result = await services.reorg(3, 3)
-    expect(result.deactivatedHeaders.length).toBe(1) // only height 3
+    expect(result.deactivatedHeaders).toHaveLength(1) // only height 3
     expect(result.newTip.height).toBe(5)
 
     const heightAfter = await services.getHeight()

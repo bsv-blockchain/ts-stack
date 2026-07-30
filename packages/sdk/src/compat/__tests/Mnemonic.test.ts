@@ -8,11 +8,14 @@ import { toBase58Check, toHex, toArray } from '../../primitives/utils'
 describe('Mnemonic', function () {
   it('should initialize the class', () => {
     expect(Mnemonic).toBeDefined()
-    expect(new Mnemonic()).toBeDefined()
+    const mnemonic = new Mnemonic()
+    expect(mnemonic.mnemonic).toBe('')
+    expect(mnemonic.seed).toEqual([])
+    expect(mnemonic.Wordlist).toBe(enWordList)
   })
 
   it('should have a wordlist of length 2048', () => {
-    expect(enWordList.value.length).toEqual(2048)
+    expect(enWordList.value).toHaveLength(2048)
   })
 
   it('should handle this community-derived test vector', () => {

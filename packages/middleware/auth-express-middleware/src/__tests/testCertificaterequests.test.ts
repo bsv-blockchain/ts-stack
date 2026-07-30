@@ -75,7 +75,7 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     ]
     const certs = await Promise.all(certRequests)
     expect(certs).toBeDefined()
-    expect(certs.length).toBe(1)
+    expect(certs).toHaveLength(1)
     // Add further assertions based on expected certificates
   }, 30000)
 

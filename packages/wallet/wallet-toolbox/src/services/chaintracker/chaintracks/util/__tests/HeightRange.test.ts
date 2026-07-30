@@ -3,10 +3,10 @@ import { HeightRange } from '../HeightRange'
 describe('testing HeightRange', () => {
   const hr = (a: number, b: number) => new HeightRange(a, b)
   test('length', () => {
-    expect(hr(1, 1).length).toBe(1)
-    expect(hr(1, 10).length).toBe(10)
-    expect(hr(1, 0).length).toBe(0)
-    expect(hr(1, -10).length).toBe(0)
+    expect(hr(1, 1)).toHaveLength(1)
+    expect(hr(1, 10)).toHaveLength(10)
+    expect(hr(1, 0)).toHaveLength(0)
+    expect(hr(1, -10)).toHaveLength(0)
   })
   test('copy', () => {
     expect(hr(4, 8).copy()).toEqual(hr(4, 8))

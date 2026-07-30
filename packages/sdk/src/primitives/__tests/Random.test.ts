@@ -3,8 +3,8 @@ import Random from '../../primitives/Random'
 
 describe('Random', () => {
   it('Produces random bytes of correct length', () => {
-    expect(Random(3).length).toBe(3)
-    expect(Random(10).length).toBe(10)
+    expect(Random(3)).toHaveLength(3)
+    expect(Random(10)).toHaveLength(10)
   })
   it('Does not produce the same thing every time', () => {
     // While this test may fail once every few hundred trillion years or so,
@@ -19,11 +19,11 @@ describe('Random', () => {
     })
   })
   it('Works with various lengths including edge cases', () => {
-    expect(Random(1).length).toBe(1)
-    expect(Random(16).length).toBe(16)
-    expect(Random(32).length).toBe(32)
-    expect(Random(64).length).toBe(64)
-    expect(Random(256).length).toBe(256)
+    expect(Random(1)).toHaveLength(1)
+    expect(Random(16)).toHaveLength(16)
+    expect(Random(32)).toHaveLength(32)
+    expect(Random(64)).toHaveLength(64)
+    expect(Random(256)).toHaveLength(256)
   })
   it('Returns an array of numbers', () => {
     const bytes = Random(10)

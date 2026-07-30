@@ -182,14 +182,14 @@
       "name": "@bsv/wallet-relay",
       "publishedVersion": "0.2.2",
       "releaseType": "minor",
-      "summary": "Adds the strict package and artifact contract and strengthens relay runtime, declaration consistency, native QR accessibility, and CLI control flow.",
+      "summary": "Adds the strict package and artifact contract, strengthens relay runtime, declaration consistency, native QR accessibility, and CLI control flow, and distinguishes generated consumer customization markers from unfinished library work.",
       "migration": "QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers."
     },
     {
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, explicit manual-suite governance, and safe operator/example tooling across wallet, monitor, provider, action-batch, storage, proof, and Chaintracks paths.",
+      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, explicit manual-suite governance, safe operator/example tooling, and redacted diagnostic summaries across wallet, monitor, provider, action-batch, storage, proof, and Chaintracks paths.",
       "migration": "No consumer migration is required; persisted schemas, provider behavior, transaction construction, monitor behavior, and the 2.x wallet and storage interfaces remain compatible."
     },
     {

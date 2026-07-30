@@ -53,7 +53,7 @@ describe('listActions tests', () => {
         }
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBe(191)
-        expect(r.actions.length).toBe(10)
+        expect(r.actions).toHaveLength(10)
         let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
@@ -74,7 +74,7 @@ describe('listActions tests', () => {
         }
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBe(0)
-        expect(r.actions.length).toBe(0)
+        expect(r.actions).toHaveLength(0)
       }
     }
   })
@@ -88,7 +88,7 @@ describe('listActions tests', () => {
         }
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
-        expect(r.actions.length).toBe(args.limit || 10)
+        expect(r.actions).toHaveLength(args.limit || 10)
         let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
@@ -109,7 +109,7 @@ describe('listActions tests', () => {
         }
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
-        expect(r.actions.length).toBe(args.limit || 10)
+        expect(r.actions).toHaveLength(args.limit || 10)
         let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
@@ -132,7 +132,7 @@ describe('listActions tests', () => {
         }
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
-        expect(r.actions.length).toBe(args.limit || 10)
+        expect(r.actions).toHaveLength(args.limit || 10)
         let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
@@ -171,7 +171,7 @@ describe('listActions tests', () => {
         }
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
-        expect(r.actions.length).toBe(args.limit || 10)
+        expect(r.actions).toHaveLength(args.limit || 10)
         let _i = 0
         for (const a of r.actions) {
           expect(a.isOutgoing === true || a.isOutgoing === false).toBe(true)

@@ -260,7 +260,7 @@ describe('Output class method tests', () => {
     const updatedRecord = await ctx.activeStorage.findOutputs({
       partial: { outputId: 701 }
     })
-    expect(updatedRecord.length).toBe(1)
+    expect(updatedRecord).toHaveLength(1)
     expect(updatedRecord[0]).toBeDefined()
     expect(updatedRecord[0].spendable).toBe(false)
     expect(updatedRecord[0].type).toBe('p2sh')
@@ -336,7 +336,7 @@ describe('Output class method tests', () => {
     const unchangedRecord = await ctx.activeStorage.findOutputs({
       partial: { outputId: 702 }
     })
-    expect(unchangedRecord.length).toBe(1)
+    expect(unchangedRecord).toHaveLength(1)
     expect(unchangedRecord[0].spendable).toBe(true)
   })
 

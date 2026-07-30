@@ -57,13 +57,11 @@ export async function createSetup(chain: sdk.Chain, options: LocalWalletTestOpti
   if (options.useTestIdentityKey) {
     identityKey = env.testIdentityKey
     filePath = env.testFilePath
+  } else if (options.useIdentityKey2) {
+    identityKey = env.identityKey2
   } else {
-    if (options.useIdentityKey2) {
-      identityKey = env.identityKey2
-    } else {
-      identityKey = env.identityKey
-      filePath = env.filePath
-    }
+    identityKey = env.identityKey
+    filePath = env.filePath
   }
   if (!identityKey) throw new sdk.WERR_INVALID_PARAMETER('identityKey', 'valid')
   if (!filePath) filePath = `./backup-${chain}-${identityKey}.sqlite`
@@ -169,7 +167,7 @@ export async function createOneSatTestOutput(
         noSendChange
       }
     }
-    vargs = Validation.validateCreateActionArgs(args)
+    Validation.validateCreateActionArgs(args)
     car = await setup.wallet.createAction(args)
     expect(car.txid).toMatch(/^[0-9a-f]{64}$/)
     txids.push(car.txid!)
@@ -285,7 +283,7 @@ export async function trackReqByTxid(setup: LocalTestWalletSetup, txid: string):
 
   let newBlocks = 0
   let lastHeight: number | undefined
-  for (; req.status !== 'completed';) {
+  while (req.status !== 'completed') {
     const height = setup.monitor.lastNewHeader?.height
     newBlocks = await observeUnminedProgress(req, height, lastHeight, newBlocks)
 

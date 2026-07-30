@@ -75,7 +75,7 @@ describe('OutputTag class method tests', () => {
     const updatedRecord = await ctx.activeStorage.findOutputTags({
       partial: { outputTagId: 401 }
     })
-    expect(updatedRecord.length).toBe(1)
+    expect(updatedRecord).toHaveLength(1)
     expect(updatedRecord[0]).toBeDefined()
     expect(updatedRecord[0].isDeleted).toBe(true)
   })
@@ -128,7 +128,7 @@ describe('OutputTag class method tests', () => {
     const record = await ctx.activeStorage.findOutputTags({
       partial: { outputTagId: 1 }
     })
-    expect(record.length).toBe(1)
+    expect(record).toHaveLength(1)
     expect(record[0].isDeleted).toBe(false)
   })
 

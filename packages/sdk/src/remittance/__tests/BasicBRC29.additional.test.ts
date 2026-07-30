@@ -162,81 +162,32 @@ describe('Brc29RemittanceModule – buildSettlement option validation', () => {
 // ---------------------------------------------------------------------------
 
 describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
-  it('terminates when getPublicKey returns an empty publicKey string', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '' }))
-    })
-    const module = new Brc29RemittanceModule({
-      nonceProvider: { createNonce: jest.fn().mockResolvedValue('nonce') },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
-    })
+  it.each([
+    ['an empty public key', '', '76a914abcd88ac', 'brc29.public_key_missing'],
+    ['a whitespace-only public key', '   ', 'script', 'brc29.public_key_missing'],
+    ['an empty locking script', '02deadbeef', '', 'brc29.locking_script_missing'],
+    ['a whitespace-only locking script', '02deadbeef', '   ', 'brc29.locking_script_missing']
+  ])(
+    'terminates when the wallet path returns %s',
+    async (_case, publicKey, lockingScript, expectedCode) => {
+      const wallet = makeWallet({
+        getPublicKey: jest.fn(async () => ({ publicKey }))
+      })
+      const module = new Brc29RemittanceModule({
+        nonceProvider: { createNonce: jest.fn().mockResolvedValue('nonce') },
+        lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => lockingScript) }
+      })
 
-    const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 1000, payee: 'pk' } },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('terminate')
-    if (result.action === 'terminate') {
-      expect(result.termination.code).toBe('brc29.public_key_missing')
+      const result = await module.buildSettlement(
+        { threadId: 'tid', option: { amountSatoshis: 1000, payee: 'pk' } },
+        makeContext(wallet)
+      )
+      expect(result.action).toBe('terminate')
+      if (result.action === 'terminate') {
+        expect(result.termination.code).toBe(expectedCode)
+      }
     }
-  })
-
-  it('terminates when getPublicKey returns a whitespace-only publicKey', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '   ' }))
-    })
-    const module = new Brc29RemittanceModule({
-      nonceProvider: { createNonce: jest.fn().mockResolvedValue('nonce') },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => 'script') }
-    })
-
-    const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 1000, payee: 'pk' } },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('terminate')
-    if (result.action === 'terminate') {
-      expect(result.termination.code).toBe('brc29.public_key_missing')
-    }
-  })
-
-  it('terminates when lockingScriptProvider returns an empty string', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' }))
-    })
-    const module = new Brc29RemittanceModule({
-      nonceProvider: { createNonce: jest.fn().mockResolvedValue('nonce') },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '') }
-    })
-
-    const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 1000, payee: 'pk' } },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('terminate')
-    if (result.action === 'terminate') {
-      expect(result.termination.code).toBe('brc29.locking_script_missing')
-    }
-  })
-
-  it('terminates when lockingScriptProvider returns a whitespace-only string', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' }))
-    })
-    const module = new Brc29RemittanceModule({
-      nonceProvider: { createNonce: jest.fn().mockResolvedValue('nonce') },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '   ') }
-    })
-
-    const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 1000, payee: 'pk' } },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('terminate')
-    if (result.action === 'terminate') {
-      expect(result.termination.code).toBe('brc29.locking_script_missing')
-    }
-  })
+  )
 
   it('settles successfully when createAction returns signableTransaction.tx instead of direct tx', async () => {
     const wallet = makeWallet({

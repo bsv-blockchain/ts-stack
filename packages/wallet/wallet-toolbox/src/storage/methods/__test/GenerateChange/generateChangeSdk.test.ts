@@ -1010,7 +1010,7 @@ describe('generateChange tests', () => {
     // Must not exceed the cap regardless of how large targetNetCount is
     expect(r.changeOutputs.length).toBeLessThanOrEqual(maxChangeOutputsPerTransaction)
     // Should be exactly the cap since we have plenty of funds
-    expect(r.changeOutputs.length).toBe(maxChangeOutputsPerTransaction)
+    expect(r.changeOutputs).toHaveLength(maxChangeOutputsPerTransaction)
     // Sanity: transaction must balance
     expectTransactionSize(params, r)
   })

@@ -19,7 +19,6 @@ describe('toOriginHeader()', () => {
     ['localhost:3000', 'http://localhost:3321', 'http://localhost:3000'],
     ['example.com', 'https://api.example.com', 'https://example.com'],
     ['https://example.com:8443', 'http://localhost:3321', 'https://example.com:8443']
-    // ["metanet://somehost", "http://localhost:3321", "metanet://somehost"], // TODO: Consider adding support in the future
   ]
 
   it.each(vectors)('originator=%p, baseUrl=%p → %p', (originator, baseUrl, expected) => {

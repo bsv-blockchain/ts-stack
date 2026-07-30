@@ -675,7 +675,7 @@ describe('AuthFetch.normalizeBodyToNumberArray (private)', () => {
 
   it('converts a string to a number array', async () => {
     const result = await (authFetch as any).normalizeBodyToNumberArray('abc')
-    expect(result.length).toBe(3)
+    expect(result).toHaveLength(3)
   })
 
   it('preserves a number[] as binary bytes', async () => {

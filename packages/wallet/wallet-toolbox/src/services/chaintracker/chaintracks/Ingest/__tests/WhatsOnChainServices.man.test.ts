@@ -27,12 +27,12 @@ describe('WhatsOnChainServices tests', () => {
 
   test('getHeaderByHash', async () => {
     const header = await woc.getHeaderByHash('000000000000000001b3e99847d57ff3e0bfc4222cea5c29f10bf24387a250a2')
-    expect(header?.height === 781348).toBe(true)
+    expect(header?.height).toBe(true)
   })
 
   test('getChainTipHeight', async () => {
     const height = await woc.getChainTipHeight()
-    expect(height > 600000).toBe(true)
+    expect(height).toBeGreaterThan(true)
   })
 
   const stopOldListenersToken: StopListenerToken = { stop: undefined }
@@ -43,7 +43,7 @@ describe('WhatsOnChainServices tests', () => {
   test.skip('0 listenForOldBlockHeaders', async () => {
     // The service this depends on appears to be deprecated...
     const height = await woc.getChainTipHeight()
-    expect(height > 600000).toBe(true)
+    expect(height).toBeGreaterThan(true)
 
     const headersOld: BlockHeader[] = []
     const errorsOld: Array<{ code: number; message: string }> = []
@@ -59,8 +59,8 @@ describe('WhatsOnChainServices tests', () => {
       chain
     )
     expect(okOld).toBe(true)
-    expect(errorsOld.length).toBe(0)
-    expect(headersOld.length >= 4).toBe(true)
+    expect(errorsOld).toHaveLength(0)
+    expect(headersOld.length).toBeGreaterThanOrEqual(true)
   })
 
   const stopNewListenersToken: StopListenerToken = { stop: undefined }
@@ -68,7 +68,7 @@ describe('WhatsOnChainServices tests', () => {
   test.skip('1 listenForNewBlockHeaders', async () => {
     // The service this depends on appears to be deprecated...
     const height = await woc.getChainTipHeight()
-    expect(height > 600000).toBe(true)
+    expect(height).toBeGreaterThan(true)
 
     // Comment out this line to just wait for next new header...
     // setTimeout(() => woc.stopNewListener(), 5000)
@@ -84,7 +84,7 @@ describe('WhatsOnChainServices tests', () => {
     }
     const okNew = await WocHeadersLiveListener(eh, errh, stopNewListenersToken, chain, console.log.bind(console))
     if (errorsNew.length > 0) console.log(JSON.stringify(errorsNew))
-    expect(errorsNew.length).toBe(0)
+    expect(errorsNew).toHaveLength(0)
     expect(okNew).toBe(true)
     expect(Array.isArray(headersNew)).toBe(true)
   })
@@ -133,7 +133,7 @@ describe('WhatsOnChainServices tests', () => {
     const _fetch = new ChaintracksFetch()
     const woc = new WhatsOnChainServices(WhatsOnChainServices.createWhatsOnChainServicesOptions('main'))
     const files = await woc.getHeaderByteFileLinks(new HeightRange(907123, 911000))
-    expect(files.length).toBe(3)
+    expect(files).toHaveLength(3)
     expect(files[0].range.minHeight).toBe(906001)
     expect(files[0].range.maxHeight).toBe(908000)
     expect(files[1].range.minHeight).toBe(908001)

@@ -21,7 +21,7 @@ describe('MandalaToken unlock', () => {
     spendTx.inputs[0].unlockingScript = unlockingScript
 
     // Two pushes: signature then pubkey.
-    expect(unlockingScript.chunks.length).toBe(2)
+    expect(unlockingScript.chunks).toHaveLength(2)
     expect(unlockingScript.chunks[1].data?.length).toBe(33)
     // estimateLength uses optional parameters to satisfy ScriptTemplateUnlock interface
     // while supporting no-argument calls for backward compatibility

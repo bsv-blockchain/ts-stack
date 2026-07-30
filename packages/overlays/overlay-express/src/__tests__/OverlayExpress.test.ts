@@ -678,15 +678,9 @@ describe('OverlayExpress', () => {
     it('should check Knex before configuring engine', async () => {
       const freshInstance = new OverlayExpress('Test', 'key', 'example.com')
 
-      // Note: due to initialization with empty object, ensureKnex check doesn't actually
-      // throw when knex is not properly configured. This is a known limitation.
-      // Just verify the method can be called
-      try {
-        await freshInstance.configureEngine()
-      } catch {
-        // May fail for other reasons like missing dependencies
-      }
-      expect(true).toBe(true)
+      await expect(freshInstance.configureEngine()).rejects.toThrow(
+        'You must configure your SQL database with the .configureKnex() method first!'
+      )
     })
 
     it('should configure engine with auto SHIP/SLAP', async () => {
@@ -1499,7 +1493,15 @@ describe('OverlayExpress', () => {
 
       await instance.start()
 
-      expect(mockKnex.migrate.latest).toHaveBeenCalled()
+      expect(mockKnex.migrate.latest).toHaveBeenCalledWith({
+        migrationSource: expect.any(Object)
+      })
+
+      const [{ migrationSource }] = mockKnex.migrate.latest.mock.calls[0]
+      const migrations = await migrationSource.getMigrations([])
+      expect(migrations).toEqual(instance.migrationsToRun)
+      expect(await migrationSource.getMigration(migrations[0])).toBe(migrations[0])
+      expect(migrationSource.getMigrationName({ name: 'named', up: jest.fn() })).toBe('named')
     })
 
     it('should call syncAdvertisements on start', async () => {
@@ -1632,14 +1634,6 @@ describe('OverlayExpress', () => {
       const lastUse = useSpy.mock.calls[useSpy.mock.calls.length - 1]
       expect(lastUse).toBeDefined()
       expect(typeof lastUse[0]).toBe('function')
-    })
-  })
-
-  describe('InMemoryMigrationSource', () => {
-    it('should be tested via OverlayExpress start method', () => {
-      // InMemoryMigrationSource is an internal class used by start()
-      // It's covered by the start() tests above
-      expect(true).toBe(true)
     })
   })
 })

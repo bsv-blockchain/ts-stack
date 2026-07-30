@@ -48,6 +48,7 @@ import { config } from 'dotenv'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import packageJson from '../package.json' with { type: 'json' }
 import { log } from './logger.js'
+import { createOverlayLifecycle, type OverlayLifecycle } from './lifecycle.js'
 config()
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)
@@ -171,6 +172,8 @@ type OverlayProviderConfigMethods = OverlayExpress & {
 }
 
 // Hi there! Let's configure Overlay Express!
+let overlayLifecycle: OverlayLifecycle | undefined
+
 const main = async () => {
   // Validate required configuration up front so misconfiguration fails fast.
   const NODE_NAME = requireEnv('NODE_NAME')
@@ -205,6 +208,7 @@ const main = async () => {
     // Provide an adminToken to enable the admin API
     ADMIN_TOKEN
   )
+  overlayLifecycle = createOverlayLifecycle(server)
   const providerServer = server as OverlayProviderConfigMethods
   server.configureLogger(overlayLogger as unknown as typeof console)
 
@@ -430,6 +434,25 @@ const main = async () => {
 }
 
 // Happy hacking :)
+let shutdownPromise: Promise<void> | undefined
+const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+  shutdownPromise ??= (async () => {
+    log.info({ operation: 'shutdown', signal }, 'overlay-server shutdown started')
+    await overlayLifecycle?.close()
+    log.info({ operation: 'shutdown', outcome: 'ok', signal }, 'overlay-server shutdown complete')
+  })().catch(error => {
+    process.exitCode = 1
+    log.error(
+      { operation: 'shutdown', outcome: 'error', signal, err: error },
+      'overlay-server shutdown failed'
+    )
+  })
+  return shutdownPromise
+}
+
+process.once('SIGTERM', () => void shutdown('SIGTERM'))
+process.once('SIGINT', () => void shutdown('SIGINT'))
+
 // Wrap startup in a span so a slow/failed boot is visible in traces, and emit
 // structured ready/fatal events with timing.
 tracer.startActiveSpan('overlay.bootstrap', async span => {
@@ -448,6 +471,7 @@ tracer.startActiveSpan('overlay.bootstrap', async span => {
       { operation: 'bootstrap', outcome: 'error', duration_ms, err },
       'overlay-server failed to start'
     )
+    await overlayLifecycle?.close()
     process.exitCode = 1
   } finally {
     span.end()

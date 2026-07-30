@@ -1,14 +1,12 @@
 {
   "name": "chaintracks-server",
-  "version": "1.0.12",
+  "version": "1.0.13",
+  "overrides": {
+    "gaxios": "7.3.0"
+  },
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
-  },
-  "overrides": {
-    "brace-expansion": "5.0.8",
-    "gaxios": "7.3.0",
-    "uuid": "11.1.1"
   },
   "description": "TypeScript Express server wrapping ChaintracksService from @bsv/wallet-toolbox",
   "main": "dist/server.js",

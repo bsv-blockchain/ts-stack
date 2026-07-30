@@ -1,9 +1,10 @@
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 
-const sdkRoot = process.env.SDK_DIST_ROOT == null
-  ? new URL('../dist/esm/src/', import.meta.url)
-  : pathToFileURL(`${process.env.SDK_DIST_ROOT.replace(/\/$/, '')}/`)
+const sdkRoot =
+  process.env.SDK_DIST_ROOT == null
+    ? new URL('../dist/esm/src/', import.meta.url)
+    : pathToFileURL(`${process.env.SDK_DIST_ROOT.replace(/\/$/, '')}/`)
 const [
   { default: Beef },
   { default: MerklePath },
@@ -25,12 +26,12 @@ const scriptBytes = Number.parseInt(process.env.SCRIPT_BYTES ?? '2048', 10)
 const wideInputs = Number.parseInt(process.env.WIDE_INPUTS ?? '100', 10)
 const samples = Number.parseInt(process.env.BENCH_SAMPLES ?? '7', 10)
 
-function median (values) {
+function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-async function measure (name, fn, count = samples) {
+async function measure(name, fn, count = samples) {
   const values = []
   let error
   for (let i = 0; i < count; i++) {
@@ -43,26 +44,34 @@ async function measure (name, fn, count = samples) {
       break
     }
   }
-  const result = error == null
-    ? { medianMs: median(values), minMs: Math.min(...values), maxMs: Math.max(...values), samples: values.length }
-    : { error }
+  const result =
+    error == null
+      ? {
+          medianMs: median(values),
+          minMs: Math.min(...values),
+          maxMs: Math.max(...values),
+          samples: values.length
+        }
+      : { error }
   console.log(`${name}: ${JSON.stringify(result)}`)
   return result
 }
 
-function makeAnchor (lockingScript, satoshis, payloadScript) {
+function makeAnchor(lockingScript, satoshis, payloadScript) {
   const tx = new Transaction()
   tx.addOutput({ lockingScript, satoshis })
   if (payloadScript != null) tx.addOutput({ lockingScript: payloadScript, satoshis: 0 })
   const txid = tx.id('hex')
-  tx.merklePath = new MerklePath(1, [[
-    { offset: 0, hash: txid, txid: true },
-    { offset: 1, hash: 'ab'.repeat(32) }
-  ]])
+  tx.merklePath = new MerklePath(1, [
+    [
+      { offset: 0, hash: txid, txid: true },
+      { offset: 1, hash: 'ab'.repeat(32) }
+    ]
+  ])
   return tx
 }
 
-function makeLargeChain () {
+function makeLargeChain() {
   const payload = new Uint8Array(scriptBytes)
   payload.fill(0x51)
   const payloadScript = Script.fromBinary(payload)
@@ -83,7 +92,7 @@ function makeLargeChain () {
   return tx
 }
 
-async function makeWideTransaction () {
+async function makeWideTransaction() {
   const privateKey = new PrivateKey(1)
   const p2pkh = new P2PKH()
   const lockingScript = p2pkh.lock(privateKey.toPublicKey().toHash())
@@ -102,13 +111,17 @@ async function makeWideTransaction () {
   return tx
 }
 
-async function run () {
+async function run() {
   console.log(JSON.stringify({ chainDepth, scriptBytes, wideInputs, node: process.version }))
   const chain = makeLargeChain()
   let atomic
-  await measure('large-chain cold atomic serialize', () => {
-    atomic = chain.toAtomicBEEFUint8Array()
-  }, 1)
+  await measure(
+    'large-chain cold atomic serialize',
+    () => {
+      atomic = chain.toAtomicBEEFUint8Array()
+    },
+    1
+  )
   if (atomic == null) return
   console.log(`atomic bytes: ${atomic.length}`)
 
@@ -130,7 +143,9 @@ async function run () {
   await measure('wide P2PKH verify', async () => await wide.verify('scripts only'), 3)
 }
 
-run().catch(error => {
+try {
+  await run()
+} catch (error) {
   console.error(error)
   process.exitCode = 1
-})
+}

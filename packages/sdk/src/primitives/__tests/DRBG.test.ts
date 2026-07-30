@@ -24,7 +24,7 @@ describe('DRBG', () => {
         const out2 = drbg2.generate(expectedByteLen)
 
         expect(out1).toEqual(out2)
-        expect(out1.length).toBe(opt.expected.length)
+        expect(out1).toHaveLength(opt.expected.length)
       })
     })
   })
@@ -123,8 +123,8 @@ describe('DRBG', () => {
       const out16 = drbg.generate(16)
       const out32 = drbg.generate(32)
 
-      expect(out16.length).toBe(16 * 2)
-      expect(out32.length).toBe(32 * 2)
+      expect(out16).toHaveLength(16 * 2)
+      expect(out32).toHaveLength(32 * 2)
     })
 
     it('advances internal state between generate calls', () => {

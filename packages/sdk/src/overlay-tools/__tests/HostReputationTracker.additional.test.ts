@@ -181,35 +181,14 @@ describe('HostReputationTracker – additional coverage', () => {
     })
 
     // Immediate backoff triggers (ERR_NAME_NOT_RESOLVED, ENOTFOUND, etc.)
-    it('immediately escalates consecutiveFailures for ERR_NAME_NOT_RESOLVED', () => {
+    it.each([
+      'ERR_NAME_NOT_RESOLVED: dns error',
+      'ENOTFOUND host.invalid',
+      'getaddrinfo ENOTFOUND',
+      'Failed to fetch'
+    ])('immediately escalates consecutiveFailures for %s', reason => {
       const t = new HostReputationTracker()
-      // First failure with DNS error should skip grace period
-      t.recordFailure('https://host.com', 'ERR_NAME_NOT_RESOLVED: dns error')
-      const snap = t.snapshot('https://host.com')!
-      // consecutiveFailures should be >= FAILURE_BACKOFF_GRACE + 1 = 3
-      expect(snap.consecutiveFailures).toBeGreaterThanOrEqual(3)
-      expect(snap.backoffUntil).toBeGreaterThan(0)
-    })
-
-    it('immediately escalates consecutiveFailures for ENOTFOUND', () => {
-      const t = new HostReputationTracker()
-      t.recordFailure('https://host.com', 'ENOTFOUND host.invalid')
-      const snap = t.snapshot('https://host.com')!
-      expect(snap.consecutiveFailures).toBeGreaterThanOrEqual(3)
-      expect(snap.backoffUntil).toBeGreaterThan(0)
-    })
-
-    it('immediately escalates consecutiveFailures for getaddrinfo errors', () => {
-      const t = new HostReputationTracker()
-      t.recordFailure('https://host.com', 'getaddrinfo ENOTFOUND')
-      const snap = t.snapshot('https://host.com')!
-      expect(snap.consecutiveFailures).toBeGreaterThanOrEqual(3)
-      expect(snap.backoffUntil).toBeGreaterThan(0)
-    })
-
-    it('immediately escalates consecutiveFailures for "Failed to fetch"', () => {
-      const t = new HostReputationTracker()
-      t.recordFailure('https://host.com', 'Failed to fetch')
+      t.recordFailure('https://host.com', reason)
       const snap = t.snapshot('https://host.com')!
       expect(snap.consecutiveFailures).toBeGreaterThanOrEqual(3)
       expect(snap.backoffUntil).toBeGreaterThan(0)
@@ -380,23 +359,13 @@ describe('HostReputationTracker – additional coverage', () => {
       expect(snap!.totalFailures).toBe(1)
     })
 
-    it('handles corrupt JSON in storage gracefully', () => {
-      const kv = makeStore({ bsvsdk_overlay_host_reputation_v1: 'not-json{' })
-      expect(() => new HostReputationTracker(kv)).not.toThrow()
-    })
-
-    it('handles non-object JSON in storage gracefully', () => {
-      const kv = makeStore({ bsvsdk_overlay_host_reputation_v1: '"just a string"' })
-      expect(() => new HostReputationTracker(kv)).not.toThrow()
-    })
-
-    it('handles null JSON value in storage gracefully', () => {
-      const kv = makeStore({ bsvsdk_overlay_host_reputation_v1: 'null' })
-      expect(() => new HostReputationTracker(kv)).not.toThrow()
-    })
-
-    it('handles empty string storage gracefully (no-op)', () => {
-      const kv = makeStore({ bsvsdk_overlay_host_reputation_v1: '' })
+    it.each([
+      ['corrupt JSON', 'not-json{'],
+      ['non-object JSON', '"just a string"'],
+      ['a null JSON value', 'null'],
+      ['an empty string', '']
+    ])('handles %s in storage gracefully', (_case, storedValue) => {
+      const kv = makeStore({ bsvsdk_overlay_host_reputation_v1: storedValue })
       expect(() => new HostReputationTracker(kv)).not.toThrow()
     })
 

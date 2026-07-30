@@ -36,13 +36,13 @@ const MockedUtils = Utils as jest.Mocked<typeof Utils>
  */
 const expectedFieldCount = Object.keys(kvProtocol).length // 6
 
-function makeMockTransaction (outputs: Array<{ lockingScript?: any } | null>): Transaction {
+function makeMockTransaction(outputs: Array<{ lockingScript?: any } | null>): Transaction {
   return {
     outputs
   } as unknown as Transaction
 }
 
-function makeFieldArray (
+function makeFieldArray(
   protocolID: string,
   key: string,
   value: string,
@@ -68,7 +68,10 @@ function makeFieldArray (
 
 import { SecurityLevel, WalletProtocol } from '../../wallet/Wallet.interfaces'
 
-function makeCtx (key: string, protocolID: WalletProtocol = [2 as SecurityLevel, 'kvstore']): KVContext {
+function makeCtx(
+  key: string,
+  protocolID: WalletProtocol = [2 as SecurityLevel, 'kvstore']
+): KVContext {
   return { key, protocolID }
 }
 
@@ -124,13 +127,19 @@ describe('kvStoreInterpreter', () => {
 
     it('returns undefined when ctx.key is null', async () => {
       const tx = makeMockTransaction([{ lockingScript: {} }])
-      const result = await kvStoreInterpreter(tx, 0, { key: null as any, protocolID: testProtocolID })
+      const result = await kvStoreInterpreter(tx, 0, {
+        key: null as any,
+        protocolID: testProtocolID
+      })
       expect(result).toBeUndefined()
     })
 
     it('returns undefined when ctx.key is undefined', async () => {
       const tx = makeMockTransaction([{ lockingScript: {} }])
-      const result = await kvStoreInterpreter(tx, 0, { key: undefined as any, protocolID: testProtocolID })
+      const result = await kvStoreInterpreter(tx, 0, {
+        key: undefined as any,
+        protocolID: testProtocolID
+      })
       expect(result).toBeUndefined()
     })
   })
@@ -224,7 +233,7 @@ describe('kvStoreInterpreter', () => {
   describe('returns decoded value string for matching outputs', () => {
     it('returns value for new format (expectedFieldCount fields) matching key and protocolID', async () => {
       const newFormatFields = makeFieldArray(protocolIDStr, testKey, testValue, 'controller', true)
-      expect(newFormatFields.length).toBe(expectedFieldCount)
+      expect(newFormatFields).toHaveLength(expectedFieldCount)
 
       MockedPushDropDecode.mockReturnValue({ fields: newFormatFields })
       MockedUtils.toUTF8
@@ -241,7 +250,7 @@ describe('kvStoreInterpreter', () => {
 
     it('returns value for old format (expectedFieldCount - 1 fields) matching key and protocolID', async () => {
       const oldFormatFields = makeFieldArray(protocolIDStr, testKey, testValue, 'controller', false)
-      expect(oldFormatFields.length).toBe(expectedFieldCount - 1)
+      expect(oldFormatFields).toHaveLength(expectedFieldCount - 1)
 
       MockedPushDropDecode.mockReturnValue({ fields: oldFormatFields })
       MockedUtils.toUTF8
@@ -321,7 +330,7 @@ describe('kvStoreInterpreter', () => {
       expect(kvProtocol.controller).toBe(3)
       expect(kvProtocol.tags).toBe(4)
       expect(kvProtocol.signature).toBe(5)
-      expect(Object.keys(kvProtocol).length).toBe(6)
+      expect(Object.keys(kvProtocol)).toHaveLength(6)
     })
   })
 })

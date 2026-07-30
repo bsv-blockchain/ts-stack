@@ -114,7 +114,7 @@ describe('EntropyCollector', () => {
       const entropy = collector.generateEntropy()
 
       expect(entropy).toBeInstanceOf(Uint8Array)
-      expect(entropy.length).toBe(32)
+      expect(entropy).toHaveLength(32)
     })
 
     it('should generate entropy even with insufficient samples (with warning)', () => {
@@ -129,7 +129,7 @@ describe('EntropyCollector', () => {
 
       const entropy = collector.generateEntropy()
 
-      expect(entropy.length).toBe(32)
+      expect(entropy).toHaveLength(32)
       expect(consoleSpy).toHaveBeenCalled()
 
       consoleSpy.mockRestore()

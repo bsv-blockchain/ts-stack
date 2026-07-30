@@ -44,7 +44,7 @@ function buildTxWithInput(outputScripts: LockingScript[]): Transaction {
 function buildDesktopIntegrityScript(): LockingScript {
   return new LockingScript([
     { op: 0x00 }, // OP_FALSE
-    { op: 0x6a }  // OP_RETURN
+    { op: 0x6a } // OP_RETURN
   ])
 }
 
@@ -69,46 +69,19 @@ describe('DesktopIntegrityTopicManager', () => {
   })
 
   it('admits multiple valid OP_FALSE OP_RETURN outputs in one transaction', async () => {
-    const tx = buildTxWithInput([
-      buildDesktopIntegrityScript(),
-      buildDesktopIntegrityScript()
-    ])
+    const tx = buildTxWithInput([buildDesktopIntegrityScript(), buildDesktopIntegrityScript()])
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(result.outputsToAdmit).toContain(0)
     expect(result.outputsToAdmit).toContain(1)
   })
 
-  it('rejects a script with wrong first opcode (not OP_FALSE)', async () => {
-    // OP_1 (0x51) + OP_RETURN — wrong first opcode
-    const badScript = new LockingScript([
-      { op: 0x51 }, // OP_1
-      { op: 0x6a }  // OP_RETURN
-    ])
-    const tx = buildTxWithInput([badScript])
-
-    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
-    expect(result.outputsToAdmit).toEqual([])
-  })
-
-  it('rejects a script with wrong second opcode (not OP_RETURN)', async () => {
-    // OP_FALSE + OP_EQUAL — wrong second opcode
-    const badScript = new LockingScript([
-      { op: 0x00 }, // OP_FALSE
-      { op: 0x87 }  // OP_EQUAL (wrong)
-    ])
-    const tx = buildTxWithInput([badScript])
-
-    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
-    expect(result.outputsToAdmit).toEqual([])
-  })
-
-  it('rejects a script where the second opcode is not OP_RETURN (uses OP_DROP instead)', async () => {
-    // OP_FALSE + OP_DROP (0x75) — second opcode is not OP_RETURN
-    const badScript = new LockingScript([
-      { op: 0x00 }, // OP_FALSE
-      { op: 0x75 }  // OP_DROP (wrong)
-    ])
+  it.each([
+    ['OP_1 instead of OP_FALSE', 0x51, 0x6a],
+    ['OP_EQUAL instead of OP_RETURN', 0x00, 0x87],
+    ['OP_DROP instead of OP_RETURN', 0x00, 0x75]
+  ])('rejects a script with %s', async (_case, firstOpcode, secondOpcode) => {
+    const badScript = new LockingScript([{ op: firstOpcode }, { op: secondOpcode }])
     const tx = buildTxWithInput([badScript])
 
     const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
@@ -128,11 +101,11 @@ describe('DesktopIntegrityTopicManager', () => {
   it('rejects a P2PKH script', async () => {
     const pubkeyHash = Array.from({ length: 20 }, () => 0xab)
     const badScript = new LockingScript([
-      { op: 0x76 },                           // OP_DUP
-      { op: 0xa9 },                           // OP_HASH160
-      { op: 20, data: pubkeyHash },           // <20-byte hash>
-      { op: 0x88 },                           // OP_EQUALVERIFY
-      { op: 0xac }                            // OP_CHECKSIG
+      { op: 0x76 }, // OP_DUP
+      { op: 0xa9 }, // OP_HASH160
+      { op: 20, data: pubkeyHash }, // <20-byte hash>
+      { op: 0x88 }, // OP_EQUALVERIFY
+      { op: 0xac } // OP_CHECKSIG
     ])
     const tx = buildTxWithInput([badScript])
 

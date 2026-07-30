@@ -517,48 +517,12 @@
       "reviewBy": "2026-08-26"
     },
     {
-      "path": "packages/wallet/wallet-toolbox/src/storage/methods/__test/offsetKey.test.ts",
-      "title": "4_redeemServiceCharges",
-      "classification": "environment-dependent",
-      "owner": "ts-stack-maintainers",
-      "reason": "The redemption scenario depends on a funded mainnet commission identity, live proof services, and operator-controlled storage state.",
-      "removeWhen": "Replace the live funded context with deterministic commission, proof, and redemption fixtures.",
-      "reviewBy": "2026-08-26"
-    },
-    {
-      "path": "packages/wallet/wallet-toolbox/src/storage/methods/__test/offsetKey.test.ts",
-      "title": "4a_redeemServiceCharges optimized",
-      "classification": "environment-dependent",
-      "owner": "ts-stack-maintainers",
-      "reason": "The optimized redemption comparison uses a funded mainnet commission identity and database records that are not available in deterministic CI.",
-      "removeWhen": "Build an isolated database fixture that exercises both redemption queries against the same deterministic commission set.",
-      "reviewBy": "2026-08-26"
-    },
-    {
       "path": "packages/wallet/wallet-toolbox/src/storage/__test/StorageIdb.test.ts",
       "title": "1",
       "classification": "known-defect",
       "owner": "ts-stack-maintainers",
       "reason": "The IndexedDB wallet scenario passes alone but leaves a handle open when run with the complete Jest suite.",
       "removeWhen": "Identify and close the leaked handle, give the scenario a behavioral name, and enable it in the required suite.",
-      "reviewBy": "2026-08-26"
-    },
-    {
-      "path": "packages/wallet/wallet-toolbox/src/storage/__test/getBeefForTransaction.test.ts",
-      "title": "1 obtain atomic beef hex for txid",
-      "classification": "environment-dependent",
-      "owner": "ts-stack-maintainers",
-      "reason": "The diagnostic fetches one hard-coded mainnet transaction through live chain and storage providers and prints the resulting atomic BEEF.",
-      "removeWhen": "Commit a deterministic transaction/proof fixture and assert the exact atomic BEEF rather than consulting the live network.",
-      "reviewBy": "2026-08-26"
-    },
-    {
-      "path": "packages/wallet/wallet-toolbox/src/storage/__test/WalletStorageManager.test.ts",
-      "title": "2_TODOTONE - AtomicBEEF error",
-      "classification": "known-defect",
-      "owner": "ts-stack-maintainers",
-      "reason": "The seven-writer concurrency scenario still exposes an AtomicBEEF merge error and has not been reduced to a deterministic minimal fixture.",
-      "removeWhen": "Fix the AtomicBEEF merge race, replace the TODO title, and enable the concurrent storage regression.",
       "reviewBy": "2026-08-26"
     }
   ],

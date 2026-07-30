@@ -1,0 +1,146 @@
+name: Container runtime contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/container-runtime-contract.yml'
+      - 'governance/container-images.json'
+      - 'governance/service-operations.json'
+      - 'infra/**'
+      - 'packages/wallet/wallet-toolbox/**'
+      - 'scripts/container-runtime-contract.mjs'
+      - 'scripts/container-runtime-contract.test.mjs'
+      - 'scripts/service-operations.mjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/container-runtime-contract.yml'
+      - 'governance/container-images.json'
+      - 'governance/service-operations.json'
+      - 'infra/**'
+      - 'packages/wallet/wallet-toolbox/**'
+      - 'scripts/container-runtime-contract.mjs'
+      - 'scripts/container-runtime-contract.test.mjs'
+      - 'scripts/service-operations.mjs'
+
+permissions: {}
+
+concurrency:
+  group: container-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: Runtime / ${{ matrix.component.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        component:
+          - name: chaintracks-server
+            path: infra/chaintracks-server
+            wallet: false
+          - name: message-box-server
+            path: infra/message-box-server
+            wallet: true
+          - name: overlay-server
+            path: infra/overlay-server
+            wallet: true
+          - name: uhrp-server-basic
+            path: infra/uhrp-server-basic
+            wallet: true
+          - name: uhrp-server-cloud-bucket
+            path: infra/uhrp-server-cloud-bucket
+            wallet: true
+          - name: wab
+            path: infra/wab
+            wallet: false
+          - name: wallet-infra
+            path: infra/wallet-infra
+            wallet: false
+    services:
+      mysql:
+        image: mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
+        env:
+          MYSQL_DATABASE: container_contract
+          MYSQL_ROOT_PASSWORD: container-contract
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping --host 127.0.0.1 --password=container-contract"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      mongo:
+        image: mongo@sha256:5351bff2b5d1563e3fa603a74b9be85ef9323e10aeb0b45cea933a93876e77fd
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.runCommand({ping:1}).ok ? 0 : 2)'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build the exact component image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ matrix.component.path }}
+          file: ${{ matrix.component.path }}/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ts-stack-${{ matrix.component.name }}:contract
+          cache-from: type=gha,scope=runtime-${{ matrix.component.name }}
+          cache-to: type=gha,mode=max,scope=runtime-${{ matrix.component.name }}
+
+      - name: Build Wallet Infrastructure dependency from the same source
+        if: matrix.component.wallet
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: infra/wallet-infra
+          file: infra/wallet-infra/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ts-stack-wallet-infra:contract-dependency
+          cache-from: type=gha,scope=runtime-wallet-infra
+
+      - name: Exercise the complete runtime contract
+        run: >-
+          node scripts/container-runtime-contract.mjs
+          --component "${{ matrix.component.name }}"
+          --image "ts-stack-${{ matrix.component.name }}:contract"
+          ${{ matrix.component.wallet && '--wallet-image ts-stack-wallet-infra:contract-dependency' || '' }}
+
+      - name: Preserve container logs on failure
+        if: failure()
+        run: |
+          mkdir -p container-contract-logs
+          for container in $(docker ps --all --format '{{.Names}}' --filter name=contract-); do
+            docker logs "$container" > "container-contract-logs/$container.log" 2>&1 || true
+            docker inspect "$container" > "container-contract-logs/$container.inspect.json" || true
+          done
+
+      - name: Upload failed runtime evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: container-runtime-${{ matrix.component.name }}-${{ github.run_attempt }}
+          path: container-contract-logs
+          if-no-files-found: ignore
+          retention-days: 30

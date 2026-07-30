@@ -1,0 +1,97 @@
+name: Dependency and release verification
+
+on:
+  schedule:
+    - cron: '17 14 1 * *'
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Release, Infra Release]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: dependency-release-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Enforce dependency and release governance
+        run: node scripts/dependency-release-governance.mjs check
+
+      - name: Generate direct/latest dependency inventory
+        run: >-
+          node scripts/dependency-release-governance.mjs inventory
+          --output dependency-release-inventory.json
+
+      - name: Reconcile source candidates and published npm packages
+        run: >-
+          node scripts/dependency-release-governance.mjs verify-published
+          --output published-package-verification.json
+
+      - name: Install every published package tarball without lifecycle scripts
+        run: |
+          mkdir published-install
+          jq '{
+            name: "ts-stack-published-verification",
+            private: true,
+            dependencies: (
+              .packages
+              | map({key: .name, value: .publishedLatest})
+              | from_entries
+            )
+          }' published-package-verification.json > published-install/package.json
+          npm install \
+            --prefix published-install \
+            --ignore-scripts \
+            --no-audit \
+            --no-fund \
+            --package-lock=true
+
+      - name: Verify registry signatures and npm provenance
+        working-directory: published-install
+        run: npm audit signatures
+
+      - name: Verify immutable deployment images can be pulled by digest
+        run: |
+          node scripts/dependency-release-governance.mjs image-refs \
+            --output immutable-deployment-images.json
+          jq -r '.images[]' immutable-deployment-images.json |
+            while IFS= read -r image; do
+              docker pull --quiet "$image"
+            done
+
+      - name: Verify generated package, support, conformance, and version facts
+        run: pnpm docs:facts:check
+
+      - name: Record reconciliation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dependency-release-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dependency-release-inventory.json
+            published-package-verification.json
+            immutable-deployment-images.json
+            published-install/package-lock.json
+          if-no-files-found: error
+          retention-days: 90

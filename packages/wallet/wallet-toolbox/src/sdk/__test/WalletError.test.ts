@@ -42,7 +42,7 @@ describe('WalletError tests', () => {
 
       const json = WalletError.unknownToJson(werr)
       const werr2 = WalletErrorFromJson(JSON.parse(json))
-      expect(werr2 instanceof WERR_REVIEW_ACTIONS).toBe(true)
+      expect(werr2).toBeInstanceOf(WERR_REVIEW_ACTIONS)
       const werr3 = werr2 as WERR_REVIEW_ACTIONS
       expect(werr3.txid).toBe('txid123')
       expect(werr3.reviewActionResults).toEqual([

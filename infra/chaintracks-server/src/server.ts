@@ -46,7 +46,11 @@ async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
 }
 
 async function main() {
-  const chain: Chain = (process.env.CHAIN as Chain) || 'main'
+  const configuredChain = process.env.CHAIN || 'main'
+  if (configuredChain !== 'main' && configuredChain !== 'test') {
+    throw new Error('CHAIN must be "main" or "test"')
+  }
+  const chain: Chain = configuredChain
   const port = Number.parseInt(process.env.PORT || '3013', 10)
   const cdnPort = port + 1 // CDN runs on next port
   const whatsonchainApiKey = process.env.WHATSONCHAIN_API_KEY || ''

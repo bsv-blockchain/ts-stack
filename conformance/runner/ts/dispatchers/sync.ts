@@ -431,48 +431,69 @@ function isValidBRC40Request(m: Record<string, unknown>): BRC40RequestValidation
 }
 
 /** Pure structural validation of a SyncChunk message. */
+function validateSyncChunkIdentity(
+  message: Record<string, unknown>,
+  request: Record<string, unknown> | undefined
+): string | undefined {
+  if (!isNonEmptyHexPubkey(message['fromStorageIdentityKey'])) return 'fromStorageIdentityKey'
+  if (!isNonEmptyHexPubkey(message['toStorageIdentityKey'])) return 'toStorageIdentityKey'
+  if (!isNonEmptyHexPubkey(message['userIdentityKey'])) return 'userIdentityKey'
+  if (
+    request !== undefined &&
+    typeof request['identityKey'] === 'string' &&
+    request['identityKey'] !== message['userIdentityKey']
+  ) {
+    return 'ERR_BRC40_USER_MISMATCH'
+  }
+  return undefined
+}
+
+function validateSyncRows(rows: unknown[]): string | undefined {
+  for (const row of rows) {
+    if (row === null || typeof row !== 'object') return 'ERR_BRC40_NULL_ENTITY'
+    const record = row as Record<string, unknown>
+    if (typeof record['updated_at'] !== 'string' || !ISO_8601_RE.test(record['updated_at'])) {
+      return 'ERR_BRC40_MISSING_TIMESTAMP:updated_at'
+    }
+    if (typeof record['created_at'] !== 'string' || !ISO_8601_RE.test(record['created_at'])) {
+      return 'ERR_BRC40_MISSING_TIMESTAMP:created_at'
+    }
+  }
+  return undefined
+}
+
+function validateSyncEntity(
+  key: string,
+  value: unknown
+): { ok: true; isArray: boolean; isEmpty: boolean } | { ok: false; reason: string } {
+  if (key === 'user') {
+    if (value !== undefined && (typeof value !== 'object' || value === null)) {
+      return { ok: false, reason: `${key} must be object` }
+    }
+    return { ok: true, isArray: false, isEmpty: true }
+  }
+  if (!Array.isArray(value)) return { ok: false, reason: `${key} must be array` }
+  const invalidReason = validateSyncRows(value)
+  if (invalidReason !== undefined) return { ok: false, reason: invalidReason }
+  return { ok: true, isArray: true, isEmpty: value.length === 0 }
+}
+
 function isValidBRC40SyncChunk(
   m: Record<string, unknown>,
   request?: Record<string, unknown>
 ): { ok: true; allEmpty: boolean } | { ok: false; reason: string } {
-  if (!isNonEmptyHexPubkey(m['fromStorageIdentityKey']))
-    return { ok: false, reason: 'fromStorageIdentityKey' }
-  if (!isNonEmptyHexPubkey(m['toStorageIdentityKey']))
-    return { ok: false, reason: 'toStorageIdentityKey' }
-  if (!isNonEmptyHexPubkey(m['userIdentityKey'])) return { ok: false, reason: 'userIdentityKey' }
-
-  if (request !== undefined && typeof request['identityKey'] === 'string') {
-    if (request['identityKey'] !== m['userIdentityKey']) {
-      return { ok: false, reason: 'ERR_BRC40_USER_MISMATCH' }
-    }
-  }
+  const identityError = validateSyncChunkIdentity(m, request)
+  if (identityError !== undefined) return { ok: false, reason: identityError }
 
   let allPresentArraysEmpty = true
   let arrayKeyCount = 0
   for (const key of BRC40_ENTITY_KEYS) {
     if (!(key in m)) continue
-    const val = m[key]
-    if (key === 'user') {
-      if (val !== undefined && (typeof val !== 'object' || val === null)) {
-        return { ok: false, reason: `${key} must be object` }
-      }
-      continue
-    }
-    if (!Array.isArray(val)) return { ok: false, reason: `${key} must be array` }
-    arrayKeyCount++
-    if (val.length > 0) allPresentArraysEmpty = false
-    for (const row of val) {
-      if (row === null || typeof row !== 'object') {
-        return { ok: false, reason: 'ERR_BRC40_NULL_ENTITY' }
-      }
-      const r = row as Record<string, unknown>
-      if (typeof r['updated_at'] !== 'string' || !ISO_8601_RE.test(r['updated_at'])) {
-        return { ok: false, reason: 'ERR_BRC40_MISSING_TIMESTAMP:updated_at' }
-      }
-      if (typeof r['created_at'] !== 'string' || !ISO_8601_RE.test(r['created_at'])) {
-        return { ok: false, reason: 'ERR_BRC40_MISSING_TIMESTAMP:created_at' }
-      }
-    }
+    const validation = validateSyncEntity(key, m[key])
+    if (!validation.ok) return validation
+    if (!validation.isArray) continue
+    arrayKeyCount += 1
+    if (!validation.isEmpty) allPresentArraysEmpty = false
   }
   // Completion sentinel = all 12 entity arrays present AND empty
   const allEmpty = allPresentArraysEmpty && arrayKeyCount === 12
@@ -486,48 +507,48 @@ function scalarKeyPart(value: unknown): string | null {
   return null
 }
 
+const BRC40_ID_MAPPING_KEYS: Record<string, (row: Record<string, unknown>) => string | null> = {
+  provenTxs: row => (typeof row['txid'] === 'string' ? (row['txid'] as string) : null),
+  outputBaskets: row => {
+    const userId = scalarKeyPart(row['userId'])
+    return userId !== null && typeof row['name'] === 'string' ? `${userId}::${row['name']}` : null
+  }
+}
+
+function recordIdMappings(
+  entity: string,
+  getKey: (row: Record<string, unknown>) => string | null,
+  rows: unknown[],
+  seen: Record<string, Map<string, unknown>>
+): boolean {
+  seen[entity] ??= new Map<string, unknown>()
+  const surrogateField = entity === 'provenTxs' ? 'provenTxId' : 'basketId'
+  for (const row of rows) {
+    const record = row as Record<string, unknown>
+    const key = getKey(record)
+    if (key === null) continue
+    const surrogate = record[surrogateField]
+    if (!seen[entity].has(key)) {
+      seen[entity].set(key, surrogate)
+      continue
+    }
+    if (seen[entity].get(key) !== surrogate && entity === 'outputBaskets') return false
+  }
+  return true
+}
+
 /** Detect ID-mapping conflict / convergence across a sequence of SyncChunks. */
 function detectIdMappingResult(
   messages: Array<Record<string, unknown>>
 ): { ok: true } | { ok: false; reason: string } {
-  // Natural-key index per entity
-  const naturalKeyForEntity: Record<string, (row: Record<string, unknown>) => string | null> = {
-    provenTxs: r => (typeof r['txid'] === 'string' ? (r['txid'] as string) : null),
-    outputBaskets: r => {
-      const userId = scalarKeyPart(r['userId'])
-      return userId !== null && typeof r['name'] === 'string' ? `${userId}::${r['name']}` : null
-    }
-  }
-  // For each entity, track natural-key → producer-side surrogate ID seen
   const seen: Record<string, Map<string, unknown>> = {}
   for (const chunk of messages) {
     const sc = (chunk['syncChunk'] ?? chunk) as Record<string, unknown>
-    for (const [entity, getKey] of Object.entries(naturalKeyForEntity)) {
+    for (const [entity, getKey] of Object.entries(BRC40_ID_MAPPING_KEYS)) {
       const rows = sc[entity]
       if (!Array.isArray(rows)) continue
-      seen[entity] ??= new Map<string, unknown>()
-      const surrogateField = entity === 'provenTxs' ? 'provenTxId' : 'basketId'
-      for (const row of rows) {
-        const r = row as Record<string, unknown>
-        const k = getKey(r)
-        if (k === null) continue
-        const surrogate = r[surrogateField]
-        if (seen[entity].has(k)) {
-          const prior = seen[entity].get(k)
-          if (prior !== surrogate) {
-            // Same natural key → distinct surrogate. Convergence only valid if natural key
-            // identifies the same logical row; conflict if entity has user/local uniqueness
-            // constraint enforced by natural key alone. For provenTxs the natural key (txid)
-            // IS globally unique, so different surrogates → convergence (ok). For
-            // outputBaskets the natural key (userId, name) is unique per producer; different
-            // surrogates → ID-mapping conflict.
-            if (entity === 'outputBaskets') {
-              return { ok: false, reason: 'ERR_BRC40_ID_MAPPING_CONFLICT' }
-            }
-          }
-        } else {
-          seen[entity].set(k, surrogate)
-        }
+      if (!recordIdMappings(entity, getKey, rows, seen)) {
+        return { ok: false, reason: 'ERR_BRC40_ID_MAPPING_CONFLICT' }
       }
     }
   }
@@ -562,37 +583,47 @@ function mergeAction(
   return i > e ? 'update' : 'skip'
 }
 
+const BRC40_REPLAY_KEYS: Record<string, (row: Record<string, unknown>) => string | null> = {
+  transactions: row => {
+    const id = scalarKeyPart(row['transactionId'])
+    return id === null ? null : `tx::${id}`
+  },
+  outputs: row => {
+    const id = scalarKeyPart(row['outputId'])
+    return id === null ? null : `out::${id}`
+  },
+  provenTxs: row => (typeof row['txid'] === 'string' ? `ptx::${row['txid'] as string}` : null)
+}
+
+function replayEntityRows(
+  entity: string,
+  getKey: (row: Record<string, unknown>) => string | null,
+  rows: unknown[],
+  state: Record<string, Map<string, Record<string, unknown>>>
+): void {
+  state[entity] ??= new Map<string, Record<string, unknown>>()
+  for (const row of rows) {
+    const record = row as Record<string, unknown>
+    const key = getKey(record)
+    if (key === null) continue
+    const prior = state[entity].get(key)
+    if (prior === undefined || mergeAction(prior, record) === 'update') {
+      state[entity].set(key, record)
+    }
+  }
+}
+
 /** Replay an ordered chunk sequence and produce the post-merge state per natural key. */
 function replayChunks(
   messages: Array<Record<string, unknown>>
 ): Record<string, Map<string, Record<string, unknown>>> {
   const state: Record<string, Map<string, Record<string, unknown>>> = {}
-  const naturalKey: Record<string, (r: Record<string, unknown>) => string | null> = {
-    transactions: r => {
-      const id = scalarKeyPart(r['transactionId'])
-      return id === null ? null : `tx::${id}`
-    },
-    outputs: r => {
-      const id = scalarKeyPart(r['outputId'])
-      return id === null ? null : `out::${id}`
-    },
-    provenTxs: r => (typeof r['txid'] === 'string' ? `ptx::${r['txid'] as string}` : null)
-  }
   for (const chunk of messages) {
     const sc = (chunk['syncChunk'] ?? chunk) as Record<string, unknown>
-    for (const [entity, getKey] of Object.entries(naturalKey)) {
+    for (const [entity, getKey] of Object.entries(BRC40_REPLAY_KEYS)) {
       const rows = sc[entity]
       if (!Array.isArray(rows)) continue
-      state[entity] ??= new Map<string, Record<string, unknown>>()
-      for (const row of rows) {
-        const r = row as Record<string, unknown>
-        const k = getKey(r)
-        if (k === null) continue
-        const prior = state[entity].get(k)
-        if (prior === undefined || mergeAction(prior, r) === 'update') {
-          state[entity].set(k, r)
-        }
-      }
+      replayEntityRows(entity, getKey, rows, state)
     }
   }
   return state

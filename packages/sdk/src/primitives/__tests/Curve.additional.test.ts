@@ -56,7 +56,7 @@ describe('Curve – additional coverage', () => {
       const k2 = new BigNumber(11)
       const jsf = curve.getJSF(k1, k2)
       expect(Array.isArray(jsf)).toBe(true)
-      expect(jsf.length).toBe(2)
+      expect(jsf).toHaveLength(2)
       expect(Array.isArray(jsf[0])).toBe(true)
       expect(Array.isArray(jsf[1])).toBe(true)
     })
@@ -180,7 +180,7 @@ describe('Curve – additional coverage', () => {
     it('computes two roots for the curve order n', () => {
       const roots = curve._getEndoRoots(curve.n)
       expect(Array.isArray(roots)).toBe(true)
-      expect(roots.length).toBe(2)
+      expect(roots).toHaveLength(2)
       expect(BigNumber.isBN(roots[0])).toBe(true)
       expect(BigNumber.isBN(roots[1])).toBe(true)
     })
@@ -188,7 +188,7 @@ describe('Curve – additional coverage', () => {
     it('computes two roots for the curve field prime p', () => {
       const roots = curve._getEndoRoots(curve.p)
       expect(Array.isArray(roots)).toBe(true)
-      expect(roots.length).toBe(2)
+      expect(roots).toHaveLength(2)
     })
   })
 
@@ -201,7 +201,7 @@ describe('Curve – additional coverage', () => {
       if (curve.endo != null) {
         const basis = curve._getEndoBasis(curve.endo.lambda)
         expect(Array.isArray(basis)).toBe(true)
-        expect(basis.length).toBe(2)
+        expect(basis).toHaveLength(2)
         expect(basis[0]).toHaveProperty('a')
         expect(basis[0]).toHaveProperty('b')
         expect(basis[1]).toHaveProperty('a')

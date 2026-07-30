@@ -14,6 +14,10 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
     underlying = mockUnderlyingWallet()
   })
 
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
   describe('P-Label Delegation', () => {
     it('should delegate listActions through P-label modules in order and return responses in reverse order', async () => {
       const callOrder: string[] = []
@@ -142,10 +146,6 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
     })
   })
 
-  afterEach(() => {
-    jest.clearAllMocks()
-  })
-
   describe('Permission Module Registration', () => {
     it('should accept permissionModules in config', () => {
       const testModule: PermissionsModule = {
@@ -188,7 +188,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', config)
       const storedConfig = (manager as any).config as PermissionsManagerConfig
 
-      expect(Object.keys(storedConfig.permissionModules ?? {}).length).toBe(2)
+      expect(Object.keys(storedConfig.permissionModules ?? {})).toHaveLength(2)
       expect(storedConfig.permissionModules?.scheme1).toBe(module1)
       expect(storedConfig.permissionModules?.scheme2).toBe(module2)
     })

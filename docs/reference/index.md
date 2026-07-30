@@ -3,8 +3,8 @@ id: reference-overview
 title: 'Reference'
 kind: meta
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, api, index]
@@ -19,6 +19,7 @@ Quick reference material for API details and protocol indices.
 - **[BRC Standards Index](./brc-index.md)** — All BRC standards with links to implementations
 - **[Container supply chain](./container-supply-chain.md)** — Immutable images, scanning, SBOMs, signatures, attestations, verification, and rollback
 - **[Dependency and release policy](./dependency-policy.md)** — Runtime baseline, supply-chain controls, advisory handling, and release rules
+- **[Duplication governance](./duplication-governance.md)** — Reviewed consolidation boundaries, ownership, expiry, and required equivalence evidence
 - **[Generated stack facts](./stack-facts.md)** — Current source versions, runtime profiles, release routes, infrastructure manifests, and conformance totals
 - **[Licensing policy](./licensing.md)** — Uniform Open BSV License Version 6 declarations, package files, and drift controls
 - **[npm package supply chain](./npm-package-supply-chain.md)** — Pack-once candidates, SBOMs, attestations, OIDC publication, and registry verification

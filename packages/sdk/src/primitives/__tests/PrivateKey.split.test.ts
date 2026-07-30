@@ -12,10 +12,10 @@ describe('PrivateKey', () => {
     const backup = shares.toBackupFormat()
 
     // Check the number of shares
-    expect(backup.length).toBe(totalShares)
+    expect(backup).toHaveLength(totalShares)
 
     // Check that each share is a BigNumber
-    shares.points.forEach((share) => {
+    shares.points.forEach(share => {
       expect(share).toBeInstanceOf(PointInFiniteField)
     })
     expect(shares.threshold).toBe(threshold)
@@ -53,9 +53,7 @@ describe('PrivateKey', () => {
 
   it('should throw an error for invalid totalShares', () => {
     const k = PrivateKey.fromRandom()
-    expect(() => k.toKeyShares(2, -4)).toThrow(
-      'totalShares must be at least 2'
-    )
+    expect(() => k.toKeyShares(2, -4)).toThrow('totalShares must be at least 2')
   })
 
   it('should throw an error for totalShares being less than threshold', () => {
@@ -73,11 +71,7 @@ describe('PrivateKey', () => {
       'GBmoNRbsMVsLmEK5A6G28fktUNonZkn9mDrJJ58FXgsf.HDBRkzVUCtZ38ApEu36fvZtDoDSQTv3TWmbnxwwR7kto.3.2f804d43',
       '2gHebXBgPd7daZbsj6w9TPDta3vQzqvbkLtJG596rdN1.E7ZaHyyHNDCwR6qxZvKkPPWWXzFCiKQFentJtvSSH5Bi.3.2f804d43'
     ]
-    const recovery = KeyShares.fromBackupFormat([
-      backup[0],
-      backup[1],
-      backup[1]
-    ])
+    const recovery = KeyShares.fromBackupFormat([backup[0], backup[1], backup[1]])
     expect(() => PrivateKey.fromKeyShares(recovery)).toThrow(
       'Duplicate share detected, each must be unique.'
     )

@@ -59,7 +59,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
 
       // Underlying decrypt mock returns { plaintext: [42, 42] } by default
       // which would become "**" if using our ASCII interpretation
-      ;(underlying.decrypt).mockResolvedValueOnce({
+      underlying.decrypt.mockResolvedValueOnce({
         plaintext: [72, 105] // 'Hi'
       })
 
@@ -87,7 +87,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Make underlying.decrypt() throw an error to simulate failure
-      ;(underlying.decrypt).mockImplementationOnce(() => {
+      underlying.decrypt.mockImplementationOnce(() => {
         throw new Error('Decryption error')
       })
 
@@ -150,7 +150,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       //    to return the "encrypted" data that the manager gave it.
       //    But the manager doesn't store that data in the underlying wallet mock automatically.
       //    We'll just pretend that the wallet returns some data, and ensure the manager tries to decrypt it.
-      ;(underlying.listActions).mockResolvedValueOnce({
+      underlying.listActions.mockResolvedValueOnce({
         totalActions: 1,
         actions: [
           {
@@ -191,7 +191,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       const result = await (manager as any).listActions({}, 'nonadmin.com')
 
       // We should get exactly 1 action
-      expect(result.actions.length).toBe(1)
+      expect(result.actions).toHaveLength(1)
       const action = result.actions[0]
 
       // The manager is expected to have decrypted each field
@@ -239,7 +239,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       expect(underlying.encrypt).not.toHaveBeenCalled()
 
       // Simulate that the wallet actually stored them in plaintext and is returning them as-is
-      ;(underlying.listActions).mockResolvedValue({
+      underlying.listActions.mockResolvedValue({
         totalActions: 1,
         actions: [
           {
@@ -306,7 +306,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Suppose we have an output with custom instructions that was stored encrypted
-      ;(underlying.listOutputs).mockResolvedValue({
+      underlying.listOutputs.mockResolvedValue({
         totalOutputs: 1,
         outputs: [
           {
@@ -321,7 +321,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
 
       const originalInstr = 'Please do not reveal this data.'
       // We'll mock decrypt() to interpret 'fake-encrypted-instructions-string' as a success
-      ;(underlying.decrypt).mockResolvedValueOnce({
+      underlying.decrypt.mockResolvedValueOnce({
         plaintext: Array.from(originalInstr).map(ch => ch.codePointAt(0))
       })
 
@@ -332,7 +332,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
         'some-origin.com'
       )
 
-      expect(outputsResult.outputs.length).toBe(1)
+      expect(outputsResult.outputs).toHaveLength(1)
       expect(outputsResult.outputs[0].customInstructions).toBe(originalInstr)
 
       // Confirm we tried to decrypt
@@ -379,7 +379,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       manager.bindCallback('onBasketAccessRequested', x => {
         void manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       })
-      ;(underlying.listOutputs).mockResolvedValue({
+      underlying.listOutputs.mockResolvedValue({
         totalOutputs: 1,
         outputs: [
           {
@@ -393,7 +393,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Force an error from decrypt
-      ;(underlying.decrypt).mockImplementationOnce(() => {
+      underlying.decrypt.mockImplementationOnce(() => {
         throw new Error('Failed to decrypt')
       })
 
@@ -404,7 +404,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
         'some-origin.com'
       )
 
-      expect(outputsResult.outputs.length).toBe(1)
+      expect(outputsResult.outputs).toHaveLength(1)
       // Should fall back to the original 'bad-ciphertext-of-some-kind'
       expect(outputsResult.outputs[0].customInstructions).toBe('bad-ciphertext-of-some-kind')
     })

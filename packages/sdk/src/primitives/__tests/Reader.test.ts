@@ -27,9 +27,7 @@ describe('Reader', () => {
     it('should return the same buffer', () => {
       const buf = Buffer.from([0])
       const br = new Reader([...buf])
-      expect(Buffer.from(br.read()).toString('hex')).toEqual(
-        buf.toString('hex')
-      )
+      expect(Buffer.from(br.read()).toString('hex')).toEqual(buf.toString('hex'))
     })
   })
 
@@ -38,14 +36,14 @@ describe('Reader', () => {
     buf.fill(0)
     const br = new Reader([...buf])
     const buf2 = br.read(2)
-    expect(buf2.length).toEqual(2)
+    expect(buf2).toHaveLength(2)
     expect(br.eof()).toBeFalsy()
     expect(br.pos).toEqual(2)
   })
 
   it('should be able to read 0 bytes', () => {
     const buf = Buffer.from('0101', 'hex')
-    expect(new Reader([...buf]).read(0).length).toEqual(0)
+    expect(new Reader([...buf]).read(0)).toHaveLength(0)
   })
 })
 
@@ -58,7 +56,7 @@ describe('#readReverse', () => {
 
   it('should be able to read 0 bytes', () => {
     const buf = Buffer.from('0101', 'hex')
-    expect(new Reader([...buf]).readReverse(0).length).toEqual(0)
+    expect(new Reader([...buf]).readReverse(0)).toHaveLength(0)
   })
 })
 
@@ -161,9 +159,7 @@ describe('#readInt32LE', () => {
     buf.writeInt32LE(1, 0)
     const br = new Reader([...buf])
     expect(br.readInt32LE()).toEqual(1)
-    expect(
-      new Reader([...Buffer.from('ffffffff', 'hex')]).readInt32LE()
-    ).toEqual(-1)
+    expect(new Reader([...Buffer.from('ffffffff', 'hex')]).readInt32LE()).toEqual(-1)
   })
 })
 
@@ -220,28 +216,26 @@ describe('#readVarInt', () => {
   it('should read a 1 byte varInt', () => {
     const buf = Buffer.from([50])
     const br = new Reader([...buf])
-    expect(br.readVarInt().length).toEqual(1)
+    expect(br.readVarInt()).toHaveLength(1)
   })
 
   it('should read a 3 byte varInt', () => {
     const buf = Buffer.from([253, 253, 0])
     const br = new Reader([...buf])
-    expect(br.readVarInt().length).toEqual(3)
+    expect(br.readVarInt()).toHaveLength(3)
   })
 
   it('should read a 5 byte varInt', () => {
     const buf = Buffer.from([254, 0, 0, 0, 0])
     buf.writeUInt32LE(50000, 1)
     const br = new Reader([...buf])
-    expect(br.readVarInt().length).toEqual(5)
+    expect(br.readVarInt()).toHaveLength(5)
   })
 
   it('should read a 9 byte varInt', () => {
-    const buf = new Writer()
-      .writeVarIntBn(new BigNumber(Math.pow(2, 54).toString()))
-      .toArray()
+    const buf = new Writer().writeVarIntBn(new BigNumber(Math.pow(2, 54).toString())).toArray()
     const br = new Reader([...buf])
-    expect(br.readVarInt().length).toEqual(9)
+    expect(br.readVarInt()).toHaveLength(9)
   })
 })
 
@@ -266,9 +260,7 @@ describe('#readVarIntNum', () => {
   })
 
   it('should throw an error on a 9 byte varInt over the javascript uint precision limit', () => {
-    const buf = new Writer()
-      .writeVarIntBn(new BigNumber(Math.pow(2, 54).toString()))
-      .toArray()
+    const buf = new Writer().writeVarIntBn(new BigNumber(Math.pow(2, 54).toString())).toArray()
     const br = new Reader([...buf])
     expect(() => {
       br.readVarIntNum()
@@ -276,9 +268,7 @@ describe('#readVarIntNum', () => {
   })
 
   it('should not throw an error on a 9 byte varInt not over the javascript uint precision limit', () => {
-    const buf = new Writer()
-      .writeVarIntBn(new BigNumber(Math.pow(2, 53).toString()))
-      .toArray()
+    const buf = new Writer().writeVarIntBn(new BigNumber(Math.pow(2, 53).toString())).toArray()
     const br = new Reader([...buf])
     expect(() => {
       br.readVarIntNum()
@@ -307,10 +297,7 @@ describe('#readVarIntBn', () => {
   })
 
   it('should read a 9 byte varInt', () => {
-    const buf = Buffer.concat([
-      Buffer.from([255]),
-      Buffer.from('ffffffffffffffff', 'hex')
-    ])
+    const buf = Buffer.concat([Buffer.from([255]), Buffer.from('ffffffffffffffff', 'hex')])
     const br = new Reader([...buf])
     expect(br.readVarIntBn().toHex()).toEqual('ffffffffffffffff')
   })

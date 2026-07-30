@@ -1,15 +1,14 @@
 {
   "name": "@bsv/wab-server",
   "private": true,
-  "version": "1.4.14",
+  "version": "1.4.15",
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "gaxios": "7.3.0"
+  },
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11"
-  },
-  "overrides": {
-    "brace-expansion": "5.0.8",
-    "gaxios": "7.3.0",
-    "uuid": "11.1.1"
   },
   "description": "Wallet Authentication Backend (WAB) server",
   "main": "dist/server.js",

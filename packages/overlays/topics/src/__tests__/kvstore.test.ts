@@ -349,7 +349,7 @@ describe('KVStoreLookupService (MongoDB)', () => {
       query: { key: 'mykey' }
     } as LookupQuestion)) as any[]
 
-    expect(result.length).toBe(1)
+    expect(result).toHaveLength(1)
     expect(result[0].txid).toBe('kv0001')
   })
 
@@ -429,7 +429,7 @@ describe('KVStoreLookupService (MongoDB)', () => {
       service: 'ls_kvstore',
       query: { key: 'evictedkey' }
     } as LookupQuestion)) as any[]
-    expect(before.length).toBe(1)
+    expect(before).toHaveLength(1)
 
     await service.outputEvicted('kv0004', 0)
 

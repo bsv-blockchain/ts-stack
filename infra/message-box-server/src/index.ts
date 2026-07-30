@@ -21,7 +21,11 @@ import { app, appReady, getWallet, knex } from './app.js'
 import { createServer } from 'node:http'
 import { Logger, log } from './utils/logger.js'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
-import { createMessageBoxContext, attachMessageBoxWebSockets } from './compose.js'
+import {
+  createMessageBoxContext,
+  attachMessageBoxWebSockets,
+  closeMessageBoxWebSockets
+} from './compose.js'
 import { AuthSocketServer } from '@bsv/authsocket'
 import * as crypto from 'node:crypto'
 import { initializeFirebase } from './config/firebase.js'
@@ -143,9 +147,13 @@ let shutdownPromise: Promise<void> | undefined
 export function shutdownStandalone(signal: NodeJS.Signals): Promise<void> {
   shutdownPromise ??= (async () => {
     log.info({ operation: 'server.shutdown', signal }, 'MessageBox shutdown started')
-    await new Promise<void>((resolve, reject) => {
-      http.close(error => (error == null ? resolve() : reject(error)))
-    })
+    await closeMessageBoxWebSockets(ioRef.current)
+    ioRef.current = null
+    if (http.listening) {
+      await new Promise<void>((resolve, reject) => {
+        http.close(error => (error == null ? resolve() : reject(error)))
+      })
+    }
     await knex.destroy()
     log.info(
       { operation: 'server.shutdown', outcome: 'ok', signal },
@@ -167,15 +175,8 @@ export function shutdownStandalone(signal: NodeJS.Signals): Promise<void> {
 if (NODE_ENV !== 'test') {
   try {
     await startStandalone()
-    if (ENABLE_WEBSOCKETS.toLowerCase() === 'true') {
-      log.warn(
-        { operation: 'server.shutdown', outcome: 'release-ordered' },
-        'Graceful signal handling requires the unpublished AuthSocket close lifecycle'
-      )
-    } else {
-      process.once('SIGTERM', () => void shutdownStandalone('SIGTERM'))
-      process.once('SIGINT', () => void shutdownStandalone('SIGINT'))
-    }
+    process.once('SIGTERM', () => void shutdownStandalone('SIGTERM'))
+    process.once('SIGINT', () => void shutdownStandalone('SIGINT'))
   } catch (error) {
     log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
     try {

@@ -105,7 +105,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
-        expect(r.outputs.length).toBe(10)
+        expect(r.outputs).toHaveLength(10)
         expect(r.BEEF).toBeUndefined()
         for (const o of r.outputs) {
           expect(o.customInstructions).toBeUndefined()
@@ -129,7 +129,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
-        expect(r.outputs.length).toBe(10)
+        expect(r.outputs).toHaveLength(10)
         expect(r.BEEF).toBeUndefined()
         for (const o of r.outputs) {
           expect(o.customInstructions).toBeUndefined()
@@ -173,7 +173,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(1)
-        expect(r.outputs.length).toBe(1)
+        expect(r.outputs).toHaveLength(1)
         let i = -1
         for (const a of r.outputs) {
           i++
@@ -265,7 +265,7 @@ describe('listOutputs test', () => {
           limit: 5
         }
         const r = await wallet.listOutputs(args)
-        expect(r.outputs.length).toBe(5)
+        expect(r.outputs).toHaveLength(5)
         for (const a of r.outputs) {
           expect(Array.isArray(a.labels)).toBe(true)
           expect(a.labels?.indexOf('babbage_protocol_perm')).toBeGreaterThan(-1)
@@ -285,7 +285,7 @@ describe('listOutputs test', () => {
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
         expect(r.outputs.length).toBeLessThan(16)
-        expect(r.outputs.length).toBe(15)
+        expect(r.outputs).toHaveLength(15)
         let _i = 0
         for (const a of r.outputs) {
           expect(Array.isArray(a.tags)).toBe(true)
@@ -305,7 +305,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBeGreaterThanOrEqual(r.outputs.length)
-        expect(r.outputs.length).toBe(args.limit || 10)
+        expect(r.outputs).toHaveLength(args.limit || 10)
         let _i = 0
         for (const a of r.outputs) {
           expect(Array.isArray(a.tags)).toBe(true)
@@ -341,7 +341,7 @@ describe('listOutputs test', () => {
         if (missingTags.length > 0) {
           console.error(`Output ${index} is missing tags:`, missingTags)
         }
-        expect(missingTags.length).toBe(0)
+        expect(missingTags).toHaveLength(0)
       })
     }
   })
@@ -368,7 +368,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBe(totalOutputs)
-        expect(r.outputs.length).toBe(totalOutputs)
+        expect(r.outputs).toHaveLength(totalOutputs)
         expect(r.totalOutputs).toBe(totalOutputs)
         allOutputs = r.outputs
       }
@@ -380,7 +380,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBe(totalOutputs)
-        expect(r.outputs.length).toBe(limit)
+        expect(r.outputs).toHaveLength(limit)
         expect(r.outputs[0].outpoint).toBe(allOutputs[totalOutputs - limit].outpoint)
         expect(r.outputs[1].outpoint).toBe(allOutputs[totalOutputs - limit + 1].outpoint)
         expect(r.outputs[2].outpoint).toBe(allOutputs[totalOutputs - limit + 2].outpoint)
@@ -394,7 +394,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBe(totalOutputs)
-        expect(r.outputs.length).toBe(limit)
+        expect(r.outputs).toHaveLength(limit)
         expect(r.outputs[0].outpoint).toBe(allOutputs[totalOutputs - 1].outpoint)
         expect(r.outputs[1].outpoint).toBe(allOutputs[totalOutputs - 2].outpoint)
         expect(r.outputs[2].outpoint).toBe(allOutputs[totalOutputs - 3].outpoint)
@@ -408,7 +408,7 @@ describe('listOutputs test', () => {
         }
         const r = await wallet.listOutputs(args)
         expect(r.totalOutputs).toBe(totalOutputs)
-        expect(r.outputs.length).toBe(limit)
+        expect(r.outputs).toHaveLength(limit)
         expect(r.outputs[0].outpoint).toBe(allOutputs[totalOutputs - 3].outpoint)
         expect(r.outputs[1].outpoint).toBe(allOutputs[totalOutputs - 4].outpoint)
         expect(r.outputs[2].outpoint).toBe(allOutputs[totalOutputs - 5].outpoint)

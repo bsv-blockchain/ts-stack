@@ -243,7 +243,12 @@ describe('getBeefForTransaction tests', () => {
     expect(invalidConcurrency.txs).toHaveLength(rawByTxid.size)
   })
 
-  test.skip('1 obtain atomic beef hex for txid', async () => {
+  test('1 obtains atomic BEEF hex for an operator-selected live transaction', async () => {
+    // This live diagnostic remains in the historical storage harness because it
+    // reuses its complete abstract-provider fixture. Normal CI is deterministic;
+    // operators opt in explicitly when validating a public mainnet service.
+    if (process.env.WALLET_TOOLBOX_LIVE_SERVICES !== 'true') return
+
     const ps = new ProtoStorage('main')
     const txid = '4cefbe79926d6ef2cc727d8faccac186d9bb141f170411dd75bc6329f428f5a4'
     const beef = await ps.getBeefForTxid(txid)

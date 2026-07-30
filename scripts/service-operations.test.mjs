@@ -16,7 +16,8 @@ test('service operations registry renders all seven public services', async () =
   assert.ok(registry.services.every(service => service.publicProtocol === true))
   assert.equal(registry.policy.publicEdge.defaultCorsMode, 'public-wildcard')
   assert.match(rendered, /Credential-free wildcard CORS is therefore the default/)
-  assert.match(rendered, /AuthSocket close API/)
+  assert.match(rendered, /disconnect authenticated WebSockets/)
+  assert.match(rendered, /Hosted Linux\/amd64 CI builds every governed image/)
   for (const service of registry.services) assert.match(rendered, new RegExp(service.name))
 })
 
