@@ -22,6 +22,40 @@ const IGNORED_DIRECTORIES = new Set([
 ])
 const CRITICALITIES = new Set(['tier-0', 'tier-1', 'tier-2', 'tier-3'])
 const RELEASES = new Set(['none', 'npm-oidc'])
+const CONSUMER_PROFILE_CONTRACTS = {
+  'browser-bundler': {
+    requiredRuntimeTargets: ['browser'],
+    requiredScript: 'test:browser'
+  },
+  'browser-esm': {
+    requiredRuntimeTargets: ['browser'],
+    requiredScript: 'test:browser'
+  },
+  cli: {
+    requiredRuntimeTargets: ['node'],
+    requiredScript: 'pack:check'
+  },
+  'node-cjs': {
+    requiredRuntimeTargets: ['node'],
+    requiredScript: 'pack:check'
+  },
+  'node-esm': {
+    requiredRuntimeTargets: ['node'],
+    requiredScript: 'pack:check'
+  },
+  'react-native-metro': {
+    requiredRuntimeTargets: ['react-native'],
+    requiredScript: 'test:mobile'
+  },
+  'umd-global': {
+    requiredRuntimeTargets: ['browser', 'umd'],
+    requiredScript: 'test:browser'
+  },
+  'wasm-worker': {
+    requiredRuntimeTargets: ['browser', 'wasm', 'worker'],
+    requiredScript: 'test:consumers'
+  }
+}
 const EXCEPTION_CATEGORIES = new Set([
   'advisory',
   'coverage',
@@ -170,6 +204,40 @@ function validateDependencyAutomation(registry) {
   return errors
 }
 
+function validateConsumerProfileDefinitions(registry) {
+  const definitions = registry?.consumerProfileDefinitions
+  const prefix = 'projects.json consumerProfileDefinitions'
+  if (!definitions || typeof definitions !== 'object' || Array.isArray(definitions)) {
+    return [`${prefix} must be an object`]
+  }
+
+  const errors = []
+  const expectedNames = Object.keys(CONSUMER_PROFILE_CONTRACTS).sort()
+  const actualNames = Object.keys(definitions).sort()
+  if (JSON.stringify(actualNames) !== JSON.stringify(expectedNames)) {
+    errors.push(`${prefix} must define exactly: ${expectedNames.join(', ')}`)
+  }
+  for (const name of expectedNames) {
+    const definition = definitions[name]
+    if (!definition || typeof definition !== 'object') continue
+    for (const field of ['description', 'verification']) {
+      if (!isNonEmptyString(definition[field])) {
+        errors.push(`${prefix}.${name}.${field} must be a non-empty string`)
+      }
+    }
+    if (
+      JSON.stringify(definition.requiredRuntimeTargets) !==
+      JSON.stringify(CONSUMER_PROFILE_CONTRACTS[name].requiredRuntimeTargets)
+    ) {
+      errors.push(
+        `${prefix}.${name}.requiredRuntimeTargets must be ` +
+          JSON.stringify(CONSUMER_PROFILE_CONTRACTS[name].requiredRuntimeTargets)
+      )
+    }
+  }
+  return errors
+}
+
 function isDeclarationDependency(value) {
   if (typeof value !== 'string' || !value.startsWith('@types/')) return false
   const parts = value.slice('@types/'.length).split('__')
@@ -200,6 +268,33 @@ function validateDeclarationDependencies(project, prefix) {
   return errors
 }
 
+function validateConsumerProfiles(project, prefix) {
+  const profiles = project.consumerProfiles
+  if (project.release !== 'npm-oidc') {
+    return profiles === undefined
+      ? []
+      : [`${prefix} consumerProfiles are only valid for public packages`]
+  }
+  if (!Array.isArray(profiles) || profiles.length === 0) {
+    return [`${prefix} must have one or more consumerProfiles`]
+  }
+
+  const errors = []
+  for (const profile of profiles) {
+    if (!Object.hasOwn(CONSUMER_PROFILE_CONTRACTS, profile)) {
+      errors.push(`${prefix} has unknown consumer profile ${JSON.stringify(profile)}`)
+    }
+  }
+  for (const duplicate of duplicateValues(profiles)) {
+    errors.push(`${prefix} repeats consumer profile ${duplicate}`)
+  }
+  const canonical = [...profiles].sort((left, right) => left.localeCompare(right))
+  if (JSON.stringify(profiles) !== JSON.stringify(canonical)) {
+    errors.push(`${prefix} consumerProfiles must use canonical lexical order`)
+  }
+  return errors
+}
+
 function validateProjectMetadata(project, registry) {
   const errors = []
   const prefix = `projects.json entry ${project.path ?? '<missing path>'}`
@@ -225,7 +320,10 @@ function validateProjectMetadata(project, registry) {
   if (!RELEASES.has(project.release)) {
     errors.push(`${prefix} has invalid release ${JSON.stringify(project.release)}`)
   }
-  errors.push(...validateDeclarationDependencies(project, prefix))
+  errors.push(
+    ...validateDeclarationDependencies(project, prefix),
+    ...validateConsumerProfiles(project, prefix)
+  )
   return errors
 }
 
@@ -254,6 +352,85 @@ function validateProjectManifest(project, actual) {
   }
   if (!isPrivate && project.release !== 'npm-oidc') {
     errors.push(`${prefix} is public but release is not npm-oidc`)
+  }
+  for (const consumerProfile of project.consumerProfiles ?? []) {
+    const contract = CONSUMER_PROFILE_CONTRACTS[consumerProfile]
+    if (!contract) continue
+    for (const target of contract.requiredRuntimeTargets) {
+      if (!project.runtimeTargets.includes(target)) {
+        errors.push(
+          `${prefix} consumer profile ${consumerProfile} requires runtime target ${target}`
+        )
+      }
+    }
+    if (!isNonEmptyString(actual.manifest.scripts?.[contract.requiredScript])) {
+      errors.push(
+        `${prefix} consumer profile ${consumerProfile} requires script ${contract.requiredScript}`
+      )
+    }
+  }
+  const packScript = actual.manifest.scripts?.['pack:check']
+  const configuredPackModes =
+    typeof packScript === 'string'
+      ? (packScript.match(/(?:^|\s)--modes\s+([^\s]+)/)?.[1]?.split(',') ?? ['cjs', 'esm'])
+      : []
+  for (const mode of ['cjs', 'esm']) {
+    if (project.consumerProfiles?.includes(`node-${mode}`) && !configuredPackModes.includes(mode)) {
+      errors.push(
+        `${prefix} consumer profile node-${mode} is not exercised by the pack:check modes`
+      )
+    }
+  }
+  if (
+    project.consumerProfiles?.includes('cli') &&
+    (typeof packScript !== 'string' || !/(?:^|\s)--bin(?:\s|$)/.test(packScript))
+  ) {
+    errors.push(`${prefix} consumer profile cli requires pack:check to exercise --bin`)
+  }
+  if (project.consumerProfiles?.includes('cli') && !actual.manifest.bin) {
+    errors.push(`${prefix} consumer profile cli requires a package bin entry`)
+  }
+  const browserScript = actual.manifest.scripts?.['test:browser']
+  if (
+    project.consumerProfiles?.some(profile =>
+      ['browser-bundler', 'browser-esm'].includes(profile)
+    ) &&
+    (typeof browserScript !== 'string' ||
+      !/(?:check-browser-package|check-wallet-toolbox-platform)\.mjs/.test(browserScript))
+  ) {
+    errors.push(`${prefix} browser consumer profiles require an exact-package browser checker`)
+  }
+  if (project.consumerProfiles?.includes('umd-global')) {
+    const budgetPath = path.join(path.dirname(actual.manifestPath), 'browser-budget.json')
+    if (!fs.existsSync(budgetPath)) {
+      errors.push(`${prefix} consumer profile umd-global requires browser-budget.json`)
+    } else {
+      const budget = readJson(budgetPath)
+      if (
+        !budget.umd ||
+        !isNonEmptyString(budget.umd.path) ||
+        !isNonEmptyString(budget.umd.global)
+      ) {
+        errors.push(`${prefix} consumer profile umd-global requires an exact UMD budget contract`)
+      }
+    }
+  }
+  const mobileScript = actual.manifest.scripts?.['test:mobile']
+  if (
+    project.consumerProfiles?.includes('react-native-metro') &&
+    (typeof mobileScript !== 'string' ||
+      !/check-wallet-toolbox-platform\.mjs mobile/.test(mobileScript))
+  ) {
+    errors.push(`${prefix} consumer profile react-native-metro requires the exact Metro checker`)
+  }
+  const consumerScript = actual.manifest.scripts?.['test:consumers']
+  if (
+    project.consumerProfiles?.includes('wasm-worker') &&
+    (typeof consumerScript !== 'string' ||
+      !consumerScript.includes('test-node-consumers.mjs') ||
+      !consumerScript.includes('browser/test.mjs'))
+  ) {
+    errors.push(`${prefix} consumer profile wasm-worker requires Node and browser worker checks`)
   }
   for (const dependency of project.declarationDependencies ?? []) {
     if (!Object.hasOwn(actual.manifest.dependencies ?? {}, dependency)) {
@@ -292,7 +469,11 @@ export function validateProjectRegistry(registry, discovered) {
   if (!registry?.ownerDefinitions || typeof registry.ownerDefinitions !== 'object') {
     errors.push('projects.json ownerDefinitions must be an object')
   }
-  errors.push(...validateDependencyAutomation(registry), ...validateGeneratedArtifacts(registry))
+  errors.push(
+    ...validateDependencyAutomation(registry),
+    ...validateConsumerProfileDefinitions(registry),
+    ...validateGeneratedArtifacts(registry)
+  )
   if (!registry?.profiles || typeof registry.profiles !== 'object') {
     errors.push('projects.json profiles must be an object')
   }

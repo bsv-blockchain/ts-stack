@@ -148,12 +148,22 @@ below are source-manifest versions; registry publication is a separate, explicit
 authorized release action.
 
 ${table(
-  ['Area', 'Package', 'Source version', 'Profile', 'Runtime targets', 'Node engine', 'Source'],
+  [
+    'Area',
+    'Package',
+    'Source version',
+    'Project profile',
+    'Consumer profiles',
+    'Runtime targets',
+    'Node engine',
+    'Source'
+  ],
   publicPackages.map(project => [
     project.area,
     `\`${project.name}\``,
     `\`${project.version}\``,
     project.profile,
+    project.consumerProfiles.join(', '),
     project.runtimeTargets.join(', '),
     `\`${project.engines.node}\``,
     repositoryLink(project)

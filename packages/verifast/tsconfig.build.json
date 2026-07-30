@@ -4,6 +4,7 @@
     "outDir": "dist",
     "rootDir": ".",
     "declaration": true,
+    "inlineSources": true,
     "types": ["node"],
     "tsBuildInfoFile": "node_modules/.cache/verifast.tsbuildinfo"
   },

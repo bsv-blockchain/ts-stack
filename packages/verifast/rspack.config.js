@@ -6,6 +6,7 @@ const packageDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default {
   mode: 'production',
+  devtool: 'source-map',
   entry: './dist/umd.js',
   output: {
     filename: 'verifast.cjs',

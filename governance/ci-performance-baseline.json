@@ -1,0 +1,614 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-30T00:35:48.389Z",
+  "source": {
+    "repository": "bsv-blockchain/ts-stack",
+    "workflow": "ci.yml",
+    "event": "pull_request",
+    "conclusion": "success"
+  },
+  "classification": {
+    "fullScopeMinimumJobs": 50,
+    "sampleSizePerClass": 20
+  },
+  "regressionBudget": {
+    "fullScope": {
+      "medianPercent": 15,
+      "p95Percent": 20
+    },
+    "targeted": {
+      "medianPercent": 20,
+      "p95Percent": 25
+    }
+  },
+  "observability": {
+    "captured": [
+      "run duration and variance",
+      "per-job and per-step duration",
+      "job queue time",
+      "artifact upload/download step duration"
+    ],
+    "unavailableFromActionsApi": [
+      "hosted-runner CPU utilization",
+      "hosted-runner memory utilization",
+      "action-internal cache hit rate"
+    ],
+    "note": "Unavailable metrics require explicit in-run instrumentation; they are not inferred from the GitHub Actions REST API."
+  },
+  "reference": {
+    "fullScope": {
+      "summary": {
+        "runCount": 20,
+        "durationSeconds": {
+          "samples": 20,
+          "minimum": 527,
+          "median": 570,
+          "p95": 892,
+          "maximum": 979,
+          "standardDeviation": 115
+        },
+        "queueSeconds": {
+          "samples": 20,
+          "minimum": 2,
+          "median": 3,
+          "p95": 35,
+          "maximum": 42,
+          "standardDeviation": 14
+        },
+        "prepareSeconds": {
+          "samples": 20,
+          "minimum": 181,
+          "median": 218,
+          "p95": 233,
+          "maximum": 238,
+          "standardDeviation": 13
+        },
+        "artifactTransferSeconds": {
+          "samples": 20,
+          "minimum": 58,
+          "median": 68,
+          "p95": 78,
+          "maximum": 86,
+          "standardDeviation": 7
+        },
+        "jobCount": {
+          "samples": 20,
+          "minimum": 50,
+          "median": 51,
+          "p95": 57,
+          "maximum": 58,
+          "standardDeviation": 3
+        }
+      },
+      "runs": [
+        {
+          "id": 30501070016,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30501070016",
+          "headSha": "a3107812dd125e0cb6960bdb690d1f68388e035c",
+          "createdAt": "2026-07-29T23:55:41Z",
+          "durationSeconds": 527,
+          "queueSeconds": 2,
+          "prepareSeconds": 181,
+          "artifactTransferSeconds": 76,
+          "jobCount": 58,
+          "declaredJobCount": 59
+        },
+        {
+          "id": 30497961865,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30497961865",
+          "headSha": "bb4bbdc09ce094c19b65aef28beb5b95db988a85",
+          "createdAt": "2026-07-29T22:58:19Z",
+          "durationSeconds": 892,
+          "queueSeconds": 3,
+          "prepareSeconds": 220,
+          "artifactTransferSeconds": 78,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30496301166,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30496301166",
+          "headSha": "ac65c140583e20806e682d36736732e95ed14170",
+          "createdAt": "2026-07-29T22:29:14Z",
+          "durationSeconds": 979,
+          "queueSeconds": 2,
+          "prepareSeconds": 238,
+          "artifactTransferSeconds": 72,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30495602908,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30495602908",
+          "headSha": "2edfe20bae6ce2227b467d6823958067ba74e4c2",
+          "createdAt": "2026-07-29T22:17:32Z",
+          "durationSeconds": 612,
+          "queueSeconds": 42,
+          "prepareSeconds": 227,
+          "artifactTransferSeconds": 76,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30428000587,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30428000587",
+          "headSha": "b0c2e15db572d2db50852c820d4dd7e0786486fe",
+          "createdAt": "2026-07-29T06:23:16Z",
+          "durationSeconds": 577,
+          "queueSeconds": 2,
+          "prepareSeconds": 206,
+          "artifactTransferSeconds": 67,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30419109237,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30419109237",
+          "headSha": "98607e32ce5d048c30a3173a57b570fbdb49050e",
+          "createdAt": "2026-07-29T03:16:00Z",
+          "durationSeconds": 554,
+          "queueSeconds": 2,
+          "prepareSeconds": 230,
+          "artifactTransferSeconds": 68,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30416684054,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30416684054",
+          "headSha": "b43092d5e376980aedc547cf85c8fa1cc77c69c4",
+          "createdAt": "2026-07-29T02:23:07Z",
+          "durationSeconds": 545,
+          "queueSeconds": 2,
+          "prepareSeconds": 216,
+          "artifactTransferSeconds": 66,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30409489114,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30409489114",
+          "headSha": "3a6ce91e6ae5973bb3873736d251c93240b269de",
+          "createdAt": "2026-07-28T23:54:48Z",
+          "durationSeconds": 570,
+          "queueSeconds": 2,
+          "prepareSeconds": 224,
+          "artifactTransferSeconds": 69,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30408074671,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30408074671",
+          "headSha": "6ee194a44390dc97814fd2bdfe360053a85bc558",
+          "createdAt": "2026-07-28T23:28:13Z",
+          "durationSeconds": 585,
+          "queueSeconds": 30,
+          "prepareSeconds": 205,
+          "artifactTransferSeconds": 76,
+          "jobCount": 50,
+          "declaredJobCount": 50
+        },
+        {
+          "id": 30405101676,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30405101676",
+          "headSha": "b899b54ef49d5017cf24d5652bf139ffd2758dba",
+          "createdAt": "2026-07-28T22:35:30Z",
+          "durationSeconds": 565,
+          "queueSeconds": 2,
+          "prepareSeconds": 231,
+          "artifactTransferSeconds": 69,
+          "jobCount": 51,
+          "declaredJobCount": 51
+        },
+        {
+          "id": 30404076395,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30404076395",
+          "headSha": "658a8a893585ca6357858428d8d02a4b9c4b6fce",
+          "createdAt": "2026-07-28T22:18:43Z",
+          "durationSeconds": 562,
+          "queueSeconds": 3,
+          "prepareSeconds": 224,
+          "artifactTransferSeconds": 63,
+          "jobCount": 51,
+          "declaredJobCount": 51
+        },
+        {
+          "id": 30402930875,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30402930875",
+          "headSha": "12cda5828932188d8ad5994777017342872687ef",
+          "createdAt": "2026-07-28T22:00:36Z",
+          "durationSeconds": 583,
+          "queueSeconds": 31,
+          "prepareSeconds": 214,
+          "artifactTransferSeconds": 68,
+          "jobCount": 51,
+          "declaredJobCount": 51
+        },
+        {
+          "id": 30398700176,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30398700176",
+          "headSha": "7b084d2333f32a1ed22f42da8560235fa8446c94",
+          "createdAt": "2026-07-28T20:58:54Z",
+          "durationSeconds": 600,
+          "queueSeconds": 3,
+          "prepareSeconds": 233,
+          "artifactTransferSeconds": 63,
+          "jobCount": 57,
+          "declaredJobCount": 57
+        },
+        {
+          "id": 30388511059,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30388511059",
+          "headSha": "71c4546ea139dfdb6986ed9a2e2ecf2d01196404",
+          "createdAt": "2026-07-28T18:40:37Z",
+          "durationSeconds": 627,
+          "queueSeconds": 31,
+          "prepareSeconds": 214,
+          "artifactTransferSeconds": 59,
+          "jobCount": 57,
+          "declaredJobCount": 57
+        },
+        {
+          "id": 30382380922,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30382380922",
+          "headSha": "e7058e4821866753539dcf88d3d114b4b71fda38",
+          "createdAt": "2026-07-28T17:19:43Z",
+          "durationSeconds": 665,
+          "queueSeconds": 3,
+          "prepareSeconds": 208,
+          "artifactTransferSeconds": 86,
+          "jobCount": 55,
+          "declaredJobCount": 55
+        },
+        {
+          "id": 30381225149,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30381225149",
+          "headSha": "2cc8d719a6a0f0af27507203103e458fe75eb5f0",
+          "createdAt": "2026-07-28T17:04:31Z",
+          "durationSeconds": 727,
+          "queueSeconds": 24,
+          "prepareSeconds": 215,
+          "artifactTransferSeconds": 69,
+          "jobCount": 55,
+          "declaredJobCount": 55
+        },
+        {
+          "id": 30332441684,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30332441684",
+          "headSha": "a048d6d4a45745852291706db98d69e0f404a1d9",
+          "createdAt": "2026-07-28T05:42:25Z",
+          "durationSeconds": 548,
+          "queueSeconds": 5,
+          "prepareSeconds": 218,
+          "artifactTransferSeconds": 65,
+          "jobCount": 56,
+          "declaredJobCount": 56
+        },
+        {
+          "id": 30329465728,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30329465728",
+          "headSha": "de8c1576d022912eb618528307f6dd32168d4c64",
+          "createdAt": "2026-07-28T04:41:56Z",
+          "durationSeconds": 545,
+          "queueSeconds": 3,
+          "prepareSeconds": 230,
+          "artifactTransferSeconds": 58,
+          "jobCount": 54,
+          "declaredJobCount": 54
+        },
+        {
+          "id": 30328159156,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30328159156",
+          "headSha": "d846f82b066b0315c68bcbe4e66a040236aa964d",
+          "createdAt": "2026-07-28T04:13:46Z",
+          "durationSeconds": 570,
+          "queueSeconds": 35,
+          "prepareSeconds": 207,
+          "artifactTransferSeconds": 58,
+          "jobCount": 54,
+          "declaredJobCount": 54
+        },
+        {
+          "id": 30305296283,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30305296283",
+          "headSha": "443011429507eb4d2306f210963f42d7dcb4b9c1",
+          "createdAt": "2026-07-27T21:04:24Z",
+          "durationSeconds": 560,
+          "queueSeconds": 3,
+          "prepareSeconds": 219,
+          "artifactTransferSeconds": 72,
+          "jobCount": 56,
+          "declaredJobCount": 56
+        }
+      ]
+    },
+    "targeted": {
+      "summary": {
+        "runCount": 20,
+        "durationSeconds": {
+          "samples": 20,
+          "minimum": 177,
+          "median": 425,
+          "p95": 557,
+          "maximum": 561,
+          "standardDeviation": 109
+        },
+        "queueSeconds": {
+          "samples": 20,
+          "minimum": 2,
+          "median": 2,
+          "p95": 44,
+          "maximum": 61,
+          "standardDeviation": 17
+        },
+        "prepareSeconds": {
+          "samples": 20,
+          "minimum": 105,
+          "median": 207,
+          "p95": 231,
+          "maximum": 239,
+          "standardDeviation": 36
+        },
+        "artifactTransferSeconds": {
+          "samples": 20,
+          "minimum": 7,
+          "median": 32,
+          "p95": 72,
+          "maximum": 84,
+          "standardDeviation": 23
+        },
+        "jobCount": {
+          "samples": 20,
+          "minimum": 15,
+          "median": 30,
+          "p95": 49,
+          "maximum": 49,
+          "standardDeviation": 13
+        }
+      },
+      "runs": [
+        {
+          "id": 30499063682,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30499063682",
+          "headSha": "e3068e972fcf5ba21e814cba07bfc26c436076ac",
+          "createdAt": "2026-07-29T23:17:47Z",
+          "durationSeconds": 327,
+          "queueSeconds": 2,
+          "prepareSeconds": 145,
+          "artifactTransferSeconds": 27,
+          "jobCount": 21,
+          "declaredJobCount": 26
+        },
+        {
+          "id": 30498242402,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30498242402",
+          "headSha": "a932cbaaba95c6aff46a44aad77c2bd39cbef114",
+          "createdAt": "2026-07-29T23:03:07Z",
+          "durationSeconds": 339,
+          "queueSeconds": 2,
+          "prepareSeconds": 146,
+          "artifactTransferSeconds": 23,
+          "jobCount": 21,
+          "declaredJobCount": 26
+        },
+        {
+          "id": 30410294465,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30410294465",
+          "headSha": "137e969d831c2903d58875e0d4b535e28bb88590",
+          "createdAt": "2026-07-29T00:09:44Z",
+          "durationSeconds": 177,
+          "queueSeconds": 2,
+          "prepareSeconds": 105,
+          "artifactTransferSeconds": 7,
+          "jobCount": 15,
+          "declaredJobCount": 23
+        },
+        {
+          "id": 30326325961,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30326325961",
+          "headSha": "fca9ea7015db9bbe30f274713958d0a5a2a9ab0b",
+          "createdAt": "2026-07-28T03:35:13Z",
+          "durationSeconds": 376,
+          "queueSeconds": 2,
+          "prepareSeconds": 186,
+          "artifactTransferSeconds": 43,
+          "jobCount": 27,
+          "declaredJobCount": 27
+        },
+        {
+          "id": 30324995426,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30324995426",
+          "headSha": "593d7059b6eda6487d027664ca1dcbba2780682b",
+          "createdAt": "2026-07-28T03:06:12Z",
+          "durationSeconds": 554,
+          "queueSeconds": 3,
+          "prepareSeconds": 215,
+          "artifactTransferSeconds": 68,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30323815350,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30323815350",
+          "headSha": "2872b9d7740e26f65246edd7da68649a449d9515",
+          "createdAt": "2026-07-28T02:41:18Z",
+          "durationSeconds": 561,
+          "queueSeconds": 44,
+          "prepareSeconds": 203,
+          "artifactTransferSeconds": 62,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30320830245,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30320830245",
+          "headSha": "a25b633c6a17d5933ec8d789ed771574c3f74569",
+          "createdAt": "2026-07-28T01:38:17Z",
+          "durationSeconds": 551,
+          "queueSeconds": 2,
+          "prepareSeconds": 214,
+          "artifactTransferSeconds": 84,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30319606279,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30319606279",
+          "headSha": "b90dcdaf87beb100dde747dcd506fedca8eaa6dd",
+          "createdAt": "2026-07-28T01:12:46Z",
+          "durationSeconds": 525,
+          "queueSeconds": 3,
+          "prepareSeconds": 218,
+          "artifactTransferSeconds": 71,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30317128835,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30317128835",
+          "headSha": "8ecaae9b58cf4737e64e121c4f40a4b44d53ce29",
+          "createdAt": "2026-07-28T00:22:50Z",
+          "durationSeconds": 430,
+          "queueSeconds": 22,
+          "prepareSeconds": 219,
+          "artifactTransferSeconds": 27,
+          "jobCount": 24,
+          "declaredJobCount": 25
+        },
+        {
+          "id": 30314285296,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30314285296",
+          "headSha": "7109c7cea43873a35674a8771b07c2de471cd78c",
+          "createdAt": "2026-07-27T23:29:07Z",
+          "durationSeconds": 537,
+          "queueSeconds": 39,
+          "prepareSeconds": 181,
+          "artifactTransferSeconds": 70,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30311382751,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30311382751",
+          "headSha": "588861bf560552949315a723b07dec17609d0ad5",
+          "createdAt": "2026-07-27T22:37:26Z",
+          "durationSeconds": 549,
+          "queueSeconds": 2,
+          "prepareSeconds": 214,
+          "artifactTransferSeconds": 68,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30308921530,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30308921530",
+          "headSha": "bdf5a226b87c169f0d5ee572cbf453843ee1fd74",
+          "createdAt": "2026-07-27T21:57:24Z",
+          "durationSeconds": 552,
+          "queueSeconds": 3,
+          "prepareSeconds": 206,
+          "artifactTransferSeconds": 72,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30308226236,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30308226236",
+          "headSha": "16fb270ee955c8a75e92fa1c40680093bd96ce13",
+          "createdAt": "2026-07-27T21:46:35Z",
+          "durationSeconds": 556,
+          "queueSeconds": 2,
+          "prepareSeconds": 209,
+          "artifactTransferSeconds": 63,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30297586037,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30297586037",
+          "headSha": "d6d8d927e6bd1b850ecfbf9826d704c3e760b492",
+          "createdAt": "2026-07-27T19:17:19Z",
+          "durationSeconds": 390,
+          "queueSeconds": 61,
+          "prepareSeconds": 149,
+          "artifactTransferSeconds": 26,
+          "jobCount": 20,
+          "declaredJobCount": 25
+        },
+        {
+          "id": 30242635549,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30242635549",
+          "headSha": "c389a49721f61d3e4720aa4ad6359c89e9f9b576",
+          "createdAt": "2026-07-27T06:24:28Z",
+          "durationSeconds": 557,
+          "queueSeconds": 3,
+          "prepareSeconds": 231,
+          "artifactTransferSeconds": 70,
+          "jobCount": 49,
+          "declaredJobCount": 49
+        },
+        {
+          "id": 30236409071,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30236409071",
+          "headSha": "b33aa1f3af7e2fd0cddaba5f68cfd2525699c79b",
+          "createdAt": "2026-07-27T04:11:36Z",
+          "durationSeconds": 425,
+          "queueSeconds": 2,
+          "prepareSeconds": 239,
+          "artifactTransferSeconds": 22,
+          "jobCount": 30,
+          "declaredJobCount": 30
+        },
+        {
+          "id": 30235006722,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30235006722",
+          "headSha": "a59cdc604b87a367ef170c5c6c4793ffa2f49e30",
+          "createdAt": "2026-07-27T03:36:31Z",
+          "durationSeconds": 401,
+          "queueSeconds": 2,
+          "prepareSeconds": 216,
+          "artifactTransferSeconds": 24,
+          "jobCount": 30,
+          "declaredJobCount": 30
+        },
+        {
+          "id": 30234691195,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30234691195",
+          "headSha": "aaa0316ba7f1a6070126430cee650c705582a9d7",
+          "createdAt": "2026-07-27T03:28:38Z",
+          "durationSeconds": 401,
+          "queueSeconds": 2,
+          "prepareSeconds": 207,
+          "artifactTransferSeconds": 32,
+          "jobCount": 30,
+          "declaredJobCount": 30
+        },
+        {
+          "id": 30234688139,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30234688139",
+          "headSha": "22b5af1c2e6713093bdca07a504480aa23750551",
+          "createdAt": "2026-07-27T03:28:33Z",
+          "durationSeconds": 280,
+          "queueSeconds": 2,
+          "prepareSeconds": 135,
+          "artifactTransferSeconds": 17,
+          "jobCount": 18,
+          "declaredJobCount": 23
+        },
+        {
+          "id": 30234346065,
+          "url": "https://github.com/bsv-blockchain/ts-stack/actions/runs/30234346065",
+          "headSha": "b4dea247474c0a2da47404cd20262b12b6d3684c",
+          "createdAt": "2026-07-27T03:19:42Z",
+          "durationSeconds": 413,
+          "queueSeconds": 2,
+          "prepareSeconds": 217,
+          "artifactTransferSeconds": 32,
+          "jobCount": 30,
+          "declaredJobCount": 30
+        }
+      ]
+    }
+  }
+}

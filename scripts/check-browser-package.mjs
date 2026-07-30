@@ -89,6 +89,17 @@ export function bundleSizes(buffer) {
   }
 }
 
+export function aggregateBundleSizes(buffers) {
+  return buffers.map(bundleSizes).reduce(
+    (total, sizes) => ({
+      raw: total.raw + sizes.raw,
+      gzip: total.gzip + sizes.gzip,
+      brotli: total.brotli + sizes.brotli
+    }),
+    { raw: 0, gzip: 0, brotli: 0 }
+  )
+}
+
 function positiveBudget(value, label) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${label} must be a positive safe integer`)
@@ -173,6 +184,13 @@ export function validateBrowserBudget(budget, manifest) {
     for (const field of ['path', 'global']) {
       if (typeof budget.umd?.[field] !== 'string' || budget.umd[field] === '') {
         throw new Error(`browser budget umd.${field} must be a non-empty string`)
+      }
+    }
+    if (budget.umd.additionalPaths !== undefined) {
+      validateStringArray(budget.umd.additionalPaths, 'browser budget umd.additionalPaths')
+      const paths = [budget.umd.path, ...budget.umd.additionalPaths]
+      if (new Set(paths).size !== paths.length) {
+        throw new Error('browser budget umd paths must be unique')
       }
     }
     validateBundleBudget({ raw: 0, gzip: 0, brotli: 0 }, budget.umd.maximumBytes, 'umd')
@@ -369,14 +387,29 @@ async function removeTemporaryDirectory(directory) {
 async function checkUmd(consumerDirectory, manifest, budget) {
   if (!budget.umd) return undefined
   const packageDirectory = installedPackageDirectory(consumerDirectory, manifest.name)
-  const bundlePath = path.resolve(packageDirectory, budget.umd.path)
-  if (!bundlePath.startsWith(`${packageDirectory}${path.sep}`)) {
-    throw new Error(`UMD path escapes installed package: ${budget.umd.path}`)
-  }
-  const [code, sourceMapText] = await Promise.all([
-    fs.readFile(bundlePath),
+  const payloadPaths = [budget.umd.path, ...(budget.umd.additionalPaths ?? [])]
+  const absolutePayloadPaths = payloadPaths.map(relativePath => {
+    const absolutePath = path.resolve(packageDirectory, relativePath)
+    if (!absolutePath.startsWith(`${packageDirectory}${path.sep}`)) {
+      throw new Error(`UMD path escapes installed package: ${relativePath}`)
+    }
+    return absolutePath
+  })
+  const bundlePath = absolutePayloadPaths[0]
+  const [payloads, sourceMapText] = await Promise.all([
+    Promise.all(absolutePayloadPaths.map(payloadPath => fs.readFile(payloadPath))),
     fs.readFile(`${bundlePath}.map`, 'utf8')
   ])
+  for (const [index, payloadPath] of absolutePayloadPaths.entries()) {
+    if (/\.[cm]?js$/.test(payloadPath)) {
+      assertBrowserComposition(
+        [],
+        payloads[index].toString('utf8'),
+        `UMD payload ${payloadPaths[index]}`
+      )
+    }
+  }
+  const code = payloads[0]
   const sourceMap = JSON.parse(sourceMapText)
   if (
     !Array.isArray(sourceMap.sources) ||
@@ -390,9 +423,8 @@ async function checkUmd(consumerDirectory, manifest, budget) {
   if (!codeText.includes(budget.umd.global)) {
     throw new Error(`UMD bundle does not expose configured global ${budget.umd.global}`)
   }
-  assertBrowserComposition([], codeText, 'UMD browser bundle')
-  const measurements = bundleSizes(code)
-  validateBundleBudget(measurements, budget.umd.maximumBytes, 'UMD browser bundle')
+  const measurements = aggregateBundleSizes(payloads)
+  validateBundleBudget(measurements, budget.umd.maximumBytes, 'UMD browser payload')
   return measurements
 }
 
