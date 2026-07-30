@@ -1470,7 +1470,8 @@ export class Beef {
         log += `    rawTx length=${t.rawTx?.length ?? 0}\n`
       }
       if (t.inputTxids.length > 0) {
-        log += `    inputs: [\n${t.inputTxids.map(it => `      '${it}'`).join(',\n')}\n    ]\n`
+        const inputLines = t.inputTxids.map(it => `      '${it}'`).join(',\n')
+        log += `    inputs: [\n${inputLines}\n    ]\n`
       }
     }
 

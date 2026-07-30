@@ -222,7 +222,7 @@ const OP = namedOP as typeof namedOP & Record<string, number | string> & Record<
 
 for (const name of Object.keys(namedOP) as Array<keyof typeof namedOP>) {
   const opcode = namedOP[name]
-  if (OP[opcode] === undefined) OP[opcode] = name
+  OP[opcode] ??= name
 }
 
 export default OP

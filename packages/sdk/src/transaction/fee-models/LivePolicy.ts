@@ -29,9 +29,7 @@ export default class LivePolicy extends SatoshisPerKilobyte {
    * @returns The singleton LivePolicy instance
    */
   static getInstance(cacheValidityMs: number = 5 * 60 * 1000): LivePolicy {
-    if (!LivePolicy.instance) {
-      LivePolicy.instance = new LivePolicy(cacheValidityMs)
-    }
+    LivePolicy.instance ??= new LivePolicy(cacheValidityMs)
     return LivePolicy.instance
   }
 

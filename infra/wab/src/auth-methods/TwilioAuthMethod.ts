@@ -181,7 +181,10 @@ export class TwilioAuthMethod extends AuthMethod {
    * @param storedConfig
    * @param payload
    */
-  public isAlreadyLinked(storedConfig: Record<string, any>, payload: AuthPayload): boolean {
+  public override isAlreadyLinked(
+    storedConfig: Record<string, any>,
+    payload: AuthPayload
+  ): boolean {
     return storedConfig.phoneNumber === payload.phoneNumber
   }
 

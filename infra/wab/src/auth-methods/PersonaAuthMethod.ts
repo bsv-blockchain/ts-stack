@@ -59,7 +59,10 @@ export class PersonaAuthMethod extends AuthMethod {
   /**
    * For demonstration, if stored config has the same sessionId, we consider it "already linked".
    */
-  public isAlreadyLinked(storedConfig: Record<string, any>, payload: AuthPayload): boolean {
+  public override isAlreadyLinked(
+    storedConfig: Record<string, any>,
+    payload: AuthPayload
+  ): boolean {
     return storedConfig.personaSessionId === payload.sessionId
   }
 }

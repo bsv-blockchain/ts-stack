@@ -30,12 +30,14 @@ test('all tracked TypeScript projects use the governed side-by-side toolchain', 
   assert.equal(report.codegen, 1)
   assert.ok(report.configurations > 100)
   assert.equal(report.profiles, 9)
+  assert.equal(report.standalone, 7)
   assert.deepEqual(report.findings, [])
 })
 
-test('all tracked tsconfig files inherit strict role profiles with Oxlint owning unused symbols', () => {
+test('all tracked tsconfig files use strict role profiles with Oxlint owning unused symbols', () => {
   const report = inspectTypeScriptProfiles()
   assert.ok(report.governed > 100)
+  assert.equal(report.standalone, 7)
   assert.deepEqual(report.findings, [])
   assert.equal(
     repositoryTypeScriptConfigs().some(relativePath =>

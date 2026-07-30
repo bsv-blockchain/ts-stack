@@ -1,5 +1,4 @@
 {
-  "extends": "../../config/typescript/node-service.json",
   "compilerOptions": {
     "lib": ["dom", "ESNext"],
     "module": "NodeNext",
@@ -12,6 +11,14 @@
     "strict": true,
     "isolatedModules": true,
     "strictNullChecks": true,
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,

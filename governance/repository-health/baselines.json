@@ -60,6 +60,7 @@
   "typescript": {
     "effectiveConfigs": 121,
     "approvedRuntimeProfiles": 9,
+    "selfContainedServiceConfigs": 7,
     "strict": 121,
     "strictNullChecks": 121,
     "noImplicitAny": 121,

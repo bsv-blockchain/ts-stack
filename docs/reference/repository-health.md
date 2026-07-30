@@ -50,9 +50,10 @@ only from authoritative evidence and retain the evidence URL.
 
 The lint record retains the original 846-warning baseline while ratcheting the
 current authored-code result to zero across 1,909 files. The TypeScript record
-tracks all 121 governed configurations and their inherited strict options.
-`pnpm lint` and `pnpm typescript:check` are executable zero-debt gates; the
-historical counts are evidence, not allowances.
+tracks all 121 governed configurations and their effective strict options,
+including seven self-contained deployable-service contexts. `pnpm lint` and
+`pnpm typescript:check` are executable zero-debt gates; the historical counts
+are evidence, not allowances.
 
 `governance/repository-health/contract-baseline.json` contains the exact package
 contract debt present when the control was introduced. The health check rejects

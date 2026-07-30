@@ -385,8 +385,9 @@ export default class WalletWireProcessor implements WalletWire {
                 resultWriter.writeVarIntNum(createActionResult.sendWithResults.length)
                 for (const result of createActionResult.sendWithResults) {
                   resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
-                  const statusCode =
-                    result.status === 'unproven' ? 1 : result.status === 'sending' ? 2 : 3
+                  let statusCode = 3
+                  if (result.status === 'unproven') statusCode = 1
+                  else if (result.status === 'sending') statusCode = 2
                   resultWriter.writeInt8(statusCode)
                 }
               }
@@ -532,8 +533,9 @@ export default class WalletWireProcessor implements WalletWire {
                 resultWriter.writeVarIntNum(signActionResult.sendWithResults.length)
                 for (const result of signActionResult.sendWithResults) {
                   resultWriter.write(Utils.toUint8Array(result.txid, 'hex'))
-                  const statusCode =
-                    result.status === 'unproven' ? 1 : result.status === 'sending' ? 2 : 3
+                  let statusCode = 3
+                  if (result.status === 'unproven') statusCode = 1
+                  else if (result.status === 'sending') statusCode = 2
                   resultWriter.writeInt8(statusCode)
                 }
               }

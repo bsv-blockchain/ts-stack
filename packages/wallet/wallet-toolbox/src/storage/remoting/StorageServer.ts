@@ -223,7 +223,8 @@ export class StorageServer {
     this.securityHeadersPolicy = options.securityHeaders ?? {}
     this.logRpcRequests = options.logRpcRequests ?? true
 
-    if (options.logShortReqs) {
+    const legacyLogShortReqs = (options as unknown as Record<string, unknown>)['logShortReqs']
+    if (legacyLogShortReqs) {
       this.setupShortReqLogging()
     }
 

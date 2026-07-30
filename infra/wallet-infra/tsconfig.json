@@ -1,5 +1,4 @@
 {
-  "extends": "../../config/typescript/node-service.json",
   "compilerOptions": {
     "target": "es2022",
     "module": "nodenext",
@@ -11,13 +10,20 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
     "declaration": true,
     "declarationMap": true,
     "rootDir": ".",
     "composite": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "include": ["src/**/*", "package.json"],
   "exclude": ["node_modules", "jest.config.ts"],

@@ -39,6 +39,17 @@ const APPROVED_TYPESCRIPT_PROFILES = new Set([
   'config/typescript/test.json',
   'config/typescript/wasm-worker.json'
 ])
+const STANDALONE_RUNTIME_PROFILES = new Map(
+  [
+    'infra/chaintracks-server/tsconfig.json',
+    'infra/message-box-server/tsconfig.json',
+    'infra/overlay-server/tsconfig.json',
+    'infra/uhrp-server-basic/tsconfig.json',
+    'infra/uhrp-server-cloud-bucket/tsconfig.json',
+    'infra/wab/tsconfig.json',
+    'infra/wallet-infra/tsconfig.json'
+  ].map(relativePath => [relativePath, 'config/typescript/node-service.json'])
+)
 const REQUIRED_STRICT_OPTIONS = [
   'strict',
   'strictNullChecks',
@@ -136,37 +147,47 @@ export function repositoryPackageManifests(root = REPOSITORY_ROOT) {
   return manifests.sort((left, right) => left.localeCompare(right))
 }
 
-function parseJsonWithComments(source, relativePath) {
+function jsonStringEnd(source, start) {
+  let index = start + 1
+  while (index < source.length) {
+    if (source[index] === '\\') index += 2
+    else if (source[index++] === '"') return index
+  }
+  return source.length
+}
+
+function newlinePlaceholders(source) {
+  return '\n'.repeat(source.split('\n').length - 1)
+}
+
+function stripJsonComments(source) {
   let result = ''
-  let inString = false
-  let escaped = false
-  for (let index = 0; index < source.length; index++) {
-    const character = source[index]
-    const next = source[index + 1]
-    if (inString) {
-      result += character
-      if (escaped) escaped = false
-      else if (character === '\\') escaped = true
-      else if (character === '"') inString = false
-    } else if (character === '"') {
-      inString = true
-      result += character
-    } else if (character === '/' && next === '/') {
-      while (index < source.length && source[index] !== '\n') index++
+  let index = 0
+  while (index < source.length) {
+    if (source[index] === '"') {
+      const end = jsonStringEnd(source, index)
+      result += source.slice(index, end)
+      index = end
+    } else if (source.startsWith('//', index)) {
+      const end = source.indexOf('\n', index + 2)
+      if (end === -1) break
       result += '\n'
-    } else if (character === '/' && next === '*') {
-      index += 2
-      while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
-        if (source[index] === '\n') result += '\n'
-        index++
-      }
-      index++
+      index = end + 1
+    } else if (source.startsWith('/*', index)) {
+      const closing = source.indexOf('*/', index + 2)
+      const end = closing === -1 ? source.length : closing + 2
+      result += newlinePlaceholders(source.slice(index, end))
+      index = end
     } else {
-      result += character
+      result += source[index++]
     }
   }
+  return result
+}
+
+function parseJsonWithComments(source, relativePath) {
   try {
-    return JSON.parse(result.replace(/,\s*([}\]])/g, '$1'))
+    return JSON.parse(stripJsonComments(source).replace(/,\s*([}\]])/g, '$1'))
   } catch (error) {
     throw new SyntaxError(
       `${relativePath} is not valid JSONC: ${error instanceof Error ? error.message : String(error)}`
@@ -206,11 +227,8 @@ function resolveExtendedConfig(relativePath, extendedConfig) {
   return resolved.endsWith('.json') ? resolved : `${resolved}.json`
 }
 
-export function inspectTypeScriptProfiles(root = REPOSITORY_ROOT) {
-  const findings = []
-  const configs = repositoryTypeScriptConfigs(root)
+function parseTypeScriptConfigs(configs, root, findings) {
   const parsedConfigs = new Map()
-
   for (const relativePath of configs) {
     parsedConfigs.set(
       relativePath,
@@ -220,71 +238,114 @@ export function inspectTypeScriptProfiles(root = REPOSITORY_ROOT) {
       findings.push(`${relativePath} is an obsolete ESLint-era TypeScript configuration`)
     }
   }
+  return parsedConfigs
+}
 
-  let governed = 0
-  for (const relativePath of configs) {
-    if (relativePath.startsWith('config/typescript/')) continue
-    governed++
-    const chain = []
-    const seen = new Set()
-    let currentPath = relativePath
-    while (currentPath !== undefined) {
-      if (seen.has(currentPath)) {
-        findings.push(`${relativePath} has a circular extends chain through ${currentPath}`)
-        break
-      }
-      seen.add(currentPath)
-      const config = parsedConfigs.get(currentPath)
-      if (config === undefined) {
-        findings.push(`${relativePath} extends missing configuration ${currentPath}`)
-        break
-      }
-      chain.push({ relativePath: currentPath, config })
-      if (typeof config.extends !== 'string') break
-      const resolved = resolveExtendedConfig(currentPath, config.extends)
-      if (resolved === undefined) {
-        findings.push(`${relativePath} uses unsupported non-repository extends ${config.extends}`)
-        break
-      }
-      currentPath = resolved
+function validateStandaloneProfileMappings(parsedConfigs, findings) {
+  for (const [relativePath, approvedProfile] of STANDALONE_RUNTIME_PROFILES) {
+    const config = parsedConfigs.get(relativePath)
+    if (config === undefined) {
+      findings.push(`standalone TypeScript profile mapping references missing ${relativePath}`)
+    } else if (config.extends !== undefined) {
+      findings.push(
+        `${relativePath} must remain self-contained for its package and Docker build contexts`
+      )
     }
-
-    const approvedProfile = chain.find(entry =>
-      APPROVED_TYPESCRIPT_PROFILES.has(entry.relativePath)
-    )?.relativePath
-    if (approvedProfile === undefined) {
-      findings.push(`${relativePath} does not inherit an approved TypeScript runtime profile`)
-      continue
-    }
-
-    const effectiveCompilerOptions = {}
-    for (const entry of [...chain].reverse()) {
-      Object.assign(effectiveCompilerOptions, entry.config.compilerOptions ?? {})
-    }
-    for (const option of REQUIRED_STRICT_OPTIONS) {
-      if (effectiveCompilerOptions[option] !== true) {
-        findings.push(`${relativePath} must enable compilerOptions.${option}`)
-      }
-    }
-    for (const option of ['noUnusedLocals', 'noUnusedParameters']) {
-      if (effectiveCompilerOptions[option] !== false) {
-        findings.push(
-          `${relativePath} must leave compilerOptions.${option}=false; Oxlint owns unused-symbol enforcement`
-        )
-      }
-    }
-
-    const strictNew = approvedProfile === 'config/typescript/strict-new.json'
-    for (const option of ['noUncheckedIndexedAccess', 'exactOptionalPropertyTypes']) {
-      if (effectiveCompilerOptions[option] !== strictNew) {
-        findings.push(
-          `${relativePath} must set compilerOptions.${option}=${strictNew} for ${approvedProfile}`
-        )
-      }
+    if (!APPROVED_TYPESCRIPT_PROFILES.has(approvedProfile)) {
+      findings.push(`${relativePath} maps to unapproved TypeScript profile ${approvedProfile}`)
     }
   }
+}
 
-  return { findings, governed, profiles: APPROVED_TYPESCRIPT_PROFILES.size }
+function resolveConfigChain(relativePath, parsedConfigs, findings) {
+  const chain = []
+  const seen = new Set()
+  let currentPath = relativePath
+  while (currentPath !== undefined) {
+    if (seen.has(currentPath)) {
+      findings.push(`${relativePath} has a circular extends chain through ${currentPath}`)
+      break
+    }
+    seen.add(currentPath)
+    const config = parsedConfigs.get(currentPath)
+    if (config === undefined) {
+      findings.push(`${relativePath} extends missing configuration ${currentPath}`)
+      break
+    }
+    chain.push({ relativePath: currentPath, config })
+    if (typeof config.extends !== 'string') break
+    currentPath = resolveExtendedConfig(currentPath, config.extends)
+    if (currentPath === undefined) {
+      findings.push(`${relativePath} uses unsupported non-repository extends ${config.extends}`)
+    }
+  }
+  return chain
+}
+
+function runtimeProfileForChain(chain) {
+  const inheritedProfile = chain.find(entry => APPROVED_TYPESCRIPT_PROFILES.has(entry.relativePath))
+  if (inheritedProfile !== undefined) return inheritedProfile.relativePath
+  const standaloneEntry = chain.find(entry => STANDALONE_RUNTIME_PROFILES.has(entry.relativePath))
+  if (standaloneEntry === undefined) return undefined
+  return STANDALONE_RUNTIME_PROFILES.get(standaloneEntry.relativePath)
+}
+
+function effectiveCompilerOptions(chain) {
+  const compilerOptions = {}
+  for (const entry of [...chain].reverse()) {
+    Object.assign(compilerOptions, entry.config.compilerOptions ?? {})
+  }
+  return compilerOptions
+}
+
+function validateProfileOptions(relativePath, approvedProfile, compilerOptions, findings) {
+  for (const option of REQUIRED_STRICT_OPTIONS) {
+    if (compilerOptions[option] !== true) {
+      findings.push(`${relativePath} must enable compilerOptions.${option}`)
+    }
+  }
+  for (const option of ['noUnusedLocals', 'noUnusedParameters']) {
+    if (compilerOptions[option] !== false) {
+      findings.push(
+        `${relativePath} must leave compilerOptions.${option}=false; Oxlint owns unused-symbol enforcement`
+      )
+    }
+  }
+  const strictNew = approvedProfile === 'config/typescript/strict-new.json'
+  for (const option of ['noUncheckedIndexedAccess', 'exactOptionalPropertyTypes']) {
+    if (compilerOptions[option] !== strictNew) {
+      findings.push(
+        `${relativePath} must set compilerOptions.${option}=${strictNew} for ${approvedProfile}`
+      )
+    }
+  }
+}
+
+export function inspectTypeScriptProfiles(root = REPOSITORY_ROOT) {
+  const findings = []
+  const configs = repositoryTypeScriptConfigs(root)
+  const parsedConfigs = parseTypeScriptConfigs(configs, root, findings)
+  validateStandaloneProfileMappings(parsedConfigs, findings)
+
+  const governedConfigs = configs.filter(
+    relativePath => !relativePath.startsWith('config/typescript/')
+  )
+  for (const relativePath of governedConfigs) {
+    const chain = resolveConfigChain(relativePath, parsedConfigs, findings)
+    const approvedProfile = runtimeProfileForChain(chain)
+    if (approvedProfile === undefined) {
+      findings.push(`${relativePath} does not use an approved TypeScript runtime profile`)
+      continue
+    }
+    validateProfileOptions(relativePath, approvedProfile, effectiveCompilerOptions(chain), findings)
+  }
+
+  return {
+    findings,
+    governed: governedConfigs.length,
+    profiles: APPROVED_TYPESCRIPT_PROFILES.size,
+    standalone: STANDALONE_RUNTIME_PROFILES.size
+  }
 }
 
 export function inspectTypeScriptToolchain(root = REPOSITORY_ROOT) {
@@ -307,7 +368,8 @@ export function inspectTypeScriptToolchain(root = REPOSITORY_ROOT) {
     governed,
     codegen,
     configurations: profileReport.governed,
-    profiles: profileReport.profiles
+    profiles: profileReport.profiles,
+    standalone: profileReport.standalone
   }
 }
 
@@ -317,7 +379,8 @@ function main() {
   console.log(
     `TypeScript toolchain: ${report.governed} native compiler profiles, ` +
       `${report.codegen} isolated codegen API profile, ${report.configurations} governed ` +
-      `tsconfig files across ${report.profiles} runtime profiles, ${report.findings.length} findings.`
+      `tsconfig files across ${report.profiles} runtime profiles ` +
+      `(${report.standalone} self-contained service contexts), ${report.findings.length} findings.`
   )
   if (report.findings.length > 0) process.exitCode = 1
 }

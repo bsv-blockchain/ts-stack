@@ -136,7 +136,10 @@ export class DevConsoleAuthMethod extends AuthMethod {
    * @param storedConfig - The stored configuration
    * @param payload - Must include { phoneNumber }
    */
-  public isAlreadyLinked(storedConfig: Record<string, any>, payload: AuthPayload): boolean {
+  public override isAlreadyLinked(
+    storedConfig: Record<string, any>,
+    payload: AuthPayload
+  ): boolean {
     return storedConfig.phoneNumber === payload.phoneNumber
   }
 

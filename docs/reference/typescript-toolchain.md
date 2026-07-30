@@ -70,26 +70,32 @@ requires:
 The current governed inventory is 43 native compiler profiles plus one isolated
 codegen API profile. It also discovers all 121 tracked `tsconfig` files, resolves
 their complete `extends` chains, rejects missing or circular configurations,
-and requires every project to inherit one of nine approved runtime profiles.
-The check runs in the repository-health job and locally through
-`pnpm typescript:check` or `pnpm health:check`.
+and requires every project to use one of nine approved runtime profiles. Seven
+deployable services have self-contained `tsconfig` files because their npm and
+Docker build contexts intentionally contain only the service directory. The
+governance mapping assigns those configs to `node-service.json`, requires every
+strict option inline, and rejects either profile drift or a new external
+`extends` dependency that would break a standalone build. The check runs in the
+repository-health job and locally through `pnpm typescript:check` or
+`pnpm health:check`.
 
 ## Strict runtime profiles
 
 All profiles live under `config/typescript/` and inherit the same strict
-compiler contract.
+compiler contract. Projects normally inherit them directly; self-contained
+service configs are validated against the same contract as described above.
 
-| Profile | Intended boundary |
-| --- | --- |
-| `node-library.json` | Node-oriented published libraries |
-| `node-service.json` | Deployable Node services |
-| `dual-runtime.json` | Packages shared by Node and browser-like runtimes |
-| `browser.json` | Browser builds |
-| `react-native.json` | React Native and Metro builds |
-| `cli.json` | Command-line applications |
-| `test.json` | Tests, examples, and conformance runners |
-| `wasm-worker.json` | WASM packages and worker entry points |
-| `strict-new.json` | New or isolated code that can also enforce exact optional and indexed access |
+| Profile             | Intended boundary                                                            |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `node-library.json` | Node-oriented published libraries                                            |
+| `node-service.json` | Deployable Node services                                                     |
+| `dual-runtime.json` | Packages shared by Node and browser-like runtimes                            |
+| `browser.json`      | Browser builds                                                               |
+| `react-native.json` | React Native and Metro builds                                                |
+| `cli.json`          | Command-line applications                                                    |
+| `test.json`         | Tests, examples, and conformance runners                                     |
+| `wasm-worker.json`  | WASM packages and worker entry points                                        |
+| `strict-new.json`   | New or isolated code that can also enforce exact optional and indexed access |
 
 The shared contract enables `strict`, `strictNullChecks`, `noImplicitAny`,
 `useUnknownInCatchVariables`, `noImplicitOverride`, and
