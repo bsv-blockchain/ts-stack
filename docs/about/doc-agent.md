@@ -2,9 +2,9 @@
 id: about-doc-agent
 title: 'Documentation Maintenance'
 kind: meta
-version: '2.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '2.1.0'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 status: stable
 tags: [about, documentation, maintenance, automation]
@@ -29,8 +29,14 @@ generated facts, examples, and operational claims must agree with source.
 - Release behavior: `.github/workflows/release.yaml`,
   `.github/workflows/infra-release.yaml`, and the machine-readable supply-chain
   policies.
-- Program state and deferred work:
-  [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324).
+- Contribution policy: the root
+  [`CONTRIBUTING.md`](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md).
+- Deferred final QA:
+  [issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400);
+  release/external assurance:
+  [issue #401](https://github.com/bsv-blockchain/ts-stack/issues/401); and
+  analysis/CI follow-up:
+  [issue #402](https://github.com/bsv-blockchain/ts-stack/issues/402).
 
 Do not copy source-manifest tables into prose. Run `pnpm docs:facts` and link to
 [Generated Stack Facts](../reference/stack-facts.md).
@@ -152,6 +158,6 @@ A documentation PR should state:
 - runtime, deployment, security, or migration claims changed; and
 - intentionally historical or deferred content left unchanged.
 
-Update [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324)
-when the work completes or changes the remaining program, so the issue and
-repository do not diverge.
+Update the applicable focused issue when work changes its remaining scope. Do
+not reopen the retired modernization tracker or copy active policy into a
+package-local document.

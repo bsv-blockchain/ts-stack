@@ -32,6 +32,9 @@ jobs:
       - name: Test repository health controls
         run: node --test scripts/*.test.mjs
 
+      - name: Enforce uniform contributor and agent policy
+        run: node scripts/contributor-policy.mjs
+
       - name: Enforce the TypeScript compiler and tooling-API boundary
         run: node scripts/typescript-toolchain.mjs
 

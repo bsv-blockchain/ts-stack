@@ -2,9 +2,9 @@
 
 > **Historical planning record — superseded.** This document describes an
 > unadopted cross-language governance model and references files and roles that
-> are not current repository policy. Use [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324),
-> `docs/about/contributing.md`, the `governance/` registries, and enforced
-> repository rules as the current sources of truth.
+> are not current repository policy. Use root `CONTRIBUTING.md`, `AGENTS.md`,
+> the `governance/` registries, specifications, and enforced repository rules
+> as the current sources of truth.
 
 ## Mission
 

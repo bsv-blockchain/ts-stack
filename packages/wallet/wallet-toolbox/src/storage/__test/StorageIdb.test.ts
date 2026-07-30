@@ -138,7 +138,7 @@ describe('StorageIdb tests', () => {
   })
 
   test.skip('1', async () => {
-    // Tracker #324 final-QA item; owner: wallet-maintainers; review by 2026-10-27.
+    // Final QA issue #400; owner: wallet-maintainers; review by 2026-10-27.
     // The isolated case passes but the full suite retains an IndexedDB handle.
     if (Setup.noEnv('test')) return
     const env = Setup.getEnv('test')

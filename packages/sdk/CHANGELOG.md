@@ -230,6 +230,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Point SDK contributors and AI agents to the canonical stack-level
+  contribution and quality policy without changing package behavior.
 - Harden UTF-8, binary JSON, secret-redaction, cryptographic compatibility, and
   optional-state handling while preserving the existing SDK 2.x wire and call
   contracts.

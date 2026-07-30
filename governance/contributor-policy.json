@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "owner": "ts-stack-maintainers",
+  "lastReviewed": "2026-07-30",
+  "authority": {
+    "agentInstructions": "AGENTS.md",
+    "contributionGuide": "CONTRIBUTING.md",
+    "codeOfConduct": "CODE_OF_CONDUCT.md",
+    "securityPolicy": ".github/SECURITY.md",
+    "pullRequestTemplate": ".github/pull_request_template.md",
+    "issueTemplateDirectory": ".github/ISSUE_TEMPLATE"
+  },
+  "scopeSources": [
+    "governance/repository-health/projects.json",
+    "governance/service-operations.json"
+  ],
+  "packageAgentPolicy": {
+    "mode": "generated-pointer-only",
+    "syncCommand": "pnpm contributor-policy:sync",
+    "technicalDocumentationLocations": ["README.md", "docs/", "specs/", "governance/"]
+  },
+  "legacyAgentConsolidation": {
+    "decision": "replaced-with-generated-root-pointers",
+    "replacement": "AGENTS.md, CONTRIBUTING.md, current package READMEs, generated package documentation, specifications, and operator guides",
+    "rationale": "The former package files mixed contributor rules with duplicated API inventories, stale package versions, obsolete commands, and generated AI-oriented notes. Current technical authorities already live in package READMEs, generated package documentation, specifications, service contracts, and operator guides; copying stale inventories forward would create a second source of truth. Each former file is now a generated pointer to the root doctrine.",
+    "priorFiles": [
+      "infra/message-box-server/AGENTS.md",
+      "infra/overlay-server/AGENTS.md",
+      "infra/uhrp-server-basic/AGENTS.md",
+      "infra/uhrp-server-cloud-bucket/AGENTS.md",
+      "infra/wab/AGENTS.md",
+      "infra/wallet-infra/AGENTS.md",
+      "packages/helpers/amountinator/AGENTS.md",
+      "packages/helpers/bsv-wallet-helper/AGENTS.md",
+      "packages/helpers/did-client/AGENTS.md",
+      "packages/helpers/fund-wallet/AGENTS.md",
+      "packages/helpers/simple/AGENTS.md",
+      "packages/helpers/ts-templates/AGENTS.md",
+      "packages/messaging/authsocket-client/AGENTS.md",
+      "packages/messaging/authsocket/AGENTS.md",
+      "packages/messaging/message-box-client/AGENTS.md",
+      "packages/messaging/ts-paymail/AGENTS.md",
+      "packages/middleware/402-pay/AGENTS.md",
+      "packages/middleware/auth-express-middleware/AGENTS.md",
+      "packages/middleware/payment-express-middleware/AGENTS.md",
+      "packages/network/ts-p2p/AGENTS.md",
+      "packages/overlays/btms-backend/AGENTS.md",
+      "packages/overlays/gasp-core/AGENTS.md",
+      "packages/overlays/overlay-discovery-services/AGENTS.md",
+      "packages/overlays/overlay-express/AGENTS.md",
+      "packages/overlays/overlay/AGENTS.md",
+      "packages/overlays/topics/AGENTS.md",
+      "packages/sdk/AGENTS.md",
+      "packages/wallet/btms-permission-module/AGENTS.md",
+      "packages/wallet/btms/AGENTS.md",
+      "packages/wallet/ts-wallet-relay/AGENTS.md",
+      "packages/wallet/wallet-toolbox/AGENTS.md"
+    ]
+  },
+  "prohibitedNestedPolicyFiles": [
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".cursorrules"
+  ],
+  "requiredRootWorkflows": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/conformance.yml",
+    ".github/workflows/dependency-release-verification.yml",
+    ".github/workflows/docs-deploy.yml",
+    ".github/workflows/infra-release.yaml",
+    ".github/workflows/release.yaml",
+    ".github/workflows/wab-marketplace-release.yml"
+  ],
+  "requiredPullRequestEvidence": [
+    "exact-head",
+    "zero new Sonar findings",
+    "CodeQL",
+    "self-review",
+    "Documentation, changelog, migration",
+    "Review conversations are resolved",
+    "all applicable checks"
+  ],
+  "historicalGitHubDispositions": [
+    {
+      "id": "standalone-package-build-test-publish",
+      "decision": "consolidated",
+      "replacement": ".github/workflows/ci.yml and .github/workflows/release.yaml",
+      "rationale": "Root CI retains build, strict lint, typecheck, tests, coverage, package consumers, browser/mobile, conformance, Sonar, and security gates. Root release replaces merge-to-main npm publication with reviewed, immutable, scanned, attested OIDC candidates.",
+      "files": [
+        "packages/helpers/amountinator/.github/workflows/push.yaml",
+        "packages/helpers/bsv-wallet-helper/.github/workflows/push.yaml",
+        "packages/helpers/did-client/.github/workflows/push.yaml",
+        "packages/helpers/simple/.github/workflows/push.yaml",
+        "packages/helpers/ts-templates/.github/workflows/push.yaml",
+        "packages/messaging/authsocket-client/.github/workflows/push.yaml",
+        "packages/messaging/authsocket/.github/workflows/push.yaml",
+        "packages/messaging/ts-paymail/.github/workflows/push.yaml",
+        "packages/middleware/402-pay/.github/workflows/push.yaml",
+        "packages/middleware/auth-express-middleware/.github/workflows/push.yaml",
+        "packages/middleware/payment-express-middleware/.github/workflows/push.yaml",
+        "packages/network/ts-p2p/.github/workflows/push.yaml",
+        "packages/overlays/gasp-core/.github/workflows/push.yaml",
+        "packages/overlays/overlay-discovery-services/.github/workflows/push.yaml",
+        "packages/overlays/overlay-express/.github/workflows/push.yaml",
+        "packages/overlays/overlay/.github/workflows/push.yaml",
+        "packages/wallet/wallet-toolbox/.github/workflows/push.yaml"
+      ]
+    },
+    {
+      "id": "standalone-community-templates",
+      "decision": "consolidated",
+      "replacement": ".github/ISSUE_TEMPLATE and .github/pull_request_template.md",
+      "rationale": "The root forms retain reproducibility, environment, expected/actual behavior, discussion, tests, self-review, documentation, changelog, and migration intent while adding stack scope, compatibility, security, dependency, exact-head, and quality evidence.",
+      "files": [
+        "packages/helpers/bsv-wallet-helper/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/helpers/bsv-wallet-helper/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/helpers/bsv-wallet-helper/.github/pull_request_template.md",
+        "packages/helpers/simple/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/helpers/simple/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/helpers/simple/.github/pull_request_template.md",
+        "packages/messaging/ts-paymail/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/messaging/ts-paymail/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/messaging/ts-paymail/.github/pull_request_template.md",
+        "packages/network/ts-p2p/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/network/ts-p2p/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/network/ts-p2p/.github/pull_request_template.md",
+        "packages/overlays/overlay-express/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/overlays/overlay-express/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/overlays/overlay-express/.github/pull_request_template.md",
+        "packages/overlays/overlay/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/overlays/overlay/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/overlays/overlay/.github/pull_request_template.md",
+        "packages/wallet/wallet-toolbox/.github/ISSUE_TEMPLATE/bug_report.md",
+        "packages/wallet/wallet-toolbox/.github/ISSUE_TEMPLATE/discussion.md",
+        "packages/wallet/wallet-toolbox/.github/pull_request_template.md"
+      ]
+    },
+    {
+      "id": "standalone-infrastructure-automation",
+      "decision": "consolidated-and-retired",
+      "replacement": ".github/workflows/infra-release.yaml, .github/workflows/wab-marketplace-release.yml, .github/dependabot.yml, and operator-owned deployment systems",
+      "rationale": "Root workflows retain Linux/amd64 image builds, vulnerability scans, SBOMs, provenance, signatures, immutable GHCR publication, post-release verification, and the complete WAB Marketplace transaction. Inert Cloud Run/bootstrap examples, static cloud keys, hard-coded projects, legacy Docker Hub pushes, branch-based deployments, and ECR-only uploads without governed listing registration are unsafe operational history and are not reactivated.",
+      "files": [
+        "infra/message-box-server/.github/workflows/build-and-push.yml",
+        "infra/message-box-server/.github/workflows/deploy.yaml.example",
+        "infra/message-box-server/.github/workflows/image.yaml",
+        "infra/overlay-server/.github/workflows/image.yaml",
+        "infra/uhrp-server-cloud-bucket/.github/dependabot.yml",
+        "infra/uhrp-server-cloud-bucket/.github/workflows/build.yaml",
+        "infra/uhrp-server-cloud-bucket/.github/workflows/deploy.yaml",
+        "infra/uhrp-server-cloud-bucket/.github/workflows/setup.yaml",
+        "infra/wab/.github/workflows/deploy.yaml.example",
+        "infra/wallet-infra/.github/workflows/build-and-push.yml",
+        "infra/wallet-infra/.github/workflows/build.yaml"
+      ]
+    }
+  ],
+  "retiredPackageContributionFiles": [
+    "packages/helpers/ts-templates/CONTRIBUTING.md",
+    "packages/messaging/ts-paymail/CODE_OF_CONDUCT.md",
+    "packages/messaging/ts-paymail/CONTRIBUTING.md",
+    "packages/network/ts-p2p/CODE_OF_CONDUCT.md",
+    "packages/network/ts-p2p/CONTRIBUTING.md",
+    "packages/overlays/overlay/CONTRIBUTING.md",
+    "packages/sdk/CONTRIBUTING.md",
+    "packages/wallet/wallet-toolbox/CONTRIBUTING.md"
+  ]
+}

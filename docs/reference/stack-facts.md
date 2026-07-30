@@ -42,7 +42,7 @@ authorized release action.
 | helpers | `@bsv/did-client` | `1.2.3` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/helpers/did-client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client) |
 | helpers | `@bsv/fund-wallet` | `1.4.3` | cli | cli | node | `>=22` | [packages/helpers/fund-wallet](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet) |
 | helpers | `@bsv/simple` | `0.4.8` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/simple](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple) |
-| helpers | `@bsv/templates` | `1.9.5` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/ts-templates](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates) |
+| helpers | `@bsv/templates` | `1.9.6` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/ts-templates](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates) |
 | helpers | `@bsv/wallet-helper` | `0.1.6` | node-library | node-cjs, node-esm | node | `>=22` | [packages/helpers/bsv-wallet-helper](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper) |
 | helpers | `create-bsv-app` | `1.0.4` | cli | cli | node | `>=22` | [packages/helpers/create-bsv-app](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app) |
 | messaging | `@bsv/authsocket` | `2.1.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/messaging/authsocket](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket) |
@@ -59,14 +59,14 @@ authorized release action.
 | overlays | `@bsv/overlay-discovery-services` | `2.1.6` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services) |
 | overlays | `@bsv/overlay-express` | `2.4.9` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-express](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express) |
 | overlays | `@bsv/overlay-topics` | `1.6.8` | node-library | node-esm | node | `>=22` | [packages/overlays/topics](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics) |
-| sdk | `@bsv/sdk` | `2.2.14` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
+| sdk | `@bsv/sdk` | `2.2.15` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk) |
 | sdk | `@bsv/verifast` | `0.3.4` | wasm-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global, wasm-worker | browser, node, umd, wasm, worker | `>=22` | [packages/verifast](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast) |
 | wallet | `@bsv/btms` | `1.1.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/wallet/btms](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms) |
 | wallet | `@bsv/btms-permission-module` | `1.1.3` | node-library | node-esm | node | `>=22` | [packages/wallet/btms-permission-module](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module) |
 | wallet | `@bsv/wallet-relay` | `0.3.3` | cli-library | browser-bundler, browser-esm, cli, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/ts-wallet-relay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/ts-wallet-relay) |
-| wallet | `@bsv/wallet-toolbox` | `2.4.19` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
-| wallet | `@bsv/wallet-toolbox-client` | `2.4.19` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
-| wallet | `@bsv/wallet-toolbox-mobile` | `2.4.19` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
+| wallet | `@bsv/wallet-toolbox` | `2.4.20` | node-library | node-cjs | node | `>=22` | [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox) |
+| wallet | `@bsv/wallet-toolbox-client` | `2.4.20` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client) |
+| wallet | `@bsv/wallet-toolbox-mobile` | `2.4.20` | react-native-library | react-native-metro | react-native | `>=22` | [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile) |
 
 ## Standalone infrastructure manifests
 

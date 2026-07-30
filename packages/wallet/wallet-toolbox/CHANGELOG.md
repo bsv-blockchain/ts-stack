@@ -6,6 +6,9 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Point Wallet Toolbox contributors and AI agents to the canonical stack-level
+  contribution and quality policy; keep client and mobile candidate versions
+  in release lockstep without changing runtime behavior.
 - Harden storage, action-batch, remoting, WAB, authentication, chaintracker,
   and monitor implementation paths while preserving persisted schemas,
   positional call compatibility, and public wallet/storage contracts.

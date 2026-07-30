@@ -44,16 +44,16 @@ and clean-consumer tests remain the executable type authority.
 | `@bsv/overlay-topics`             | `1.6.1`      | `1.6.8`  | patch     | [API and usage](../packages/overlays/overlay-topics.md)               | No consumer migration is required; topic IDs, lookup contracts, and persisted formats are unchanged.                                                                                                                             |
 | `@bsv/paymail`                    | `2.4.2`      | `2.4.5`  | patch     | [API and usage](../packages/messaging/paymail.md)                     | No consumer migration is required; existing Paymail client APIs and protocol semantics are retained.                                                                                                                             |
 | `@bsv/payment-express-middleware` | `2.1.1`      | `2.1.4`  | patch     | [API and usage](../packages/middleware/payment-express-middleware.md) | No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported.                                                                                                                                         |
-| `@bsv/sdk`                        | `2.2.0`      | `2.2.14` | patch     | [API and usage](../packages/sdk/bsv-sdk.md)                           | No consumer migration is required; the source candidate preserves the 2.x public API, wire encodings, script semantics, errors, and supported import forms.                                                                      |
+| `@bsv/sdk`                        | `2.2.0`      | `2.2.15` | patch     | [API and usage](../packages/sdk/bsv-sdk.md)                           | No consumer migration is required; the source candidate preserves the 2.x public API, wire encodings, script semantics, errors, and supported import forms.                                                                      |
 | `@bsv/simple`                     | `0.4.1`      | `0.4.8`  | patch     | [API and usage](../packages/helpers/simple.md)                        | No consumer migration is required; the browser and server entry points remain compatible.                                                                                                                                        |
-| `@bsv/templates`                  | `1.9.1`      | `1.9.5`  | patch     | [API and usage](../packages/helpers/templates.md)                     | No consumer migration is required; template APIs, supported imports, and generated script semantics are unchanged.                                                                                                               |
+| `@bsv/templates`                  | `1.9.1`      | `1.9.6`  | patch     | [API and usage](../packages/helpers/templates.md)                     | No consumer migration is required; template APIs, supported imports, and generated script semantics are unchanged.                                                                                                               |
 | `@bsv/teranode-listener`          | `1.1.1`      | `1.1.4`  | patch     | [API and usage](../packages/network/teranode-listener.md)             | No consumer migration is required; listener APIs, topics, and network configuration are unchanged.                                                                                                                               |
 | `@bsv/verifast`                   | `0.3.0`      | `0.3.4`  | patch     | [API and usage](../packages/sdk/verifast.md)                          | No consumer migration is required; exports, verification behavior, worker protocols, package paths, and runtime defaults are unchanged.                                                                                          |
 | `@bsv/wallet-helper`              | `0.1.1`      | `0.1.6`  | patch     | [API and usage](../packages/helpers/wallet-helper.md)                 | No consumer migration is required; fluent builder APIs and transaction semantics are unchanged.                                                                                                                                  |
 | `@bsv/wallet-relay`               | `0.2.2`      | `0.3.3`  | minor     | [API and usage](../packages/wallet/wallet-relay.md)                   | QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers. |
-| `@bsv/wallet-toolbox`             | `2.4.4`      | `2.4.19` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required; persisted schemas, provider behavior, transaction construction, monitor behavior, and the 2.x wallet and storage interfaces remain compatible.                                                |
-| `@bsv/wallet-toolbox-client`      | `2.4.4`      | `2.4.19` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No consumer migration is required; client entry points and remote storage contracts remain compatible.                                                                                                                           |
-| `@bsv/wallet-toolbox-mobile`      | `2.4.4`      | `2.4.19` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No consumer migration is required; React Native and mobile bridge contracts remain compatible.                                                                                                                                   |
+| `@bsv/wallet-toolbox`             | `2.4.4`      | `2.4.20` | patch     | [API and usage](../packages/wallet/wallet-toolbox.md)                 | No consumer migration is required; persisted schemas, provider behavior, transaction construction, monitor behavior, and the 2.x wallet and storage interfaces remain compatible.                                                |
+| `@bsv/wallet-toolbox-client`      | `2.4.4`      | `2.4.20` | patch     | [API and usage](../packages/wallet/wallet-toolbox-client.md)          | No consumer migration is required; client entry points and remote storage contracts remain compatible.                                                                                                                           |
+| `@bsv/wallet-toolbox-mobile`      | `2.4.4`      | `2.4.20` | patch     | [API and usage](../packages/wallet/wallet-toolbox-mobile.md)          | No consumer migration is required; React Native and mobile bridge contracts remain compatible.                                                                                                                                   |
 | `create-bsv-app`                  | `1.0.2`      | `1.0.4`  | patch     | [API and usage](../packages/helpers/create-bsv-app.md)                | No consumer migration is required; generated application structure and CLI behavior are unchanged.                                                                                                                               |
 
 `none` means the source manifest matches the recorded npm baseline. Any other
@@ -304,7 +304,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/sdk/bsv-sdk.md](../packages/sdk/bsv-sdk.md)
 - Source: [packages/sdk](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
-- Release note: Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, and behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths.
+- Release note: Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and canonical root contribution guidance.
 - Migration: No consumer migration is required; the source candidate preserves the 2.x public API, wire encodings, script semantics, errors, and supported import forms.
 
 | Public subpath                     | Runtime target(s)                                                                                          | Declaration target(s)                                                                                            |
@@ -399,7 +399,7 @@ CLI entry points: `{"fund-metanet":"./dist/index.mjs"}`.
 
 - Package documentation: [docs/packages/helpers/templates.md](../packages/helpers/templates.md)
 - Source: [packages/helpers/ts-templates](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates)
-- Release note: Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence, and adds an exact-tarball browser-consumer and bundle-size contract.
+- Release note: Consolidates MultiPushDrop script construction while preserving the exact generated locking-script sequence, adds an exact-tarball browser-consumer and bundle-size contract, and points contributors to the canonical root policy.
 - Migration: No consumer migration is required; template APIs, supported imports, and generated script semantics are unchanged.
 
 | Public subpath | Runtime target(s)                       | Declaration target(s)                       |
@@ -465,7 +465,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox.md](../packages/wallet/wallet-toolbox.md)
 - Source: [packages/wallet/wallet-toolbox](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox)
-- Release note: Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, explicit manual-suite governance, safe operator/example tooling, and redacted diagnostic summaries across wallet, monitor, provider, action-batch, storage, proof, and Chaintracks paths.
+- Release note: Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, explicit manual-suite governance, safe operator/example tooling, redacted diagnostic summaries across wallet, monitor, provider, action-batch, storage, proof, and Chaintracks paths, and canonical root contribution guidance.
 - Migration: No consumer migration is required; persisted schemas, provider behavior, transaction construction, monitor behavior, and the 2.x wallet and storage interfaces remain compatible.
 
 | Public subpath   | Runtime target(s)                                    | Declaration target(s)      |
@@ -479,7 +479,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-client.md](../packages/wallet/wallet-toolbox-client.md)
 - Source: [packages/wallet/wallet-toolbox/client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client)
-- Release note: Carries the lockstep Wallet Toolbox client candidate with transport, validation, storage, provider, dependency, package, declaration, test, and operator-procedure hardening.
+- Release note: Carries the lockstep Wallet Toolbox client candidate with transport, validation, storage, provider, dependency, package, declaration, test, operator-procedure hardening, and the synchronized contributor-policy release boundary.
 - Migration: No consumer migration is required; client entry points and remote storage contracts remain compatible.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |
@@ -491,7 +491,7 @@ CLI entry points: `{"wallet-relay":"./bin/init.mjs"}`.
 
 - Package documentation: [docs/packages/wallet/wallet-toolbox-mobile.md](../packages/wallet/wallet-toolbox-mobile.md)
 - Source: [packages/wallet/wallet-toolbox/mobile](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile)
-- Release note: Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, transport, storage, provider, package, declaration, test, and operator-procedure hardening.
+- Release note: Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, transport, storage, provider, package, declaration, test, operator-procedure hardening, and the synchronized contributor-policy release boundary.
 - Migration: No consumer migration is required; React Native and mobile bridge contracts remain compatible.
 
 | Public subpath   | Runtime target(s)                                                                | Declaration target(s)                                                                  |

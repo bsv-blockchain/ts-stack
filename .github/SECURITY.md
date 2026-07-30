@@ -92,7 +92,7 @@ Pull requests and releases enforce, as applicable:
 
 Coverage-guided fuzzing, remaining manual/browser/performance review, and the
 final QA hardening campaign are deliberately tracked as unfinished in
-[issue #324](https://github.com/bsv-blockchain/ts-stack/issues/324). They must
+[issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400). They must
 not be described as complete until their preserved branch is finished,
 reviewed, merged, and validated.
 

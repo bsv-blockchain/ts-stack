@@ -2,7 +2,7 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.3.3'
+version: '1.4.0'
 last_updated: '2026-07-30'
 last_verified: '2026-07-30'
 review_cadence_days: 30
@@ -13,8 +13,14 @@ tags: [reference, governance, quality, security, releases]
 # Repository Health Controls
 
 The repository health controls turn the TypeScript stack maintenance program
-into a checked, machine-readable contract. The authoritative program tracker is
-[GitHub issue #324](https://github.com/bsv-blockchain/ts-stack/issues/324).
+into a checked, machine-readable contract. Root
+[`CONTRIBUTING.md`](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md),
+`AGENTS.md`, governance registries, and CI are the current authority. Retired
+[tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324)
+preserves modernization history; focused remaining work is tracked in
+[QA #400](https://github.com/bsv-blockchain/ts-stack/issues/400),
+[release/assurance #401](https://github.com/bsv-blockchain/ts-stack/issues/401),
+and [analysis/CI #402](https://github.com/bsv-blockchain/ts-stack/issues/402).
 
 ## Sources of truth
 
@@ -219,6 +225,21 @@ registry. A separate scheduled workflow validates all targets weekly.
 The job writes a rule-by-rule and project-by-project report to the GitHub Actions
 step summary and feeds the required `merge-gate`. Known findings stay visible
 until their remediation PR removes them from both the code and baseline.
+
+## Contributor-policy control
+
+`governance/contributor-policy.json` makes the root contribution and agent
+doctrine executable. `pnpm contributor-policy:check` requires a generated
+root-policy pointer at all 37 governed workspace projects and seven standalone
+services (43 unique nested scopes), forbids nested `.github` ownership and
+package-local contribution policies, verifies root templates/workflows, and
+retains the disposition of 31 legacy agent guides, 49 imported GitHub files,
+and eight superseded package policies. `pnpm contributor-policy:sync`
+regenerates pointers after a project or service is added.
+
+The root CI repository-health job runs this check before installed workspace
+jobs. A new package or service cannot silently invent different lint, review,
+release, dependency, documentation, migration, or agent rules.
 
 ## Completion discipline
 

@@ -9,9 +9,10 @@ Use [Generated Stack Facts](../../docs/reference/stack-facts.md) for current
 versions/runtime profiles, [Repository Health](../../docs/reference/repository-health.md)
 for enforced controls, [Security Policy](../../.github/SECURITY.md) for current
 security scope, and
-[tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324) for
-unfinished work. Keep the files below unchanged except for factual archival
-corrections; new findings belong in current governance or the tracker.
+[final QA issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400)
+for unfinished test/reliability validation. Keep the files below unchanged
+except for factual archival corrections; new findings belong in current
+governance or a focused issue.
 
 ## Registry
 

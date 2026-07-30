@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
+- Point contributors and AI agents to the canonical stack-level contribution
+  and quality policy without changing template behavior.
 - Consolidate MultiPushDrop script-chunk assembly without changing the
   generated locking script.
 

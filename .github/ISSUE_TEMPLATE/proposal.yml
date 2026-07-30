@@ -1,0 +1,59 @@
+name: Change proposal
+description: Propose a capability, specification, public API, package, migration, or cross-stack improvement.
+title: 'proposal: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Substantial changes should establish compatibility, specification, security, and migration intent before implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and users
+      description: What concrete problem exists, who encounters it, and why current behavior is insufficient?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed end state
+      description: Describe behavior and acceptance criteria, not only an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Affected packages, services, and implementations
+      description: Include TypeScript projects, public services, specifications, conformance vectors, and other implementations.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and migration
+      description: Explain public API, wire, persistence, runtime, browser/mobile, deployment, and cross-implementation effects.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and operational impact
+      description: Identify changed trust boundaries, abuse cases, CORS/CSP behavior, dependencies, rollout, and rollback.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Validation plan
+      description: List tests, conformance, consumer, performance, documentation, and release evidence required.
+    validations:
+      required: true
+  - type: checkboxes
+    id: commitments
+    attributes:
+      label: Proposal checks
+      options:
+        - label: I searched for overlapping issues, pull requests, specifications, and planning records.
+          required: true
+        - label: I have not assumed that a breaking change is acceptable merely because it simplifies implementation.
+          required: true

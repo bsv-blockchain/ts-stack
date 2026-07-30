@@ -5,10 +5,12 @@ history. They are not automatically current policy.
 
 Current repository policy and work are governed by:
 
-- [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324);
-- `docs/about/contributing.md` and `.github/SECURITY.md`;
+- root `CONTRIBUTING.md`, `AGENTS.md`, and `.github/SECURITY.md`;
 - `governance/` machine-readable registries and repository CI; and
-- package and infrastructure operator guides.
+- package and infrastructure operator guides. Focused remaining work lives in
+  [QA #400](https://github.com/bsv-blockchain/ts-stack/issues/400),
+  [release/assurance #401](https://github.com/bsv-blockchain/ts-stack/issues/401),
+  and [analysis/CI #402](https://github.com/bsv-blockchain/ts-stack/issues/402).
 
 Each planning record must say whether it is historical, resolved, or still a
 proposal. A proposal requires a current issue, compatibility and security

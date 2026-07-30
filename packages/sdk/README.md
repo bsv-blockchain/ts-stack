@@ -152,7 +152,8 @@ We're always looking for contributors to help us improve the SDK. Whether it's b
    [Development and Distribution](#development-and-distribution).
 5. **Commit**: Commit your changes and push to your fork.
 6. **Pull Request**: Open a pull request from your fork to this repository.
-   For more details, check the [contribution guidelines](./CONTRIBUTING.md).
+   For more details, check the
+   [repository contribution guidelines](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md).
 
 For information on past releases, check out the [changelog](./CHANGELOG.md). For future plans, check the [roadmap](./ROADMAP.md)!
 
