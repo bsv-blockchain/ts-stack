@@ -365,3 +365,11 @@ jobs:
               --title "chore: sync published workspace versions" \
               --body "$body"
           fi
+
+  post-release-verification:
+    if: needs.publish.result == 'success'
+    needs: publish
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/dependency-release-verification.yml

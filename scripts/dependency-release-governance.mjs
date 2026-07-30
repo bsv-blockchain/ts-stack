@@ -20,13 +20,34 @@ const DEPENDENCY_FIELDS = [
   'peerDependencies'
 ]
 const IGNORED_DIRECTORIES = new Set(['.git', 'coverage', 'dist', 'node_modules', 'out'])
-const DEPENDENCY_CHANGE_PATTERN =
-  /(^|\/)(?:package(?:-lock)?\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|go\.(?:mod|sum)|pyproject\.toml|uv\.lock|Dockerfile(?:\.[^/]*)?|dependabot\.yml)$|^\.github\/workflows\/[^/]+\.ya?ml$/
+const DEPENDENCY_FILENAMES = new Set([
+  'dependabot.yml',
+  'go.mod',
+  'go.sum',
+  'package-lock.json',
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'pyproject.toml',
+  'uv.lock'
+])
 
 const readJson = filePath => JSON.parse(fs.readFileSync(filePath, 'utf8'))
 const stableValue = value => JSON.stringify(value)
 const relative = filePath => path.relative(ROOT, filePath).split(path.sep).join('/')
 const isNonEmptyString = value => typeof value === 'string' && value.trim().length > 0
+const compareText = (left, right) => left.localeCompare(right)
+
+function isDependencyChange(file) {
+  const normalized = file.split(path.sep).join('/')
+  const filename = path.posix.basename(normalized)
+  if (DEPENDENCY_FILENAMES.has(filename)) return true
+  if (filename === 'Dockerfile' || filename.startsWith('Dockerfile.')) return true
+  return (
+    normalized.startsWith('.github/workflows/') &&
+    (normalized.endsWith('.yml') || normalized.endsWith('.yaml'))
+  )
+}
 
 function walk(directory, callback) {
   if (!fs.existsSync(directory)) return
@@ -45,7 +66,7 @@ function packageManifestPaths() {
       if (path.basename(filePath) === 'package.json') manifests.push(filePath)
     })
   }
-  return [...new Set(manifests)].sort()
+  return [...new Set(manifests)].sort(compareText)
 }
 
 export function parsePnpmOverrides(source) {
@@ -57,9 +78,20 @@ export function parsePnpmOverrides(source) {
       continue
     }
     if (!inside) continue
-    if (/^\S/.test(line) && line.trim() !== '') break
-    const match = /^  (['"]?)(.+?)\1:\s+(.+?)\s*$/.exec(line)
-    if (match) overrides.push({ selector: match[2], value: match[3] })
+    if (line.trim() !== '' && !line.startsWith(' ')) break
+    if (!line.startsWith('  ') || line.startsWith('   ')) continue
+    const entry = line.slice(2)
+    const separator = entry.indexOf(':')
+    if (separator < 1) continue
+    const rawSelector = entry.slice(0, separator).trim()
+    const value = entry.slice(separator + 1).trim()
+    if (value === '') continue
+    const quoted =
+      rawSelector.length >= 2 &&
+      (rawSelector[0] === "'" || rawSelector[0] === '"') &&
+      rawSelector.at(-1) === rawSelector[0]
+    const selector = quoted ? rawSelector.slice(1, -1) : rawSelector
+    overrides.push({ selector, value })
   }
   return overrides
 }
@@ -158,27 +190,30 @@ function validateOverrideRegistry(policy, exceptions, errors) {
   const byId = new Map(exceptions.exceptions.map(exception => [exception.id, exception]))
   const today = new Date().toISOString().slice(0, 10)
   for (const registration of policy.overrideRegistry) {
-    const exception = byId.get(registration.exceptionId)
-    if (exception?.category !== 'override') {
-      errors.push(
-        `${registration.source} ${registration.selector} references missing override exception ${registration.exceptionId}`
-      )
-      continue
-    }
-    if (exception.owner !== policy.owner) {
-      errors.push(`${exception.id} must be owned by ${policy.owner}`)
-    }
-    if (exception.reviewBy < today) errors.push(`${exception.id} expired on ${exception.reviewBy}`)
-    if (
-      !(exception.evidence ?? []).some(item =>
-        /^https:\/\/github\.com\/(?!bsv-blockchain\/ts-stack\/issues\/324)/.test(item)
-      )
-    ) {
-      errors.push(`${exception.id} must include an upstream or advisory link`)
-    }
-    if (!isNonEmptyString(exception.removeWhen)) {
-      errors.push(`${exception.id} must define a removal test`)
-    }
+    validateOverrideException(registration, byId, policy.owner, today, errors)
+  }
+}
+
+function validateOverrideException(registration, exceptionsById, owner, today, errors) {
+  const exception = exceptionsById.get(registration.exceptionId)
+  if (exception?.category !== 'override') {
+    errors.push(
+      `${registration.source} ${registration.selector} references missing override exception ${registration.exceptionId}`
+    )
+    return
+  }
+  if (exception.owner !== owner) errors.push(`${exception.id} must be owned by ${owner}`)
+  if (exception.reviewBy < today) errors.push(`${exception.id} expired on ${exception.reviewBy}`)
+  const hasExternalEvidence = (exception.evidence ?? []).some(
+    item =>
+      item.startsWith('https://github.com/') &&
+      item !== 'https://github.com/bsv-blockchain/ts-stack/issues/324'
+  )
+  if (!hasExternalEvidence) {
+    errors.push(`${exception.id} must include an upstream or advisory link`)
+  }
+  if (!isNonEmptyString(exception.removeWhen)) {
+    errors.push(`${exception.id} must define a removal test`)
   }
 }
 
@@ -265,7 +300,7 @@ function declaredMajor(value) {
 
 export async function createDirectLatestInventory() {
   const declarations = dependencyDeclarations()
-  const names = [...new Set(declarations.map(item => item.name))].sort()
+  const names = [...new Set(declarations.map(item => item.name))].sort(compareText)
   const metadata = await mapWithConcurrency(names, 8, async name => {
     try {
       const latest = await npmView(name, ['name', 'version'])
@@ -304,6 +339,12 @@ function publishedBaselines(notes) {
   return result
 }
 
+function publishedStatus(source, latest, baseline) {
+  if (source === latest) return 'current'
+  if (baseline === latest) return 'first-party-release-held'
+  return 'diverged'
+}
+
 export async function verifyPublishedPackages() {
   const projects = readJson(PROJECTS_PATH).projects.filter(
     project => project.release === 'npm-oidc'
@@ -322,14 +363,12 @@ export async function verifyPublishedPackages() {
     const latest = metadata.version
     const source = manifest.version
     const baseline = baselines.get(project.name)
-    const status =
-      source === latest ? 'current' : baseline === latest ? 'first-party-release-held' : 'diverged'
     return {
       name: project.name,
       sourceVersion: source,
       publishedLatest: latest,
       recordedPublishedBaseline: baseline,
-      status,
+      status: publishedStatus(source, latest, baseline),
       integrity: metadata['dist.integrity'],
       provenance:
         metadata['dist.attestations']?.provenance?.predicateType ===
@@ -364,7 +403,9 @@ export async function verifyPublishedPackages() {
 
 export function immutableDeploymentImages() {
   const references = new Set()
-  const imagePattern = /^\s*(?:-\s*)?image:\s*['"]?([^'"\s]+@sha256:[0-9a-f]{64})['"]?\s*$/
+  const imagePattern = new RegExp(
+    String.raw`^\s*(?:-\s*)?image:\s*['"]?([^'"\s]+@sha256:[0-9a-f]{64})['"]?\s*$`
+  )
   for (const root of [
     path.join(ROOT, 'infra/overlay-server/deploy'),
     path.join(ROOT, 'infra/wab/deploy'),
@@ -378,11 +419,11 @@ export function immutableDeploymentImages() {
       }
     })
   }
-  return [...references].sort()
+  return [...references].sort(compareText)
 }
 
 export function validatePullRequestEvidence(body, changedFiles, policy = readJson(POLICY_PATH)) {
-  const dependencyChanges = changedFiles.filter(file => DEPENDENCY_CHANGE_PATTERN.test(file))
+  const dependencyChanges = changedFiles.filter(isDependencyChange)
   if (dependencyChanges.length === 0) return []
   const errors = []
   const evidence = policy.dependencyPullRequestEvidence
@@ -404,10 +445,7 @@ async function gitChangedFiles(base, head) {
     cwd: ROOT,
     encoding: 'utf8'
   })
-  return stdout
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .filter(file => DEPENDENCY_CHANGE_PATTERN.test(file))
+  return stdout.split(/\r?\n/).filter(Boolean).filter(isDependencyChange)
 }
 
 async function writeReport(filePath, report) {
@@ -441,6 +479,42 @@ async function main(args) {
     if (report.errors.length > 0) throw new Error(report.errors.join('\n'))
     return
   }
+  if (command === 'prepare-published-install') {
+    const reportPath = argumentValue(args, '--report')
+    const directory = argumentValue(args, '--directory')
+    if (!reportPath || !directory) {
+      throw new Error('prepare-published-install requires --report and --directory')
+    }
+    const report = readJson(path.resolve(reportPath))
+    const installPath = path.resolve(directory)
+    fs.mkdirSync(installPath, { recursive: true })
+    const dependencies = Object.fromEntries(
+      report.packages
+        .map(item => [item.name, item.publishedLatest])
+        .sort(([left], [right]) => compareText(left, right))
+    )
+    fs.writeFileSync(
+      path.join(installPath, 'package.json'),
+      `${JSON.stringify(
+        { name: 'ts-stack-published-verification', private: true, dependencies },
+        null,
+        2
+      )}\n`
+    )
+    await execFileAsync(
+      'npm',
+      [
+        'install',
+        '--package-lock-only',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--package-lock=true'
+      ],
+      { cwd: installPath, encoding: 'utf8', timeout: 5 * 60_000 }
+    )
+    return
+  }
   if (command === 'image-refs') {
     await writeReport(argumentValue(args, '--output'), {
       schemaVersion: 1,
@@ -468,8 +542,10 @@ async function main(args) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main(process.argv.slice(2)).catch(error => {
+  try {
+    await main(process.argv.slice(2))
+  } catch (error) {
     console.error(error.message)
     process.exitCode = 1
-  })
+  }
 }

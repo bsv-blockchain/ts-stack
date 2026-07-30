@@ -6,19 +6,22 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const TEST_PRIVATE_KEY = `${'0'.repeat(63)}1`
 const TEST_ENCRYPTION_KEY = 'ab'.repeat(32)
-const DATABASE_CONNECTION = JSON.stringify({
-  host: '127.0.0.1',
-  port: 3306,
-  user: 'root',
-  password: 'container-contract',
-  database: 'container_contract'
-})
+const TEST_DATABASE_PASSWORD = process.env.CONTRACT_DB_PASSWORD ?? ''
+const databaseConnection = database =>
+  JSON.stringify({
+    host: '127.0.0.1',
+    port: 3306,
+    user: 'root',
+    password: TEST_DATABASE_PASSWORD,
+    database
+  })
 const WALLET_URL = 'http://127.0.0.1:3998'
 const COMMON_ENVIRONMENT = {
   DEPLOY_ENV: 'container-contract',
   LOG_LEVEL: 'info',
   OTEL_DIAG: 'false',
-  OTEL_EXPORTER_OTLP_ENDPOINT: ''
+  OTEL_EXPORTER_OTLP_ENDPOINT: '',
+  OTEL_SDK_DISABLED: 'true'
 }
 
 const contracts = {
@@ -28,7 +31,7 @@ const contracts = {
       CHAIN: 'test',
       ENABLE_BULK_HEADERS_CDN: 'false',
       PORT: '3011',
-      SOURCE_CDN_URL: ''
+      SOURCE_CDN_URL: 'https://cdn.projectbabbage.com/blockheaders/'
     },
     invalidEnvironment: { CHAIN: 'invalid' },
     liveness: '/getInfo',
@@ -44,13 +47,13 @@ const contracts = {
       ENABLE_FIREBASE: 'false',
       ENABLE_WEBSOCKETS: 'true',
       KNEX_DB_CLIENT: 'mysql2',
-      KNEX_DB_CONNECTION: DATABASE_CONNECTION,
+      KNEX_DB_CONNECTION: databaseConnection('container_contract_message'),
       NODE_ENV: 'development',
       PORT: '8080',
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
       WALLET_STORAGE_URL: WALLET_URL
     },
-    invalidEnvironment: { NODE_ENV: 'production' },
+    invalidEnvironment: { PORT: 'invalid' },
     liveness: '/health',
     readiness: '/ready',
     transaction: { method: 'GET', path: '/openapi.json', status: 200 },
@@ -64,15 +67,15 @@ const contracts = {
       BASM_ENABLED: 'false',
       BASM_REORG_STREAM_ENABLED: 'false',
       GASP_ENABLED: 'false',
-      HOSTING_URL: 'http://127.0.0.1:8080',
-      KNEX_URL: 'mysql://root:container-contract@127.0.0.1:3306/container_contract',
-      MONGO_URL: 'mongodb://127.0.0.1:27017/container_contract',
+      HOSTING_URL: 'https://overlay.container-contract.example',
+      KNEX_URL: `mysql://root:${encodeURIComponent(TEST_DATABASE_PASSWORD)}@127.0.0.1:3306/container_contract_overlay`,
+      MONGO_URL: 'mongodb://127.0.0.1:27017/container_contract_overlay',
       NETWORK: 'test',
       NODE_NAME: 'container-contract',
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY,
       WALLET_STORAGE_URL: WALLET_URL
     },
-    invalidEnvironment: {},
+    invalidEnvironment: { HOSTING_URL: 'http://127.0.0.1:8080' },
     liveness: '/health/live',
     readiness: '/health/ready',
     transaction: { method: 'GET', path: '/version', status: 200 },
@@ -130,8 +133,8 @@ const contracts = {
       BSV_NETWORK: 'test',
       DB_CLIENT: 'mysql2',
       DB_HOST: '127.0.0.1',
-      DB_NAME: 'container_contract',
-      DB_PASS: 'container-contract',
+      DB_NAME: 'container_contract_wab',
+      DB_PASS: TEST_DATABASE_PASSWORD,
       DB_PORT: '3306',
       DB_USER: 'root',
       NODE_ENV: 'production',
@@ -140,7 +143,7 @@ const contracts = {
       SHARE_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
       STORAGE_URL: WALLET_URL
     },
-    invalidEnvironment: { NODE_ENV: 'production' },
+    invalidEnvironment: { DB_CLIENT: 'invalid' },
     liveness: '/info',
     readiness: '/info',
     transaction: { method: 'GET', path: '/info', status: 200 },
@@ -152,10 +155,10 @@ const contracts = {
       BSV_NETWORK: 'test',
       ENABLE_NGINX: 'false',
       HTTP_PORT: '3998',
-      KNEX_DB_CONNECTION: DATABASE_CONNECTION,
+      KNEX_DB_CONNECTION: databaseConnection('container_contract_wallet'),
       SERVER_PRIVATE_KEY: TEST_PRIVATE_KEY
     },
-    invalidEnvironment: {},
+    invalidEnvironment: { SERVER_PRIVATE_KEY: '' },
     liveness: '/',
     readiness: '/',
     transaction: { method: 'GET', path: '/', status: 200 },
@@ -179,7 +182,7 @@ const parseArguments = argv => {
 const docker = async (...arguments_) =>
   await execFileAsync('docker', arguments_, {
     encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024
+    maxBuffer: 20 * 1024 * 1024
   })
 
 const containerLogs = async name => {
@@ -237,7 +240,7 @@ const assertInvalidConfigurationFails = async (component, image, contract) => {
     name,
     '--network',
     'host',
-    ...environmentArguments(contract.invalidEnvironment),
+    ...environmentArguments({ ...contract.environment, ...contract.invalidEnvironment }),
     image
   )
   const exitCode = await waitForExit(name, 30_000)
@@ -315,10 +318,10 @@ const stopGracefully = async name => {
   await docker('kill', '--signal', 'SIGTERM', name)
   const exitCode = await waitForExit(name, 30_000)
   const logs = await containerLogs(name)
-  await removeContainer(name)
   if (exitCode !== 0) {
     throw new Error(`${name} did not shut down cleanly (exit ${String(exitCode)})\n${logs}`)
   }
+  await removeContainer(name)
 }
 
 const startWalletDependency = async walletImage => {
@@ -340,10 +343,14 @@ export async function runContainerRuntimeContract({ component, image, walletImag
   const contract = contracts[component]
   if (contract === undefined) throw new Error(`unknown component ${component}`)
   if (image === undefined) throw new Error('--image is required')
+  if (TEST_DATABASE_PASSWORD === '') {
+    throw new Error('CONTRACT_DB_PASSWORD is required')
+  }
 
   await assertImageMetadata(image)
   await assertInvalidConfigurationFails(component, image, contract)
 
+  let completed = false
   try {
     if (contract.walletDependency === true) {
       await startWalletDependency(walletImage)
@@ -363,9 +370,10 @@ export async function runContainerRuntimeContract({ component, image, walletImag
     const transaction = await waitForEndpoint(name, contract.port, contract.transaction)
     await assertPublicResponse(component, transaction)
     await stopGracefully(name)
+    completed = true
   } finally {
-    await removeContainer(`contract-${component}`)
-    if (contract.walletDependency === true) {
+    if (completed) await removeContainer(`contract-${component}`)
+    if (completed && contract.walletDependency === true) {
       await stopGracefully('contract-wallet-dependency').catch(async error => {
         await removeContainer('contract-wallet-dependency')
         throw error

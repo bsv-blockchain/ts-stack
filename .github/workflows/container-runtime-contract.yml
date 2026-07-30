@@ -68,11 +68,11 @@ jobs:
         image: mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
         env:
           MYSQL_DATABASE: container_contract
-          MYSQL_ROOT_PASSWORD: container-contract
+          MYSQL_ROOT_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         ports:
           - 3306:3306
         options: >-
-          --health-cmd "mysqladmin ping --host 127.0.0.1 --password=container-contract"
+          --health-cmd "mysqladmin ping --host 127.0.0.1 --password=$MYSQL_ROOT_PASSWORD"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 30
@@ -120,7 +120,22 @@ jobs:
           tags: ts-stack-wallet-infra:contract-dependency
           cache-from: type=gha,scope=runtime-wallet-infra
 
+      - name: Isolate service migration schemas
+        env:
+          CONTRACT_DB_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          docker run --rm --network host \
+            --env MYSQL_PWD="$CONTRACT_DB_PASSWORD" \
+            mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb \
+            mysql --host 127.0.0.1 --user root --execute \
+            "CREATE DATABASE IF NOT EXISTS container_contract_message;
+            CREATE DATABASE IF NOT EXISTS container_contract_overlay;
+            CREATE DATABASE IF NOT EXISTS container_contract_wab;
+            CREATE DATABASE IF NOT EXISTS container_contract_wallet;"
+
       - name: Exercise the complete runtime contract
+        env:
+          CONTRACT_DB_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         run: >-
           node scripts/container-runtime-contract.mjs
           --component "${{ matrix.component.name }}"

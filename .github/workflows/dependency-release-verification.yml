@@ -4,9 +4,7 @@ on:
   schedule:
     - cron: '17 14 1 * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: [Release, Infra Release]
-    types: [completed]
+  workflow_call:
 
 permissions: {}
 
@@ -16,7 +14,6 @@ concurrency:
 
 jobs:
   verify:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -51,22 +48,14 @@ jobs:
 
       - name: Install every published package tarball without lifecycle scripts
         run: |
-          mkdir published-install
-          jq '{
-            name: "ts-stack-published-verification",
-            private: true,
-            dependencies: (
-              .packages
-              | map({key: .name, value: .publishedLatest})
-              | from_entries
-            )
-          }' published-package-verification.json > published-install/package.json
-          npm install \
+          node scripts/dependency-release-governance.mjs prepare-published-install \
+            --report published-package-verification.json \
+            --directory published-install
+          npm ci \
             --prefix published-install \
             --ignore-scripts \
             --no-audit \
-            --no-fund \
-            --package-lock=true
+            --no-fund
 
       - name: Verify registry signatures and npm provenance
         working-directory: published-install

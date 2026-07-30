@@ -310,3 +310,10 @@ jobs:
             echo "- SLSA provenance and SBOM attestations published to GitHub and GHCR"
             echo "- Image digest keylessly signed with GitHub OIDC via Cosign"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  post-release-verification:
+    needs: release
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/dependency-release-verification.yml
