@@ -14,8 +14,8 @@
       "name": "@bsv/air-gap",
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
-      "summary": "Introduces the zero-dependency one-directional optical air-gap transport: fountain-coded wire parts for arbitrary bytes, CRC32 payload integrity, a camera-safe decoder that never throws, and dual CJS/ESM builds.",
-      "migration": "No consumer migration is required; this is the first published release of a new package with no prior public API."
+      "summary": "Introduces the zero-dependency one-directional optical air-gap transport, wire protocol v1 (BRC-141): a versioned 23-byte header with an 8-byte session identity, exact-integer ideal-soliton fountain coding, a resource-bounded camera-safe decoder with session locking that never throws, CRC32 payload integrity, browser and Node consumers, and shared conformance vectors under conformance/vectors/transport/.",
+      "migration": "No consumer migration is required; this is the first published release of a new package with no prior public API. The experimental pre-release framing that circulated on the unmerged feature branch is not accepted by the v1 decoder."
     },
     {
       "name": "@bsv/amountinator",

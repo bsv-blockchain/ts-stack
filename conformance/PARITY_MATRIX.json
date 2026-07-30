@@ -1,21 +1,21 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-27",
+  "generated_at": "2026-07-30",
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
-    "total_files": 74,
-    "total_vectors": 6650,
-    "fully_required_files": 55,
+    "total_files": 75,
+    "total_vectors": 6681,
+    "fully_required_files": 56,
     "files_with_intended": 17,
     "files_with_mixed_status": 15,
     "vectors_by_status": {
-      "required": 6446,
+      "required": 6477,
       "intended": 204,
       "skipped": 7
     },
     "by_reason_category": {
-      "fully_supported": 1234,
+      "fully_supported": 1265,
       "governed_vector_skip": 50,
       "historical_regression": 36,
       "partial_ts_behavioral_difference": 5116,
@@ -563,6 +563,18 @@
       "file_level_parity": "required",
       "effective_status": "required",
       "required_count": 20,
+      "intended_count": 0,
+      "skipped_count": 0,
+      "reason_category": "fully_supported",
+      "categories": []
+    },
+    {
+      "path": "transport/air-gap-optical.json",
+      "id": "transport.air-gap-optical",
+      "total_vectors": 31,
+      "file_level_parity": "required",
+      "effective_status": "required",
+      "required_count": 31,
       "intended_count": 0,
       "skipped_count": 0,
       "reason_category": "fully_supported",

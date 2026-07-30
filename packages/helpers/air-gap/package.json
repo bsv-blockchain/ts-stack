@@ -1,6 +1,6 @@
 {
   "name": "@bsv/air-gap",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -43,7 +43,8 @@
     "build": "tsdown src/index.ts --format cjs,esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/helpers/air-gap/{src,tests}/**/*.ts\" \"packages/helpers/air-gap/*.{cjs,json,ts}\"",
     "lint": "oxlint src tests --deny-warnings",
-    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports AIR_GAP_PREFIX,DEFAULT_BLOCK_BYTES,MAX_MESSAGE_BYTES,AirGapError,crc32,AirGapEncoder,AirGapDecoder,isAirGapPart,estimatePartCharLength",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports AIR_GAP_PREFIX,AIR_GAP_WIRE_VERSION,DEFAULT_BLOCK_BYTES,MAX_BLOCK_BYTES,MAX_MESSAGE_BYTES,SESSION_ID_BYTES,SESSION_SWITCH_PARTS,AirGapError,crc32,AirGapEncoder,AirGapDecoder,isAirGapPart,estimatePartCharLength",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "repository": {

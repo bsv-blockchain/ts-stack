@@ -245,7 +245,8 @@
           "Arbitrary repeating frame-loss patterns still reconstruct the exact payload.",
           "Arbitrary scanned text never throws and never completes a message.",
           "A corrupted part yields either the exact original bytes or nothing at all.",
-          "Every rendered part has the exact predicted character length for its block size."
+          "Every rendered part has the exact predicted character length for its block size.",
+          "A single foreign-session frame never erases decoding progress."
         ]
       },
       {

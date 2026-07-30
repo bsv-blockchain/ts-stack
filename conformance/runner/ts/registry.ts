@@ -25,6 +25,7 @@ import * as overlay from './dispatchers/overlay.js'
 import * as payments from './dispatchers/payments.js'
 import * as storage from './dispatchers/storage.js'
 import * as sync from './dispatchers/sync.js'
+import * as transport from './dispatchers/transport.js'
 import * as walletStorage from './dispatchers/wallet-storage.js'
 
 export type DispatchFn = (
@@ -56,7 +57,8 @@ const DISPATCHERS: Array<{
   { domain: 'overlay', dispatcher: overlay },
   { domain: 'payments', dispatcher: payments },
   { domain: 'storage', dispatcher: storage },
-  { domain: 'sync', dispatcher: sync }
+  { domain: 'sync', dispatcher: sync },
+  { domain: 'transport', dispatcher: transport }
 ]
 
 const CATEGORY_MAP = new Map<string, Route>()
@@ -84,7 +86,8 @@ const PREFIX_MAP: Array<[string, Route]> = [
   ['overlay.', { domain: 'overlay', dispatch: overlay.dispatch }],
   ['payments.', { domain: 'payments', dispatch: payments.dispatch }],
   ['storage.', { domain: 'storage', dispatch: storage.dispatch }],
-  ['sync.', { domain: 'sync', dispatch: sync.dispatch }]
+  ['sync.', { domain: 'sync', dispatch: sync.dispatch }],
+  ['transport.', { domain: 'transport', dispatch: transport.dispatch }]
 ]
 
 /**

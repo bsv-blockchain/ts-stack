@@ -37,7 +37,7 @@ authorized release action.
 
 | Area | Package | Source version | Project profile | Consumer profiles | Runtime targets | Node engine | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| helpers | `@bsv/air-gap` | `0.1.0` | node-library | node-cjs, node-esm | node | `>=22` | [packages/helpers/air-gap](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/air-gap) |
+| helpers | `@bsv/air-gap` | `0.1.1` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/air-gap](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/air-gap) |
 | helpers | `@bsv/amountinator` | `2.1.4` | node-library | node-cjs, node-esm | node | `>=22` | [packages/helpers/amountinator](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator) |
 | helpers | `@bsv/did` | `0.2.4` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/helpers/did](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did) |
 | helpers | `@bsv/did-client` | `1.2.3` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/helpers/did-client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client) |
@@ -103,14 +103,14 @@ recorded container release route; they are not published by the public-package j
 
 | Metric | Current value |
 | --- | --- |
-| Vector files | 74 |
-| Vectors | 6650 |
-| Structurally passed | 6439 |
+| Vector files | 75 |
+| Vectors | 6681 |
+| Structurally passed | 6470 |
 | Governed skips | 211 |
-| Required parity vectors | 6446 |
+| Required parity vectors | 6477 |
 | Intended parity vectors | 204 |
 | Explicitly skipped vector entries | 7 |
-| Corpus metadata revision | 2026-07-27 |
+| Corpus metadata revision | 2026-07-30 |
 
 Structural runner pass/skip results and parity classifications answer different questions:
 the former is the current runner outcome, while the latter records cross-language

@@ -57,28 +57,32 @@ specs/
 
   wallet/
     storage-adapter.yaml       — OpenAPI 3.1 for wallet storage adapter HTTP boundary (done)
+
+  transport/
+    air-gap-optical.md         — Markdown wire spec for the BRC-141 optical air-gap transport (experimental)
 ```
 
 ---
 
 ## Spec inventory
 
-| Spec file | Format | Status | Boundary |
-|-----------|--------|--------|----------|
-| `sdk/brc-100-wallet.json` | JSON Schema Draft 2020-12 | Done | BRC-100 wallet interface (all methods) |
-| `overlay/overlay-http.yaml` | OpenAPI 3.1 | Done | Overlay submit, lookup, discovery, admin |
-| `broadcast/arc.yaml` | OpenAPI 3.1 | Done | ARC broadcast submit, status, batch, callback |
-| `errors.md` | Markdown taxonomy | Done | All error categories and codes |
-| `EXCEPTIONS.md` | Tracked gaps | Done | Unspecced boundaries with reasons |
-| `messaging/message-box-http.yaml` | OpenAPI 3.1 | Done | message-box-server REST (all 9 endpoints) |
-| `messaging/authsocket-asyncapi.yaml` | AsyncAPI 3.0 | Done | AuthSocket WebSocket protocol (all events) |
-| `auth/brc103-mutual-auth.yaml` | AsyncAPI 3.0 | Done | BRC-103 mutual auth handshake (both phases) / BRC-104 HTTP transport |
-| `payments/brc29-payment-protocol.yaml` | AsyncAPI 3.0 | Done | BRC-29 P2PKH peer payment (key derivation, BEEF message, internalizeAction remittance) |
-| `payments/brc121.yaml` | OpenAPI 3.1 | Done | BRC-121 HTTP 402 payment middleware (all 7 headers, 2-trip exchange, replay guards) |
-| `sync/gasp-asyncapi.yaml` | AsyncAPI 3.0 | Done | GASP cross-node sync protocol (initial exchange, graph walk, all message shapes) |
-| `storage/uhrp-http.yaml` | OpenAPI 3.1 | Done | UHRP resolution HTTP API (upload, find, list, renew) |
-| `merkle/merkle-service-http.yaml` | OpenAPI 3.1 | Done | Merkle Service REST API (POST /watch, GET /health) |
-| `wallet/storage-adapter.yaml` | OpenAPI 3.1 | Done | Wallet storage adapter HTTP boundary (all operations, all table schemas) |
+| Spec file                              | Format                    | Status       | Boundary                                                                                       |
+| -------------------------------------- | ------------------------- | ------------ | ---------------------------------------------------------------------------------------------- |
+| `sdk/brc-100-wallet.json`              | JSON Schema Draft 2020-12 | Done         | BRC-100 wallet interface (all methods)                                                         |
+| `overlay/overlay-http.yaml`            | OpenAPI 3.1               | Done         | Overlay submit, lookup, discovery, admin                                                       |
+| `broadcast/arc.yaml`                   | OpenAPI 3.1               | Done         | ARC broadcast submit, status, batch, callback                                                  |
+| `errors.md`                            | Markdown taxonomy         | Done         | All error categories and codes                                                                 |
+| `EXCEPTIONS.md`                        | Tracked gaps              | Done         | Unspecced boundaries with reasons                                                              |
+| `messaging/message-box-http.yaml`      | OpenAPI 3.1               | Done         | message-box-server REST (all 9 endpoints)                                                      |
+| `messaging/authsocket-asyncapi.yaml`   | AsyncAPI 3.0              | Done         | AuthSocket WebSocket protocol (all events)                                                     |
+| `auth/brc103-mutual-auth.yaml`         | AsyncAPI 3.0              | Done         | BRC-103 mutual auth handshake (both phases) / BRC-104 HTTP transport                           |
+| `payments/brc29-payment-protocol.yaml` | AsyncAPI 3.0              | Done         | BRC-29 P2PKH peer payment (key derivation, BEEF message, internalizeAction remittance)         |
+| `payments/brc121.yaml`                 | OpenAPI 3.1               | Done         | BRC-121 HTTP 402 payment middleware (all 7 headers, 2-trip exchange, replay guards)            |
+| `sync/gasp-asyncapi.yaml`              | AsyncAPI 3.0              | Done         | GASP cross-node sync protocol (initial exchange, graph walk, all message shapes)               |
+| `storage/uhrp-http.yaml`               | OpenAPI 3.1               | Done         | UHRP resolution HTTP API (upload, find, list, renew)                                           |
+| `merkle/merkle-service-http.yaml`      | OpenAPI 3.1               | Done         | Merkle Service REST API (POST /watch, GET /health)                                             |
+| `wallet/storage-adapter.yaml`          | OpenAPI 3.1               | Done         | Wallet storage adapter HTTP boundary (all operations, all table schemas)                       |
+| `transport/air-gap-optical.md`         | Markdown wire spec        | Experimental | BRC-141 one-directional optical air-gap transport (wire v1, fountain coding, decoder contract) |
 
 ---
 
@@ -134,12 +138,12 @@ pnpm run codegen
 
 **Toolchain targets:**
 
-| Output | Tool |
-|--------|------|
+| Output                          | Tool                              |
+| ------------------------------- | --------------------------------- |
 | TypeScript types + client stubs | `openapi-typescript`, `quicktype` |
-| Go types + client stubs | `oapi-codegen` |
-| Python pydantic models | `datamodel-code-generator` |
-| Rust types | `typify`, `progenitor` |
+| Go types + client stubs         | `oapi-codegen`                    |
+| Python pydantic models          | `datamodel-code-generator`        |
+| Rust types                      | `typify`, `progenitor`            |
 
 Generated output lands in:
 
