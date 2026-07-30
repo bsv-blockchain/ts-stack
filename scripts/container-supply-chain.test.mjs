@@ -223,6 +223,11 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   assert.match(dependabot, /package-ecosystem: docker/)
   assert.match(dependabot, /directory: \/governance/)
   assert.match(dependabot, /dependency-name: node/)
+  assert.match(
+    dependabot,
+    /exclude-paths:\s+- Dockerfile\s+- '\*\*\/Dockerfile'/,
+    'Dependabot must not reinterpret digest-only runtime Node bases as the mutable latest tag'
+  )
   for (const component of registry.components) {
     assert.match(dependabot, new RegExp(`- /${component.path.replaceAll('/', '\\/')}`))
   }

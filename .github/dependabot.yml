@@ -85,8 +85,11 @@ updates:
           - '@bsv/*'
 
   # Keep deployment manifests current. Runtime Dockerfiles are digest-only, so
-  # ignore their bare `node` dependency here: a digest-only Dependabot update
-  # would incorrectly resolve the registry's `latest` tag.
+  # exclude them from this scan: Dependabot treats their bare `node` dependency
+  # as `latest`, even when it is ignored, and its multi-directory updater then
+  # fails instead of producing a reviewable change. The readable, versioned
+  # Node source under /governance owns base-image discovery; deployment image
+  # and database updates remain in this entry.
   - package-ecosystem: docker
     directories:
       - /infra
@@ -104,7 +107,11 @@ updates:
       - '*'
     multi-ecosystem-group: monthly-stack-maintenance
     rebase-strategy: auto
+    exclude-paths:
+      - Dockerfile
+      - '**/Dockerfile'
     ignore:
+      # Defense in depth if GitHub changes exclude-path handling.
       - dependency-name: node
       # Database majors require backup/restore, upgrade-path, rollback, and
       # application compatibility validation. Patch and minor refreshes remain
