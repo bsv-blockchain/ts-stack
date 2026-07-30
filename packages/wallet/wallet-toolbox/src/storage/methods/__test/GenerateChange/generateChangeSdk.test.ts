@@ -40,6 +40,22 @@ describe('generateChange tests', () => {
       })
       expect(JSON.stringify(log.mock.calls)).not.toContain('lockingScriptLength')
       expect(JSON.stringify(log.mock.calls)).not.toContain(JSON.stringify(params.randomVals))
+
+      const paramsWithoutRandomVals = { ...params, randomVals: undefined }
+      const secondStorage = generateChangeSdkMakeStorage([...defAvailableChange()])
+      await generateChangeSdk(
+        paramsWithoutRandomVals,
+        secondStorage.allocateChangeInput,
+        secondStorage.releaseChangeInput
+      )
+      expect(log).toHaveBeenLastCalledWith('generateChangeSdk parameter summary', {
+        fixedInputCount: 0,
+        fixedOutputCount: 2,
+        targetNetCount: undefined,
+        changeInitialSatoshis: 1000,
+        changeFirstSatoshis: 285,
+        randomValsCount: 0
+      })
     } finally {
       log.mockRestore()
     }
