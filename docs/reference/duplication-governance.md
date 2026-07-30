@@ -1,7 +1,7 @@
 ---
 id: duplication-governance
 title: 'Duplication Governance'
-kind: policy
+kind: reference
 version: '1.0.0'
 last_updated: '2026-07-29'
 last_verified: '2026-07-29'
