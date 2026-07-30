@@ -263,16 +263,20 @@ function exportedJavaScriptTargets(manifest, files) {
   for (const [, value] of exportSubpathEntries(manifest.exports)) {
     for (const { target } of exportTargets(value)) {
       if (typeof target !== 'string' || !target.startsWith('./')) continue
-      const targetPattern = target.slice(2)
-      const expression = target.includes('*') ? wildcardExpression(targetPattern) : undefined
-      for (const file of files) {
-        if (isExportedJavaScriptFile(file, targetPattern, expression)) {
-          javascriptTargets.add(file)
-        }
-      }
+      addExportedJavaScriptFiles(javascriptTargets, target, files)
     }
   }
   return javascriptTargets
+}
+
+function addExportedJavaScriptFiles(javascriptTargets, target, files) {
+  const targetPattern = target.slice(2)
+  const expression = target.includes('*') ? wildcardExpression(targetPattern) : undefined
+  for (const file of files) {
+    if (isExportedJavaScriptFile(file, targetPattern, expression)) {
+      javascriptTargets.add(file)
+    }
+  }
 }
 
 function isExportedJavaScriptFile(file, targetPattern, expression) {
