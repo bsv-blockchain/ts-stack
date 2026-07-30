@@ -204,7 +204,9 @@ We welcome bug reports, feature requests, and pull requests.
 4. Make your changes and run the relevant package checks above
 5. Open a pull request
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for full guidelines.
+See the
+[repository contribution guidelines](https://github.com/bsv-blockchain/ts-stack/blob/main/CONTRIBUTING.md)
+for the full stack-wide policy.
 
 ## Contributors
 

@@ -214,7 +214,8 @@ private GitHub advisory, and coordinate disclosure under
 
 A release is complete only when source, published artifacts, post-release
 dependency state, deployed image digests where applicable, and documentation
-agree. Update [tracker #324](https://github.com/bsv-blockchain/ts-stack/issues/324)
+agree. Update
+[release issue #401](https://github.com/bsv-blockchain/ts-stack/issues/401)
 with the exact evidence; do not mark package availability or deployed behavior
 complete from a local build alone.
 

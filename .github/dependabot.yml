@@ -108,7 +108,7 @@ updates:
       - dependency-name: node
       # Database majors require backup/restore, upgrade-path, rollback, and
       # application compatibility validation. Patch and minor refreshes remain
-      # automated; major migrations are tracked explicitly in issue #324.
+      # automated; each major migration requires its own reviewed issue.
       - dependency-name: mysql
         update-types:
           - version-update:semver-major

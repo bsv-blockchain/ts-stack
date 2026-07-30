@@ -2,7 +2,13 @@
   "schemaVersion": 1,
   "owner": "ts-stack-maintainers",
   "lastReviewed": "2026-07-30",
-  "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
+  "programHistory": "https://github.com/bsv-blockchain/ts-stack/issues/324",
+  "contributionAuthority": "CONTRIBUTING.md",
+  "activeFollowUps": {
+    "qualityAssurance": "https://github.com/bsv-blockchain/ts-stack/issues/400",
+    "releaseAndExternalAssurance": "https://github.com/bsv-blockchain/ts-stack/issues/401",
+    "analysisAndCiEfficiency": "https://github.com/bsv-blockchain/ts-stack/issues/402"
+  },
   "publicPackageReadme": {
     "requiredSections": ["installation", "usage", "license"],
     "requiredLicenseFile": "LICENSE.txt",

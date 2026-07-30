@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible defect in a ts-stack package, service, specification, or tool.
+title: 'fix: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a defect. Do not disclose vulnerabilities or secrets here; use the private security policy instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Select the closest affected area.
+      options:
+        - SDK or VeriFast
+        - Wallet
+        - Overlays
+        - Messaging
+        - Middleware
+        - Network
+        - Helpers
+        - Infrastructure or containers
+        - Conformance or specifications
+        - Documentation
+        - CI, dependencies, or release tooling
+        - Cross-stack or unsure
+    validations:
+      required: true
+  - type: input
+    id: packages
+    attributes:
+      label: Affected package or service and version
+      description: Include every known package/service and the installed, source, image, or deployment version.
+      placeholder: '@bsv/sdk 2.x; Node 24.x; browser/runtime details'
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Defect
+      description: Describe the observable problem, its impact, and whether it is a regression.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide deterministic steps or a small repository/code sample. Remove credentials and private data.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Cite a public API, specification, conformance vector, or prior compatible behavior when applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and evidence
+      description: Include complete errors, logs, or screenshots after redacting secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node, package manager, browser/mobile runtime, database, image digest, and relevant configuration.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I searched for an existing issue or pull request describing this defect.
+          required: true
+        - label: This report contains no secret, private key, token, production data, or uncoordinated vulnerability detail.
+          required: true

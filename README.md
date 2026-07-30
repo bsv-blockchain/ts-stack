@@ -26,6 +26,19 @@ BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middle
 
 Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders usually start with `@bsv/wallet-toolbox`. Service operators usually start with the overlay, messaging, middleware, or infra packages.
 
+## Contributing
+
+The entire stack follows one [contribution policy](./CONTRIBUTING.md), one
+[agent doctrine](./AGENTS.md), one [code of conduct](./CODE_OF_CONDUCT.md), and
+the root [security policy](./.github/SECURITY.md). Package-level `AGENTS.md`
+files point back to these root rules; packages do not define competing
+conventions.
+
+Use the root issue and pull request templates. Run strict local checks before
+using hosted CI, then keep a pull request in draft and remain responsible for
+its exact head until all applicable checks pass with zero new Sonar or CodeQL
+findings.
+
 ## Quick Start
 
 Prerequisites:
@@ -45,7 +58,7 @@ Useful root commands:
 | ---------------------- | ------------------------------------------------------------------------------------- |
 | `pnpm build`           | Builds every workspace package except the private root package                        |
 | `pnpm test`            | Runs every workspace package test script                                              |
-| `pnpm lint`            | Lints every authored JS/TS file with a repository-wide zero-warning gate               |
+| `pnpm lint`            | Lints every authored JS/TS file with a repository-wide zero-warning gate              |
 | `pnpm format:check`    | Verifies repository and workspace formatting without changing files                   |
 | `pnpm health:check`    | Enforces repository profiles, package metadata, licensing, and policy synchronization |
 | `pnpm test:governance` | Verifies required skips, manual/live suites, empty-test policy, and conformance gaps  |

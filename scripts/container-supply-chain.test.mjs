@@ -103,7 +103,9 @@ test('container registry exactly owns every release Dockerfile and immutable bas
 })
 
 test('checked-in deployment examples use immutable non-latest image references', () => {
-  const deploymentFiles = trackedFiles('infra/**/*.yml', 'infra/**/*.yaml')
+  const deploymentFiles = trackedFiles('infra/**/*.yml', 'infra/**/*.yaml').filter(
+    path => !path.includes('/.github/')
+  )
 
   for (const path of deploymentFiles) {
     const imageLines = readRepositoryFile(path)

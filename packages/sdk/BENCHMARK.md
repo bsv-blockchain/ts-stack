@@ -23,7 +23,7 @@ their own timing summaries.
 
 These programs are diagnostics, not a blocking performance claim. Hardware,
 power mode, thermal state, Node/V8 patch level, and background load materially
-affect results. The final QA phase tracked by GitHub issue #324 owns stable
+affect results. The final QA phase tracked by GitHub issue #400 owns stable
 hosted hardware, machine-readable baselines, variance policy, historical
 artifacts, and any future regression threshold. Until that work is complete,
 do not copy a local result into documentation as a universal SDK baseline.

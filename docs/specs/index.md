@@ -85,6 +85,8 @@ The authoritative BRC repository is at [github.com/bitcoin-sv/BRCs](https://gith
 
 ## Related Documentation
 
-- **Implementations** — See package-specific guides in `/packages/*/CLAUDE.md`
+- **Implementations** — See package READMEs and package pages under
+  `/docs/packages/`; contributor and agent policy is owned by root
+  `CONTRIBUTING.md` and `AGENTS.md`
 - **Error Codes** — Reference `specs/errors.md` for standardized error responses
 - **Network Services** — Consult `/docs/network-services/` for Merkle Service, ARC endpoints, and provider lists

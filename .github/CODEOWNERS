@@ -17,10 +17,17 @@ conformance/                                    @sirdeggen @ty-everett @BraydenL
 
 # CI, release, dependency, and analysis controls require redundant ownership.
 .github/                                        @sirdeggen @ty-everett
+/AGENTS.md                                      @sirdeggen @ty-everett
+/CLAUDE.md                                      @sirdeggen @ty-everett
+/CODE_OF_CONDUCT.md                             @sirdeggen @ty-everett
+/CONTRIBUTING.md                                @sirdeggen @ty-everett
 /package.json                                   @sirdeggen @ty-everett
 /pnpm-lock.yaml                                 @sirdeggen @ty-everett
 /pnpm-workspace.yaml                            @sirdeggen @ty-everett
+/governance/contributor-policy.json             @sirdeggen @ty-everett
 /governance/repository-health/                  @sirdeggen @ty-everett
+/scripts/contributor-policy.mjs                 @sirdeggen @ty-everett
+/scripts/contributor-policy.test.mjs            @sirdeggen @ty-everett
 /scripts/repository-health.mjs                  @sirdeggen @ty-everett
 /scripts/repository-health.test.mjs             @sirdeggen @ty-everett
 /sonar-project.properties                       @sirdeggen @ty-everett
