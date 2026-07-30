@@ -5,7 +5,14 @@
  * and exposes it via a JSON-RPC POST endpoint using Express.
  */
 
-import { MakeWalletLogger, WalletInterface, WalletLoggerInterface } from '@bsv/sdk'
+import {
+  MakeWalletLogger,
+  Telemetry,
+  TelemetryConfig,
+  TelemetrySpan,
+  WalletInterface,
+  WalletLoggerInterface
+} from '@bsv/sdk'
 import express, { Request, Response } from 'express'
 import { AuthMiddlewareOptions, AuthRequest, createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
@@ -18,6 +25,7 @@ import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
+import { parseTraceparent } from '../../utility/traceContext'
 import {
   BINARY_ENCODING,
   BINARY_ENCODING_HEADER,
@@ -177,6 +185,11 @@ export interface WalletStorageServerOptions {
   logRpcRequests?: boolean
   /** @deprecated Use structured RPC logging. Retained for compatibility. */
   logShortReqs?: boolean
+  /**
+   * Optional provider-neutral timing for ingress, authentication, RPC
+   * authorization, storage dispatch, and response formulation.
+   */
+  telemetry?: TelemetryConfig
 }
 
 export class StorageServer {
@@ -197,6 +210,8 @@ export class StorageServer {
   private readonly httpPolicy: HttpServerPolicyDefaults
   private readonly securityHeadersPolicy: SecurityHeadersOptions
   private readonly logRpcRequests: boolean
+  private readonly telemetry: Telemetry
+  private readonly telemetryConfig?: TelemetryConfig
 
   constructor(storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
@@ -222,6 +237,8 @@ export class StorageServer {
     }
     this.securityHeadersPolicy = options.securityHeaders ?? {}
     this.logRpcRequests = options.logRpcRequests ?? true
+    this.telemetryConfig = options.telemetry
+    this.telemetry = new Telemetry(options.telemetry)
 
     const legacyLogShortReqs = (options as unknown as Record<string, unknown>)['logShortReqs']
     if (legacyLogShortReqs) {
@@ -288,6 +305,9 @@ export class StorageServer {
         )
       )
     )
+    if (this.telemetry.enabled) {
+      this.app.use(this.traceHttpRequest.bind(this))
+    }
 
     // Escape HTML-significant characters in JSON responses. This preserves the
     // decoded JSON value while keeping user-controlled strings inert even if a
@@ -319,7 +339,8 @@ export class StorageServer {
     })
 
     const options: AuthMiddlewareOptions = {
-      wallet: this.wallet as WalletInterface
+      wallet: this.wallet as WalletInterface,
+      ...(this.telemetryConfig == null ? {} : { telemetry: this.telemetryConfig })
     }
     if (this.sessionManager != null) options.sessionManager = this.sessionManager
     this.app.use(createAuthMiddleware(options))
@@ -395,6 +416,23 @@ export class StorageServer {
   }
 
   private async handleRpcRequest(req: Request, res: Response): Promise<Response> {
+    if (!this.telemetry.enabled) return await this.handleRpcRequestCore(req, res)
+    return await this.telemetry.withSpan(
+      'wallet.storage.rpc',
+      {
+        component: 'wallet-storage-server',
+        kind: 'server',
+        carrier: req,
+        attributes: {
+          'rpc.system': 'wallet-storage',
+          'rpc.method': typeof req.body?.method === 'string' ? req.body.method : 'invalid'
+        }
+      },
+      async span => await this.handleRpcRequestCore(req, res, span)
+    )
+  }
+
+  private async handleRpcRequestCore(req: Request, res: Response, rpcSpan?: TelemetrySpan): Promise<Response> {
     const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
     const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
     if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
@@ -407,7 +445,7 @@ export class StorageServer {
 
     const logObj = this.createRpcLog(req, method, id, params)
     try {
-      const dispatch = await this.dispatchRpcCall(method, params, req, logObj)
+      const dispatch = await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
       if (!dispatch.found) {
         return this.sendRpc(
           res,
@@ -424,6 +462,39 @@ export class StorageServer {
     } catch (error: unknown) {
       return this.sendRpcError(res, useBinary, id, error)
     }
+  }
+
+  private traceHttpRequest(req: Request, res: Response, next: express.NextFunction): void {
+    const span = this.telemetry.startSpan('wallet.storage.http.request', {
+      component: 'wallet-storage-server',
+      kind: 'server',
+      parent: parseTraceparent(req.headers.traceparent),
+      carrier: req,
+      attributes: {
+        'http.request.method': req.method,
+        'http.request.body_size': Number(req.headers['content-length'] ?? 0),
+        'network.protocol': 'http'
+      }
+    })
+    span.bind(req)
+    let ended = false
+    const end = (status: 'ok' | 'error' | 'cancelled'): void => {
+      if (ended) return
+      ended = true
+      span.end({
+        status,
+        attributes: {
+          'http.response.status_code': res.statusCode
+        }
+      })
+    }
+    res.once('finish', () => {
+      end(res.statusCode >= 500 ? 'error' : 'ok')
+    })
+    res.once('close', () => {
+      end(res.writableEnded ? 'ok' : 'cancelled')
+    })
+    next()
   }
 
   private sendRpc(res: Response, useBinary: boolean, payload: unknown, status: number = 200): Response {
@@ -452,11 +523,14 @@ export class StorageServer {
     const logObj: Record<string, unknown> = {
       source: 'StorageServer POST handler',
       method,
-      id,
-      user: requiredAuthenticatedIdentityKey(req),
-      params: JSON.stringify(params || '').slice(0, 256)
+      requestIdType: typeof id,
+      authenticated: requiredAuthenticatedIdentityKey(req) !== '',
+      parameterCount: Array.isArray(params) ? params.length : 0
     }
-    const traceContext = firstRequestHeader(req, 'X-Cloud-Trace-Context')?.split('/')[0]
+    const traceContext =
+      this.telemetry.contextFor(req)?.traceId ??
+      parseTraceparent(firstRequestHeader(req, 'traceparent'))?.traceId ??
+      firstRequestHeader(req, 'X-Cloud-Trace-Context')?.split('/')[0]
     if (traceContext) {
       logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
     }
@@ -468,7 +542,8 @@ export class StorageServer {
     method: string,
     params: any[],
     req: Request,
-    logObj?: Record<string, unknown>
+    logObj?: Record<string, unknown>,
+    rpcSpan?: TelemetrySpan
   ): Promise<RpcDispatchResult> {
     if (!storageRpcMethods.has(method)) return { found: false }
 
@@ -476,12 +551,22 @@ export class StorageServer {
     const storageHandler = (this.storage as any)[storageMethod]
     if (typeof storageHandler !== 'function') return { found: false }
 
-    const shouldInvoke = await this.authorizeRpcCall(method, params, req, logObj)
+    const shouldInvoke = await this.traceRpcStep(
+      'wallet.storage.authorize',
+      rpcSpan,
+      async () => await this.authorizeRpcCall(method, params, req, logObj),
+      { 'rpc.method': method }
+    )
     if (!shouldInvoke) return { found: true, result: undefined }
 
     const logger = this.createRpcLogger(method, params)
     try {
-      const result = await storageHandler.call(this.storage, ...params)
+      const result = await this.traceRpcStep(
+        'wallet.storage.handler',
+        rpcSpan,
+        async () => await storageHandler.call(this.storage, ...params),
+        { 'rpc.method': method }
+      )
       this.finishRpcLogging(logger, result)
       return { found: true, result }
     } catch (error: unknown) {
@@ -489,6 +574,25 @@ export class StorageServer {
       logger?.flush?.()
       throw error
     }
+  }
+
+  private async traceRpcStep<T>(
+    name: string,
+    parent: TelemetrySpan | undefined,
+    callback: () => Promise<T> | T,
+    attributes?: Readonly<Record<string, unknown>>
+  ): Promise<T> {
+    if (parent == null) return await callback()
+    return await this.telemetry.withSpan(
+      name,
+      {
+        component: 'wallet-storage-server',
+        kind: 'server',
+        parent: parent.context,
+        attributes
+      },
+      callback
+    )
   }
 
   private async authorizeRpcCall(

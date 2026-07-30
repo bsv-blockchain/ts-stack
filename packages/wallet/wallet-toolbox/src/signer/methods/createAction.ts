@@ -5,6 +5,7 @@ import {
   OutpointString,
   SendWithResult,
   SignableTransaction,
+  TelemetrySpan,
   TXIDHexString,
   Transaction,
   Validation
@@ -35,13 +36,46 @@ export async function createAction(
   auth: AuthId,
   vargs: Validation.ValidCreateActionArgs
 ): Promise<CreateActionResultX> {
+  if (!wallet.telemetry.enabled) return await createActionCore(wallet, auth, vargs)
+  return await wallet.telemetry.withSpan(
+    'wallet.create_action',
+    {
+      component: 'wallet-toolbox',
+      carrier: vargs,
+      attributes: {
+        'action.input_count': vargs.inputs.length,
+        'action.output_count': vargs.outputs.length,
+        'action.is_new_transaction': vargs.isNewTx,
+        'action.is_sign_action': vargs.isSignAction
+      }
+    },
+    async span => {
+      const result = await createActionCore(wallet, auth, vargs, span)
+      span.end({
+        attributes: {
+          'action.has_transaction': result.tx != null,
+          'action.has_signable_transaction': result.signableTransaction != null,
+          'action.send_result_count': result.sendWithResults?.length ?? 0
+        }
+      })
+      return result
+    }
+  )
+}
+
+async function createActionCore(
+  wallet: Wallet,
+  auth: AuthId,
+  vargs: Validation.ValidCreateActionArgs,
+  parent?: TelemetrySpan
+): Promise<CreateActionResultX> {
   const r: CreateActionResultX = {}
   const logger = vargs.logger
 
   let prior: PendingSignAction | undefined
 
   if (vargs.isNewTx || vargs.isTestWerrReviewActions) {
-    prior = await createNewTx(wallet, vargs)
+    prior = await createNewTx(wallet, vargs, parent)
     logger?.log('created new transaction')
 
     if (vargs.isSignAction) {
@@ -50,7 +84,12 @@ export async function createAction(
       return r
     }
 
-    prior.tx = await completeSignedTransaction(prior, {}, wallet)
+    prior.tx = await traceActionStep(
+      wallet,
+      'wallet.create_action.complete_signing',
+      parent,
+      async () => await completeSignedTransaction(prior!, {}, wallet)
+    )
     logger?.log('completed signed transaction')
 
     r.txid = prior.tx.id('hex')
@@ -65,7 +104,12 @@ export async function createAction(
     beef.mergeTransaction(prior.tx)
     logger?.log('merged beef')
 
-    await verifyUnlockScripts(r.txid, beef, wallet.scriptVerifier)
+    await traceActionStep(
+      wallet,
+      'wallet.create_action.verify_unlock_scripts',
+      parent,
+      async () => await verifyUnlockScripts(r.txid!, beef, wallet.scriptVerifier)
+    )
     logger?.log('verified unlock scripts')
 
     r.noSendChange = prior.dcr.noSendChangeOutputVouts?.map(vout => `${r.txid}.${vout}`)
@@ -74,7 +118,12 @@ export async function createAction(
     if (!vargs.options.returnTXIDOnly) r.tx = beef.toUint8ArrayAtomic(r.txid)
   }
 
-  const { sendWithResults, notDelayedResults } = await processAction(prior, wallet, auth, vargs)
+  const { sendWithResults, notDelayedResults } = await traceActionStep(
+    wallet,
+    'wallet.create_action.process',
+    parent,
+    async () => await processAction(prior, wallet, auth, vargs)
+  )
   logger?.log('processed transaction')
 
   r.sendWithResults = sendWithResults
@@ -83,14 +132,45 @@ export async function createAction(
   return r
 }
 
-async function createNewTx(wallet: Wallet, vargs: Validation.ValidCreateActionArgs): Promise<PendingSignAction> {
+async function traceActionStep<T>(
+  wallet: Wallet,
+  name: string,
+  parent: TelemetrySpan | undefined,
+  callback: () => Promise<T> | T
+): Promise<T> {
+  if (parent == null) return await callback()
+  return await wallet.telemetry.withSpan(
+    name,
+    {
+      component: 'wallet-toolbox',
+      parent: parent.context
+    },
+    callback
+  )
+}
+
+async function createNewTx(
+  wallet: Wallet,
+  vargs: Validation.ValidCreateActionArgs,
+  parent?: TelemetrySpan
+): Promise<PendingSignAction> {
   const logger = vargs.logger
   const storageArgs = removeUnlockScripts(vargs)
-  const dcr = (await wallet.actionBatch.plan(storageArgs)) ?? (await wallet.storage.createAction(storageArgs))
+  const dcr = await traceActionStep(
+    wallet,
+    'wallet.create_action.storage_plan',
+    parent,
+    async () => (await wallet.actionBatch.plan(storageArgs)) ?? (await wallet.storage.createAction(storageArgs))
+  )
 
   const reference = dcr.reference
 
-  const { tx, amount, pdi } = buildSignableTransaction(dcr, vargs, wallet)
+  const { tx, amount, pdi } = await traceActionStep(
+    wallet,
+    'wallet.create_action.build_signable_transaction',
+    parent,
+    () => buildSignableTransaction(dcr, vargs, wallet)
+  )
   logger?.log('built signable transaction')
 
   const prior: PendingSignAction = { reference, dcr, args: vargs, amount, tx, pdi }

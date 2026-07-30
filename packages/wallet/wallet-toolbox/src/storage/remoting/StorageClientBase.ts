@@ -9,7 +9,10 @@ import {
   RelinquishOutputArgs,
   WalletInterface,
   AuthFetch,
-  Validation
+  Validation,
+  Telemetry,
+  TelemetryConfig,
+  TelemetrySpan
 } from '@bsv/sdk'
 import {
   AuthId,
@@ -69,6 +72,11 @@ export interface StorageClientOptions {
    * still route requests to legacy server instances.
    */
   binaryRequests?: boolean
+  /**
+   * Optional vendor-neutral tracing. Disabled unless an enabled sink is
+   * supplied. Request parameters and response payloads are never emitted.
+   */
+  telemetry?: TelemetryConfig
 }
 
 /**
@@ -84,6 +92,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected nextId = 1
   protected serverSupportsBinary = false
   protected readonly binaryRequests: boolean
+  protected readonly telemetry: Telemetry
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: TableSettings
@@ -92,6 +101,49 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     this.authClient = new AuthFetch(wallet)
     this.endpointUrl = endpointUrl
     this.binaryRequests = options.binaryRequests === true
+    this.telemetry = new Telemetry(options.telemetry)
+  }
+
+  protected async traceRpcCall<T>(
+    method: string,
+    params: unknown[],
+    callback: (span?: TelemetrySpan) => Promise<T>
+  ): Promise<T> {
+    if (!this.telemetry.enabled) return await callback()
+    const carrier = params.find(param => typeof param === 'object' && param != null) as object | undefined
+    return await this.telemetry.withSpan(
+      'wallet.storage.rpc',
+      {
+        component: 'wallet-storage-client',
+        kind: 'client',
+        carrier,
+        attributes: {
+          'rpc.method': method,
+          'rpc.system': 'wallet-storage',
+          'network.protocol': 'http'
+        }
+      },
+      callback
+    )
+  }
+
+  protected async traceRpcStep<T>(
+    name: string,
+    parent: TelemetrySpan | undefined,
+    callback: (span?: TelemetrySpan) => Promise<T> | T,
+    attributes?: Readonly<Record<string, unknown>>
+  ): Promise<T> {
+    if (parent == null) return await callback()
+    return await this.telemetry.withSpan(
+      name,
+      {
+        component: 'wallet-storage-client',
+        kind: 'client',
+        parent: parent.context,
+        attributes
+      },
+      callback
+    )
   }
 
   /**

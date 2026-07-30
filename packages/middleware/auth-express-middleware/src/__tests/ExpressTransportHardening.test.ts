@@ -15,7 +15,8 @@ function responseMock(): any {
     json: jest.fn(),
     text: jest.fn(),
     end: jest.fn(),
-    sendFile: jest.fn()
+    sendFile: jest.fn(),
+    once: jest.fn()
   }
   response.status.mockReturnValue(response)
   response.set.mockReturnValue(response)
@@ -739,5 +740,149 @@ describe('ExpressTransport hardening', () => {
       }
     )
     expect(JSON.stringify(debug.mock.calls)).not.toContain('/public')
+  })
+
+  it('emits a traceparent-linked auth span without request secrets', async () => {
+    const events: any[] = []
+    const middleware = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry: {
+        sink: {
+          capture: event => events.push(event)
+        },
+        traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        spanIdFactory: () => 'bbbbbbbbbbbbbbbb'
+      }
+    })
+    const req = {
+      path: '/private/customer-record',
+      method: 'GET',
+      headers: {
+        authorization: 'Bearer never-report-this',
+        traceparent: '00-0123456789abcdef0123456789abcdef-fedcba9876543210-01'
+      }
+    } as any
+    const res = responseMock()
+    const next = jest.fn()
+
+    middleware(req, res, next)
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(next).toHaveBeenCalled()
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      type: 'span',
+      name: 'wallet.auth.middleware',
+      traceId: '0123456789abcdef0123456789abcdef',
+      parentSpanId: 'fedcba9876543210',
+      spanStatus: 'ok',
+      attributes: {
+        'http.request.method': 'GET',
+        'auth.handshake': false,
+        'auth.signed_request': false,
+        'auth.disposition': 'continued'
+      }
+    })
+    expect(JSON.stringify(events)).not.toContain('customer-record')
+    expect(JSON.stringify(events)).not.toContain('never-report-this')
+  })
+
+  it('reports middleware errors and response completion without changing next semantics', async () => {
+    const events: any[] = []
+    const telemetry = {
+      sink: { capture: (event: unknown) => events.push(event) },
+      traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      spanIdFactory: () => 'bbbbbbbbbbbbbbbb'
+    }
+    const handleIncomingRequest = jest.spyOn(ExpressTransport.prototype, 'handleIncomingRequest')
+
+    handleIncomingRequest.mockImplementationOnce(async (_req, _res, next) => {
+      next(new Error('continued with error'))
+    })
+    const continued = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry
+    })
+    const continuedNext = jest.fn()
+    continued(
+      {
+        path: '/public',
+        method: 'GET',
+        headers: {
+          traceparent: `00-${'0'.repeat(32)}-${'0'.repeat(16)}-01`
+        }
+      } as any,
+      responseMock(),
+      continuedNext
+    )
+    await flushPromises()
+    expect(continuedNext).toHaveBeenCalledWith(expect.any(Error))
+    expect(events.at(-1)).toMatchObject({
+      spanStatus: 'error',
+      attributes: { 'auth.disposition': 'continued' }
+    })
+
+    handleIncomingRequest.mockRejectedValueOnce(new Error('transport failed'))
+    const rejected = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry
+    })
+    const rejectedNext = jest.fn()
+    rejected(
+      {
+        path: '/public',
+        method: 'GET',
+        headers: { traceparent: 'not-a-traceparent' }
+      } as any,
+      responseMock(),
+      rejectedNext
+    )
+    await flushPromises()
+    expect(rejectedNext).toHaveBeenCalledWith(expect.any(Error))
+    expect(events.at(-1)).toMatchObject({
+      spanStatus: 'error',
+      attributes: { 'auth.disposition': 'middleware_error' }
+    })
+
+    handleIncomingRequest.mockReturnValue(new Promise(() => {}))
+    const pending = createAuthMiddleware({
+      wallet: new MockWallet(new PrivateKey(1)),
+      allowUnauthenticated: true,
+      telemetry
+    })
+    for (const [statusCode, writableEnded, eventName, status, traceparent] of [
+      [503, true, 'finish', 'error', 'x'.repeat(129)],
+      [200, true, 'finish', 'ok', undefined],
+      [200, true, 'close', 'ok', `00-0123456789abcdef0123456789abcdef-${'0'.repeat(16)}-01`],
+      [200, false, 'close', 'cancelled', undefined]
+    ] as const) {
+      const res = responseMock()
+      res.statusCode = statusCode
+      res.writableEnded = writableEnded
+      pending(
+        {
+          path: '/public',
+          method: 'GET',
+          headers: traceparent === undefined ? {} : { traceparent }
+        } as any,
+        res,
+        jest.fn()
+      )
+      const callback = res.once.mock.calls.find(([name]: [string]) => name === eventName)?.[1]
+      callback()
+      callback()
+      expect(events.at(-1)).toMatchObject({
+        spanStatus: status,
+        attributes: {
+          'auth.disposition': eventName === 'finish' ? 'responded' : 'connection_closed',
+          'http.response.status_code': statusCode
+        }
+      })
+    }
+
+    handleIncomingRequest.mockRestore()
   })
 })

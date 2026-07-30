@@ -22,7 +22,9 @@ import {
   CreateActionArgs,
   ListOutputsResult,
   ListActionsArgs,
-  ListActionsResult
+  ListActionsResult,
+  Telemetry,
+  TelemetryConfig
 } from '@bsv/sdk'
 
 import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
@@ -309,6 +311,13 @@ export interface WalletPermissionsManagerCallbacks {
  */
 export interface PermissionsManagerConfig {
   /**
+   * Optional provider-neutral permission timing. Originators, permission-token
+   * contents, manifests, descriptions, labels, and transaction data are never
+   * emitted by the generic instrumentation.
+   */
+  telemetry?: TelemetryConfig
+
+  /**
    * A map of P-basket/protocol permission scheme modules.
    *
    * Keys are scheme IDs (e.g., "btms"), values are PermissionsModule instances.
@@ -573,6 +582,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * Configuration that determines whether to skip or apply various checks and encryption.
    */
   private readonly config: PermissionsManagerConfig
+  private readonly telemetry: Telemetry
 
   /**
    * Constructs a new Permissions Manager instance.
@@ -584,6 +594,7 @@ export class WalletPermissionsManager implements WalletInterface {
   constructor(underlyingWallet: WalletInterface, adminOriginator: string, config: PermissionsManagerConfig = {}) {
     this.underlying = underlyingWallet
     this.adminOriginator = this.normalizeOriginator(adminOriginator) || adminOriginator
+    this.telemetry = new Telemetry(config.telemetry)
 
     // Default all config options to true unless specified
     this.config = {
@@ -849,10 +860,25 @@ export class WalletPermissionsManager implements WalletInterface {
    */
   private async callEvent(eventName: keyof WalletPermissionsManagerCallbacks, param: any): Promise<void> {
     const arr = this.callbacks[eventName] || []
-    for (const cb of arr) {
+    for (const [callbackIndex, cb] of arr.entries()) {
       if (typeof cb === 'function') {
         try {
-          await cb(param)
+          if (this.telemetry.enabled && typeof param === 'object' && param != null) {
+            await this.telemetry.withSpan(
+              'wallet.permission.callback',
+              {
+                component: 'wallet-permissions',
+                carrier: param,
+                attributes: {
+                  'permission.callback': eventName,
+                  'permission.callback_index': callbackIndex
+                }
+              },
+              async () => await cb(param)
+            )
+          } else {
+            await cb(param)
+          }
         } catch {
           // Intentionally swallow errors from user-provided callbacks to prevent
           // a misbehaving callback from disrupting the event dispatch loop.
@@ -2250,12 +2276,41 @@ export class WalletPermissionsManager implements WalletInterface {
    *   and return a promise that resolves once permission is granted or rejects if denied.
    */
   private async requestPermissionFlow(r: PermissionRequest): Promise<boolean> {
+    if (!this.telemetry.enabled) return await this.requestPermissionFlowCore(r)
+    return await this.telemetry.withSpan(
+      'wallet.permission.request',
+      {
+        component: 'wallet-permissions',
+        carrier: r,
+        attributes: {
+          'permission.type': r.type,
+          'permission.renewal': r.renewal === true
+        }
+      },
+      async span => {
+        const result = await this.requestPermissionFlowCore(r, span.context)
+        span.end({
+          attributes: {
+            'permission.granted': result
+          }
+        })
+        return result
+      }
+    )
+  }
+
+  private async requestPermissionFlowCore(
+    r: PermissionRequest,
+    context?: { traceId: string; spanId: string; traceFlags?: number }
+  ): Promise<boolean> {
+    if (context != null) this.telemetry.bindContext(r, context)
     const normalizedOriginator = this.normalizeOriginator(r.originator) || r.originator
     const preparedRequest: PermissionRequest = {
       ...r,
       originator: normalizedOriginator,
       displayOriginator: r.displayOriginator ?? r.previousToken?.rawOriginator ?? r.originator
     }
+    if (context != null) this.telemetry.bindContext(preparedRequest, context)
 
     if (preparedRequest.type === 'protocol' && preparedRequest.protocolID?.[0] === 1) {
       preparedRequest.counterparty = ''
@@ -2344,22 +2399,31 @@ export class WalletPermissionsManager implements WalletInterface {
   private async firePermissionRequestEvent(request: PermissionRequest, key: string): Promise<void> {
     switch (request.type) {
       case 'protocol':
-        await this.callEvent('onProtocolPermissionRequested', {
+        await this.callPermissionEvent(request, 'onProtocolPermissionRequested', {
           ...request,
           counterparty: request.protocolID?.[0] === 1 ? undefined : request.counterparty,
           requestID: key
         })
         break
       case 'basket':
-        await this.callEvent('onBasketAccessRequested', { ...request, requestID: key })
+        await this.callPermissionEvent(request, 'onBasketAccessRequested', { ...request, requestID: key })
         break
       case 'certificate':
-        await this.callEvent('onCertificateAccessRequested', { ...request, requestID: key })
+        await this.callPermissionEvent(request, 'onCertificateAccessRequested', { ...request, requestID: key })
         break
       case 'spending':
-        await this.callEvent('onSpendingAuthorizationRequested', { ...request, requestID: key })
+        await this.callPermissionEvent(request, 'onSpendingAuthorizationRequested', { ...request, requestID: key })
         break
     }
+  }
+
+  private async callPermissionEvent(
+    request: PermissionRequest,
+    eventName: keyof WalletPermissionsManagerCallbacks,
+    param: object
+  ): Promise<void> {
+    this.telemetry.linkContext(request, param)
+    await this.callEvent(eventName, param)
   }
 
   /* ---------------------------------------------------------------------
@@ -4993,6 +5057,26 @@ export class WalletPermissionsManager implements WalletInterface {
    * user a duplicate prompt for a grant they already made moments ago.
    */
   private async hasRecentOrPendingGrant(cacheKey: string): Promise<boolean> {
+    if (!this.telemetry.enabled) return await this.hasRecentOrPendingGrantCore(cacheKey)
+    return await this.telemetry.withSpan(
+      'wallet.permission.cache_check',
+      {
+        component: 'wallet-permissions'
+      },
+      async span => {
+        const result = await this.hasRecentOrPendingGrantCore(cacheKey)
+        span.end({
+          attributes: {
+            'permission.cache_hit': result,
+            'permission.mint_in_flight': this.mintsInFlight.has(cacheKey)
+          }
+        })
+        return result
+      }
+    )
+  }
+
+  private async hasRecentOrPendingGrantCore(cacheKey: string): Promise<boolean> {
     if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
     const inFlight = this.mintsInFlight.get(cacheKey)
     if (inFlight == null) return false

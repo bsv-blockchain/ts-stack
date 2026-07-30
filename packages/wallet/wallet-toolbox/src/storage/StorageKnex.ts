@@ -1,4 +1,4 @@
-import { ListActionsResult, ListOutputsResult, Validation } from '@bsv/sdk'
+import { ListActionsResult, ListOutputsResult, TelemetrySpan, Validation } from '@bsv/sdk'
 import {
   outputColumnsWithoutLockingScript,
   TableCertificate,
@@ -73,13 +73,60 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 // ceilings. The surrounding transaction still makes a complete pack atomic.
 const ACTION_BATCH_BLOB_SQL_CHUNK = 500
 
+interface KnexTelemetryQuery {
+  __knexQueryUid?: string
+  method?: string
+}
+
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
+  private readonly querySpans = new Map<string, TelemetrySpan>()
+  private readonly onQuery = (query: KnexTelemetryQuery): void => {
+    if (!this.telemetry.enabled || query.__knexQueryUid == null) return
+    const span = this.telemetry.startSpan('wallet.storage.db.query', {
+      component: 'wallet-storage-knex',
+      kind: 'client',
+      attributes: {
+        'db.system': this.databaseSystem(),
+        'db.operation': query.method ?? 'unknown'
+      }
+    })
+    this.querySpans.set(query.__knexQueryUid, span)
+  }
+
+  private readonly onQueryResponse = (_response: unknown, query: KnexTelemetryQuery): void => {
+    this.endQuerySpan(query)
+  }
+
+  private readonly onQueryError = (error: unknown, query: KnexTelemetryQuery): void => {
+    this.endQuerySpan(query, error)
+  }
 
   constructor (options: StorageKnexOptions) {
     super(options)
     if (options.knex == null) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
+    if (this.telemetry.enabled) {
+      this.knex.on('query', this.onQuery)
+      this.knex.on('query-response', this.onQueryResponse)
+      this.knex.on('query-error', this.onQueryError)
+    }
+  }
+
+  private databaseSystem (): string {
+    const clientName = (this.knex.client as { config?: { client?: string } }).config?.client ?? ''
+    if (clientName.includes('sqlite')) return 'sqlite'
+    if (clientName.includes('mysql')) return 'mysql'
+    if (clientName.includes('pg') || clientName.includes('postgres')) return 'postgresql'
+    return 'unknown'
+  }
+
+  private endQuerySpan (query: KnexTelemetryQuery, error?: unknown): void {
+    if (query.__knexQueryUid == null) return
+    const span = this.querySpans.get(query.__knexQueryUid)
+    if (span == null) return
+    this.querySpans.delete(query.__knexQueryUid)
+    span.end(error == null ? {} : { status: 'error', error })
   }
 
   protected override supportsActionBatchPersistence (): boolean { return true }
@@ -1087,6 +1134,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async destroy (): Promise<void> {
+    this.knex.off('query', this.onQuery)
+    this.knex.off('query-response', this.onQueryResponse)
+    this.knex.off('query-error', this.onQueryError)
+    for (const span of this.querySpans.values()) span.end({ status: 'cancelled' })
+    this.querySpans.clear()
     await this.knex?.destroy()
   }
 

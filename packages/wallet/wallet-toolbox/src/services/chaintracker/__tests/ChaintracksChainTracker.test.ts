@@ -20,7 +20,7 @@ const HEADER_877599 = {
 const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
-    const url = typeof input === 'string' ? input : input?.url ?? ''
+    const url = typeof input === 'string' ? input : (input?.url ?? '')
     if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
       return jsonResponse({ status: 'success', value: 950000 })
     }
@@ -51,11 +51,7 @@ describe('ChaintracksChaintracker tests', () => {
   })
 
   test('retries transient header lookup failures', async () => {
-    const chaintracks = makeChaintracksClient([
-      new Error('temporary chaintracks failure'),
-      undefined,
-      HEADER_877599
-    ])
+    const chaintracks = makeChaintracksClient([new Error('temporary chaintracks failure'), undefined, HEADER_877599])
     const tracker = new ChaintracksChainTracker('main', chaintracks, { maxRetries: 3, retryDelayMs: 0 })
 
     await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).resolves.toBe(true)
@@ -63,18 +59,57 @@ describe('ChaintracksChaintracker tests', () => {
   })
 
   test('throws the final chaintracks lookup error after retries', async () => {
-    const chaintracks = makeChaintracksClient([
-      new Error('first failure'),
-      new Error('final failure')
-    ])
+    const chaintracks = makeChaintracksClient([new Error('first failure'), new Error('final failure')])
     const tracker = new ChaintracksChainTracker('main', chaintracks, { maxRetries: 2, retryDelayMs: 0 })
 
-    await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).rejects.toThrow('final failure')
+    await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).rejects.toThrow(
+      'final failure'
+    )
     expect(chaintracks.findHeaderForHeight).toHaveBeenCalledTimes(2)
+  })
+
+  test('traces retry attempts and cache disposition without roots or headers', async () => {
+    const events: any[] = []
+    let nextSpanId = 1
+    const chaintracks = makeChaintracksClient([undefined, HEADER_877599])
+    const tracker = new ChaintracksChainTracker('main', chaintracks, {
+      maxRetries: 2,
+      retryDelayMs: 0,
+      telemetry: {
+        sink: {
+          capture: event => events.push(event)
+        },
+        traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        spanIdFactory: () => (nextSpanId++).toString(16).padStart(16, '0')
+      }
+    })
+
+    await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).resolves.toBe(true)
+    await expect(tracker.isValidRootForHeight(HEADER_877599.merkleRoot, HEADER_877599.height)).resolves.toBe(true)
+    await expect(tracker.currentHeight()).resolves.toBe(950000)
+
+    const attempts = events.filter(event => event.name === 'wallet.chaintracks.find_header')
+    const validations = events.filter(event => event.name === 'wallet.chaintracks.validate_root')
+    expect(attempts).toHaveLength(2)
+    expect(attempts.map(event => event.attributes['retry.attempt'])).toEqual([1, 2])
+    expect(validations).toHaveLength(2)
+    expect(validations[0].attributes).toMatchObject({
+      'chaintracks.cache_hit': false,
+      'chaintracks.valid': true
+    })
+    expect(validations[1].attributes).toMatchObject({
+      'chaintracks.cache_hit': true,
+      'chaintracks.valid': true
+    })
+    expect(events.find(event => event.name === 'wallet.chaintracks.current_height')).toMatchObject({
+      spanStatus: 'ok'
+    })
+    expect(JSON.stringify(events)).not.toContain(HEADER_877599.merkleRoot)
+    expect(JSON.stringify(events)).not.toContain(HEADER_877599.previousHash)
   })
 })
 
-async function testChaintracksChaintracker (chain: sdk.Chain) {
+async function testChaintracksChaintracker(chain: sdk.Chain) {
   const tracker = new ChaintracksChainTracker(chain)
   const height = await tracker.currentHeight()
   expect(height).toBeGreaterThan(877598)
@@ -90,11 +125,11 @@ async function testChaintracksChaintracker (chain: sdk.Chain) {
   expect(okTest).toBe(chain === 'test')
 }
 
-function jsonResponse (body: unknown): any {
+function jsonResponse(body: unknown): any {
   return { ok: true, status: 200, json: async () => body }
 }
 
-function makeChaintracksClient (responses: Array<BlockHeader | undefined | Error>): any {
+function makeChaintracksClient(responses: Array<BlockHeader | undefined | Error>): any {
   return {
     getPresentHeight: jest.fn(async () => 950000),
     findHeaderForHeight: jest.fn(async () => {

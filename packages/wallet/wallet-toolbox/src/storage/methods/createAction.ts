@@ -943,7 +943,7 @@ async function fundNewTransactionSdk(
     })
   }
 
-  const gcr = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput, vargs.logger)
+  const gcr = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput, vargs.logger, storage.telemetry)
 
   const nextRandomVal = (): number => {
     let val = 0

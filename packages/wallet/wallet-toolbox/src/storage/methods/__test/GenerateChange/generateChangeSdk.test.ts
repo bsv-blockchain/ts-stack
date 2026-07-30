@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { Transaction as BsvTransaction, Script } from '@bsv/sdk'
+import { Telemetry, Transaction as BsvTransaction, Script } from '@bsv/sdk'
 import { randomValsUsed1 } from './randomValsUsed1'
 import { sdk } from '../../../../index.client'
 import {
@@ -125,6 +125,10 @@ describe('generateChange tests', () => {
   })
 
   test('2 WERR_INSUFFICIENT_FUNDS', async () => {
+    const events: any[] = []
+    const telemetry = new Telemetry({
+      sink: { capture: event => events.push(event) }
+    })
     const params: GenerateChangeSdkParams = {
       ...defParams,
       fixedOutputs: [
@@ -137,10 +141,10 @@ describe('generateChange tests', () => {
 
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
 
-    expectToThrowWERR(
-      sdk.WERR_INSUFFICIENT_FUNDS,
-      async () => await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
-    )
+    await expect(
+      generateChangeSdk(params, allocateChangeInput, releaseChangeInput, undefined, telemetry)
+    ).rejects.toBeInstanceOf(sdk.WERR_INSUFFICIENT_FUNDS)
+    expect(events.some(event => event.name === 'wallet.storage.generate_change.release')).toBe(true)
   })
 
   test('2a WERR_INSUFFICIENT_FUNDS no inputs', async () => {
@@ -1156,6 +1160,51 @@ describe('generateChange tests', () => {
       expect(o.satoshis).toBeGreaterThanOrEqual(expectedDustFloor)
     }
     expectTransactionSize(params, r)
+  })
+
+  test('11 emits correlated allocation and generate-change spans without values', async () => {
+    const events: any[] = []
+    const telemetry = new Telemetry({
+      sink: {
+        capture: event => events.push(event)
+      },
+      traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      spanIdFactory: (() => {
+        let value = 1
+        return () => (value++).toString(16).padStart(16, '0')
+      })()
+    })
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedOutputs: [
+        { satoshis: 1234, lockingScriptLength: 1739091 },
+        { satoshis: 2, lockingScriptLength: 25 }
+      ]
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([...defAvailableChange()])
+
+    await generateChangeSdk(params, allocateChangeInput, releaseChangeInput, undefined, telemetry)
+
+    const total = events.find(event => event.name === 'wallet.storage.generate_change')
+    const allocation = events.find(event => event.name === 'wallet.storage.generate_change.allocate')
+    expect(total).toMatchObject({
+      type: 'span',
+      traceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      spanStatus: 'ok',
+      attributes: {
+        'change.fixed_input_count': params.fixedInputs.length,
+        'change.fixed_output_count': params.fixedOutputs.length,
+        'change.allocated_input_count': 1
+      }
+    })
+    expect(allocation).toMatchObject({
+      type: 'span',
+      traceId: total.traceId,
+      parentSpanId: total.spanId,
+      spanStatus: 'ok'
+    })
+    expect(JSON.stringify(events)).not.toContain('6323')
+    expect(JSON.stringify(events)).not.toContain('15005')
   })
 })
 

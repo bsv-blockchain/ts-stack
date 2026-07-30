@@ -19,6 +19,7 @@ import {
 import * as sdk from '../sdk/index'
 import { validateSecondsSinceEpoch, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { getSyncChunk } from './methods/getSyncChunk'
+import { Telemetry, TelemetryConfig } from '@bsv/sdk'
 
 type StorageDate = Date | string
 type DateInput = Date | string | number
@@ -38,6 +39,7 @@ type OptionalDateInput = DateInput | null | undefined
  */
 export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   chain: sdk.Chain
+  readonly telemetry: Telemetry
   _settings?: TableSettings
   whenLastAccess?: Date
   get dbtype (): DBType | undefined {
@@ -46,6 +48,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
 
   constructor (options: StorageReaderOptions) {
     this.chain = options.chain
+    this.telemetry = new Telemetry(options.telemetry)
   }
 
   isAvailable (): boolean {
@@ -191,6 +194,8 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
 
 export interface StorageReaderOptions {
   chain: sdk.Chain
+  /** Optional provider-neutral storage and database tracing. */
+  telemetry?: TelemetryConfig
 }
 
 export type DBType = 'SQLite' | 'MySQL' | 'IndexedDB'
