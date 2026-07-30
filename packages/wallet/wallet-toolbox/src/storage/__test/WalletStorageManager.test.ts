@@ -208,6 +208,14 @@ describe('WalletStorageManager tests', () => {
         rootKeyHex: '2'.repeat(64),
         dropAll: true
       })
+      // Keep this concurrency test independent of public chaintracks availability.
+      // AtomicBEEF proof validity is covered separately; this case verifies that
+      // parallel internalization stays within the supported writer batch.
+      fred.activeStorage.setServices({
+        getChainTracker: async () => ({
+          isValidRootForHeight: async (_root: string, _height: number) => true
+        })
+      } as any)
       const promises: Array<Promise<number>> = []
       const result: Array<{ i: number; r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
