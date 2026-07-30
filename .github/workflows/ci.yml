@@ -136,7 +136,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-browser-package|check-package-artifact|check-wallet-toolbox-platform|package-release-artifacts|repository-health|run-ci-tests|run-prebuilt-package-script|normalize-lcov-paths|run-governed-test|sonar-pr-gate|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy|lib/workspace-packages)\.(mjs|test\.mjs)$)'; then
+            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|ci-performance|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-browser-package|check-package-artifact|check-wallet-toolbox-platform|ci-performance|package-release-artifacts|repository-health|run-ci-tests|run-prebuilt-package-script|normalize-lcov-paths|run-governed-test|sonar-pr-gate|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy|lib/workspace-packages)\.(mjs|test\.mjs)$)'; then
               FILTER=""
             else
               FILTER="...[${BASE_SHA}]"

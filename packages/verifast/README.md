@@ -176,7 +176,9 @@ the SDK implementation. Worker scheduling and its internal table-snapshot ABI
 remain in the full ESM/worker artifact, so the classic path ships only the
 public typed verifier and cryptography APIs. The build rejects a complete
 classic-script payload over 300,000 bytes, counting both loaders and WASM; the
-current payload is 298,567 bytes.
+current payload is 298,753 bytes. Exact-tarball browser checks additionally
+enforce raw, gzip, and Brotli Vite, esbuild, and complete classic-payload
+budgets.
 
 An optional custom WASM factory remains supported:
 
@@ -241,8 +243,10 @@ The coverage gate ratchets statements, branches, functions, and lines.
 validates conditional declarations and raw WASM assets. The deterministic
 corpus compares positive and negative SDK-interpreter
 verdicts with real BDK WASM for whole transactions and individual Spend objects.
-Consumer tests execute the built package through Node ESM, CommonJS, browser
-ESM, and browser UMD rather than substituting mocks.
+Consumer tests install the exact tarball and execute it through Node ESM,
+CommonJS, Vite, esbuild, real browser ESM/workers, and browser UMD rather than
+substituting mocks. Browser runtime checks enforce a strict same-origin CSP and
+exercise both streaming WASM compilation and the ArrayBuffer fallback.
 
 On the retained Apple M3 Max baseline, BDK is 16–20x faster in Node and 12–15x
 faster in Chrome for P2PKH transactions; TypeScript remains faster for trivial

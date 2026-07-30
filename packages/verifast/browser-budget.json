@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/verifast",
+  "entry": ".",
+  "requiredExports": [
+    "BDK_FLAG_BITS",
+    "BdkErrorDomain",
+    "BdkVerificationError",
+    "BdkVerifier",
+    "mapVerifyFlags"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 805000,
+      "gzip": 321000,
+      "brotli": 138000
+    },
+    "esbuild": {
+      "raw": 42000,
+      "gzip": 14200,
+      "brotli": 12700
+    }
+  },
+  "umd": {
+    "path": "dist/umd/verifast.js",
+    "additionalPaths": ["dist/src/wasm/bdk-core.umd.js", "dist/src/wasm/bdk-core.umd.wasm"],
+    "global": "bsvVerifast",
+    "maximumBytes": {
+      "raw": 300000,
+      "gzip": 121000,
+      "brotli": 95000
+    }
+  }
+}

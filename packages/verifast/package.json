@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -78,8 +78,8 @@
     "bench:batch": "node --expose-gc --import tsx bench/batch-benchmark.ts",
     "bench:crypto": "node --import tsx bench/crypto-benchmark.ts",
     "bench:warmup": "node --import tsx bench/warmup-benchmark.ts",
-    "test:browser": "pnpm build && node browser/test.mjs",
-    "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs && node browser/test.mjs",
+    "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs . && node browser/test.mjs",
+    "test:consumers": "pnpm build && node scripts/test-node-consumers.mjs && node scripts/test-browser-bundler.mjs && node ../../scripts/check-browser-package.mjs . && node browser/test.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "prepublishOnly": "pnpm build"
   },

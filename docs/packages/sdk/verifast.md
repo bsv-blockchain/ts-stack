@@ -3,9 +3,9 @@ id: pkg-verifast
 title: '@bsv/verifast'
 kind: package
 domain: sdk
-version: '0.3.1'
-last_updated: '2026-07-28'
-last_verified: '2026-07-28'
+version: '0.3.2'
+last_updated: '2026-07-30'
+last_verified: '2026-07-30'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/verifast'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast'
@@ -46,8 +46,11 @@ warms and routes eligible verification work to WASM afterward. Use explicit
 consensus or policy context when establishing transaction validity. Batch and
 worker APIs are bounded and can be preloaded for latency-sensitive workloads.
 
-Build and package checks exercise real WASM verification in Node, browser
-bundlers, workers, CommonJS, and the classic browser payload. See the
+Build and package checks install exact tarballs and exercise real WASM
+verification in Node, browser bundlers, workers, CommonJS, strict-CSP browser
+pages, streaming fallback, and the classic browser payload. Raw, gzip, and
+Brotli budgets guard both browser bundles and the complete UMD loaders-plus-WASM
+composition. See the
 [package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/verifast#readme)
 for routing, network, batch, resource, and UMD details.
 

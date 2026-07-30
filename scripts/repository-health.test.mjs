@@ -14,6 +14,7 @@ import {
   validateExceptionRegistry,
   validateProjectRegistry
 } from './repository-health.mjs'
+import { validateBaseline as validateCiPerformanceBaseline } from './ci-performance.mjs'
 
 const healthDirectory = path.join(REPOSITORY_ROOT, 'governance/repository-health')
 const projects = readJson(path.join(healthDirectory, 'projects.json'))
@@ -49,6 +50,16 @@ test('current repository health controls and ratchet are internally consistent',
   assert.equal(result.projects.length, 37)
   assert.equal(result.publicPackages, 30)
   assert.equal(result.findings.length, 0)
+})
+
+test('CI performance baseline retains representative full and targeted cohorts', () => {
+  const baseline = readJson(path.join(REPOSITORY_ROOT, 'governance/ci-performance-baseline.json'))
+  assert.deepEqual(validateCiPerformanceBaseline(baseline), [])
+  assert.deepEqual(baseline.observability.unavailableFromActionsApi, [
+    'hosted-runner CPU utilization',
+    'hosted-runner memory utilization',
+    'action-internal cache hit rate'
+  ])
 })
 
 test('published declaration dependencies are explicit and backed by runtime modules', () => {
@@ -144,6 +155,62 @@ test('every public package declares supported runtime and canonical support meta
       `${project.path} must declare its tree-shaking side-effect contract`
     )
   }
+})
+
+test('every public package has canonical, machine-verified consumer profiles', () => {
+  const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
+  assert.equal(publicProjects.length, 30)
+  assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
+  assert.deepEqual(
+    [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),
+    [
+      'browser-bundler',
+      'browser-esm',
+      'cli',
+      'node-cjs',
+      'node-esm',
+      'react-native-metro',
+      'umd-global',
+      'wasm-worker'
+    ]
+  )
+
+  const unsorted = structuredClone(projects)
+  unsorted.projects.find(project => project.name === '@bsv/sdk').consumerProfiles = [
+    'node-esm',
+    'browser-esm'
+  ]
+  assert.match(
+    validateProjectRegistry(unsorted, discoverWorkspaceProjects()).join('\n'),
+    /consumerProfiles must use canonical lexical order/
+  )
+
+  const unsupportedMode = structuredClone(discoverWorkspaceProjects())
+  unsupportedMode.find(project => project.manifest.name === '@bsv/overlay-topics').manifest.scripts[
+    'pack:check'
+  ] = 'node check-package-artifact.mjs . --modes cjs'
+  assert.match(
+    validateProjectRegistry(projects, unsupportedMode).join('\n'),
+    /consumer profile node-esm is not exercised by the pack:check modes/
+  )
+
+  const missingTarget = structuredClone(projects)
+  missingTarget.projects.find(
+    project => project.name === '@bsv/message-box-client'
+  ).runtimeTargets = ['browser', 'node']
+  assert.match(
+    validateProjectRegistry(missingTarget, discoverWorkspaceProjects()).join('\n'),
+    /consumer profile umd-global requires runtime target umd/
+  )
+
+  const sourceOnlyBrowser = structuredClone(discoverWorkspaceProjects())
+  sourceOnlyBrowser.find(project => project.manifest.name === '@bsv/did').manifest.scripts[
+    'test:browser'
+  ] = 'node browser/source-only.mjs'
+  assert.match(
+    validateProjectRegistry(projects, sourceOnlyBrowser).join('\n'),
+    /browser consumer profiles require an exact-package browser checker/
+  )
 })
 
 test('contract findings are deterministic and match their recorded baseline', () => {

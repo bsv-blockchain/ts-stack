@@ -168,8 +168,8 @@
       "name": "@bsv/verifast",
       "publishedVersion": "0.3.0",
       "releaseType": "patch",
-      "summary": "Uses precise worker result type errors and refreshes the compatible browser verification test client.",
-      "migration": "No consumer migration is required; valid verification results and worker protocols are unchanged."
+      "summary": "Adds exact-tarball browser, WASM, worker, strict-CSP, streaming-fallback, UMD source-map, and raw/gzip/Brotli bundle contracts.",
+      "migration": "No consumer migration is required; exports, verification behavior, worker protocols, package paths, and runtime defaults are unchanged."
     },
     {
       "name": "@bsv/wallet-helper",
