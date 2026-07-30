@@ -10,7 +10,7 @@ describe('LocalKVStore tests', () => {
   let ctxs: TestWalletNoSetup[] = []
   const context = 'test kv store'
   const key1 = 'key1'
-  const key2 = 'key2'
+  const _key2 = 'key2'
 
   beforeEach(async () => {
     ctxs = [await _tu.createLegacyWalletSQLiteCopy(`${testName()}`)]
@@ -23,7 +23,7 @@ describe('LocalKVStore tests', () => {
   })
 
   test('0 get non-existent', async () => {
-    for (const { storage, wallet } of ctxs) {
+    for (const { storage: _storage, wallet } of ctxs) {
       const kvStore = new LocalKVStore(wallet, context, false, undefined, true)
       const value = await kvStore.get(key1)
       expect(value).toBeUndefined()
@@ -32,7 +32,7 @@ describe('LocalKVStore tests', () => {
 
   test('1 set get', async () => {
     if (!includeTestChaintracks) return
-    for (const { storage, wallet } of ctxs) {
+    for (const { storage: _storage, wallet } of ctxs) {
       const kvStore = new LocalKVStore(wallet, context, false, undefined, true)
       await kvStore.set(key1, 'value1')
       const value = await kvStore.get(key1)
@@ -42,7 +42,7 @@ describe('LocalKVStore tests', () => {
 
   test('3 set x 4 get', async () => {
     if (!includeTestChaintracks) return
-    for (const { storage, wallet } of ctxs) {
+    for (const { storage: _storage, wallet } of ctxs) {
       const kvStore = new LocalKVStore(wallet, context, false, undefined, true)
       const promises = [
         kvStore.set(key1, 'value1'),
@@ -76,7 +76,7 @@ describe('LocalKVStore tests', () => {
 
   test('5 set x 4 get set x 4 get', async () => {
     if (!includeTestChaintracks) return
-    for (const { storage, wallet } of ctxs) {
+    for (const { storage: _storage, wallet } of ctxs) {
       const kvStore = new LocalKVStore(wallet, context, false, undefined, true)
       let v4: string | undefined
       async function captureValue(): Promise<void> {

@@ -14,7 +14,7 @@ import type { WalletInterface } from '../Wallet.interfaces'
 // Helper: create a fully-mocked substrate and an already-connected WalletClient
 // ---------------------------------------------------------------------------
 
-function buildMockSubstrate (): jest.Mocked<WalletInterface> {
+function buildMockSubstrate(): jest.Mocked<WalletInterface> {
   return {
     createAction: jest.fn(),
     signAction: jest.fn(),
@@ -43,12 +43,12 @@ function buildMockSubstrate (): jest.Mocked<WalletInterface> {
     getHeight: jest.fn(),
     getHeaderForHeight: jest.fn(),
     getNetwork: jest.fn(),
-    getVersion: jest.fn(),
+    getVersion: jest.fn()
   } as jest.Mocked<WalletInterface>
 }
 
 /** Creates a WalletClient whose substrate is already the given mock object. */
-function clientWith (mock: jest.Mocked<WalletInterface>, originator = 'test.origin'): WalletClient {
+function clientWith(mock: jest.Mocked<WalletInterface>, originator = 'test.origin'): WalletClient {
   const client = new WalletClient(mock, originator)
   return client
 }
@@ -65,7 +65,7 @@ describe('WalletClient.relinquishOutput – substrate delegation', () => {
 
     const result = await client.relinquishOutput({
       basket: 'default',
-      output: 'a'.repeat(64) + '.0',
+      output: 'a'.repeat(64) + '.0'
     })
 
     expect(result).toEqual({ relinquished: true })
@@ -112,7 +112,7 @@ describe('WalletClient.getPublicKey – substrate delegation', () => {
     await client.getPublicKey({
       protocolID: [2, 'my-protocol'],
       keyID: '1',
-      counterparty: 'self',
+      counterparty: 'self'
     })
 
     expect(mock.getPublicKey).toHaveBeenCalledWith(
@@ -135,14 +135,14 @@ describe('WalletClient.revealCounterpartyKeyLinkage – substrate delegation', (
       counterparty: 'cc'.repeat(33),
       revelationTime: '2024-01-01T00:00:00.000Z',
       encryptedLinkage: [1, 2, 3],
-      encryptedLinkageProof: [4, 5, 6],
+      encryptedLinkageProof: [4, 5, 6]
     }
     mock.revealCounterpartyKeyLinkage.mockResolvedValue(fakeResult)
     const client = clientWith(mock)
 
     const args = {
       counterparty: 'cc'.repeat(33),
-      verifier: 'bb'.repeat(33),
+      verifier: 'bb'.repeat(33)
     }
     const result = await client.revealCounterpartyKeyLinkage(args)
 
@@ -166,7 +166,7 @@ describe('WalletClient.revealSpecificKeyLinkage – substrate delegation', () =>
       keyID: '1',
       encryptedLinkage: [1],
       encryptedLinkageProof: [2],
-      proofType: 1,
+      proofType: 1
     }
     mock.revealSpecificKeyLinkage.mockResolvedValue(fakeResult)
     const client = clientWith(mock)
@@ -175,7 +175,7 @@ describe('WalletClient.revealSpecificKeyLinkage – substrate delegation', () =>
       counterparty: 'cc'.repeat(33),
       verifier: 'bb'.repeat(33),
       protocolID: [1, 'proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.revealSpecificKeyLinkage(args)
 
@@ -197,7 +197,7 @@ describe('WalletClient.encrypt – substrate delegation', () => {
     const args = {
       plaintext: [1, 2, 3],
       protocolID: [1, 'enc-proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.encrypt(args)
 
@@ -215,7 +215,7 @@ describe('WalletClient.decrypt – substrate delegation', () => {
     const args = {
       ciphertext: [9, 8, 7],
       protocolID: [1, 'enc-proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.decrypt(args)
 
@@ -237,7 +237,7 @@ describe('WalletClient.createHmac – substrate delegation', () => {
     const args = {
       data: [10, 20],
       protocolID: [2, 'hmac-proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.createHmac(args)
 
@@ -256,7 +256,7 @@ describe('WalletClient.verifyHmac – substrate delegation', () => {
       data: [10, 20],
       hmac: [0, 1, 2, 3],
       protocolID: [2, 'hmac-proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.verifyHmac(args)
 
@@ -278,7 +278,7 @@ describe('WalletClient.createSignature – substrate delegation', () => {
     const args = {
       data: [1, 2],
       protocolID: [1, 'sig-proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.createSignature(args)
 
@@ -297,7 +297,7 @@ describe('WalletClient.verifySignature – substrate delegation', () => {
       data: [1, 2],
       signature: [5, 6, 7],
       protocolID: [1, 'sig-proto'] as [0 | 1 | 2, string],
-      keyID: '1',
+      keyID: '1'
     }
     const result = await client.verifySignature(args)
 
@@ -320,7 +320,7 @@ describe('WalletClient.acquireCertificate – substrate delegation', () => {
     revocationOutpoint: 'a'.repeat(64) + '.0',
     signature: 'aabb',
     keyringRevealer: 'certifier' as const,
-    keyringForSubject: {},
+    keyringForSubject: {}
   }
 
   it('delegates direct acquisition to substrate and returns result', async () => {
@@ -341,7 +341,7 @@ describe('WalletClient.acquireCertificate – substrate delegation', () => {
       certifier: 'aa'.repeat(33),
       fields: {},
       acquisitionProtocol: 'issuance' as const,
-      certifierUrl: 'https://certifier.example.com',
+      certifierUrl: 'https://certifier.example.com'
     }
     mock.acquireCertificate.mockResolvedValue(issuanceCert as any)
     const client = clientWith(mock)
@@ -391,10 +391,10 @@ describe('WalletClient.proveCertificate – substrate delegation', () => {
         fields: {},
         subject: 'bb'.repeat(33),
         revocationOutpoint: 'a'.repeat(64) + '.0',
-        signature: 'aabb',
+        signature: 'aabb'
       } as any,
       fieldsToReveal: ['name'],
-      verifier: 'cc'.repeat(33),
+      verifier: 'cc'.repeat(33)
     }
     const result = await client.proveCertificate(args)
 
@@ -416,7 +416,7 @@ describe('WalletClient.relinquishCertificate – substrate delegation', () => {
     const args = {
       type: 'dHlwZQ==',
       serialNumber: 'c2VyaWFs',
-      certifier: 'aa'.repeat(33),
+      certifier: 'aa'.repeat(33)
     }
     const result = await client.relinquishCertificate(args)
 
@@ -706,16 +706,19 @@ describe('WalletClient.internalizeAction – substrate delegation', () => {
     // BEEF_V2 = 4022206466 (0xEFBE0002) in little-endian = [2, 0, 190, 239]
     // TX_DATA_FORMAT.TXID_ONLY = 2, followed by 32-byte txid
     const minimalBeef: number[] = [
-      2, 0, 190, 239,          // BEEF_V2 version LE
-      0,                        // 0 bumps (varint)
-      1,                        // 1 tx (varint)
-      2,                        // TX_DATA_FORMAT.TXID_ONLY
-      ...new Array(32).fill(0)  // 32-byte zero txid
+      2,
+      0,
+      190,
+      239, // BEEF_V2 version LE
+      0, // 0 bumps (varint)
+      1, // 1 tx (varint)
+      2, // TX_DATA_FORMAT.TXID_ONLY
+      ...Array.from({ length: 32 }).fill(0) // 32-byte zero txid
     ]
     const args = {
       tx: minimalBeef,
       outputs: [{ outputIndex: 0, protocol: 'wallet payment' as const }],
-      description: 'Internalize tx',
+      description: 'Internalize tx'
     }
     const result = await client.internalizeAction(args)
 
@@ -749,7 +752,9 @@ describe('WalletClient.listOutputs – substrate delegation', () => {
 
 describe('WalletClient.connectToSubstrate – error when no substrate available', () => {
   it('throws a descriptive error when auto-substrate fails to connect', async () => {
-    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('No test wallet available'))
+    const fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('No test wallet available'))
 
     try {
       const client = new WalletClient('auto', 'test.origin')

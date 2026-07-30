@@ -26,7 +26,7 @@ jest.mock('../../overlay-tools/index.js', () => {
 jest.mock('../../transaction/index.js', () => {
   return {
     Transaction: {
-      fromAtomicBEEF: jest.fn().mockImplementation((tx) => ({
+      fromAtomicBEEF: jest.fn().mockImplementation(_tx => ({
         toHexBEEF: () => 'transactionHex'
       })),
       fromBEEF: jest.fn().mockReturnValue({
@@ -67,7 +67,7 @@ jest.mock('../../primitives/index.js', () => {
     Utils: {
       toBase64: jest.fn().mockReturnValue('mockKeyID'),
       toArray: jest.fn().mockReturnValue(new Uint8Array()),
-      toUTF8: jest.fn().mockImplementation((data) => {
+      toUTF8: jest.fn().mockImplementation(data => {
         return new TextDecoder().decode(data)
       }),
       toHex: jest.fn().mockReturnValue('0102030405060708')
@@ -189,11 +189,14 @@ describe('IdentityClient', () => {
       expect(result).toEqual('broadcastResult')
 
       // Validate that proveCertificate was called with the proper arguments.
-      expect(walletMock.proveCertificate).toHaveBeenCalledWith({
-        certificate,
-        fieldsToReveal,
-        verifier: expect.any(String)
-      }, undefined)
+      expect(walletMock.proveCertificate).toHaveBeenCalledWith(
+        {
+          certificate,
+          fieldsToReveal,
+          verifier: expect.any(String)
+        },
+        undefined
+      )
 
       // Validate that createAction was called.
       expect(walletMock.createAction).toHaveBeenCalled()
@@ -215,10 +218,15 @@ describe('IdentityClient', () => {
         }
       }
       // Mock discoverByIdentityKey to return a certificate list.
-      walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates: [dummyCertificate] })
+      walletMock.discoverByIdentityKey = jest
+        .fn()
+        .mockResolvedValue({ certificates: [dummyCertificate] })
 
       const identities = await identityClient.resolveByIdentityKey({ identityKey: 'dummyKey' })
-      expect(walletMock.discoverByIdentityKey).toHaveBeenCalledWith({ identityKey: 'dummyKey' }, undefined)
+      expect(walletMock.discoverByIdentityKey).toHaveBeenCalledWith(
+        { identityKey: 'dummyKey' },
+        undefined
+      )
       expect(identities).toHaveLength(1)
       expect(identities[0]).toEqual({
         name: 'Alice',
@@ -258,9 +266,14 @@ describe('IdentityClient', () => {
       // Mock ContactsManager to return contact for the specific identity key
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
-      walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
+      walletMock.discoverByIdentityKey = jest
+        .fn()
+        .mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const identities = await identityClient.resolveByIdentityKey({ identityKey: 'alice-identity-key' }, { useContacts: true })
+      const identities = await identityClient.resolveByIdentityKey(
+        { identityKey: 'alice-identity-key' },
+        { useContacts: true }
+      )
 
       expect(identities).toHaveLength(1)
       expect(identities[0].name).toBe('Alice Smith (Personal Contact)') // Contact should be returned, not discovered identity
@@ -343,9 +356,13 @@ describe('IdentityClient', () => {
         }
       }
 
-      walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [dummyCertificate] })
+      walletMock.discoverByAttributes = jest
+        .fn()
+        .mockResolvedValue({ certificates: [dummyCertificate] })
 
-      const identities = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } })
+      const identities = await identityClient.resolveByAttributes({
+        attributes: { email: 'alice@example.com' }
+      })
       expect(identities).toHaveLength(1)
       expect(identities[0].name).toBe('alice@example.com')
     })
@@ -378,9 +395,14 @@ describe('IdentityClient', () => {
       // Mock the ContactsManager's getContacts method instead of the IdentityClient method
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
-      walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
+      walletMock.discoverByAttributes = jest
+        .fn()
+        .mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const identities = await identityClient.resolveByAttributes({ attributes: { name: 'Alice' } }, { useContacts: true })
+      const identities = await identityClient.resolveByAttributes(
+        { attributes: { name: 'Alice' } },
+        { useContacts: true }
+      )
 
       expect(identities).toHaveLength(1)
       expect(identities[0].name).toBe('Alice Smith (Personal)') // Contact should be returned, not discovered identity
@@ -391,14 +413,20 @@ describe('IdentityClient', () => {
         {
           name: 'Alice Smith',
           identityKey: 'alice-key',
-          avatarURL: '', abbreviatedKey: 'alice-i...', badgeIconURL: '', badgeLabel: '', badgeClickURL: ''
+          avatarURL: '',
+          abbreviatedKey: 'alice-i...',
+          badgeIconURL: '',
+          badgeLabel: '',
+          badgeClickURL: ''
         }
       ]
 
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.getContacts = jest.fn().mockResolvedValue(contacts)
 
-      const identities = await identityClient.resolveByAttributes({ attributes: { name: '', email: '   ' } })
+      const identities = await identityClient.resolveByAttributes({
+        attributes: { name: '', email: '   ' }
+      })
 
       expect(identities).toHaveLength(0)
     })
@@ -408,7 +436,11 @@ describe('IdentityClient', () => {
         {
           name: 'Alice Smith (Personal)',
           identityKey: 'alice-key',
-          avatarURL: '', abbreviatedKey: 'alice-i...', badgeIconURL: '', badgeLabel: '', badgeClickURL: ''
+          avatarURL: '',
+          abbreviatedKey: 'alice-i...',
+          badgeIconURL: '',
+          badgeLabel: '',
+          badgeClickURL: ''
         }
       ]
 
@@ -428,7 +460,9 @@ describe('IdentityClient', () => {
 
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.getContacts = jest.fn().mockResolvedValue(contacts)
-      walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
+      walletMock.discoverByAttributes = jest
+        .fn()
+        .mockResolvedValue({ certificates: [discoveredCertificate] })
 
       // With overrideWithContacts = false, should ignore contacts entirely
       const identities = await identityClient.resolveByAttributes(
@@ -501,7 +535,7 @@ describe('IdentityClient', () => {
       badgeClickURL: 'https://example.com/verify'
     }
 
-    const mockContactWithMetadata = {
+    const _mockContactWithMetadata = {
       ...mockContact,
       metadata: { notes: 'Met at conference' }
     }
@@ -514,7 +548,7 @@ describe('IdentityClient', () => {
     describe('saveContact', () => {
       it('should save a contact without metadata', async () => {
         // Mock empty contacts list (new contact)
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
@@ -522,20 +556,26 @@ describe('IdentityClient', () => {
         await identityClient.saveContact(mockContact)
 
         // Verify HMAC was created for tagging
-        expect(walletMock.createHmac).toHaveBeenCalledWith({
-          protocolID: [2, 'contact'],
-          keyID: mockContact.identityKey,
-          counterparty: 'self',
-          data: expect.any(Uint8Array)
-        }, undefined)
+        expect(walletMock.createHmac).toHaveBeenCalledWith(
+          {
+            protocolID: [2, 'contact'],
+            keyID: mockContact.identityKey,
+            counterparty: 'self',
+            data: expect.any(Uint8Array)
+          },
+          undefined
+        )
 
         // Verify contact data was encrypted
-        expect(walletMock.encrypt).toHaveBeenCalledWith({
-          plaintext: expect.any(Uint8Array),
-          protocolID: [2, 'contact'],
-          keyID: expect.any(String),
-          counterparty: 'self'
-        }, undefined)
+        expect(walletMock.encrypt).toHaveBeenCalledWith(
+          {
+            plaintext: expect.any(Uint8Array),
+            protocolID: [2, 'contact'],
+            keyID: expect.any(String),
+            counterparty: 'self'
+          },
+          undefined
+        )
 
         // Verify new contact transaction was created
         expect(walletMock.createAction).toHaveBeenCalledWith(
@@ -553,14 +593,16 @@ describe('IdentityClient', () => {
 
         // Verify contact is now available from cache
         const contacts = await identityClient.getContacts()
-        expect(contacts).toContainEqual(expect.objectContaining({
-          name: mockContact.name,
-          identityKey: mockContact.identityKey
-        }))
+        expect(contacts).toContainEqual(
+          expect.objectContaining({
+            name: mockContact.name,
+            identityKey: mockContact.identityKey
+          })
+        )
       })
 
       it('should save a contact with metadata', async () => {
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
@@ -569,16 +611,18 @@ describe('IdentityClient', () => {
 
         // Verify contact with metadata is available from cache
         const contacts = await identityClient.getContacts()
-        expect(contacts).toContainEqual(expect.objectContaining({
-          name: mockContact.name,
-          identityKey: mockContact.identityKey,
-          metadata: { notes: 'Met at conference' }
-        }))
+        expect(contacts).toContainEqual(
+          expect.objectContaining({
+            name: mockContact.name,
+            identityKey: mockContact.identityKey,
+            metadata: { notes: 'Met at conference' }
+          })
+        )
       })
 
       it('should update existing contact', async () => {
         // First save a contact to establish it exists
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValueOnce({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValueOnce({
           outputs: [],
           BEEF: []
         })
@@ -590,14 +634,14 @@ describe('IdentityClient', () => {
           customInstructions: JSON.stringify({ keyID: 'existingKeyID' })
         }
 
-          ; (walletMock.listOutputs as jest.Mock).mockResolvedValueOnce({
-            outputs: [existingOutput],
-            BEEF: [1, 2, 3]
-          })
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValueOnce({
+          outputs: [existingOutput],
+          BEEF: [1, 2, 3]
+        })
 
-          ; (walletMock.decrypt as jest.Mock).mockResolvedValue({
-            plaintext: new TextEncoder().encode(JSON.stringify(mockContact))
-          })
+        ;(walletMock.decrypt as jest.Mock).mockResolvedValue({
+          plaintext: new TextEncoder().encode(JSON.stringify(mockContact))
+        })
 
         const updatedContact = { ...mockContact, name: 'Alice Updated' }
         await identityClient.saveContact(updatedContact)
@@ -621,7 +665,7 @@ describe('IdentityClient', () => {
     describe('getContacts', () => {
       it('should return cached contacts when available', async () => {
         // First save a contact to populate cache
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
@@ -633,10 +677,12 @@ describe('IdentityClient', () => {
         // Get contacts should use cache and not call wallet
         const result = await identityClient.getContacts()
 
-        expect(result).toContainEqual(expect.objectContaining({
-          name: mockContact.name,
-          identityKey: mockContact.identityKey
-        }))
+        expect(result).toContainEqual(
+          expect.objectContaining({
+            name: mockContact.name,
+            identityKey: mockContact.identityKey
+          })
+        )
         expect(walletMock.listOutputs).not.toHaveBeenCalled()
       })
 
@@ -647,25 +693,28 @@ describe('IdentityClient', () => {
           lockingScript: 'lockingScriptHex'
         }
 
-          ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
-            outputs: [mockOutput],
-            BEEF: [1, 2, 3]
-          })
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
+          outputs: [mockOutput],
+          BEEF: [1, 2, 3]
+        })
 
-          ; (walletMock.decrypt as jest.Mock).mockResolvedValue({
-            plaintext: new TextEncoder().encode(JSON.stringify(mockContact))
-          })
+        ;(walletMock.decrypt as jest.Mock).mockResolvedValue({
+          plaintext: new TextEncoder().encode(JSON.stringify(mockContact))
+        })
 
         const result = await identityClient.getContacts()
 
         expect(result).toEqual([mockContact])
-        expect(walletMock.listOutputs).toHaveBeenCalledWith({
-          basket: 'contacts',
-          include: 'locking scripts',
-          includeCustomInstructions: true,
-          tags: [],
-          limit: 1000
-        }, undefined)
+        expect(walletMock.listOutputs).toHaveBeenCalledWith(
+          {
+            basket: 'contacts',
+            include: 'locking scripts',
+            includeCustomInstructions: true,
+            tags: [],
+            limit: 1000
+          },
+          undefined
+        )
 
         // Verify subsequent call uses cache
         jest.clearAllMocks()
@@ -676,17 +725,17 @@ describe('IdentityClient', () => {
 
       it('should force refresh when requested', async () => {
         // First populate cache
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
         await identityClient.saveContact(mockContact)
 
-          // Mock empty result for force refresh
-          ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
-            outputs: [],
-            BEEF: []
-          })
+        // Mock empty result for force refresh
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
+          outputs: [],
+          BEEF: []
+        })
 
         const result = await identityClient.getContacts(undefined, true)
 
@@ -696,7 +745,7 @@ describe('IdentityClient', () => {
 
       it('should filter by identity key when provided', async () => {
         // Save two different contacts
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
@@ -708,28 +757,28 @@ describe('IdentityClient', () => {
         // Filter by specific identity key
         const result = await identityClient.getContacts(mockContact.identityKey)
 
-        expect(result).toEqual([expect.objectContaining({
-          name: mockContact.name,
-          identityKey: mockContact.identityKey
-        })])
+        expect(result).toEqual([
+          expect.objectContaining({
+            name: mockContact.name,
+            identityKey: mockContact.identityKey
+          })
+        ])
         expect(result).toHaveLength(1)
       })
 
       it('should throw error on listOutputs failure', async () => {
-        ; (walletMock.listOutputs as jest.Mock).mockRejectedValue(
-          new Error('List outputs error')
-        )
+        ;(walletMock.listOutputs as jest.Mock).mockRejectedValue(new Error('List outputs error'))
 
-        await expect(
-          identityClient.getContacts(undefined, true)
-        ).rejects.toThrow('List outputs error')
+        await expect(identityClient.getContacts(undefined, true)).rejects.toThrow(
+          'List outputs error'
+        )
       })
     })
 
     describe('removeContact', () => {
       it('should remove contact from cache and spend UTXO', async () => {
         // First save two contacts
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
@@ -744,14 +793,14 @@ describe('IdentityClient', () => {
           customInstructions: JSON.stringify({ keyID: 'mockKeyID' })
         }
 
-          ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
-            outputs: [mockOutput],
-            BEEF: [1, 2, 3]
-          })
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
+          outputs: [mockOutput],
+          BEEF: [1, 2, 3]
+        })
 
-          ; (walletMock.decrypt as jest.Mock).mockResolvedValue({
-            plaintext: new TextEncoder().encode(JSON.stringify(mockContact))
-          })
+        ;(walletMock.decrypt as jest.Mock).mockResolvedValue({
+          plaintext: new TextEncoder().encode(JSON.stringify(mockContact))
+        })
 
         await identityClient.removeContact(mockContact.identityKey)
 
@@ -778,15 +827,13 @@ describe('IdentityClient', () => {
       })
 
       it('should handle contact not found gracefully', async () => {
-        ; (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+        ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
           outputs: [],
           BEEF: []
         })
 
         // Should not throw when contact doesn't exist
-        await expect(
-          identityClient.removeContact('non-existent-key')
-        ).resolves.toBeUndefined()
+        await expect(identityClient.removeContact('non-existent-key')).resolves.toBeUndefined()
 
         // Should not call createAction since no contact found
         expect(walletMock.createAction).not.toHaveBeenCalled()

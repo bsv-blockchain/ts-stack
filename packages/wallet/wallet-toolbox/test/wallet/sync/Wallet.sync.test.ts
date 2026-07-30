@@ -26,9 +26,9 @@ describe('Wallet sync tests', () => {
     })
     //await tmpStore.dropAllData()
     await tmpStore.migrate('walletSyncTest0tmp', '1'.repeat(64))
-    const dstSettings = await tmpStore.makeAvailable()
+    const _dstSettings = await tmpStore.makeAvailable()
 
-    const srcSettings = await storage.makeAvailable()
+    const _srcSettings = await storage.makeAvailable()
     const manager = new WalletStorageManager(identityKey, storage, [tmpStore])
 
     const auth = await manager.getAuth()
@@ -111,7 +111,7 @@ async function setActiveTwice(
 
   const originalAuth = { ...(await storageManager.getAuth()) }
   expect(originalAuth.userId).toBe(originalUserId)
-  const originalTransactions = await original.findTransactions({
+  const _originalTransactions = await original.findTransactions({
     partial: { userId: originalAuth.userId }
   })
 
@@ -173,7 +173,7 @@ async function setActiveTwice(
   }
 
   const backupAuth = await storageManager.getAuth()
-  const backupTransactions = await backup.findTransactions({
+  const _backupTransactions = await backup.findTransactions({
     partial: { userId: backupAuth.userId }
   })
 

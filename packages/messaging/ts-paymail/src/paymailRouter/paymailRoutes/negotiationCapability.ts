@@ -38,7 +38,9 @@ export default class TransactionNegotiationCapabilitiesRoute extends PaymailRout
     })
   }
 
-  protected serializeResponse(domainLogicResponse: NegotiationCapabilitiesResponse): string {
+  protected override serializeResponse(
+    domainLogicResponse: NegotiationCapabilitiesResponse
+  ): string {
     return JSON.stringify({
       send_disabled: domainLogicResponse.send_disabled,
       auto_send_response: domainLogicResponse.auto_send_response,

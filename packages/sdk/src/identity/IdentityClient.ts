@@ -578,13 +578,13 @@ export class IdentityClient {
 
     return {
       name,
-      avatarURL,
+      avatarURL: avatarURL!,
       abbreviatedKey:
         identityToParse.subject.length > 0 ? `${identityToParse.subject.substring(0, 10)}...` : '',
       identityKey: identityToParse.subject,
-      badgeIconURL,
-      badgeLabel,
-      badgeClickURL
+      badgeIconURL: badgeIconURL!,
+      badgeLabel: badgeLabel!,
+      badgeClickURL: badgeClickURL!
     }
   }
 

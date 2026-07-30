@@ -17,18 +17,12 @@ describe('PushDrop', () => {
     signOutputs: 'all' | 'none' | 'single' = 'all',
     anyoneCanPay: boolean = false
   ): Promise<void> => {
-    const lockingScript = await pushDrop.lock(
-      fields,
-      protocolID,
-      keyID,
-      counterparty
-    )
+    const lockingScript = await pushDrop.lock(fields, protocolID, keyID, counterparty)
     expect(lockingScript).toBeInstanceOf(Script)
     const decoded = await PushDrop.decode(lockingScript)
     expect(decoded.fields).toEqual(fields)
-    const expectedPublicKey = (
-      await wallet.getPublicKey({ protocolID, keyID, counterparty })
-    ).publicKey
+    const expectedPublicKey = (await wallet.getPublicKey({ protocolID, keyID, counterparty }))
+      .publicKey
     expect(decoded.lockingPublicKey.toString()).toEqual(expectedPublicKey)
     const satoshis = 1
     const unlockingTemplate = await pushDrop.unlock(
@@ -92,51 +86,16 @@ describe('PushDrop', () => {
     await createDecodeRedeem([[1]])
     await createDecodeRedeem([[0x81]])
     await createDecodeRedeem([[3, 1, 4, 1, 5, 9]])
-    await createDecodeRedeem([new Array(200).fill(0xff)])
-    await createDecodeRedeem([new Array(400).fill(0xff)])
-    await createDecodeRedeem([new Array(70000).fill(0xff)])
+    await createDecodeRedeem([Array.from({ length: 200 }).fill(0xff)])
+    await createDecodeRedeem([Array.from({ length: 400 }).fill(0xff)])
+    await createDecodeRedeem([Array.from({ length: 70000 }).fill(0xff)])
     await createDecodeRedeem([[0], [1], [2]])
     await createDecodeRedeem([[0], [1], [2], [3]])
-    await createDecodeRedeem(
-      [[3, 1, 4, 1, 5, 9]],
-      undefined,
-      undefined,
-      undefined,
-      'none',
-      false
-    )
-    await createDecodeRedeem(
-      [[3, 1, 4, 1, 5, 9]],
-      undefined,
-      undefined,
-      undefined,
-      'single',
-      false
-    )
-    await createDecodeRedeem(
-      [[3, 1, 4, 1, 5, 9]],
-      undefined,
-      undefined,
-      undefined,
-      'all',
-      true
-    )
-    await createDecodeRedeem(
-      [[3, 1, 4, 1, 5, 9]],
-      undefined,
-      undefined,
-      undefined,
-      'none',
-      true
-    )
-    await createDecodeRedeem(
-      [[3, 1, 4, 1, 5, 9]],
-      undefined,
-      undefined,
-      undefined,
-      'single',
-      true
-    )
+    await createDecodeRedeem([[3, 1, 4, 1, 5, 9]], undefined, undefined, undefined, 'none', false)
+    await createDecodeRedeem([[3, 1, 4, 1, 5, 9]], undefined, undefined, undefined, 'single', false)
+    await createDecodeRedeem([[3, 1, 4, 1, 5, 9]], undefined, undefined, undefined, 'all', true)
+    await createDecodeRedeem([[3, 1, 4, 1, 5, 9]], undefined, undefined, undefined, 'none', true)
+    await createDecodeRedeem([[3, 1, 4, 1, 5, 9]], undefined, undefined, undefined, 'single', true)
   })
 
   describe('lock', () => {
@@ -149,12 +108,7 @@ describe('PushDrop', () => {
       const protocolID: [0 | 1 | 2, string] = [0, 'tests']
       const keyID = 'test-key'
       const counterparty = 'self'
-      const lockingScript = await pushDrop.lock(
-        fields,
-        protocolID,
-        keyID,
-        counterparty
-      )
+      const lockingScript = await pushDrop.lock(fields, protocolID, keyID, counterparty)
 
       // Check that the locking script is not null
       expect(lockingScript).toBeInstanceOf(Script)
@@ -162,9 +116,8 @@ describe('PushDrop', () => {
       // Decode the locking script and check the fields and locking public key
       const decoded = await PushDrop.decode(lockingScript)
       expect(decoded.fields).toEqual(fields)
-      const expectedPublicKey = (
-        await wallet.getPublicKey({ protocolID, keyID, counterparty })
-      ).publicKey
+      const expectedPublicKey = (await wallet.getPublicKey({ protocolID, keyID, counterparty }))
+        .publicKey
       expect(decoded.lockingPublicKey.toString()).toEqual(expectedPublicKey)
     })
   })
@@ -179,18 +132,9 @@ describe('PushDrop', () => {
       const protocolID: [0 | 1 | 2, string] = [0, 'tests']
       const keyID = 'test-key'
       const counterparty = 'self'
-      const lockingScript = await pushDrop.lock(
-        fields,
-        protocolID,
-        keyID,
-        counterparty
-      )
+      const lockingScript = await pushDrop.lock(fields, protocolID, keyID, counterparty)
       const satoshis = 1
-      const unlockingTemplate = await pushDrop.unlock(
-        protocolID,
-        keyID,
-        counterparty
-      )
+      const unlockingTemplate = await pushDrop.unlock(protocolID, keyID, counterparty)
       const sourceTx = new Transaction(
         1,
         [],
@@ -257,18 +201,12 @@ describe('PushDrop', () => {
       const keyID = 'test-key'
       const counterparty = 'self'
 
-      const lockingScript = await pushDrop.lock(
-        fields,
-        protocolID,
-        keyID,
-        counterparty
-      )
+      const lockingScript = await pushDrop.lock(fields, protocolID, keyID, counterparty)
 
       const decoded = await PushDrop.decode(lockingScript)
       expect(decoded.fields).toEqual(fields)
-      const expectedPublicKey = (
-        await wallet.getPublicKey({ protocolID, keyID, counterparty })
-      ).publicKey
+      const expectedPublicKey = (await wallet.getPublicKey({ protocolID, keyID, counterparty }))
+        .publicKey
       expect(decoded.lockingPublicKey.toString()).toEqual(expectedPublicKey)
     })
 
@@ -294,9 +232,8 @@ describe('PushDrop', () => {
 
       const decoded = await PushDrop.decode(lockingScript, 'after')
       expect(decoded.fields).toEqual(fields)
-      const expectedPublicKey = (
-        await wallet.getPublicKey({ protocolID, keyID, counterparty })
-      ).publicKey
+      const expectedPublicKey = (await wallet.getPublicKey({ protocolID, keyID, counterparty }))
+        .publicKey
       expect(decoded.lockingPublicKey.toString()).toEqual(expectedPublicKey)
     })
   })

@@ -16,11 +16,7 @@ import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 
 export interface ChaintracksStorageIdbOptions extends ChaintracksStorageBaseOptions {}
 
-type IdbWriteTransaction = IDBPTransaction<
-  ChaintracksStorageIdbSchema,
-  string[],
-  'readwrite'
->
+type IdbWriteTransaction = IDBPTransaction<ChaintracksStorageIdbSchema, string[], 'readwrite'>
 
 function createInsertHeaderResult(): InsertHeaderResult {
   return {
@@ -269,9 +265,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     if ((await store.count()) !== 0) return false
     const lastBulkFile = await this.bulkManager.getLastFile()
     if (lastBulkFile == null) {
-      throw new WERR_INVALID_OPERATION(
-        'bulk headers must exist before first live header can be added'
-      )
+      throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
     }
     if (
       header.previousHash !== lastBulkFile.lastHash ||
@@ -283,16 +277,11 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
       ...header,
       headerId: 0,
       previousHeaderId: null,
-      chainWork: addWork(
-        lastBulkFile.lastChainWork,
-        convertBitsToWork(header.bits)
-      ),
+      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits)),
       isChainTip: true,
       isActive: true
     }
-    newHeader.headerId = Number(
-      await store.add(this.prepareStoredLiveHeader(newHeader, true))
-    )
+    newHeader.headerId = Number(await store.add(this.prepareStoredLiveHeader(newHeader, true)))
     result.isActiveTip = true
     result.added = true
     return true
@@ -306,9 +295,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const store = trx.objectStore('live_headers')
     let activeAncestor = oneBack
     while (!activeAncestor.isActive) {
-      const previousHeader = this.repairStoredLiveHeader(
-        await store.get(activeAncestor.previousHeaderId!)
-      )
+      const previousHeader = this.repairStoredLiveHeader(await store.get(activeAncestor.previousHeaderId!))
       if (previousHeader == null) {
         result.noActiveAncestor = true
         return undefined
@@ -327,13 +314,8 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     if (activeAncestor.headerId === oneBack.headerId) return
     const store = trx.objectStore('live_headers')
     const activeTipIndex = store.index('activeTip')
-    let headerToDeactivate = this.repairStoredLiveHeader(
-      await activeTipIndex.get([1, 1])
-    )!
-    while (
-      headerToDeactivate != null &&
-      headerToDeactivate.headerId !== activeAncestor.headerId
-    ) {
+    let headerToDeactivate = this.repairStoredLiveHeader(await activeTipIndex.get([1, 1]))!
+    while (headerToDeactivate != null && headerToDeactivate.headerId !== activeAncestor.headerId) {
       result.deactivatedHeaders.push(headerToDeactivate)
       await store.put(
         this.prepareStoredLiveHeader({
@@ -341,18 +323,12 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
           isActive: false
         })
       )
-      headerToDeactivate = this.repairStoredLiveHeader(
-        await store.get(headerToDeactivate.previousHeaderId!)
-      )!
+      headerToDeactivate = this.repairStoredLiveHeader(await store.get(headerToDeactivate.previousHeaderId!))!
     }
     let headerToActivate = oneBack
     while (headerToActivate.headerId !== activeAncestor.headerId) {
-      await store.put(
-        this.prepareStoredLiveHeader({ ...headerToActivate, isActive: true })
-      )
-      headerToActivate = this.repairStoredLiveHeader(
-        await store.get(headerToActivate.previousHeaderId!)
-      )!
+      await store.put(this.prepareStoredLiveHeader({ ...headerToActivate, isActive: true }))
+      headerToActivate = this.repairStoredLiveHeader(await store.get(headerToActivate.previousHeaderId!))!
     }
   }
 
@@ -366,8 +342,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const activeAncestor = await this.findActiveAncestor(trx, oneBack, result)
     if (activeAncestor == null) return false
     if (!(oneBack.isActive && oneBack.isChainTip)) {
-      result.reorgDepth =
-        Math.min(result.priorTip!.height, header.height) - activeAncestor.height
+      result.reorgDepth = Math.min(result.priorTip!.height, header.height) - activeAncestor.height
     }
     await this.applyReorganization(trx, oneBack, activeAncestor, result)
     return true
@@ -474,7 +449,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
     const store = trx.objectStore('bulk_headers')
-    const fileObj: object = { ...file }
+    const fileObj: Record<string, unknown> = { ...file }
     delete fileObj['fileId']
     file.fileId = Number(await store.put(fileObj))
     await trx.done
@@ -548,7 +523,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   private prepareStoredLiveHeader(header: LiveBlockHeader, forInsert?: boolean): object {
-    const h: object = { ...header }
+    const h: Record<string, unknown> = { ...header }
     if (forInsert) delete h['headerId']
 
     if (header.isActive) h['isActive'] = 1

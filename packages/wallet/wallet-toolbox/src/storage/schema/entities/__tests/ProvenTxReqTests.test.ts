@@ -1,7 +1,6 @@
-import * as bsv from '@bsv/sdk'
-import { createSyncMap, sdk, SyncMap, TableProvenTxReq } from '../../../../../src'
+import { createSyncMap, sdk, TableProvenTxReq } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
-import { EntityProvenTxReq, ProvenTxReqHistorySummaryApi } from '../EntityProvenTxReq'
+import { EntityProvenTxReq } from '../EntityProvenTxReq'
 
 describe('ProvenTxReq class method tests', () => {
   jest.setTimeout(99999999)
@@ -328,7 +327,7 @@ describe('ProvenTxReq class method tests', () => {
 
   test('12_isTerminalStatus_with_real_data', async () => {
     // Assuming `ctxs[0]` contains the necessary setup and `sdk.ProvenTxReqTerminalStatus` is already defined
-    const ctx = ctxs[0]
+    const _ctx = ctxs[0]
 
     // Fetch terminal statuses if they are stored in the database or available via context
     const terminalStatuses: sdk.ProvenTxReqStatus[] = sdk.ProvenTxReqTerminalStatus

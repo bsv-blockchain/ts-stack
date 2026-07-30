@@ -19,7 +19,7 @@ describe('SHIPCast', () => {
   beforeEach(() => {
     mockFacilitator.send.mockReset()
     mockResolver.query.mockReset()
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => { })
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -53,9 +53,7 @@ describe('SHIPCast', () => {
 
   it('rejects insecure facilitator URLs unless HTTP is explicitly enabled', async () => {
     const httpClient = jest.fn()
-    const facilitator = new HTTPSOverlayBroadcastFacilitator(
-      httpClient as unknown as typeof fetch
-    )
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
 
     await expect(
       facilitator.send('http://overlay.example', {
@@ -94,11 +92,7 @@ describe('SHIPCast', () => {
     const shipHostKey = new PrivateKey(42)
     const shipWallet = new CompletedProtoWallet(shipHostKey)
     const shipLib = new OverlayAdminTokenTemplate(shipWallet)
-    const shipScript = await shipLib.lock(
-      'SHIP',
-      'https://shiphost.com',
-      'tm_foo'
-    )
+    const shipScript = await shipLib.lock('SHIP', 'https://shiphost.com', 'tm_foo')
     const shipTx = new Transaction(
       1,
       [],
@@ -164,11 +158,7 @@ describe('SHIPCast', () => {
     const shipWallet = new CompletedProtoWallet(shipHostKey)
     const shipLib = new OverlayAdminTokenTemplate(shipWallet)
     // First SHIP is for wrong topic
-    const shipScript = await shipLib.lock(
-      'SHIP',
-      'https://shiphost.com',
-      'tm_wrong'
-    )
+    const shipScript = await shipLib.lock('SHIP', 'https://shiphost.com', 'tm_wrong')
     const shipTx = new Transaction(
       1,
       [],
@@ -184,11 +174,7 @@ describe('SHIPCast', () => {
     const shipWallet2 = new CompletedProtoWallet(shipHostKey2)
     const shipLib2 = new OverlayAdminTokenTemplate(shipWallet2)
     // Second SHIP is for correct topic
-    const shipScript2 = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_foo'
-    )
+    const shipScript2 = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_foo')
     const shipTx2 = new Transaction(
       1,
       [],
@@ -374,11 +360,7 @@ describe('SHIPCast', () => {
     const shipHostKey = new PrivateKey(42)
     const shipWallet = new CompletedProtoWallet(shipHostKey)
     const shipLib = new OverlayAdminTokenTemplate(shipWallet)
-    const shipScript = await shipLib.lock(
-      'SHIP',
-      'https://shiphost.com',
-      'tm_foo'
-    )
+    const shipScript = await shipLib.lock('SHIP', 'https://shiphost.com', 'tm_foo')
     const shipTx = new Transaction(
       1,
       [],
@@ -429,11 +411,7 @@ describe('SHIPCast', () => {
     const shipHostKey = new PrivateKey(42)
     const shipWallet = new CompletedProtoWallet(shipHostKey)
     const shipLib = new OverlayAdminTokenTemplate(shipWallet)
-    const shipScript = await shipLib.lock(
-      'SHIP',
-      'https://shiphost.com',
-      'tm_foo'
-    )
+    const shipScript = await shipLib.lock('SHIP', 'https://shiphost.com', 'tm_foo')
     const shipTx = new Transaction(
       1,
       [],
@@ -458,18 +436,16 @@ describe('SHIPCast', () => {
     })
 
     // First host acknowledges 'tm_foo', but it's not the right host.
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: topic === 'tm_foo' ? [0] : [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: topic === 'tm_foo' ? [0] : [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo'], {
       facilitator: mockFacilitator,
@@ -494,16 +470,8 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
-    const shipScript1b = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_bar'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
+    const shipScript1b = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_bar')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -523,16 +491,8 @@ describe('SHIPCast', () => {
     const shipHostKey2 = new PrivateKey(43)
     const shipWallet2 = new CompletedProtoWallet(shipHostKey2)
     const shipLib2 = new OverlayAdminTokenTemplate(shipWallet2)
-    const shipScript2 = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_bar'
-    )
-    const shipScript2b = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_foo'
-    )
+    const shipScript2 = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_bar')
+    const shipScript2b = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_foo')
     const shipTx2 = new Transaction(
       1,
       [],
@@ -606,11 +566,7 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -626,11 +582,7 @@ describe('SHIPCast', () => {
     const shipHostKey2 = new PrivateKey(43)
     const shipWallet2 = new CompletedProtoWallet(shipHostKey2)
     const shipLib2 = new OverlayAdminTokenTemplate(shipWallet2)
-    const shipScript2 = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_bar'
-    )
+    const shipScript2 = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_bar')
     const shipTx2 = new Transaction(
       1,
       [],
@@ -653,32 +605,28 @@ describe('SHIPCast', () => {
     })
 
     // First host acknowledges 'tm_foo'
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     // Second host does not acknowledge any topics
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo', 'tm_bar'], {
       facilitator: mockFacilitator,
@@ -698,11 +646,7 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -718,11 +662,7 @@ describe('SHIPCast', () => {
     const shipHostKey2 = new PrivateKey(43)
     const shipWallet2 = new CompletedProtoWallet(shipHostKey2)
     const shipLib2 = new OverlayAdminTokenTemplate(shipWallet2)
-    const shipScript2 = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_bar'
-    )
+    const shipScript2 = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_bar')
     const shipTx2 = new Transaction(
       1,
       [],
@@ -745,32 +685,28 @@ describe('SHIPCast', () => {
     })
 
     // First host acknowledges no topics
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     // Second host acknowledges 'tm_bar'
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: topic === 'tm_bar' ? [0] : [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: topic === 'tm_bar' ? [0] : [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo', 'tm_bar'], {
       facilitator: mockFacilitator,
@@ -793,11 +729,7 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -817,18 +749,16 @@ describe('SHIPCast', () => {
     })
 
     // Host acknowledges no topics
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo'], {
       facilitator: mockFacilitator,
@@ -851,11 +781,7 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -871,11 +797,7 @@ describe('SHIPCast', () => {
     const shipHostKey2 = new PrivateKey(43)
     const shipWallet2 = new CompletedProtoWallet(shipHostKey2)
     const shipLib2 = new OverlayAdminTokenTemplate(shipWallet2)
-    const shipScript2 = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_bar'
-    )
+    const shipScript2 = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_bar')
     const shipTx2 = new Transaction(
       1,
       [],
@@ -898,32 +820,28 @@ describe('SHIPCast', () => {
     })
 
     // First host acknowledges 'tm_foo'
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: topic === 'tm_foo' ? [0] : [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: topic === 'tm_foo' ? [0] : [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     // Second host does not acknowledge 'tm_bar'
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo', 'tm_bar'], {
       facilitator: mockFacilitator,
@@ -948,11 +866,7 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -968,11 +882,7 @@ describe('SHIPCast', () => {
     const shipHostKey2 = new PrivateKey(43)
     const shipWallet2 = new CompletedProtoWallet(shipHostKey2)
     const shipLib2 = new OverlayAdminTokenTemplate(shipWallet2)
-    const shipScript2 = await shipLib2.lock(
-      'SHIP',
-      'https://shiphost2.com',
-      'tm_bar'
-    )
+    const shipScript2 = await shipLib2.lock('SHIP', 'https://shiphost2.com', 'tm_bar')
     const shipTx2 = new Transaction(
       1,
       [],
@@ -995,34 +905,30 @@ describe('SHIPCast', () => {
     })
 
     // First host acknowledges 'tm_foo' with coinsRemoved
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: [],
-            coinsRemoved: topic === 'tm_foo' ? [0] : []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: [],
+          coinsRemoved: topic === 'tm_foo' ? [0] : []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     // Second host does not acknowledge 'tm_bar'
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: [],
-            coinsRemoved: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: [],
+          coinsRemoved: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo', 'tm_bar'], {
       facilitator: mockFacilitator,
@@ -1059,11 +965,7 @@ describe('SHIPCast', () => {
     const shipHostKey1 = new PrivateKey(42)
     const shipWallet1 = new CompletedProtoWallet(shipHostKey1)
     const shipLib1 = new OverlayAdminTokenTemplate(shipWallet1)
-    const shipScript1 = await shipLib1.lock(
-      'SHIP',
-      'https://shiphost1.com',
-      'tm_foo'
-    )
+    const shipScript1 = await shipLib1.lock('SHIP', 'https://shiphost1.com', 'tm_foo')
     const shipTx1 = new Transaction(
       1,
       [],
@@ -1083,18 +985,16 @@ describe('SHIPCast', () => {
     })
 
     // Host does not acknowledge 'tm_foo'
-    mockFacilitator.send.mockImplementationOnce(
-      async (host, { beef, topics }) => {
-        const steak = {}
-        for (const topic of topics) {
-          steak[topic] = {
-            outputsToAdmit: [],
-            coinsToRetain: []
-          }
+    mockFacilitator.send.mockImplementationOnce(async (host, { beef: _beef, topics }) => {
+      const steak = {}
+      for (const topic of topics) {
+        steak[topic] = {
+          outputsToAdmit: [],
+          coinsToRetain: []
         }
-        return steak
       }
-    )
+      return steak
+    })
 
     const b = new SHIPCast(['tm_foo'], {
       facilitator: mockFacilitator,
@@ -1120,11 +1020,7 @@ describe('SHIPCast', () => {
     const shipHostKey = new PrivateKey(42)
     const shipWallet = new CompletedProtoWallet(shipHostKey)
     const shipLib = new OverlayAdminTokenTemplate(shipWallet)
-    const shipScript = await shipLib.lock(
-      'SHIP',
-      'https://shiphost.com',
-      'tm_foo'
-    )
+    const shipScript = await shipLib.lock('SHIP', 'https://shiphost.com', 'tm_foo')
     const shipTx = new Transaction(
       1,
       [],

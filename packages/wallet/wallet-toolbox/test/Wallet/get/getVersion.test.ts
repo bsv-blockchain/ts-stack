@@ -1,4 +1,3 @@
-import { sdk } from '../../../src/index.client'
 import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
 describe('Wallet getVersion Tests', () => {

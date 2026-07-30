@@ -97,7 +97,7 @@ export class HTTPSOverlayBroadcastFacilitator implements OverlayBroadcastFacilit
     if (!url.startsWith('https:') && !this.allowHTTP) {
       throw new Error('HTTPS facilitator can only use URLs that start with "https:"')
     }
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
       // OpenAPI "simple" array encoding is comma-separated. Overlay Express
       // accepts this canonical form and the legacy JSON array during rollout.
@@ -241,7 +241,11 @@ export default class TopicBroadcaster implements Broadcaster {
         const coinsToRetain = instructions.coinsToRetain
         const coinsRemoved = instructions.coinsRemoved
 
-        if (outputsToAdmit?.length > 0 || coinsToRetain?.length > 0 || coinsRemoved?.length > 0) {
+        if (
+          (outputsToAdmit?.length ?? 0) > 0 ||
+          (coinsToRetain?.length ?? 0) > 0 ||
+          (coinsRemoved?.length ?? 0) > 0
+        ) {
           acknowledgedTopics.add(topic)
         }
       }

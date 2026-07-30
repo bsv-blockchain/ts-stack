@@ -6,7 +6,7 @@ import { AuthMessage } from '../../types.js'
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Build a serialized general message payload. */
-function buildGeneralPayload ({
+function buildGeneralPayload({
   path = '/api/resource',
   method = 'GET',
   search = '',
@@ -16,7 +16,7 @@ function buildGeneralPayload ({
   const writer = new Utils.Writer()
 
   // requestId: 32 bytes
-  writer.write(new Array(32).fill(0xab))
+  writer.write(Array.from({ length: 32 }).fill(0xab))
 
   // method
   if (method.length > 0) {
@@ -68,7 +68,7 @@ function buildGeneralPayload ({
   return writer.toArray()
 }
 
-function makeGeneralMessage (overrides: Partial<AuthMessage> = {}): AuthMessage {
+function makeGeneralMessage(overrides: Partial<AuthMessage> = {}): AuthMessage {
   return {
     version: '0.1',
     messageType: 'general',
@@ -76,12 +76,15 @@ function makeGeneralMessage (overrides: Partial<AuthMessage> = {}): AuthMessage 
     nonce: 'cnonce',
     yourNonce: 'snonce',
     payload: buildGeneralPayload(),
-    signature: new Array(64).fill(0),
+    signature: Array.from({ length: 64 }).fill(0),
     ...overrides
   }
 }
 
-function makeAuthMessage (messageType: AuthMessage['messageType'], overrides: Partial<AuthMessage> = {}): AuthMessage {
+function makeAuthMessage(
+  messageType: AuthMessage['messageType'],
+  overrides: Partial<AuthMessage> = {}
+): AuthMessage {
   return {
     version: '0.1',
     messageType,
@@ -89,13 +92,13 @@ function makeAuthMessage (messageType: AuthMessage['messageType'], overrides: Pa
     nonce: 'cnonce',
     yourNonce: 'snonce',
     payload: [],
-    signature: new Array(64).fill(0),
+    signature: Array.from({ length: 64 }).fill(0),
     ...overrides
   }
 }
 
 /** Build a minimal valid general response (all required BSV auth headers). */
-function makeValidGeneralResponse (body = '', extraHeaders: Record<string, string> = {}): Response {
+function makeValidGeneralResponse(body = '', extraHeaders: Record<string, string> = {}): Response {
   return new Response(body, {
     status: 200,
     headers: {
@@ -116,13 +119,15 @@ afterEach(() => {
 
 describe('SimplifiedFetchTransport constructor', () => {
   test('throws when fetchClient is not a function', () => {
-    expect(() => new SimplifiedFetchTransport('https://example.com', 'not-a-function' as any))
-      .toThrow('SimplifiedFetchTransport requires a fetch implementation.')
+    expect(
+      () => new SimplifiedFetchTransport('https://example.com', 'not-a-function' as any)
+    ).toThrow('SimplifiedFetchTransport requires a fetch implementation.')
   })
 
   test('throws when fetchClient is null', () => {
-    expect(() => new SimplifiedFetchTransport('https://example.com', null as any))
-      .toThrow('SimplifiedFetchTransport requires a fetch implementation.')
+    expect(() => new SimplifiedFetchTransport('https://example.com', null as any)).toThrow(
+      'SimplifiedFetchTransport requires a fetch implementation.'
+    )
   })
 
   test('stores baseUrl and fetchClient', () => {
@@ -153,20 +158,35 @@ describe('SimplifiedFetchTransport send without listener', () => {
 describe('SimplifiedFetchTransport send — non-general auth message', () => {
   test('non-initialRequest: resolves before response arrives and still calls onDataCallback', async () => {
     let resolveResponse: (r: Response) => void
-    const responsePromise = new Promise<Response>((res) => { resolveResponse = res })
+    const responsePromise = new Promise<Response>(res => {
+      resolveResponse = res
+    })
 
     const mockFetch = jest.fn<() => any>().mockReturnValue(responsePromise) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
 
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     const sendPromise = transport.send(makeAuthMessage('initialResponse'))
     // resolve before the fetch response arrives to confirm promise doesn't hang
-    resolveResponse!(new Response(JSON.stringify({ version: '0.1', messageType: 'initialResponse', identityKey: 'k', payload: [], signature: [] }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    }))
+    resolveResponse!(
+      new Response(
+        JSON.stringify({
+          version: '0.1',
+          messageType: 'initialResponse',
+          identityKey: 'k',
+          payload: [],
+          signature: []
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    )
 
     await sendPromise
     // Flush microtask queue so the background response processing completes
@@ -179,14 +199,24 @@ describe('SimplifiedFetchTransport send — non-general auth message', () => {
   })
 
   test('initialRequest: resolves after the response is processed', async () => {
-    const responseBody = JSON.stringify({ version: '0.1', messageType: 'initialRequest', identityKey: 'server-key', payload: [], signature: [] })
-    const mockFetch = jest.fn<() => any>().mockResolvedValue(
-      new Response(responseBody, { status: 200, headers: { 'Content-Type': 'application/json' } })
-    ) as any
+    const responseBody = JSON.stringify({
+      version: '0.1',
+      messageType: 'initialRequest',
+      identityKey: 'server-key',
+      payload: [],
+      signature: []
+    })
+    const mockFetch = jest
+      .fn<() => any>()
+      .mockResolvedValue(
+        new Response(responseBody, { status: 200, headers: { 'Content-Type': 'application/json' } })
+      ) as any
 
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     await transport.send(makeAuthMessage('initialRequest'))
 
@@ -198,9 +228,11 @@ describe('SimplifiedFetchTransport send — non-general auth message', () => {
   })
 
   test('non-ok response on auth endpoint throws unauthenticated error', async () => {
-    const mockFetch = jest.fn<() => any>().mockResolvedValue(
-      new Response('Unauthorized', { status: 401, statusText: 'Unauthorized' })
-    ) as any
+    const mockFetch = jest
+      .fn<() => any>()
+      .mockResolvedValue(
+        new Response('Unauthorized', { status: 401, statusText: 'Unauthorized' })
+      ) as any
 
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
@@ -236,10 +268,7 @@ describe('SimplifiedFetchTransport send — non-general auth message', () => {
 // ─── send: general message — body Content-Type handling ──────────────────────
 
 describe('SimplifiedFetchTransport send — general message body handling', () => {
-  async function sendWithBody (
-    body: number[],
-    contentType: string
-  ): Promise<void> {
+  async function _sendWithBody(body: number[], contentType: string): Promise<void> {
     const payload = buildGeneralPayload({
       method: 'POST',
       path: '/data',
@@ -257,7 +286,12 @@ describe('SimplifiedFetchTransport send — general message body handling', () =
 
   test('application/json body is converted to UTF-8 string', async () => {
     const body = Utils.toArray('{"hello":"world"}', 'utf8') as number[]
-    const payload = buildGeneralPayload({ method: 'POST', path: '/json', headers: { 'content-type': 'application/json' }, body })
+    const payload = buildGeneralPayload({
+      method: 'POST',
+      path: '/json',
+      headers: { 'content-type': 'application/json' },
+      body
+    })
     const mockFetch = jest.fn<() => any>().mockResolvedValue(makeValidGeneralResponse()) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
@@ -289,7 +323,12 @@ describe('SimplifiedFetchTransport send — general message body handling', () =
 
   test('text/plain body is converted to UTF-8 string', async () => {
     const body = Utils.toArray('hello world', 'utf8') as number[]
-    const payload = buildGeneralPayload({ method: 'POST', path: '/text', headers: { 'content-type': 'text/plain' }, body })
+    const payload = buildGeneralPayload({
+      method: 'POST',
+      path: '/text',
+      headers: { 'content-type': 'text/plain' },
+      body
+    })
     const mockFetch = jest.fn<() => any>().mockResolvedValue(makeValidGeneralResponse()) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
@@ -303,7 +342,12 @@ describe('SimplifiedFetchTransport send — general message body handling', () =
 
   test('binary content-type body is converted to Uint8Array', async () => {
     const body = [0x89, 0x50, 0x4e, 0x47] // PNG magic bytes
-    const payload = buildGeneralPayload({ method: 'POST', path: '/upload', headers: { 'content-type': 'image/png' }, body })
+    const payload = buildGeneralPayload({
+      method: 'POST',
+      path: '/upload',
+      headers: { 'content-type': 'image/png' },
+      body
+    })
     const mockFetch = jest.fn<() => any>().mockResolvedValue(makeValidGeneralResponse()) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
@@ -336,7 +380,9 @@ describe('SimplifiedFetchTransport send — general message response parsing', (
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
 
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     await transport.send(makeGeneralMessage())
 
@@ -347,13 +393,17 @@ describe('SimplifiedFetchTransport send — general message response parsing', (
   })
 
   test('sets messageType to certificateRequest when x-bsv-auth-message-type is certificateRequest', async () => {
-    const mockFetch = jest.fn<() => any>().mockResolvedValue(
-      makeValidGeneralResponse('', { 'x-bsv-auth-message-type': 'certificateRequest' })
-    ) as any
+    const mockFetch = jest
+      .fn<() => any>()
+      .mockResolvedValue(
+        makeValidGeneralResponse('', { 'x-bsv-auth-message-type': 'certificateRequest' })
+      ) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
 
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     await transport.send(makeGeneralMessage())
     expect(received[0].messageType).toBe('certificateRequest')
@@ -362,21 +412,27 @@ describe('SimplifiedFetchTransport send — general message response parsing', (
   test('parses requestedCertificates header into structured object', async () => {
     const certSet = { certifiers: ['certKey1'], types: {} }
     const mockFetch = jest.fn<() => any>().mockResolvedValue(
-      makeValidGeneralResponse('', { 'x-bsv-auth-requested-certificates': JSON.stringify(certSet) })
+      makeValidGeneralResponse('', {
+        'x-bsv-auth-requested-certificates': JSON.stringify(certSet)
+      })
     ) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
 
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     await transport.send(makeGeneralMessage())
     expect(received[0].requestedCertificates).toEqual(certSet)
   })
 
   test('throws on malformed requestedCertificates header', async () => {
-    const mockFetch = jest.fn<() => any>().mockResolvedValue(
-      makeValidGeneralResponse('', { 'x-bsv-auth-requested-certificates': '{invalid json' })
-    ) as any
+    const mockFetch = jest
+      .fn<() => any>()
+      .mockResolvedValue(
+        makeValidGeneralResponse('', { 'x-bsv-auth-requested-certificates': '{invalid json' })
+      ) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
 
@@ -386,13 +442,17 @@ describe('SimplifiedFetchTransport send — general message response parsing', (
   })
 
   test('includes x-bsv-auth-request-id in payload when present in response', async () => {
-    const requestIdBase64 = Utils.toBase64(new Array(32).fill(0xcc))
-    const mockFetch = jest.fn<() => any>().mockResolvedValue(
-      makeValidGeneralResponse('', { 'x-bsv-auth-request-id': requestIdBase64 })
-    ) as any
+    const requestIdBase64 = Utils.toBase64(Array.from({ length: 32 }).fill(0xcc))
+    const mockFetch = jest
+      .fn<() => any>()
+      .mockResolvedValue(
+        makeValidGeneralResponse('', { 'x-bsv-auth-request-id': requestIdBase64 })
+      ) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     await transport.send(makeGeneralMessage())
     expect(received[0].payload).toBeDefined()
@@ -400,20 +460,24 @@ describe('SimplifiedFetchTransport send — general message response parsing', (
   })
 
   test('includes x-bsv (non-auth) and authorization headers in signed payload', async () => {
-    const mockFetch = jest.fn<() => any>().mockResolvedValue(new Response('', {
-      status: 200,
-      headers: {
-        'x-bsv-auth-version': '0.1',
-        'x-bsv-auth-identity-key': 'server-key',
-        'x-bsv-auth-signature': 'deadbeef',
-        'x-bsv-custom-header': 'custom-value',   // should be included
-        'authorization': 'Bearer token',            // should be included
-        'x-bsv-auth-extra': 'excluded'             // should NOT be included (x-bsv-auth prefix)
-      }
-    })) as any
+    const mockFetch = jest.fn<() => any>().mockResolvedValue(
+      new Response('', {
+        status: 200,
+        headers: {
+          'x-bsv-auth-version': '0.1',
+          'x-bsv-auth-identity-key': 'server-key',
+          'x-bsv-auth-signature': 'deadbeef',
+          'x-bsv-custom-header': 'custom-value', // should be included
+          authorization: 'Bearer token', // should be included
+          'x-bsv-auth-extra': 'excluded' // should NOT be included (x-bsv-auth prefix)
+        }
+      })
+    ) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     const received: AuthMessage[] = []
-    await transport.onData(async (msg) => { received.push(msg) })
+    await transport.onData(async msg => {
+      received.push(msg)
+    })
 
     await transport.send(makeGeneralMessage())
     // The payload should be non-empty (headers were serialized into it)
@@ -471,12 +535,12 @@ describe('SimplifiedFetchTransport deserializeRequestPayload', () => {
 
   test('returns GET and empty urlPostfix when method and path lengths are 0', () => {
     const writer = new Utils.Writer()
-    writer.write(new Array(32).fill(0)) // requestId
-    writer.writeVarIntNum(0)            // method length 0
-    writer.writeVarIntNum(0)            // path length 0
-    writer.writeVarIntNum(0)            // search length 0
-    writer.writeVarIntNum(0)            // 0 headers
-    writer.writeVarIntNum(0)            // body length 0
+    writer.write(Array.from({ length: 32 }).fill(0)) // requestId
+    writer.writeVarIntNum(0) // method length 0
+    writer.writeVarIntNum(0) // path length 0
+    writer.writeVarIntNum(0) // search length 0
+    writer.writeVarIntNum(0) // 0 headers
+    writer.writeVarIntNum(0) // body length 0
 
     const result = transport.deserializeRequestPayload(writer.toArray())
     expect(result.method).toBe('GET')
@@ -492,7 +556,7 @@ describe('SimplifiedFetchTransport deserializeRequestPayload', () => {
 
   test('deserializes headers correctly', () => {
     const payload = buildGeneralPayload({
-      headers: { 'x-custom': 'value1', 'accept': 'application/json' }
+      headers: { 'x-custom': 'value1', accept: 'application/json' }
     })
     const result = transport.deserializeRequestPayload(payload)
     expect(result.headers['x-custom']).toBe('value1')
@@ -532,7 +596,7 @@ describe('SimplifiedFetchTransport onData', () => {
     const mockFetch = jest.fn<() => any>().mockResolvedValue(makeValidGeneralResponse()) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
 
-    await transport.onData(async (_msg) => {
+    await transport.onData(async _msg => {
       throw new Error('intentional callback error')
     })
 
@@ -546,11 +610,13 @@ describe('SimplifiedFetchTransport onData', () => {
 describe('SimplifiedFetchTransport body preview in error messages', () => {
   test('includes text body preview in unauthenticated error', async () => {
     const mockFetch: any = jest.fn()
-    mockFetch.mockResolvedValue(new Response('{"error":"forbidden"}', {
-      status: 403,
-      statusText: 'Forbidden',
-      headers: { 'Content-Type': 'application/json' }
-    }))
+    mockFetch.mockResolvedValue(
+      new Response('{"error":"forbidden"}', {
+        status: 403,
+        statusText: 'Forbidden',
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
 
@@ -583,10 +649,12 @@ describe('SimplifiedFetchTransport body preview in error messages', () => {
     // Binary bytes (low printability ratio)
     const binaryBytes = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x80, 0x81, 0xff, 0xfe])
     const mockFetch: any = jest.fn()
-    mockFetch.mockResolvedValue(new Response(binaryBytes.buffer as ArrayBuffer, {
-      status: 401,
-      headers: { 'Content-Type': 'application/octet-stream' }
-    }))
+    mockFetch.mockResolvedValue(
+      new Response(binaryBytes.buffer as ArrayBuffer, {
+        status: 401,
+        headers: { 'Content-Type': 'application/octet-stream' }
+      })
+    )
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
 
@@ -603,10 +671,12 @@ describe('SimplifiedFetchTransport body preview in error messages', () => {
   test('large body (>1024 bytes) is truncated in preview', async () => {
     const largeBody = 'x'.repeat(2000)
     const mockFetch: any = jest.fn()
-    mockFetch.mockResolvedValue(new Response(largeBody, {
-      status: 401,
-      headers: { 'Content-Type': 'text/plain' }
-    }))
+    mockFetch.mockResolvedValue(
+      new Response(largeBody, {
+        status: 401,
+        headers: { 'Content-Type': 'text/plain' }
+      })
+    )
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
 
@@ -623,10 +693,12 @@ describe('SimplifiedFetchTransport body preview in error messages', () => {
     // Body that is textual and between 512 and 1024 chars (not truncated due to length, but truncated for preview)
     const mediumBody = 'A'.repeat(600)
     const mockFetch: any = jest.fn()
-    mockFetch.mockResolvedValue(new Response(mediumBody, {
-      status: 401,
-      headers: { 'Content-Type': 'text/plain' }
-    }))
+    mockFetch.mockResolvedValue(
+      new Response(mediumBody, {
+        status: 401,
+        headers: { 'Content-Type': 'text/plain' }
+      })
+    )
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
 
@@ -641,11 +713,13 @@ describe('SimplifiedFetchTransport body preview in error messages', () => {
 
   test('status description includes statusText when non-empty', async () => {
     const mockFetch: any = jest.fn()
-    mockFetch.mockResolvedValue(new Response('error text', {
-      status: 422,
-      statusText: 'Unprocessable Entity',
-      headers: { 'Content-Type': 'text/plain' }
-    }))
+    mockFetch.mockResolvedValue(
+      new Response('error text', {
+        status: 422,
+        statusText: 'Unprocessable Entity',
+        headers: { 'Content-Type': 'text/plain' }
+      })
+    )
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
 
@@ -684,21 +758,23 @@ describe('SimplifiedFetchTransport malformed header error — non-Error cause', 
   test('formats error when JSON.parse throws a non-Error value (string cause)', async () => {
     // Spy on JSON.parse to throw a string
     const originalParse = JSON.parse
-    jest.spyOn(JSON, 'parse').mockImplementation((text) => {
+    jest.spyOn(JSON, 'parse').mockImplementation(text => {
       if (text === '{bad}') throw 'string error cause'
       return originalParse(text)
     })
 
     const mockFetch: any = jest.fn()
-    mockFetch.mockResolvedValue(new Response('', {
-      status: 200,
-      headers: {
-        'x-bsv-auth-version': '0.1',
-        'x-bsv-auth-identity-key': 'server-key',
-        'x-bsv-auth-signature': 'aabbcc',
-        'x-bsv-auth-requested-certificates': '{bad}'
-      }
-    }))
+    mockFetch.mockResolvedValue(
+      new Response('', {
+        status: 200,
+        headers: {
+          'x-bsv-auth-version': '0.1',
+          'x-bsv-auth-identity-key': 'server-key',
+          'x-bsv-auth-signature': 'aabbcc',
+          'x-bsv-auth-requested-certificates': '{bad}'
+        }
+      })
+    )
 
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
     await transport.onData(async () => {})
@@ -719,7 +795,10 @@ describe('SimplifiedFetchTransport malformed header error — non-Error cause', 
 // ─── isTextualContent heuristics ─────────────────────────────────────────────
 
 describe('SimplifiedFetchTransport — isTextualContent heuristics (via send response)', () => {
-  async function sendAndCatchError (body: BodyInit | null, contentType: string | null): Promise<Error> {
+  async function sendAndCatchError(
+    body: BodyInit | null,
+    contentType: string | null
+  ): Promise<Error> {
     const headers: Record<string, string> = {}
     if (contentType != null) {
       headers['Content-Type'] = contentType

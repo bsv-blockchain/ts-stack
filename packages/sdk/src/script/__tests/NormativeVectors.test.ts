@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import BigNumber from '../../primitives/BigNumber'
-import { hash160, hash256 } from '../../primitives/Hash'
+import { hash256 } from '../../primitives/Hash'
 import TransactionSignature from '../../primitives/TransactionSignature'
 import { toArray, toHex } from '../../primitives/utils'
 import Transaction from '../../transaction/Transaction'
@@ -75,17 +74,17 @@ const fixtureSources = [
   }
 ]
 
-function readFixture<T = JsonValue[]> (source: string, file: string): T {
+function readFixture<T = JsonValue[]>(source: string, file: string): T {
   return JSON.parse(readFileSync(join(FIXTURE_ROOT, source, file), 'utf8')) as T
 }
 
-function sha256File (source: string, file: string): string {
+function sha256File(source: string, file: string): string {
   return createHash('sha256')
     .update(readFileSync(join(FIXTURE_ROOT, source, file)))
     .digest('hex')
 }
 
-function scriptNumBytes (value: bigint): number[] {
+function scriptNumBytes(value: bigint): number[] {
   if (value === 0n) return []
   const negative = value < 0n
   let absValue = negative ? -value : value
@@ -102,7 +101,7 @@ function scriptNumBytes (value: bigint): number[] {
   return bytes
 }
 
-function writePush (bytes: number[], out: number[]): void {
+function writePush(bytes: number[], out: number[]): void {
   if (bytes.length === 0) {
     out.push(OP.OP_0)
   } else if (bytes.length === 1 && bytes[0] >= 1 && bytes[0] <= 16) {
@@ -127,7 +126,7 @@ function writePush (bytes: number[], out: number[]): void {
   }
 }
 
-function tokenToOpcode (token: string): number | undefined {
+function tokenToOpcode(token: string): number | undefined {
   if (token === 'TRUE') return OP.OP_TRUE
   if (token === 'FALSE') return OP.OP_FALSE
   const opToken = token.startsWith('OP_') ? token : `OP_${token}`
@@ -135,11 +134,11 @@ function tokenToOpcode (token: string): number | undefined {
   return typeof opcode === 'number' ? opcode : undefined
 }
 
-function tokenizeAsm (asm: string): string[] {
+function tokenizeAsm(asm: string): string[] {
   return asm.match(/'[^']*'|\S+/g) ?? []
 }
 
-function parseNodeAsm (asm: string): number[] {
+function parseNodeAsm(asm: string): number[] {
   const out: number[] = []
   for (const token of tokenizeAsm(asm)) {
     if (token.startsWith('0x')) {
@@ -164,15 +163,15 @@ function parseNodeAsm (asm: string): number[] {
   return out
 }
 
-function toLockingScript (asm: string): LockingScript {
+function toLockingScript(asm: string): LockingScript {
   return new LockingScript(Script.fromBinary(parseNodeAsm(asm)).chunks.map(cloneChunk))
 }
 
-function toUnlockingScript (asm: string): UnlockingScript {
+function toUnlockingScript(asm: string): UnlockingScript {
   return new UnlockingScript(Script.fromBinary(parseNodeAsm(asm)).chunks.map(cloneChunk))
 }
 
-function cloneChunk (chunk: ScriptChunk): ScriptChunk {
+function cloneChunk(chunk: ScriptChunk): ScriptChunk {
   return {
     op: chunk.op,
     data: Array.isArray(chunk.data) ? chunk.data.slice() : undefined,
@@ -180,21 +179,23 @@ function cloneChunk (chunk: ScriptChunk): ScriptChunk {
   }
 }
 
-function buildCreditingTransaction (lockingScript: LockingScript, amount: number): Transaction {
+function buildCreditingTransaction(lockingScript: LockingScript, amount: number): Transaction {
   return new Transaction(
     1,
-    [{
-      sourceTXID: ZERO_TXID,
-      sourceOutputIndex: 0xffffffff,
-      unlockingScript: new UnlockingScript([{ op: OP.OP_0 }, { op: OP.OP_0 }]),
-      sequence: 0xffffffff
-    }],
+    [
+      {
+        sourceTXID: ZERO_TXID,
+        sourceOutputIndex: 0xffffffff,
+        unlockingScript: new UnlockingScript([{ op: OP.OP_0 }, { op: OP.OP_0 }]),
+        sequence: 0xffffffff
+      }
+    ],
     [{ lockingScript, satoshis: amount }],
     0
   )
 }
 
-function buildScriptSpend (vector: ScriptVector): Spend {
+function buildScriptSpend(vector: ScriptVector): Spend {
   const lockingScript = toLockingScript(vector.scriptPubKey)
   const creditTx = buildCreditingTransaction(lockingScript, vector.amount)
   return new Spend({
@@ -213,7 +214,7 @@ function buildScriptSpend (vector: ScriptVector): Spend {
   })
 }
 
-function parseScriptVectors (source: string): ScriptVector[] {
+function parseScriptVectors(source: string): ScriptVector[] {
   const raw = readFixture<JsonValue[]>(source, 'script_tests.json')
   const vectors: ScriptVector[] = []
   raw.forEach((entry, index) => {
@@ -260,7 +261,7 @@ function parseScriptVectors (source: string): ScriptVector[] {
   return vectors
 }
 
-function parseTxVectors (source: string, file: string): TxVector[] {
+function parseTxVectors(source: string, file: string): TxVector[] {
   const raw = readFixture<JsonValue[]>(source, file)
   const vectors: TxVector[] = []
   raw.forEach((entry, index) => {
@@ -277,7 +278,7 @@ function parseTxVectors (source: string, file: string): TxVector[] {
   return vectors
 }
 
-function parseSighashVectors (source: string): SighashVector[] {
+function parseSighashVectors(source: string): SighashVector[] {
   const raw = readFixture<JsonValue[]>(source, 'sighash.json')
   const vectors: SighashVector[] = []
   raw.forEach((entry, index) => {
@@ -296,11 +297,11 @@ function parseSighashVectors (source: string): SighashVector[] {
   return vectors
 }
 
-function validateTxVectorInput (vector: TxVector, flags: string, inputIndex: number): boolean {
+function validateTxVectorInput(vector: TxVector, flags: string, inputIndex: number): boolean {
   const tx = Transaction.fromHex(vector.txHex)
   const input = tx.inputs[inputIndex]
-  const prevout = vector.prevouts.find(([txid, vout]) =>
-    txid === input.sourceTXID && (vout >>> 0) === input.sourceOutputIndex
+  const prevout = vector.prevouts.find(
+    ([txid, vout]) => txid === input.sourceTXID && vout >>> 0 === input.sourceOutputIndex
   )
   if (prevout === undefined || input.unlockingScript === undefined) {
     throw new Error(`Missing prevout fixture for input ${inputIndex}`)
@@ -325,7 +326,7 @@ function validateTxVectorInput (vector: TxVector, flags: string, inputIndex: num
   return spend.validate()
 }
 
-function computeSignatureHashes (vector: SighashVector): { regular: string, original: string } {
+function computeSignatureHashes(vector: SighashVector): { regular: string; original: string } {
   const tx = Transaction.fromHex(vector.txHex)
   const input = tx.inputs[vector.inputIndex]
   const otherInputs = [...tx.inputs]
@@ -346,10 +347,12 @@ function computeSignatureHashes (vector: SighashVector): { regular: string, orig
   // Teranode's go-bt-derived vectors route FORKID signatures through the
   // forkid digest even when the Chronicle bit is present. bitcoin-sv keeps
   // the Chronicle bit as an OTDA selector, which remains the SDK default.
-  const regular = hash256(TransactionSignature.format({
-    ...params,
-    ignoreChronicle: vector.source === 'teranode'
-  })).reverse()
+  const regular = hash256(
+    TransactionSignature.format({
+      ...params,
+      ignoreChronicle: vector.source === 'teranode'
+    })
+  ).reverse()
   const original = hash256(TransactionSignature.formatOTDA(params)).reverse()
   return {
     regular: toHex(regular),
@@ -402,7 +405,8 @@ describe('Normative BSV node script fixtures', () => {
             for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
               const label = `${vector.source} tx_valid#${vector.index} input ${inputIndex} flags ${flags}`
               try {
-                if (validateTxVectorInput(vector, flags, inputIndex) !== true) failures.push(`${label}: returned false`)
+                if (validateTxVectorInput(vector, flags, inputIndex) !== true)
+                  failures.push(`${label}: returned false`)
               } catch (e) {
                 failures.push(`${label}: ${errorSummary(e)}`)
               }
@@ -433,7 +437,7 @@ describe('Normative BSV node script fixtures', () => {
               evaluatedSpendCases++
               try {
                 if (validateTxVectorInput(vector, flags, inputIndex) !== true) rejectedSpendCases++
-              } catch (e) {
+              } catch {
                 rejectedSpendCases++
               }
             }
@@ -452,10 +456,14 @@ describe('Normative BSV node script fixtures', () => {
           const actual = computeSignatureHashes(vector)
           const label = `${vector.source} sighash#${vector.index}`
           if (actual.regular !== vector.regularHash) {
-            failures.push(`${label} regular: expected ${vector.regularHash}, received ${actual.regular}`)
+            failures.push(
+              `${label} regular: expected ${vector.regularHash}, received ${actual.regular}`
+            )
           }
           if (actual.original !== vector.originalHash) {
-            failures.push(`${label} original: expected ${vector.originalHash}, received ${actual.original}`)
+            failures.push(
+              `${label} original: expected ${vector.originalHash}, received ${actual.original}`
+            )
           }
         }
         expect(failures).toEqual([])

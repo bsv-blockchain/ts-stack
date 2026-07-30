@@ -7,14 +7,14 @@ import { jest } from '@jest/globals'
 const mockWABClient = {
   startShareAuth: jest.fn<() => Promise<{ success: boolean }>>().mockResolvedValue({ success: true }),
   storeShare: jest
-    .fn<() => Promise<{ success: boolean, userId: number }>>()
+    .fn<() => Promise<{ success: boolean; userId: number }>>()
     .mockResolvedValue({ success: true, userId: 1 }),
-  retrieveShare: jest.fn<() => Promise<{ success: boolean, shareB: string }>>().mockResolvedValue({
+  retrieveShare: jest.fn<() => Promise<{ success: boolean; shareB: string }>>().mockResolvedValue({
     success: true,
     shareB: '1.mockedserversharefromwab.2.test'
   }),
   updateShare: jest
-    .fn<() => Promise<{ success: boolean, shareVersion: number }>>()
+    .fn<() => Promise<{ success: boolean; shareVersion: number }>>()
     .mockResolvedValue({ success: true, shareVersion: 2 }),
   deleteShamirUser: jest.fn<() => Promise<{ success: boolean }>>().mockResolvedValue({ success: true })
 }
@@ -28,11 +28,11 @@ jest.mock('../wab-client/WABClient', () => {
 // Mock wallet builder
 const mockWallet = {} as unknown as WalletInterface
 const mockWalletBuilder = jest.fn(
-  async (privateKey: PrivateKey, privilegedKeyManager: PrivilegedKeyManager) => mockWallet
+  async (_privateKey: PrivateKey, _privilegedKeyManager: PrivilegedKeyManager) => mockWallet
 )
 
 describe('ShamirWalletManager', () => {
-  jest.spyOn(console, 'warn').mockImplementation((...args: any[]) => {})
+  jest.spyOn(console, 'warn').mockImplementation((..._args: any[]) => {})
 
   describe('Configuration', () => {
     it('should use default 2-of-3 configuration', () => {

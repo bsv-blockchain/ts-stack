@@ -307,11 +307,11 @@ export default class Point extends BasePoint {
       bytes.length - 1 === 2 * len
     ) {
       if (bytes[0] === 0x06) {
-        if (bytes.at(-1) % 2 !== 0) {
+        if (bytes.at(-1)! % 2 !== 0) {
           throw new Error('Point string value is wrong length')
         }
       } else if (bytes[0] === 0x07) {
-        if (bytes.at(-1) % 2 !== 1) {
+        if (bytes.at(-1)! % 2 !== 1) {
           throw new Error('Point string value is wrong length')
         }
       }
@@ -412,7 +412,7 @@ export default class Point extends BasePoint {
 
     const pre = obj[2]
 
-    const obj2point = (p): Point => {
+    const obj2point = (p: [PointInput, PointInput]): Point => {
       const pt = new Point(p[0], p[1], isRed)
       return Point._assertOnCurve(pt)
     }
@@ -450,11 +450,7 @@ export default class Point extends BasePoint {
    * new Point('abc123', 'def456');
    * new Point(null, null); // Generates Infinity point.
    */
-  constructor(
-    x: PointInput | null,
-    y: PointInput | null,
-    isRed: boolean = true
-  ) {
+  constructor(x: PointInput | null, y: PointInput | null, isRed: boolean = true) {
     super('affine')
     this.precomputed = null
     if (x === null && y === null) {
@@ -559,7 +555,7 @@ export default class Point extends BasePoint {
    * const aPoint = new Point(x, y);
    * const stringPoint = aPoint.toString();
    */
-  toString(): string {
+  override toString(): string {
     return this.encode(true, 'hex') as string
   }
 
@@ -939,7 +935,7 @@ export default class Point extends BasePoint {
     const res = new Point(this.x, (this.y ?? new BigNumber(0)).redNeg())
     if (_precompute === true && this.precomputed != null) {
       const pre = this.precomputed
-      const negate = (p: Point): Point => p.neg()
+      const negate = (p: BasePoint): Point => (p as Point).neg()
       res.precomputed = {
         naf:
           pre.naf == null
@@ -1021,7 +1017,8 @@ export default class Point extends BasePoint {
     const beta = new Point((this.x ?? new BigNumber(0)).redMul(this.curve.endo.beta), this.y)
     if (pre != null) {
       const curve = this.curve
-      const endoMul = (p: Point): Point => {
+      const endoMul = (basePoint: BasePoint): Point => {
+        const p = basePoint as Point
         if (p.x === null) {
           throw new Error('p.x is null')
         }
@@ -1102,23 +1099,11 @@ export default class Point extends BasePoint {
     }
   }
 
-  private _combineWnafPair(
-    a: number,
-    b: number,
-    context: WnafPairContext
-  ): number {
+  private _combineWnafPair(a: number, b: number, context: WnafPairContext): number {
     const { points, coeffs, wndWidth, wnd, naf, currentMax } = context
     if (wndWidth[a] !== 1 || wndWidth[b] !== 1) {
-      naf[a] = this.curve.getNAF(
-        coeffs[a],
-        wndWidth[a],
-        this.curve._bitLength
-      )
-      naf[b] = this.curve.getNAF(
-        coeffs[b],
-        wndWidth[b],
-        this.curve._bitLength
-      )
+      naf[a] = this.curve.getNAF(coeffs[a], wndWidth[a], this.curve._bitLength)
+      naf[b] = this.curve.getNAF(coeffs[b], wndWidth[b], this.curve._bitLength)
       return Math.max(currentMax, naf[a].length, naf[b].length)
     }
     const comb: any[] = [points[a], null, null, points[b]]
@@ -1159,11 +1144,14 @@ export default class Point extends BasePoint {
   ): number {
     let max = 0
     for (let index = len - 1; index >= 1; index -= 2) {
-      max = this._combineWnafPair(
-        index - 1,
-        index,
-        { points, coeffs, wndWidth, wnd, naf, currentMax: max }
-      )
+      max = this._combineWnafPair(index - 1, index, {
+        points,
+        coeffs,
+        wndWidth,
+        wnd,
+        naf,
+        currentMax: max
+      })
     }
     return max
   }
@@ -1179,9 +1167,7 @@ export default class Point extends BasePoint {
     while (index >= 0) {
       let zero = true
       for (let point = 0; point < len; point++) {
-        tmp[point] = new BigNumber(
-          typeof naf[point][index] === 'number' ? naf[point][index] : 0
-        )
+        tmp[point] = new BigNumber(typeof naf[point][index] === 'number' ? naf[point][index] : 0)
         if (!tmp[point].isZero()) zero = false
       }
       if (!zero) break
@@ -1192,12 +1178,7 @@ export default class Point extends BasePoint {
     return { index, doubles }
   }
 
-  private _addWnafStep(
-    accumulator: JPoint,
-    len: number,
-    tmp: BigNumber[],
-    wnd: Point[][]
-  ): JPoint {
+  private _addWnafStep(accumulator: JPoint, len: number, tmp: BigNumber[], wnd: Point[][]): JPoint {
     const one = new BigNumber(1)
     const two = new BigNumber(2)
     let result = accumulator
@@ -1207,10 +1188,7 @@ export default class Point extends BasePoint {
       const point: any = value.isNeg()
         ? wnd[index][value.neg().sub(one).div(two).toNumber()].neg()
         : wnd[index][value.sub(one).div(two).toNumber()]
-      result =
-        point.type === 'affine'
-          ? result.mixedAdd(point)
-          : result.add(point)
+      result = point.type === 'affine' ? result.mixedAdd(point) : result.add(point)
     }
     return result
   }
@@ -1228,14 +1206,7 @@ export default class Point extends BasePoint {
     const naf: number[][] = Array.from({ length: scratchLength }, () => [])
 
     this._prepareWnafWindows(defW, points, len, wndWidth, wnd)
-    const max = this._prepareWnafRepresentations(
-      points,
-      coeffs,
-      len,
-      wndWidth,
-      wnd,
-      naf
-    )
+    const max = this._prepareWnafRepresentations(points, coeffs, len, wndWidth, wnd, naf)
 
     let acc = new JPoint(null, null, null)
     const tmp = this.curve._wnafT4

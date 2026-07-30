@@ -2,7 +2,7 @@ import { HostReputationTracker } from '../HostReputationTracker'
 
 // ---- helpers ----------------------------------------------------------------
 
-function makeStore (initial: Record<string, string> = {}): {
+function makeStore(initial: Record<string, string> = {}): {
   store: Map<string, string>
   get: (key: string) => string | null
   set: (key: string, value: string) => void
@@ -11,7 +11,9 @@ function makeStore (initial: Record<string, string> = {}): {
   return {
     store,
     get: (key: string) => store.get(key) ?? null,
-    set: (key: string, value: string) => { store.set(key, value) }
+    set: (key: string, value: string) => {
+      store.set(key, value)
+    }
   }
 }
 
@@ -261,7 +263,7 @@ describe('HostReputationTracker – additional coverage', () => {
       const ranked = t.rankHosts([
         'https://a.com',
         'https://b.com',
-        'https://a.com',  // duplicate
+        'https://a.com', // duplicate
         'https://c.com'
       ])
       const hosts = ranked.map(r => r.host)
@@ -273,7 +275,7 @@ describe('HostReputationTracker – additional coverage', () => {
       const t = new HostReputationTracker()
       const ranked = t.rankHosts([
         'https://valid.com',
-        '',                       // empty string – skipped
+        '', // empty string – skipped
         'https://also.valid.com'
       ])
       const hosts = ranked.map(r => r.host)
@@ -345,7 +347,7 @@ describe('HostReputationTracker – additional coverage', () => {
 
     it('adds backoff penalty when host is in backoff', () => {
       const t = new HostReputationTracker()
-      const before = Date.now()
+      const _before = Date.now()
 
       t.recordSuccess('https://host.com', 100) // baseline
       const normalScore = t.rankHosts(['https://host.com'])[0].score
@@ -436,7 +438,9 @@ describe('HostReputationTracker – additional coverage', () => {
 
     it('handles storage.get throwing by returning undefined', () => {
       const kv = {
-        get: (_key: string): string | null => { throw new Error('get error') },
+        get: (_key: string): string | null => {
+          throw new Error('get error')
+        },
         set: (_key: string, _value: string): void => {}
       }
       // Should not throw during construction
@@ -446,7 +450,9 @@ describe('HostReputationTracker – additional coverage', () => {
     it('handles storage.set throwing gracefully', () => {
       const kv = {
         get: (_key: string): null => null,
-        set: (_key: string, _value: string): void => { throw new Error('set error') }
+        set: (_key: string, _value: string): void => {
+          throw new Error('set error')
+        }
       }
       const t = new HostReputationTracker(kv)
       // Should not throw when saving
@@ -457,7 +463,7 @@ describe('HostReputationTracker – additional coverage', () => {
       let writes = 0
       const values = new Map<string, string>()
       const t = new HostReputationTracker({
-        get: (key) => values.get(key) ?? null,
+        get: key => values.get(key) ?? null,
         set: (key, value) => {
           writes++
           values.set(key, value)
@@ -530,7 +536,7 @@ describe('HostReputationTracker – additional coverage', () => {
       if (originalLocalStorage === undefined) {
         delete (globalThis as any).localStorage
       } else {
-        (globalThis as any).localStorage = originalLocalStorage
+        ;(globalThis as any).localStorage = originalLocalStorage
       }
     })
 
@@ -538,7 +544,9 @@ describe('HostReputationTracker – additional coverage', () => {
       const mockStore = new Map<string, string>()
       ;(globalThis as any).localStorage = {
         getItem: (key: string): string | null => mockStore.get(key) ?? null,
-        setItem: (key: string, value: string): void => { mockStore.set(key, value) }
+        setItem: (key: string, value: string): void => {
+          mockStore.set(key, value)
+        }
       }
 
       const t = new HostReputationTracker()
@@ -553,7 +561,9 @@ describe('HostReputationTracker – additional coverage', () => {
 
     it('handles localStorage.getItem throwing', () => {
       ;(globalThis as any).localStorage = {
-        getItem: (_key: string): never => { throw new Error('security error') },
+        getItem: (_key: string): never => {
+          throw new Error('security error')
+        },
         setItem: (_key: string, _value: string): void => {}
       }
 
@@ -564,7 +574,9 @@ describe('HostReputationTracker – additional coverage', () => {
     it('handles localStorage.setItem throwing', () => {
       ;(globalThis as any).localStorage = {
         getItem: (_key: string): null => null,
-        setItem: (_key: string, _value: string): never => { throw new Error('quota exceeded') }
+        setItem: (_key: string, _value: string): never => {
+          throw new Error('quota exceeded')
+        }
       }
 
       const t = new HostReputationTracker()
@@ -601,11 +613,7 @@ describe('HostReputationTracker – additional coverage', () => {
       t.recordSuccess('https://fast.com', 50)
       for (let i = 0; i < 4; i++) t.recordFailure('https://down.com', 'err')
 
-      const ranked = t.rankHosts([
-        'https://down.com',
-        'https://mid.com',
-        'https://fast.com'
-      ])
+      const ranked = t.rankHosts(['https://down.com', 'https://mid.com', 'https://fast.com'])
 
       // fast should come first, down should be last (in backoff)
       expect(ranked[0].host).toBe('https://fast.com')

@@ -6,6 +6,15 @@ import Point from '../primitives/Point.js'
 import * as Hash from '../primitives/Hash.js'
 import { toArray, toHex, encode } from '../primitives/utils.js'
 
+interface AESState {
+  _key: number[][]
+  _tables: Uint32Array[][]
+  _precompute: () => void
+  _crypt: (input: number[], dir: number) => Uint32Array
+  encrypt: (data: number[]) => Uint32Array
+  decrypt: (data: number[]) => Uint32Array
+}
+
 function expandEncryptionKey(key: number[], sbox: Uint32Array): number[] {
   const keyLen = key.length
   const encKey = key.slice()
@@ -47,7 +56,7 @@ function expandDecryptionKey(
   return decKey
 }
 
-function AES(key): void {
+function AES(this: AESState, key: number[]): void {
   if (this._tables[0][0][0] === 0) this._precompute()
 
   const sbox = this._tables[0][4]
@@ -69,7 +78,7 @@ AES.prototype = {
    * @param {Array} data The plaintext.
    * @return {Array} The ciphertext.
    */
-  encrypt: function (data) {
+  encrypt: function (this: AESState, data: number[]) {
     return this._crypt(data, 0)
   },
 
@@ -78,7 +87,7 @@ AES.prototype = {
    * @param {Array} data The ciphertext.
    * @return {Array} The plaintext.
    */
-  decrypt: function (data) {
+  decrypt: function (this: AESState, data: number[]) {
     return this._crypt(data, 1)
   },
 
@@ -110,9 +119,10 @@ AES.prototype = {
       new Uint32Array(256)
     ]
   ],
+  _key: [] as number[][],
 
   // Expand the S-box tables.
-  _precompute: function () {
+  _precompute: function (this: AESState) {
     const encTable = this._tables[0]
     const decTable = this._tables[1]
     const sbox = encTable[4]
@@ -167,7 +177,7 @@ AES.prototype = {
    * @return {Array} The four encrypted or decrypted words.
    * @private
    */
-  _crypt: function (input, dir) {
+  _crypt: function (this: AESState, input: number[], dir: number) {
     if (input.length !== 4) {
       throw new Error('invalid aes block size')
     }
@@ -227,12 +237,14 @@ AES.prototype = {
   }
 }
 
+const AESConstructor = AES as unknown as new (key: number[]) => AESState
+
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class AESWrapper {
   public static encrypt(messageBuf: number[], keyBuf: number[]): number[] {
     const key = AESWrapper.buf2Words(keyBuf)
     const message = AESWrapper.buf2Words(messageBuf)
-    const a = new AES(key)
+    const a = new AESConstructor(key)
     const enc = a.encrypt(message)
     const encBuf = AESWrapper.words2Buf(enc)
     return encBuf
@@ -241,7 +253,7 @@ class AESWrapper {
   public static decrypt(encBuf: number[], keyBuf: number[]): number[] {
     const enc = AESWrapper.buf2Words(encBuf)
     const key = AESWrapper.buf2Words(keyBuf)
-    const a = new AES(key)
+    const a = new AESConstructor(key)
     const message = a.decrypt(enc)
     const messageBuf = AESWrapper.words2Buf(message)
     return messageBuf
@@ -263,7 +275,7 @@ class AESWrapper {
     return words
   }
 
-  public static words2Buf(words: number[]): number[] {
+  public static words2Buf(words: ArrayLike<number>): number[] {
     const buf = Array.from({ length: words.length * 4 }, () => 0)
 
     for (let i = 0; i < words.length; i++) {
@@ -299,7 +311,7 @@ class CBC {
 
   public static blockBufs2Buf(blockBufs: number[][]): number[] {
     let last = blockBufs.at(-1)
-    last = CBC.pkcs7Unpad(last)
+    last = CBC.pkcs7Unpad(last!)
     blockBufs[blockBufs.length - 1] = last
 
     const buf = blockBufs.flat()
@@ -406,7 +418,7 @@ class CBC {
   }
 
   public static pkcs7Unpad(paddedbuf: number[]): number[] {
-    const padlength = paddedbuf.at(-1)
+    const padlength = paddedbuf.at(-1)!
     const padbuf = paddedbuf.slice(paddedbuf.length - padlength, paddedbuf.length)
     const padbuf2 = Array.from({ length: padlength }, () => 0)
     padbuf2.fill(padlength)

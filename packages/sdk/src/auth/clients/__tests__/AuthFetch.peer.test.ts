@@ -19,7 +19,7 @@ jest.mock('../../utils/index.js', () => ({
 
 jest.mock('../../../primitives/Random.js', () => ({
   __esModule: true,
-  default: jest.fn(() => new Array(32).fill(7))
+  default: jest.fn(() => Array.from({ length: 32 }).fill(7))
 }))
 
 const PeerMock = Peer as unknown as jest.Mock
@@ -89,12 +89,12 @@ describe('AuthFetch authenticated peer lifecycle', () => {
       toPeer: jest.fn(async () => {
         generalMessage?.(
           'unrelated-server',
-          buildResponsePayload(new Array(32).fill(8), 500, {}, [])
+          buildResponsePayload(Array.from({ length: 32 }).fill(8), 500, {}, [])
         )
         generalMessage?.(
           'server-identity-key',
           buildResponsePayload(
-            new Array(32).fill(7),
+            Array.from({ length: 32 }).fill(7),
             201,
             { 'content-type': 'text/plain', 'x-test': 'passed' },
             responseBody
@@ -145,7 +145,7 @@ describe('AuthFetch authenticated peer lifecycle', () => {
     peer.toPeer.mockImplementationOnce(async () => {
       generalMessage?.(
         'server-identity-key',
-        buildResponsePayload(new Array(32).fill(7), 204, {}, [])
+        buildResponsePayload(Array.from({ length: 32 }).fill(7), 204, {}, [])
       )
     })
     const emptyResponse = await authFetch.fetch('https://service.example/empty')

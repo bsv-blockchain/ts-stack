@@ -483,7 +483,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
+      const _handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
       await taker.syncThreads()
 
       const takerThreadId = taker.threads[0].threadId
@@ -517,7 +517,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
+      const _handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
       await taker.syncThreads()
       const takerThread = taker.threads[0]
 
@@ -545,7 +545,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
+      const _handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
       await taker.syncThreads()
 
       const takerThread = taker.threads[0]
@@ -577,7 +577,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
+      const _handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
       await taker.syncThreads()
 
       const takerThread = taker.threads[0]
@@ -605,7 +605,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
+      const _handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
       await taker.syncThreads()
 
       const takerThread = taker.threads[0]
@@ -731,7 +731,7 @@ describe('RemittanceManager additional coverage', () => {
       const mod = makeModule()
 
       const identityLayer = makeIdentityLayer()
-      const sender = new RemittanceManager(
+      const _sender = new RemittanceManager(
         {
           remittanceModules: [mod],
           identityLayer,
@@ -931,7 +931,7 @@ describe('RemittanceManager additional coverage', () => {
         new TestComms('taker-key', bus)
       )
 
-      const handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
+      const _handle = await maker.sendInvoice('taker-key', makeInvoiceInput())
       await taker.syncThreads()
       const takerThread = taker.threads[0]
 
@@ -1112,7 +1112,7 @@ describe('RemittanceManager additional coverage', () => {
 
   describe('sendEnvelope with live message fallback', () => {
     it('falls back to sendMessage when sendLiveMessage fails', async () => {
-      const bus = new MessageBus()
+      const _bus = new MessageBus()
       const mod = makeModule()
 
       const sendLiveMessage = jest.fn(async () => {

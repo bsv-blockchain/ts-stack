@@ -2,7 +2,7 @@ import Script from '../dist/esm/src/script/Script.js'
 import OP from '../dist/esm/src/script/OP.js'
 import { runBenchmark } from './lib/benchmark-runner.js'
 
-function makeRng (seed) {
+function makeRng(seed) {
   let x = seed | 0
   return () => {
     x ^= x << 13
@@ -12,15 +12,15 @@ function makeRng (seed) {
   }
 }
 
-function makeBytes (rng, length) {
-  const out = new Array(length)
+function makeBytes(rng, length) {
+  const out = Array.from({ length: length })
   for (let i = 0; i < length; i++) {
     out[i] = rng() & 0xff
   }
   return out
 }
 
-function makePushChunk (data) {
+function makePushChunk(data) {
   const len = data.length
   let op
   if (len === 0) {
@@ -42,11 +42,11 @@ function makePushChunk (data) {
   }
 }
 
-function makeOpChunk (op) {
+function makeOpChunk(op) {
   return { op }
 }
 
-function makeScenario ({
+function makeScenario({
   name,
   totalChunks,
   matchRatio,
@@ -60,7 +60,7 @@ function makeScenario ({
   const targetChunk = makePushChunk(targetData)
   const targetScript = new Script([targetChunk])
 
-  const chunks = new Array(totalChunks)
+  const chunks = Array.from({ length: totalChunks })
   for (let i = 0; i < totalChunks; i++) {
     const roll = rng() / 0xffffffff
     if (roll < matchRatio) {
@@ -136,20 +136,24 @@ const scenarios = [
   })
 ]
 
-async function main () {
+async function main() {
   for (const scenario of scenarios) {
-    await runBenchmark(scenario.name, () => {
-      const script = scenario.makeScript()
-      script.findAndDelete(scenario.targetScript)
-    }, {
-      minSampleMs: 600,
-      samples: 9,
-      minIterations: 10
-    })
+    await runBenchmark(
+      scenario.name,
+      () => {
+        const script = scenario.makeScript()
+        script.findAndDelete(scenario.targetScript)
+      },
+      {
+        minSampleMs: 600,
+        samples: 9,
+        minIterations: 10
+      }
+    )
   }
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error(err)
   process.exit(1)
 })

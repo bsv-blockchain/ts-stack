@@ -6,7 +6,7 @@
     "build": "pnpm -r --filter '!@bsv/ts-stack' run build",
     "typecheck": "pnpm -r --workspace-concurrency=4 --filter '!@bsv/ts-stack' --if-present run typecheck",
     "test": "pnpm -r --filter '!@bsv/ts-stack' run test",
-    "lint": "oxlint scripts --deny-warnings && pnpm -r --filter '!@bsv/ts-stack' run lint",
+    "lint": "oxlint . --ignore-path .oxlintignore --deny-warnings",
     "format:root": "prettier --check \"package.json\" \"pnpm-workspace.yaml\" \"tsconfig.base.json\" \".prettierrc.json\" \"scripts/**/*.{mjs,json}\" \"governance/**/*.{json,md,mjs}\" \".github/**/*.{md,yml,yaml}\"",
     "format:check": "pnpm format:root && pnpm -r --filter '!@bsv/ts-stack' --if-present run format:check",
     "clean": "pnpm -r --filter '!@bsv/ts-stack' run clean",

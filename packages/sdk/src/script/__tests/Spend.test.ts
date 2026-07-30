@@ -37,7 +37,7 @@ export class MockChain implements ChainTracker {
   }
 }
 
-async function makeReusableP2PKHSpend (sigHashCache?: SignatureHashCache): Promise<Spend> {
+async function makeReusableP2PKHSpend(sigHashCache?: SignatureHashCache): Promise<Spend> {
   const privateKey = new PrivateKey(1)
   const p2pkh = new P2PKH()
   const lockingScript = p2pkh.lock(privateKey.toPublicKey().toHash())
@@ -74,7 +74,7 @@ async function makeReusableP2PKHSpend (sigHashCache?: SignatureHashCache): Promi
 const ZERO_TXID = '0'.repeat(64)
 
 const cloneChunks = (chunks: ScriptChunk[]): ScriptChunk[] =>
-  chunks.map((chunk) => ({
+  chunks.map(chunk => ({
     op: chunk.op,
     data: Array.isArray(chunk.data) ? chunk.data.slice() : undefined
   }))
@@ -130,14 +130,32 @@ const scriptNumBytes = (value: bigint): number[] => new BigNumber(value).toScrip
 describe('Spend', () => {
   describe('signature-hash cache lifetime', () => {
     it.each([
-      ['output value', (spend: Spend) => { spend.outputs[0].satoshis = 998 }],
-      ['current input sequence', (spend: Spend) => { spend.inputSequence = 0xfffffffd }],
-      ['sibling input outpoint', (spend: Spend) => {
-        const siblingInput = spend.allInputs?.[1]
-        if (siblingInput == null) throw new Error('Expected a sibling input')
-        siblingInput.sourceOutputIndex = 1
-      }],
-      ['lock time', (spend: Spend) => { spend.lockTime++ }]
+      [
+        'output value',
+        (spend: Spend) => {
+          spend.outputs[0].satoshis = 998
+        }
+      ],
+      [
+        'current input sequence',
+        (spend: Spend) => {
+          spend.inputSequence = 0xfffffffd
+        }
+      ],
+      [
+        'sibling input outpoint',
+        (spend: Spend) => {
+          const siblingInput = spend.allInputs?.[1]
+          if (siblingInput == null) throw new Error('Expected a sibling input')
+          siblingInput.sourceOutputIndex = 1
+        }
+      ],
+      [
+        'lock time',
+        (spend: Spend) => {
+          spend.lockTime++
+        }
+      ]
     ])('invalidates an owned cache after %s mutation', async (_name, mutate) => {
       const spend = await makeReusableP2PKHSpend()
       expect(spend.validate()).toBe(true)
@@ -321,19 +339,13 @@ describe('Spend', () => {
   })
 
   it('maintains endianness when shifting right', () => {
-    const spend = createSpendWithPushes(
-      'OP_1 OP_RSHIFT 0080 OP_EQUAL',
-      [[0x01, 0x00]]
-    )
+    const spend = createSpendWithPushes('OP_1 OP_RSHIFT 0080 OP_EQUAL', [[0x01, 0x00]])
 
     expect(spend.validate()).toBe(true)
   })
 
   it('maintains endianness when shifting left', () => {
-    const spend = createSpendWithPushes(
-      'OP_1 OP_LSHIFT 0100 OP_EQUAL',
-      [[0x00, 0x80]]
-    )
+    const spend = createSpendWithPushes('OP_1 OP_LSHIFT 0100 OP_EQUAL', [[0x00, 0x80]])
 
     expect(spend.validate()).toBe(true)
   })
@@ -341,10 +353,9 @@ describe('Spend', () => {
   it('truncates overflow MSBs on OP_LSHIFT (0x6A09E667 << 30 === 0xC0000000)', () => {
     // 0x6A09E667 left-shifted by 30 bits produces 0x1A827999C0000000 (8 bytes),
     // but must be truncated to the original 4 bytes → 0xC0000000
-    const spend = createSpendWithPushes(
-      '1e OP_LSHIFT c0000000 OP_EQUAL',
-      [[0x6a, 0x09, 0xe6, 0x67]]
-    )
+    const spend = createSpendWithPushes('1e OP_LSHIFT c0000000 OP_EQUAL', [
+      [0x6a, 0x09, 0xe6, 0x67]
+    ])
     expect(spend.validate()).toBe(true)
   })
 
@@ -533,8 +544,7 @@ describe('Spend', () => {
     }
     it(a[2], () => {
       const spend = new Spend({
-        sourceTXID:
-          '0000000000000000000000000000000000000000000000000000000000000000',
+        sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
         sourceOutputIndex: 0,
         sourceSatoshis: 1,
         lockingScript: LockingScript.fromHex(a[1]),
@@ -552,26 +562,21 @@ describe('Spend', () => {
 
   describe('bigint stack operand handling', () => {
     it('OP_PICK rejects indexes that exceed the stack length without tripping JS safe-integer limits', () => {
-      const spend = createSpendWithPushes('OP_PICK', [
-        [0x01],
-        scriptNumBytes((1n << 60n) + 5n)
-      ])
-      expect(() => spend.validate()).toThrow('OP_PICK requires the top stack element to be 0 or a positive number less than the current size of the stack.')
+      const spend = createSpendWithPushes('OP_PICK', [[0x01], scriptNumBytes((1n << 60n) + 5n)])
+      expect(() => spend.validate()).toThrow(
+        'OP_PICK requires the top stack element to be 0 or a positive number less than the current size of the stack.'
+      )
     })
 
     it('OP_SPLIT surfaces its range error for very large positions', () => {
-      const spend = createSpendWithPushes('OP_SPLIT', [
-        [0x01, 0x02],
-        scriptNumBytes(1n << 60n)
-      ])
-      expect(() => spend.validate()).toThrow('OP_SPLIT requires the first stack item to be a non-negative number less than or equal to the size of the second-from-top stack item.')
+      const spend = createSpendWithPushes('OP_SPLIT', [[0x01, 0x02], scriptNumBytes(1n << 60n)])
+      expect(() => spend.validate()).toThrow(
+        'OP_SPLIT requires the first stack item to be a non-negative number less than or equal to the size of the second-from-top stack item.'
+      )
     })
 
     it('OP_NUM2BIN reports an unrepresentable local allocation as resource exhaustion', () => {
-      const spend = createSpendWithPushes('OP_NUM2BIN', [
-        [0x01],
-        scriptNumBytes(1n << 60n)
-      ])
+      const spend = createSpendWithPushes('OP_NUM2BIN', [[0x01], scriptNumBytes(1n << 60n)])
       expect(() => spend.validate()).toThrow(ScriptResourceLimitError)
       try {
         spend.validate()
@@ -594,12 +599,14 @@ describe('Spend', () => {
   it('Rejects spending an immature coinbase transaction', async () => {
     const sourceTransaction = new Transaction(
       1,
-      [{
-        sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
-        sourceOutputIndex: 0,
-        unlockingScript: Script.fromASM('OP_TRUE'),
-        sequence: 0xffffffff
-      }],
+      [
+        {
+          sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
+          sourceOutputIndex: 0,
+          unlockingScript: Script.fromASM('OP_TRUE'),
+          sequence: 0xffffffff
+        }
+      ],
       [
         {
           lockingScript: Script.fromASM('OP_NOP'),
@@ -621,10 +628,12 @@ describe('Spend', () => {
           sourceOutputIndex: 0
         }
       ],
-      [{
+      [
+        {
           lockingScript: Script.fromASM('OP_NOP'),
           satoshis: 1
-      }],
+        }
+      ],
       0
     )
 
@@ -636,12 +645,14 @@ describe('Spend', () => {
   it('Successfully validates a mature coinbase spend where sequence is set to undefined', async () => {
     const sourceTransaction = new Transaction(
       1,
-      [{
-        sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
-        sourceOutputIndex: 0,
-        unlockingScript: Script.fromASM('OP_TRUE'),
-        sequence: 0xffffffff
-      }],
+      [
+        {
+          sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
+          sourceOutputIndex: 0,
+          unlockingScript: Script.fromASM('OP_TRUE'),
+          sequence: 0xffffffff
+        }
+      ],
       [
         {
           lockingScript: Script.fromASM('OP_NOP'),
@@ -652,7 +663,7 @@ describe('Spend', () => {
     )
     const txid = sourceTransaction.id('hex')
     sourceTransaction.merklePath = MerklePath.fromCoinbaseTxidAndHeight(txid, 0)
-    const chain = new MockChain({ blockheaders: [txid, ...new Array(100).fill('')] })
+    const chain = new MockChain({ blockheaders: [txid, ...Array.from({ length: 100 }).fill('')] })
 
     const spendTx = new Transaction(
       1,
@@ -663,10 +674,12 @@ describe('Spend', () => {
           sourceOutputIndex: 0
         }
       ],
-      [{
+      [
+        {
           lockingScript: Script.fromASM('OP_NOP'),
           satoshis: 1
-      }],
+        }
+      ],
       0
     )
 

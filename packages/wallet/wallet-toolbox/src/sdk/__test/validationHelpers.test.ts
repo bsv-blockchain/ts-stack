@@ -1,4 +1,4 @@
-import { Utils, Validation as V } from '@bsv/sdk'
+import { Validation as V } from '@bsv/sdk'
 describe('validationHelpers tests', () => {
   jest.setTimeout(99999999)
 

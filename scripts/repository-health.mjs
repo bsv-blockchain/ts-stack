@@ -823,6 +823,33 @@ function collectScriptFindings(project, configured, profile) {
       )
     }
   }
+  if (
+    typeof scripts.lint === 'string' &&
+    /\boxlint\b/.test(scripts.lint) &&
+    !/(?:^|\s)--deny-warnings(?:\s|$)/.test(scripts.lint)
+  ) {
+    findings.push(
+      finding(
+        project,
+        'lint-warnings-allowed',
+        'Oxlint scripts must fail on every warning with --deny-warnings',
+        'lint'
+      )
+    )
+  }
+  if (
+    typeof scripts.lint === 'string' &&
+    /--ignore-pattern\s+['"]?[^'"]*(?:__tests?__|\.test\.|benchmarks?)/.test(scripts.lint)
+  ) {
+    findings.push(
+      finding(
+        project,
+        'lint-authored-code-excluded',
+        'Lint scripts must not exclude authored tests or benchmarks',
+        'lint'
+      )
+    )
+  }
   for (const disabledScript of Object.keys(scripts).filter(name => name.endsWith('-disabled'))) {
     findings.push(
       finding(

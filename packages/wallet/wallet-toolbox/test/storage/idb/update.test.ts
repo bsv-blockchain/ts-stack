@@ -33,7 +33,7 @@ describe('idb update tests', () => {
   jest.setTimeout(99999999)
 
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnv(chain)
+  const _env = _tu.getEnv(chain)
   let setups: { setup: TestSetup1; storage: StorageProvider }[] = []
 
   beforeEach(async () => {
@@ -718,7 +718,7 @@ describe('idb update tests', () => {
   })
 
   test('11_update OutputTagMap', async () => {
-    const primaryKey = ['outputTagId', 'outputId']
+    const _primaryKey = ['outputTagId', 'outputId']
     for (const { storage } of setups) {
       const records = await storage.findOutputTagMaps({ partial: {} })
       for (const record of records) {
@@ -776,7 +776,7 @@ describe('idb update tests', () => {
   })
 
   test('12_update TxLabel', async () => {
-    const primaryKey = 'txLabelId'
+    const _primaryKey = 'txLabelId'
     for (const { storage } of setups) {
       const records = await storage.findTxLabels({ partial: {} })
       for (const record of records) {
@@ -836,7 +836,7 @@ describe('idb update tests', () => {
   test('13_update TxLabelMap', async () => {
     const primaryKeyTransaction = 'transactionId'
     const primaryKeyLabel = 'txLabelId'
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       const records = await storage.findTxLabelMaps({ partial: {} })
       for (const record of records) {
         if (!record.transactionId || !record.txLabelId) {
@@ -896,7 +896,7 @@ describe('idb update tests', () => {
 
   test('14_update MonitorEvent', async () => {
     const primaryKey = 'id'
-    for (const { storage, setup } of setups) {
+    for (const { storage, setup: _setup } of setups) {
       const records = await storage.findMonitorEvents({ partial: {} })
       for (const record of records) {
         try {
@@ -935,7 +935,7 @@ describe('idb update tests', () => {
   })
 
   test('15_update SyncState', async () => {
-    const primaryKey = 'syncStateId'
+    const _primaryKey = 'syncStateId'
     for (const { storage } of setups) {
       const records = await storage.findSyncStates({ partial: {} })
       for (const record of records) {
@@ -1008,7 +1008,9 @@ describe('idb update tests', () => {
       await storage.updateTransactionStatus('failed', state.failedTx.transactionId)
       await expectFailedTransactionOutputStateRepaired(storage, state)
 
-      const txAfter = verifyOne(await storage.findTransactions({ partial: { transactionId: state.failedTx.transactionId } }))
+      const txAfter = verifyOne(
+        await storage.findTransactions({ partial: { transactionId: state.failedTx.transactionId } })
+      )
       expect(txAfter.status).toBe('failed')
     }
   })

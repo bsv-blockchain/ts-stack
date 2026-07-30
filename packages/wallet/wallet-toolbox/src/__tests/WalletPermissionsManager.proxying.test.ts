@@ -1,4 +1,10 @@
-import { mockAtomicBEEF, mockUnderlyingWallet, MockLockingScript, MockedBSV_SDK, MockTransaction } from './WalletPermissionsManager.fixtures'
+import {
+  mockAtomicBEEF,
+  mockUnderlyingWallet,
+  MockLockingScript,
+  MockedBSV_SDK,
+  MockTransaction
+} from './WalletPermissionsManager.fixtures'
 import { WalletPermissionsManager, PermissionsManagerConfig } from '../WalletPermissionsManager'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
@@ -161,7 +167,7 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
       // Our callback ephemeral-granted.  So everything should proceed with no error.
       // The manager returns the partial result from underlying
       // We don't have a final sign call from the manager because signAndProcess is forcibly false.
-    } catch (eu) {
+    } catch {
       expect(true).toBe(false)
     }
   })

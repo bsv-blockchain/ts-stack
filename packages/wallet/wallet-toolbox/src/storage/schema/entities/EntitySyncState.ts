@@ -9,7 +9,7 @@ import { WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
 import { maxDate, verifyId, verifyTruthy } from '../../../utility/utilityHelpers'
 import { TableSettings } from '../tables/TableSettings'
 import { TableSyncState } from '../tables/TableSyncState'
-import { createSyncMap, EntityBase, EntityStorage, EntitySyncMap, SyncError, SyncMap } from './EntityBase'
+import { createSyncMap, EntityBase, EntityStorage, SyncError, SyncMap } from './EntityBase'
 import { EntityCertificate } from './EntityCertificate'
 import { EntityCertificateField } from './EntityCertificateField'
 import { EntityCommission } from './EntityCommission'
@@ -67,8 +67,15 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
 
   validateSyncMap(sm: SyncMap) {
     for (const key of Object.keys(sm)) {
-      const esm: EntitySyncMap = sm[key]
-      if (typeof esm.maxUpdated_at === 'string') esm.maxUpdated_at = new Date(esm.maxUpdated_at)
+      const value = (sm as SyncMap & Record<string, unknown>)[key]
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        'maxUpdated_at' in value &&
+        typeof value.maxUpdated_at === 'string'
+      ) {
+        value.maxUpdated_at = new Date(value.maxUpdated_at)
+      }
     }
   }
 
@@ -226,15 +233,16 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
 
   static mergeIdMap(fromMap: Record<number, number>, toMap: Record<number, number>) {
     for (const [key, value] of Object.entries(fromMap)) {
-      const fromValue = fromMap[key]
-      const toValue = toMap[key]
+      const typedKey = key as unknown as number
+      const fromValue = fromMap[typedKey]
+      const toValue = toMap[typedKey]
       if (toValue !== undefined && toValue !== fromValue) {
         throw new WERR_INVALID_PARAMETER(
           'syncMap',
           `an unmapped id or the same mapped id. ${key} maps to ${toValue} not equal to ${fromValue}`
         )
       }
-      if (toValue === undefined) toMap[key] = value
+      if (toValue === undefined) toMap[typedKey] = value
     }
   }
 

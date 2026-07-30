@@ -1,6 +1,5 @@
-import { WalletCertificate, WalletInterface } from '../../wallet/index'
+import { WalletInterface } from '../../wallet/index'
 import { IdentityClient } from '../IdentityClient'
-import { Certificate } from '../../auth/certificates/index.js'
 import { KNOWN_IDENTITY_TYPES, defaultIdentity } from '../types/index.js'
 
 // ----- Mocks for external dependencies -----
@@ -56,7 +55,7 @@ jest.mock('../../overlay-tools/index.js', () => {
 jest.mock('../../transaction/index.js', () => {
   return {
     Transaction: {
-      fromAtomicBEEF: jest.fn().mockImplementation((_tx) => ({
+      fromAtomicBEEF: jest.fn().mockImplementation(_tx => ({
         toHexBEEF: () => 'transactionHex'
       })),
       fromBEEF: jest.fn().mockReturnValue({
@@ -78,7 +77,7 @@ jest.mock('../../primitives/index.js', () => {
     Utils: {
       toBase64: jest.fn().mockReturnValue('mockKeyID'),
       toArray: jest.fn().mockReturnValue(new Uint8Array()),
-      toUTF8: jest.fn().mockImplementation((data) => {
+      toUTF8: jest.fn().mockImplementation(data => {
         return new TextDecoder().decode(data)
       }),
       toHex: jest.fn().mockReturnValue('0102030405060708')
@@ -209,7 +208,9 @@ describe('IdentityClient (additional coverage)', () => {
       expect(result.name).toBe('ACME Corp')
       expect(result.avatarURL).toBe('acme-icon.png')
       expect(result.badgeLabel).toBe('Entity certified by RegistryCertifier')
-      expect(result.badgeClickURL).toBe('https://bsv-blockchain.github.io/ts-sdk/reference/identity/')
+      expect(result.badgeClickURL).toBe(
+        'https://bsv-blockchain.github.io/ts-sdk/reference/identity/'
+      )
     })
 
     it('parses coolCert with cool=true', () => {
@@ -244,8 +245,12 @@ describe('IdentityClient (additional coverage)', () => {
       const result = IdentityClient.parseIdentity(cert as any)
       expect(result.name).toBe('Anyone')
       expect(result.avatarURL).toBe('XUT4bpQ6cpBaXi1oMzZsXfpkWGbtp2JTUYAoN7PzhStFJ6wLfoeR')
-      expect(result.badgeLabel).toBe('Represents the ability for anyone to access this information.')
-      expect(result.badgeClickURL).toBe('https://bsv-blockchain.github.io/ts-sdk/reference/identity/')
+      expect(result.badgeLabel).toBe(
+        'Represents the ability for anyone to access this information.'
+      )
+      expect(result.badgeClickURL).toBe(
+        'https://bsv-blockchain.github.io/ts-sdk/reference/identity/'
+      )
     })
 
     it('parses self identity type', () => {
@@ -259,7 +264,9 @@ describe('IdentityClient (additional coverage)', () => {
       expect(result.name).toBe('You')
       expect(result.avatarURL).toBe('XUT9jHGk2qace148jeCX5rDsMftkSGYKmigLwU2PLLBc7Hm63VYR')
       expect(result.badgeLabel).toBe('Represents your ability to access this information.')
-      expect(result.badgeClickURL).toBe('https://bsv-blockchain.github.io/ts-sdk/reference/identity/')
+      expect(result.badgeClickURL).toBe(
+        'https://bsv-blockchain.github.io/ts-sdk/reference/identity/'
+      )
     })
 
     it('produces empty abbreviatedKey when subject is empty string', () => {
@@ -515,12 +522,19 @@ describe('IdentityClient (additional coverage)', () => {
         decryptedFields: { userName: 'Alice', profilePhoto: 'photo.png' },
         certifierInfo: { name: 'CertX', iconUrl: 'icon.png' }
       }
-      walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates: [dummyCertificate] })
+      walletMock.discoverByIdentityKey = jest
+        .fn()
+        .mockResolvedValue({ certificates: [dummyCertificate] })
 
       const mockContactsManager = identityClient['contactsManager']
-      mockContactsManager.getContacts = jest.fn().mockResolvedValue([{ name: 'Alice Contact', identityKey: 'aliceKey123456789' }])
+      mockContactsManager.getContacts = jest
+        .fn()
+        .mockResolvedValue([{ name: 'Alice Contact', identityKey: 'aliceKey123456789' }])
 
-      const result = await identityClient.resolveByIdentityKey({ identityKey: 'aliceKey123456789' }, false)
+      const result = await identityClient.resolveByIdentityKey(
+        { identityKey: 'aliceKey123456789' },
+        false
+      )
 
       expect(result).toHaveLength(1)
       expect(result[0].name).toBe('Alice') // from cert, not contact
@@ -530,7 +544,10 @@ describe('IdentityClient (additional coverage)', () => {
     it('returns empty array when no certificates found and contacts skipped', async () => {
       walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates: [] })
 
-      const result = await identityClient.resolveByIdentityKey({ identityKey: 'unknown-key' }, false)
+      const result = await identityClient.resolveByIdentityKey(
+        { identityKey: 'unknown-key' },
+        false
+      )
       expect(result).toEqual([])
     })
 
@@ -547,7 +564,10 @@ describe('IdentityClient (additional coverage)', () => {
   describe('resolveByAttributes additional branches', () => {
     it('handles null/undefined certificates result gracefully', async () => {
       walletMock.discoverByAttributes = jest.fn().mockResolvedValue(null)
-      const result = await identityClient.resolveByAttributes({ attributes: { name: 'Alice' } }, false)
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { name: 'Alice' } },
+        false
+      )
       expect(result).toEqual([])
     })
 
@@ -569,9 +589,14 @@ describe('IdentityClient (additional coverage)', () => {
       }
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
-      walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
+      walletMock.discoverByAttributes = jest
+        .fn()
+        .mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const result = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } }, { useContacts: true })
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { email: 'alice@example.com' } },
+        { useContacts: true }
+      )
       expect(result[0].name).toBe('Alice From Contact')
     })
 
@@ -593,9 +618,13 @@ describe('IdentityClient (additional coverage)', () => {
       }
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
-      walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
+      walletMock.discoverByAttributes = jest
+        .fn()
+        .mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const result = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } })
+      const result = await identityClient.resolveByAttributes({
+        attributes: { email: 'alice@example.com' }
+      })
       expect(result[0].name).toBe('alice@example.com')
     })
   })
@@ -603,7 +632,9 @@ describe('IdentityClient (additional coverage)', () => {
   // ─── revokeCertificateRevelation ────────────────────────────────────────────
 
   describe('revokeCertificateRevelation', () => {
-    const { LookupResolver, SHIPBroadcaster, withDoubleSpendRetry } = jest.requireMock('../../overlay-tools/index.js')
+    const { LookupResolver, SHIPBroadcaster, withDoubleSpendRetry } = jest.requireMock(
+      '../../overlay-tools/index.js'
+    )
 
     beforeEach(() => {
       jest.clearAllMocks()
@@ -614,9 +645,9 @@ describe('IdentityClient (additional coverage)', () => {
         query: jest.fn().mockResolvedValue({ type: 'freeform', result: 'some data' })
       }))
 
-      await expect(
-        identityClient.revokeCertificateRevelation('serialXYZ')
-      ).rejects.toThrow('Failed to get lookup result')
+      await expect(identityClient.revokeCertificateRevelation('serialXYZ')).rejects.toThrow(
+        'Failed to get lookup result'
+      )
     })
 
     it('completes successfully with valid lookup output', async () => {
@@ -647,9 +678,7 @@ describe('IdentityClient (additional coverage)', () => {
       })
       walletMock.signAction = jest.fn().mockResolvedValue({ tx: [4, 5, 6] })
 
-      await expect(
-        identityClient.revokeCertificateRevelation('serialABC')
-      ).resolves.toBeUndefined()
+      await expect(identityClient.revokeCertificateRevelation('serialABC')).resolves.toBeUndefined()
     })
 
     it('throws when signableTransaction is undefined', async () => {
@@ -679,9 +708,9 @@ describe('IdentityClient (additional coverage)', () => {
         tx: undefined
       })
 
-      await expect(
-        identityClient.revokeCertificateRevelation('serialDEF')
-      ).rejects.toThrow('Failed to create signable transaction')
+      await expect(identityClient.revokeCertificateRevelation('serialDEF')).rejects.toThrow(
+        'Failed to create signable transaction'
+      )
     })
 
     it('throws when signed tx is undefined after signAction', async () => {
@@ -712,9 +741,9 @@ describe('IdentityClient (additional coverage)', () => {
       })
       walletMock.signAction = jest.fn().mockResolvedValue({ tx: undefined })
 
-      await expect(
-        identityClient.revokeCertificateRevelation('serialGHI')
-      ).rejects.toThrow('Failed to sign transaction')
+      await expect(identityClient.revokeCertificateRevelation('serialGHI')).rejects.toThrow(
+        'Failed to sign transaction'
+      )
     })
   })
 
@@ -737,7 +766,17 @@ describe('IdentityClient (additional coverage)', () => {
   describe('contact delegation methods', () => {
     it('getContacts delegates to contactsManager', async () => {
       const mockContactsManager = identityClient['contactsManager']
-      const expected = [{ name: 'Test', identityKey: 'key1', avatarURL: '', abbreviatedKey: '', badgeIconURL: '', badgeLabel: '', badgeClickURL: '' }]
+      const expected = [
+        {
+          name: 'Test',
+          identityKey: 'key1',
+          avatarURL: '',
+          abbreviatedKey: '',
+          badgeIconURL: '',
+          badgeLabel: '',
+          badgeClickURL: ''
+        }
+      ]
       mockContactsManager.getContacts = jest.fn().mockResolvedValue(expected)
 
       const result = await identityClient.getContacts('key1', true, 50)
@@ -749,7 +788,15 @@ describe('IdentityClient (additional coverage)', () => {
       const mockContactsManager = identityClient['contactsManager']
       mockContactsManager.saveContact = jest.fn().mockResolvedValue(undefined)
 
-      const contact = { name: 'Alice', identityKey: 'key1', avatarURL: '', abbreviatedKey: '', badgeIconURL: '', badgeLabel: '', badgeClickURL: '' }
+      const contact = {
+        name: 'Alice',
+        identityKey: 'key1',
+        avatarURL: '',
+        abbreviatedKey: '',
+        badgeIconURL: '',
+        badgeLabel: '',
+        badgeClickURL: ''
+      }
       const metadata = { note: 'test' }
       await identityClient.saveContact(contact, metadata)
 
@@ -781,7 +828,13 @@ describe('IdentityClient (additional coverage)', () => {
     certifierInfo: { name: 'EC', iconUrl: '' }
   })
   const contactOf = (name: string, identityKey: string): any => ({
-    name, identityKey, avatarURL: '', abbreviatedKey: '', badgeIconURL: '', badgeLabel: '', badgeClickURL: ''
+    name,
+    identityKey,
+    avatarURL: '',
+    abbreviatedKey: '',
+    badgeIconURL: '',
+    badgeLabel: '',
+    badgeClickURL: ''
   })
   const stubDiscoveryByKey = (contacts: any[], certificates: any[]): void => {
     identityClient['contactsManager'].getContacts = jest.fn().mockResolvedValue(contacts)
@@ -795,7 +848,10 @@ describe('IdentityClient (additional coverage)', () => {
   describe('resolveByIdentityKey with useContacts opt-in', () => {
     it('contacts miss falls through to overlay (sequential)', async () => {
       stubDiscoveryByKey([], [xCert('k1', 'XUser')])
-      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k1' }, { useContacts: true })
+      const result = await identityClient.resolveByIdentityKey(
+        { identityKey: 'k1' },
+        { useContacts: true }
+      )
       expect(walletMock.discoverByIdentityKey).toHaveBeenCalled()
       expect(result[0].name).toBe('XUser')
     })
@@ -803,14 +859,20 @@ describe('IdentityClient (additional coverage)', () => {
     it('parallel mode returns contact on hit even though overlay runs', async () => {
       const contact = contactOf('Cached Alice', 'k2')
       stubDiscoveryByKey([contact], [])
-      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k2' }, { useContacts: true, parallel: true })
+      const result = await identityClient.resolveByIdentityKey(
+        { identityKey: 'k2' },
+        { useContacts: true, parallel: true }
+      )
       expect(walletMock.discoverByIdentityKey).toHaveBeenCalled()
       expect(result).toEqual([contact])
     })
 
     it('parallel mode contacts miss returns parsed overlay results', async () => {
       stubDiscoveryByKey([], [xCert('k3', 'XOnly')])
-      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k3' }, { useContacts: true, parallel: true })
+      const result = await identityClient.resolveByIdentityKey(
+        { identityKey: 'k3' },
+        { useContacts: true, parallel: true }
+      )
       expect(result[0].name).toBe('XOnly')
     })
 
@@ -833,7 +895,10 @@ describe('IdentityClient (additional coverage)', () => {
 
   describe('resolveByAttributes with useContacts opt-in', () => {
     it('contacts no-match falls through to overlay with contact overrides applied', async () => {
-      stubDiscoveryByAttr([contactOf('Override Alice', 'k-over')], [emailCertOf('k-over', 'alice@example.com')])
+      stubDiscoveryByAttr(
+        [contactOf('Override Alice', 'k-over')],
+        [emailCertOf('k-over', 'alice@example.com')]
+      )
       const result = await identityClient.resolveByAttributes(
         { attributes: { email: 'alice@example.com' } },
         { useContacts: true }
@@ -860,7 +925,10 @@ describe('IdentityClient (additional coverage)', () => {
     })
 
     it('parallel mode with contacts applies overrides on overlay results', async () => {
-      stubDiscoveryByAttr([contactOf('Parallel Contact', 'pk')], [emailCertOf('pk', 'p@example.com')])
+      stubDiscoveryByAttr(
+        [contactOf('Parallel Contact', 'pk')],
+        [emailCertOf('pk', 'p@example.com')]
+      )
       const result = await identityClient.resolveByAttributes(
         { attributes: { email: 'p@example.com' } },
         { useContacts: true, parallel: true }
@@ -903,7 +971,9 @@ describe('IdentityClient (additional coverage)', () => {
 
   describe('yieldToEventLoop scheduler.yield path', () => {
     const origScheduler = (globalThis as any).scheduler
-    afterEach(() => { (globalThis as any).scheduler = origScheduler })
+    afterEach(() => {
+      ;(globalThis as any).scheduler = origScheduler
+    })
 
     it('uses scheduler.yield when available', async () => {
       const yieldFn = jest.fn().mockResolvedValue(undefined)

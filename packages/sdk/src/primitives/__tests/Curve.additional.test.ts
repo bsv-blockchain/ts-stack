@@ -4,7 +4,7 @@ import BigNumber from '../../primitives/BigNumber'
 
 describe('Curve – additional coverage', () => {
   const curve = new Curve()
-  const G = curve.g as Point
+  const _G = curve.g as Point
 
   // --------------------------------------------------------------------------
   // assert
@@ -136,13 +136,17 @@ describe('Curve – additional coverage', () => {
     })
 
     it('returns true for a valid curve point', () => {
-      const p = Point.fromString('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
+      const p = Point.fromString(
+        '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+      )
       expect(curve.validate(p)).toBe(true)
     })
 
     it('returns false for an off-curve point', () => {
       // Create point with modified y to be off-curve
-      const p = Point.fromString('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
+      const p = Point.fromString(
+        '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+      )
       const yModified = (p.y as BigNumber).clone().redIAdd(curve.one)
       // Access internal: just test via validate
       // Use a different approach to create an off-curve point

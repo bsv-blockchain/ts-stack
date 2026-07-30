@@ -1,7 +1,5 @@
 import { RelinquishOutputArgs } from '@bsv/sdk'
-import { sdk, StorageKnex } from '../../../src/index.all'
-import { _tu, expectToThrowWERR, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
-import { getBeefForTransaction } from '../../../src/storage/methods/getBeefForTransaction'
+import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
 describe('RelinquishOutputArgs tests', () => {
   jest.setTimeout(99999999)
@@ -24,7 +22,7 @@ describe('RelinquishOutputArgs tests', () => {
     const outputTxid = '2795b293c698b2244147aaba745db887a632d21990c474df46d842ec3e52f122'
     const expectedResult = { relinquished: true }
 
-    for (const { wallet, activeStorage: storage } of ctxs) {
+    for (const { wallet, activeStorage: _storage } of ctxs) {
       const args: RelinquishOutputArgs = {
         basket: 'default',
         output: `${outputTxid}.0`

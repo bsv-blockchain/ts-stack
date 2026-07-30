@@ -41,7 +41,7 @@ describe('Mnemonic', function () {
     m = new Mnemonic().fromRandom(128)
     expect(m.check()).toEqual(true)
 
-    const entropy = new Array(32)
+    const entropy = Array.from({ length: 32 })
     entropy.fill(0)
     m = new Mnemonic().fromEntropy(entropy)
     expect(m.check()).toEqual(true)

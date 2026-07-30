@@ -31,20 +31,20 @@ export class MockTransaction {
   public outputs: any[] = []
   public fee: number = 0
 
-  static fromAtomicBEEF (): void {
+  static fromAtomicBEEF(): void {
     // Mocked below
   }
 
-  static fromBEEF (beef: number[]): MockTransaction {
+  static fromBEEF(_beef: number[]): MockTransaction {
     // Same approach as above
     return new MockTransaction()
   }
 
-  getFee (): number {
+  getFee(): number {
     return this.fee
   }
 
-  toBEEF (): number[] {
+  toBEEF(): number[] {
     // Return an empty array for the BEEF representation
     return []
   }
@@ -65,15 +65,15 @@ const mockTransactionsByAtomicBEEF = new WeakMap<number[], MockTransaction>()
  */
 export class MockLockingScript {
   hex: string
-  constructor (hex: string) {
+  constructor(hex: string) {
     this.hex = hex
   }
 
-  public toHex (): string {
+  public toHex(): string {
     return this.hex
   }
 
-  static fromHex (hex: string): MockLockingScript {
+  static fromHex(hex: string): MockLockingScript {
     return new MockLockingScript(hex)
   }
 }
@@ -84,14 +84,14 @@ export class MockLockingScript {
  * Specialized tests can use this when they need to control fees or inputs on
  * the transaction returned by the underlying wallet.
  */
-export function mockAtomicBEEF (tx: MockTransaction): number[] {
+export function mockAtomicBEEF(tx: MockTransaction): number[] {
   const beef: number[] = []
   mockTransactionsByAtomicBEEF.set(beef, tx)
   return beef
 }
 
 /** Builds the transaction an underlying wallet would return for createAction. */
-function mockCreateActionTransaction (args: any): MockTransaction {
+function mockCreateActionTransaction(args: any): MockTransaction {
   const tx = new MockTransaction()
   tx.outputs = (args.outputs ?? []).map((output: any) => ({
     lockingScript: new MockLockingScript(output.lockingScript),
@@ -107,7 +107,7 @@ export class MockPushDrop {
   // Typically we might store the wallet reference, but we can skip for now.
 
   // Decodes a LockingScript into some {fields: number[][], protocol...} or undefined
-  static decode (script: MockLockingScript): { fields: number[][] } | undefined {
+  static decode(script: MockLockingScript): { fields: number[][] } | undefined {
     // If you rely on a real format, parse or store a pattern.
     // For now, returning a minimal stub: empty fields
     if (script?.hex == null || script.hex === '') return undefined
@@ -129,31 +129,31 @@ export class MockPushDrop {
     return { fields: [] }
   }
 
-  lock (
-    fields: number[][],
-    protocolID: [number, string],
-    keyID: string,
-    counterparty: string,
-    singleSignature: boolean,
-    anyoneCanPay: boolean
+  lock(
+    _fields: number[][],
+    _protocolID: [number, string],
+    _keyID: string,
+    _counterparty: string,
+    _singleSignature: boolean,
+    _anyoneCanPay: boolean
   ): MockLockingScript {
     return new MockLockingScript('deadbeef')
   }
 
-  unlock (
-    protocolID: [number, string],
-    keyID: string,
-    counterparty: string,
-    sighashType: string,
-    enforceReplayProtection: boolean,
-    sigSize: number,
-    lockingScript: MockLockingScript
+  unlock(
+    _protocolID: [number, string],
+    _keyID: string,
+    _counterparty: string,
+    _sighashType: string,
+    _enforceReplayProtection: boolean,
+    _sigSize: number,
+    _lockingScript: MockLockingScript
   ): {
-      sign: (tx: MockTransaction, vin: number) => Promise<MockLockingScript>
-    } {
+    sign: (tx: MockTransaction, vin: number) => Promise<MockLockingScript>
+  } {
     // In real usage, it would handle signature logic. We'll return a minimal stub.
     return {
-      sign: async (tx: MockTransaction, vin: number) => {
+      sign: async (_tx: MockTransaction, _vin: number) => {
         // produce a minimal unlocking script
         return new MockLockingScript('mockUnlockingScript')
       }
@@ -240,7 +240,7 @@ export { MockedBsvSdk as MockedBSV_SDK }
  * - You can override or chain .mockResolvedValueOnce(...) inside individual tests
  *   if you want more specific behavior in certain test steps.
  */
-export function mockUnderlyingWallet (): jest.Mocked<any> {
+export function mockUnderlyingWallet(): jest.Mocked<any> {
   return {
     getPublicKey: jest.fn().mockResolvedValue({ publicKey: '029999...' }),
     revealCounterpartyKeyLinkage: jest.fn().mockResolvedValue({

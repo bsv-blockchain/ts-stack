@@ -1,7 +1,7 @@
-import type { Config } from 'jest'
 //import { defaults } from 'jest-config'
 
-const getJestConfig = async (): Promise<Config> => {
+/** @returns {Promise<import('jest').Config>} */
+const getJestConfig = async () => {
   //console.log(defaults)
   return {
     bail: 0,
@@ -45,4 +45,4 @@ const getJestConfig = async (): Promise<Config> => {
   }
 }
 
-export default getJestConfig
+module.exports = getJestConfig

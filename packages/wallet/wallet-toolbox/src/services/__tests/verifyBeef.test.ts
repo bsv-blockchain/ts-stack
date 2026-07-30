@@ -1,4 +1,4 @@
-import { Beef, Transaction, Utils } from '@bsv/sdk'
+import { Beef } from '@bsv/sdk'
 import { Services } from '../Services'
 import { _tu, logger } from '../../../test/utils/TestUtilsWalletStorage'
 import { verifyTruthy } from '../../utility/utilityHelpers'
@@ -55,7 +55,7 @@ describe('verifyBeef tests', () => {
 
   test('1_', async () => {
     if (_tu.noEnv('main')) return
-    const { env, storage, services } = await _tu.createMainReviewSetup()
+    const { env: _env, storage, services } = await _tu.createMainReviewSetup()
 
     const getBeefForTxid = '4d9a1eff26bac99c7524cb7b2e808b77935d3d890562db2fefc6cb8cb92a6b16'
     {

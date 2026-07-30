@@ -32,8 +32,8 @@ import {
 } from './whatsOnChainHelpers'
 
 export class WhatsOnChainNoServices extends SdkWhatsOnChain {
-  constructor (chain: Chain = 'main', config: WhatsOnChainConfig = {}) {
-    if (chain === 'mock') throw new Error('WhatsOnChain does not support \'mock\' chain. Use MockServices directly.')
+  constructor(chain: Chain = 'main', config: WhatsOnChainConfig = {}) {
+    if (chain === 'mock') throw new Error("WhatsOnChain does not support 'mock' chain. Use MockServices directly.")
     super(chain, config)
   }
 
@@ -58,7 +58,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
    * result for an unknown txid:
    *     [{"txid":"6815f8014db74eab8b7f75925c68929597f1d97efa970109d990824c25e5e62c","error":"unknown"}]
    */
-  async getStatusForTxids (txids: string[]): Promise<GetStatusForTxidsResult> {
+  async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> {
     const r: GetStatusForTxidsResult = {
       name: 'WoC',
       status: 'error',
@@ -77,12 +77,14 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     try {
       const response = await this.httpClient.request<WhatsOnChainTxsStatusData[]>(url, requestOptions)
 
-      if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_OPERATION('Unable to get status for txids at this timei.') }
+      if (!response.data || !response.ok || response.status !== 200) {
+        throw new WERR_INVALID_OPERATION('Unable to get status for txids at this timei.')
+      }
 
       const data = response.data
       for (const txid of txids) {
         const d = data.find(d => d.txid === txid)
-        if ((d == null) || d.error === 'unknown') r.results.push({ txid, status: 'unknown', depth: undefined })
+        if (d == null || d.error === 'unknown') r.results.push({ txid, status: 'unknown', depth: undefined })
         else if (d.error !== undefined) {
           console.log(`WhatsOnChain getStatusForTxids unexpected error ${d.error} ${txid}`)
           r.results.push({ txid, status: 'unknown', depth: undefined })
@@ -103,7 +105,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
    * @param txid
    * @returns
    */
-  async getTxPropagation (txid: string): Promise<number> {
+  async getTxPropagation(txid: string): Promise<number> {
     const requestOptions = {
       method: 'GET',
       headers: this.getHttpHeaders()
@@ -112,7 +114,9 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     const response = await this.httpClient.request<string>(`${this.URL}/tx/hash/${txid}/propagation`, requestOptions)
 
     // response.statusText is often, but not always 'OK' on success...
-    if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`) }
+    if (!response.data || !response.ok || response.status !== 200) {
+      throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`)
+    }
 
     return 0
   }
@@ -122,7 +126,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
    * @param txid
    * @returns raw transaction as hex string or undefined if txid not found in mined block.
    */
-  async getRawTx (txid: string): Promise<string | undefined> {
+  async getRawTx(txid: string): Promise<string | undefined> {
     const headers = this.getHttpHeaders()
     headers['Cache-Control'] = 'no-cache'
 
@@ -143,14 +147,16 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       if (response.status === 404 && response.statusText === 'Not Found') return undefined
 
       // response.statusText is often, but not always 'OK' on success...
-      if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`) }
+      if (!response.data || !response.ok || response.status !== 200) {
+        throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`)
+      }
 
       return response.data
     }
     throw new WERR_INTERNAL()
   }
 
-  async getRawTxResult (txid: string): Promise<GetRawTxResult> {
+  async getRawTxResult(txid: string): Promise<GetRawTxResult> {
     const r: GetRawTxResult = { name: 'WoC', txid: asString(txid) }
 
     try {
@@ -172,7 +178,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
    * @param txids
    * @returns
    */
-  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult> {
+  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
     const r: PostBeefResult = {
       name: 'WoC',
       status: 'success',
@@ -216,7 +222,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
    * @param rawTx raw transaction to broadcast as hex string
    * @returns txid returned by transaction processor of transaction broadcast
    */
-  async postRawTx (rawTx: HexString): Promise<PostTxResultForTxid> {
+  async postRawTx(rawTx: HexString): Promise<PostTxResultForTxid> {
     const txid = Utils.toHex(doubleSha256BE(Utils.toArray(rawTx, 'hex')))
 
     const r: PostTxResultForTxid = {
@@ -279,7 +285,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     return r
   }
 
-  async updateBsvExchangeRate (rate?: BsvExchangeRate, updateMsecs?: number): Promise<BsvExchangeRate> {
+  async updateBsvExchangeRate(rate?: BsvExchangeRate, updateMsecs?: number): Promise<BsvExchangeRate> {
     if (rate != null) {
       // Check if the rate we know is stale enough to update.
       updateMsecs ||= 1000 * 60 * 15
@@ -303,7 +309,9 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       }
 
       // response.statusText is often, but not always 'OK' on success...
-      if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_OPERATION(`WoC exchangerate response ${response.statusText}`) }
+      if (!response.data || !response.ok || response.status !== 200) {
+        throw new WERR_INVALID_OPERATION(`WoC exchangerate response ${response.statusText}`)
+      }
 
       const wocrate = response.data
       if (wocrate.currency !== 'USD') wocrate.rate = Number.NaN
@@ -319,7 +327,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     throw new WERR_INTERNAL()
   }
 
-  async getUtxoStatus (
+  async getUtxoStatus(
     output: string,
     outputFormat?: GetUtxoStatusOutputFormat,
     outpoint?: string
@@ -332,7 +340,10 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     for (let retry = 0; retry <= 2; retry++) {
       try {
         const response = await this.httpClient.request<WhatsOnChainUtxoStatus>(url, requestOptions)
-        if (response.statusText === 'Too Many Requests' && retry < 2) { await wait(2000); continue }
+        if (response.statusText === 'Too Many Requests' && retry < 2) {
+          await wait(2000)
+          continue
+        }
         this.applyUtxoStatusResponse(r, response, scriptHash, outpoint)
         return r
       } catch (error_: unknown) {
@@ -343,9 +354,9 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     return r
   }
 
-  private applyUtxoStatusResponse (
+  private applyUtxoStatusResponse(
     r: GetUtxoStatusResult,
-    response: { data?: WhatsOnChainUtxoStatus, ok: boolean, status: number, statusText: string },
+    response: { data?: WhatsOnChainUtxoStatus; ok: boolean; status: number; statusText: string },
     scriptHash: string,
     outpoint?: string
   ): void {
@@ -360,7 +371,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     else populateUtxoDetails(r, data.result, outpoint)
   }
 
-  async getScriptHashConfirmedHistory (hash: string): Promise<GetScriptHashHistoryResult> {
+  async getScriptHashConfirmedHistory(hash: string): Promise<GetScriptHashHistoryResult> {
     const r: GetScriptHashHistoryResult = {
       name: 'WoC',
       status: 'error',
@@ -380,10 +391,16 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         const response = await this.httpClient.request<WhatsOnChainScriptHashHistoryData>(url, requestOptions)
 
         const action = handleScriptHashHistoryResponse(r, response as ScriptHashHistoryResponse, methodName, retry)
-        if (action === 'continue') { await wait(2000); continue }
+        if (action === 'continue') {
+          await wait(2000)
+          continue
+        }
         if (action === 'return') return r
 
-        r.history = response.data!.result.map(d => ({ txid: d.tx_hash, height: d.height }))
+        r.history = response.data!.result.map((d: WhatsOnChainScriptHashHistory) => ({
+          txid: d.tx_hash,
+          height: d.height
+        }))
         r.status = 'success'
         return r
       } catch (error_: unknown) {
@@ -395,7 +412,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     return r
   }
 
-  async getScriptHashUnconfirmedHistory (hash: string): Promise<GetScriptHashHistoryResult> {
+  async getScriptHashUnconfirmedHistory(hash: string): Promise<GetScriptHashHistoryResult> {
     const r: GetScriptHashHistoryResult = {
       name: 'WoC',
       status: 'error',
@@ -415,10 +432,16 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         const response = await this.httpClient.request<WhatsOnChainScriptHashHistoryData>(url, requestOptions)
 
         const action = handleScriptHashHistoryResponse(r, response as ScriptHashHistoryResponse, methodName, retry)
-        if (action === 'continue') { await wait(2000); continue }
+        if (action === 'continue') {
+          await wait(2000)
+          continue
+        }
         if (action === 'return') return r
 
-        r.history = response.data!.result.map(d => ({ txid: d.tx_hash, height: d.height }))
+        r.history = response.data!.result.map((d: WhatsOnChainScriptHashHistory) => ({
+          txid: d.tx_hash,
+          height: d.height
+        }))
         r.status = 'success'
         return r
       } catch (error_: unknown) {
@@ -429,7 +452,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     }
   }
 
-  async getScriptHashHistory (hash: string): Promise<GetScriptHashHistoryResult> {
+  async getScriptHashHistory(hash: string): Promise<GetScriptHashHistoryResult> {
     const r1 = await this.getScriptHashConfirmedHistory(hash)
     if (r1.error || r1.status !== 'success') return r1
     const r2 = await this.getScriptHashUnconfirmedHistory(hash)
@@ -459,7 +482,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       "num_tx": 5
     }
    */
-  async getBlockHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
+  async getBlockHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
     const headers = this.getHttpHeaders()
     const requestOptions = {
       method: 'GET',
@@ -478,7 +501,9 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       if (response.status === 404 && response.statusText === 'Not Found') return undefined
 
       // response.statusText is often, but not always 'OK' on success...
-      if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_PARAMETER('hash', `valid block hash. '${hash}' response ${response.statusText}`) }
+      if (!response.data || !response.ok || response.status !== 200) {
+        throw new WERR_INVALID_PARAMETER('hash', `valid block hash. '${hash}' response ${response.statusText}`)
+      }
 
       const header = convertWocToBlockHeaderHex(response.data)
 
@@ -487,7 +512,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     throw new WERR_INTERNAL()
   }
 
-  async getChainInfo (): Promise<WocChainInfo> {
+  async getChainInfo(): Promise<WocChainInfo> {
     const headers = this.getHttpHeaders()
     const requestOptions = {
       method: 'GET',
@@ -504,7 +529,9 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       }
 
       // response.statusText is often, but not always 'OK' on success...
-      if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_PARAMETER('hash', `valid block hash. '${url}' response ${response.statusText}`) }
+      if (!response.data || !response.ok || response.status !== 200) {
+        throw new WERR_INVALID_PARAMETER('hash', `valid block hash. '${url}' response ${response.statusText}`)
+      }
 
       return response.data
     }
@@ -518,7 +545,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
 export class WhatsOnChain extends WhatsOnChainNoServices {
   services: Services
 
-  constructor (chain: Chain = 'main', config: WhatsOnChainConfig = {}, services?: Services) {
+  constructor(chain: Chain = 'main', config: WhatsOnChainConfig = {}, services?: Services) {
     super(chain, config)
     this.services = services || new Services(chain)
   }
@@ -527,7 +554,7 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
    * @param txid
    * @returns
    */
-  async getMerklePath (txid: string, services: WalletServices): Promise<GetMerklePathResult> {
+  async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> {
     const r: GetMerklePathResult = { name: 'WoCTsc', notes: [] }
     const name = r.name!
     const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
@@ -535,16 +562,26 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
 
     for (let retry = 0; retry < 2; retry++) {
       try {
-        const response = await this.httpClient.request<WhatsOnChainTscProof | WhatsOnChainTscProof[]>(url, requestOptions)
+        const response = await this.httpClient.request<WhatsOnChainTscProof | WhatsOnChainTscProof[]>(
+          url,
+          requestOptions
+        )
         const classification = classifyMerklePathResponse(response.status, response.statusText, retry)
 
         if (classification === 'retry') {
-          r.notes!.push(makeMerklePathNote('getMerklePathRetry', name, { status: response.status, statusText: response.statusText }))
+          r.notes!.push(
+            makeMerklePathNote('getMerklePathRetry', name, { status: response.status, statusText: response.statusText })
+          )
           await wait(2000)
           continue
         }
         if (classification === 'notFound') {
-          r.notes!.push(makeMerklePathNote('getMerklePathNotFound', name, { status: response.status, statusText: response.statusText }))
+          r.notes!.push(
+            makeMerklePathNote('getMerklePathNotFound', name, {
+              status: response.status,
+              statusText: response.statusText
+            })
+          )
           return r
         }
         await this.applyMerklePathResponse(r, name, txid, response, services)
@@ -559,20 +596,24 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
     throw new WERR_INTERNAL()
   }
 
-  private async applyMerklePathResponse (
+  private async applyMerklePathResponse(
     r: GetMerklePathResult,
     name: string,
     txid: string,
-    response: { data?: WhatsOnChainTscProof | WhatsOnChainTscProof[], ok: boolean, status: number, statusText: string },
+    response: { data?: WhatsOnChainTscProof | WhatsOnChainTscProof[]; ok: boolean; status: number; statusText: string },
     services: WalletServices
   ): Promise<void> {
     if (!response.ok || response.status !== 200) {
-      r.notes!.push(makeMerklePathNote('getMerklePathBadStatus', name, { status: response.status, statusText: response.statusText }))
+      r.notes!.push(
+        makeMerklePathNote('getMerklePathBadStatus', name, { status: response.status, statusText: response.statusText })
+      )
       throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`)
     }
     if (!response.data) {
       // Unmined, proof not yet available.
-      r.notes!.push(makeMerklePathNote('getMerklePathNoData', name, { status: response.status, statusText: response.statusText }))
+      r.notes!.push(
+        makeMerklePathNote('getMerklePathNoData', name, { status: response.status, statusText: response.statusText })
+      )
       return
     }
     if (!Array.isArray(response.data)) response.data = [response.data]
@@ -583,9 +624,17 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
     if (header) {
       r.merklePath = convertProofToMerklePath(txid, { index: p.index, nodes: p.nodes, height: header.height })
       r.header = header
-      r.notes!.push(makeMerklePathNote('getMerklePathSuccess', name, { status: response.status, statusText: response.statusText }))
+      r.notes!.push(
+        makeMerklePathNote('getMerklePathSuccess', name, { status: response.status, statusText: response.statusText })
+      )
     } else {
-      r.notes!.push(makeMerklePathNote('getMerklePathNoHeader', name, { target: p.target, status: response.status, statusText: response.statusText }))
+      r.notes!.push(
+        makeMerklePathNote('getMerklePathNoHeader', name, {
+          target: p.target,
+          status: response.status,
+          statusText: response.statusText
+        })
+      )
       throw new WERR_INVALID_PARAMETER('blockhash', 'a valid on-chain block hash')
     }
   }
@@ -694,7 +743,7 @@ export interface WocHeader {
   // orphaned
 }
 
-export function convertWocToBlockHeaderHex (woc: WocHeader): BlockHeader {
+export function convertWocToBlockHeaderHex(woc: WocHeader): BlockHeader {
   const bits: number = typeof woc.bits === 'string' ? Number.parseInt(woc.bits, 16) : woc.bits
   if (!woc.previousblockhash) {
     woc.previousblockhash = '0000000000000000000000000000000000000000000000000000000000000000' // genesis
@@ -711,7 +760,7 @@ export function convertWocToBlockHeaderHex (woc: WocHeader): BlockHeader {
   }
 }
 
-export async function getWhatsOnChainBlockHeaderByHash (
+export async function getWhatsOnChainBlockHeaderByHash(
   hash: string,
   chain: Chain = 'main',
   apiKey?: string

@@ -39,7 +39,7 @@ export interface ChaintracksServiceOptions {
 }
 
 export class ChaintracksService {
-  static createChaintracksServiceOptions (chain: Chain): ChaintracksServiceOptions {
+  static createChaintracksServiceOptions(chain: Chain): ChaintracksServiceOptions {
     const options: ChaintracksServiceOptions = {
       chain,
       routingPrefix: ''
@@ -54,7 +54,7 @@ export class ChaintracksService {
   services: Services
   server?: Server<typeof IncomingMessage, typeof ServerResponse>
 
-  constructor (options: ChaintracksServiceOptions) {
+  constructor(options: ChaintracksServiceOptions) {
     this.options = { ...options }
     this.port = options.port
     this.chain = options.chain
@@ -70,12 +70,12 @@ export class ChaintracksService {
     }
   }
 
-  async stopJsonRpcServer (): Promise<void> {
+  async stopJsonRpcServer(): Promise<void> {
     this.server?.close()
     await this.chaintracks?.destroy()
   }
 
-  async startJsonRpcServer (port?: number): Promise<void> {
+  async startJsonRpcServer(port?: number): Promise<void> {
     await this.chaintracks.makeAvailable()
 
     port ||= this.port || 3011
@@ -84,18 +84,19 @@ export class ChaintracksService {
     const app = express()
     app.disable('x-powered-by')
     app.use(securityHeaders({ environmentPrefix: 'CHAINTRACKS' }))
-    app.use(corsPolicy({
-      environmentPrefix: 'CHAINTRACKS',
-      allowedOrigins: this.options.allowedOrigins,
-      methods: ['GET', 'POST', 'OPTIONS']
-    }))
-    app.use(concurrencyLimit(
-      'CHAINTRACKS',
-      this.options.maxConcurrentRequests ?? 200
-    ))
-    app.use(bodyParser.json({
-      limit: readBodyLimitBytes('CHAINTRACKS', 256 * 1024)
-    }))
+    app.use(
+      corsPolicy({
+        environmentPrefix: 'CHAINTRACKS',
+        allowedOrigins: this.options.allowedOrigins,
+        methods: ['GET', 'POST', 'OPTIONS']
+      })
+    )
+    app.use(concurrencyLimit('CHAINTRACKS', this.options.maxConcurrentRequests ?? 200))
+    app.use(
+      bodyParser.json({
+        limit: readBodyLimitBytes('CHAINTRACKS', 256 * 1024)
+      })
+    )
     app.use(bodyParserErrorHandler)
 
     app.get('/robots.txt', (req: Request, res: Response) => {
@@ -153,7 +154,7 @@ export class ChaintracksService {
       async q => {
         if (q.wait) await wait(Number(q.wait))
         const r = await this.chaintracks.getInfo()
-        if (q.wait) r['wait'] = q.wait
+        if (q.wait) (r as ChaintracksInfoApi & { wait?: string }).wait = q.wait
         return r
       },
       true

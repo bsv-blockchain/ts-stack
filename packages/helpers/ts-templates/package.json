@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.9.3",
+  "version": "1.9.4",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

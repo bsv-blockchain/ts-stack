@@ -2,9 +2,9 @@
 id: about-contributing
 title: 'Contributing'
 kind: meta
-version: '1.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '1.0.1'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [about, contributing, development, community]
@@ -138,13 +138,15 @@ pnpm lint
 pnpm --filter @bsv/sdk exec oxlint --fix src
 ```
 
-Uses **Oxlint** for fast, consistent TypeScript checks. Errors and warnings fail
-CI for every affected package. The root `.oxlintrc.json` is the shared baseline:
+Uses **Oxlint** for fast, consistent TypeScript checks. The root command scans
+all 1,909 authored JavaScript and TypeScript files on every run; any error or
+warning fails CI. The root `.oxlintrc.json` is the shared baseline:
 it enables the correctness profile, rejects non-`node:` built-in imports, and
 defines Node, browser, and test environments for their repository paths.
-Package scripts may narrow the files they own, but must not weaken the shared
-rules or the zero-warning gate. Legacy ESLint files are not part of the lint
-contract.
+Package scripts may provide a faster local package scope, but must not weaken
+the shared rules, exclude authored tests or benchmarks, or omit the
+zero-warning gate. Legacy ESLint files and ESLint-only TypeScript configs are
+not part of the lint contract.
 
 ### Check Formatting
 
@@ -152,8 +154,11 @@ contract.
 pnpm format:check
 ```
 
-The formatting check is read-only. Run the relevant package's Prettier command
-with `--write` before submitting when it reports a mismatch.
+The formatting check is read-only. The root `.prettierrc.json` is the single
+formatting policy; its path-specific overrides preserve the established
+Wallet Toolbox and wallet-infrastructure print widths. Run the relevant
+package's Prettier command with `--write` before submitting when it reports a
+mismatch.
 
 ### Build Packages
 

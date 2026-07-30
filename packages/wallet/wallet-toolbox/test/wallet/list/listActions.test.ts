@@ -8,13 +8,13 @@ import 'fake-indexeddb/auto'
 describe('listActions tests', () => {
   jest.setTimeout(99999999)
 
-  const storages: StorageProvider[] = []
-  const chain: sdk.Chain = 'test'
-  const setups: { setup: TestSetup1; storage: StorageProvider }[] = []
+  const _storages: StorageProvider[] = []
+  const _chain: sdk.Chain = 'test'
+  const _setups: { setup: TestSetup1; storage: StorageProvider }[] = []
 
   const env = _tu.getEnv('test')
   const ctxs: TestWalletProviderNoSetup[] = []
-  const testName = () => expect.getState().currentTestName || 'test'
+  const _testName = () => expect.getState().currentTestName || 'test'
   const databaseName = path.parse(expect.getState().testPath!).name
 
   beforeAll(async () => {
@@ -54,7 +54,7 @@ describe('listActions tests', () => {
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBe(191)
         expect(r.actions.length).toBe(10)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
           expect(a.outputs).toBeUndefined()
@@ -89,7 +89,7 @@ describe('listActions tests', () => {
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
         expect(r.actions.length).toBe(args.limit || 10)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
           expect(a.outputs).toBeUndefined()
@@ -110,7 +110,7 @@ describe('listActions tests', () => {
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
         expect(r.actions.length).toBe(args.limit || 10)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
           expect(a.outputs).toBeUndefined()
@@ -133,7 +133,7 @@ describe('listActions tests', () => {
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
         expect(r.actions.length).toBe(args.limit || 10)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.inputs).toBeUndefined()
           expect(a.outputs).toBeUndefined()
@@ -172,7 +172,7 @@ describe('listActions tests', () => {
         const r = await wallet.listActions(args)
         expect(r.totalActions).toBeGreaterThanOrEqual(r.actions.length)
         expect(r.actions.length).toBe(args.limit || 10)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.isOutgoing === true || a.isOutgoing === false).toBe(true)
           expect(a.inputs).toBeUndefined()
@@ -196,7 +196,7 @@ describe('listActions tests', () => {
           labels: ['babbage_protocol_perm']
         }
         const r = await wallet.listActions(args)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           for (const o of a.outputs!) {
             expect(o.lockingScript?.length).toBeGreaterThan(0)
@@ -214,7 +214,7 @@ describe('listActions tests', () => {
           labels: ['babbage_protocol_perm']
         }
         const r = await wallet.listActions(args)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.isOutgoing === true || a.isOutgoing === false).toBe(true)
           expect(a.outputs).toBeUndefined()
@@ -238,7 +238,7 @@ describe('listActions tests', () => {
           labels: ['babbage_protocol_perm']
         }
         const r = await wallet.listActions(args)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.isOutgoing === true || a.isOutgoing === false).toBe(true)
           expect(a.outputs).toBeUndefined()
@@ -262,7 +262,7 @@ describe('listActions tests', () => {
           labels: ['babbage_protocol_perm']
         }
         const r = await wallet.listActions(args)
-        let i = 0
+        let _i = 0
         for (const a of r.actions) {
           expect(a.isOutgoing === true || a.isOutgoing === false).toBe(true)
           expect(a.outputs).toBeUndefined()

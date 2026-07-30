@@ -66,7 +66,7 @@ describe('walletLive test', () => {
     expect(btx?.txid).toBe(expectedTxid)
     expect(btx?.rawTx).toBeDefined()
     console.log(`
-  tx: '${Utils.toHex(btx?.rawTx!)}'
+  tx: '${Utils.toHex(btx?.rawTx)}'
 
   ${beef.toLogString()}
 

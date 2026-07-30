@@ -1,10 +1,10 @@
 import { convertProofToMerklePath, sdk, Services, TscMerkleProofApi } from '../../index.client'
-import { Bitails, BitailsMerkleProof } from '../providers/Bitails'
+import { Bitails } from '../providers/Bitails'
 
 describe('bitrails tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance
+  let _logSpy: jest.SpyInstance
   const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {

@@ -1,13 +1,14 @@
 {
-    "compilerOptions": {
-        "outDir": "dist",
-        "rootDir": "src",
-        "sourceMap": true,
-        "target": "es2022",
-        "module": "nodenext",
-        "moduleResolution": "nodenext",
-        "esModuleInterop": true,
-        "resolveJsonModule": true,
-        "skipLibCheck": true
-    }
+  "extends": "../../config/typescript/node-service.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  }
 }

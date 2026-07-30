@@ -1,6 +1,5 @@
 import {
   Certificate,
-  KeyDeriver,
   MasterCertificate,
   PrivateKey,
   ProtoWallet,
@@ -8,7 +7,6 @@ import {
   VerifiableCertificate,
   WalletCertificate
 } from '@bsv/sdk'
-import { sdk } from '../../index.all'
 
 describe('CertificateLifeCycle tests', () => {
   jest.setTimeout(99999999)
@@ -59,7 +57,7 @@ describe('CertificateLifeCycle tests', () => {
     expect(await signedCert.verify()).toBe(true)
 
     // Confirm subject can decrypt the certifier's copy of the cert:
-    const r2 = await MasterCertificate.decryptFields(
+    const _r2 = await MasterCertificate.decryptFields(
       subjectWallet,
       r1.masterKeyring,
       signedCert.fields,
@@ -102,21 +100,21 @@ describe('CertificateLifeCycle tests', () => {
   })
 })
 
-function makeSampleCert (
+function makeSampleCert(
   subjectRootKeyHex?: string,
   certifierKeyHex?: string,
   verifierKeyHex?: string
 ): {
-    cert: WalletCertificate
-    subject: PrivateKey
-    certifier: PrivateKey
-  } {
+  cert: WalletCertificate
+  subject: PrivateKey
+  certifier: PrivateKey
+} {
   const subject = subjectRootKeyHex ? PrivateKey.fromString(subjectRootKeyHex) : PrivateKey.fromRandom()
   const certifier = certifierKeyHex ? PrivateKey.fromString(certifierKeyHex) : PrivateKey.fromRandom()
-  const verifier = verifierKeyHex ? PrivateKey.fromString(verifierKeyHex) : PrivateKey.fromRandom()
+  const _verifier = verifierKeyHex ? PrivateKey.fromString(verifierKeyHex) : PrivateKey.fromRandom()
   const cert: WalletCertificate = {
-    type: Utils.toBase64(new Array(32).fill(1)),
-    serialNumber: Utils.toBase64(new Array(32).fill(2)),
+    type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
+    serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
     revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
     subject: subject.toPublicKey().toString(),
     certifier: certifier.toPublicKey().toString(),

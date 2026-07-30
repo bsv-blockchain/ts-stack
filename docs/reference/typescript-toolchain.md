@@ -2,9 +2,9 @@
 id: typescript-toolchain
 title: 'TypeScript Compiler and Tooling Boundary'
 kind: reference
-version: '1.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-07-27'
+version: '1.1.0'
+last_updated: '2026-07-29'
+last_verified: '2026-07-29'
 review_cadence_days: 30
 status: stable
 tags: [reference, typescript, compiler, testing, toolchain]
@@ -68,8 +68,51 @@ requires:
 - repository-wide fan-out when the toolchain policy or checker changes.
 
 The current governed inventory is 43 native compiler profiles plus one isolated
-codegen API profile. The check runs in the repository-health job and locally
-through `pnpm typescript:check` or `pnpm health:check`.
+codegen API profile. It also discovers all 121 tracked `tsconfig` files, resolves
+their complete `extends` chains, rejects missing or circular configurations,
+and requires every project to inherit one of nine approved runtime profiles.
+The check runs in the repository-health job and locally through
+`pnpm typescript:check` or `pnpm health:check`.
+
+## Strict runtime profiles
+
+All profiles live under `config/typescript/` and inherit the same strict
+compiler contract.
+
+| Profile | Intended boundary |
+| --- | --- |
+| `node-library.json` | Node-oriented published libraries |
+| `node-service.json` | Deployable Node services |
+| `dual-runtime.json` | Packages shared by Node and browser-like runtimes |
+| `browser.json` | Browser builds |
+| `react-native.json` | React Native and Metro builds |
+| `cli.json` | Command-line applications |
+| `test.json` | Tests, examples, and conformance runners |
+| `wasm-worker.json` | WASM packages and worker entry points |
+| `strict-new.json` | New or isolated code that can also enforce exact optional and indexed access |
+
+The shared contract enables `strict`, `strictNullChecks`, `noImplicitAny`,
+`useUnknownInCatchVariables`, `noImplicitOverride`, and
+`noFallthroughCasesInSwitch`. No package may relax those options. Targets,
+libraries, module formats, declaration emission, and source-map settings remain
+in the package build profile because the stack intentionally supports direct
+`tsc`, dual ESM/CJS conversion, `tsup`/`tsdown`, Rspack/UMD, browser, mobile,
+and WASM implementations. Package-contract checks validate those emitted
+surfaces rather than forcing one incompatible emitter configuration.
+
+Unused symbols are owned by Oxlint, which checks all authored source, tests,
+benchmarks, scripts, and configuration with zero warnings. TypeScript therefore
+keeps `noUnusedLocals` and `noUnusedParameters` disabled to avoid two competing
+diagnostic systems.
+
+`noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` were evaluated
+across every package during the strictness migration. Enabling them wholesale
+would change established public optional-property and index-access contracts
+throughout SDK, wallet, overlay, browser, and mobile declarations. They remain
+centrally disabled for compatibility profiles, while `strict-new.json` enables
+both for new projects and isolated boundaries that can adopt them without a
+consumer-visible type change. The internal documentation site now proves this
+profile in CI. This is the approved policy, not a per-package exception.
 
 ## Validation and maintenance
 

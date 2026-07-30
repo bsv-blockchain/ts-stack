@@ -12,7 +12,7 @@ function expectUint8ArrayEqual(a: Uint8Array, b: Uint8Array): void {
 
 describe('AESGCM resource-intensive boundary', () => {
   it('handles ciphertext longer than 2^32 bits', () => {
-    const key = new Uint8Array(new Array(16).fill(0x01))
+    const key = new Uint8Array(Array.from({ length: 16 }).fill(0x01))
     const iv = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 
     // 2^32 bits = 2^29 bytes. Go just beyond that boundary.

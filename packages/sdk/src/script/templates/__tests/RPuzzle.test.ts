@@ -8,7 +8,7 @@ import Curve from '../../../primitives/Curve'
 
 const ZERO_TXID = '0'.repeat(64)
 
-function getRValue (k: BigNumber): number[] {
+function getRValue(k: BigNumber): number[] {
   const c = new Curve()
   let r = c.g.mul(k).x?.umod(c.n)?.toArray()
   if (r == null) return []
@@ -16,7 +16,7 @@ function getRValue (k: BigNumber): number[] {
   return r
 }
 
-async function buildRPuzzleSpend (
+async function buildRPuzzleSpend(
   puz: RPuzzle,
   k: BigNumber,
   privateKey: PrivateKey,
@@ -32,7 +32,9 @@ async function buildRPuzzleSpend (
     [{ lockingScript: LockingScript.fromASM('OP_1'), satoshis: 1 }],
     0
   )
-  const unlockingScript = await puz.unlock(k, privateKey, signOutputs, anyoneCanPay).sign(spendTx, 0)
+  const unlockingScript = await puz
+    .unlock(k, privateKey, signOutputs, anyoneCanPay)
+    .sign(spendTx, 0)
   return new Spend({
     sourceTXID: sourceTx.id('hex'),
     sourceOutputIndex: 0,
@@ -84,7 +86,7 @@ describe('RPuzzle – additional coverage', () => {
   describe('missing source transaction', () => {
     it('throws when input has no sourceTransaction', async () => {
       const puz = new RPuzzle()
-      const lockingScript = puz.lock(r)
+      const _lockingScript = puz.lock(r)
       // Construct a tx where the input has no sourceTransaction
       const spendTx = new Transaction(
         1,
@@ -92,9 +94,9 @@ describe('RPuzzle – additional coverage', () => {
         [],
         0
       )
-      await expect(
-        puz.unlock(k, privateKey).sign(spendTx, 0)
-      ).rejects.toThrow('The source transaction is needed')
+      await expect(puz.unlock(k, privateKey).sign(spendTx, 0)).rejects.toThrow(
+        'The source transaction is needed'
+      )
     })
   })
 

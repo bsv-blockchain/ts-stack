@@ -1,5 +1,5 @@
 import { EntitySyncState } from '../EntitySyncState'
-import { createSyncMap, EntityStorage, sdk, SyncMap, TableSyncState } from '../../../../../src'
+import { createSyncMap, EntityStorage, sdk, TableSyncState } from '../../../../../src'
 import { TestUtilsWalletStorage as _tu, TestWalletNoSetup } from '../../../../../test/utils/TestUtilsWalletStorage'
 
 describe('SyncState class method tests', () => {
@@ -7,7 +7,7 @@ describe('SyncState class method tests', () => {
 
   const env = _tu.getEnv('test')
   const ctxs: TestWalletNoSetup[] = []
-  const ctxs2: TestWalletNoSetup[] = []
+  const _ctxs2: TestWalletNoSetup[] = []
 
   beforeAll(async () => {
     if (env.runMySQL) {

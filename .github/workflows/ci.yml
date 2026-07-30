@@ -250,14 +250,8 @@ jobs:
             "$output/manifest.json" \
             --dry-run
 
-      - name: Lint changed packages
-        env:
-          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
-        run: |
-          EXTRA=""
-          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
-          pnpm exec oxlint scripts --deny-warnings
-          pnpm -r --if-present --filter '!@bsv/ts-stack' $EXTRA run lint
+      - name: Lint all authored code with zero warnings
+        run: pnpm lint
 
       - name: Check repository and changed-package formatting
         env:

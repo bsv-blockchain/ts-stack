@@ -37,14 +37,14 @@ export default class LivePolicy extends SatoshisPerKilobyte {
 
   /**
    * Fetches the current fee rate from ARC GorillaPool API.
-   * 
+   *
    * @returns The current satoshis per kilobyte rate
    */
   private async fetchFeeRate(): Promise<number> {
     const now = Date.now()
-    
+
     // Return cached rate if still valid
-    if (this.cachedRate !== null && (now - this.cacheTimestamp) < this.cacheValidityMs) {
+    if (this.cachedRate !== null && now - this.cacheTimestamp < this.cacheValidityMs) {
       return this.cachedRate
     }
 
@@ -53,20 +53,25 @@ export default class LivePolicy extends SatoshisPerKilobyte {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
+
       const response_data = await response.json()
-      
-      if (!response_data.policy?.miningFee || typeof response_data.policy.miningFee.satoshis !== 'number' || typeof response_data.policy.miningFee.bytes !== 'number') {
+
+      if (
+        !response_data.policy?.miningFee ||
+        typeof response_data.policy.miningFee.satoshis !== 'number' ||
+        typeof response_data.policy.miningFee.bytes !== 'number'
+      ) {
         throw new Error('Invalid policy response format')
       }
-      
+
       // Convert to satoshis per kilobyte
-      const rate = (response_data.policy.miningFee.satoshis / response_data.policy.miningFee.bytes) * 1000
-      
+      const rate =
+        (response_data.policy.miningFee.satoshis / response_data.policy.miningFee.bytes) * 1000
+
       // Cache the result
       this.cachedRate = rate
       this.cacheTimestamp = now
-      
+
       return rate
     } catch (error) {
       // If we have a cached rate, use it as fallback
@@ -74,7 +79,7 @@ export default class LivePolicy extends SatoshisPerKilobyte {
         console.warn('Failed to fetch live fee rate, using cached value:', error)
         return this.cachedRate
       }
-      
+
       // Otherwise, use a reasonable default (100 sat/kb)
       console.warn('Failed to fetch live fee rate, using default 100 sat/kb:', error)
       return 100
@@ -88,7 +93,7 @@ export default class LivePolicy extends SatoshisPerKilobyte {
    * @param tx The transaction for which a fee is to be computed.
    * @returns The fee in satoshis for the transaction.
    */
-  async computeFee(tx: Transaction): Promise<number> {
+  override async computeFee(tx: Transaction): Promise<number> {
     const rate = await this.fetchFeeRate()
     // Update the value property so parent's computeFee uses the live rate
     this.value = rate

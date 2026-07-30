@@ -78,7 +78,7 @@ describe('ECDSA – additional coverage', () => {
   describe('sign with function customK', () => {
     it('accepts a function as customK', () => {
       let callCount = 0
-      const customK = (iter: number): BigNumber => {
+      const customK = (_iter: number): BigNumber => {
         callCount++
         return new BigNumber(1358)
       }

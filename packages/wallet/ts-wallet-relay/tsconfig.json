@@ -1,4 +1,5 @@
 {
+  "extends": "../../../config/typescript/node-library.json",
   "compilerOptions": {
     "types": ["jest", "node"],
     "target": "ES2020",

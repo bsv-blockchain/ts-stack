@@ -32,7 +32,7 @@ import Script from '../../../script/Script'
 // ---------------------------------------------------------------------------
 
 /** Build the simplest possible mock input with an already-compiled unlocking script. */
-function makeScriptInput (scriptBytes: number[]): any {
+function makeScriptInput(scriptBytes: number[]): any {
   return {
     unlockingScript: Script.fromBinary(scriptBytes),
     unlockingScriptTemplate: undefined
@@ -40,7 +40,7 @@ function makeScriptInput (scriptBytes: number[]): any {
 }
 
 /** Build an input that uses an unlockingScriptTemplate instead. */
-function makeTemplateInput (estimatedLength: number): any {
+function makeTemplateInput(estimatedLength: number): any {
   return {
     unlockingScript: undefined,
     unlockingScriptTemplate: {
@@ -50,7 +50,7 @@ function makeTemplateInput (estimatedLength: number): any {
 }
 
 /** Build a simple output with a locking script of the given byte length. */
-function makeOutput (scriptBytes: number[], satoshis = 1000): any {
+function makeOutput(scriptBytes: number[], satoshis = 1000): any {
   return {
     lockingScript: Script.fromBinary(scriptBytes),
     satoshis
@@ -58,7 +58,7 @@ function makeOutput (scriptBytes: number[], satoshis = 1000): any {
 }
 
 /** Create a minimal Transaction-like object with the given inputs and outputs. */
-function makeTx (inputs: any[], outputs: any[]): Transaction {
+function makeTx(inputs: any[], outputs: any[]): Transaction {
   const tx = new Transaction()
   tx.inputs = inputs
   tx.outputs = outputs
@@ -114,7 +114,7 @@ describe('SatoshisPerKilobyte', () => {
 
     it('computes fee for one input with an unlocking script', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      const scriptData = new Array(107).fill(0x00) // P2PKH-ish unlock ~107 bytes
+      const scriptData = Array.from({ length: 107 }).fill(0x00) // P2PKH-ish unlock ~107 bytes
       const tx = makeTx([makeScriptInput(scriptData)], [])
       // size = 4 (ver) + 1 (input count) + [40 + 1 (script varint) + 107 (script)] + 1 (output count) + 4 (locktime)
       //      = 4 + 1 + 148 + 1 + 4 = 158 bytes
@@ -133,7 +133,7 @@ describe('SatoshisPerKilobyte', () => {
 
     it('computes fee including outputs', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      const lockScript = new Array(25).fill(0x00) // P2PKH locking script = 25 bytes
+      const lockScript = Array.from({ length: 25 }).fill(0x00) // P2PKH locking script = 25 bytes
       const tx = makeTx([], [makeOutput(lockScript)])
       // size = 4 + 1 + 1 + [8 + 1 + 25] + 4 = 44 bytes
       const fee = await model.computeFee(tx)
@@ -142,8 +142,8 @@ describe('SatoshisPerKilobyte', () => {
 
     it('computes fee for one input and one output', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      const unlockScript = new Array(107).fill(0x00)
-      const lockScript = new Array(25).fill(0x00)
+      const unlockScript = Array.from({ length: 107 }).fill(0x00)
+      const lockScript = Array.from({ length: 25 }).fill(0x00)
       const tx = makeTx([makeScriptInput(unlockScript)], [makeOutput(lockScript)])
       // size = 4 + 1 + (40 + 1 + 107) + 1 + (8 + 1 + 25) + 4
       //      = 4 + 1 + 148 + 1 + 34 + 4 = 192 bytes
@@ -183,7 +183,7 @@ describe('SatoshisPerKilobyte', () => {
   describe('getVarIntSize thresholds', () => {
     it('uses 1-byte varint for script length <= 253', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      const script253 = new Array(253).fill(0x00)
+      const script253 = Array.from({ length: 253 }).fill(0x00)
       const tx = makeTx([makeScriptInput(script253)], [])
       const fee = await model.computeFee(tx)
       // script len 253 ≤ 253, so varint is 1 byte
@@ -193,7 +193,7 @@ describe('SatoshisPerKilobyte', () => {
 
     it('uses 3-byte varint for script length 254 (> 253)', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      const script254 = new Array(254).fill(0x00)
+      const script254 = Array.from({ length: 254 }).fill(0x00)
       const tx = makeTx([makeScriptInput(script254)], [])
       const fee = await model.computeFee(tx)
       // script len 254 > 253, so varint is 3 bytes
@@ -205,7 +205,7 @@ describe('SatoshisPerKilobyte', () => {
       const model = new SatoshisPerKilobyte(1000)
       // The condition in getVarIntSize is `i > 2**16` (i.e. strictly greater than 65536).
       // A script of 65537 bytes is the smallest value that triggers the 5-byte varint path.
-      const bigScript = new Array(65537).fill(0x00)
+      const bigScript = Array.from({ length: 65537 }).fill(0x00)
       const tx = makeTx([makeScriptInput(bigScript)], [])
       const fee = await model.computeFee(tx)
       // varint = 5 bytes (65537 > 2^16)
@@ -215,17 +215,14 @@ describe('SatoshisPerKilobyte', () => {
 
     it('uses multiple inputs and outputs correctly', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      const unlockScript = new Array(107).fill(0x00)
-      const lockScript = new Array(25).fill(0x00)
+      const unlockScript = Array.from({ length: 107 }).fill(0x00)
+      const lockScript = Array.from({ length: 25 }).fill(0x00)
       const inputs = [
         makeScriptInput(unlockScript),
         makeScriptInput(unlockScript),
         makeScriptInput(unlockScript)
       ]
-      const outputs = [
-        makeOutput(lockScript),
-        makeOutput(lockScript)
-      ]
+      const outputs = [makeOutput(lockScript), makeOutput(lockScript)]
       const tx = makeTx(inputs, outputs)
 
       const fee = await model.computeFee(tx)

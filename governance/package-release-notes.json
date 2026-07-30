@@ -20,9 +20,9 @@
     {
       "name": "@bsv/auth",
       "publishedVersion": "0.1.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "migration": "No consumer migration is required; authentication APIs, wire behavior, and runtime defaults are unchanged."
     },
     {
       "name": "@bsv/auth-express-middleware",
@@ -41,9 +41,9 @@
     {
       "name": "@bsv/authsocket-client",
       "publishedVersion": "2.1.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "migration": "No consumer migration is required; client APIs, authenticated socket behavior, and supported imports are unchanged."
     },
     {
       "name": "@bsv/btms",
@@ -55,9 +55,9 @@
     {
       "name": "@bsv/btms-permission-module",
       "publishedVersion": "1.1.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "migration": "No consumer migration is required; permission-module APIs and token semantics are unchanged."
     },
     {
       "name": "@bsv/did",
@@ -69,16 +69,16 @@
     {
       "name": "@bsv/did-client",
       "publishedVersion": "1.2.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "migration": "No consumer migration is required; DID client APIs, encodings, and supported imports are unchanged."
     },
     {
       "name": "@bsv/fund-wallet",
       "publishedVersion": "1.4.1",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "migration": "No consumer migration is required; wallet funding APIs and transaction behavior are unchanged."
     },
     {
       "name": "@bsv/gasp",
@@ -209,9 +209,9 @@
     {
       "name": "create-bsv-app",
       "publishedVersion": "1.0.2",
-      "releaseType": "none",
-      "summary": "The source manifest matches the published package; no unpublished release candidate exists.",
-      "migration": "No migration is pending for the current source version."
+      "releaseType": "patch",
+      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
+      "migration": "No consumer migration is required; generated application structure and CLI behavior are unchanged."
     }
   ]
 }

@@ -11,9 +11,9 @@ import { HeightRange } from '../util/HeightRange'
 export type ErrorHandler = (code: number, message: string) => boolean
 export type EnqueueHandler = (header: BlockHeader) => void
 
-export function parseFileLink (
+export function parseFileLink(
   file: string
-): { range: { fromHeight: number, toHeight: number } | 'latest', sourceUrl: string, fileName: string } | undefined {
+): { range: { fromHeight: number; toHeight: number } | 'latest'; sourceUrl: string; fileName: string } | undefined {
   const url = new URL(file)
   const parts = url.pathname.split('/')
   const fileName = parts.pop()
@@ -91,7 +91,7 @@ export interface WhatsOnChainServicesOptions {
 }
 
 export class WhatsOnChainServices {
-  static createWhatsOnChainServicesOptions (chain: Chain): WhatsOnChainServicesOptions {
+  static createWhatsOnChainServicesOptions(chain: Chain): WhatsOnChainServicesOptions {
     const options: WhatsOnChainServicesOptions = {
       chain,
       apiKey: '',
@@ -110,7 +110,7 @@ export class WhatsOnChainServices {
   chain: Chain
   woc: WhatsOnChain
 
-  constructor (public options: WhatsOnChainServicesOptions) {
+  constructor(public options: WhatsOnChainServicesOptions) {
     const config = {
       apiKey: this.options.apiKey,
       timeout: this.options.timeout,
@@ -118,35 +118,39 @@ export class WhatsOnChainServices {
       enableCache: this.options.enableCache
     }
     this.chain = options.chain
-    WhatsOnChainServices.chainInfoMsecs[this.chain] = options.chainInfoMsecs
+    const chainInfoMsecs = WhatsOnChainServices.chainInfoMsecs as unknown as Record<Chain, number>
+    chainInfoMsecs[this.chain] = options.chainInfoMsecs
     this.woc = new WhatsOnChain(this.chain, config)
   }
 
-  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
     const header = await this.woc.getBlockHeaderByHash(hash)
     return header
   }
 
-  async getChainInfo (): Promise<WocChainInfo> {
+  async getChainInfo(): Promise<WocChainInfo> {
+    const chainInfo = WhatsOnChainServices.chainInfo as unknown as Partial<Record<Chain, WocChainInfo>>
+    const chainInfoTime = WhatsOnChainServices.chainInfoTime as unknown as Partial<Record<Chain, Date>>
+    const chainInfoMsecs = WhatsOnChainServices.chainInfoMsecs as unknown as Partial<Record<Chain, number>>
     const now = new Date()
-    let update = WhatsOnChainServices.chainInfo[this.chain] === undefined
-    if (!update && WhatsOnChainServices.chainInfoTime[this.chain] !== undefined) {
-      const elapsed = now.getTime() - WhatsOnChainServices.chainInfoTime[this.chain].getTime()
-      update = elapsed > WhatsOnChainServices.chainInfoMsecs[this.chain]
+    let update = chainInfo[this.chain] === undefined
+    if (!update && chainInfoTime[this.chain] !== undefined) {
+      const elapsed = now.getTime() - chainInfoTime[this.chain]!.getTime()
+      update = elapsed > chainInfoMsecs[this.chain]!
     }
     if (update) {
-      WhatsOnChainServices.chainInfo[this.chain] = await this.woc.getChainInfo()
-      WhatsOnChainServices.chainInfoTime[this.chain] = now
+      chainInfo[this.chain] = await this.woc.getChainInfo()
+      chainInfoTime[this.chain] = now
     }
-    if (!WhatsOnChainServices.chainInfo[this.chain]) throw new Error('Unexpected failure to update chainInfo.')
-    return WhatsOnChainServices.chainInfo[this.chain]
+    if (!chainInfo[this.chain]) throw new Error('Unexpected failure to update chainInfo.')
+    return chainInfo[this.chain]!
   }
 
-  async getChainTipHeight (): Promise<number> {
+  async getChainTipHeight(): Promise<number> {
     return (await this.getChainInfo()).blocks
   }
 
-  async getChainTipHash (): Promise<string> {
+  async getChainTipHash(): Promise<string> {
     return (await this.getChainInfo()).bestblockhash
   }
 
@@ -154,7 +158,7 @@ export class WhatsOnChainServices {
    * @param fetch
    * @returns returns the last 10 block headers including height, size, chainwork...
    */
-  async getHeaders (fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> {
+  async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> {
     fetch ||= new ChaintracksFetch()
     const headers = await fetch.fetchJson<WocGetHeadersHeader[]>(
       `https://api.whatsonchain.com/v1/bsv/${this.chain}/block/headers`
@@ -162,7 +166,7 @@ export class WhatsOnChainServices {
     return headers
   }
 
-  async getHeaderByteFileLinks (
+  async getHeaderByteFileLinks(
     neededRange: HeightRange,
     fetch?: ChaintracksFetchApi
   ): Promise<GetHeaderByteFileLinksResult[]> {
@@ -207,7 +211,7 @@ export interface WocGetHeadersHeader {
   num_tx: number
 }
 
-export function wocGetHeadersHeaderToBlockHeader (h: WocGetHeadersHeader): BlockHeader {
+export function wocGetHeadersHeaderToBlockHeader(h: WocGetHeadersHeader): BlockHeader {
   const bits: number = typeof h.bits === 'string' ? Number.parseInt(h.bits, 16) : h.bits
   if (!h.previousblockhash) {
     h.previousblockhash = '0000000000000000000000000000000000000000000000000000000000000000' // genesis

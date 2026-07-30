@@ -1,6 +1,6 @@
 // Operator-only integration coverage; excluded from the required deterministic suite.
-import { Beef, Utils } from '@bsv/sdk'
-import { sdk, Services, sha256Hash, wait } from '../../src/index.all'
+import { Utils } from '@bsv/sdk'
+import { sdk, sha256Hash, wait } from '../../src/index.all'
 import { _tu, TestSetup1Wallet } from '../utils/TestUtilsWalletStorage'
 
 const includeTestChaintracks = false
@@ -194,7 +194,7 @@ describe('Wallet services tests', () => {
 
   // Underlying WoC service is rate limited
   test.skip('1 getBsvExchangeRate', async () => {
-    for (const { chain, wallet, services } of ctxs) {
+    for (const { chain: _chain, wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
 
       {
@@ -205,7 +205,7 @@ describe('Wallet services tests', () => {
   })
 
   test('2 getFiatExchangeRate', async () => {
-    for (const { chain, wallet, services } of ctxs) {
+    for (const { chain: _chain, wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
       {
         const eurPerUsd = await wallet.services.getFiatExchangeRate('EUR', 'USD')
@@ -215,7 +215,7 @@ describe('Wallet services tests', () => {
   })
 
   test('3 getChainTracker', async () => {
-    for (const { chain, wallet, services } of ctxs) {
+    for (const { chain: _chain, wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
 
       {
@@ -255,7 +255,7 @@ describe('Wallet services tests', () => {
       {
         const txid = '9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4'
         // Mock getRawTx to avoid live network call
-        const mockRawTx = new Array(176).fill(0)
+        const mockRawTx = Array.from({ length: 176 }).fill(0)
         const origGetRawTx = wallet.services.getRawTx.bind(wallet.services)
         wallet.services.getRawTx = jest.fn().mockImplementation(async (id: string) => {
           if (chain === 'main') {

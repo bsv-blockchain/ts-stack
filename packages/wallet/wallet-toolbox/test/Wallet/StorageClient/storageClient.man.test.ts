@@ -9,7 +9,7 @@ describe('walletStorageClient test', () => {
   jest.setTimeout(99999999)
 
   const env = _tu.getEnv('test')
-  const testName = () => expect.getState().currentTestName || 'test'
+  const _testName = () => expect.getState().currentTestName || 'test'
 
   const ctxs: TestWalletOnly[] = []
 
@@ -45,7 +45,7 @@ describe('walletStorageClient test', () => {
       endpointUrl: 'https://staging-storage.babbage.systems'
     })
     ctxs.push(ctx)
-    const { wallet, storage } = ctx
+    const { wallet: _wallet, storage } = ctx
 
     {
       const auth = await storage.getAuth()

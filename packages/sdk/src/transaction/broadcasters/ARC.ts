@@ -1,8 +1,4 @@
-import {
-  BroadcastResponse,
-  BroadcastFailure,
-  Broadcaster
-} from '../Broadcaster.js'
+import { BroadcastResponse, BroadcastFailure, Broadcaster } from '../Broadcaster.js'
 import Transaction from '../Transaction.js'
 import { HttpClient, HttpClientRequestOptions } from '../http/HttpClient.js'
 import { defaultHttpClient } from '../http/DefaultHttpClient.js'
@@ -25,7 +21,7 @@ export interface ArcConfig {
   headers?: Record<string, string>
 }
 
-function defaultDeploymentId (): string {
+function defaultDeploymentId(): string {
   return `ts-sdk-${toHex(Random(16))}`
 }
 
@@ -37,23 +33,23 @@ const ARC_ERROR_STATUSES = new Set([
   'MINED_IN_STALE_BLOCK'
 ])
 
-function transactionHex (tx: Transaction): string {
+function transactionHex(tx: Transaction): string {
   try {
     return tx.toHexEF()
   } catch (error) {
     if (
-      error.message ===
+      (error as Error).message ===
       'All inputs must have source transactions when serializing to EF format'
-    ) return tx.toHex()
+    )
+      return tx.toHex()
     throw error
   }
 }
 
-function successfulArcResponse (data: ArcResponse): BroadcastResponse | BroadcastFailure {
+function successfulArcResponse(data: ArcResponse): BroadcastResponse | BroadcastFailure {
   const { txid, extraInfo, txStatus, competingTxs } = data
   const upperStatus = txStatus?.toUpperCase()
-  const isOrphan = extraInfo?.toUpperCase().includes('ORPHAN') ||
-    upperStatus?.includes('ORPHAN')
+  const isOrphan = extraInfo?.toUpperCase().includes('ORPHAN') || upperStatus?.includes('ORPHAN')
   if (ARC_ERROR_STATUSES.has(upperStatus) || isOrphan) {
     const failure: BroadcastFailure = {
       status: 'error',
@@ -74,7 +70,7 @@ function successfulArcResponse (data: ArcResponse): BroadcastResponse | Broadcas
   return response
 }
 
-function parseArcFailureData (data: unknown): unknown {
+function parseArcFailureData(data: unknown): unknown {
   if (typeof data !== 'string') return data
   try {
     return JSON.parse(data)
@@ -83,12 +79,11 @@ function parseArcFailureData (data: unknown): unknown {
   }
 }
 
-function failedArcResponse (status: unknown, responseData: unknown): BroadcastFailure {
+function failedArcResponse(status: unknown, responseData: unknown): BroadcastFailure {
   const failure: BroadcastFailure = {
     status: 'error',
-    code: typeof status === 'number' || typeof status === 'string'
-      ? status.toString()
-      : 'ERR_UNKNOWN',
+    code:
+      typeof status === 'number' || typeof status === 'string' ? status.toString() : 'ERR_UNKNOWN',
     description: 'Unknown error'
   }
   const data = parseArcFailureData(responseData)
@@ -99,7 +94,7 @@ function failedArcResponse (status: unknown, responseData: unknown): BroadcastFa
   return failure
 }
 
-function caughtArcResponse (error: unknown): BroadcastFailure {
+function caughtArcResponse(error: unknown): BroadcastFailure {
   return {
     status: 'error',
     code: '500',
@@ -131,16 +126,16 @@ export default class ARC implements Broadcaster {
    * @param {string} URL - The URL endpoint for the ARC API.
    * @param {ArcConfig} config - Configuration options for the ARC broadcaster.
    */
-  constructor (URL: string, config?: ArcConfig)
+  constructor(URL: string, config?: ArcConfig)
   /**
    * Constructs an instance of the ARC broadcaster.
    *
    * @param {string} URL - The URL endpoint for the ARC API.
    * @param {string} apiKey - The API key used for authorization with the ARC API.
    */
-  constructor (URL: string, apiKey?: string)
+  constructor(URL: string, apiKey?: string)
 
-  constructor (URL: string, config?: string | ArcConfig) {
+  constructor(URL: string, config?: string | ArcConfig) {
     this.URL = URL
     if (typeof config === 'string') {
       this.apiKey = config
@@ -150,14 +145,7 @@ export default class ARC implements Broadcaster {
       this.callbackUrl = undefined
     } else {
       const configObj: ArcConfig = config ?? {}
-      const {
-        apiKey,
-        deploymentId,
-        httpClient,
-        callbackToken,
-        callbackUrl,
-        headers
-      } = configObj
+      const { apiKey, deploymentId, httpClient, callbackToken, callbackUrl, headers } = configObj
       this.apiKey = apiKey
       this.httpClient = httpClient ?? defaultHttpClient()
       this.deploymentId = deploymentId ?? defaultDeploymentId()
@@ -170,7 +158,7 @@ export default class ARC implements Broadcaster {
   /**
    * Constructs a dictionary of the default & supplied request headers.
    */
-  private requestHeaders (): Record<string, string> {
+  private requestHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'XDeployment-ID': this.deploymentId
@@ -203,9 +191,7 @@ export default class ARC implements Broadcaster {
    * @param {Transaction} tx - The transaction to be broadcasted.
    * @returns {Promise<BroadcastResponse | BroadcastFailure>} A promise that resolves to either a success or failure response.
    */
-  async broadcast (
-    tx: Transaction
-  ): Promise<BroadcastResponse | BroadcastFailure> {
+  async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> {
     const requestOptions: HttpClientRequestOptions = {
       method: 'POST',
       headers: this.requestHeaders(),
@@ -232,7 +218,7 @@ export default class ARC implements Broadcaster {
    * @param {Transaction[]} txs - Array of transactions to be broadcasted.
    * @returns {Promise<Array<object>>} A promise that resolves to an array of objects.
    */
-  async broadcastMany (txs: Transaction[]): Promise<object[]> {
+  async broadcastMany(txs: Transaction[]): Promise<object[]> {
     const rawTxs = txs.map(tx => ({ rawTx: transactionHex(tx) }))
 
     const requestOptions: HttpClientRequestOptions = {
@@ -242,10 +228,7 @@ export default class ARC implements Broadcaster {
     }
 
     try {
-      const response = await this.httpClient.request<object[]>(
-        `${this.URL}/v1/txs`,
-        requestOptions
-      )
+      const response = await this.httpClient.request<object[]>(`${this.URL}/v1/txs`, requestOptions)
 
       return response.data as object[]
     } catch (error) {

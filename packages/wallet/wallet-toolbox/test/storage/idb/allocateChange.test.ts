@@ -1,24 +1,21 @@
-import { _tu, logger, TestSetup1 } from '../../utils/TestUtilsWalletStorage'
+import { _tu, TestSetup1 } from '../../utils/TestUtilsWalletStorage'
 import {
   randomBytesBase64,
-  randomBytesHex,
   sdk,
   StorageProvider,
   StorageProviderOptions,
-  TableCommission,
   TableOutput,
   TableTransaction
 } from '../../../src/index.client'
 import { StorageIdb } from '../../../src/storage/StorageIdb'
 
 import 'fake-indexeddb/auto'
-import { openDB } from 'idb'
 
 describe('idb transactionAbort tests', () => {
   jest.setTimeout(99999999)
 
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnv(chain)
+  const _env = _tu.getEnv(chain)
   let setups: { setup: TestSetup2; storage: StorageProvider }[] = []
 
   beforeEach(async () => {

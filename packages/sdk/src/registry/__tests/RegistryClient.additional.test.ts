@@ -13,15 +13,13 @@
 
 import { RegistryClient, deserializeWalletProtocol } from '../RegistryClient'
 import { WalletInterface } from '../../wallet/index.js'
-import { TopicBroadcaster, LookupResolver } from '../../overlay-tools/index.js'
+import { TopicBroadcaster } from '../../overlay-tools/index.js'
 import { PushDrop } from '../../script/index.js'
 import {
-  DefinitionType,
   DefinitionData,
   ProtocolDefinitionData,
   CertificateDefinitionData,
-  RegistryRecord,
-  CertificateFieldDescriptor
+  RegistryRecord
 } from '../types/index.js'
 
 // -------------------- Module-level mocks -------------------- //
@@ -59,10 +57,7 @@ jest.mock('../../script/index.js', () => {
 jest.mock('../../transaction/index.js', () => ({
   Transaction: {
     fromAtomicBEEF: jest.fn().mockImplementation(() => ({
-      outputs: [
-        { lockingScript: 'mockLS0' },
-        { lockingScript: 'mockLS1' }
-      ]
+      outputs: [{ lockingScript: 'mockLS0' }, { lockingScript: 'mockLS1' }]
     })),
     fromBEEF: jest.fn().mockImplementation(() => ({
       outputs: [
@@ -76,11 +71,11 @@ jest.mock('../../transaction/index.js', () => ({
 
 jest.mock('../../primitives/index.js', () => ({
   Utils: {
-    toArray: jest.fn().mockImplementation((str: string) =>
-      Array.from(str).map((c) => c.codePointAt(0))
-    ),
+    toArray: jest
+      .fn()
+      .mockImplementation((str: string) => Array.from(str).map(c => c.codePointAt(0))),
     toUTF8: jest.fn().mockImplementation((arr: number[] | string) => {
-      if (Array.isArray(arr)) return arr.map((n) => String.fromCodePoint(n)).join('')
+      if (Array.isArray(arr)) return arr.map(n => String.fromCodePoint(n)).join('')
       return arr
     })
   }
@@ -91,7 +86,7 @@ jest.mock('../../primitives/index.js', () => ({
 const TEST_ORIGINATOR = 'test.additional.origin'
 const MOCK_PUB_KEY = 'mockPublicKey'
 
-function buildWalletMock (): jest.Mocked<Partial<WalletInterface>> {
+function buildWalletMock(): jest.Mocked<Partial<WalletInterface>> {
   return {
     getPublicKey: jest.fn().mockResolvedValue({ publicKey: MOCK_PUB_KEY }),
     createAction: jest.fn().mockResolvedValue({
@@ -104,7 +99,7 @@ function buildWalletMock (): jest.Mocked<Partial<WalletInterface>> {
   }
 }
 
-function buildClient (wallet: Partial<WalletInterface>): RegistryClient {
+function buildClient(wallet: Partial<WalletInterface>): RegistryClient {
   const client = new RegistryClient(wallet as WalletInterface, {}, TEST_ORIGINATOR)
   ;(client as any).resolver = {
     query: jest.fn().mockResolvedValue({ type: 'output-list', outputs: [] })
@@ -164,9 +159,7 @@ describe('deserializeWalletProtocol', () => {
   })
 
   it('throws for non-string protocol string', () => {
-    expect(() => deserializeWalletProtocol(JSON.stringify([1, 42]))).toThrow(
-      'Invalid protocolID'
-    )
+    expect(() => deserializeWalletProtocol(JSON.stringify([1, 42]))).toThrow('Invalid protocolID')
   })
 
   it('throws for completely invalid JSON', () => {
@@ -487,7 +480,9 @@ describe('RegistryClient.updateDefinition', () => {
     mockBroadcast.mockRejectedValueOnce(new Error('Update broadcast failed!'))
     const record = { ...baseRegistryRecord }
     const updated: DefinitionData = { ...baseRegistryRecord }
-    await expect(client.updateDefinition(record, updated)).rejects.toThrow('Update broadcast failed!')
+    await expect(client.updateDefinition(record, updated)).rejects.toThrow(
+      'Update broadcast failed!'
+    )
   })
 })
 
@@ -572,13 +567,13 @@ describe('RegistryClient.listOwnRegistryEntries – edge cases', () => {
     // Basket has 7 fields
     ;(PushDrop.decode as jest.Mock).mockReturnValue({
       fields: [
-        [98],  // basketID: 'b'
-        [97],  // name: 'a'
+        [98], // basketID: 'b'
+        [97], // name: 'a'
         [115], // iconURL: 's'
         [107], // description: 'k'
         [101], // documentationURL: 'e'
         [116], // operator: 't'
-        [111]  // signature field
+        [111] // signature field
       ]
     })
 
@@ -628,13 +623,13 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
     // protocol has 7 fields: protocolID, name, iconURL, description, docURL, operator, sig
     ;(PushDrop.decode as jest.Mock).mockReturnValueOnce({
       fields: [
-        Array.from('[1,"proto"]').map((c) => c.codePointAt(0)), // protocolID JSON
-        [110, 97, 109, 101],  // 'name'
-        [105, 99, 111, 110],  // 'icon'
-        [100, 101, 115, 99],  // 'desc'
-        [100, 111, 99],       // 'doc'
-        [111, 112],           // 'op' - operator
-        [115, 105, 103]       // signature
+        Array.from('[1,"proto"]').map(c => c.codePointAt(0)), // protocolID JSON
+        [110, 97, 109, 101], // 'name'
+        [105, 99, 111, 110], // 'icon'
+        [100, 101, 115, 99], // 'desc'
+        [100, 111, 99], // 'doc'
+        [111, 112], // 'op' - operator
+        [115, 105, 103] // signature
       ]
     })
 
@@ -650,17 +645,19 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
     })
 
     // certificate has 8 fields: type, name, iconURL, desc, docURL, fieldsJSON, operator, sig
-    const fieldsJSON = JSON.stringify({ field1: { friendlyName: 'Field One', description: 'd', type: 'text', fieldIcon: 'i' } })
+    const fieldsJSON = JSON.stringify({
+      field1: { friendlyName: 'Field One', description: 'd', type: 'text', fieldIcon: 'i' }
+    })
     ;(PushDrop.decode as jest.Mock).mockReturnValueOnce({
       fields: [
-        [116, 121, 112, 101],  // 'type'
-        [110, 97, 109, 101],   // 'name'
-        [105, 99, 111, 110],   // 'icon'
-        [100, 101, 115, 99],   // 'desc'
-        [100, 111, 99],        // 'doc'
-        Array.from(fieldsJSON).map((c) => c.codePointAt(0)), // fieldsJSON
-        [111, 112],            // 'op' - operator
-        [115, 105, 103]        // signature
+        [116, 121, 112, 101], // 'type'
+        [110, 97, 109, 101], // 'name'
+        [105, 99, 111, 110], // 'icon'
+        [100, 101, 115, 99], // 'desc'
+        [100, 111, 99], // 'doc'
+        Array.from(fieldsJSON).map(c => c.codePointAt(0)), // fieldsJSON
+        [111, 112], // 'op' - operator
+        [115, 105, 103] // signature
       ]
     })
 
@@ -678,14 +675,14 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
     // Invalid JSON for fieldsJSON
     ;(PushDrop.decode as jest.Mock).mockReturnValueOnce({
       fields: [
-        [116, 121, 112, 101],   // 'type'
-        [110, 97, 109, 101],    // 'name'
-        [105, 99, 111, 110],    // 'icon'
-        [100, 101, 115, 99],    // 'desc'
-        [100, 111, 99],         // 'doc'
-        [123, 105, 110, 118],   // '{inv' - invalid JSON
-        [111, 112],             // operator
-        [115, 105, 103]         // signature
+        [116, 121, 112, 101], // 'type'
+        [110, 97, 109, 101], // 'name'
+        [105, 99, 111, 110], // 'icon'
+        [100, 101, 115, 99], // 'desc'
+        [100, 111, 99], // 'doc'
+        [123, 105, 110, 118], // '{inv' - invalid JSON
+        [111, 112], // operator
+        [115, 105, 103] // signature
       ]
     })
 

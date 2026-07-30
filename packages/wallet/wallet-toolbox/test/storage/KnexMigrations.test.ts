@@ -50,7 +50,7 @@ describe('KnexMigrations tests', () => {
         try {
           const r = await knex.migrate.down(config)
           expect(r).toBeTruthy()
-        } catch (eu: unknown) {
+        } catch {
           break
         }
       }
@@ -109,7 +109,9 @@ describe('KnexMigrations tests', () => {
       ])
 
       const source = new KnexMigrations('test', 'backfill migration test', '1'.repeat(64), 1000)
-      const migration = await source.getMigration('2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs')
+      const migration = await source.getMigration(
+        '2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs'
+      )
       await migration.up(knex)
 
       const rows = await knex('proven_tx_reqs').select('status', 'wasBroadcast', 'rebroadcastAttempts')

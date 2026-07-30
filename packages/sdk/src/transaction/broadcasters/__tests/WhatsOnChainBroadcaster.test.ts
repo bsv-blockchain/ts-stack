@@ -6,11 +6,11 @@ import { FetchHttpClient } from '../../../transaction/http/FetchHttpClient'
 // Mock Transaction
 jest.mock('../../../transaction/Transaction', () => {
   class MockTransaction {
-    toHex (): String {
+    toHex(): string {
       return 'mocked_transaction_hex'
     }
 
-    toHexEF (): String {
+    toHexEF(): string {
       return 'mocked_transaction_hexEF'
     }
   }
@@ -30,7 +30,7 @@ describe('WhatsOnChainBroadcaster', () => {
     transaction = new Transaction()
   })
 
-  async function withoutGlobalFetch<T> (callback: () => Promise<T>): Promise<T> {
+  async function withoutGlobalFetch<T>(callback: () => Promise<T>): Promise<T> {
     const originalFetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true,
@@ -86,10 +86,7 @@ describe('WhatsOnChainBroadcaster', () => {
   it('should broadcast successfully using provided fetch', async () => {
     const mockFetch = mockedFetch(successResponse)
 
-    const broadcaster = new WhatsOnChainBroadcaster(
-      network,
-      new FetchHttpClient(mockFetch)
-    )
+    const broadcaster = new WhatsOnChainBroadcaster(network, new FetchHttpClient(mockFetch))
     const response = await broadcaster.broadcast(transaction)
 
     expect(mockFetch).toHaveBeenCalled()
@@ -102,10 +99,7 @@ describe('WhatsOnChainBroadcaster', () => {
 
   it('should broadcast successfully using provided https', async () => {
     const mockHttps = mockedHttps(successResponse) as unknown as HttpsNodejs
-    const broadcaster = new WhatsOnChainBroadcaster(
-      network,
-      new NodejsHttpClient(mockHttps)
-    )
+    const broadcaster = new WhatsOnChainBroadcaster(network, new NodejsHttpClient(mockHttps))
 
     const response = await broadcaster.broadcast(transaction)
 
@@ -149,13 +143,13 @@ describe('WhatsOnChainBroadcaster', () => {
     })
   })
 
-  function mockedFetch (response: any): jest.Mock<any, any, any> {
+  function mockedFetch(response: any): jest.Mock<any, any, any> {
     return jest.fn().mockResolvedValue({
       ok: response.status === 200,
       status: response.status,
       statusText: response.status === 200 ? 'OK' : 'Bad request',
       headers: {
-        get (key: string) {
+        get(key: string) {
           if (key === 'Content-Type') {
             return 'text/plain'
           }
@@ -165,7 +159,7 @@ describe('WhatsOnChainBroadcaster', () => {
     })
   }
 
-  function mockedHttps (response: any): { request: Function } {
+  function mockedHttps(response: any): { request: Function } {
     const https = {
       request: (url, options, callback) => {
         // eslint-disable-next-line

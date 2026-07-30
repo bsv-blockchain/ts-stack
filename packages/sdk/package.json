@@ -1,6 +1,6 @@
 {
   "name": "@bsv/sdk",
-  "version": "2.2.12",
+  "version": "2.2.13",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -514,7 +514,7 @@
     "test:resource": "pnpm build && node ../../scripts/run-governed-test.mjs resource src/primitives/__tests/AESGCM.man.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/sdk/README.md\" \"packages/sdk/package.json\" \"packages/sdk/*.{js,json,ts}\"",
     "lint:ci": "pnpm lint",
-    "lint": "oxlint mod.ts src jest.config.js rspack.config.js --ignore-pattern 'src/**/__test/**' --ignore-pattern 'src/**/__tests/**' --ignore-pattern 'src/**/*.test.ts' --deny-warnings",
+    "lint": "oxlint mod.ts src benchmarks jest.config.js rspack.config.js --deny-warnings",
     "pack:check": "pnpm build && node ../../scripts/check-package-artifact.mjs . --exports PrivateKey,PublicKey,Transaction,Script,WalletClient,ProtoWallet,AuthFetch,IdentityClient,LookupResolver,RemittanceManager --esm-only-entrypoints ./umd",
     "test:browser": "pnpm build && node ../../scripts/check-browser-package.mjs .",
     "typecheck": "tsc --build --pretty false",

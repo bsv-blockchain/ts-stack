@@ -22,7 +22,7 @@ describe('ARC tests', () => {
     }
 
     try {
-      const response = await httpClient.request(url, requestOptions)
+      const _response = await httpClient.request(url, requestOptions)
       expect(true).toBe(false) // Should not reach here, expect an error
     } catch (error: any) {
       console.log('Error posting to TAAL:', error.message)
@@ -57,7 +57,7 @@ describe('ARC tests', () => {
     }
 
     try {
-      const response = await httpClient.request(url, requestOptions)
+      const _response = await httpClient.request(url, requestOptions)
       expect(true).toBe(false) // Should not reach here, expect an error
     } catch (error: any) {
       console.log('Error posting to TAAL:', error.message)

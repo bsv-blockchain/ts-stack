@@ -680,7 +680,7 @@ describe('in-memory action batch workspace', () => {
     if (originalRaw == null) throw new Error('captured manifest did not inline its transaction')
     const alteredRaw = Uint8Array.from(originalRaw)
     alteredRaw[alteredRaw.length - 4] = 1
-    const altered = Transaction.fromBinary(alteredRaw)
+    const _altered = Transaction.fromBinary(alteredRaw)
     const alteredTxid = Transaction.fromBinary(alteredRaw).id('hex')
     const alteredDigest = actionBatchBlobDigest(alteredRaw)
     const actions = [

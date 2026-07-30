@@ -1578,6 +1578,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2

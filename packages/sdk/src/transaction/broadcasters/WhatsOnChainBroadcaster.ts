@@ -1,8 +1,4 @@
-import {
-  BroadcastResponse,
-  BroadcastFailure,
-  Broadcaster
-} from '../Broadcaster.js'
+import { BroadcastResponse, BroadcastFailure, Broadcaster } from '../Broadcaster.js'
 import Transaction from '../Transaction.js'
 import { HttpClient } from '../http/HttpClient.js'
 import { defaultHttpClient } from '../http/DefaultHttpClient.js'
@@ -36,9 +32,7 @@ export default class WhatsOnChainBroadcaster implements Broadcaster {
    * @param {Transaction} tx - The transaction to be broadcasted.
    * @returns {Promise<BroadcastResponse | BroadcastFailure>} A promise that resolves to either a success or failure response.
    */
-  async broadcast(
-    tx: Transaction
-  ): Promise<BroadcastResponse | BroadcastFailure> {
+  async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> {
     const rawTx = tx.toHex()
 
     const requestOptions = {
@@ -51,10 +45,7 @@ export default class WhatsOnChainBroadcaster implements Broadcaster {
     }
 
     try {
-      const response = await this.httpClient.request<string>(
-        this.URL,
-        requestOptions
-      )
+      const response = await this.httpClient.request<string>(this.URL, requestOptions)
       if (response.ok) {
         const txid = response.data
         return {
@@ -70,13 +61,12 @@ export default class WhatsOnChainBroadcaster implements Broadcaster {
         }
       }
     } catch (error) {
+      const caughtError = error as { message?: unknown }
       return {
         status: 'error',
         code: '500',
         description:
-          typeof error.message === 'string'
-            ? error.message
-            : 'Internal Server Error'
+          typeof caughtError.message === 'string' ? caughtError.message : 'Internal Server Error'
       }
     }
   }

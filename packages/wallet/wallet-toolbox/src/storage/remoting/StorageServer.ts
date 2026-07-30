@@ -7,11 +7,7 @@
 
 import { MakeWalletLogger, WalletInterface, WalletLoggerInterface } from '@bsv/sdk'
 import express, { Request, Response } from 'express'
-import {
-  AuthMiddlewareOptions,
-  AuthRequest,
-  createAuthMiddleware
-} from '@bsv/auth-express-middleware'
+import { AuthMiddlewareOptions, AuthRequest, createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
@@ -22,13 +18,14 @@ import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
-import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
 import {
-  authenticatedIdentityKey,
-  configureTrustProxy,
-  rateLimitOptions,
-  TrustProxySetting
-} from './RateLimitPolicy'
+  BINARY_ENCODING,
+  BINARY_ENCODING_HEADER,
+  BINARY_REQUEST_ENCODING_HEADER,
+  decodeBinaryJsonValue,
+  stringifyJsonRpc
+} from './BinaryJson'
+import { authenticatedIdentityKey, configureTrustProxy, rateLimitOptions, TrustProxySetting } from './RateLimitPolicy'
 import {
   bodyParserErrorHandler,
   concurrencyLimit,
@@ -45,10 +42,7 @@ import {
   decompressActionBatchPack,
   supportedActionBatchPackEncodings
 } from '../../utility/actionBatchPack'
-import {
-  ACTION_BATCH_MAX_PACK_BYTES,
-  ACTION_BATCH_MAX_PACK_ITEMS
-} from '../methods/actionBatchBlobs'
+import { ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS } from '../methods/actionBatchBlobs'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -128,19 +122,15 @@ interface RpcDispatchResult {
   result?: unknown
 }
 
-function requiredAuthenticatedIdentityKey (req: Request): string {
+function requiredAuthenticatedIdentityKey(req: Request): string {
   const identityKey = (req as AuthRequest).auth?.identityKey
-  if (
-    typeof identityKey !== 'string' ||
-    identityKey.trim() === '' ||
-    identityKey === 'unknown'
-  ) {
+  if (typeof identityKey !== 'string' || identityKey.trim() === '' || identityKey === 'unknown') {
     throw new WERR_UNAUTHORIZED('authenticated request identity is required')
   }
   return identityKey
 }
 
-function firstRequestHeader (req: Request, name: string): string | undefined {
+function firstRequestHeader(req: Request, name: string): string | undefined {
   const value = req.headers[name.toLowerCase()]
   return Array.isArray(value) ? value[0] : value
 }
@@ -185,6 +175,8 @@ export interface WalletStorageServerOptions {
   securityHeaders?: SecurityHeadersOptions
   /** Emit one JSON log record for each authenticated RPC. Default: true. */
   logRpcRequests?: boolean
+  /** @deprecated Use structured RPC logging. Retained for compatibility. */
+  logShortReqs?: boolean
 }
 
 export class StorageServer {
@@ -206,7 +198,7 @@ export class StorageServer {
   private readonly securityHeadersPolicy: SecurityHeadersOptions
   private readonly logRpcRequests: boolean
 
-  constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
+  constructor(storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
     this.port = options.port
     this.wallet = options.wallet
@@ -231,14 +223,14 @@ export class StorageServer {
     this.securityHeadersPolicy = options.securityHeaders ?? {}
     this.logRpcRequests = options.logRpcRequests ?? true
 
-    if (options['logShortReqs']) {
+    if (options.logShortReqs) {
       this.setupShortReqLogging()
     }
 
     this.setupRoutes()
   }
 
-  private setupShortReqLogging (): void {
+  private setupShortReqLogging(): void {
     this.app.use((req: Request, res: Response, next: express.NextFunction) => {
       const contentLength = Number(req.headers['content-length'] || 0)
 
@@ -253,7 +245,9 @@ export class StorageServer {
           ua: req.headers['user-agent'] || '-'
         }
         const traceContext = firstRequestHeader(req, 'X-Cloud-Trace-Context')?.split('/')[0]
-        if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
+        if (traceContext) {
+          logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
+        }
 
         // Request bodies and BSV auth/payment headers can contain sensitive
         // material. Short-request logging records metadata only.
@@ -264,44 +258,53 @@ export class StorageServer {
     })
   }
 
-  private setupRoutes (): void {
+  private setupRoutes(): void {
     configureTrustProxy(this.app, this.trustProxy)
     this.app.disable('x-powered-by')
-    this.app.use(securityHeaders({
-      environmentPrefix: 'WALLET_STORAGE',
-      ...this.securityHeadersPolicy
-    }))
-    this.app.use(corsPolicy({
-      environmentPrefix: 'WALLET_STORAGE',
-      allowedOrigins: this.allowedOrigins,
-      methods: ['GET', 'PUT', 'POST', 'OPTIONS']
-    }))
-    this.app.use(concurrencyLimit(
-      'WALLET_STORAGE',
-      this.maxConcurrentRequests
-    ))
+    this.app.use(
+      securityHeaders({
+        environmentPrefix: 'WALLET_STORAGE',
+        ...this.securityHeadersPolicy
+      })
+    )
+    this.app.use(
+      corsPolicy({
+        environmentPrefix: 'WALLET_STORAGE',
+        allowedOrigins: this.allowedOrigins,
+        methods: ['GET', 'PUT', 'POST', 'OPTIONS']
+      })
+    )
+    this.app.use(concurrencyLimit('WALLET_STORAGE', this.maxConcurrentRequests))
 
-    this.app.use(rateLimit(rateLimitOptions(
-      { windowMs: 60_000, limit: 300 },
-      {
-        skip: (req: Request) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
-        ...this.preAuthRateLimitOptions
-      }
-    )))
+    this.app.use(
+      rateLimit(
+        rateLimitOptions(
+          { windowMs: 60_000, limit: 300 },
+          {
+            skip: (req: Request) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+            ...this.preAuthRateLimitOptions
+          }
+        )
+      )
+    )
 
     // Escape HTML-significant characters in JSON responses. This preserves the
     // decoded JSON value while keeping user-controlled strings inert even if a
     // consumer embeds a response in an HTML context.
     this.app.set('json escape', true)
-    this.app.use(express.json({
-      limit: readBodyLimitBytes('WALLET_STORAGE_JSON', 30 * 1024 * 1024)
-    }))
+    this.app.use(
+      express.json({
+        limit: readBodyLimitBytes('WALLET_STORAGE_JSON', 30 * 1024 * 1024)
+      })
+    )
     // Authentication must see the exact binary body bytes, so parse octet
     // streams before the auth middleware just as JSON is parsed above.
-    this.app.use(express.raw({
-      type: 'application/octet-stream',
-      limit: readBodyLimitBytes('WALLET_STORAGE_BINARY', 8 * 1024 * 1024)
-    }))
+    this.app.use(
+      express.raw({
+        type: 'application/octet-stream',
+        limit: readBodyLimitBytes('WALLET_STORAGE_BINARY', 8 * 1024 * 1024)
+      })
+    )
     this.app.use(bodyParserErrorHandler)
 
     this.app.get('/robots.txt', (req: Request, res: Response) => {
@@ -319,13 +322,15 @@ export class StorageServer {
     }
     if (this.sessionManager != null) options.sessionManager = this.sessionManager
     this.app.use(createAuthMiddleware(options))
-    const authenticatedRateLimit = rateLimit(rateLimitOptions(
-      { windowMs: 60_000, limit: 1_000 },
-      {
-        keyGenerator: authenticatedIdentityKey,
-        ...this.rateLimitOptions
-      }
-    ))
+    const authenticatedRateLimit = rateLimit(
+      rateLimitOptions(
+        { windowMs: 60_000, limit: 1_000 },
+        {
+          keyGenerator: authenticatedIdentityKey,
+          ...this.rateLimitOptions
+        }
+      )
+    )
     this.app.use(authenticatedRateLimit)
     if (this.monetize) {
       this.app.use(
@@ -336,74 +341,59 @@ export class StorageServer {
       )
     }
 
-    this.app.put(
-      '/action-batch/:batchId/pack',
-      async (req: Request, res: Response) => {
-        try {
-          const auth = await this.authenticatedAuth(req, true)
-          const batchId = String(req.params.batchId)
-          // Express types request bodies as `any`, and other body parsers can
-          // produce strings, arrays, or objects. Keep the runtime narrowing
-          // inline so both the transport and static data-flow analysis can see
-          // that only a real byte view reaches the binary pack decoder.
-          const rawBody: unknown = req.body
-          if (
-            typeof rawBody !== 'object' ||
-            rawBody === null ||
-            !(rawBody instanceof Uint8Array)
-          ) {
-            throw new TypeError('binary action batch body required')
-          }
-          // Re-wrap without copying. Besides normalizing Buffer subclasses,
-          // this makes the decoder's runtime type independent of req.body.
-          const body = new Uint8Array(rawBody.buffer, rawBody.byteOffset, rawBody.byteLength)
-          const requestedEncoding = req.header(ACTION_BATCH_PACK_ENCODING_HEADER) ?? 'identity'
-          const encoding = supportedActionBatchPackEncodings()
-            .find(candidate => candidate === requestedEncoding)
-          if (encoding == null) throw new TypeError(`unsupported action batch pack encoding ${requestedEncoding}`)
-          const frame = await decompressActionBatchPack(body, encoding, ACTION_BATCH_MAX_PACK_BYTES)
-          const items = decodeActionBatchPack(
-            frame,
-            ACTION_BATCH_MAX_PACK_BYTES,
-            ACTION_BATCH_MAX_PACK_ITEMS
-          )
-          await this.storage.putActionBatchPack(auth, {
-            batchId,
-            items,
-            maxPackBytes: ACTION_BATCH_MAX_PACK_BYTES,
-            maxItems: ACTION_BATCH_MAX_PACK_ITEMS
-          })
-          res.status(200).json({ uploaded: true })
-        } catch (error: unknown) {
-          const json = WalletError.unknownToJson(error)
-          res.status(400).json(JSON.parse(json))
+    this.app.put('/action-batch/:batchId/pack', async (req: Request, res: Response) => {
+      try {
+        const auth = await this.authenticatedAuth(req, true)
+        const batchId = String(req.params.batchId)
+        // Express types request bodies as `any`, and other body parsers can
+        // produce strings, arrays, or objects. Keep the runtime narrowing
+        // inline so both the transport and static data-flow analysis can see
+        // that only a real byte view reaches the binary pack decoder.
+        const rawBody: unknown = req.body
+        if (typeof rawBody !== 'object' || rawBody === null || !(rawBody instanceof Uint8Array)) {
+          throw new TypeError('binary action batch body required')
         }
+        // Re-wrap without copying. Besides normalizing Buffer subclasses,
+        // this makes the decoder's runtime type independent of req.body.
+        const body = new Uint8Array(rawBody.buffer, rawBody.byteOffset, rawBody.byteLength)
+        const requestedEncoding = req.header(ACTION_BATCH_PACK_ENCODING_HEADER) ?? 'identity'
+        const encoding = supportedActionBatchPackEncodings().find(candidate => candidate === requestedEncoding)
+        if (encoding == null) throw new TypeError(`unsupported action batch pack encoding ${requestedEncoding}`)
+        const frame = await decompressActionBatchPack(body, encoding, ACTION_BATCH_MAX_PACK_BYTES)
+        const items = decodeActionBatchPack(frame, ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS)
+        await this.storage.putActionBatchPack(auth, {
+          batchId,
+          items,
+          maxPackBytes: ACTION_BATCH_MAX_PACK_BYTES,
+          maxItems: ACTION_BATCH_MAX_PACK_ITEMS
+        })
+        res.status(200).json({ uploaded: true })
+      } catch (error: unknown) {
+        const json = WalletError.unknownToJson(error)
+        res.status(400).json(JSON.parse(json))
       }
-    )
+    })
 
-    this.app.put(
-      '/action-batch/:batchId/blob/:digest',
-      async (req: Request, res: Response) => {
-        try {
-          const auth = await this.authenticatedAuth(req, true)
-          const batchId = String(req.params.batchId)
-          const digest = String(req.params.digest)
-          const body = req.body
-          if (!(body instanceof Uint8Array)) throw new TypeError('binary action batch body required')
-          await this.storage.putActionBatchBlob(auth, { batchId, digest, bytes: body })
-          res.status(200).json({ uploaded: true })
-        } catch (error: unknown) {
-          const json = WalletError.unknownToJson(error)
-          res.status(400).json(JSON.parse(json))
-        }
+    this.app.put('/action-batch/:batchId/blob/:digest', async (req: Request, res: Response) => {
+      try {
+        const auth = await this.authenticatedAuth(req, true)
+        const batchId = String(req.params.batchId)
+        const digest = String(req.params.digest)
+        const body = req.body
+        if (!(body instanceof Uint8Array)) throw new TypeError('binary action batch body required')
+        await this.storage.putActionBatchBlob(auth, { batchId, digest, bytes: body })
+        res.status(200).json({ uploaded: true })
+      } catch (error: unknown) {
+        const json = WalletError.unknownToJson(error)
+        res.status(400).json(JSON.parse(json))
       }
-    )
+    })
 
     // A single POST endpoint for JSON-RPC:
     this.app.post('/', this.handleRpcRequest.bind(this))
   }
 
-  private async handleRpcRequest (req: Request, res: Response): Promise<Response> {
+  private async handleRpcRequest(req: Request, res: Response): Promise<Response> {
     const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
     const requestUsesBinary = req.header(BINARY_REQUEST_ENCODING_HEADER) === BINARY_ENCODING
     if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
@@ -418,11 +408,16 @@ export class StorageServer {
     try {
       const dispatch = await this.dispatchRpcCall(method, params, req, logObj)
       if (!dispatch.found) {
-        return this.sendRpc(res, useBinary, {
-          jsonrpc: '2.0',
-          error: { code: -32601, message: `Method not found: ${method}` },
-          id
-        }, 400)
+        return this.sendRpc(
+          res,
+          useBinary,
+          {
+            jsonrpc: '2.0',
+            error: { code: -32601, message: `Method not found: ${method}` },
+            id
+          },
+          400
+        )
       }
       return this.sendRpc(res, useBinary, { jsonrpc: '2.0', result: dispatch.result, id })
     } catch (error: unknown) {
@@ -430,14 +425,14 @@ export class StorageServer {
     }
   }
 
-  private sendRpc (res: Response, useBinary: boolean, payload: unknown, status: number = 200): Response {
+  private sendRpc(res: Response, useBinary: boolean, payload: unknown, status: number = 200): Response {
     res.set('X-Content-Type-Options', 'nosniff')
     // Normalize with the negotiated binary replacer, then let Express emit
     // the JSON response through its escaping-aware JSON sink.
     return res.status(status).json(JSON.parse(stringifyJsonRpc(payload, useBinary)))
   }
 
-  private sendRpcError (res: Response, useBinary: boolean, id: unknown, error: unknown): Response {
+  private sendRpcError(res: Response, useBinary: boolean, id: unknown, error: unknown): Response {
     /**
      * Convert errors to standard JSON object format that can be converted back
      * to WalletError derived objects on the client side and re-thrown.
@@ -450,12 +445,7 @@ export class StorageServer {
     })
   }
 
-  private createRpcLog (
-    req: Request,
-    method: string,
-    id: unknown,
-    params: any[]
-  ): Record<string, unknown> | undefined {
+  private createRpcLog(req: Request, method: string, id: unknown, params: any[]): Record<string, unknown> | undefined {
     if (!this.logRpcRequests) return undefined
 
     const logObj: Record<string, unknown> = {
@@ -473,7 +463,7 @@ export class StorageServer {
     return logObj
   }
 
-  private async dispatchRpcCall (
+  private async dispatchRpcCall(
     method: string,
     params: any[],
     req: Request,
@@ -481,9 +471,7 @@ export class StorageServer {
   ): Promise<RpcDispatchResult> {
     if (!storageRpcMethods.has(method)) return { found: false }
 
-    const storageMethod = method === 'findOutputBaskets'
-      ? 'findOutputBasketsAuth'
-      : method
+    const storageMethod = method === 'findOutputBaskets' ? 'findOutputBasketsAuth' : method
     const storageHandler = (this.storage as any)[storageMethod]
     if (typeof storageHandler !== 'function') return { found: false }
 
@@ -502,7 +490,7 @@ export class StorageServer {
     }
   }
 
-  private async authorizeRpcCall (
+  private async authorizeRpcCall(
     method: string,
     params: any[],
     req: Request,
@@ -532,14 +520,14 @@ export class StorageServer {
     }
   }
 
-  private logIgnoredDestroy (logObj?: Record<string, unknown>): void {
+  private logIgnoredDestroy(logObj?: Record<string, unknown>): void {
     if (logObj == null) return
     logObj.result = undefined
     logObj.comment = 'IGNORED'
     console.log(JSON.stringify(logObj))
   }
 
-  private authorizeAdminStats (params: any[], req: Request): void {
+  private authorizeAdminStats(params: any[], req: Request): void {
     const identityKey = requiredAuthenticatedIdentityKey(req)
     if (params[0] !== identityKey) {
       throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.')
@@ -549,7 +537,7 @@ export class StorageServer {
     }
   }
 
-  private async authorizeStandardRpcCall (method: string, params: any[], req: Request): Promise<void> {
+  private async authorizeStandardRpcCall(method: string, params: any[], req: Request): Promise<void> {
     if (authIdRpcMethods.has(method)) {
       await this.bindAuthenticatedAuth(params, req, actionBatchRpcMethods.has(method))
       return
@@ -557,7 +545,7 @@ export class StorageServer {
     await this.validateParam0(params, req)
   }
 
-  private createRpcLogger (method: string, params: any[]): WalletLoggerInterface | undefined {
+  private createRpcLogger(method: string, params: any[]): WalletLoggerInterface | undefined {
     if (this.makeLogger == null || params[1] == null || typeof params[1] !== 'object') return undefined
 
     const logger = this.makeLogger(params[1].logger)
@@ -570,7 +558,7 @@ export class StorageServer {
     return logger
   }
 
-  private finishRpcLogging (logger: WalletLoggerInterface | undefined, result: any): void {
+  private finishRpcLogging(logger: WalletLoggerInterface | undefined, result: any): void {
     if (logger == null) return
 
     logger.groupEnd()
@@ -581,12 +569,12 @@ export class StorageServer {
     }
   }
 
-  private async authenticatedAuth (req: Request, requireActive: boolean): Promise<AuthId> {
+  private async authenticatedAuth(req: Request, requireActive: boolean): Promise<AuthId> {
     const identityKey = requiredAuthenticatedIdentityKey(req)
     const { user } = await this.storage.findOrInsertUser(identityKey)
     const isActive = user.activeStorage === this.storage.getSettings().storageIdentityKey
     if (requireActive && !isActive) {
-      throw new WERR_NOT_ACTIVE('action batch methods require the authenticated user\'s active storage provider')
+      throw new WERR_NOT_ACTIVE("action batch methods require the authenticated user's active storage provider")
     }
     return {
       identityKey,
@@ -595,7 +583,7 @@ export class StorageServer {
     }
   }
 
-  private async bindAuthenticatedAuth (params: any[], req: Request, requireActive: boolean): Promise<void> {
+  private async bindAuthenticatedAuth(params: any[], req: Request, requireActive: boolean): Promise<void> {
     if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
     const claimed = typeof params[0] === 'object' && params[0] != null ? params[0] : {}
     const identityKey = requiredAuthenticatedIdentityKey(req)
@@ -610,13 +598,15 @@ export class StorageServer {
     }
   }
 
-  private async validateParam0 (params: any[], req: Request): Promise<void> {
+  private async validateParam0(params: any[], req: Request): Promise<void> {
     if (!Array.isArray(params)) throw new WERR_UNAUTHORIZED('authenticated RPC parameters are required')
     if (typeof params[0] !== 'object' || !params[0]) {
       params[0] = {}
     }
     const identityKey = requiredAuthenticatedIdentityKey(req)
-    if (params[0].identityKey && params[0].identityKey !== identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentication') }
+    if (params[0].identityKey && params[0].identityKey !== identityKey) {
+      throw new WERR_UNAUTHORIZED('identityKey does not match authentication')
+    }
     // console.log('looking up user with identityKey:', identityKey)
     const { user } = await this.storage.findOrInsertUser(identityKey)
     params[0].reqAuthUserId = user.userId
@@ -625,14 +615,14 @@ export class StorageServer {
 
   server: any
 
-  public start (): void {
+  public start(): void {
     this.server = this.app.listen(this.port, () => {
       console.log(`WalletStorageServer listening at http://localhost:${this.port}`)
     })
     configureHttpServer(this.server, 'WALLET_STORAGE', this.httpPolicy)
   }
 
-  public async close (): Promise<void> {
+  public async close(): Promise<void> {
     if (this.server) {
       await this.server.close(() => {
         // console.log('WalletStorageServer closed')
@@ -641,7 +631,9 @@ export class StorageServer {
   }
 
   /** @see {@link validateDate} */
-  validateDate (date: Date | string | number): Date { return validateDate(date) }
+  validateDate(date: Date | string | number): Date {
+    return validateDate(date)
+  }
 
   /**
    * Helper to force uniform behavior across database engines.

@@ -67,16 +67,16 @@ const MAX_XDM_RESPONSE_WAIT = 200
 export default class WalletClient implements WalletInterface {
   public substrate: 'auto' | WalletInterface
   originator?: OriginatorDomainNameStringUnder250Bytes
-  constructor (
+  constructor(
     substrate:
-    | 'auto'
-    | 'Cicada'
-    | 'XDM'
-    | 'window.CWI'
-    | 'json-api'
-    | 'react-native'
-    | 'secure-json-api'
-    | WalletInterface = 'auto',
+      | 'auto'
+      | 'Cicada'
+      | 'XDM'
+      | 'window.CWI'
+      | 'json-api'
+      | 'react-native'
+      | 'secure-json-api'
+      | WalletInterface = 'auto',
     originator?: OriginatorDomainNameStringUnder250Bytes
   ) {
     if (substrate === 'Cicada') {
@@ -86,17 +86,21 @@ export default class WalletClient implements WalletInterface {
     if (substrate === 'XDM') substrate = new XDMSubstrate()
     if (substrate === 'json-api') substrate = new HTTPWalletJSON(originator)
     if (substrate === 'react-native') substrate = new ReactNativeWebView(originator)
-    if (substrate === 'secure-json-api') substrate = new HTTPWalletJSON(originator, 'https://localhost:2121')
+    if (substrate === 'secure-json-api')
+      substrate = new HTTPWalletJSON(originator, 'https://localhost:2121')
     this.substrate = substrate
     this.originator = originator
   }
 
-  async connectToSubstrate (): Promise<void> {
+  async connectToSubstrate(): Promise<void> {
     if (typeof this.substrate === 'object') {
       return // substrate is already connected
     }
 
-    const attemptSubstrate = async (factory: () => WalletInterface, timeout?: number): Promise<{ success: boolean, sub?: WalletInterface }> => {
+    const attemptSubstrate = async (
+      factory: () => WalletInterface,
+      timeout?: number
+    ): Promise<{ success: boolean; sub?: WalletInterface }> => {
       try {
         const sub = factory()
         let result
@@ -130,11 +134,14 @@ export default class WalletClient implements WalletInterface {
 
     const fastResults = await Promise.allSettled(fastAttempts)
     const fastSuccessful = fastResults
-      .filter((r): r is PromiseFulfilledResult<{ success: boolean, sub?: WalletInterface }> => r.status === 'fulfilled' && r.value.success && r.value.sub !== undefined)
+      .filter(
+        (r): r is PromiseFulfilledResult<{ success: boolean; sub?: WalletInterface }> =>
+          r.status === 'fulfilled' && r.value.success && r.value.sub !== undefined
+      )
       .map(r => r.value.sub)
 
     if (fastSuccessful.length > 0) {
-      this.substrate = fastSuccessful[0]
+      this.substrate = fastSuccessful[0]!
       return
     }
 
@@ -149,77 +156,52 @@ export default class WalletClient implements WalletInterface {
     }
   }
 
-  async createAction (args: CreateActionArgs): Promise<CreateActionResult> {
+  async createAction(args: CreateActionArgs): Promise<CreateActionResult> {
     validateCreateActionArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).createAction(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).createAction(args, this.originator)
   }
 
-  async signAction (args: SignActionArgs): Promise<SignActionResult> {
+  async signAction(args: SignActionArgs): Promise<SignActionResult> {
     validateSignActionArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).signAction(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).signAction(args, this.originator)
   }
 
-  async abortAction (args: {
-    reference: Base64String
-  }): Promise<{ aborted: boolean }> {
+  async abortAction(args: { reference: Base64String }): Promise<{ aborted: boolean }> {
     validateAbortActionArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).abortAction(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).abortAction(args, this.originator)
   }
 
-  async listActions (args: ListActionsArgs): Promise<ListActionsResult> {
+  async listActions(args: ListActionsArgs): Promise<ListActionsResult> {
     validateListActionsArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).listActions(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).listActions(args, this.originator)
   }
 
-  async internalizeAction (
-    args: InternalizeActionArgs
-  ): Promise<{ accepted: true }> {
+  async internalizeAction(args: InternalizeActionArgs): Promise<{ accepted: true }> {
     validateInternalizeActionArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).internalizeAction(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).internalizeAction(args, this.originator)
   }
 
-  async listOutputs (args: ListOutputsArgs): Promise<ListOutputsResult> {
+  async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult> {
     validateListOutputsArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).listOutputs(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).listOutputs(args, this.originator)
   }
 
-  async relinquishOutput (args: {
+  async relinquishOutput(args: {
     basket: BasketStringUnder300Bytes
     output: OutpointString
   }): Promise<{ relinquished: true }> {
     validateRelinquishOutputArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).relinquishOutput(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).relinquishOutput(args, this.originator)
   }
 
-  async getPublicKey (args: {
+  async getPublicKey(args: {
     identityKey?: true
     protocolID?: [SecurityLevel, ProtocolString5To400Bytes]
     keyID?: KeyIDStringUnder800Bytes
@@ -229,32 +211,30 @@ export default class WalletClient implements WalletInterface {
     forSelf?: BooleanDefaultFalse
   }): Promise<{ publicKey: PubKeyHex }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).getPublicKey(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).getPublicKey(args, this.originator)
   }
 
-  async revealCounterpartyKeyLinkage (args: {
+  async revealCounterpartyKeyLinkage(args: {
     counterparty: PubKeyHex
     verifier: PubKeyHex
     privilegedReason?: DescriptionString5to50Bytes
     privileged?: BooleanDefaultFalse
   }): Promise<{
-      prover: PubKeyHex
-      verifier: PubKeyHex
-      counterparty: PubKeyHex
-      revelationTime: ISOTimestampString
-      encryptedLinkage: Byte[]
-      encryptedLinkageProof: Byte[]
-    }> {
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    revelationTime: ISOTimestampString
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+  }> {
     await this.connectToSubstrate()
-    return await (
-      this.substrate as WalletInterface
-    ).revealCounterpartyKeyLinkage(args, this.originator)
+    return await (this.substrate as WalletInterface).revealCounterpartyKeyLinkage(
+      args,
+      this.originator
+    )
   }
 
-  async revealSpecificKeyLinkage (args: {
+  async revealSpecificKeyLinkage(args: {
     counterparty: PubKeyHex
     verifier: PubKeyHex
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
@@ -262,23 +242,20 @@ export default class WalletClient implements WalletInterface {
     privilegedReason?: DescriptionString5to50Bytes
     privileged?: BooleanDefaultFalse
   }): Promise<{
-      prover: PubKeyHex
-      verifier: PubKeyHex
-      counterparty: PubKeyHex
-      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
-      keyID: KeyIDStringUnder800Bytes
-      encryptedLinkage: Byte[]
-      encryptedLinkageProof: Byte[]
-      proofType: Byte
-    }> {
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+    proofType: Byte
+  }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).revealSpecificKeyLinkage(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).revealSpecificKeyLinkage(args, this.originator)
   }
 
-  async encrypt (args: {
+  async encrypt(args: {
     plaintext: Byte[]
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
@@ -287,13 +264,10 @@ export default class WalletClient implements WalletInterface {
     privileged?: BooleanDefaultFalse
   }): Promise<{ ciphertext: Byte[] }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).encrypt(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).encrypt(args, this.originator)
   }
 
-  async decrypt (args: {
+  async decrypt(args: {
     ciphertext: Byte[]
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
@@ -302,13 +276,10 @@ export default class WalletClient implements WalletInterface {
     privileged?: BooleanDefaultFalse
   }): Promise<{ plaintext: Byte[] }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).decrypt(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).decrypt(args, this.originator)
   }
 
-  async createHmac (args: {
+  async createHmac(args: {
     data: Byte[]
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
@@ -317,13 +288,10 @@ export default class WalletClient implements WalletInterface {
     privileged?: BooleanDefaultFalse
   }): Promise<{ hmac: Byte[] }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).createHmac(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).createHmac(args, this.originator)
   }
 
-  async verifyHmac (args: {
+  async verifyHmac(args: {
     data: Byte[]
     hmac: Byte[]
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
@@ -333,13 +301,10 @@ export default class WalletClient implements WalletInterface {
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).verifyHmac(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).verifyHmac(args, this.originator)
   }
 
-  async createSignature (args: {
+  async createSignature(args: {
     data?: Byte[]
     hashToDirectlySign?: Byte[]
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
@@ -349,13 +314,10 @@ export default class WalletClient implements WalletInterface {
     privileged?: BooleanDefaultFalse
   }): Promise<{ signature: Byte[] }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).createSignature(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).createSignature(args, this.originator)
   }
 
-  async verifySignature (args: {
+  async verifySignature(args: {
     data?: Byte[]
     hashToDirectlyVerify?: Byte[]
     signature: Byte[]
@@ -367,24 +329,25 @@ export default class WalletClient implements WalletInterface {
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).verifySignature(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).verifySignature(args, this.originator)
   }
 
-  async acquireCertificate (
-    args: AcquireCertificateArgs
-  ): Promise<AcquireCertificateResult> {
-    if (args.acquisitionProtocol === 'direct') { validateAcquireDirectCertificateArgs(args) } else if (args.acquisitionProtocol === 'issuance') { validateAcquireIssuanceCertificateArgs(args) } else { throw new WERR_INVALID_PARAMETER('acquisitionProtocol', `valid. ${String(args.acquisitionProtocol)} is unrecognized.`) }
+  async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult> {
+    if (args.acquisitionProtocol === 'direct') {
+      validateAcquireDirectCertificateArgs(args)
+    } else if (args.acquisitionProtocol === 'issuance') {
+      validateAcquireIssuanceCertificateArgs(args)
+    } else {
+      throw new WERR_INVALID_PARAMETER(
+        'acquisitionProtocol',
+        `valid. ${String(args.acquisitionProtocol)} is unrecognized.`
+      )
+    }
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).acquireCertificate(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).acquireCertificate(args, this.originator)
   }
 
-  async listCertificates (args: {
+  async listCertificates(args: {
     certifiers: PubKeyHex[]
     types: Base64String[]
     limit?: PositiveIntegerDefault10Max10000
@@ -394,111 +357,72 @@ export default class WalletClient implements WalletInterface {
   }): Promise<ListCertificatesResult> {
     validateListCertificatesArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).listCertificates(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).listCertificates(args, this.originator)
   }
 
-  async proveCertificate (
-    args: ProveCertificateArgs
-  ): Promise<ProveCertificateResult> {
+  async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult> {
     validateProveCertificateArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).proveCertificate(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).proveCertificate(args, this.originator)
   }
 
-  async relinquishCertificate (args: {
+  async relinquishCertificate(args: {
     type: Base64String
     serialNumber: Base64String
     certifier: PubKeyHex
   }): Promise<{ relinquished: true }> {
     validateRelinquishCertificateArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).relinquishCertificate(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).relinquishCertificate(args, this.originator)
   }
 
-  async discoverByIdentityKey (args: {
+  async discoverByIdentityKey(args: {
     identityKey: PubKeyHex
     limit?: PositiveIntegerDefault10Max10000
     offset?: PositiveIntegerOrZero
   }): Promise<DiscoverCertificatesResult> {
     validateDiscoverByIdentityKeyArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).discoverByIdentityKey(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).discoverByIdentityKey(args, this.originator)
   }
 
-  async discoverByAttributes (args: {
+  async discoverByAttributes(args: {
     attributes: Record<CertificateFieldNameUnder50Bytes, string>
     limit?: PositiveIntegerDefault10Max10000
     offset?: PositiveIntegerOrZero
   }): Promise<DiscoverCertificatesResult> {
     validateDiscoverByAttributesArgs(args)
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).discoverByAttributes(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).discoverByAttributes(args, this.originator)
   }
 
-  async isAuthenticated (args: object = {}): Promise<AuthenticatedResult> {
+  async isAuthenticated(args: object = {}): Promise<AuthenticatedResult> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).isAuthenticated(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).isAuthenticated(args, this.originator)
   }
 
-  async waitForAuthentication (args: object = {}): Promise<{ authenticated: true }> {
+  async waitForAuthentication(args: object = {}): Promise<{ authenticated: true }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).waitForAuthentication(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).waitForAuthentication(args, this.originator)
   }
 
-  async getHeight (args: object = {}): Promise<{ height: PositiveInteger }> {
+  async getHeight(args: object = {}): Promise<{ height: PositiveInteger }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).getHeight(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).getHeight(args, this.originator)
   }
 
-  async getHeaderForHeight (args: {
-    height: PositiveInteger
-  }): Promise<{ header: HexString }> {
+  async getHeaderForHeight(args: { height: PositiveInteger }): Promise<{ header: HexString }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).getHeaderForHeight(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).getHeaderForHeight(args, this.originator)
   }
 
-  async getNetwork (args: object = {}): Promise<{ network: 'mainnet' | 'testnet' }> {
+  async getNetwork(args: object = {}): Promise<{ network: 'mainnet' | 'testnet' }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).getNetwork(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).getNetwork(args, this.originator)
   }
 
-  async getVersion (
-    args: object = {}
-  ): Promise<{ version: VersionString7To30Bytes }> {
+  async getVersion(args: object = {}): Promise<{ version: VersionString7To30Bytes }> {
     await this.connectToSubstrate()
-    return await (this.substrate as WalletInterface).getVersion(
-      args,
-      this.originator
-    )
+    return await (this.substrate as WalletInterface).getVersion(args, this.originator)
   }
 }

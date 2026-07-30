@@ -31,7 +31,7 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
     this.paymailClient = config.paymailClient
   }
 
-  protected async validateBody(body: unknown): Promise<unknown> {
+  protected override async validateBody(body: unknown): Promise<unknown> {
     const schema = this.buildSchema()
     const { error, value } = schema.validate(body)
     if (error) {
@@ -107,7 +107,7 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
     }
   }
 
-  protected serializeResponse(domainLogicResponse: ReceiveTransactionResponse): string {
+  protected override serializeResponse(domainLogicResponse: ReceiveTransactionResponse): string {
     return JSON.stringify({
       txid: domainLogicResponse.txid,
       note: domainLogicResponse.note || ''

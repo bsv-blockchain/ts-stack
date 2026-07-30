@@ -80,10 +80,10 @@ describe('BigNumber – additional coverage', () => {
     })
 
     it('rejects non-integer and out-of-range output bases', () => {
-      expect(() => new BigNumber(1).toString(1)).toThrow(
+      expect(() => new BigNumber(1).toString(Number('1'))).toThrow(
         'Base should be an integer between 2 and 36'
       )
-      expect(() => new BigNumber(1).toString(2.5)).toThrow(
+      expect(() => new BigNumber(1).toString(Number('2.5'))).toThrow(
         'Base should be an integer between 2 and 36'
       )
     })

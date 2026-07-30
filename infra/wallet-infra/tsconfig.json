@@ -1,4 +1,5 @@
 {
+  "extends": "../../config/typescript/node-service.json",
   "compilerOptions": {
     "target": "es2022",
     "module": "nodenext",
@@ -11,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "declaration": true,
     "declarationMap": true,
     "rootDir": ".",

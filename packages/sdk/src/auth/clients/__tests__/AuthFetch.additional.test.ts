@@ -38,7 +38,7 @@ const createNonceMock = createNonce as jest.MockedFunction<typeof createNonce>
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildWallet (): any {
+function buildWallet(): any {
   const identityKey = new PrivateKey(10).toPublicKey().toString()
   const derivedKey = new PrivateKey(11).toPublicKey().toString()
   return {
@@ -48,11 +48,11 @@ function buildWallet (): any {
     createAction: jest.fn(async () => ({
       tx: Utils.toArray('mock-tx', 'utf8')
     })),
-    createHmac: jest.fn(async () => ({ hmac: new Array(32).fill(0) }))
+    createHmac: jest.fn(async () => ({ hmac: Array.from({ length: 32 }).fill(0) }))
   }
 }
 
-function make402Response (overrides: Record<string, string> = {}): Response {
+function make402Response(overrides: Record<string, string> = {}): Response {
   const headers: Record<string, string> = {
     'x-bsv-payment-version': '1.0',
     'x-bsv-payment-satoshis-required': '10',
@@ -75,9 +75,9 @@ afterEach(() => {
 describe('AuthFetch.fetch – retryCounter', () => {
   it('throws when retryCounter reaches 0', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    await expect(
-      authFetch.fetch('https://example.com', { retryCounter: 0 })
-    ).rejects.toThrow('Request failed after maximum number of retries.')
+    await expect(authFetch.fetch('https://example.com', { retryCounter: 0 })).rejects.toThrow(
+      'Request failed after maximum number of retries.'
+    )
   })
 
   it('decrements retryCounter before making the request', async () => {
@@ -119,9 +119,9 @@ describe('AuthFetch.fetch – retryCounter', () => {
 
     // With retryCounter: 2, the stale-session branch retries once; the spy
     // intercepts the recursive call and throws 'second call'.
-    await expect(
-      authFetch.fetch('https://example.com/path', { retryCounter: 2 })
-    ).rejects.toThrow('second call')
+    await expect(authFetch.fetch('https://example.com/path', { retryCounter: 2 })).rejects.toThrow(
+      'second call'
+    )
     expect(fetchCallCount).toBe(2)
   })
 })
@@ -258,7 +258,7 @@ describe('AuthFetch.handlePaymentAndRetry – header validation', () => {
 
   it('throws when x-bsv-payment-satoshis-required header is missing', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const response = make402Response({ 'x-bsv-payment-satoshis-required': '' })
+    const _response = make402Response({ 'x-bsv-payment-satoshis-required': '' })
     // Force re-check: create a response without the satoshis header entirely
     const headersRaw: Record<string, string> = {
       'x-bsv-payment-version': '1.0',
@@ -344,7 +344,7 @@ describe('AuthFetch.handlePaymentAndRetry – context compatibility', () => {
     createNonceMock.mockResolvedValue('new-suffix')
 
     const existingContext = {
-      satoshisRequired: 5,   // server now asks for 10
+      satoshisRequired: 5, // server now asks for 10
       transactionBase64: Utils.toBase64([1, 2, 3]),
       derivationPrefix: 'pfx',
       derivationSuffix: 'old-suffix',
@@ -425,7 +425,7 @@ describe('AuthFetch.handlePaymentAndRetry – maxAttempts exceeded pre-check', (
 describe('AuthFetch.serializeRequest (private)', () => {
   it('serializes a GET request with no body or headers', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(0)
+    const nonce = Array.from({ length: 32 }).fill(0)
     const writer = await (authFetch as any).serializeRequest(
       'GET',
       {},
@@ -439,7 +439,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('serializes a POST request with a JSON body', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(1)
+    const nonce = Array.from({ length: 32 }).fill(1)
     const writer = await (authFetch as any).serializeRequest(
       'POST',
       { 'content-type': 'application/json' },
@@ -452,7 +452,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('serializes a request with search params', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(2)
+    const nonce = Array.from({ length: 32 }).fill(2)
     const writer = await (authFetch as any).serializeRequest(
       'GET',
       {},
@@ -465,7 +465,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('includes x-bsv-* custom headers', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(3)
+    const nonce = Array.from({ length: 32 }).fill(3)
     const writer = await (authFetch as any).serializeRequest(
       'GET',
       { 'x-bsv-custom': 'value123' },
@@ -478,7 +478,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('includes authorization header', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(4)
+    const nonce = Array.from({ length: 32 }).fill(4)
     const writer = await (authFetch as any).serializeRequest(
       'GET',
       { authorization: 'Bearer token123' },
@@ -491,7 +491,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('throws for x-bsv-auth-* headers', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(5)
+    const nonce = Array.from({ length: 32 }).fill(5)
     await expect(
       (authFetch as any).serializeRequest(
         'GET',
@@ -505,11 +505,11 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('throws for unsupported headers', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(6)
+    const nonce = Array.from({ length: 32 }).fill(6)
     await expect(
       (authFetch as any).serializeRequest(
         'GET',
-        { 'accept': 'application/json' },
+        { accept: 'application/json' },
         undefined,
         new URL('https://example.com/'),
         nonce
@@ -519,7 +519,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('normalizes content-type by stripping parameters', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(7)
+    const nonce = Array.from({ length: 32 }).fill(7)
     // Should not throw — content-type is allowed but parameters are stripped
     const writer = await (authFetch as any).serializeRequest(
       'POST',
@@ -533,7 +533,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('defaults POST body to {} when content-type is application/json and body is undefined', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(8)
+    const nonce = Array.from({ length: 32 }).fill(8)
     // Should not throw
     const writer = await (authFetch as any).serializeRequest(
       'POST',
@@ -547,7 +547,7 @@ describe('AuthFetch.serializeRequest (private)', () => {
 
   it('defaults DELETE body to empty string when no content-type and body is undefined', async () => {
     const authFetch = new AuthFetch(buildWallet())
-    const nonce = new Array(32).fill(9)
+    const nonce = Array.from({ length: 32 }).fill(9)
     const writer = await (authFetch as any).serializeRequest(
       'DELETE',
       {},
@@ -724,7 +724,9 @@ describe('AuthFetch.normalizeBodyToNumberArray (private)', () => {
 
   it('rejects ReadableStream bodies that cannot be replayed', async () => {
     const stream = new ReadableStream()
-    await expect((authFetch as any).normalizeBodyToNumberArray(stream)).rejects.toThrow('ReadableStream')
+    await expect((authFetch as any).normalizeBodyToNumberArray(stream)).rejects.toThrow(
+      'ReadableStream'
+    )
   })
 
   it('converts a plain object via JSON.stringify', async () => {
@@ -766,7 +768,9 @@ describe('AuthFetch.getMaxPaymentAttempts (private)', () => {
   })
 
   it('returns 3 when paymentRetryAttempts is a string', () => {
-    expect((authFetch as any).getMaxPaymentAttempts({ paymentRetryAttempts: 'five' as any })).toBe(3)
+    expect((authFetch as any).getMaxPaymentAttempts({ paymentRetryAttempts: 'five' as any })).toBe(
+      3
+    )
   })
 })
 
@@ -820,7 +824,9 @@ describe('AuthFetch.wait (private)', () => {
     try {
       const authFetch = new AuthFetch(buildWallet())
       let resolved = false
-      const promise = (authFetch as any).wait(500).then(() => { resolved = true })
+      const promise = (authFetch as any).wait(500).then(() => {
+        resolved = true
+      })
       expect(resolved).toBe(false)
       await jest.advanceTimersByTimeAsync(500)
       await promise
@@ -843,16 +849,16 @@ describe('AuthFetch.waitForPendingCertificateRequests (private)', () => {
       peer.pendingCertificateRequests.shift()
     })
 
-    await expect((authFetch as any).waitForPendingCertificateRequests(peer)).resolves.toBeUndefined()
+    await expect(
+      (authFetch as any).waitForPendingCertificateRequests(peer)
+    ).resolves.toBeUndefined()
     expect(peer.pendingCertificateRequests).toEqual([])
   })
 
   it('fails closed when a pending certificate decision times out', async () => {
     const authFetch = new AuthFetch(buildWallet())
     const peer = { pendingCertificateRequests: [true] }
-    jest.spyOn(Date, 'now')
-      .mockReturnValueOnce(0)
-      .mockReturnValueOnce(30_001)
+    jest.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(30_001)
 
     await expect((authFetch as any).waitForPendingCertificateRequests(peer)).rejects.toThrow(
       'Timeout waiting for certificate request to complete'
@@ -871,7 +877,7 @@ describe('AuthFetch.isPaymentContextCompatible (private)', () => {
     authFetch = new AuthFetch(buildWallet())
   })
 
-  function makeCtx (overrides: Partial<any> = {}): any {
+  function makeCtx(overrides: Partial<any> = {}): any {
     return {
       satoshisRequired: 10,
       serverIdentityKey: 'srv',
@@ -955,21 +961,21 @@ describe('AuthFetch.sendCertificateRequest – new peer creation', () => {
 
     // Intercept Peer constructor by injecting peer directly after fetch call starts
     const origFetch = authFetch.sendCertificateRequest.bind(authFetch)
-    jest.spyOn(authFetch as any, 'sendCertificateRequest').mockImplementationOnce(
-      async (url: string, certs: any) => {
+    jest
+      .spyOn(authFetch as any, 'sendCertificateRequest')
+      .mockImplementationOnce(async (url: string, certs: any) => {
         // Manually inject our stub peer so Peer constructor is bypassed
         ;(authFetch as any).peers['https://new-server.com'] = {
           peer: peerProto,
           pendingCertificateRequests: []
         }
         return origFetch(url, certs)
-      }
-    )
+      })
 
-    const result = await authFetch.sendCertificateRequest(
-      'https://new-server.com/path',
-      { certifiers: [], types: {} } as any
-    )
+    const result = await authFetch.sendCertificateRequest('https://new-server.com/path', {
+      certifiers: [],
+      types: {}
+    } as any)
 
     expect(result).toHaveLength(1)
   })
@@ -1060,7 +1066,7 @@ describe('AuthFetch.buildPaymentFailureError (private)', () => {
     authFetch = new AuthFetch(buildWallet())
   })
 
-  function makeContext (): any {
+  function makeContext(): any {
     return {
       satoshisRequired: 10,
       transactionBase64: 'tx-base64',
@@ -1071,7 +1077,13 @@ describe('AuthFetch.buildPaymentFailureError (private)', () => {
       attempts: 3,
       maxAttempts: 3,
       errors: [],
-      requestSummary: { url: 'https://ex.com', method: 'GET', headers: {}, bodyType: 'none', bodyByteLength: 0 }
+      requestSummary: {
+        url: 'https://ex.com',
+        method: 'GET',
+        headers: {},
+        bodyType: 'none',
+        bodyByteLength: 0
+      }
     }
   }
 
@@ -1125,10 +1137,11 @@ describe('AuthFetch.buildPaymentFailureError (private)', () => {
 describe('AuthFetch.buildPaymentRequestSummary (private)', () => {
   it('builds a summary with correct fields', () => {
     const authFetch = new AuthFetch(buildWallet())
-    const summary = (authFetch as any).buildPaymentRequestSummary(
-      'https://example.com/resource',
-      { method: 'post', headers: { 'X-Custom': 'value' }, body: 'hello' }
-    )
+    const summary = (authFetch as any).buildPaymentRequestSummary('https://example.com/resource', {
+      method: 'post',
+      headers: { 'X-Custom': 'value' },
+      body: 'hello'
+    })
     expect(summary.url).toBe('https://example.com/resource')
     expect(summary.method).toBe('POST')
     expect(summary.headers).toMatchObject({ 'X-Custom': 'value' })

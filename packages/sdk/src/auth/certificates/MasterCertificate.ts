@@ -4,7 +4,7 @@ import {
   HexString,
   OutpointString,
   PubKeyHex,
-  WalletCounterparty,
+  WalletCounterparty
 } from '../../wallet/Wallet.interfaces.js'
 import Certificate from './Certificate.js'
 import * as Utils from '../../primitives/utils.js'
@@ -57,15 +57,7 @@ export class MasterCertificate extends Certificate {
       signature?: HexString
     ]
   ) {
-    super(
-      type,
-      serialNumber,
-      subject,
-      certifier,
-      revocationOutpoint,
-      fields,
-      signature
-    )
+    super(type, serialNumber, subject, certifier, revocationOutpoint, fields, signature)
 
     // Ensure every field in `fields` is a string and has a corresponding key in `masterKeyring`
     for (const fieldName of Object.keys(fields)) {
@@ -88,7 +80,7 @@ export class MasterCertificate extends Certificate {
    * @param {WalletCounterparty} certifierOrSubject - The certifier or subject who will validate the certificate fields.
    * @param {Record<CertificateFieldNameUnder50Bytes, string>} fields - A record of certificate field names (under 50 bytes) mapped to their values.
    * @param {BooleanDefaultFalse} [privileged] - Whether this is a privileged request.
-   * @param {DescriptionString5to50Bytes} [privilegedReason] - Reason provided for privileged access, required if this is a privileged operation.   * 
+   * @param {DescriptionString5to50Bytes} [privilegedReason] - Reason provided for privileged access, required if this is a privileged operation.   *
    * @returns {Promise<CreateCertificateFieldsResult>} A promise resolving to an object containing:
    *   - `certificateFields` {Record<CertificateFieldNameUnder50Bytes, Base64String>}:
    *     The encrypted certificate fields.
@@ -102,33 +94,20 @@ export class MasterCertificate extends Certificate {
     privileged?: boolean,
     privilegedReason?: string
   ): Promise<CreateCertificateFieldsResult> {
-    const certificateFields: Record<
-      CertificateFieldNameUnder50Bytes,
-      Base64String
-    > = {}
-    const masterKeyring: Record<
-      CertificateFieldNameUnder50Bytes,
-      Base64String
-    > = {}
+    const certificateFields: Record<CertificateFieldNameUnder50Bytes, Base64String> = {}
+    const masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String> = {}
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
       const fieldSymmetricKey = SymmetricKey.fromRandom()
-      const encryptedFieldValue = fieldSymmetricKey.encrypt(
-        Utils.toArray(fieldValue, 'utf8')
-      )
-      certificateFields[fieldName] = Utils.toBase64(
-        encryptedFieldValue as number[]
-      )
+      const encryptedFieldValue = fieldSymmetricKey.encrypt(Utils.toArray(fieldValue, 'utf8'))
+      certificateFields[fieldName] = Utils.toBase64(encryptedFieldValue as number[])
 
-      const { ciphertext: encryptedFieldRevelationKey } =
-        await creatorWallet.encrypt(
-          {
-            plaintext: fieldSymmetricKey.toArray(),
-            ...Certificate.getCertificateFieldEncryptionDetails(fieldName), // Only fieldName used on MasterCertificate
-            counterparty: certifierOrSubject,
-            privileged,
-            privilegedReason
-          }
-        )
+      const { ciphertext: encryptedFieldRevelationKey } = await creatorWallet.encrypt({
+        plaintext: fieldSymmetricKey.toArray(),
+        ...Certificate.getCertificateFieldEncryptionDetails(fieldName), // Only fieldName used on MasterCertificate
+        counterparty: certifierOrSubject,
+        privileged,
+        privilegedReason
+      })
       masterKeyring[fieldName] = Utils.toBase64(encryptedFieldRevelationKey)
     }
 
@@ -150,7 +129,7 @@ export class MasterCertificate extends Certificate {
    * @param {string} [originator] - Optional originator identifier, used if additional context is needed for decryption and encryption operations.
    * @returns {Promise<Record<CertificateFieldNameUnder50Bytes, string>>} - A keyring mapping field names to encrypted field revelation keys, allowing the verifier to decrypt specified fields.
    * @param {BooleanDefaultFalse} [privileged] - Whether this is a privileged request.
-   * @param {DescriptionString5to50Bytes} [privilegedReason] - Reason provided for privileged access, required if this is a privileged operation.   * 
+   * @param {DescriptionString5to50Bytes} [privilegedReason] - Reason provided for privileged access, required if this is a privileged operation.   *
    * @throws {Error} Throws an error if:
    *   - fieldsToReveal is not an array of strings.
    *   - A field in `fieldsToReveal` does not exist in the certificate.
@@ -182,10 +161,14 @@ export class MasterCertificate extends Certificate {
     if (!Array.isArray(fieldsToReveal)) {
       throw new TypeError('fieldsToReveal must be an array of strings')
     }
-    const fieldRevelationKeyring = {}
+    const fieldRevelationKeyring: Record<CertificateFieldNameUnder50Bytes, string> = {}
     for (const fieldName of fieldsToReveal) {
       // Make sure that fields to reveal is a subset of the certificate fields
-      if (fields[fieldName] === undefined || fields[fieldName] === null || fields[fieldName] === '') {
+      if (
+        fields[fieldName] === undefined ||
+        fields[fieldName] === null ||
+        fields[fieldName] === ''
+      ) {
         throw new Error(
           `Fields to reveal must be a subset of the certificate fields. Missing the "${fieldName}" field.`
         )
@@ -205,24 +188,16 @@ export class MasterCertificate extends Certificate {
       ).fieldRevelationKey
 
       // Encrypt derived fieldRevelationKey for verifier
-      const { ciphertext: encryptedFieldRevelationKey } =
-        await subjectWallet.encrypt(
-          {
-            plaintext: masterFieldKey,
-            ...Certificate.getCertificateFieldEncryptionDetails(
-              fieldName,
-              serialNumber
-            ),
-            counterparty: verifier,
-            privileged,
-            privilegedReason
-          }
-        )
+      const { ciphertext: encryptedFieldRevelationKey } = await subjectWallet.encrypt({
+        plaintext: masterFieldKey,
+        ...Certificate.getCertificateFieldEncryptionDetails(fieldName, serialNumber),
+        counterparty: verifier,
+        privileged,
+        privilegedReason
+      })
 
       // Add encryptedFieldRevelationKey to fieldRevelationKeyring
-      fieldRevelationKeyring[fieldName] = Utils.toBase64(
-        encryptedFieldRevelationKey
-      )
+      fieldRevelationKeyring[fieldName] = Utils.toBase64(encryptedFieldRevelationKey)
     }
 
     // Return the field revelation keyring which can be used to create a verifiable certificate for a verifier.
@@ -253,26 +228,28 @@ export class MasterCertificate extends Certificate {
     subject: WalletCounterparty,
     fields: Record<CertificateFieldNameUnder50Bytes, string>,
     certificateType: string,
-    getRevocationOutpoint = async (_serial: string): Promise<string> =>
-      '00'.repeat(32),
+    getRevocationOutpoint = async (_serial: string): Promise<string> => '00'.repeat(32),
     serialNumber?: string
   ): Promise<MasterCertificate> {
     // 1. Generate a random serialNumber if not provided
     const finalSerialNumber = serialNumber ?? Utils.toBase64(Random(32))
 
     // 2. Create encrypted certificate fields and associated master keyring
-    const { certificateFields, masterKeyring } =
-      await this.createCertificateFields(certifierWallet, subject, fields)
+    const { certificateFields, masterKeyring } = await this.createCertificateFields(
+      certifierWallet,
+      subject,
+      fields
+    )
 
     // 3. Obtain a revocation outpoint
     const revocationOutpoint = await getRevocationOutpoint(finalSerialNumber)
 
     let subjectIdentityKey: string
-      if (subject === 'self') {
-        subjectIdentityKey = (await certifierWallet.getPublicKey({ identityKey: true })).publicKey
-      } else {
-        subjectIdentityKey = subject
-      }
+    if (subject === 'self') {
+      subjectIdentityKey = (await certifierWallet.getPublicKey({ identityKey: true })).publicKey
+    } else {
+      subjectIdentityKey = subject
+    }
 
     // 4. Create new MasterCertificate instance
     const certificate = new MasterCertificate(
@@ -321,8 +298,7 @@ export class MasterCertificate extends Certificate {
       throw new Error('A MasterCertificate must have a valid masterKeyring!')
     }
     try {
-      const decryptedFields: Record<CertificateFieldNameUnder50Bytes, string> =
-        {}
+      const decryptedFields: Record<CertificateFieldNameUnder50Bytes, string> = {}
       // Note: we want to iterate through all fields, not just masterKeyring keys/value pairs.
       for (const fieldName of Object.keys(fields)) {
         decryptedFields[fieldName] = (
@@ -351,21 +327,18 @@ export class MasterCertificate extends Certificate {
     counterparty: WalletCounterparty,
     privileged?: boolean,
     privilegedReason?: string
-  ): Promise<{ fieldRevelationKey: number[], decryptedFieldValue: string }> {
+  ): Promise<{ fieldRevelationKey: number[]; decryptedFieldValue: string }> {
     if (masterKeyring == null || Object.keys(masterKeyring).length === 0) {
       throw new Error('A MasterCertificate must have a valid masterKeyring!')
     }
     try {
-      const { plaintext: fieldRevelationKey } =
-        await subjectOrCertifierWallet.decrypt(
-          {
-            ciphertext: Utils.toArray(masterKeyring[fieldName], 'base64'),
-            ...Certificate.getCertificateFieldEncryptionDetails(fieldName), // Only fieldName used on MasterCertificate
-            counterparty,
-            privileged,
-            privilegedReason
-          }
-        )
+      const { plaintext: fieldRevelationKey } = await subjectOrCertifierWallet.decrypt({
+        ciphertext: Utils.toArray(masterKeyring[fieldName], 'base64'),
+        ...Certificate.getCertificateFieldEncryptionDetails(fieldName), // Only fieldName used on MasterCertificate
+        counterparty,
+        privileged,
+        privilegedReason
+      })
 
       const decryptedFieldValue = new SymmetricKey(fieldRevelationKey).decrypt(
         Utils.toArray(fieldValue, 'base64')

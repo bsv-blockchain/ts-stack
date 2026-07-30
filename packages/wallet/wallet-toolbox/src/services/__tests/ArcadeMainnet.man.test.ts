@@ -1,4 +1,4 @@
-import { PrivateKey, CachedKeyDeriver, Beef, P2PKH, Utils } from '@bsv/sdk'
+import { PrivateKey, CachedKeyDeriver, Beef, P2PKH } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { Services } from '../Services'
 import { createDefaultWalletServicesOptions } from '../createDefaultWalletServicesOptions'
@@ -47,7 +47,13 @@ describe('Arcade mainnet broadcast (live, real funds)', () => {
     // Arcade-first Services on mainnet — the configuration under test.
     const serviceOptions = createDefaultWalletServicesOptions(
       'main',
-      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       ARCADE_URL
     )
     services = new Services(serviceOptions)
@@ -91,7 +97,14 @@ describe('Arcade mainnet broadcast (live, real funds)', () => {
       // For Arcade, postBeef submits Extended Format (EF) under the hood.
       const beef = Beef.fromBinary(cr.tx!)
       const pbrs = await services.postBeef(beef, [txid])
-      console.log('[arcade] postBeef results:', JSON.stringify(pbrs.map(r => ({ name: r.name, status: r.status })), null, 1))
+      console.log(
+        '[arcade] postBeef results:',
+        JSON.stringify(
+          pbrs.map(r => ({ name: r.name, status: r.status })),
+          null,
+          1
+        )
+      )
 
       // The ARC instance reports its own name ('arcade'); it is registered first as 'ArcadeBeef'.
       const arcadeResult = pbrs.find(r => r.name === 'arcade')

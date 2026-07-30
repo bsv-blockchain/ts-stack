@@ -137,8 +137,9 @@ describe('generateChange tests', () => {
 
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
 
-    expectToThrowWERR(sdk.WERR_INSUFFICIENT_FUNDS, async () =>
-      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+    expectToThrowWERR(
+      sdk.WERR_INSUFFICIENT_FUNDS,
+      async () => await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
     )
   })
 
@@ -155,8 +156,9 @@ describe('generateChange tests', () => {
 
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
 
-    expectToThrowWERR(sdk.WERR_INSUFFICIENT_FUNDS, async () =>
-      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+    expectToThrowWERR(
+      sdk.WERR_INSUFFICIENT_FUNDS,
+      async () => await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
     )
   })
 
@@ -1158,7 +1160,7 @@ describe('generateChange tests', () => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function expectToThrowWERR<R> (expectedClass: new (...args: any[]) => any, fn: () => Promise<R>): Promise<void> {
+async function expectToThrowWERR<R>(expectedClass: new (...args: any[]) => any, fn: () => Promise<R>): Promise<void> {
   try {
     await fn()
   } catch (eu: unknown) {
@@ -1170,38 +1172,38 @@ async function expectToThrowWERR<R> (expectedClass: new (...args: any[]) => any,
   throw new Error(`${expectedClass.name} was not thrown`)
 }
 
-function makeTransaction (params: GenerateChangeSdkParams, results: GenerateChangeSdkResult): BsvTransaction {
+function makeTransaction(params: GenerateChangeSdkParams, results: GenerateChangeSdkResult): BsvTransaction {
   const tx = new BsvTransaction()
   for (const i of params.fixedInputs) {
     tx.inputs.push({
-      unlockingScript: Script.fromBinary(new Array(i.unlockingScriptLength).fill(0)),
+      unlockingScript: Script.fromBinary(Array.from({ length: i.unlockingScriptLength }).fill(0)),
       sourceOutputIndex: 0,
       sourceTXID: '00'.repeat(32)
     })
   }
   for (const i of results.allocatedChangeInputs) {
     tx.inputs.push({
-      unlockingScript: Script.fromBinary(new Array(params.changeUnlockingScriptLength).fill(0)),
+      unlockingScript: Script.fromBinary(Array.from({ length: params.changeUnlockingScriptLength }).fill(0)),
       sourceOutputIndex: 0,
       sourceTXID: '00'.repeat(32)
     })
   }
   for (const o of params.fixedOutputs) {
     tx.outputs.push({
-      lockingScript: Script.fromBinary(new Array(o.lockingScriptLength).fill(0)),
+      lockingScript: Script.fromBinary(Array.from({ length: o.lockingScriptLength }).fill(0)),
       satoshis: o.satoshis
     })
   }
   for (const o of results.changeOutputs) {
     tx.outputs.push({
-      lockingScript: Script.fromBinary(new Array(o.lockingScriptLength).fill(0)),
+      lockingScript: Script.fromBinary(Array.from({ length: o.lockingScriptLength }).fill(0)),
       satoshis: o.satoshis
     })
   }
   return tx
 }
 
-function expectTransactionSize (params: GenerateChangeSdkParams, results: GenerateChangeSdkResult) {
+function expectTransactionSize(params: GenerateChangeSdkParams, results: GenerateChangeSdkResult) {
   const tx = makeTransaction(params, results)
   const size = tx.toBinary().length
   if (size !== results.size) throw new sdk.WERR_INTERNAL(`expectTransaction actual ${size} expected ${results.size}`)

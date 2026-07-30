@@ -18,7 +18,7 @@ export default class TransactionNegotiationCapabilitiesRoute extends PaymailRout
     })
   }
 
-  protected async validateBody(body: unknown): Promise<unknown> {
+  protected override async validateBody(body: unknown): Promise<unknown> {
     const feeSchema = Joi.object({
       feeType: Joi.string().valid('standard', 'data').required(),
       satoshis: Joi.number().integer().min(0).required(),
@@ -59,11 +59,11 @@ export default class TransactionNegotiationCapabilitiesRoute extends PaymailRout
     return value
   }
 
-  protected serializeResponse(): string {
+  protected override serializeResponse(): string {
     return JSON.stringify({})
   }
 
-  protected sendSuccessResponse(res: Response): Response {
+  protected override sendSuccessResponse(res: Response): Response {
     return res.type('application/json').status(202).send()
   }
 }

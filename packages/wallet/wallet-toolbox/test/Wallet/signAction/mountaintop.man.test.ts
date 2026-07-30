@@ -40,9 +40,9 @@ describe('mountaintop tests', () => {
       124, 56, 189, 3, 104, 214, 94, 76
     ]
     const msgHash = new BigNumber(msg, 16)
-    const h1 = msgHash.toHex()
+    const _h1 = msgHash.toHex()
     const msgHash2 = new BigNumber(msg)
-    const h2 = msgHash2.toHex()
+    const _h2 = msgHash2.toHex()
 
     const beef = Beef.fromString(beef0, 'hex')
     const o = parseWalletOutpoint(outpoints[0])

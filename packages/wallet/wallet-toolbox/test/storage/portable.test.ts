@@ -85,7 +85,7 @@ describe('BRC-38/39 portable wallet data', () => {
     expect(json).not.toContain('monitor_events')
     expect(parsed.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
     expect(parsed.tables.transactions.map(row => row.transactionId)).toEqual(
-      [...parsed.tables.transactions.map(row => row.transactionId)].sort((a, b) => Number(a) - Number(b))
+      parsed.tables.transactions.map(row => row.transactionId).sort((a, b) => Number(a) - Number(b))
     )
 
     const txWithRaw = verifyTruthy(parsed.tables.transactions.find(row => row.rawTx != null))
@@ -173,9 +173,8 @@ describe('BRC-38/39 portable wallet data', () => {
     const sourceRemoteSyncTransaction = verifyTruthy(
       document.tables.transactions.find(row => row.provenTxId === sourceProvenTxReq.provenTxId)
     )
-    const targetRemoteSyncTransactionId = importMap.transaction.idMap[
-      sourceRemoteSyncTransaction.transactionId as number
-    ]
+    const targetRemoteSyncTransactionId =
+      importMap.transaction.idMap[sourceRemoteSyncTransaction.transactionId as number]
     const importedRemoteSyncState = verifyOne(
       await target.activeStorage.findSyncStates({
         partial: {
@@ -219,7 +218,7 @@ describe('BRC-38/39 portable wallet data', () => {
     expect(readUInt32BE(bytes, 15)).toBe(131072)
     expect(bytes[19]).toBe(1)
     expect(bytes[20]).toBe(32)
-    expect(bytes.slice(21, 33)).toEqual(new Array(12).fill(0))
+    expect(bytes.slice(21, 33)).toEqual(Array.from({ length: 12 }).fill(0))
     expect(decoded).toEqual(document)
   })
 
@@ -240,8 +239,9 @@ describe('BRC-38/39 portable wallet data', () => {
     await expect(decryptBRC39(withByte(bytes, 9, 0), 'password')).rejects.toThrow(/salt length/)
     await expect(decryptBRC39(withBytes(bytes, 11, [0, 0, 0, 0]), 'password')).rejects.toThrow(/iterations/)
     await expect(decryptBRC39(withByte(bytes, 20, 31), 'password')).rejects.toThrow(/hashLength/)
-    await expect(decryptBRC39(withByte(bytes, bytes.length - 1, bytes[bytes.length - 1] ^ 1), 'password'))
-      .rejects.toThrow(/authentication failed/)
+    await expect(
+      decryptBRC39(withByte(bytes, bytes.length - 1, bytes[bytes.length - 1] ^ 1), 'password')
+    ).rejects.toThrow(/authentication failed/)
 
     const nonBRC38 = await makeBRC39File('{"brc":37}', 'password')
     await expect(decryptBRC39(nonBRC38, 'password')).rejects.toThrow(/brc must equal 38/)
@@ -260,9 +260,9 @@ describe('BRC-38/39 portable wallet data', () => {
     wrongChain.sourceStorage.chain = 'main'
     await expect(importBRC38(target, wrongChain, { mode: 'restore' })).rejects.toThrow(/chain mismatch/)
 
-    await expect(
-      importBRC38(target, document, { mode: 'bogus' as unknown as 'restore' })
-    ).rejects.toThrow(/Unsupported BRC-38 import mode/)
+    await expect(importBRC38(target, document, { mode: 'bogus' as unknown as 'restore' })).rejects.toThrow(
+      /Unsupported BRC-38 import mode/
+    )
   })
 
   test('exportBRC39 + importBRC39 round-trip preserves user state', async () => {
@@ -310,7 +310,7 @@ describe('BRC-38/39 portable wallet data', () => {
     expect(() => parseBRC38Json(JSON.stringify(provenTxReqDangling))).toThrow(/provenTxReq\.txid/)
   })
 
-  async function createPortableSource (databaseName: string, rootKeyHex: string): Promise<TestSetup1Wallet> {
+  async function createPortableSource(databaseName: string, rootKeyHex: string): Promise<TestSetup1Wallet> {
     const ctx = await _tu.createSQLiteTestSetup1Wallet({
       databaseName,
       chain: 'test',
@@ -347,7 +347,7 @@ describe('BRC-38/39 portable wallet data', () => {
     return ctx
   }
 
-  async function createEmptyStorage (databaseName: string): Promise<StorageKnex> {
+  async function createEmptyStorage(databaseName: string): Promise<StorageKnex> {
     const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const storage = new StorageKnex({
       ...StorageKnex.defaultOptions(),
@@ -364,7 +364,7 @@ describe('BRC-38/39 portable wallet data', () => {
   }
 })
 
-function minimalDocument (): BRC38WalletData {
+function minimalDocument(): BRC38WalletData {
   return {
     brc: 38,
     title: 'User Wallet Data Format',
@@ -402,27 +402,27 @@ function minimalDocument (): BRC38WalletData {
   }
 }
 
-function cloneDocument (document: BRC38WalletData): BRC38WalletData {
+function cloneDocument(document: BRC38WalletData): BRC38WalletData {
   return JSON.parse(JSON.stringify(document)) as BRC38WalletData
 }
 
-function withByte (bytes: number[], offset: number, value: number): number[] {
+function withByte(bytes: number[], offset: number, value: number): number[] {
   const copy = bytes.slice()
   copy[offset] = value
   return copy
 }
 
-function withBytes (bytes: number[], offset: number, values: number[]): number[] {
+function withBytes(bytes: number[], offset: number, values: number[]): number[] {
   const copy = bytes.slice()
   copy.splice(offset, values.length, ...values)
   return copy
 }
 
-function readUInt32BE (bytes: number[], offset: number): number {
+function readUInt32BE(bytes: number[], offset: number): number {
   return ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3]
 }
 
-async function makeBRC39File (plaintext: string, password: string): Promise<number[]> {
+async function makeBRC39File(plaintext: string, password: string): Promise<number[]> {
   const iterations = 1
   const memoryKiB = 64
   const parallelism = 1
@@ -457,14 +457,14 @@ async function makeBRC39File (plaintext: string, password: string): Promise<numb
   return Array.from(concatBytes(header, encrypted.result, encrypted.authenticationTag))
 }
 
-function writeUInt32BE (target: Uint8Array, offset: number, value: number): void {
+function writeUInt32BE(target: Uint8Array, offset: number, value: number): void {
   target[offset] = (value >>> 24) & 0xff
   target[offset + 1] = (value >>> 16) & 0xff
   target[offset + 2] = (value >>> 8) & 0xff
   target[offset + 3] = value & 0xff
 }
 
-function concatBytes (...arrays: Uint8Array[]): Uint8Array {
+function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((sum, bytes) => sum + bytes.length, 0)
   const out = new Uint8Array(total)
   let offset = 0

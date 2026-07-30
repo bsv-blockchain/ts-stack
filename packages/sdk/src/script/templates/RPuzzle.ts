@@ -24,15 +24,7 @@ export default class RPuzzle implements ScriptTemplate {
    *
    * @param {'raw'|'SHA1'|'SHA256'|'HASH256'|'RIPEMD160'|'HASH160'} type Denotes the type of puzzle to create
    */
-  constructor(
-    type:
-      | 'raw'
-      | 'SHA1'
-      | 'SHA256'
-      | 'HASH256'
-      | 'RIPEMD160'
-      | 'HASH160' = 'raw'
-  ) {
+  constructor(type: 'raw' | 'SHA1' | 'SHA256' | 'HASH256' | 'RIPEMD160' | 'HASH160' = 'raw') {
     this.type = type
   }
 
@@ -56,7 +48,7 @@ export default class RPuzzle implements ScriptTemplate {
     ]
     if (this.type !== 'raw') {
       chunks.push({
-        op: OP['OP_' + this.type]
+        op: OP['OP_' + this.type] as number
       })
     }
     chunks.push(
@@ -109,43 +101,28 @@ export default class RPuzzle implements ScriptTemplate {
         const otherInputs = [...tx.inputs]
         const [input] = otherInputs.splice(inputIndex, 1)
         if (typeof input.sourceTransaction !== 'object') {
-          throw new TypeError(
-            'The source transaction is needed for transaction signing.'
-          )
+          throw new TypeError('The source transaction is needed for transaction signing.')
         }
         const preimage = TransactionSignature.format({
           sourceTXID: input.sourceTransaction?.id('hex') ?? '',
           sourceOutputIndex: input.sourceOutputIndex ?? 0,
-          sourceSatoshis:
-            input.sourceTransaction?.outputs[input.sourceOutputIndex]
-              ?.satoshis ?? 0,
+          sourceSatoshis: input.sourceTransaction?.outputs[input.sourceOutputIndex]?.satoshis ?? 0,
           transactionVersion: tx.version,
           otherInputs,
           inputIndex,
           outputs: tx.outputs,
           inputSequence: input.sequence ?? 0xffffffff,
           subscript:
-            input.sourceTransaction?.outputs[input.sourceOutputIndex]
-              ?.lockingScript ?? new Script(),
+            input.sourceTransaction?.outputs[input.sourceOutputIndex]?.lockingScript ??
+            new Script(),
           lockTime: tx.lockTime,
           scope: signatureScope
         })
 
-        const rawSignature = privateKey.sign(
-          sha256(preimage),
-          undefined,
-          true,
-          k
-        )
-        const sig = new TransactionSignature(
-          rawSignature.r,
-          rawSignature.s,
-          signatureScope
-        )
+        const rawSignature = privateKey.sign(sha256(preimage), undefined, true, k)
+        const sig = new TransactionSignature(rawSignature.r, rawSignature.s, signatureScope)
         const sigForScript = sig.toChecksigFormat()
-        const pubkeyForScript = privateKey
-          .toPublicKey()
-          .encode(true) as number[]
+        const pubkeyForScript = privateKey.toPublicKey().encode(true) as number[]
         return new UnlockingScript([
           { op: sigForScript.length, data: sigForScript },
           { op: pubkeyForScript.length, data: pubkeyForScript }

@@ -30,10 +30,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {Object} [options] - Optional settings for the cache.
    * @param {number} [options.maxCacheSize=1000] - The maximum number of entries to store in the cache.
    */
-  constructor (
-    rootKey: PrivateKey | 'anyone',
-    options?: { maxCacheSize?: number }
-  ) {
+  constructor(rootKey: PrivateKey | 'anyone', options?: { maxCacheSize?: number }) {
     if (rootKey === 'anyone') {
       this.rootKey = new PrivateKey(1)
     } else {
@@ -51,7 +48,8 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     this.identityKey = this.rootKey.toPublicKey().toString()
     this.cache = new Map<string, CachedKeyValue>()
     const maxCacheSize = options?.maxCacheSize
-    this.maxCacheSize = (maxCacheSize != null && !Number.isNaN(maxCacheSize) && maxCacheSize > 0) ? maxCacheSize : 1000
+    this.maxCacheSize =
+      maxCacheSize != null && !Number.isNaN(maxCacheSize) && maxCacheSize > 0 ? maxCacheSize : 1000
   }
 
   /**
@@ -63,7 +61,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {boolean} [forSelf=false] - Whether deriving for self.
    * @returns {PublicKey} - The derived public key.
    */
-  derivePublicKey (
+  derivePublicKey(
     protocolID: WalletProtocol,
     keyID: string,
     counterparty: Counterparty,
@@ -83,30 +81,32 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       }
       return cachedValue as PublicKey
     } else {
-      const result = this.keyDeriver.derivePublicKey(
-        protocolID,
-        keyID,
-        counterparty,
-        forSelf
-      )
+      const result = this.keyDeriver.derivePublicKey(protocolID, keyID, counterparty, forSelf)
       this.cacheSet(cacheKey, result)
       return result
     }
   }
 
-  async derivePublicKeyAsync (
+  async derivePublicKeyAsync(
     protocolID: WalletProtocol,
     keyID: string,
     counterparty: Counterparty,
     forSelf: boolean = false
   ): Promise<PublicKey> {
     const cacheKey = this.generateCacheKey(
-      'derivePublicKey', protocolID, keyID, counterparty, forSelf
+      'derivePublicKey',
+      protocolID,
+      keyID,
+      counterparty,
+      forSelf
     )
     const cachedValue = this.cacheGet(cacheKey)
     if (cachedValue !== undefined) return cachedValue as PublicKey
     const result = await this.keyDeriver.derivePublicKeyAsync(
-      protocolID, keyID, counterparty, forSelf
+      protocolID,
+      keyID,
+      counterparty,
+      forSelf
     )
     this.cacheSet(cacheKey, result)
     return result
@@ -120,17 +120,12 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {Counterparty} counterparty - The counterparty's public key or a predefined value ('self' or 'anyone').
    * @returns {PrivateKey} - The derived private key.
    */
-  derivePrivateKey (
+  derivePrivateKey(
     protocolID: WalletProtocol,
     keyID: string,
     counterparty: Counterparty
   ): PrivateKey {
-    const cacheKey = this.generateCacheKey(
-      'derivePrivateKey',
-      protocolID,
-      keyID,
-      counterparty
-    )
+    const cacheKey = this.generateCacheKey('derivePrivateKey', protocolID, keyID, counterparty)
     if (this.cache.has(cacheKey)) {
       const cachedValue = this.cacheGet(cacheKey)
       if (cachedValue === undefined) {
@@ -138,11 +133,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       }
       return cachedValue as PrivateKey
     } else {
-      const result = this.keyDeriver.derivePrivateKey(
-        protocolID,
-        keyID,
-        counterparty
-      )
+      const result = this.keyDeriver.derivePrivateKey(protocolID, keyID, counterparty)
       this.cacheSet(cacheKey, result)
       return result
     }
@@ -157,17 +148,12 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @returns {SymmetricKey} - The derived symmetric key.
    * @throws {Error} - Throws an error if attempting to derive a symmetric key for 'anyone'.
    */
-  deriveSymmetricKey (
+  deriveSymmetricKey(
     protocolID: WalletProtocol,
     keyID: string,
     counterparty: Counterparty
   ): SymmetricKey {
-    const cacheKey = this.generateCacheKey(
-      'deriveSymmetricKey',
-      protocolID,
-      keyID,
-      counterparty
-    )
+    const cacheKey = this.generateCacheKey('deriveSymmetricKey', protocolID, keyID, counterparty)
     if (this.cache.has(cacheKey)) {
       const cachedValue = this.cacheGet(cacheKey)
       if (cachedValue === undefined) {
@@ -175,29 +161,21 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       }
       return cachedValue as SymmetricKey
     } else {
-      const result = this.keyDeriver.deriveSymmetricKey(
-        protocolID,
-        keyID,
-        counterparty
-      )
+      const result = this.keyDeriver.deriveSymmetricKey(protocolID, keyID, counterparty)
       this.cacheSet(cacheKey, result)
       return result
     }
   }
 
-  async deriveSymmetricKeyAsync (
+  async deriveSymmetricKeyAsync(
     protocolID: WalletProtocol,
     keyID: string,
     counterparty: Counterparty
   ): Promise<SymmetricKey> {
-    const cacheKey = this.generateCacheKey(
-      'deriveSymmetricKey', protocolID, keyID, counterparty
-    )
+    const cacheKey = this.generateCacheKey('deriveSymmetricKey', protocolID, keyID, counterparty)
     const cachedValue = this.cacheGet(cacheKey)
     if (cachedValue !== undefined) return cachedValue as SymmetricKey
-    const result = await this.keyDeriver.deriveSymmetricKeyAsync(
-      protocolID, keyID, counterparty
-    )
+    const result = await this.keyDeriver.deriveSymmetricKeyAsync(protocolID, keyID, counterparty)
     this.cacheSet(cacheKey, result)
     return result
   }
@@ -209,11 +187,8 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @returns {number[]} - The shared secret as a number array.
    * @throws {Error} - Throws an error if attempting to reveal a shared secret for 'self'.
    */
-  revealCounterpartySecret (counterparty: Counterparty): number[] {
-    const cacheKey = this.generateCacheKey(
-      'revealCounterpartySecret',
-      counterparty
-    )
+  revealCounterpartySecret(counterparty: Counterparty): number[] {
+    const cacheKey = this.generateCacheKey('revealCounterpartySecret', counterparty)
     if (this.cache.has(cacheKey)) {
       const cachedValue = this.cacheGet(cacheKey)
       if (cachedValue === undefined) {
@@ -235,17 +210,12 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {string} keyID - The key identifier.
    * @returns {number[]} - The specific key association as a number array.
    */
-  revealSpecificSecret (
+  revealSpecificSecret(
     counterparty: Counterparty,
     protocolID: WalletProtocol,
     keyID: string
   ): number[] {
-    const cacheKey = this.generateCacheKey(
-      'revealSpecificSecret',
-      counterparty,
-      protocolID,
-      keyID
-    )
+    const cacheKey = this.generateCacheKey('revealSpecificSecret', counterparty, protocolID, keyID)
     if (this.cache.has(cacheKey)) {
       const cachedValue = this.cacheGet(cacheKey)
       if (cachedValue === undefined) {
@@ -253,11 +223,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       }
       return cachedValue as number[]
     } else {
-      const result = this.keyDeriver.revealSpecificSecret(
-        counterparty,
-        protocolID,
-        keyID
-      )
+      const result = this.keyDeriver.revealSpecificSecret(counterparty, protocolID, keyID)
       this.cacheSet(cacheKey, result)
       return result
     }
@@ -269,10 +235,13 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {...any} args - The arguments passed to the method.
    * @returns {string} - The generated cache key.
    */
-  private generateCacheKey (methodName: string, ...args: Array<string | number | boolean | PublicKey | PrivateKey | Counterparty | WalletProtocol>): string {
-    const serializedArgs = args
-      .map((arg) => this.serializeArgument(arg))
-      .join('|')
+  private generateCacheKey(
+    methodName: string,
+    ...args: Array<
+      string | number | boolean | PublicKey | PrivateKey | Counterparty | WalletProtocol
+    >
+  ): string {
+    const serializedArgs = args.map(arg => this.serializeArgument(arg)).join('|')
     return `${methodName}|${serializedArgs}`
   }
 
@@ -281,11 +250,22 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {any} arg - The argument to serialize.
    * @returns {string} - The serialized argument.
    */
-  private serializeArgument (arg: string | number | boolean | PublicKey | PrivateKey | Counterparty | WalletProtocol | object | null): string {
+  private serializeArgument(
+    arg:
+      | string
+      | number
+      | boolean
+      | PublicKey
+      | PrivateKey
+      | Counterparty
+      | WalletProtocol
+      | object
+      | null
+  ): string {
     if (arg instanceof PublicKey || arg instanceof PrivateKey) {
       return arg.toString()
     } else if (Array.isArray(arg)) {
-      return arg.map((item) => this.serializeArgument(item)).join(',')
+      return arg.map(item => this.serializeArgument(item)).join(',')
     } else if (typeof arg === 'object' && arg !== null) {
       return JSON.stringify(arg)
     } else {
@@ -298,7 +278,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {string} cacheKey - The key of the cached item.
    * @returns {any} - The cached value.
    */
-  private cacheGet (cacheKey: string): CachedKeyValue | undefined {
+  private cacheGet(cacheKey: string): CachedKeyValue | undefined {
     const value = this.cache.get(cacheKey)
     // Update the entry to reflect recent use
     this.cache.delete(cacheKey)
@@ -313,11 +293,11 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {string} cacheKey - The key of the item to cache.
    * @param {any} value - The value to cache.
    */
-  private cacheSet (cacheKey: string, value: CachedKeyValue): void {
+  private cacheSet(cacheKey: string, value: CachedKeyValue): void {
     if (this.cache.size >= this.maxCacheSize) {
       // Evict the least recently used item (first item in Map)
       const firstKey = this.cache.keys().next().value
-      this.cache.delete(firstKey)
+      if (firstKey !== undefined) this.cache.delete(firstKey)
     }
     this.cache.set(cacheKey, value)
   }

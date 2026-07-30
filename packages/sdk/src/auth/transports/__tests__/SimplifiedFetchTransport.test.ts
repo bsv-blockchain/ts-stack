@@ -3,9 +3,9 @@ import { SimplifiedFetchTransport } from '../SimplifiedFetchTransport.js'
 import * as Utils from '../../../primitives/utils.js'
 import { AuthMessage } from '../../types.js'
 
-function createGeneralPayload (path = '/resource', method = 'GET'): number[] {
+function createGeneralPayload(path = '/resource', method = 'GET'): number[] {
   const writer = new Utils.Writer()
-  const requestId = new Array(32).fill(1)
+  const requestId = Array.from({ length: 32 }).fill(1)
   writer.write(requestId)
 
   const methodBytes = Utils.toArray(method, 'utf8')
@@ -23,7 +23,7 @@ function createGeneralPayload (path = '/resource', method = 'GET'): number[] {
   return writer.toArray()
 }
 
-function createGeneralMessage (overrides: Partial<AuthMessage> = {}): AuthMessage {
+function createGeneralMessage(overrides: Partial<AuthMessage> = {}): AuthMessage {
   return {
     version: '1.0',
     messageType: 'general',
@@ -31,7 +31,7 @@ function createGeneralMessage (overrides: Partial<AuthMessage> = {}): AuthMessag
     nonce: 'client-nonce',
     yourNonce: 'server-nonce',
     payload: createGeneralPayload(),
-    signature: new Array(64).fill(0),
+    signature: Array.from({ length: 64 }).fill(0),
     ...overrides
   }
 }
@@ -49,14 +49,18 @@ describe('SimplifiedFetchTransport send', () => {
     const message = createGeneralMessage()
 
     let caught: any
-    await expect((async () => {
-      try {
-        await transport.send(message)
-      } catch (error) {
-        caught = error
-        throw error
-      }
-    })()).rejects.toThrow('Network error while sending authenticated request to https://api.example.com/resource: network down')
+    await expect(
+      (async () => {
+        try {
+          await transport.send(message)
+        } catch (error) {
+          caught = error
+          throw error
+        }
+      })()
+    ).rejects.toThrow(
+      'Network error while sending authenticated request to https://api.example.com/resource: network down'
+    )
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/resource')
@@ -80,40 +84,42 @@ describe('SimplifiedFetchTransport send', () => {
     const message = createGeneralMessage()
 
     let thrown: any
-    await expect((async () => {
-      try {
-        await transport.send(message)
-      } catch (error) {
-        thrown = error
-        throw error
-      }
-    })()).rejects.toThrow('Received HTTP 200 from https://api.example.com/resource without valid BSV authentication (missing headers: x-bsv-auth-version, x-bsv-auth-identity-key, x-bsv-auth-signature)')
+    await expect(
+      (async () => {
+        try {
+          await transport.send(message)
+        } catch (error) {
+          thrown = error
+          throw error
+        }
+      })()
+    ).rejects.toThrow(
+      'Received HTTP 200 from https://api.example.com/resource without valid BSV authentication (missing headers: x-bsv-auth-version, x-bsv-auth-identity-key, x-bsv-auth-signature)'
+    )
 
     expect(thrown.details).toMatchObject({
       url: 'https://api.example.com/resource',
       status: 200,
-      missingHeaders: [
-        'x-bsv-auth-version',
-        'x-bsv-auth-identity-key',
-        'x-bsv-auth-signature'
-      ]
+      missingHeaders: ['x-bsv-auth-version', 'x-bsv-auth-identity-key', 'x-bsv-auth-signature']
     })
     expect(thrown.details.bodyPreview).toContain('missing auth')
   })
 
   test('rejects malformed requested certificates header', async () => {
     const fetchMock: jest.MockedFunction<typeof fetch> = jest.fn()
-    fetchMock.mockResolvedValue(new Response('', {
-      status: 200,
-      headers: {
-        'x-bsv-auth-version': '0.1',
-        'x-bsv-auth-identity-key': 'server-key',
-        'x-bsv-auth-signature': 'deadbeef',
-        'x-bsv-auth-message-type': 'general',
-        'x-bsv-auth-request-id': Utils.toBase64(new Array(32).fill(2)),
-        'x-bsv-auth-requested-certificates': 'not-json'
-      }
-    }))
+    fetchMock.mockResolvedValue(
+      new Response('', {
+        status: 200,
+        headers: {
+          'x-bsv-auth-version': '0.1',
+          'x-bsv-auth-identity-key': 'server-key',
+          'x-bsv-auth-signature': 'deadbeef',
+          'x-bsv-auth-message-type': 'general',
+          'x-bsv-auth-request-id': Utils.toBase64(Array.from({ length: 32 }).fill(2)),
+          'x-bsv-auth-requested-certificates': 'not-json'
+        }
+      })
+    )
 
     const transport = new SimplifiedFetchTransport('https://api.example.com', fetchMock as any)
     await transport.onData(async () => {})

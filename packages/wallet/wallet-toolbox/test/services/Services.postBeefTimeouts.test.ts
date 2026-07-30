@@ -38,7 +38,7 @@ describe('Services postBeef timeout behavior', () => {
     services.postBeefUntilSuccessSoftTimeoutPerKbMs = 1
     services.postBeefUntilSuccessSoftTimeoutMaxMs = 1000
 
-    const beef = { toBinary: () => new Array<number>(200 * 1024).fill(0) } as unknown as Beef
+    const beef = { toBinary: () => Array.from({ length: 200 * 1024 }).fill(0) } as unknown as Beef
     const results = await services.postBeef(beef, ['txid1'])
 
     expect(results).toHaveLength(1)

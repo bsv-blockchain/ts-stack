@@ -81,7 +81,7 @@ describe('StorageDownloader', () => {
       // Valid UHRP URL
       jest.spyOn(StorageUtils, 'isValidURL').mockReturnValue(true)
       // Return some random 32-byte hash so we can pass the check
-      jest.spyOn(StorageUtils, 'getHashFromURL').mockReturnValue(new Array(32).fill(0))
+      jest.spyOn(StorageUtils, 'getHashFromURL').mockReturnValue(Array.from({ length: 32 }).fill(0))
 
       // Force resolve() to return an empty array
       jest.spyOn(downloader, 'resolve').mockResolvedValue([])
@@ -124,7 +124,7 @@ describe('StorageDownloader', () => {
     it('throws if content hash mismatches the UHRP hash', async () => {
       jest.spyOn(StorageUtils, 'isValidURL').mockReturnValue(true)
       // The expected hash is all zeros
-      jest.spyOn(StorageUtils, 'getHashFromURL').mockReturnValue(new Array(32).fill(0))
+      jest.spyOn(StorageUtils, 'getHashFromURL').mockReturnValue(Array.from({ length: 32 }).fill(0))
 
       // One potential host
       jest.spyOn(downloader, 'resolve').mockResolvedValue(['http://bad-content.test'])
@@ -139,7 +139,7 @@ describe('StorageDownloader', () => {
 
     it('throws if all hosts fail or mismatch', async () => {
       jest.spyOn(StorageUtils, 'isValidURL').mockReturnValue(true)
-      jest.spyOn(StorageUtils, 'getHashFromURL').mockReturnValue(new Array(32).fill(0))
+      jest.spyOn(StorageUtils, 'getHashFromURL').mockReturnValue(Array.from({ length: 32 }).fill(0))
 
       jest
         .spyOn(downloader, 'resolve')

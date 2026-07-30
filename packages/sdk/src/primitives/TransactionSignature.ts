@@ -48,7 +48,7 @@ interface TransactionSignatureFormatParams {
 const EMPTY_SCRIPT = new Uint8Array(0)
 const ZERO_HASH = Object.freeze(Array.from({ length: 32 }, () => 0))
 
-function bip143Inputs (
+function bip143Inputs(
   params: TransactionSignatureFormatParams,
   currentInput: TransactionInput
 ): TransactionInput[] {
@@ -58,7 +58,7 @@ function bip143Inputs (
   return inputs
 }
 
-function bip143InputAt (
+function bip143InputAt(
   inputs: TransactionInput[],
   inputIndex: number,
   currentInput: TransactionInput,
@@ -67,7 +67,7 @@ function bip143InputAt (
   return index === inputIndex ? currentInput : inputs[index]
 }
 
-function hashPrevouts (
+function hashPrevouts(
   inputs: TransactionInput[],
   inputIndex: number,
   currentInput: TransactionInput
@@ -86,7 +86,7 @@ function hashPrevouts (
   return Hash.hash256(writer.toUint8Array())
 }
 
-function hashSequences (
+function hashSequences(
   inputs: TransactionInput[],
   inputIndex: number,
   currentInput: TransactionInput
@@ -99,14 +99,14 @@ function hashSequences (
   return Hash.hash256(writer.toUint8Array())
 }
 
-function writeBip143Output (writer: Writer, output: TransactionOutput): void {
+function writeBip143Output(writer: Writer, output: TransactionOutput): void {
   writer.writeUInt64LE(output.satoshis ?? 0)
   const script = output.lockingScript?.toUint8Array() ?? EMPTY_SCRIPT
   writer.writeVarIntNum(script.length)
   writer.write(script)
 }
 
-function hashOutputs (outputs: TransactionOutput[], outputIndex?: number): number[] {
+function hashOutputs(outputs: TransactionOutput[], outputIndex?: number): number[] {
   const writer = new Writer()
   if (outputIndex == null) {
     for (const output of outputs) writeBip143Output(writer, output)
@@ -118,7 +118,7 @@ function hashOutputs (outputs: TransactionOutput[], outputIndex?: number): numbe
   return Hash.hash256(writer.toUint8Array())
 }
 
-function bip143PrevoutsHash (
+function bip143PrevoutsHash(
   params: TransactionSignatureFormatParams,
   inputs: TransactionInput[],
   currentInput: TransactionInput
@@ -130,7 +130,7 @@ function bip143PrevoutsHash (
   return hash
 }
 
-function bip143SequenceHash (
+function bip143SequenceHash(
   params: TransactionSignatureFormatParams,
   inputs: TransactionInput[],
   currentInput: TransactionInput
@@ -140,14 +140,15 @@ function bip143SequenceHash (
     (params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) !== 0 ||
     baseScope === TransactionSignature.SIGHASH_SINGLE ||
     baseScope === TransactionSignature.SIGHASH_NONE
-  ) return [...ZERO_HASH]
+  )
+    return [...ZERO_HASH]
   if (params.cache?.hashSequence != null) return params.cache.hashSequence
   const hash = hashSequences(inputs, params.inputIndex, currentInput)
   if (params.cache != null) params.cache.hashSequence = hash
   return hash
 }
 
-function bip143OutputsHash (params: TransactionSignatureFormatParams): number[] {
+function bip143OutputsHash(params: TransactionSignatureFormatParams): number[] {
   const baseScope = params.scope & 31
   if (
     baseScope !== TransactionSignature.SIGHASH_SINGLE &&
@@ -158,7 +159,10 @@ function bip143OutputsHash (params: TransactionSignatureFormatParams): number[] 
     if (params.cache != null) params.cache.hashOutputsAll = hash
     return hash
   }
-  if (baseScope !== TransactionSignature.SIGHASH_SINGLE || params.inputIndex >= params.outputs.length) {
+  if (
+    baseScope !== TransactionSignature.SIGHASH_SINGLE ||
+    params.inputIndex >= params.outputs.length
+  ) {
     return [...ZERO_HASH]
   }
   const cached = params.cache?.hashOutputsSingle?.get(params.inputIndex)
@@ -333,7 +337,7 @@ export default class TransactionSignature extends Signature {
     writer.writeUInt64LE(params.sourceSatoshis)
 
     // nSequence of the input (4-byte little endian)
-    const sequenceNumber = currentInput.sequence
+    const sequenceNumber = currentInput.sequence ?? 0xffffffff
     writer.writeUInt32LE(sequenceNumber)
 
     // Outputs (none/one/all, depending on flags)
@@ -399,7 +403,7 @@ export default class TransactionSignature extends Signature {
       const scope = 1
       return new TransactionSignature(r, s, scope)
     }
-    const scope = buf.at(-1)
+    const scope = buf.at(-1)!
     const derbuf = buf.slice(0, -1)
     const tempSig = Signature.fromDER(derbuf)
     return new TransactionSignature(tempSig.r, tempSig.s, scope)

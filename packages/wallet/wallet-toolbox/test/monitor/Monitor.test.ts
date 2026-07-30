@@ -41,7 +41,7 @@ describe('Monitor tests', () => {
     if (!env.runSlowTests) return
 
     // This test takes a bit over a minute to run... un-skip it to work on it.
-    for (const { chain, wallet, services, monitor } of ctxs) {
+    for (const { chain: _chain, wallet: _wallet, services: _services, monitor } of ctxs) {
       if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
 
       {
@@ -66,7 +66,7 @@ describe('Monitor tests', () => {
     if (!env.runSlowTests) return
 
     // This test takes 10+ seconds to run... un-skip it to work on it.
-    for (const { chain, wallet, services, monitor } of ctxs) {
+    for (const { chain: _chain, wallet: _wallet, services: _services, monitor } of ctxs) {
       if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
 
       {
@@ -95,7 +95,7 @@ describe('Monitor tests', () => {
         ctxs.push(await _tu.createMySQLTestWallet({ databaseName: 'stagingdojotone', chain: 'test', rootKeyHex, dropAll: false }))
         */
 
-    for (const { chain, wallet, services, monitor } of ctxs) {
+    for (const { chain: _chain, wallet: _wallet, services: _services, monitor } of ctxs) {
       if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
 
       {
@@ -176,7 +176,7 @@ describe('Monitor tests', () => {
   test('5 TaskCheckForProofs success', async () => {
     const ctxs: TestWallet<{}>[] = []
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest5'))
-    let txidsPosted: string[] = []
+    let _txidsPosted: string[] = []
     let mockResultIndex = 0
 
     const expectedTxids = [
@@ -238,8 +238,8 @@ describe('Monitor tests', () => {
   test('6 TaskCheckForProofs fail', async () => {
     const ctxs: TestWallet<{}>[] = []
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6'))
-    let txidsPosted: string[] = []
-    let mockResultIndex = 0
+    let _txidsPosted: string[] = []
+    let _mockResultIndex = 0
 
     const expectedTxids = [
       'c099c52277426abb863dc902d0389b008ddf2301d6b40ac718746ac16ca59136',

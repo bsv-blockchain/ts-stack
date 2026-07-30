@@ -1,4 +1,5 @@
 {
+  "extends": "../../config/typescript/dual-runtime.json",
   "files": [],
   "compilerOptions": {
     "types": ["jest", "node"],

@@ -6,7 +6,7 @@ import {
   DefaultLockingScriptProvider
 } from '../modules/BasicBRC29.js'
 
-const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+const _consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
 const makeContext = (wallet: WalletInterface): ModuleContext => ({
   wallet,
@@ -14,12 +14,13 @@ const makeContext = (wallet: WalletInterface): ModuleContext => ({
   now: () => 123
 })
 
-const makeWallet = (overrides: Partial<WalletInterface> = {}): WalletInterface => ({
-  getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-  createAction: jest.fn(async () => ({ tx: [1, 2, 3] })),
-  internalizeAction: jest.fn(async () => ({ ok: true })),
-  ...overrides
-} as unknown as WalletInterface)
+const makeWallet = (overrides: Partial<WalletInterface> = {}): WalletInterface =>
+  ({
+    getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
+    createAction: jest.fn(async () => ({ tx: [1, 2, 3] })),
+    internalizeAction: jest.fn(async () => ({ ok: true })),
+    ...overrides
+  }) as unknown as WalletInterface
 
 const validSettlement = {
   customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
@@ -104,7 +105,10 @@ describe('Brc29RemittanceModule – buildSettlement option validation', () => {
   it('terminates when protocolID has negative protocol number', async () => {
     const module = new Brc29RemittanceModule()
     const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk', protocolID: [-1, 'proto'] as any } },
+      {
+        threadId: 'tid',
+        option: { amountSatoshis: 100, payee: 'pk', protocolID: [-1, 'proto'] as any }
+      },
       makeContext(makeWallet())
     )
     expect(result.action).toBe('terminate')
@@ -113,7 +117,10 @@ describe('Brc29RemittanceModule – buildSettlement option validation', () => {
   it('terminates when protocolID string is empty', async () => {
     const module = new Brc29RemittanceModule()
     const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk', protocolID: [2, '   '] as any } },
+      {
+        threadId: 'tid',
+        option: { amountSatoshis: 100, payee: 'pk', protocolID: [2, '   '] as any }
+      },
       makeContext(makeWallet())
     )
     expect(result.action).toBe('terminate')
@@ -131,7 +138,10 @@ describe('Brc29RemittanceModule – buildSettlement option validation', () => {
   it('terminates when labels is not an array', async () => {
     const module = new Brc29RemittanceModule()
     const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk', labels: 'single-label' as any } },
+      {
+        threadId: 'tid',
+        option: { amountSatoshis: 100, payee: 'pk', labels: 'single-label' as any }
+      },
       makeContext(makeWallet())
     )
     expect(result.action).toBe('terminate')
@@ -237,11 +247,11 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     })
     const module = new Brc29RemittanceModule({
       nonceProvider: {
-        createNonce: jest.fn()
-          .mockResolvedValueOnce('prefix')
-          .mockResolvedValueOnce('suffix')
+        createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
       },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac') }
+      lockingScriptProvider: {
+        pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
+      }
     })
 
     const result = await module.buildSettlement(
@@ -262,9 +272,7 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     })
     const module = new Brc29RemittanceModule({
       nonceProvider: {
-        createNonce: jest.fn()
-          .mockResolvedValueOnce('p')
-          .mockResolvedValueOnce('s')
+        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
       },
       lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
     })
@@ -286,9 +294,7 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     })
     const module = new Brc29RemittanceModule({
       nonceProvider: {
-        createNonce: jest.fn()
-          .mockResolvedValueOnce('p')
-          .mockResolvedValueOnce('s')
+        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
       },
       lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
     })
@@ -306,13 +312,13 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
   it('terminates when createAction throws an unexpected error', async () => {
     const wallet = makeWallet({
       getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-      createAction: jest.fn(async () => { throw new Error('unexpected wallet error') })
+      createAction: jest.fn(async () => {
+        throw new Error('unexpected wallet error')
+      })
     })
     const module = new Brc29RemittanceModule({
       nonceProvider: {
-        createNonce: jest.fn()
-          .mockResolvedValueOnce('p')
-          .mockResolvedValueOnce('s')
+        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
       },
       lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
     })
@@ -332,7 +338,9 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     const wallet = makeWallet()
     const module = new Brc29RemittanceModule({
       nonceProvider: {
-        createNonce: jest.fn(async () => { throw new Error('nonce error') })
+        createNonce: jest.fn(async () => {
+          throw new Error('nonce error')
+        })
       },
       lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => 'script') }
     })
@@ -353,9 +361,7 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     })
     const module = new Brc29RemittanceModule({
       nonceProvider: {
-        createNonce: jest.fn()
-          .mockResolvedValueOnce('pref')
-          .mockResolvedValueOnce('suf')
+        createNonce: jest.fn().mockResolvedValueOnce('pref').mockResolvedValueOnce('suf')
       },
       lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
     })
@@ -571,8 +577,9 @@ describe('Brc29RemittanceModule – acceptSettlement validation', () => {
   })
 
   it('rejects the unsafe basket insertion internalizeProtocol', () => {
-    expect(() => new Brc29RemittanceModule({ internalizeProtocol: 'basket insertion' }))
-      .toThrow('BRC-29 settlements cannot be internalized as basket insertions')
+    expect(() => new Brc29RemittanceModule({ internalizeProtocol: 'basket insertion' })).toThrow(
+      'BRC-29 settlements cannot be internalized as basket insertions'
+    )
   })
 })
 
@@ -630,7 +637,7 @@ describe('Brc29RemittanceModule – constructor defaults', () => {
 describe('DefaultNonceProvider and DefaultLockingScriptProvider', () => {
   it('DefaultNonceProvider.createNonce delegates to createNonce util', async () => {
     const fakeWallet = {
-      createHmac: jest.fn(async () => ({ data: new Array(32).fill(0) }))
+      createHmac: jest.fn(async () => ({ data: Array.from({ length: 32 }).fill(0) }))
     } as unknown as WalletInterface
     // createNonce will fail without real wallet; just ensure the function exists and is async
     await expect(

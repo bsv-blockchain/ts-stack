@@ -18,7 +18,7 @@ export class WalletError extends Error implements WalletErrorObject {
   // Facilitates detection of Error objects from non-error return values.
   isError = true as const
 
-  constructor (
+  constructor(
     name: string,
     message: string,
     stack?: string,
@@ -32,22 +32,22 @@ export class WalletError extends Error implements WalletErrorObject {
   /**
    * Error class compatible accessor for  `code`.
    */
-  get code (): ErrorCodeString10To40Bytes {
+  get code(): ErrorCodeString10To40Bytes {
     return this.name
   }
 
-  set code (v: ErrorCodeString10To40Bytes) {
+  set code(v: ErrorCodeString10To40Bytes) {
     this.name = v
   }
 
   /**
    * Error class compatible accessor for `description`.
    */
-  get description (): ErrorDescriptionString20To200Bytes {
+  get description(): ErrorDescriptionString20To200Bytes {
     return this.message
   }
 
-  set description (v: ErrorDescriptionString20To200Bytes) {
+  set description(v: ErrorDescriptionString20To200Bytes) {
     this.message = v
   }
 
@@ -55,23 +55,21 @@ export class WalletError extends Error implements WalletErrorObject {
    * Recovers all public fields from WalletError derived error classes and relevant Error derived errors.
    *
    */
-  private static nonEmptyString (value: unknown): string | undefined {
+  private static nonEmptyString(value: unknown): string | undefined {
     return typeof value === 'string' && value !== '' ? value : undefined
   }
 
-  private static objectErrorFields (
-    error: Record<string, unknown>
-  ): {
-      name: string
-      message: string
-      stack: string | undefined
-      details: Record<string, string> | undefined
-    } {
+  private static objectErrorFields(error: Record<string, unknown>): {
+    name: string
+    message: string
+    stack: string | undefined
+    details: Record<string, string> | undefined
+  } {
     const stringValue = WalletError.nonEmptyString
     const genericName = error.name === 'Error' || error.name === 'FetchError'
     const name = genericName
-      ? stringValue(error.code) ?? stringValue(error.status) ?? 'WERR_UNKNOWN'
-      : stringValue(error.name) ?? stringValue(error.code) ?? stringValue(error.status) ?? 'WERR_UNKNOWN'
+      ? (stringValue(error.code) ?? stringValue(error.status) ?? 'WERR_UNKNOWN')
+      : (stringValue(error.name) ?? stringValue(error.code) ?? stringValue(error.status) ?? 'WERR_UNKNOWN')
     const message = stringValue(error.message) ?? stringValue(error.description) ?? ''
     const stack = typeof error.stack === 'string' ? error.stack : undefined
     const details: Record<string, string> = {}
@@ -85,34 +83,20 @@ export class WalletError extends Error implements WalletErrorObject {
     }
   }
 
-  private static copyPublicErrorFields (
-    target: WalletError,
-    source: Record<string, unknown>
-  ): void {
-    const baseFields = new Set([
-      'status',
-      'name',
-      'code',
-      'message',
-      'description',
-      'stack',
-      'sql',
-      'sqlMessage'
-    ])
+  private static copyPublicErrorFields(target: WalletError, source: Record<string, unknown>): void {
+    const extensibleTarget = target as WalletError & Record<string, unknown>
+    const baseFields = new Set(['status', 'name', 'code', 'message', 'description', 'stack', 'sql', 'sqlMessage'])
     for (const [key, value] of Object.entries(source)) {
-      const supportedValue =
-        typeof value === 'string' ||
-        typeof value === 'number' ||
-        Array.isArray(value)
+      const supportedValue = typeof value === 'string' || typeof value === 'number' || Array.isArray(value)
       if (key === 'walletError') {
-        target[key] = WalletError.fromUnknown(value)
+        extensibleTarget[key] = WalletError.fromUnknown(value)
       } else if (!baseFields.has(key) && supportedValue) {
-        target[key] = value
+        extensibleTarget[key] = value
       }
     }
   }
 
-  static fromUnknown (err: unknown): WalletError {
+  static fromUnknown(err: unknown): WalletError {
     if (err instanceof WalletError) return err
     let message = ''
     if (typeof err === 'string') {
@@ -139,7 +123,7 @@ export class WalletError extends Error implements WalletErrorObject {
   /**
    * @returns standard HTTP error status object with status property set to 'error'.
    */
-  asStatus (): { status: string, code: string, description: string } {
+  asStatus(): { status: string; code: string; description: string } {
     return {
       status: 'error',
       code: this.name,
@@ -156,7 +140,7 @@ export class WalletError extends Error implements WalletErrorObject {
    *
    * @returns stringified JSON representation of the WalletError.
    */
-  protected toJson (): string {
+  protected toJson(): string {
     const e = new WalletError(this.name, this.message)
     const json = JSON.stringify({
       isError: true,
@@ -174,17 +158,20 @@ export class WalletError extends Error implements WalletErrorObject {
    * @param error
    * @returns stringified JSON representation of the error such that it can be desirialized to a WalletError.
    */
-  static unknownToJson (error: unknown): string {
+  static unknownToJson(error: unknown): string {
     let json: string | undefined
     let e: WalletError | undefined
     const t = typeof error
-    const ctorName: unknown = t === 'object' && error !== null ? (error as Record<string, unknown>).constructor : undefined
-    const ctor: string | undefined = ctorName != null && typeof (ctorName as Record<string, unknown>).name === 'string' ? (ctorName as Record<string, unknown>).name as string : undefined
+    const ctorName: unknown =
+      t === 'object' && error !== null ? (error as Record<string, unknown>).constructor : undefined
+    const ctor: string | undefined =
+      ctorName != null && typeof (ctorName as Record<string, unknown>).name === 'string'
+        ? ((ctorName as Record<string, unknown>).name as string)
+        : undefined
     const name = t === 'object' && error !== null && typeof (error as any).name === 'string' ? (error as any).name : ''
     const message =
       t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
-    const hasToJson: boolean =
-      t === 'object' && typeof (error as any)?.toJson === 'function'
+    const hasToJson: boolean = t === 'object' && typeof (error as any)?.toJson === 'function'
     if (ctor != null && ctor !== '' && ctor.startsWith('WERR_') && hasToJson) {
       json = (error as WalletError).toJson()
     } else if (name !== '' && message !== '') {

@@ -7,7 +7,7 @@ import { _tu } from '../../../../../test/utils/TestUtilsWalletStorage'
 describe('Chaintracks tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance
+  let _logSpy: jest.SpyInstance
   const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {

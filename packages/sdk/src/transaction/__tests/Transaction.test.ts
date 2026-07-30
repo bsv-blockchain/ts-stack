@@ -700,10 +700,12 @@ describe('Transaction', () => {
             sequence: 0xffffffff
           }
         ],
-        new Array(21).fill(null).map(() => ({
-          lockingScript: p2pkh.lock(publicKeyHash),
-          change: true
-        })),
+        Array.from({ length: 21 })
+          .fill(null)
+          .map(() => ({
+            lockingScript: p2pkh.lock(publicKeyHash),
+            change: true
+          })),
         0
       )
       await spendTx.fee(
@@ -1497,7 +1499,10 @@ describe('Transaction', () => {
       public lastSignActionArgs: any = null
       public signActionCalled: boolean = false
 
-      async createAction(args: CreateActionArgs, originator?: string): Promise<CreateActionResult> {
+      async createAction(
+        args: CreateActionArgs,
+        _originator?: string
+      ): Promise<CreateActionResult> {
         // Store the args for verification
         this.lastCreateActionArgs = args
 
@@ -1556,7 +1561,7 @@ describe('Transaction', () => {
         }
       }
 
-      async signAction(args: any, originator?: string): Promise<CreateActionResult> {
+      async signAction(args: any, _originator?: string): Promise<CreateActionResult> {
         this.signActionCalled = true
         this.lastSignActionArgs = args
 
@@ -1784,11 +1789,11 @@ describe('Transaction', () => {
 
       // Create a mock unlocking script template
       const mockTemplate = {
-        sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
+        sign: async (_tx: Transaction, _inputIndex: number): Promise<UnlockingScript> => {
           // Return a simple unlocking script
           return Script.fromASM('OP_1 OP_2')
         },
-        estimateLength: async (tx: Transaction, inputIndex: number): Promise<number> => {
+        estimateLength: async (_tx: Transaction, _inputIndex: number): Promise<number> => {
           return 73 // Standard P2PKH unlocking script length estimate
         }
       }
@@ -1871,10 +1876,10 @@ describe('Transaction', () => {
 
       // Create a mock template
       const mockTemplate = {
-        sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
+        sign: async (_tx: Transaction, _inputIndex: number): Promise<UnlockingScript> => {
           return Script.fromASM('OP_1 OP_2')
         },
-        estimateLength: async (tx: Transaction, inputIndex: number): Promise<number> => {
+        estimateLength: async (_tx: Transaction, _inputIndex: number): Promise<number> => {
           return 73
         }
       }
@@ -1972,10 +1977,10 @@ describe('Transaction', () => {
 
       // Mock template for first input
       const mockTemplate = {
-        sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
+        sign: async (_tx: Transaction, _inputIndex: number): Promise<UnlockingScript> => {
           return Script.fromASM('OP_1 OP_2')
         },
-        estimateLength: async (tx: Transaction, inputIndex: number): Promise<number> => {
+        estimateLength: async (_tx: Transaction, _inputIndex: number): Promise<number> => {
           return 73
         }
       }
@@ -2070,8 +2075,8 @@ describe('Transaction', () => {
             sourceOutputIndex: 0,
             sequence: 0xffffffff,
             unlockingScriptTemplate: {
-              sign: async (tx, inputIndex) => Script.fromASM('OP_0 OP_0'),
-              estimateLength: async (tx, inputIndex) => 100
+              sign: async (_tx, _inputIndex) => Script.fromASM('OP_0 OP_0'),
+              estimateLength: async (_tx, _inputIndex) => 100
             }
           }
         ],

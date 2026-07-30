@@ -1,7 +1,6 @@
 /** eslint-env jest */
 import { defaultChainTracker } from '../DefaultChainTracker'
 import WhatsOnChain from '../WhatsOnChain'
-import ChainTracker from '../../ChainTracker'
 
 // --- Tests ------------------------------------------------------------------
 

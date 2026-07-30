@@ -1,8 +1,8 @@
 import { Writer, Reader } from '../dist/esm/src/primitives/utils.js'
 import { runBenchmark } from './lib/benchmark-runner.js'
 
-function data (len, start = 0) {
-  const arr = new Array(len)
+function data(len, start = 0) {
+  const arr = Array.from({ length: len })
   for (let i = 0; i < len; i++) arr[i] = (start + i) & 0xff
   return arr
 }
@@ -11,7 +11,7 @@ const largePayloads = [data(2 * 1024 * 1024, 0), data(2 * 1024 * 1024, 1), data(
 const smallPayloads = Array.from({ length: 3000 }, (_, i) => data(100, i))
 const mediumPayloads = Array.from({ length: 400 }, (_, i) => data(10 * 1024, i))
 
-function mixedOps () {
+function mixedOps() {
   const writer = new Writer()
   for (let i = 0; i < 1000; i++) {
     writer.writeUInt32LE(i)
@@ -33,7 +33,7 @@ function mixedOps () {
   }
 }
 
-function rwLarge () {
+function rwLarge() {
   const writer = new Writer()
   for (const p of largePayloads) {
     writer.writeVarIntNum(p.length)
@@ -47,7 +47,7 @@ function rwLarge () {
   }
 }
 
-function rwSmall () {
+function rwSmall() {
   const writer = new Writer()
   for (const p of smallPayloads) {
     writer.writeVarIntNum(p.length)
@@ -61,7 +61,7 @@ function rwSmall () {
   }
 }
 
-function rwMedium () {
+function rwMedium() {
   const writer = new Writer()
   for (const p of mediumPayloads) {
     writer.writeVarIntNum(p.length)
@@ -75,7 +75,7 @@ function rwMedium () {
   }
 }
 
-async function main () {
+async function main() {
   const options = { minSampleMs: 300, samples: 9 }
   await runBenchmark('mixed ops', mixedOps, options)
   await runBenchmark('large payloads', rwLarge, options)
@@ -83,7 +83,7 @@ async function main () {
   await runBenchmark('400 medium payloads', rwMedium, options)
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error(err)
   process.exit(1)
 })

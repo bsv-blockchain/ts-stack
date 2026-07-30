@@ -1,6 +1,6 @@
 import { RegistryClient } from '../RegistryClient'
 import { WalletInterface } from '../../wallet/index.js'
-import { TopicBroadcaster, LookupResolver } from '../../overlay-tools/index.js'
+import { TopicBroadcaster } from '../../overlay-tools/index.js'
 import { PushDrop } from '../../script/index.js'
 import {
   DefinitionType,
@@ -81,12 +81,12 @@ jest.mock('../../transaction/index.js', () => {
 jest.mock('../../primitives/index.js', () => {
   return {
     Utils: {
-      toArray: jest.fn().mockImplementation((str: string) =>
-        Array.from(str).map((c) => c.codePointAt(0))
-      ),
+      toArray: jest
+        .fn()
+        .mockImplementation((str: string) => Array.from(str).map(c => c.codePointAt(0))),
       toUTF8: jest.fn().mockImplementation((arr: number[] | string) => {
         if (Array.isArray(arr)) {
-          return arr.map((n) => String.fromCodePoint(n)).join('')
+          return arr.map(n => String.fromCodePoint(n)).join('')
         }
         return arr
       })
@@ -165,9 +165,9 @@ describe('RegistryClient', () => {
     }
 
     registryClient = new RegistryClient(walletMock as WalletInterface, {}, TEST_ORIGINATOR)
-    
+
     // Mock the resolver instance since it's now initialized in constructor
-    ; (registryClient as any).resolver = {
+    ;(registryClient as any).resolver = {
       query: jest.fn().mockResolvedValue({ type: 'output-list', outputs: [] })
     }
 
@@ -199,9 +199,12 @@ describe('RegistryClient', () => {
         }),
         TEST_ORIGINATOR
       )
-      expect(TopicBroadcaster).toHaveBeenCalledWith(['tm_basketmap'], expect.objectContaining({
-        networkPreset: 'main'
-      }))
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_basketmap'],
+        expect.objectContaining({
+          networkPreset: 'main'
+        })
+      )
       expect(mockBroadcast).toHaveBeenCalledTimes(1)
     })
 
@@ -225,9 +228,12 @@ describe('RegistryClient', () => {
         TEST_ORIGINATOR
       )
 
-      expect(TopicBroadcaster).toHaveBeenCalledWith(['tm_protomap'], expect.objectContaining({
-        networkPreset: 'main'
-      }))
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_protomap'],
+        expect.objectContaining({
+          networkPreset: 'main'
+        })
+      )
       expect(mockBroadcast).toHaveBeenCalledTimes(1)
     })
 
@@ -251,14 +257,17 @@ describe('RegistryClient', () => {
         TEST_ORIGINATOR
       )
 
-      expect(TopicBroadcaster).toHaveBeenCalledWith(['tm_certmap'], expect.objectContaining({
-        networkPreset: 'main'
-      }))
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_certmap'],
+        expect.objectContaining({
+          networkPreset: 'main'
+        })
+      )
       expect(mockBroadcast).toHaveBeenCalledTimes(1)
     })
 
     it('should throw if createAction returns undefined tx', async () => {
-      (walletMock.createAction as jest.Mock).mockResolvedValueOnce({
+      ;(walletMock.createAction as jest.Mock).mockResolvedValueOnce({
         tx: undefined
       })
       const data = buildDefinitionData('basket')
@@ -282,7 +291,9 @@ describe('RegistryClient', () => {
   describe('resolve', () => {
     it('should return empty array if resolver does not return output-list', async () => {
       // Mock the instance resolver
-      ; (registryClient as any).resolver.query = jest.fn().mockResolvedValue({ type: 'not-output-list' })
+      ;(registryClient as any).resolver.query = jest
+        .fn()
+        .mockResolvedValue({ type: 'not-output-list' })
 
       const result = await registryClient.resolve('basket', { name: 'foo' })
       expect(result).toEqual([])
@@ -290,28 +301,28 @@ describe('RegistryClient', () => {
 
     it('should parse outputs from resolver if type is output-list', async () => {
       // Mock the instance resolver
-      ; (registryClient as any).resolver.query = jest.fn().mockResolvedValue({
+      ;(registryClient as any).resolver.query = jest.fn().mockResolvedValue({
         type: 'output-list',
         outputs: [{ beef: [9, 9, 9], outputIndex: 0 }]
       })
 
-        // Basket has 7 fields: 5 data fields + operator + signature
-        ; (PushDrop.decode as jest.Mock).mockReturnValue({
-          fields: [
-            [98], // 'b' - basketID
-            [97], // 'a' - name
-            [115], // 's' - iconURL
-            [107], // 'k' - description
-            [101], // 'e' - documentationURL
-            [116], // 't' - operator
-            [111]  // signature field
-          ]
-        })
+      // Basket has 7 fields: 5 data fields + operator + signature
+      ;(PushDrop.decode as jest.Mock).mockReturnValue({
+        fields: [
+          [98], // 'b' - basketID
+          [97], // 'a' - name
+          [115], // 's' - iconURL
+          [107], // 'k' - description
+          [101], // 'e' - documentationURL
+          [116], // 't' - operator
+          [111] // signature field
+        ]
+      })
 
-        // The final field must match the current wallet pubkey => 'mockPublicKey'
-        ; (walletMock.getPublicKey as jest.Mock).mockResolvedValueOnce({
-          publicKey: 't'
-        })
+      // The final field must match the current wallet pubkey => 'mockPublicKey'
+      ;(walletMock.getPublicKey as jest.Mock).mockResolvedValueOnce({
+        publicKey: 't'
+      })
 
       const result = await registryClient.resolve('basket', { basketID: 'whatever' })
       expect(result).toHaveLength(1)
@@ -328,7 +339,7 @@ describe('RegistryClient', () => {
 
     it('should skip outputs that fail parseLockingScript', async () => {
       // Mock the instance resolver
-      ; (registryClient as any).resolver.query = jest.fn().mockResolvedValue({
+      ;(registryClient as any).resolver.query = jest.fn().mockResolvedValue({
         type: 'output-list',
         outputs: [
           { beef: [1, 1, 1], outputIndex: 0 },
@@ -336,10 +347,10 @@ describe('RegistryClient', () => {
         ]
       })
 
-        // Return empty fields so parseLockingScript fails the length check
-        ; (PushDrop.decode as jest.Mock)
-          .mockReturnValueOnce({ fields: [] }) // fail
-          .mockReturnValueOnce({ fields: [] }) // fail again
+      // Return empty fields so parseLockingScript fails the length check
+      ;(PushDrop.decode as jest.Mock)
+        .mockReturnValueOnce({ fields: [] }) // fail
+        .mockReturnValueOnce({ fields: [] }) // fail again
 
       const result = await registryClient.resolve('basket', { name: 'fooAgain' })
       expect(result).toEqual([])
@@ -352,7 +363,7 @@ describe('RegistryClient', () => {
   describe('listOwnRegistryEntries', () => {
     it('should parse and return registry records from wallet outputs', async () => {
       // The wallet returns 3 outputs; only one is spendable
-      (walletMock.listOutputs as jest.Mock).mockResolvedValue({
+      ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
         outputs: [
           {
             outpoint: 'abc123.0',
@@ -376,40 +387,39 @@ describe('RegistryClient', () => {
           }
         ],
         BEEF: [0, 1, 2, 3]
-      });
+      })
 
       // Use a mockImplementation to inspect the lockingScript and return appropriate decoded fields.
       // Basket has 7 fields: 5 data fields + operator + signature
-      (PushDrop.decode as jest.Mock).mockImplementation((scriptObj) => {
+      ;(PushDrop.decode as jest.Mock).mockImplementation(_scriptObj => {
         return {
           fields: [
-            [98],  // 'b' - basketID
-            [97],  // 'a' - name
+            [98], // 'b' - basketID
+            [97], // 'a' - name
             [115], // 's' - iconURL
             [107], // 'k' - description
             [101], // 'e' - documentationURL
             [116], // 't' - operator
-            [111]  // signature field
+            [111] // signature field
           ]
         }
-      });
+      })
 
-      const records = await registryClient.listOwnRegistryEntries('basket');
+      const records = await registryClient.listOwnRegistryEntries('basket')
       expect(walletMock.listOutputs).toHaveBeenCalledWith({
         basket: 'basketmap',
         include: 'entire transactions'
-      });
+      })
       // Only one spendable item should be returned if parsing succeeds.
-      expect(records).toHaveLength(1);
+      expect(records).toHaveLength(1)
       expect(records[0]).toMatchObject({
         definitionType: 'basket',
         txid: 'skipMe',
         outputIndex: 2,
         satoshis: 200,
         lockingScript: 'decodedLockScript1AsHex'
-      });
-    });
-
+      })
+    })
   })
 
   // ------------------------------------------------------------------
@@ -453,14 +463,17 @@ describe('RegistryClient', () => {
         TEST_ORIGINATOR
       )
 
-      expect(TopicBroadcaster).toHaveBeenCalledWith(['tm_basketmap'], expect.objectContaining({
-        networkPreset: 'main'
-      }))
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_basketmap'],
+        expect.objectContaining({
+          networkPreset: 'main'
+        })
+      )
       expect(mockBroadcast).toHaveBeenCalled()
     })
 
     it('should throw if createAction returns no signableTransaction', async () => {
-      ; (walletMock.createAction as jest.Mock).mockResolvedValueOnce({
+      ;(walletMock.createAction as jest.Mock).mockResolvedValueOnce({
         tx: [1, 2, 3],
         signableTransaction: undefined
       })
@@ -470,7 +483,7 @@ describe('RegistryClient', () => {
     })
 
     it('should throw if signAction returns no signedTx', async () => {
-      ; (walletMock.signAction as jest.Mock).mockResolvedValueOnce({ tx: undefined })
+      ;(walletMock.signAction as jest.Mock).mockResolvedValueOnce({ tx: undefined })
       await expect(registryClient.removeDefinition(validRecord)).rejects.toThrow(
         'Failed to finalize the transaction signature.'
       )
@@ -544,9 +557,12 @@ describe('RegistryClient', () => {
         TEST_ORIGINATOR
       )
 
-      expect(TopicBroadcaster).toHaveBeenCalledWith(['tm_protomap'], expect.objectContaining({
-        networkPreset: 'main'
-      }))
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_protomap'],
+        expect.objectContaining({
+          networkPreset: 'main'
+        })
+      )
     })
 
     it('should handle certificate definition removal with correct description', async () => {
@@ -583,9 +599,12 @@ describe('RegistryClient', () => {
         TEST_ORIGINATOR
       )
 
-      expect(TopicBroadcaster).toHaveBeenCalledWith(['tm_certmap'], expect.objectContaining({
-        networkPreset: 'main'
-      }))
+      expect(TopicBroadcaster).toHaveBeenCalledWith(
+        ['tm_certmap'],
+        expect.objectContaining({
+          networkPreset: 'main'
+        })
+      )
     })
 
     it('should use certificate type as identifier when name is undefined', async () => {
@@ -618,8 +637,12 @@ describe('RegistryClient', () => {
 
     it('should use acceptDelayedBroadcast setting from constructor', async () => {
       // Create a new client with acceptDelayedBroadcast: true
-      const clientWithDelayedBroadcast = new RegistryClient(walletMock as WalletInterface, { acceptDelayedBroadcast: true }, TEST_ORIGINATOR)
-      ; (clientWithDelayedBroadcast as any).resolver = {
+      const clientWithDelayedBroadcast = new RegistryClient(
+        walletMock as WalletInterface,
+        { acceptDelayedBroadcast: true },
+        TEST_ORIGINATOR
+      )
+      ;(clientWithDelayedBroadcast as any).resolver = {
         query: jest.fn().mockResolvedValue({ type: 'output-list', outputs: [] })
       }
 

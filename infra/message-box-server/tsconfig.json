@@ -1,4 +1,5 @@
 {
+  "extends": "../../config/typescript/node-service.json",
   "compilerOptions": {
     "lib": ["dom", "ESNext"],
     "module": "NodeNext",

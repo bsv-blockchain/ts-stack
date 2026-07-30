@@ -1,5 +1,4 @@
-import { _tu, expectToThrowWERR, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
-import * as bsv from '@bsv/sdk'
+import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
 describe('getKnownTxids Tests', () => {
   jest.setTimeout(99999999)

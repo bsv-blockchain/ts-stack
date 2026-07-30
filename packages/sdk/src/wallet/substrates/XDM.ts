@@ -4,31 +4,27 @@ import { WalletError } from '../WalletError.js'
 import { CallType } from './WalletWireCalls.js'
 import { InvokableWalletBase } from './InvokableWalletBase.js'
 
-interface CWIResponse {
+type CWIResponse = {
   type: 'CWI'
   isInvocation: false
   id: string
-  status: 'success' | 'error'
-  result?: unknown
-  description?: string
-  code?: number
-}
+} & (
+  { status: 'success'; result?: unknown } | { status: 'error'; description: string; code: number }
+)
 
-function isCWIResponse (value: unknown, id: string): value is CWIResponse {
+function isCWIResponse(value: unknown, id: string): value is CWIResponse {
   if (typeof value !== 'object' || value === null) return false
   const response = value as Record<string, unknown>
-  if (
-    response.type !== 'CWI' ||
-    response.isInvocation !== false ||
-    response.id !== id
-  ) {
+  if (response.type !== 'CWI' || response.isInvocation !== false || response.id !== id) {
     return false
   }
   if (response.status === 'success') return true
-  return response.status === 'error' &&
+  return (
+    response.status === 'error' &&
     typeof response.description === 'string' &&
     typeof response.code === 'number' &&
     Number.isSafeInteger(response.code)
+  )
 }
 
 /**
@@ -48,9 +44,7 @@ export default class XDMSubstrate extends InvokableWalletBase {
       throw new TypeError('The XDM substrate requires a global window object.')
     }
     if (typeof globalThis.window.postMessage !== 'function') {
-      throw new TypeError(
-        'The window object does not seem to support postMessage calls.'
-      )
+      throw new TypeError('The window object does not seem to support postMessage calls.')
     }
     this.domain = domain
   }
@@ -64,7 +58,9 @@ export default class XDMSubstrate extends InvokableWalletBase {
           e.source !== window.parent ||
           (this.domain !== '*' && e.origin !== this.domain) ||
           !isCWIResponse(e.data, id)
-        ) { return }
+        ) {
+          return
+        }
         if (typeof window.removeEventListener === 'function') {
           window.removeEventListener('message', listener)
         }
