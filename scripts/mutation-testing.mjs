@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +16,12 @@ const CONTROL_PATH_PREFIXES = [
   'governance/mutation-testing/stryker.config.mjs'
 ]
 const CONTROL_PATHS = new Set(['package.json', 'pnpm-workspace.yaml', 'tsconfig.base.json'])
+const REGEXP_META = new RegExp(String.raw`[.*+?^$(){}|[\]\\]`, 'g')
+const OPTION_REQUIREMENTS = new Map([
+  ['--target', 'an exact target ID'],
+  ['--base', 'an exact revision'],
+  ['--affected-file', 'a path']
+])
 
 function normalized(value) {
   return value.split(path.sep).join('/').replace(/^\.\//, '')
@@ -46,7 +51,7 @@ function globPattern(pattern) {
       index += 1
     } else if (character === '*') expression += '[^/]*'
     else if (character === '?') expression += '[^/]'
-    else expression += character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    else expression += character.replace(REGEXP_META, '\\$&')
   }
   return new RegExp(`${expression}$`)
 }
@@ -116,12 +121,7 @@ export function selectAffectedMutationTargets(
 function changedPolicyTargets(base) {
   const currentPolicy = readPolicy()
   if (currentPolicy === undefined) return []
-  const basePolicy = JSON.parse(
-    execFileSync('git', ['show', `${base}:governance/mutation-testing/policy.json`], {
-      cwd: REPOSITORY_ROOT,
-      encoding: 'utf8'
-    })
-  )
+  const basePolicy = JSON.parse(gitShow(base, 'governance/mutation-testing/policy.json'))
   const currentById = new Map(currentPolicy.targets.map(target => [target.id, target]))
   const baseById = new Map(basePolicy.targets.map(target => [target.id, target]))
   return [...new Set([...currentById.keys(), ...baseById.keys()])].filter(
@@ -130,10 +130,7 @@ function changedPolicyTargets(base) {
 }
 
 async function changedConfiguredTargets(base, currentTargets) {
-  const source = execFileSync('git', ['show', `${base}:governance/mutation-testing/targets.mjs`], {
-    cwd: REPOSITORY_ROOT,
-    encoding: 'utf8'
-  })
+  const source = gitShow(base, 'governance/mutation-testing/targets.mjs')
   const module = await import(
     `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
   )
@@ -146,6 +143,13 @@ async function changedConfiguredTargets(base, currentTargets) {
 function readPolicy() {
   if (!fs.existsSync(POLICY_PATH)) return undefined
   return JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'))
+}
+
+function gitShow(revision, file) {
+  return execFileSync('/usr/bin/git', ['show', `${revision}:${file}`], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8'
+  })
 }
 
 function readReport(targetName) {
@@ -223,31 +227,29 @@ async function runTarget(targetName, target, policy) {
   if (errors.length > 0) throw new Error(errors.join('\n'))
 }
 
+function requiredArgument(arguments_, index, option) {
+  const value = arguments_[index + 1]
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`${option} requires ${OPTION_REQUIREMENTS.get(option)}`)
+  }
+  return value
+}
+
 export function parseArguments(arguments_) {
   const result = { all: false, list: false, targets: [], affectedFile: undefined, base: undefined }
   for (let index = 0; index < arguments_.length; index++) {
     const argument = arguments_[index]
-    if (argument === '--all') result.all = true
-    else if (argument === '--list') result.list = true
-    else if (argument === '--target') {
-      const target = arguments_[++index]
-      if (target === undefined || target.startsWith('--')) {
-        throw new Error('--target requires an exact target ID')
-      }
-      result.targets.push(target)
-    } else if (argument === '--affected-file') {
-      const affectedFile = arguments_[++index]
-      if (affectedFile === undefined || affectedFile.startsWith('--')) {
-        throw new Error('--affected-file requires a path')
-      }
-      result.affectedFile = affectedFile
-    } else if (argument === '--base') {
-      const base = arguments_[++index]
-      if (base === undefined || base.startsWith('--')) {
-        throw new Error('--base requires an exact revision')
-      }
-      result.base = base
-    } else throw new Error(`Unknown argument ${argument}`)
+    if (argument === '--all' || argument === '--list') {
+      result[argument.slice(2)] = true
+      continue
+    }
+    if (!['--target', '--affected-file', '--base'].includes(argument)) {
+      throw new Error(`Unknown argument ${argument}`)
+    }
+    const value = requiredArgument(arguments_, index, argument)
+    index += 1
+    if (argument === '--target') result.targets.push(value)
+    else result[argument === '--base' ? 'base' : 'affectedFile'] = value
   }
   const modes = [
     result.all,
@@ -262,6 +264,29 @@ export function parseArguments(arguments_) {
   return result
 }
 
+async function affectedTargets(options, targets) {
+  const changedFiles = fs.readFileSync(options.affectedFile, 'utf8').split(/\r?\n/)
+  if (options.base === undefined) return selectAffectedMutationTargets(targets, changedFiles)
+
+  const changedTargetIds = []
+  if (changedFiles.includes('governance/mutation-testing/policy.json')) {
+    changedTargetIds.push(...changedPolicyTargets(options.base))
+  }
+  if (changedFiles.includes('governance/mutation-testing/targets.mjs')) {
+    changedTargetIds.push(...(await changedConfiguredTargets(options.base, targets)))
+  }
+  const changedImporters = changedFiles.includes('pnpm-lock.yaml')
+    ? changedLockfileImporters(
+        gitShow(options.base, 'pnpm-lock.yaml'),
+        fs.readFileSync(path.join(REPOSITORY_ROOT, 'pnpm-lock.yaml'), 'utf8')
+      )
+    : []
+  return selectAffectedMutationTargets(targets, changedFiles, {
+    changedTargetIds: [...new Set(changedTargetIds)],
+    changedImporters
+  })
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2))
   const targets = buildMutationTargets(REPOSITORY_ROOT)
@@ -271,34 +296,7 @@ async function main() {
     return
   }
   if (options.affectedFile !== undefined) {
-    const changedFiles = fs.readFileSync(options.affectedFile, 'utf8').split(/\r?\n/)
-    let changedTargetIds = []
-    let changedImporters = []
-    if (options.base !== undefined) {
-      if (changedFiles.includes('governance/mutation-testing/policy.json')) {
-        changedTargetIds.push(...changedPolicyTargets(options.base))
-      }
-      if (changedFiles.includes('governance/mutation-testing/targets.mjs')) {
-        changedTargetIds.push(...(await changedConfiguredTargets(options.base, targets)))
-      }
-      if (changedFiles.includes('pnpm-lock.yaml')) {
-        changedImporters = changedLockfileImporters(
-          execFileSync('git', ['show', `${options.base}:pnpm-lock.yaml`], {
-            cwd: REPOSITORY_ROOT,
-            encoding: 'utf8'
-          }),
-          fs.readFileSync(path.join(REPOSITORY_ROOT, 'pnpm-lock.yaml'), 'utf8')
-        )
-      }
-    }
-    console.log(
-      JSON.stringify(
-        selectAffectedMutationTargets(targets, changedFiles, {
-          changedTargetIds: [...new Set(changedTargetIds)],
-          changedImporters
-        })
-      )
-    )
+    console.log(JSON.stringify(await affectedTargets(options, targets)))
     return
   }
 

@@ -152,10 +152,36 @@ jobs:
           --pull-request "${{ github.event.pull_request.number }}"
           --revision "${{ github.event.pull_request.head.sha }}"
 
+  early-gates:
+    name: Early policy gates
+    if: always()
+    needs:
+      - repository-health
+      - scope
+      - sonar-zero-findings
+      - dependency-review
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Stop before installing or building when a cheap gate failed
+        env:
+          HEALTH_RESULT: ${{ needs.repository-health.result }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          SONAR_RESULT: ${{ needs.sonar-zero-findings.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          if [[ "$HEALTH_RESULT" != "success" ||
+                "$SCOPE_RESULT" != "success" ||
+                ( "$SONAR_RESULT" != "success" && "$SONAR_RESULT" != "skipped" ) ||
+                ( "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ) ]]; then
+            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT sonar=$SONAR_RESULT dependency=$DEPENDENCY_RESULT"
+            exit 1
+          fi
+
   prepare:
     name: Build, lint, and policy
     needs:
-      - repository-health
+      - early-gates
       - scope
     runs-on: ubuntu-latest
     permissions:
@@ -230,6 +256,7 @@ jobs:
           AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
         run: |
           DIRECT=$(jq -r '.[].name' <<<"$DIRECT_PROJECTS")
+          AFFECTED=$(jq -r '.[].name' <<<"$AFFECTED_PROJECTS")
           printf '%s\n' "$DIRECT_PROJECTS" > .ci-direct-packages.json
           printf '%s\n' "$AFFECTED_PROJECTS" > .ci-affected-packages.json
           DEPENDENT_PROJECTS=$(jq -n -c \
@@ -278,12 +305,22 @@ jobs:
             "sdk:@bsv/sdk" \
             "did:@bsv/did" \
             "wallet:@bsv/wallet-toolbox" \
-            "wallet_client:@bsv/wallet-toolbox-client" \
-            "wallet_mobile:@bsv/wallet-toolbox-mobile" \
             "verifast:@bsv/verifast"; do
             key="${entry%%:*}"
             package="${entry#*:}"
             if grep -Fxq "$package" <<<"$DIRECT"; then
+              echo "$key=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$key=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+          for entry in \
+            "wallet_client:@bsv/wallet-toolbox-client" \
+            "wallet_mobile:@bsv/wallet-toolbox-mobile"; do
+            key="${entry%%:*}"
+            package="${entry#*:}"
+            if grep -Fxq "$package" <<<"$AFFECTED"; then
               echo "$key=true" >> "$GITHUB_OUTPUT"
             else
               echo "$key=false" >> "$GITHUB_OUTPUT"
@@ -1085,7 +1122,7 @@ jobs:
   infra-scope:
     name: Detect affected infrastructure
     needs:
-      - repository-health
+      - early-gates
       - scope
     runs-on: ubuntu-latest
     permissions: {}
@@ -1183,7 +1220,7 @@ jobs:
   docs-validate:
     name: Docs Site Validation
     needs:
-      - repository-health
+      - early-gates
       - scope
     runs-on: ubuntu-latest
     # Run on every PR (cheap and protects the docs site) and on pushes that touch docs
@@ -1228,7 +1265,7 @@ jobs:
   conformance:
     name: Conformance Vectors
     needs:
-      - repository-health
+      - early-gates
       - scope
     if: needs.scope.outputs.conformance == 'true'
     runs-on: ubuntu-latest

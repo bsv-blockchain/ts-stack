@@ -79,7 +79,7 @@ function unquote(value) {
 export function lockfileImporterSections(source) {
   const sections = new Map()
   const lines = source.split(/\r?\n/)
-  const importersIndex = lines.findIndex(line => line === 'importers:')
+  const importersIndex = lines.indexOf('importers:')
   if (importersIndex === -1) return sections
 
   let importer
@@ -90,7 +90,7 @@ export function lockfileImporterSections(source) {
   for (let index = importersIndex + 1; index < lines.length; index += 1) {
     const line = lines[index]
     if (/^[^\s]/.test(line) && line !== '') break
-    const match = /^  (\S.*):$/.exec(line)
+    const match = /^ {2}(\S.*):$/.exec(line)
     if (match !== null) {
       flush()
       importer = unquote(match[1])
@@ -264,7 +264,7 @@ function parseArguments(arguments_) {
 }
 
 function gitText(arguments_) {
-  return execFileSync('git', arguments_, { cwd: REPOSITORY_ROOT, encoding: 'utf8' })
+  return execFileSync('/usr/bin/git', arguments_, { cwd: REPOSITORY_ROOT, encoding: 'utf8' })
 }
 
 function loadProjects() {

@@ -45,8 +45,9 @@ outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
 package-composition reports without rebuilding the workspace. The cheap
-repository-health and scope gates complete before dependency installation and
-all expensive matrices cancel unfinished siblings after the first failure.
+repository-health, scope, Sonar, and dependency-review gates complete before
+dependency installation, and all expensive matrices cancel unfinished siblings
+after the first failure.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
 

@@ -21,6 +21,10 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
     /^      matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.browser-matrix\) \}\}$/m
   )
   assert.match(workflow, /PREBUILT_PACKAGE_OUTPUTS: '1'/)
+  assert.match(workflow, /^  early-gates:$/m)
+  assert.match(workflow, /Stop before installing or building when a cheap gate failed/)
+  assert.match(workflow, /AFFECTED=\$\(jq -r '\.\[\]\.name' <<<"\$AFFECTED_PROJECTS"\)/)
+  assert.match(workflow, /"wallet_client:@bsv\/wallet-toolbox-client"/)
   assert.match(workflow, /BROWSER_COMPOSITION_DIRECTORY:/)
   assert.match(workflow, /name: browser-composition-\$\{\{ matrix\.shard \}\}/)
   assert.match(workflow, /name: browser-composition-sdk/)
