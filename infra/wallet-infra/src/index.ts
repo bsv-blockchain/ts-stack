@@ -1,4 +1,3 @@
-import { PrivateKey, KeyDeriver, LookupResolver } from '@bsv/sdk'
 import {
   Services,
   MockServices,
@@ -8,19 +7,43 @@ import {
   WalletStorageServerOptions,
   StorageServer,
   Wallet,
-  Monitor
+  Monitor,
+  type WalletArgs
 } from '@bsv/wallet-toolbox'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
 import { spawn, type ChildProcess } from 'node:child_process'
 import type { Server } from 'node:http'
+import { createRequire } from 'node:module'
 import packageJson from '../package.json' with { type: 'json' }
 import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { log } from './logger.js'
 
 import * as dotenv from 'dotenv'
 dotenv.config()
+
+type WalletKeyDeriver = WalletArgs['keyDeriver']
+type WalletLookupResolver = NonNullable<WalletArgs['lookupResolver']>
+
+interface CjsSdk {
+  PrivateKey: {
+    fromHex: (hex: string) => {
+      toPublicKey: () => { toString: () => string }
+    }
+  }
+  KeyDeriver: new (rootKey: unknown) => WalletKeyDeriver
+  LookupResolver: new (options: {
+    networkPreset: 'local' | 'mainnet' | 'testnet'
+  }) => WalletLookupResolver
+}
+
+// wallet-toolbox is CommonJS and therefore resolves @bsv/sdk's require
+// condition. Load the SDK through the same condition so nominal classes with
+// private fields do not split across the ESM and CommonJS declaration graphs.
+const { PrivateKey, KeyDeriver, LookupResolver } = createRequire(
+  import.meta.url
+)('@bsv/sdk') as CjsSdk
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)
 let shutdownPromise: Promise<void> | undefined
@@ -53,7 +76,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
   storage: WalletStorageManager
   services: Services | MockServices
   settings: TableSettings
-  keyDeriver: KeyDeriver
+  keyDeriver: WalletKeyDeriver
   wallet: Wallet
   server: StorageServer
   monitor: Monitor
