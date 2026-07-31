@@ -17,7 +17,19 @@ const profiles = [
   { label: 'Express 5', express: '5.2.1', types: '5.0.6' }
 ]
 
-const source = `import express, { type RequestHandler } from 'express'
+const sources = {
+  '@bsv/paymail': `import express, { type Router } from 'express'
+import { PaymailRouter } from '@bsv/paymail'
+
+const app = express()
+const router: Router = new PaymailRouter({
+  baseUrl: 'https://paymail.example.com',
+  routes: []
+}).getRouter()
+
+app.use(router)
+`,
+  '@bsv/auth-express-middleware': `import express, { type RequestHandler } from 'express'
 import type { WalletInterface } from '@bsv/sdk'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
@@ -29,7 +41,37 @@ app.use(authentication)
 app.get('/private', (req: AuthRequest, res) => {
   res.json({ identityKey: req.auth?.identityKey })
 })
+`,
+  '@bsv/payment-express-middleware': `import express, { type RequestHandler } from 'express'
+import type { WalletInterface } from '@bsv/sdk'
+import {
+  createPaymentMiddleware,
+  type PaymentRequest
+} from '@bsv/payment-express-middleware'
+
+declare const wallet: WalletInterface
+const app = express()
+const payment: RequestHandler = createPaymentMiddleware({ wallet })
+
+app.use(payment)
+app.get('/paid', (req: PaymentRequest, res) => {
+  res.json({ satoshisPaid: req.payment?.satoshisPaid })
+})
+`,
+  '@bsv/wallet-relay': `import express from 'express'
+import { createServer } from 'node:http'
+import {
+  WalletRelayService,
+  type WalletRelayServiceOptions
+} from '@bsv/wallet-relay'
+
+declare const wallet: WalletRelayServiceOptions['wallet']
+const app = express()
+const server = createServer(app)
+
+new WalletRelayService({ app, server, wallet })
 `
+}
 
 const tsconfig = {
   compilerOptions: {
@@ -56,7 +98,7 @@ async function pack(packageDirectory, temporaryDirectory) {
   return path.resolve(JSON.parse(stdout).filename)
 }
 
-async function verifyProfile(tarball, profile, temporaryDirectory) {
+async function verifyProfile(packageName, source, tarball, profile, temporaryDirectory) {
   const consumerDirectory = path.join(
     temporaryDirectory,
     `express-${profile.express.split('.')[0]}-consumer`
@@ -95,13 +137,7 @@ async function verifyProfile(tarball, profile, temporaryDirectory) {
   await run('npm', ['ls', '--all', 'express', '@types/express'], { cwd: consumerDirectory })
   const installedManifest = JSON.parse(
     await fs.readFile(
-      path.join(
-        consumerDirectory,
-        'node_modules',
-        '@bsv',
-        'auth-express-middleware',
-        'package.json'
-      ),
+      path.join(consumerDirectory, 'node_modules', ...packageName.split('/'), 'package.json'),
       'utf8'
     )
   )
@@ -109,18 +145,27 @@ async function verifyProfile(tarball, profile, temporaryDirectory) {
     installedManifest.dependencies?.express ||
     installedManifest.dependencies?.['@types/express']
   ) {
-    throw new Error(`${profile.label} consumer received a nested Express runtime or type graph`)
+    throw new Error(
+      `${packageName} ${profile.label} consumer received a nested Express runtime or type graph`
+    )
   }
 }
 
 const packageDirectory = path.resolve(process.argv[2] ?? '.')
+const packageManifest = JSON.parse(
+  await fs.readFile(path.join(packageDirectory, 'package.json'), 'utf8')
+)
+const source = sources[packageManifest.name]
+if (source === undefined) {
+  throw new Error(`Unsupported Express middleware package: ${packageManifest.name}`)
+}
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'auth-express-consumers-'))
 try {
   const tarball = await pack(packageDirectory, temporaryDirectory)
-  for (const profile of profiles) await verifyProfile(tarball, profile, temporaryDirectory)
-  console.log(
-    'Verified @bsv/auth-express-middleware clean TypeScript consumers on Express 4 and 5.'
-  )
+  for (const profile of profiles) {
+    await verifyProfile(packageManifest.name, source, tarball, profile, temporaryDirectory)
+  }
+  console.log(`Verified ${packageManifest.name} clean TypeScript consumers on Express 4 and 5.`)
 } finally {
   await fs.rm(temporaryDirectory, { recursive: true, force: true })
 }

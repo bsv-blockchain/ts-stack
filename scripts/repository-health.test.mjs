@@ -127,6 +127,44 @@ test('published declaration dependencies are explicit and backed by runtime modu
   )
 })
 
+test('host framework extensions share the consumer runtime and declaration graph', () => {
+  const hostExtensions = projects.projects.filter(project => project.hostPeerDependencies)
+  assert.deepEqual(
+    hostExtensions.map(project => project.name),
+    [
+      '@bsv/paymail',
+      '@bsv/auth-express-middleware',
+      '@bsv/payment-express-middleware',
+      '@bsv/wallet-relay'
+    ]
+  )
+  assert.ok(
+    hostExtensions.every(
+      project =>
+        project.hostPeerDependencies.length === 1 && project.hostPeerDependencies[0] === 'express'
+    )
+  )
+
+  const invalidDiscovered = structuredClone(discoverWorkspaceProjects())
+  const paymail = invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail')
+  paymail.manifest.dependencies.express = paymail.manifest.peerDependencies.express
+  delete paymail.manifest.peerDependencies.express
+  assert.match(
+    validateProjectRegistry(projects, invalidDiscovered).join('\n'),
+    /must publish host framework express as a peer dependency/
+  )
+
+  const untestedDiscovered = structuredClone(discoverWorkspaceProjects())
+  const walletRelay = untestedDiscovered.find(
+    project => project.manifest.name === '@bsv/wallet-relay'
+  )
+  walletRelay.manifest.scripts['pack:check'] = 'pnpm build'
+  assert.match(
+    validateProjectRegistry(projects, untestedDiscovered).join('\n'),
+    /must test clean Express 4 and 5 host consumers in pack:check/
+  )
+})
+
 test('every public package declares supported runtime and canonical support metadata', () => {
   const publicPackages = discoverWorkspaceProjects().filter(
     project => project.manifest.private !== true

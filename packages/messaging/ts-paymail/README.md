@@ -7,11 +7,16 @@ transaction negotiation, and simple ordinal flows.
 ## Requirements and installation
 
 The package supports Node.js 22 or newer. Install the package and its required
-SDK peer:
+SDK and Express peers:
 
 ```sh
 npm install @bsv/paymail @bsv/sdk
+npm install express @types/express
 ```
+
+The router uses the host application's Express runtime and type graph and
+supports Express 4.18 or newer, including Express 5. Browser bundles still
+exclude the server router and its Express implementation.
 
 The package publishes native ESM and CommonJS entry points with
 module-specific declarations. The root browser condition contains only the

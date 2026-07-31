@@ -1,6 +1,6 @@
 {
   "name": "@bsv/paymail",
-  "version": "2.4.5",
+  "version": "2.4.6",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -156,7 +156,7 @@
     "example:sendP2P": "pnpm build:example && pnpm --filter example-paymail sendP2P",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/messaging/ts-paymail/**/*.{cjs,js,json,ts}\"",
     "lint": "oxlint mod.ts mod.browser.ts src --deny-warnings",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports Capability,PublicKeyInfrastructureCapability,PublicProfileCapability,P2pPaymentDestinationCapability,ReceiveTransactionCapability,RequestSenderValidationCapability,VerifyPublicKeyOwnerCapability,P2pReceiveBeefTransactionCapability,NegotiationCapability,TransactionNegotiationCapability,SimpleP2pOrdinalDestinationsCapability,SimpleP2pOrdinalReceiveCapability,PaymailClient,DNSResolver,HttpClient,AbstractDnsResolver,PaymailRouter,PaymailRoute,P2pPaymentDestinationRoute,PublicKeyInfrastructureRoute,ReceiveTransactionRoute,PublicProfileRoute,VerifyPublicKeyOwnerRoute,ReceiveBeefTransactionRoute,NegotiationCapabilitiesRoute,TransactionNegotiationCapabilitiesRoute,OrdinalP2pPaymentDestinationRoute,SimpleP2pOrdinalReceiveRoute,PaymailError,PaymailBadRequestError,PaymailServerResponseError --entry-exports \"./client=PaymailClient|DNSResolver|HttpClient|AbstractDnsResolver;./capability=Capability|PublicKeyInfrastructureCapability|PublicProfileCapability|P2pPaymentDestinationCapability|ReceiveTransactionCapability|RequestSenderValidationCapability|VerifyPublicKeyOwnerCapability|P2pReceiveBeefTransactionCapability|NegotiationCapability|TransactionNegotiationCapability|SimpleP2pOrdinalDestinationsCapability|SimpleP2pOrdinalReceiveCapability;./router=PaymailRouter|PaymailRoute|P2pPaymentDestinationRoute|PublicKeyInfrastructureRoute|ReceiveTransactionRoute|PublicProfileRoute|VerifyPublicKeyOwnerRoute|ReceiveBeefTransactionRoute|NegotiationCapabilitiesRoute|TransactionNegotiationCapabilitiesRoute|OrdinalP2pPaymentDestinationRoute|SimpleP2pOrdinalReceiveRoute;./errors=PaymailError|PaymailBadRequestError|PaymailServerResponseError\"",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports Capability,PublicKeyInfrastructureCapability,PublicProfileCapability,P2pPaymentDestinationCapability,ReceiveTransactionCapability,RequestSenderValidationCapability,VerifyPublicKeyOwnerCapability,P2pReceiveBeefTransactionCapability,NegotiationCapability,TransactionNegotiationCapability,SimpleP2pOrdinalDestinationsCapability,SimpleP2pOrdinalReceiveCapability,PaymailClient,DNSResolver,HttpClient,AbstractDnsResolver,PaymailRouter,PaymailRoute,P2pPaymentDestinationRoute,PublicKeyInfrastructureRoute,ReceiveTransactionRoute,PublicProfileRoute,VerifyPublicKeyOwnerRoute,ReceiveBeefTransactionRoute,NegotiationCapabilitiesRoute,TransactionNegotiationCapabilitiesRoute,OrdinalP2pPaymentDestinationRoute,SimpleP2pOrdinalReceiveRoute,PaymailError,PaymailBadRequestError,PaymailServerResponseError --entry-exports \"./client=PaymailClient|DNSResolver|HttpClient|AbstractDnsResolver;./capability=Capability|PublicKeyInfrastructureCapability|PublicProfileCapability|P2pPaymentDestinationCapability|ReceiveTransactionCapability|RequestSenderValidationCapability|VerifyPublicKeyOwnerCapability|P2pReceiveBeefTransactionCapability|NegotiationCapability|TransactionNegotiationCapability|SimpleP2pOrdinalDestinationsCapability|SimpleP2pOrdinalReceiveCapability;./router=PaymailRouter|PaymailRoute|P2pPaymentDestinationRoute|PublicKeyInfrastructureRoute|ReceiveTransactionRoute|PublicProfileRoute|VerifyPublicKeyOwnerRoute|ReceiveBeefTransactionRoute|NegotiationCapabilitiesRoute|TransactionNegotiationCapabilitiesRoute|OrdinalP2pPaymentDestinationRoute|SimpleP2pOrdinalReceiveRoute;./errors=PaymailError|PaymailBadRequestError|PaymailServerResponseError\" && node ../../../scripts/check-auth-express-consumers.mjs .",
     "prepublishOnly": "pnpm build",
     "start:example:server": "pnpm build:example && pnpm --filter example-paymail server",
     "test": "jest",
@@ -186,18 +186,18 @@
     "Paymail"
   ],
   "dependencies": {
-    "@types/express": "^5.0.6",
     "cross-fetch": "^4.1.0",
-    "express": "^5.2.1",
     "joi": "^18.2.3"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.4.1",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@types/supertest": "^7.2.1",
     "@typescript/native": "npm:typescript@7.0.2",
+    "express": "^5.2.1",
     "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.76.0",
@@ -208,10 +208,18 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.6",
+    "@types/express": ">=4.17.0 <6",
+    "express": ">=4.18.0 <6"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
+      "optional": false
+    },
+    "@types/express": {
+      "optional": false
+    },
+    "express": {
       "optional": false
     }
   }

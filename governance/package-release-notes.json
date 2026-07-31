@@ -133,15 +133,15 @@
       "name": "@bsv/paymail",
       "publishedVersion": "2.4.2",
       "releaseType": "patch",
-      "summary": "Modernizes the package contract and hardens DNS, capability discovery, and browser-compatible Paymail behavior.",
-      "migration": "No consumer migration is required; existing Paymail client APIs and protocol semantics are retained."
+      "summary": "Modernizes the package contract, hardens DNS, capability discovery, and browser-compatible Paymail behavior, and shares the host application's Express runtime and types for server routers.",
+      "migration": "Existing Paymail client APIs and protocol semantics are retained. Consumers provide one Express 4.18 or 5 runtime and matching type graph; browser bundles continue to exclude the server router implementation."
     },
     {
       "name": "@bsv/payment-express-middleware",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Standardizes package quality and strengthens payment middleware validation, edge policy, and failure handling.",
-      "migration": "No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported."
+      "summary": "Standardizes package quality, strengthens payment middleware validation, edge policy, and failure handling, and shares the host application's Express runtime and types.",
+      "migration": "No consumer migration is required; legacy x-bsv-payment JSON behavior remains supported, and Express 4 and 5 applications use their own peer-provided Express installation."
     },
     {
       "name": "@bsv/sdk",
@@ -189,8 +189,8 @@
       "name": "@bsv/wallet-relay",
       "publishedVersion": "0.2.2",
       "releaseType": "minor",
-      "summary": "Adds the strict package and artifact contract, strengthens relay runtime, declaration consistency, native QR accessibility, and CLI control flow, and distinguishes generated consumer customization markers from unfinished library work.",
-      "migration": "QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers."
+      "summary": "Adds the strict package and artifact contract, strengthens relay runtime, declaration consistency, native QR accessibility, CLI control flow, and host-owned Express type compatibility, and distinguishes generated consumer customization markers from unfinished library work.",
+      "migration": "QRPairingCode now renders a native button and accepts button wrapper attributes. Existing className, style, data, and ARIA props continue to work; update div-specific wrapper selectors or explicitly typed div event handlers. Express integrations now use the host application's matching Express runtime and type graph."
     },
     {
       "name": "@bsv/wallet-toolbox",

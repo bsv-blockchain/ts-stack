@@ -499,6 +499,7 @@
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -543,6 +544,7 @@
       "criticality": "tier-1",
       "runtimeTargets": ["node"],
       "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -555,6 +557,7 @@
       "criticality": "tier-1",
       "runtimeTargets": ["node"],
       "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
@@ -695,6 +698,7 @@
       "criticality": "tier-1",
       "runtimeTargets": ["browser", "node"],
       "declarationDependencies": ["@types/express"],
+      "hostPeerDependencies": ["express"],
       "release": "npm-oidc"
     },
     {
