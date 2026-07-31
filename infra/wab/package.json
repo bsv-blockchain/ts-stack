@@ -52,7 +52,7 @@
     "@types/express": "^5.0.6",
     "@types/express-serve-static-core": "^5.1.2",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.1.2",
+    "@types/node": "^24.13.3",
     "@typescript/native": "npm:typescript@7.0.2",
     "body-parser": "^2.3.0",
     "jest": "^30.4.2",

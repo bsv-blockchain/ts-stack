@@ -98,7 +98,7 @@
     "@bsv/wallet-toolbox-client": "workspace:^",
     "@types/express": "^5.0.6",
     "body-parser": "^2.3.0",
-    "chalk": "^6.0.0",
+    "chalk": "^5.6.2",
     "express": "^5.2.1",
     "knex": "^3.3.0",
     "mongodb": "^7.5.0",
