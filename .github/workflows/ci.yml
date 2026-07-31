@@ -188,6 +188,7 @@ jobs:
     needs:
       - early-gates
       - scope
+    if: always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1144,6 +1145,7 @@ jobs:
     needs:
       - early-gates
       - scope
+    if: always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -1249,7 +1251,11 @@ jobs:
     timeout-minutes: 20
     # Run on every PR (cheap and protects the docs site) and on pushes that touch docs
     # The build step inside will fail fast on frontmatter or link problems before they reach production
-    if: needs.scope.outputs.docs == 'true'
+    if: >-
+      always() &&
+      needs.early-gates.result == 'success' &&
+      needs.scope.result == 'success' &&
+      needs.scope.outputs.docs == 'true'
     permissions:
       contents: read
     steps:
@@ -1291,7 +1297,11 @@ jobs:
     needs:
       - early-gates
       - scope
-    if: needs.scope.outputs.conformance == 'true'
+    if: >-
+      always() &&
+      needs.early-gates.result == 'success' &&
+      needs.scope.result == 'success' &&
+      needs.scope.outputs.conformance == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

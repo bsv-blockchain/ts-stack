@@ -74,6 +74,22 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
   assert.equal(workflow.match(/mongodb-memory-server binary cache warmed/g)?.length, 2)
 })
 
+test('CI push jobs survive intentionally skipped pull-request-only gates', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
+  const directGateCondition =
+    "always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
+
+  assert.ok(jobs.prepare.includes(`    if: ${directGateCondition}\n`))
+  assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
+  for (const jobName of ['docs-validate', 'conformance']) {
+    assert.match(jobs[jobName], /^    if: >-$/m)
+    assert.match(jobs[jobName], /^      always\(\) &&$/m)
+    assert.match(jobs[jobName], /^      needs\.early-gates\.result == 'success' &&$/m)
+    assert.match(jobs[jobName], /^      needs\.scope\.result == 'success' &&$/m)
+  }
+})
+
 test('CI bounds every job and allocates no runner for an empty infrastructure matrix', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = workflowJobBlocks(workflow)
