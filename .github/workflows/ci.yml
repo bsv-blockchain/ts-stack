@@ -16,6 +16,7 @@ jobs:
   repository-health:
     name: Repository health contract
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -69,6 +70,7 @@ jobs:
   scope:
     name: Select affected work
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -77,6 +79,7 @@ jobs:
       build-projects: ${{ steps.scope.outputs.build-projects }}
       mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
+      has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
       conformance: ${{ steps.scope.outputs.conformance }}
     steps:
@@ -120,6 +123,7 @@ jobs:
           echo "docs=$(jq -r '.docs' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "conformance=$(jq -r '.conformance' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
           echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
+          echo "has-infra=$(jq -r '.infraMatrix.include | length > 0' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
 
           {
             echo '### Affected scope'
@@ -161,6 +165,7 @@ jobs:
       - sonar-zero-findings
       - dependency-review
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Stop before installing or building when a cheap gate failed
@@ -184,6 +189,7 @@ jobs:
       - early-gates
       - scope
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read
@@ -464,6 +470,7 @@ jobs:
       - prepare
       - mutation-tests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Verify the affected mutation targets
@@ -482,6 +489,7 @@ jobs:
     if: needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -524,6 +532,7 @@ jobs:
     if: needs.prepare.outputs.dependent-test-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -587,6 +596,7 @@ jobs:
     if: needs.prepare.outputs.browser-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     strategy:
@@ -650,6 +660,7 @@ jobs:
     if: needs.prepare.outputs.wallet_client == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -683,6 +694,7 @@ jobs:
     if: needs.prepare.outputs.wallet_mobile == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -706,6 +718,7 @@ jobs:
     if: needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -756,6 +769,7 @@ jobs:
     if: needs.prepare.outputs.did == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -790,6 +804,7 @@ jobs:
     if: needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: read
     strategy:
@@ -838,6 +853,7 @@ jobs:
     if: needs.prepare.outputs.wallet == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -882,6 +898,7 @@ jobs:
     if: needs.prepare.outputs.verifast == 'true'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -933,6 +950,7 @@ jobs:
     if: needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     strategy:
@@ -1033,6 +1051,7 @@ jobs:
       - coverage-verifast
       - coverage-other
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -1096,6 +1115,7 @@ jobs:
       - wallet-browser-platform
       - wallet-mobile-platform
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Verify parallel build, test, and coverage lanes
@@ -1125,21 +1145,24 @@ jobs:
       - early-gates
       - scope
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     outputs:
       matrix: ${{ needs.scope.outputs.infra-matrix }}
+      has-infra: ${{ needs.scope.outputs.has-infra }}
     steps:
       - name: Confirm dependency-aware component selection
         env:
           INFRA_MATRIX: ${{ needs.scope.outputs.infra-matrix }}
         run: |
-          jq -e '.include | length > 0' <<<"$INFRA_MATRIX" >/dev/null
           echo "Selected infrastructure: $(jq -c '[.include[].display]' <<<"$INFRA_MATRIX")"
 
   infra:
     name: Infra / ${{ matrix.display }}
+    if: needs.infra-scope.outputs.has-infra == 'true'
     needs: infra-scope
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     strategy:
@@ -1223,6 +1246,7 @@ jobs:
       - early-gates
       - scope
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Run on every PR (cheap and protects the docs site) and on pushes that touch docs
     # The build step inside will fail fast on frontmatter or link problems before they reach production
     if: needs.scope.outputs.docs == 'true'
@@ -1269,6 +1293,7 @@ jobs:
       - scope
     if: needs.scope.outputs.conformance == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -1316,6 +1341,7 @@ jobs:
     name: Dependency Review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -1339,6 +1365,7 @@ jobs:
       - conformance
       - dependency-review
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Verify every required CI result
@@ -1355,7 +1382,7 @@ jobs:
           if [[ "$HEALTH_RESULT" != "success" ||
                 "$BUILD_RESULT" != "success" ||
                 "$MUTATION_RESULT" != "success" ||
-                "$INFRA_RESULT" != "success" ||
+                ( "$INFRA_RESULT" != "success" && "$INFRA_RESULT" != "skipped" ) ||
                 ( "$DOCS_RESULT" != "success" && "$DOCS_RESULT" != "skipped" ) ||
                 ( "$CONFORMANCE_RESULT" != "success" && "$CONFORMANCE_RESULT" != "skipped" ) ]]; then
             echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT mutation=$MUTATION_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"

@@ -307,10 +307,11 @@ function main(arguments_) {
     : selectWorkspaceScope(projects, changedFiles, importers)
   const infrastructure = all ? INFRA_COMPONENTS : selectInfraComponents(changedFiles)
   const runtimeComponents = all ? RUNTIME_COMPONENTS : selectRuntimeComponents(changedFiles)
-  const infraEntries =
-    infrastructure.length === 0
-      ? [{ component: '_none', 'native-modules': '', run: false, display: 'no changes' }]
-      : infrastructure.map(entry => ({ ...entry, run: true, display: entry.component }))
+  const infraEntries = infrastructure.map(entry => ({
+    ...entry,
+    run: true,
+    display: entry.component
+  }))
 
   process.stdout.write(
     JSON.stringify({

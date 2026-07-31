@@ -36,6 +36,7 @@ jobs:
   scope:
     name: Select affected runtime images
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:

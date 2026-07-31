@@ -187,6 +187,17 @@ mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
 `FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit replay
 or deeper local investigation.
 
+Pull-request CI applies the same dependency graph to package regressions,
+browser/mobile consumers, infrastructure, and runtime images. Empty image and
+infrastructure matrices do not allocate build runners. The standalone
+TypeScript conformance workflow runs only when its vectors, specifications,
+generator, or workflow change; SDK-dependent conformance behavior remains an
+affected workspace regression. Cheap repository, dependency, scope, and Sonar
+checks gate installation and compilation, matrix lanes cancel siblings on a
+failure, and every CI job has a reviewed timeout instead of GitHub's six-hour
+default. The zero-install orchestration tests enforce these resource and
+fail-fast controls.
+
 List and run targets locally:
 
 ```sh
