@@ -28,6 +28,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "sdk-auth-http",
+      "manifest": "packages/sdk/package.json",
+      "propertyTest": "packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts",
+      "risk": "critical",
+      "boundary": "SDK BRC-103 authenticated HTTP response parsing and pending-request lifecycle",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "wallet-action-batch",
       "manifest": "packages/wallet/wallet-toolbox/package.json",
       "propertyTest": "packages/wallet/wallet-toolbox/src/utility/__tests/actionBatchPack.property.test.ts",

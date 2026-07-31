@@ -57,6 +57,18 @@
         ]
       },
       {
+        "path": "packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts",
+        "manifest": "packages/sdk/package.json",
+        "risk": "critical",
+        "boundary": "SDK BRC-103 authenticated HTTP response parsing and pending-request lifecycle",
+        "target": "Randomized response framing, parser settlement, listener cleanup, and pending callback cleanup",
+        "invariants": [
+          "Every bounded signed-response frame settles its owning request without an unhandled rejection.",
+          "Every settled, rejected, or malformed response releases its listener and pending callback state.",
+          "Response correlation remains bound to the exact request nonce."
+        ]
+      },
+      {
         "path": "packages/wallet/wallet-toolbox/src/utility/__tests/actionBatchPack.property.test.ts",
         "manifest": "packages/wallet/wallet-toolbox/package.json",
         "risk": "critical",

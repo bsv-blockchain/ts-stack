@@ -740,7 +740,7 @@
     "test": "pnpm build && jest --watchman=false",
     "test:watch": "pnpm build && jest --watch",
     "test:coverage": "pnpm build && jest --coverage --watchman=false",
-    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/primitives/__tests/utils.property.test.ts",
+    "test:property": "jest --runInBand --watchman=false --runTestsByPath src/primitives/__tests/utils.property.test.ts src/auth/clients/__tests__/AuthFetch.property.test.ts",
     "test:resource": "pnpm build && node ../../scripts/run-governed-test.mjs resource src/primitives/__tests/AESGCM.man.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/sdk/README.md\" \"packages/sdk/package.json\" \"packages/sdk/*.{js,json,ts}\"",
     "lint:ci": "pnpm lint",

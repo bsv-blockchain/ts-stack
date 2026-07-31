@@ -64,6 +64,8 @@ interface RequestBodySummary {
 }
 
 const PAYMENT_VERSION = '1.0'
+const AUTH_RESPONSE_TIMEOUT_MS = 30000
+const MAX_PENDING_AUTH_REQUESTS = 1000
 
 /**
  * AuthFetch provides a lightweight fetch client for interacting with servers
@@ -76,7 +78,7 @@ const PAYMENT_VERSION = '1.0'
 export class AuthFetch {
   private readonly sessionManager: SessionManager
   private readonly wallet: WalletInterface
-  private callbacks: Record<string, { resolve: Function; reject: Function }> = {}
+  private pendingRequestNonces: Set<string> = new Set()
   private readonly certificatesReceived: VerifiableCertificate[] = []
   private readonly requestedCertificates?: RequestedCertificateSet
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
@@ -202,8 +204,36 @@ export class AuthFetch {
           const writer = await this.serializeRequest(method, headers, body, parsedUrl, requestNonce)
 
           // Setup general message listener to resolve requests once a response is received
-          this.callbacks[requestNonceAsBase64] = { resolve, reject }
-          const listenerId = peerToUse.peer.listenForGeneralMessages(
+          if (this.pendingRequestNonces.size >= MAX_PENDING_AUTH_REQUESTS) {
+            throw new Error('Authentication request capacity exceeded.')
+          }
+
+          let listenerId: number | undefined
+          let responseTimeout: ReturnType<typeof setTimeout>
+          let cleaned = false
+          const cleanup = (): void => {
+            if (cleaned) return
+            cleaned = true
+            if (
+              listenerId !== undefined &&
+              typeof peerToUse.peer.stopListeningForGeneralMessages === 'function'
+            ) {
+              peerToUse.peer.stopListeningForGeneralMessages(listenerId)
+            }
+            clearTimeout(responseTimeout)
+            this.pendingRequestNonces.delete(requestNonceAsBase64)
+          }
+          const resolveRequest = (response: Response): void => {
+            cleanup()
+            resolve(response)
+          }
+          const rejectRequest = (error: unknown): void => {
+            cleanup()
+            reject(error)
+          }
+
+          this.pendingRequestNonces.add(requestNonceAsBase64)
+          listenerId = peerToUse.peer.listenForGeneralMessages(
             (senderPublicKey: string, payload: number[]) => {
               // Create a reader
               const responseReader = new Utils.Reader(payload)
@@ -212,7 +242,6 @@ export class AuthFetch {
               if (responseNonceAsBase64 !== requestNonceAsBase64) {
                 return
               }
-              peerToUse.peer.stopListeningForGeneralMessages(listenerId)
 
               // Save the identity key for the peer for future requests, since we have it here.
               this.peers[baseURL].identityKey = senderPublicKey
@@ -257,52 +286,54 @@ export class AuthFetch {
               )
 
               // Resolve or reject the correct request with the response data
-              this.callbacks[requestNonceAsBase64].resolve(responseValue)
-
-              // Clean up
-              delete this.callbacks[requestNonceAsBase64]
+              resolveRequest(responseValue)
             }
           )
+          responseTimeout = setTimeout(() => {
+            rejectRequest(new Error('Timed out waiting for authenticated response.'))
+          }, AUTH_RESPONSE_TIMEOUT_MS)
 
           // Before sending general messages to the peer, ensure that no certificate requests are pending.
           // This way, the user would need to choose to either allow or reject the certificate request first.
           // If the server has a resource that requires certificates to be sent before access would be granted,
           // this makes sure the user has a chance to send the certificates before the resource is requested.
-          if (peerToUse.pendingCertificateRequests.length > 0) {
-            await this.waitForPendingCertificateRequests(peerToUse)
-          }
+          try {
+            if (peerToUse.pendingCertificateRequests.length > 0) {
+              await this.waitForPendingCertificateRequests(peerToUse)
+            }
 
-          // Send the request, now that all listeners are set up
-          await peerToUse.peer
-            .toPeer(writer.toArray(), peerToUse.identityKey)
-            .catch(async error => {
-              const isStaleSession =
-                error.message.includes('Session not found for nonce') ||
+            // Send the request, now that all listeners are set up
+            await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
+          } catch (error) {
+            cleanup()
+            const isStaleSession =
+              error instanceof Error &&
+              (error.message.includes('Session not found for nonce') ||
                 (error.message.includes('without valid BSV authentication') &&
                   peerToUse.identityKey != null &&
-                  (error as any).details?.status === 401)
-              if (isStaleSession) {
-                // Stale session: server no longer recognises the session nonce
-                // (e.g. after a server restart). Clear the cached peer so a fresh
-                // handshake is performed on retry.
-                delete this.peers[baseURL]
-                config.retryCounter ??= 3
-                const response = await this.fetch(url, config)
-                resolve(response)
+                  (error as any).details?.status === 401))
+            if (isStaleSession) {
+              // Stale session: server no longer recognises the session nonce
+              // (e.g. after a server restart). Clear the cached peer so a fresh
+              // handshake is performed on retry.
+              delete this.peers[baseURL]
+              config.retryCounter ??= 3
+              const response = await this.fetch(url, config)
+              resolveRequest(response)
+              return
+            }
+            if (error instanceof Error && error.message.includes('HTTP server failed to authenticate')) {
+              try {
+                const response = await this.handleFetchAndValidate(url, config, peerToUse)
+                resolveRequest(response)
                 return
+              } catch (fetchError) {
+                rejectRequest(fetchError)
               }
-              if (error.message.includes('HTTP server failed to authenticate')) {
-                try {
-                  const response = await this.handleFetchAndValidate(url, config, peerToUse)
-                  resolve(response)
-                  return
-                } catch (fetchError) {
-                  reject(fetchError)
-                }
-              } else {
-                reject(error)
-              }
-            })
+            } else {
+              rejectRequest(error)
+            }
+          }
         } catch (error) {
           reject(error)
         }

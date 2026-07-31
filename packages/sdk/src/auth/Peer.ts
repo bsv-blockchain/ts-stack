@@ -394,8 +394,16 @@ export class Peer {
       requestedCertificates: this.certificatesToRequest
     }
 
-    await this.transport.send(initialRequest)
-    return await this.waitForInitialResponse(sessionNonce)
+    // Register before sending: an in-memory or otherwise synchronous transport
+    // can deliver the response before send() resolves.
+    const initialResponse = this.waitForInitialResponse(sessionNonce)
+    try {
+      await this.transport.send(initialRequest)
+      return await initialResponse
+    } catch (error) {
+      this.stopListeningForInitialResponsesByNonce(sessionNonce)
+      throw error
+    }
   }
 
   /**
@@ -443,6 +451,14 @@ export class Peer {
    */
   private stopListeningForInitialResponses (callbackID: number): void {
     this.onInitialResponseReceivedCallbacks.delete(callbackID)
+  }
+
+  private stopListeningForInitialResponsesByNonce (sessionNonce: string): void {
+    for (const [callbackID, entry] of this.onInitialResponseReceivedCallbacks) {
+      if (entry.sessionNonce === sessionNonce) {
+        this.stopListeningForInitialResponses(callbackID)
+      }
+    }
   }
 
   private propagateTransportError (peerIdentityKey: string | undefined, error: unknown): never {
