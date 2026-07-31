@@ -25,7 +25,6 @@ import {
   TableUser
 } from '../storage/schema/tables'
 import { StorageProvider } from './StorageProvider'
-import { StorageClient } from './remoting/StorageClient'
 
 class ManagedStorage {
   isAvailable: boolean
@@ -955,8 +954,20 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return log
   }
 
+  /**
+   * Return the remote HTTP(S) endpoint for a managed store, if any.
+   *
+   * Duck-types `endpointUrl` on the provider (as set by `StorageClientBase`).
+   * Do **not** key this off `constructor.name === 'StorageClient'`: production
+   * minifiers (Vite/esbuild/webpack) rename classes, so that check fails and
+   * every remote store reports `endpointURL: undefined` even though the URL is
+   * present. Consumers that match backups by URL (e.g. making a remote store
+   * primary) then fail while sync still works, because sync walks `_backups`
+   * without needing `endpointURL`.
+   */
   getStoreEndpointURL(store: ManagedStorage): string | undefined {
-    if (store.storage.constructor.name === 'StorageClient') return (store.storage as StorageClient).endpointUrl
+    const url = (store.storage as { endpointUrl?: unknown }).endpointUrl
+    if (typeof url === 'string' && url.length > 0) return url
     return undefined
   }
 
