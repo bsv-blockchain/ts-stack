@@ -147,8 +147,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and hardens BRC-103 message and async listener boundaries.",
-      "migration": "The 2.x wire encodings and supported imports are unchanged. Peer listeners may continue returning void and may now return Promise<void>; rejected listeners propagate to the owning transport for containment."
+      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and hardens BRC-103 message, handshake, response, async listener, timeout, and pending-request boundaries.",
+      "migration": "The 2.x wire encodings and supported imports are unchanged. Peer listeners may continue returning void and may now return Promise<void>; rejected or malformed authenticated HTTP responses reject and clean up the owning request, and pending authenticated responses now time out after 30 seconds."
     },
     {
       "name": "@bsv/simple",

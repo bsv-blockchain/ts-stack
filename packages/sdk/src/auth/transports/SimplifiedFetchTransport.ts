@@ -13,7 +13,7 @@ const defaultFetch: typeof fetch =
  * This class integrates with fetch to send and receive authenticated messages between peers.
  */
 export class SimplifiedFetchTransport implements Transport {
-  private onDataCallback?: (message: AuthMessage) => void
+  private onDataCallback?: (message: AuthMessage) => Promise<void>
   fetchClient: typeof fetch
   baseUrl: string
 
@@ -79,9 +79,7 @@ export class SimplifiedFetchTransport implements Transport {
             const body = Array.from(new Uint8Array(await response.arrayBuffer()))
             throw this.createUnauthenticatedResponseError(url, response, body)
           }
-          if (this.onDataCallback != null) {
-            this.onDataCallback((await response.json()) as AuthMessage)
-          }
+          await this.onDataCallback!((await response.json()) as AuthMessage)
           if (message.messageType === 'initialRequest') resolve()
         } catch (error) {
           reject(error)
@@ -223,7 +221,7 @@ export class SimplifiedFetchTransport implements Transport {
     const response = await this.fetchGeneralResponse(url, request)
     const body = Array.from(new Uint8Array(await response.arrayBuffer()))
     this.validateResponseAuthentication(url, response, body)
-    this.onDataCallback!(this.createGeneralResponseMessage(url, response, body))
+    await this.onDataCallback!(this.createGeneralResponseMessage(url, response, body))
   }
 
   /**
@@ -234,14 +232,7 @@ export class SimplifiedFetchTransport implements Transport {
    * @returns A promise that resolves once the callback is set.
    */
   async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
-    this.onDataCallback = m => {
-      void Promise.resolve()
-        .then(async () => await callback(m))
-        .catch(() => {
-          // Errors from handleIncomingMessage on the client side are not
-          // actionable here — prevent unhandled promise rejections.
-        })
-    }
+    this.onDataCallback = async m => await callback(m)
   }
 
   private createNetworkError(url: string, originalError: unknown): Error {

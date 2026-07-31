@@ -85,6 +85,12 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
 
 - **P2P Authentication**: Robust peer-to-peer authentication mechanisms to ensure secure connections between parties.
 
+  Authenticated HTTP handshakes register their response waiter before sending,
+  and each authenticated request has a bounded 30-second response window. A
+  client retains at most 1,000 pending authenticated requests. Invalid or
+  rejected peer responses reject and clean up the owning request; they do not
+  become unhandled process errors or leave listeners behind.
+
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.

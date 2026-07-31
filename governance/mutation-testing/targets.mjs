@@ -70,6 +70,75 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'sdk-auth-http': {
+      packageDirectory: 'packages/sdk',
+      manifest: 'packages/sdk/package.json',
+      propertyTest: 'packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts',
+      mutate: [
+        [
+          'src/auth/Peer.ts',
+          '// Register before sending:',
+          'Waits for the initial response from the peer'
+        ],
+        [
+          'src/auth/Peer.ts',
+          'private stopListeningForInitialResponsesByNonce (',
+          'private propagateTransportError ('
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          'if (this.pendingRequestNonces.size >= MAX_PENDING_AUTH_REQUESTS)',
+          'responseTimeout = setTimeout('
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          'responseTimeout = setTimeout(',
+          'Before sending general messages to the peer'
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          'if (peerToUse.pendingCertificateRequests.length > 0)',
+          '// Check if server requires payment to access the requested route'
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          'private isStaleSessionError(',
+          'private parseAuthenticatedResponse('
+        ],
+        [
+          'src/auth/clients/AuthFetch.ts',
+          'private parseAuthenticatedResponse(',
+          'Request Certificates from a Peer'
+        ],
+        [
+          'src/auth/transports/SimplifiedFetchTransport.ts',
+          'await this.onDataCallback!((await response.json()) as AuthMessage)',
+          "if (message.messageType === 'initialRequest') resolve()"
+        ],
+        [
+          'src/auth/transports/SimplifiedFetchTransport.ts',
+          'this.validateResponseAuthentication(url, response, body)',
+          'Registers a callback to handle incoming messages.'
+        ],
+        [
+          'src/auth/transports/SimplifiedFetchTransport.ts',
+          'async onData(callback:',
+          'private createNetworkError('
+        ]
+      ].map(([filePath, startMarker, endMarker]) =>
+        sourceLineRange(repositoryRoot, 'packages/sdk', filePath, startMarker, endMarker)
+      ),
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/auth/__tests/Peer.boundary.test.ts',
+          '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
+          '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
+          '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts'
+        ],
+        { esm: true }
+      )
+    },
     'wallet-action-batch': {
       packageDirectory: 'packages/wallet/wallet-toolbox',
       manifest: 'packages/wallet/wallet-toolbox/package.json',

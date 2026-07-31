@@ -32,11 +32,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 28)
+  assert.equal(result.summary.propertySuites, 29)
   assert.equal(result.summary.propertyPackages, 28)
   assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 34)
-  assert.equal(result.summary.mutationTargets, 28)
+  assert.equal(result.summary.mutationTargets, 29)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)

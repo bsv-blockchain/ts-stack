@@ -592,7 +592,7 @@ describe('SimplifiedFetchTransport deserializeRequestPayload', () => {
 // ─── onData callback registration ────────────────────────────────────────────
 
 describe('SimplifiedFetchTransport onData', () => {
-  test('registers callback and errors from callback are swallowed', async () => {
+  test('registers callback and propagates errors through the awaited send', async () => {
     const mockFetch = jest.fn<() => any>().mockResolvedValue(makeValidGeneralResponse()) as any
     const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
 
@@ -600,8 +600,7 @@ describe('SimplifiedFetchTransport onData', () => {
       throw new Error('intentional callback error')
     })
 
-    // Should not throw even though callback throws
-    await expect(transport.send(makeGeneralMessage())).resolves.toBeUndefined()
+    await expect(transport.send(makeGeneralMessage())).rejects.toThrow('intentional callback error')
   })
 })
 
@@ -849,7 +848,7 @@ describe('SimplifiedFetchTransport — isTextualContent heuristics (via send res
 })
 
 describe('SimplifiedFetchTransport callback containment', () => {
-  test('contains a synchronous callback throw from an untrusted response', async () => {
+  test('propagates a synchronous callback throw through the awaited general send', async () => {
     const mockFetch: any = jest.fn().mockResolvedValue(
       new Response('', {
         status: 200,
@@ -865,6 +864,22 @@ describe('SimplifiedFetchTransport callback containment', () => {
       throw new Error('invalid response')
     }) as never)
 
-    await expect(transport.send(makeGeneralMessage())).resolves.toBeUndefined()
+    await expect(transport.send(makeGeneralMessage())).rejects.toThrow('invalid response')
+  })
+
+  test('propagates an asynchronous callback rejection through an initial request', async () => {
+    const responseBody = JSON.stringify(makeAuthMessage('initialResponse'))
+    const mockFetch: any = jest.fn().mockResolvedValue(
+      new Response(responseBody, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
+    await transport.onData(async () => await Promise.reject(new Error('invalid handshake')))
+
+    await expect(transport.send(makeAuthMessage('initialRequest'))).rejects.toThrow(
+      'invalid handshake'
+    )
   })
 })
