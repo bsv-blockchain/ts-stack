@@ -1,7 +1,7 @@
 import { AuthSocket } from '../AuthSocketServer.js'
 
 describe('AuthSocket', () => {
-  function createHarness(onError = jest.fn()) {
+  function createHarness(onError = jest.fn(), useDefaultObserver = false) {
     let generalMessageListener:
       ((senderPublicKey: string, payload: number[]) => void | Promise<void>) | undefined
     const peer = {
@@ -17,7 +17,9 @@ describe('AuthSocket', () => {
       disconnect: jest.fn()
     }
     const identityDiscovered = jest.fn()
-    const authSocket = new AuthSocket(socket as never, peer as never, identityDiscovered, onError)
+    const authSocket = useDefaultObserver
+      ? new AuthSocket(socket as never, peer as never, identityDiscovered)
+      : new AuthSocket(socket as never, peer as never, identityDiscovered, onError)
     return {
       authSocket,
       generalMessage(payload: unknown, sender = 'peer-key') {
@@ -103,6 +105,19 @@ describe('AuthSocket', () => {
       socketId: 'socket-2',
       eventName: 'message'
     })
+    expect(socket.disconnect).toHaveBeenCalledWith(true)
+  })
+
+  it('contains application failures when no error observer is configured', async () => {
+    const { authSocket, generalMessage, socket } = createHarness(jest.fn(), true)
+    authSocket.on('message', () => {
+      throw new Error('application failed')
+    })
+
+    await expect(
+      generalMessage({ eventName: 'message', data: { untrusted: true } })
+    ).resolves.toBeUndefined()
+
     expect(socket.disconnect).toHaveBeenCalledWith(true)
   })
 

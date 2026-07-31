@@ -157,6 +157,61 @@ describe('AuthSocketClient', () => {
     })
   })
 
+  it('contains serialization failures without sending untrusted data', async () => {
+    const onError = jest.fn()
+    mockSocket.id = undefined
+    const { client } = createClient(onError)
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+
+    expect(client.emit('circular', circular)).toBe(client)
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(mockPeer.toPeer).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.any(TypeError), {
+      phase: 'send',
+      socketId: '',
+      eventName: 'circular'
+    })
+    mockSocket.id = 'socket-id'
+  })
+
+  it('uses the remembered socket ID when an asynchronous send fails after disconnect', async () => {
+    const error = new Error('send failed')
+    const onError = jest.fn()
+    mockSocket.id = undefined
+    mockPeer.toPeer.mockRejectedValue(error)
+    const { client } = createClient(onError)
+
+    socketListeners.get('connect')?.()
+    client.emit('failing-event', true)
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(onError).toHaveBeenCalledWith(error, {
+      phase: 'send',
+      socketId: '',
+      eventName: 'failing-event'
+    })
+    mockSocket.id = 'socket-id'
+  })
+
+  it('reports contained authentication failures through the client observer', async () => {
+    const authenticationFailure = new Error('authentication failed')
+    const onError = jest.fn()
+    createClient(onError)
+    const transport = mockPeerConstructor.mock.calls[0][1] as unknown as SocketClientTransport
+    await transport.onData(async () => await Promise.reject(authenticationFailure))
+
+    await socketListeners.get('authMessage')?.({ messageType: 'general' })
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(onError).toHaveBeenCalledWith(authenticationFailure, {
+      phase: 'authentication',
+      socketId: 'socket-id'
+    })
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+  })
+
   it('handles malformed general messages and clears identity on disconnect', () => {
     const { client } = createClient()
     const unknown = jest.fn()
@@ -204,6 +259,41 @@ describe('AuthSocketClient', () => {
       socketId: 'socket-id',
       eventName: 'message'
     })
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports rejected disconnect handlers without disconnecting twice', async () => {
+    const onError = jest.fn()
+    mockSocket.id = undefined
+    const { client } = createClient(onError)
+    const applicationFailure = new Error('disconnect handler failed')
+    client.on('disconnect', async () => await Promise.reject(applicationFailure))
+
+    await socketListeners.get('disconnect')?.('transport close')
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(onError).toHaveBeenCalledWith(applicationFailure, {
+      phase: 'application',
+      socketId: '',
+      eventName: 'disconnect'
+    })
+    expect(mockSocket.disconnect).not.toHaveBeenCalled()
+    mockSocket.id = 'socket-id'
+  })
+
+  it('contains application failures when no error observer is configured', async () => {
+    const { client } = createClient()
+    client.on('message', () => {
+      throw new Error('application failed')
+    })
+
+    await expect(
+      generalMessageListener?.(
+        'server-key',
+        Array.from(Buffer.from(JSON.stringify({ eventName: 'message', data: true })))
+      )
+    ).resolves.toBeUndefined()
+
     expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
   })
 

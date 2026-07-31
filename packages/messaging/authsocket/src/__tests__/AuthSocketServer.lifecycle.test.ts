@@ -49,6 +49,7 @@ describe('AuthSocketServer lifecycle', () => {
     const rawListeners = new Map<string, (...arguments_: any[]) => any>()
     const rawSocket = {
       id: 'socket-1',
+      disconnect: jest.fn(),
       emit: jest.fn(),
       on: jest.fn((eventName: string, callback: (...arguments_: any[]) => any) => {
         rawListeners.set(eventName, callback)
@@ -105,6 +106,135 @@ describe('AuthSocketServer lifecycle', () => {
     server.on('maintenance', callback)
 
     expect(mockIoServer.on).toHaveBeenCalledWith('maintenance', callback)
+  })
+
+  it('contains connection construction and asynchronous application failures', async () => {
+    const onError = jest.fn()
+    const server = new AuthSocketServer({} as never, { wallet: {} as never, onError })
+    const connectionListener = mockIoServer.on.mock.calls.find(
+      ([eventName]) => eventName === 'connection'
+    )?.[1]
+    const constructionFailure = new Error('construction failed')
+    const firstSocket = {
+      id: 'broken-construction',
+      disconnect: jest.fn(() => {
+        throw new Error('disconnect failed')
+      }),
+      emit: jest.fn(),
+      on: jest.fn()
+    }
+    mockPeerConstructor.mockImplementationOnce(() => {
+      throw constructionFailure
+    })
+
+    expect(() => connectionListener(firstSocket)).not.toThrow()
+    await Promise.resolve()
+    expect(onError).toHaveBeenCalledWith(constructionFailure, {
+      phase: 'connection',
+      socketId: 'broken-construction'
+    })
+    expect(firstSocket.disconnect).toHaveBeenCalledWith(true)
+
+    const callbackFailure = new Error('connection callback failed')
+    server.on('connection', async () => await Promise.reject(callbackFailure))
+    const secondSocket = {
+      id: 'broken-callback',
+      disconnect: jest.fn(),
+      emit: jest.fn(),
+      on: jest.fn()
+    }
+    connectionListener(secondSocket)
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(onError).toHaveBeenCalledWith(callbackFailure, {
+      phase: 'connection',
+      socketId: 'broken-callback'
+    })
+    expect(secondSocket.disconnect).toHaveBeenCalledWith(true)
+  })
+
+  it('contains server-side serialization failures before any peer send', async () => {
+    const onError = jest.fn()
+    const server = new AuthSocketServer({} as never, { wallet: {} as never, onError })
+
+    expect(() => server.emit('circular', 1n)).not.toThrow()
+    expect(server.emitToIdentity('identity', 'circular', 1n)).toBe(0)
+    await Promise.resolve()
+
+    expect(mockPeer.toPeer).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenNthCalledWith(1, expect.any(TypeError), {
+      phase: 'send',
+      eventName: 'circular'
+    })
+    expect(onError).toHaveBeenNthCalledWith(2, expect.any(TypeError), {
+      phase: 'send',
+      eventName: 'circular'
+    })
+  })
+
+  it('routes authenticated application failures through the server observer', async () => {
+    const applicationFailure = new Error('application failed')
+    const onError = jest.fn()
+    const server = new AuthSocketServer({} as never, { wallet: {} as never, onError })
+    const connectionListener = mockIoServer.on.mock.calls.find(
+      ([eventName]) => eventName === 'connection'
+    )?.[1]
+    const rawSocket = {
+      id: 'socket-application',
+      disconnect: jest.fn(),
+      emit: jest.fn(),
+      on: jest.fn()
+    }
+    const connectionCallback = jest.fn()
+    server.on('connection', connectionCallback)
+    connectionListener(rawSocket)
+    await new Promise(resolve => setImmediate(resolve))
+    const authenticatedSocket = connectionCallback.mock.calls[0][0]
+    authenticatedSocket.on('message', async () => await Promise.reject(applicationFailure))
+    const generalMessageListener = mockPeer.listenForGeneralMessages.mock.calls.at(-1)[0]
+
+    await generalMessageListener(
+      'identity-key',
+      Array.from(Buffer.from(JSON.stringify({ eventName: 'message', data: true })))
+    )
+    await Promise.resolve()
+
+    expect(onError).toHaveBeenCalledWith(applicationFailure, {
+      phase: 'application',
+      socketId: 'socket-application',
+      eventName: 'message'
+    })
+    expect(rawSocket.disconnect).toHaveBeenCalledWith(true)
+  })
+
+  it('reports contained authentication failures through the server observer', async () => {
+    const authenticationFailure = new Error('authentication failed')
+    const onError = jest.fn()
+    new AuthSocketServer({} as never, { wallet: {} as never, onError })
+    const connectionListener = mockIoServer.on.mock.calls.find(
+      ([eventName]) => eventName === 'connection'
+    )?.[1]
+    const rawListeners = new Map<string, (...arguments_: any[]) => any>()
+    const rawSocket = {
+      id: 'socket-authentication',
+      disconnect: jest.fn(),
+      emit: jest.fn(),
+      on: jest.fn((eventName: string, callback: (...arguments_: any[]) => any) => {
+        rawListeners.set(eventName, callback)
+      })
+    }
+    connectionListener(rawSocket)
+    const transport = mockPeerConstructor.mock.calls.at(-1)[1] as unknown as SocketServerTransport
+    await transport.onData(async () => await Promise.reject(authenticationFailure))
+
+    await rawListeners.get('authMessage')?.({ messageType: 'general' })
+    await new Promise(resolve => setImmediate(resolve))
+
+    expect(onError).toHaveBeenCalledWith(authenticationFailure, {
+      phase: 'authentication',
+      socketId: 'socket-authentication'
+    })
+    expect(rawSocket.disconnect).toHaveBeenCalledWith(true)
   })
 
   it('closes Socket.IO once when shutdown is requested repeatedly', async () => {
