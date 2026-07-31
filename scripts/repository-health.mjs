@@ -502,27 +502,31 @@ function validateDeclarationDependencyManifest(project, manifest, prefix) {
   return errors
 }
 
+function validatePeerOwnership(manifest, dependency, description, prefix) {
+  const errors = []
+  if (!Object.hasOwn(manifest.peerDependencies ?? {}, dependency)) {
+    errors.push(`${prefix} must publish ${description} ${dependency} as a peer dependency`)
+  }
+  if (Object.hasOwn(manifest.dependencies ?? {}, dependency)) {
+    errors.push(`${prefix} must not install ${description} ${dependency} as a dependency`)
+  }
+  return errors
+}
+
 function validateHostPeerManifest(project, manifest, prefix) {
   const errors = []
   for (const dependency of project.hostPeerDependencies ?? []) {
-    if (!Object.hasOwn(manifest.peerDependencies ?? {}, dependency)) {
-      errors.push(`${prefix} must publish host framework ${dependency} as a peer dependency`)
-    }
-    if (Object.hasOwn(manifest.dependencies ?? {}, dependency)) {
-      errors.push(`${prefix} must not install host framework ${dependency} as a dependency`)
-    }
+    errors.push(...validatePeerOwnership(manifest, dependency, 'host framework', prefix))
     for (const declarationDependency of project.declarationDependencies ?? []) {
       if (runtimePackageForTypes(declarationDependency) !== dependency) continue
-      if (!Object.hasOwn(manifest.peerDependencies ?? {}, declarationDependency)) {
-        errors.push(
-          `${prefix} must publish host framework declarations ${declarationDependency} as a peer dependency`
+      errors.push(
+        ...validatePeerOwnership(
+          manifest,
+          declarationDependency,
+          'host framework declarations',
+          prefix
         )
-      }
-      if (Object.hasOwn(manifest.dependencies ?? {}, declarationDependency)) {
-        errors.push(
-          `${prefix} must not install host framework declarations ${declarationDependency} as a dependency`
-        )
-      }
+      )
     }
   }
   if (
@@ -554,9 +558,11 @@ function validateProjectManifest(project, actual) {
   if (!isPrivate && project.release !== 'npm-oidc') {
     errors.push(`${prefix} is public but release is not npm-oidc`)
   }
-  errors.push(...validateConsumerProfileContracts(project, actual, prefix))
-  errors.push(...validateDeclarationDependencyManifest(project, actual.manifest, prefix))
-  errors.push(...validateHostPeerManifest(project, actual.manifest, prefix))
+  errors.push(
+    ...validateConsumerProfileContracts(project, actual, prefix),
+    ...validateDeclarationDependencyManifest(project, actual.manifest, prefix),
+    ...validateHostPeerManifest(project, actual.manifest, prefix)
+  )
   return errors
 }
 
