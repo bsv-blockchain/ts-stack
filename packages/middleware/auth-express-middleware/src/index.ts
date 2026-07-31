@@ -15,7 +15,7 @@ import {
   type VerifiableCertificate,
   type WalletInterface
 } from '@bsv/sdk'
-import type { NextFunction, Request, Response } from 'express'
+import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import {
   LogLevel,
   isLogLevelEnabled,
@@ -1334,9 +1334,7 @@ function buildResponsePayload(
  * @param {AuthMiddlewareOptions} options
  * @returns {(req: Request, res: Response, next: NextFunction) => void} Express middleware
  */
-export function createAuthMiddleware(
-  options: AuthMiddlewareOptions
-): (req: AuthRequest, res: Response, next: NextFunction) => void {
+export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHandler {
   if (options === null || typeof options !== 'object') {
     throw new TypeError('Auth middleware options are required.')
   }
@@ -1395,7 +1393,7 @@ export function createAuthMiddleware(
   transport.setPeer(peer)
   const telemetry = new Telemetry(telemetryConfig)
 
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return (req, res, next) => {
     if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
       getLogMethod(logger, 'debug')('[createAuthMiddleware] Incoming request to auth middleware', {
         pathLength: req.path.length,

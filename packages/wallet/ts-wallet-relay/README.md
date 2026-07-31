@@ -28,6 +28,9 @@ npm install @bsv/wallet-relay @bsv/sdk
 npm install express cors ws qrcode   # backend peer deps — not needed for frontend-only projects
 ```
 
+The optional Express runtime and its declarations are supplied by the backend
+application, so relay routes share one Express 4 or 5 type graph with the host.
+
 `@bsv/sdk` is used throughout — backend wallet crypto, frontend local wallet detection, and mobile pairing. Install it in every layer of your project.
 
 > **TypeScript:** your `tsconfig.json` needs `"moduleResolution": "bundler"` (or `"node16"` / `"nodenext"`) to resolve the `@bsv/wallet-relay/react` and `@bsv/wallet-relay/client` subpath exports.

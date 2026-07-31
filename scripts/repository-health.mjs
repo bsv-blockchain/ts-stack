@@ -272,6 +272,31 @@ function validateDeclarationDependencies(project, prefix) {
   return errors
 }
 
+function validateHostPeerDependencies(project, prefix) {
+  if (project.hostPeerDependencies === undefined) return []
+  const dependencies = project.hostPeerDependencies
+  if (!Array.isArray(dependencies) || dependencies.length === 0) {
+    return [`${prefix} hostPeerDependencies must be a non-empty array`]
+  }
+  const errors = []
+  for (const dependency of dependencies) {
+    if (!isNonEmptyString(dependency)) {
+      errors.push(`${prefix} has invalid host peer dependency ${JSON.stringify(dependency)}`)
+    }
+  }
+  for (const duplicate of duplicateValues(dependencies)) {
+    errors.push(`${prefix} repeats host peer dependency ${duplicate}`)
+  }
+  const canonical = [...dependencies].sort((left, right) => left.localeCompare(right))
+  if (JSON.stringify(dependencies) !== JSON.stringify(canonical)) {
+    errors.push(`${prefix} hostPeerDependencies must use canonical lexical order`)
+  }
+  if (project.release !== 'npm-oidc') {
+    errors.push(`${prefix} hostPeerDependencies are only valid for public packages`)
+  }
+  return errors
+}
+
 function validateConsumerProfiles(project, prefix) {
   const profiles = project.consumerProfiles
   if (project.release !== 'npm-oidc') {
@@ -326,6 +351,7 @@ function validateProjectMetadata(project, registry) {
   }
   errors.push(
     ...validateDeclarationDependencies(project, prefix),
+    ...validateHostPeerDependencies(project, prefix),
     ...validateConsumerProfiles(project, prefix)
   )
   return errors
@@ -451,6 +477,74 @@ function validateConsumerProfileContracts(project, actual, prefix) {
   ]
 }
 
+function validateDeclarationDependencyManifest(project, manifest, prefix) {
+  const errors = []
+  for (const dependency of project.declarationDependencies ?? []) {
+    const publishedDependencies = {
+      ...manifest.dependencies,
+      ...manifest.peerDependencies
+    }
+    if (!Object.hasOwn(publishedDependencies, dependency)) {
+      errors.push(`${prefix} must publish declaration dependency ${dependency}`)
+    }
+    const runtimePackage = runtimePackageForTypes(dependency)
+    const runtimeSurface = {
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies
+    }
+    if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
+      errors.push(
+        `${prefix} declaration dependency ${dependency} requires runtime package ${runtimePackage}`
+      )
+    }
+  }
+  return errors
+}
+
+function validatePeerOwnership(manifest, dependency, description, prefix) {
+  const errors = []
+  if (!Object.hasOwn(manifest.peerDependencies ?? {}, dependency)) {
+    errors.push(`${prefix} must publish ${description} ${dependency} as a peer dependency`)
+  }
+  if (Object.hasOwn(manifest.dependencies ?? {}, dependency)) {
+    errors.push(`${prefix} must not install ${description} ${dependency} as a dependency`)
+  }
+  if (!Object.hasOwn(manifest.devDependencies ?? {}, dependency)) {
+    errors.push(
+      `${prefix} must install ${description} ${dependency} as a development dependency for clean package QA`
+    )
+  }
+  return errors
+}
+
+function validateHostPeerManifest(project, manifest, prefix) {
+  const errors = []
+  for (const dependency of project.hostPeerDependencies ?? []) {
+    errors.push(...validatePeerOwnership(manifest, dependency, 'host framework', prefix))
+    for (const declarationDependency of project.declarationDependencies ?? []) {
+      if (runtimePackageForTypes(declarationDependency) !== dependency) continue
+      errors.push(
+        ...validatePeerOwnership(
+          manifest,
+          declarationDependency,
+          'host framework declarations',
+          prefix
+        )
+      )
+    }
+  }
+  if (
+    project.hostPeerDependencies?.includes('express') &&
+    !manifest.scripts?.['pack:check']?.includes(`check-auth-express-consumers.mjs ${project.name}`)
+  ) {
+    errors.push(
+      `${prefix} must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check`
+    )
+  }
+  return errors
+}
+
 function validateProjectManifest(project, actual) {
   const prefix = `projects.json entry ${project.path ?? '<missing path>'}`
   if (!actual) return [`${prefix} has no discovered workspace package.json`]
@@ -469,23 +563,11 @@ function validateProjectManifest(project, actual) {
   if (!isPrivate && project.release !== 'npm-oidc') {
     errors.push(`${prefix} is public but release is not npm-oidc`)
   }
-  errors.push(...validateConsumerProfileContracts(project, actual, prefix))
-  for (const dependency of project.declarationDependencies ?? []) {
-    if (!Object.hasOwn(actual.manifest.dependencies ?? {}, dependency)) {
-      errors.push(`${prefix} must publish declaration dependency ${dependency}`)
-    }
-    const runtimePackage = runtimePackageForTypes(dependency)
-    const runtimeSurface = {
-      ...actual.manifest.dependencies,
-      ...actual.manifest.optionalDependencies,
-      ...actual.manifest.peerDependencies
-    }
-    if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
-      errors.push(
-        `${prefix} declaration dependency ${dependency} requires runtime package ${runtimePackage}`
-      )
-    }
-  }
+  errors.push(
+    ...validateConsumerProfileContracts(project, actual, prefix),
+    ...validateDeclarationDependencyManifest(project, actual.manifest, prefix),
+    ...validateHostPeerManifest(project, actual.manifest, prefix)
+  )
   return errors
 }
 

@@ -1,5 +1,5 @@
 import { Beef, createNonce, PublicKey, Utils, verifyNonce, type AtomicBEEF } from '@bsv/sdk'
-import type { NextFunction, Response } from 'express'
+import type { RequestHandler, Response } from 'express'
 import type {
   BSVPayment,
   PaymentMiddlewareOptions,
@@ -182,9 +182,7 @@ async function issuePaymentChallenge(
 /**
  * Creates middleware that enforces a BRC-29 wallet payment after BRC-103 auth.
  */
-export function createPaymentMiddleware(
-  options: PaymentMiddlewareOptions
-): (req: PaymentRequest, res: Response, next: NextFunction) => Promise<void> {
+export function createPaymentMiddleware(options: PaymentMiddlewareOptions): RequestHandler {
   if (options === null || typeof options !== 'object') {
     throw new TypeError('Payment middleware options are required.')
   }
@@ -217,8 +215,9 @@ export function createPaymentMiddleware(
     throw new TypeError('logger error and warn properties must be functions when provided.')
   }
 
-  return async (req: PaymentRequest, res: Response, next: NextFunction): Promise<void> => {
-    const identityKey = req.auth?.identityKey
+  return async (req, res, next): Promise<void> => {
+    const paymentRequest: PaymentRequest = req
+    const identityKey = paymentRequest.auth?.identityKey
     if (typeof identityKey !== 'string' || !isCompressedPublicKey(identityKey)) {
       sendError(
         res,
@@ -231,7 +230,7 @@ export function createPaymentMiddleware(
 
     let requestPrice: number
     try {
-      requestPrice = await calculateRequestPrice(req)
+      requestPrice = await calculateRequestPrice(paymentRequest)
     } catch (error) {
       logger?.error?.('Payment pricing failed.', safeErrorContext(error))
       sendError(
@@ -244,7 +243,7 @@ export function createPaymentMiddleware(
     }
 
     if (requestPrice === 0) {
-      req.payment = { satoshisPaid: 0, accepted: true, tx: '', txid: '' }
+      paymentRequest.payment = { satoshisPaid: 0, accepted: true, tx: '', txid: '' }
       next()
       return
     }
@@ -254,7 +253,7 @@ export function createPaymentMiddleware(
       return
     }
 
-    const rawPayment = paymentHeader(req)
+    const rawPayment = paymentHeader(paymentRequest)
     if (rawPayment === undefined) {
       await issuePaymentChallenge(wallet, res, requestPrice, logger)
       return
@@ -342,7 +341,7 @@ export function createPaymentMiddleware(
         return
       }
 
-      req.payment = {
+      paymentRequest.payment = {
         satoshisPaid: parsed.satoshis,
         accepted: true,
         tx: payment.transaction,

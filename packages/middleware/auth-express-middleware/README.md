@@ -8,7 +8,7 @@ verifiable certificates.
 ## Requirements
 
 - Node.js 22 or newer
-- Express 5
+- Express 4.18 or newer, including Express 5
 - A BRC-100 `WalletInterface`
 
 The package ships native ESM and CommonJS entry points with declarations for
@@ -19,6 +19,11 @@ both module systems.
 ```bash
 npm install @bsv/auth-express-middleware @bsv/sdk express
 ```
+
+Express is a peer dependency, so the middleware uses the application's single
+Express runtime and type graph. This prevents duplicate Express installations
+from making `AuthRequest` or the returned middleware incompatible with the
+application's route types.
 
 ## Basic use
 
