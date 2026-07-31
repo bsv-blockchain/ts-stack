@@ -307,7 +307,9 @@ jobs:
     if: needs.prepare.outputs.mutation-targets != '[]'
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The governed air-gap codec target currently instruments 352 mutants and
+    # legitimately exceeds 20 minutes on a hosted runner.
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:
