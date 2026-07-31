@@ -2,7 +2,7 @@
 id: release-operations
 title: 'Release and Operations Guide'
 kind: reference
-version: '1.1.1'
+version: '1.1.2'
 last_updated: '2026-07-30'
 last_verified: '2026-07-30'
 review_cadence_days: 30
@@ -174,6 +174,47 @@ An allowlist must be explicit configuration. Setting a hosting URL, fallback QR
 origin, or CSP document must not silently turn a public service into a
 same-origin-only service. Authentication, authorization, signatures, topic
 validation, rate limits, and request bounds remain enforced in both modes.
+
+## 6. Independent assurance program
+
+The release owner is also accountable for arranging an independent review of
+the security-sensitive stack. The review must cover cryptography, consensus and
+Script evaluation, wallet signing and storage, authentication and payment
+replay boundaries, Overlay and other untrusted network parsers, and npm/image
+supply-chain controls. It must inspect reviewed `main` source and the exact
+released packages and images, not production secrets or customer data.
+
+The BSV Association security owner will select an independent, conflict-free
+provider with demonstrated cryptographic, application-security, and
+supply-chain experience by **2026-08-31**. Selection evidence will record the
+candidate comparison, scope, conflicts check, statement of work, and
+confidential reporting channel. The review package will include the reviewed
+source SHA, package and image digests, SBOMs and attestations, threat models,
+conformance and coverage reports, fuzz/property evidence, and sanitized
+deployment configuration.
+
+Findings must use a private GitHub security advisory or
+`security@bsvblockchain.org` and follow the acknowledgement, assessment,
+remediation-update, severity, and coordinated-disclosure targets in
+[SECURITY.md](https://github.com/bsv-blockchain/ts-stack/security/policy).
+The ts-stack maintainers own triage and remediation; release owners own
+affected-artifact inventory, mitigation, deprecation, forward fixes, and
+deployment rollback. Public disclosure remains embargoed until coordinated
+with the reporter and affected operators.
+
+OpenSSF Best Practices badge registration is deferred only while
+[QA issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400) remains
+open, because its coverage, fuzzing, runtime, and manual-suite claims are not
+yet complete enough for a truthful self-assessment. The BSV Association
+security owner must register by **2026-08-31**, or within five business days of
+issue #400 closing, whichever occurs first, and link the resulting project
+record from this guide. Existing Scorecard findings remain governed by
+`governance/repository-health/exceptions.json`; badge deferral does not waive
+or suppress them.
+
+Independent review and badge participation improve evidence and accountability.
+Neither is proof that defects cannot exist, and all findings enter the normal
+private reporting, remediation, release, and incident processes.
 
 ## Failure and rollback
 

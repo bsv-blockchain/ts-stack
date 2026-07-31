@@ -34,6 +34,9 @@ jobs:
         with:
           node-version: 24.18.0
 
+      - name: Install repository verification tooling
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
       - name: Enforce dependency and release governance
         run: node scripts/dependency-release-governance.mjs check
 
