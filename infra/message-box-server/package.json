@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.21",
+  "version": "1.1.22",
   "overrides": {
     "brace-expansion": "5.0.8",
     "gaxios": "7.3.0",
@@ -68,7 +68,7 @@
     "@bsv/auth-express-middleware": "^2.1.6",
     "@bsv/authsocket": "^2.1.5",
     "@bsv/payment-express-middleware": "^2.1.4",
-    "@bsv/sdk": "^2.2.16",
+    "@bsv/sdk": "^2.2.17",
     "@bsv/wallet-toolbox": "^2.4.20",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.221.0",
