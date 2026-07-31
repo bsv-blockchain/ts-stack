@@ -224,7 +224,9 @@ describe('AuthSocketServer lifecycle', () => {
       })
     }
     connectionListener(rawSocket)
-    const transport = mockPeerConstructor.mock.calls.at(-1)[1] as unknown as SocketServerTransport
+    const transport = (mockPeerConstructor as jest.Mock).mock.calls.at(
+      -1
+    )?.[1] as SocketServerTransport
     await transport.onData(async () => await Promise.reject(authenticationFailure))
 
     await rawListeners.get('authMessage')?.({ messageType: 'general' })
