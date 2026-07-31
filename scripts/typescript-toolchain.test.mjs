@@ -26,7 +26,7 @@ const governedManifest = {
 
 test('all tracked TypeScript projects use the governed side-by-side toolchain', () => {
   const report = inspectTypeScriptToolchain()
-  assert.equal(report.governed, 43)
+  assert.equal(report.governed, 44)
   assert.equal(report.codegen, 1)
   assert.ok(report.configurations > 100)
   assert.equal(report.profiles, 9)

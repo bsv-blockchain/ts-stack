@@ -5,8 +5,8 @@ import { loadPackageDocumentation, renderPackageDocumentation } from './package-
 test('package API and migration ledger covers every public package', async () => {
   const model = await loadPackageDocumentation()
   assert.deepEqual(model.errors, [])
-  assert.equal(model.packages.length, 30)
-  assert.equal(model.packages.filter(pkg => pkg.releaseType !== 'none').length, 30)
+  assert.equal(model.packages.length, 31)
+  assert.equal(model.packages.filter(pkg => pkg.releaseType !== 'none').length, 31)
   assert.ok(model.packages.every(pkg => pkg.docsPath?.startsWith('docs/packages/')))
 
   const rendered = renderPackageDocumentation(model)

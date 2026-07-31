@@ -111,6 +111,7 @@ export const NAV: NavSection[] = [
           { label: '@bsv/did-client', href: '/packages/helpers/did-client/' },
           { label: '@bsv/wallet-helper', href: '/packages/helpers/wallet-helper/' },
           { label: '@bsv/amountinator', href: '/packages/helpers/amountinator/' },
+          { label: '@bsv/air-gap', href: '/packages/helpers/air-gap/' },
           { label: '@bsv/fund-wallet', href: '/packages/helpers/fund-wallet/' }
         ]
       }
@@ -144,7 +145,8 @@ export const NAV: NavSection[] = [
       { label: 'Merkle Service', href: '/specs/merkle-service/' },
       { label: 'Storage Adapter', href: '/specs/storage-adapter/' },
       { label: 'GASP Sync', href: '/specs/gasp-sync/' },
-      { label: 'UHRP', href: '/specs/uhrp/' }
+      { label: 'UHRP', href: '/specs/uhrp/' },
+      { label: 'Air-Gap Optical (BRC-141)', href: '/specs/air-gap-optical/' }
     ]
   },
   {

@@ -358,6 +358,17 @@
       "release": "none"
     },
     {
+      "path": "packages/helpers/air-gap",
+      "name": "@bsv/air-gap",
+      "owner": "ts-stack-maintainers",
+      "area": "helpers",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/helpers/amountinator",
       "name": "@bsv/amountinator",
       "owner": "ts-stack-maintainers",
