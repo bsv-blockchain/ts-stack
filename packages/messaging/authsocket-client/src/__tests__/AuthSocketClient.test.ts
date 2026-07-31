@@ -199,7 +199,7 @@ describe('AuthSocketClient', () => {
     const authenticationFailure = new Error('authentication failed')
     const onError = jest.fn()
     createClient(onError)
-    const transport = mockPeerConstructor.mock.calls[0][1] as unknown as SocketClientTransport
+    const transport = (mockPeerConstructor as jest.Mock).mock.calls[0][1] as SocketClientTransport
     await transport.onData(async () => await Promise.reject(authenticationFailure))
 
     await socketListeners.get('authMessage')?.({ messageType: 'general' })
