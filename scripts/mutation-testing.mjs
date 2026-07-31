@@ -16,7 +16,7 @@ const CONTROL_PATH_PREFIXES = [
   'governance/mutation-testing/stryker.config.mjs'
 ]
 const CONTROL_PATHS = new Set(['package.json', 'pnpm-workspace.yaml', 'tsconfig.base.json'])
-const REGEXP_META = new RegExp(String.raw`[.*+?^$(){}|[\]\\]`, 'g')
+const REGEXP_META = new Set('.*+?^$(){}|[]\\')
 const OPTION_REQUIREMENTS = new Map([
   ['--target', 'an exact target ID'],
   ['--base', 'an exact revision'],
@@ -51,7 +51,7 @@ function globPattern(pattern) {
       index += 1
     } else if (character === '*') expression += '[^/]*'
     else if (character === '?') expression += '[^/]'
-    else expression += character.replace(REGEXP_META, '\\$&')
+    else expression += REGEXP_META.has(character) ? `\\${character}` : character
   }
   return new RegExp(`${expression}$`)
 }
