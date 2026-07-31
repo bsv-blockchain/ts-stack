@@ -297,12 +297,7 @@ function validateScheduledVerification(policy, errors) {
   }
   // Publication is OIDC trusted publishing from release.yaml. This workflow
   // must never require classic npm auth env vars or setup-node registry config.
-  for (const forbidden of [
-    'NODE_AUTH_TOKEN',
-    'NPM_TOKEN',
-    'registry-url:',
-    'always-auth:'
-  ]) {
+  for (const forbidden of ['NODE_AUTH_TOKEN', 'NPM_TOKEN', 'registry-url:', 'always-auth:']) {
     if (new RegExp(`^\\s*${forbidden.replace(':', '\\s*:')}.*$`, 'm').test(workflow)) {
       errors.push(`${scheduled.workflow} must not configure ${JSON.stringify(forbidden)}`)
     }
