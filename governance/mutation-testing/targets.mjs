@@ -75,77 +75,59 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/sdk/package.json',
       propertyTest: 'packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts',
       mutate: [
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        [
           'src/auth/Peer.ts',
           '// Register before sending:',
           'Waits for the initial response from the peer'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/Peer.ts',
           'private stopListeningForInitialResponsesByNonce (',
           'private propagateTransportError ('
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/clients/AuthFetch.ts',
           'if (this.pendingRequestNonces.size >= MAX_PENDING_AUTH_REQUESTS)',
           'responseTimeout = setTimeout('
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/clients/AuthFetch.ts',
           'responseTimeout = setTimeout(',
           'Before sending general messages to the peer'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/clients/AuthFetch.ts',
           'if (peerToUse.pendingCertificateRequests.length > 0)',
           '// Check if server requires payment to access the requested route'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/clients/AuthFetch.ts',
           'private isStaleSessionError(',
           'private parseAuthenticatedResponse('
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/clients/AuthFetch.ts',
           'private parseAuthenticatedResponse(',
           'Request Certificates from a Peer'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/transports/SimplifiedFetchTransport.ts',
           'await this.onDataCallback!((await response.json()) as AuthMessage)',
           "if (message.messageType === 'initialRequest') resolve()"
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/transports/SimplifiedFetchTransport.ts',
           'this.validateResponseAuthentication(url, response, body)',
           'Registers a callback to handle incoming messages.'
-        ),
-        sourceLineRange(
-          repositoryRoot,
-          'packages/sdk',
+        ],
+        [
           'src/auth/transports/SimplifiedFetchTransport.ts',
           'async onData(callback:',
           'private createNetworkError('
-        )
-      ],
+        ]
+      ].map(([filePath, startMarker, endMarker]) =>
+        sourceLineRange(repositoryRoot, 'packages/sdk', filePath, startMarker, endMarker)
+      ),
       ...jestTarget(
         'jest.config.js',
         [
