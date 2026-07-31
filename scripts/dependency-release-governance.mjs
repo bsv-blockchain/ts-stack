@@ -288,10 +288,23 @@ function validateScheduledVerification(policy, errors) {
     'dependency-release-governance.mjs verify-published',
     'npm audit signatures',
     'docker pull',
+    'pnpm install --frozen-lockfile --ignore-scripts',
     'docs:facts:check'
   ]) {
     if (!workflow.includes(fragment)) {
       errors.push(`${scheduled.workflow} must contain ${JSON.stringify(fragment)}`)
+    }
+  }
+  // Publication is OIDC trusted publishing from release.yaml. This workflow
+  // must never require classic npm auth env vars or setup-node registry config.
+  for (const forbidden of [
+    'NODE_AUTH_TOKEN',
+    'NPM_TOKEN',
+    'registry-url:',
+    'always-auth:'
+  ]) {
+    if (new RegExp(`^\\s*${forbidden.replace(':', '\\s*:')}.*$`, 'm').test(workflow)) {
+      errors.push(`${scheduled.workflow} must not configure ${JSON.stringify(forbidden)}`)
     }
   }
 }
