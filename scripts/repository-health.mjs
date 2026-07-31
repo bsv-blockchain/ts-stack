@@ -477,6 +477,31 @@ function validateConsumerProfileContracts(project, actual, prefix) {
   ]
 }
 
+function validateDeclarationDependencyManifest(project, manifest, prefix) {
+  const errors = []
+  for (const dependency of project.declarationDependencies ?? []) {
+    const publishedDependencies = {
+      ...manifest.dependencies,
+      ...manifest.peerDependencies
+    }
+    if (!Object.hasOwn(publishedDependencies, dependency)) {
+      errors.push(`${prefix} must publish declaration dependency ${dependency}`)
+    }
+    const runtimePackage = runtimePackageForTypes(dependency)
+    const runtimeSurface = {
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies
+    }
+    if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
+      errors.push(
+        `${prefix} declaration dependency ${dependency} requires runtime package ${runtimePackage}`
+      )
+    }
+  }
+  return errors
+}
+
 function validateHostPeerManifest(project, manifest, prefix) {
   const errors = []
   for (const dependency of project.hostPeerDependencies ?? []) {
@@ -530,26 +555,7 @@ function validateProjectManifest(project, actual) {
     errors.push(`${prefix} is public but release is not npm-oidc`)
   }
   errors.push(...validateConsumerProfileContracts(project, actual, prefix))
-  for (const dependency of project.declarationDependencies ?? []) {
-    const publishedDependencies = {
-      ...actual.manifest.dependencies,
-      ...actual.manifest.peerDependencies
-    }
-    if (!Object.hasOwn(publishedDependencies, dependency)) {
-      errors.push(`${prefix} must publish declaration dependency ${dependency}`)
-    }
-    const runtimePackage = runtimePackageForTypes(dependency)
-    const runtimeSurface = {
-      ...actual.manifest.dependencies,
-      ...actual.manifest.optionalDependencies,
-      ...actual.manifest.peerDependencies
-    }
-    if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
-      errors.push(
-        `${prefix} declaration dependency ${dependency} requires runtime package ${runtimePackage}`
-      )
-    }
-  }
+  errors.push(...validateDeclarationDependencyManifest(project, actual.manifest, prefix))
   errors.push(...validateHostPeerManifest(project, actual.manifest, prefix))
   return errors
 }
