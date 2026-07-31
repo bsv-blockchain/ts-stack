@@ -4,6 +4,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
 
@@ -17,8 +18,10 @@ const profiles = [
   { label: 'Express 5', express: '5.2.1', types: '5.0.6' }
 ]
 
-const sources = {
-  '@bsv/paymail': `import express, { type Router } from 'express'
+const packageContracts = {
+  '@bsv/paymail': {
+    relativeDirectory: 'packages/messaging/ts-paymail',
+    source: `import express, { type Router } from 'express'
 import { PaymailRouter } from '@bsv/paymail'
 
 const app = express()
@@ -28,8 +31,11 @@ const router: Router = new PaymailRouter({
 }).getRouter()
 
 app.use(router)
-`,
-  '@bsv/auth-express-middleware': `import express, { type RequestHandler } from 'express'
+`
+  },
+  '@bsv/auth-express-middleware': {
+    relativeDirectory: 'packages/middleware/auth-express-middleware',
+    source: `import express, { type RequestHandler } from 'express'
 import type { WalletInterface } from '@bsv/sdk'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
@@ -41,8 +47,11 @@ app.use(authentication)
 app.get('/private', (req: AuthRequest, res) => {
   res.json({ identityKey: req.auth?.identityKey })
 })
-`,
-  '@bsv/payment-express-middleware': `import express, { type RequestHandler } from 'express'
+`
+  },
+  '@bsv/payment-express-middleware': {
+    relativeDirectory: 'packages/middleware/payment-express-middleware',
+    source: `import express, { type RequestHandler } from 'express'
 import type { WalletInterface } from '@bsv/sdk'
 import {
   createPaymentMiddleware,
@@ -57,8 +66,11 @@ app.use(payment)
 app.get('/paid', (req: PaymentRequest, res) => {
   res.json({ satoshisPaid: req.payment?.satoshisPaid })
 })
-`,
-  '@bsv/wallet-relay': `import express from 'express'
+`
+  },
+  '@bsv/wallet-relay': {
+    relativeDirectory: 'packages/wallet/ts-wallet-relay',
+    source: `import express from 'express'
 import { createServer } from 'node:http'
 import {
   WalletRelayService,
@@ -71,6 +83,7 @@ const server = createServer(app)
 
 new WalletRelayService({ app, server, wallet })
 `
+  }
 }
 
 const tsconfig = {
@@ -151,21 +164,20 @@ async function verifyProfile(packageName, source, tarball, profile, temporaryDir
   }
 }
 
-const packageDirectory = path.resolve(process.argv[2] ?? '.')
-const packageManifest = JSON.parse(
-  await fs.readFile(path.join(packageDirectory, 'package.json'), 'utf8')
-)
-const source = sources[packageManifest.name]
-if (source === undefined) {
-  throw new Error(`Unsupported Express middleware package: ${packageManifest.name}`)
+const packageName = process.argv[2]
+if (!Object.hasOwn(packageContracts, packageName)) {
+  throw new Error(`Unsupported Express middleware package: ${packageName ?? '<missing>'}`)
 }
+const contract = packageContracts[packageName]
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const packageDirectory = path.join(repositoryRoot, contract.relativeDirectory)
 const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'auth-express-consumers-'))
 try {
   const tarball = await pack(packageDirectory, temporaryDirectory)
   for (const profile of profiles) {
-    await verifyProfile(packageManifest.name, source, tarball, profile, temporaryDirectory)
+    await verifyProfile(packageName, contract.source, tarball, profile, temporaryDirectory)
   }
-  console.log(`Verified ${packageManifest.name} clean TypeScript consumers on Express 4 and 5.`)
+  console.log(`Verified ${packageName} clean TypeScript consumers on Express 4 and 5.`)
 } finally {
   await fs.rm(temporaryDirectory, { recursive: true, force: true })
 }

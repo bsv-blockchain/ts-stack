@@ -42,7 +42,7 @@
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/middleware/auth-express-middleware/**/*.{js,json,ts}\"",
     "lint": "oxlint mod.ts src --deny-warnings",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ExpressTransport,createAuthMiddleware && node ../../../scripts/check-auth-express-consumers.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --exports ExpressTransport,createAuthMiddleware && node ../../../scripts/check-auth-express-consumers.mjs @bsv/auth-express-middleware",
     "prepublishOnly": "pnpm build",
     "test": "jest --runInBand",
     "test:property": "jest --runInBand src/__tests/authMiddlewareHelpers.property.test.ts",

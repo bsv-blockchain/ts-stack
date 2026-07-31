@@ -70,7 +70,7 @@
     "typecheck": "tsc --noEmit",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/ts-wallet-relay/**/*.{cjs,js,json,md,mjs,ts,tsx}\"",
     "lint": "oxlint build.mjs bin src tests --deny-warnings",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --allow-source-prefixes template --consumer-dependencies react --exports QRSessionManager,WalletRelayService,WalletRequestHandler,WebSocketRelay,compileOriginMatcher --entry-exports \"./client=WalletPairingSession|WalletRelayClient|WalletRelayError;./react=QRDisplay|QRPairingCode|RequestLog|WalletConnectionModal|useQRPairing|useWalletRelayClient\" --bin wallet-relay --bin-args --help && node ../../../scripts/check-auth-express-consumers.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --allow-source-prefixes template --consumer-dependencies react --exports QRSessionManager,WalletRelayService,WalletRequestHandler,WebSocketRelay,compileOriginMatcher --entry-exports \"./client=WalletPairingSession|WalletRelayClient|WalletRelayError;./react=QRDisplay|QRPairingCode|RequestLog|WalletConnectionModal|useQRPairing|useWalletRelayClient\" --bin wallet-relay --bin-args --help && node ../../../scripts/check-auth-express-consumers.mjs @bsv/wallet-relay",
     "test": "jest --config jest.config.cjs --watchman=false",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --config jest.config.cjs --coverage --watchman=false",

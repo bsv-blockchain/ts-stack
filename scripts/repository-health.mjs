@@ -477,6 +477,40 @@ function validateConsumerProfileContracts(project, actual, prefix) {
   ]
 }
 
+function validateHostPeerManifest(project, manifest, prefix) {
+  const errors = []
+  for (const dependency of project.hostPeerDependencies ?? []) {
+    if (!Object.hasOwn(manifest.peerDependencies ?? {}, dependency)) {
+      errors.push(`${prefix} must publish host framework ${dependency} as a peer dependency`)
+    }
+    if (Object.hasOwn(manifest.dependencies ?? {}, dependency)) {
+      errors.push(`${prefix} must not install host framework ${dependency} as a dependency`)
+    }
+    for (const declarationDependency of project.declarationDependencies ?? []) {
+      if (runtimePackageForTypes(declarationDependency) !== dependency) continue
+      if (!Object.hasOwn(manifest.peerDependencies ?? {}, declarationDependency)) {
+        errors.push(
+          `${prefix} must publish host framework declarations ${declarationDependency} as a peer dependency`
+        )
+      }
+      if (Object.hasOwn(manifest.dependencies ?? {}, declarationDependency)) {
+        errors.push(
+          `${prefix} must not install host framework declarations ${declarationDependency} as a dependency`
+        )
+      }
+    }
+  }
+  if (
+    project.hostPeerDependencies?.includes('express') &&
+    !manifest.scripts?.['pack:check']?.includes(`check-auth-express-consumers.mjs ${project.name}`)
+  ) {
+    errors.push(
+      `${prefix} must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check`
+    )
+  }
+  return errors
+}
+
 function validateProjectManifest(project, actual) {
   const prefix = `projects.json entry ${project.path ?? '<missing path>'}`
   if (!actual) return [`${prefix} has no discovered workspace package.json`]
@@ -516,33 +550,7 @@ function validateProjectManifest(project, actual) {
       )
     }
   }
-  for (const dependency of project.hostPeerDependencies ?? []) {
-    if (!Object.hasOwn(actual.manifest.peerDependencies ?? {}, dependency)) {
-      errors.push(`${prefix} must publish host framework ${dependency} as a peer dependency`)
-    }
-    if (Object.hasOwn(actual.manifest.dependencies ?? {}, dependency)) {
-      errors.push(`${prefix} must not install host framework ${dependency} as a dependency`)
-    }
-    for (const declarationDependency of project.declarationDependencies ?? []) {
-      if (runtimePackageForTypes(declarationDependency) !== dependency) continue
-      if (!Object.hasOwn(actual.manifest.peerDependencies ?? {}, declarationDependency)) {
-        errors.push(
-          `${prefix} must publish host framework declarations ${declarationDependency} as a peer dependency`
-        )
-      }
-      if (Object.hasOwn(actual.manifest.dependencies ?? {}, declarationDependency)) {
-        errors.push(
-          `${prefix} must not install host framework declarations ${declarationDependency} as a dependency`
-        )
-      }
-    }
-  }
-  if (
-    project.hostPeerDependencies?.includes('express') &&
-    !actual.manifest.scripts?.['pack:check']?.includes('check-auth-express-consumers.mjs')
-  ) {
-    errors.push(`${prefix} must test clean Express 4 and 5 host consumers in pack:check`)
-  }
+  errors.push(...validateHostPeerManifest(project, actual.manifest, prefix))
   return errors
 }
 

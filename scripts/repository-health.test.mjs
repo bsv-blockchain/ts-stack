@@ -161,7 +161,20 @@ test('host framework extensions share the consumer runtime and declaration graph
   walletRelay.manifest.scripts['pack:check'] = 'pnpm build'
   assert.match(
     validateProjectRegistry(projects, untestedDiscovered).join('\n'),
-    /must test clean Express 4 and 5 host consumers in pack:check/
+    /must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check/
+  )
+
+  const unsafePathDiscovered = structuredClone(discoverWorkspaceProjects())
+  const authExpress = unsafePathDiscovered.find(
+    project => project.manifest.name === '@bsv/auth-express-middleware'
+  )
+  authExpress.manifest.scripts['pack:check'] = authExpress.manifest.scripts['pack:check'].replace(
+    '@bsv/auth-express-middleware',
+    '.'
+  )
+  assert.match(
+    validateProjectRegistry(projects, unsafePathDiscovered).join('\n'),
+    /must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check/
   )
 })
 
