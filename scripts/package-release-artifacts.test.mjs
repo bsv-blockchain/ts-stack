@@ -455,6 +455,25 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.match(verifyStep, /gh attestation verify/)
   const pushSync = workflow.indexOf('- name: Push version sync branch')
   const openSyncPr = workflow.indexOf('- name: Open version sync PR')
+  const prepareSync = workflow.slice(
+    workflow.indexOf('- name: Prepare published workspace version sync'),
+    pushSync
+  )
+  assert.match(prepareSync, /node scripts\/generate-stack-facts\.mjs/)
+  assert.match(prepareSync, /git add [^\n]*docs\/reference\/stack-facts\.md/)
   assert.match(workflow.slice(pushSync, openSyncPr), tokenBinding)
-  assert.match(workflow.slice(openSyncPr), tokenBinding)
+  const openSyncPrStep = workflow.slice(openSyncPr)
+  assert.match(openSyncPrStep, tokenBinding)
+  assert.match(openSyncPrStep, /## Dependency evidence/)
+  for (const field of [
+    'Release notes and necessity',
+    'Runtime, build, and peer compatibility',
+    'Deduplicated lockfile',
+    'Audit and CodeQL',
+    'Package and consumer tests',
+    'Bundle and performance impact',
+    'Affected public package versions'
+  ]) {
+    assert.match(openSyncPrStep, new RegExp(`- ${field}: \\S`))
+  }
 })
