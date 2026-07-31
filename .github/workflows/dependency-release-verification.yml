@@ -28,10 +28,11 @@ jobs:
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
+      # Public registry default only. Avoid setup-node registry configuration that
+      # injects classic npm auth placeholders; publication is OIDC from release.yaml.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
-          registry-url: https://registry.npmjs.org
 
       - name: Enforce dependency and release governance
         run: node scripts/dependency-release-governance.mjs check
@@ -68,6 +69,11 @@ jobs:
             while IFS= read -r image; do
               docker pull --quiet "$image"
             done
+
+      # package-documentation needs root prettier. published-install above is
+      # intentionally isolated and does not provide monorepo devDependencies.
+      - name: Install workspace dependencies for documentation facts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Verify generated package, support, conformance, and version facts
         run: pnpm docs:facts:check

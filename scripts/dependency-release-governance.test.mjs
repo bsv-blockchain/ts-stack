@@ -108,3 +108,15 @@ test('every checked-in deployment image is immutable and scheduled for pull veri
   assert.ok(images.length >= 6)
   assert.ok(images.every(image => /@sha256:[0-9a-f]{64}$/.test(image)))
 })
+
+test('scheduled dependency verification installs the workspace before docs facts', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), dependencyPolicy.scheduledVerification.workflow),
+    'utf8'
+  )
+  const install = workflow.indexOf('run: pnpm install --frozen-lockfile --ignore-scripts')
+  const docsFacts = workflow.indexOf('run: pnpm docs:facts:check')
+  assert.ok(install > 0)
+  assert.ok(docsFacts > install)
+  assert.doesNotMatch(workflow, /^\s*(NODE_AUTH_TOKEN|NPM_TOKEN|registry-url)\s*:/m)
+})
