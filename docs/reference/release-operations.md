@@ -196,10 +196,11 @@ deployment configuration.
 Findings must use a private GitHub security advisory or
 `security@bsvblockchain.org` and follow the acknowledgement, assessment,
 remediation-update, severity, and coordinated-disclosure targets in
-[SECURITY.md](../../.github/SECURITY.md). The ts-stack maintainers own triage
-and remediation; release owners own affected-artifact inventory, mitigation,
-deprecation, forward fixes, and deployment rollback. Public disclosure remains
-embargoed until coordinated with the reporter and affected operators.
+[SECURITY.md](https://github.com/bsv-blockchain/ts-stack/security/policy).
+The ts-stack maintainers own triage and remediation; release owners own
+affected-artifact inventory, mitigation, deprecation, forward fixes, and
+deployment rollback. Public disclosure remains embargoed until coordinated
+with the reporter and affected operators.
 
 OpenSSF Best Practices badge registration is deferred only while
 [QA issue #400](https://github.com/bsv-blockchain/ts-stack/issues/400) remains
