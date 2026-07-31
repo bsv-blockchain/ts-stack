@@ -3,10 +3,10 @@ id: pkg-authsocket-client
 title: '@bsv/authsocket-client'
 kind: package
 domain: messaging
-version: '2.1.3'
+version: '2.1.4'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-07-31'
+last_verified: '2026-07-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/authsocket-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client'
@@ -58,6 +58,8 @@ socket.on('disconnect', () => {
 - **Transparent proxying** — User code sees normal Socket.IO API; BRC-103 hidden
 - **Certificate exchange** — Supports verifiable certificates during handshake (optional)
 - **Standard Socket.IO interface** — `.on()`, `.emit()`, `.id`, `.connect()`, `.disconnect()`
+- **Failure isolation** — Authentication and callback failures disconnect the affected connection
+- **Bounded ingress** — Authentication concurrency defaults to 32 and is configurable
 
 ## Common patterns
 
@@ -95,6 +97,23 @@ const socket = AuthSocketClient('http://localhost:3000', {
   }
 })
 ```
+
+### Failure reporting and authentication bounds
+
+```typescript
+const socket = AuthSocketClient('http://localhost:3000', {
+  wallet,
+  maxPendingAuthMessages: 32,
+  onError: (error, context) => {
+    console.error(context.phase, context.eventName, error)
+  }
+})
+```
+
+Malformed server authentication traffic and application callback failures are
+contained before they can become unhandled rejections. The error context does
+not include remote payloads or wallet material, and an `onError` handler that
+throws or rejects is also contained.
 
 ## Key concepts
 

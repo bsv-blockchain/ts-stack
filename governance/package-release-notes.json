@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-30",
+  "lastReviewed": "2026-07-31",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -35,22 +35,22 @@
       "name": "@bsv/auth-express-middleware",
       "publishedVersion": "2.1.2",
       "releaseType": "patch",
-      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries.",
-      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained."
+      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries, including containment of both synchronous and asynchronous BRC-103 callback failures.",
+      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained, while authentication callback failures now produce a controlled HTTP error."
     },
     {
       "name": "@bsv/authsocket",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Adds an idempotent server shutdown API that closes authenticated sockets and the attached HTTP listener.",
-      "migration": "No existing behavior changes automatically; service owners can call await server.close() during graceful shutdown."
+      "summary": "Contains authentication and application callback failures to the offending socket, caps per-socket authentication concurrency, validates authenticated event envelopes, adds safe error reporting, and adds randomized and real-Socket.IO process-survival regression coverage.",
+      "migration": "Valid traffic and the wire contract are unchanged. A socket is now disconnected when its authentication processing exceeds the concurrency limit or a callback fails; use onError for diagnostics and maxPendingAuthMessages to tune the default limit of 32."
     },
     {
       "name": "@bsv/authsocket-client",
       "publishedVersion": "2.1.1",
       "releaseType": "patch",
-      "summary": "Adopts the governed strict TypeScript profile and repository-wide zero-warning lint and formatting contract.",
-      "migration": "No consumer migration is required; client APIs, authenticated socket behavior, and supported imports are unchanged."
+      "summary": "Contains authentication and application callback failures, caps authentication concurrency, validates authenticated event envelopes, adds safe error reporting, and registers the remote payload boundary for randomized and mutation testing.",
+      "migration": "Valid traffic and supported imports are unchanged. The client now disconnects from a server that causes authentication failure or exceeds the concurrency limit; use onError for diagnostics and maxPendingAuthMessages to tune the default limit of 32."
     },
     {
       "name": "@bsv/btms",
@@ -147,8 +147,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and canonical root contribution guidance.",
-      "migration": "No consumer migration is required; the source candidate preserves the 2.x public API, wire encodings, script semantics, errors, and supported import forms."
+      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and hardens BRC-103 message and async listener boundaries.",
+      "migration": "The 2.x wire encodings and supported imports are unchanged. Peer listeners may continue returning void and may now return Promise<void>; rejected listeners propagate to the owning transport for containment."
     },
     {
       "name": "@bsv/simple",

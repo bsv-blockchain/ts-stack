@@ -38,6 +38,13 @@ const projects = [
 ]
 
 test('CI package selection partitions standard and coverage suites without duplication', () => {
+  assert.deepEqual(selectCiPackageNames(projects, 'test'), [
+    '@bsv/did',
+    '@bsv/example-browser',
+    '@bsv/example-covered',
+    '@bsv/example-standard',
+    '@bsv/sdk'
+  ])
   assert.deepEqual(selectCiPackageNames(projects, 'standard'), ['@bsv/example-standard'])
   assert.deepEqual(selectCiPackageNames(projects, 'coverage-other'), [
     '@bsv/example-browser',

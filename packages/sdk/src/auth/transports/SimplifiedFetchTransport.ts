@@ -235,10 +235,12 @@ export class SimplifiedFetchTransport implements Transport {
    */
   async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
     this.onDataCallback = m => {
-      void callback(m).catch(() => {
-        // Errors from handleIncomingMessage on the client side are not
-        // actionable here — prevent unhandled promise rejections.
-      })
+      void Promise.resolve()
+        .then(async () => await callback(m))
+        .catch(() => {
+          // Errors from handleIncomingMessage on the client side are not
+          // actionable here — prevent unhandled promise rejections.
+        })
     }
   }
 

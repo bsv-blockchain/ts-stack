@@ -1,25 +1,29 @@
 import { AuthSocket } from '../AuthSocketServer.js'
 
 describe('AuthSocket', () => {
-  function createHarness() {
-    let generalMessageListener: ((senderPublicKey: string, payload: number[]) => void) | undefined
+  function createHarness(onError = jest.fn(), useDefaultObserver = false) {
+    let generalMessageListener:
+      ((senderPublicKey: string, payload: number[]) => void | Promise<void>) | undefined
     const peer = {
       listenForGeneralMessages: jest.fn(
-        (callback: (senderPublicKey: string, payload: number[]) => void) => {
+        (callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>) => {
           generalMessageListener = callback
         }
       ),
       toPeer: jest.fn().mockResolvedValue(undefined)
     }
     const socket = {
-      id: 'socket-2'
+      id: 'socket-2',
+      disconnect: jest.fn()
     }
     const identityDiscovered = jest.fn()
-    const authSocket = new AuthSocket(socket as never, peer as never, identityDiscovered)
+    const authSocket = useDefaultObserver
+      ? new AuthSocket(socket as never, peer as never, identityDiscovered)
+      : new AuthSocket(socket as never, peer as never, identityDiscovered, onError)
     return {
       authSocket,
       generalMessage(payload: unknown, sender = 'peer-key') {
-        generalMessageListener?.(
+        return generalMessageListener?.(
           sender,
           typeof payload === 'string'
             ? Array.from(Buffer.from(payload))
@@ -27,7 +31,9 @@ describe('AuthSocket', () => {
         )
       },
       identityDiscovered,
-      peer
+      onError,
+      peer,
+      socket
     }
   }
 
@@ -67,6 +73,52 @@ describe('AuthSocket', () => {
     generalMessage('{not-json')
 
     expect(unknown).toHaveBeenCalledWith(null)
+  })
+
+  it.each([null, [], 7, 'event', {}, { eventName: 7 }])(
+    'routes a valid JSON non-envelope (%p) to the explicit unknown event',
+    value => {
+      const { authSocket, generalMessage } = createHarness()
+      const unknown = jest.fn()
+      authSocket.on('_unknown', unknown)
+
+      generalMessage(value)
+
+      expect(unknown).toHaveBeenCalledWith(null)
+    }
+  )
+
+  it('contains rejected application handlers and disconnects the offending socket', async () => {
+    const observerFailure = new Error('observer failed')
+    const onError = jest.fn().mockRejectedValue(observerFailure)
+    const { authSocket, generalMessage, socket } = createHarness(onError)
+    const applicationFailure = new Error('application failed')
+    authSocket.on('message', async () => await Promise.reject(applicationFailure))
+
+    await expect(
+      generalMessage({ eventName: 'message', data: { untrusted: true } })
+    ).resolves.toBeUndefined()
+    await Promise.resolve()
+
+    expect(onError).toHaveBeenCalledWith(applicationFailure, {
+      phase: 'application',
+      socketId: 'socket-2',
+      eventName: 'message'
+    })
+    expect(socket.disconnect).toHaveBeenCalledWith(true)
+  })
+
+  it('contains application failures when no error observer is configured', async () => {
+    const { authSocket, generalMessage, socket } = createHarness(jest.fn(), true)
+    authSocket.on('message', () => {
+      throw new Error('application failed')
+    })
+
+    await expect(
+      generalMessage({ eventName: 'message', data: { untrusted: true } })
+    ).resolves.toBeUndefined()
+
+    expect(socket.disconnect).toHaveBeenCalledWith(true)
   })
 
   it('ignores valid events without registered callbacks', () => {

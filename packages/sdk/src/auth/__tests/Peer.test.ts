@@ -1248,3 +1248,63 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     })
   })
 })
+
+describe('Peer untrusted callback boundaries', () => {
+  test('rejects null and non-object authentication messages without property access failures', async () => {
+    let receive: ((message: AuthMessage) => Promise<void>) | undefined
+    const transport: Transport = {
+      async send() {},
+      async onData(callback) {
+        receive = callback
+      }
+    }
+    const peer = new Peer(new CompletedProtoWallet(new PrivateKey(31)), transport)
+    await peer.ready
+
+    await expect(receive?.(null as never)).rejects.toThrow('Invalid authentication message.')
+    await expect(receive?.([] as never)).rejects.toThrow('Invalid authentication message.')
+    await expect(receive?.('message' as never)).rejects.toThrow('Invalid authentication message.')
+  })
+
+  test('propagates an asynchronous general-message listener failure to its transport', async () => {
+    class CallbackAwareTransport implements Transport {
+      peer?: CallbackAwareTransport
+      callback?: (message: AuthMessage) => Promise<void>
+
+      connect(peer: CallbackAwareTransport): void {
+        this.peer = peer
+        peer.peer = this
+      }
+
+      async send(message: AuthMessage): Promise<void> {
+        const callback = this.peer?.callback
+        if (callback === undefined) throw new Error('Transport is not connected')
+        if (message.messageType === 'initialRequest' || message.messageType === 'initialResponse') {
+          setTimeout(() => {
+            void callback(message).catch(() => {})
+          }, 0)
+          return
+        }
+        await callback(message)
+      }
+
+      async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
+        this.callback = callback
+      }
+    }
+
+    const aliceTransport = new CallbackAwareTransport()
+    const bobTransport = new CallbackAwareTransport()
+    aliceTransport.connect(bobTransport)
+    const aliceWallet = new CompletedProtoWallet(new PrivateKey(32))
+    const bobWallet = new CompletedProtoWallet(new PrivateKey(33))
+    const alice = new Peer(aliceWallet, aliceTransport)
+    const bob = new Peer(bobWallet, bobTransport)
+    await Promise.all([alice.ready, bob.ready])
+    const listenerFailure = new Error('listener failed')
+    bob.listenForGeneralMessages(async () => await Promise.reject(listenerFailure))
+    const bobIdentity = (await bobWallet.getPublicKey({ identityKey: true })).publicKey
+
+    await expect(alice.toPeer([1, 2, 3], bobIdentity)).rejects.toThrow('listener failed')
+  })
+})

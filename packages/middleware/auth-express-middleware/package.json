@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth-express-middleware",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

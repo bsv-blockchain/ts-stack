@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const MODES = ['standard', 'coverage-other', 'browser']
+const MODES = ['test', 'standard', 'coverage-other', 'browser']
 
 const dedicatedSuites = new Set([
   '@bsv/conformance-runner',
@@ -46,6 +46,9 @@ export function selectCiPackageNames(projects, mode) {
     .filter(project => {
       if (project.name === '@bsv/ts-stack' || project.name === 'example-paymail') {
         return false
+      }
+      if (mode === 'test') {
+        return project.name !== 'docs-site' && typeof project.scripts.test === 'string'
       }
       if (mode === 'browser') {
         return (

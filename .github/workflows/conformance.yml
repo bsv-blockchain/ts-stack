@@ -3,8 +3,18 @@ name: Conformance
 on:
   push:
     branches: [main, phase2/boundary-specs]
+    paths:
+      - '.github/workflows/conformance.yml'
+      - 'conformance/**'
+      - 'specs/**'
+      - 'scripts/generate-openapi-types.mjs'
   pull_request:
     branches: [main]
+    paths:
+      - '.github/workflows/conformance.yml'
+      - 'conformance/**'
+      - 'specs/**'
+      - 'scripts/generate-openapi-types.mjs'
 
 concurrency:
   group: conformance-${{ github.event.pull_request.number || github.ref }}
@@ -16,6 +26,7 @@ permissions:
 jobs:
   ts-runner:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9

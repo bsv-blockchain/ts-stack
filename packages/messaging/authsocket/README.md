@@ -45,17 +45,22 @@ const serverWallet = new ProtoWallet('my-private-key-hex')
 // which internally wraps the Socket.IO server.
 const io = new AuthSocketServer(server, {
   wallet: serverWallet,
+  onError: (error, context) => {
+    // Send the error to your private telemetry sink. Context never includes
+    // the remote payload or wallet material.
+    console.error(context.phase, context.socketId, error)
+  },
   cors: {
     origin: '*'
   }
 })
 
 // Use it like standard Socket.IO
-io.on('connection', (socket) => {
+io.on('connection', socket => {
   console.log('New Authenticated Connection -> socket ID:', socket.id)
 
   // Listen for chat messages
-  socket.on('chatMessage', (msg) => {
+  socket.on('chatMessage', msg => {
     console.log('Received message from client:', msg)
     // Reply to the client
     socket.emit('chatMessage', { from: socket.id, text: 'Hello from server!' })
@@ -89,16 +94,27 @@ cross-origin default of its own.
 Call `await io.close()` during shutdown. It is idempotent and disconnects
 active Socket.IO clients before closing the attached HTTP server.
 
+### Failure isolation and resource limits
+
+Authentication frames and application callbacks are isolated per connection.
+If signature verification, certificate handling, a connection callback, or an
+event callback throws or rejects, AuthSocket contains the failure and
+disconnects only that socket. The optional `onError(error, context)` hook
+receives a phase, socket ID, and event name where applicable; a hook that
+throws or rejects is also contained. Raw payloads and wallet data are not added
+to the context.
+
+At most 32 authentication messages are processed concurrently per socket by
+default. Set `maxPendingAuthMessages` to a positive safe integer when a
+deployment needs a different per-connection bound. A client that exceeds the
+bound is disconnected while the server continues accepting other clients.
+
 ### Targeted authenticated delivery
 
 Use `emitToIdentity` when a message is private to one BRC-103 identity:
 
 ```ts
-const selectedConnections = io.emitToIdentity(
-  recipientIdentityKey,
-  'message',
-  encryptedPayload
-)
+const selectedConnections = io.emitToIdentity(recipientIdentityKey, 'message', encryptedPayload)
 ```
 
 The routing decision uses the peer identity discovered by the signed
@@ -129,9 +145,11 @@ operation and should be reserved for intentionally public events.
   - Internally, it uses the BRC-103 `Peer` to sign outbound messages and verify inbound ones.
 
 ### SocketServerTransport
+
 - Implements the **BRC-103** `Transport` interface for server-side usage.
 - Receives messages via `socket.on('authMessage', ...)` from the Socket.IO layer.
 - Passes them to the `Peer` for handshake steps (signature verification, certificate exchange, etc.).
+- Contains rejected handshake processing and disconnects the offending socket.
 - Sends BRC-103 messages back to the client via `socket.emit('authMessage', ...)`.
 
 ## License

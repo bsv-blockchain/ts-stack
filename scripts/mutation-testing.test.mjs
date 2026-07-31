@@ -35,21 +35,58 @@ test('mutation command parsing rejects missing values and conflicting modes', ()
     all: false,
     list: false,
     targets: ['one', 'two'],
-    affectedFile: undefined
+    affectedFile: undefined,
+    base: undefined
   })
   assert.throws(() => parseArguments(['--target']), /requires an exact target ID/)
   assert.throws(() => parseArguments(['--affected-file']), /requires a path/)
   assert.throws(() => parseArguments(['--all', '--target', 'one']), /exactly one/)
 })
 
-test('affected mutation selection is package-scoped with global control fan-out', () => {
-  assert.deepEqual(selectAffectedMutationTargets(targets, ['packages/one/src/index.ts']), ['one'])
+test('affected mutation selection follows exact target inputs and changed governance entries', () => {
+  const preciseTargets = {
+    one: {
+      packageDirectory: 'packages/one',
+      manifest: 'packages/one/package.json',
+      propertyTest: 'packages/one/test/value.property.test.ts',
+      mutate: ['src/value.ts'],
+      runnerOptions: {
+        jest: {
+          configFile: 'jest.config.js',
+          config: { testMatch: ['<rootDir>/test/value*.test.ts'] }
+        }
+      }
+    },
+    two: {
+      packageDirectory: 'packages/two',
+      manifest: 'packages/two/package.json',
+      mutate: ['src/other.ts'],
+      runnerOptions: { jest: { configFile: 'jest.config.js' } }
+    }
+  }
+  assert.deepEqual(selectAffectedMutationTargets(preciseTargets, ['packages/one/src/value.ts']), [
+    'one'
+  ])
+  assert.deepEqual(
+    selectAffectedMutationTargets(preciseTargets, ['packages/one/src/unrelated.ts']),
+    []
+  )
+  assert.deepEqual(
+    selectAffectedMutationTargets(preciseTargets, ['governance/mutation-testing/policy.json'], {
+      changedTargetIds: ['two']
+    }),
+    ['two']
+  )
+  assert.deepEqual(
+    selectAffectedMutationTargets(preciseTargets, ['pnpm-lock.yaml'], {
+      changedImporters: ['packages/one']
+    }),
+    ['one']
+  )
   assert.deepEqual(selectAffectedMutationTargets(targets, ['docs/about/contributing.md']), [])
   assert.deepEqual(selectAffectedMutationTargets(targets, ['package.json']), ['one', 'two'])
-  assert.deepEqual(selectAffectedMutationTargets(targets, ['packages/sdk/src/index.ts']), [
-    'one',
-    'two'
-  ])
+  assert.deepEqual(selectAffectedMutationTargets(targets, ['.github/workflows/ci.yml']), [])
+  assert.deepEqual(selectAffectedMutationTargets(targets, ['scripts/mutation-testing.mjs']), [])
 })
 
 test('mutation report evaluation ratchets score, coverage, and invalid outcomes', () => {

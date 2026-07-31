@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.0.0'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.1.0'
+last_updated: '2026-07-31'
+last_verified: '2026-07-31'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -23,13 +23,33 @@ prepare-job duration; artifact upload/download duration; and variance. This
 separates targeted feedback from the complete merge gate so a changing PR mix
 cannot make the trend appear faster or slower by accident.
 
-The main CI workflow builds the workspace once and shares immutable outputs
-with isolated test lanes, skips empty affected-package lanes, installs through
-the setup-node pnpm cache, caches the immutable MongoDB test binary, and
-rebuilds native/build tools only in jobs that execute them. Browser lanes
-retain exact package-composition reports without rebuilding the workspace.
-These optimizations reduce repeated CPU, network, and setup work without
-removing coverage, mutation, platform, security, or package-consumer checks.
+The zero-install scope job resolves three distinct package sets from the
+workspace dependency graph. Directly changed package importers own coverage
+suites; their reverse-dependency closure owns non-instrumented regression,
+compatibility, and browser checks; and the forward closure supplies every build
+prerequisite. This preserves behavioral coverage of possible consumers without
+paying to regenerate unchanged packages' coverage reports.
+A lockfile-only change selects the importers whose lock snapshots actually
+changed instead of treating the root lockfile as a global invalidation. Root
+compiler and workspace controls still select the complete graph deliberately.
+
+Mutation selection follows each target's exact implementation, property,
+regression, configuration, and policy inputs. Package-wide mutation suites
+expand only where their configuration really covers the whole package. Image
+jobs follow changed build contexts: a CI-workflow-only change selects no
+application image, while shared image/runtime contract inputs deliberately fan
+out to the registered consumers.
+
+The main CI workflow builds the selected graph once and shares immutable
+outputs with isolated test lanes, skips empty lanes, installs through the
+setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
+native/build tools only in jobs that execute them. Browser lanes retain exact
+package-composition reports without rebuilding the workspace. The cheap
+repository-health, scope, Sonar, and dependency-review gates complete before
+dependency installation, and all expensive matrices cancel unfinished siblings
+after the first failure.
+These controls reduce repeated CPU, network, and setup work without weakening
+the tests selected by the dependency or registered trust-boundary graph.
 
 To refresh the evidence without changing the baseline:
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-26",
+  "lastReviewed": "2026-07-31",
   "ownerDefinitions": ["ts-stack-maintainers"],
   "propertyTesting": {
     "library": "fast-check",
@@ -23,6 +23,8 @@
       "packages/middleware/auth/package.json",
       "packages/overlays/overlay-express/package.json",
       "packages/messaging/message-box-client/package.json",
+      "packages/messaging/authsocket/package.json",
+      "packages/messaging/authsocket-client/package.json",
       "packages/wallet/ts-wallet-relay/package.json",
       "packages/overlays/overlay-discovery-services/package.json",
       "packages/overlays/overlay/package.json",
@@ -168,6 +170,32 @@
           "Endpoint paths cannot replace the chosen authority.",
           "Reserved IPv4 and IPv6 destinations are rejected without blocking adjacent public ranges.",
           "Arbitrary advertisements never throw at the tolerant boundary."
+        ]
+      },
+      {
+        "path": "packages/messaging/authsocket/src/__tests__/eventPayload.property.test.ts",
+        "manifest": "packages/messaging/authsocket/package.json",
+        "risk": "critical",
+        "boundary": "Server-side BRC-103 Socket.IO authentication and authenticated event payload ingress",
+        "target": "Arbitrary-value callback containment, arbitrary-byte parser totality, JSON envelope shape validation, and event data round trips",
+        "invariants": [
+          "Rejected authentication processing for arbitrary remote values is contained and disconnects only that socket.",
+          "Arbitrary remote bytes never make event decoding throw.",
+          "Only object envelopes with string event names are dispatched as named events.",
+          "Arbitrary JSON event data retains its canonical JSON semantics."
+        ]
+      },
+      {
+        "path": "packages/messaging/authsocket-client/src/__tests__/eventPayload.property.test.ts",
+        "manifest": "packages/messaging/authsocket-client/package.json",
+        "risk": "critical",
+        "boundary": "Client-side BRC-103 Socket.IO authentication and authenticated event payload ingress",
+        "target": "Arbitrary-value callback containment, arbitrary-byte parser totality, JSON envelope shape validation, and event data round trips",
+        "invariants": [
+          "Rejected authentication processing for arbitrary server values is contained and disconnects that connection.",
+          "Arbitrary server bytes never make event decoding throw.",
+          "Only object envelopes with string event names are dispatched as named events.",
+          "Arbitrary JSON event data retains its canonical JSON semantics."
         ]
       },
       {
@@ -385,20 +413,6 @@
         "manifest": "packages/helpers/simple/package.json",
         "kind": "adapter-or-composition",
         "rationale": "This convenience facade composes wallet, DID, Message Box, overlay, and token clients without owning an independent wire codec or authorization parser.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
-      },
-      {
-        "manifest": "packages/messaging/authsocket/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "The server package is a Socket.IO transport for SDK BRC-103 AuthMessage values; authentication byte binding is governed by @bsv/auth and the SDK.",
-        "owner": "ts-stack-maintainers",
-        "reviewBy": "2026-08-26"
-      },
-      {
-        "manifest": "packages/messaging/authsocket-client/package.json",
-        "kind": "adapter-or-composition",
-        "rationale": "The client package forwards SDK AuthMessage values through Socket.IO and owns no independent parser, canonicalizer, or authorization decision.",
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-08-26"
       },

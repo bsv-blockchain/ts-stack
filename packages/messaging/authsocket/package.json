@@ -1,6 +1,6 @@
 {
   "name": "@bsv/authsocket",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "sideEffects": false,
   "engines": {
     "node": ">=22"
@@ -41,6 +41,7 @@
     "prepublishOnly": "pnpm build",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:property": "jest --runInBand --runTestsByPath src/__tests__/eventPayload.property.test.ts",
     "test:watch": "jest --watch",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
@@ -70,8 +71,10 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
     "jest": "^30.4.2",
     "oxlint": "^1.76.0",
+    "socket.io-client": "^4.8.3",
     "ts-jest": "^29.4.12",
     "ts2md": "^0.2.8",
     "tsdown": "0.22.14",

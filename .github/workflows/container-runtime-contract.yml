@@ -8,9 +8,10 @@ on:
       - 'governance/container-images.json'
       - 'governance/service-operations.json'
       - 'infra/**'
-      - 'packages/wallet/wallet-toolbox/**'
       - 'scripts/container-runtime-contract.mjs'
       - 'scripts/container-runtime-contract.test.mjs'
+      - 'scripts/ci-affected-scope.mjs'
+      - 'scripts/ci-affected-scope.test.mjs'
       - 'scripts/service-operations.mjs'
   push:
     branches: [main]
@@ -19,9 +20,10 @@ on:
       - 'governance/container-images.json'
       - 'governance/service-operations.json'
       - 'infra/**'
-      - 'packages/wallet/wallet-toolbox/**'
       - 'scripts/container-runtime-contract.mjs'
       - 'scripts/container-runtime-contract.test.mjs'
+      - 'scripts/ci-affected-scope.mjs'
+      - 'scripts/ci-affected-scope.test.mjs'
       - 'scripts/service-operations.mjs'
 
 permissions: {}
@@ -31,38 +33,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Select affected runtime images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+      has-runtime: ${{ steps.scope.outputs.has-runtime }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+
+      - name: Resolve runtime contexts from the changed-file graph
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          BASE_SHA="$PR_BASE_SHA"
+          if [ -z "$BASE_SHA" ]; then BASE_SHA="$PUSH_BASE_SHA"; fi
+          if [ -z "$BASE_SHA" ] ||
+             [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] ||
+             ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            SCOPE=$(node scripts/ci-affected-scope.mjs --all)
+          else
+            SCOPE=$(node scripts/ci-affected-scope.mjs --base "$BASE_SHA" --head "$HEAD_SHA")
+          fi
+          MATRIX=$(jq -c '.runtimeMatrix' <<<"$SCOPE")
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "has-runtime=$(jq -r '.include | length > 0' <<<"$MATRIX")" >> "$GITHUB_OUTPUT"
+          echo "Runtime images: $(jq -c '[.include[].component.name]' <<<"$MATRIX")" >> "$GITHUB_STEP_SUMMARY"
+
   runtime:
     name: Runtime / ${{ matrix.component.name }}
+    if: needs.scope.outputs.has-runtime == 'true'
+    needs: scope
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 7
-      matrix:
-        component:
-          - name: chaintracks-server
-            path: infra/chaintracks-server
-            wallet: false
-          - name: message-box-server
-            path: infra/message-box-server
-            wallet: true
-          - name: overlay-server
-            path: infra/overlay-server
-            wallet: true
-          - name: uhrp-server-basic
-            path: infra/uhrp-server-basic
-            wallet: true
-          - name: uhrp-server-cloud-bucket
-            path: infra/uhrp-server-cloud-bucket
-            wallet: true
-          - name: wab
-            path: infra/wab
-            wallet: false
-          - name: wallet-infra
-            path: infra/wallet-infra
-            wallet: false
+      matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     services:
       mysql:
         image: mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
