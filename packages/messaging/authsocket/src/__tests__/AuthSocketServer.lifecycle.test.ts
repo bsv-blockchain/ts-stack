@@ -42,10 +42,9 @@ describe('AuthSocketServer lifecycle', () => {
     const connectionCallback = jest.fn()
     server.on('connection', connectionCallback)
 
-    expect(mockIoServerConstructor).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ wallet, requestedCertificates, sessionManager })
-    )
+    expect(mockIoServerConstructor).toHaveBeenCalledWith(expect.anything(), {
+      cors: { origin: '*' }
+    })
 
     const rawListeners = new Map<string, (...arguments_: any[]) => any>()
     const rawSocket = {

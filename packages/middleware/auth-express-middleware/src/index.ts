@@ -741,16 +741,19 @@ export class ExpressTransport implements Transport {
 
     if (this.messageCallback) {
       this.log('debug', 'Invoking stored messageCallback for non-general message')
-      this.messageCallback(message).catch(err => {
-        this.log('error', 'Error in messageCallback', safeErrorDetails(err))
-        this.removeNonGeneralHandle(requestId)
-        this.clearActiveCertificateRequest(requestId)
-        return res.status(500).json({
-          status: 'error',
-          code: 'ERR_INTERNAL_SERVER_ERROR',
-          description: 'Authentication processing failed.'
+      const messageCallback = this.messageCallback
+      void Promise.resolve()
+        .then(async () => await messageCallback(message))
+        .catch(err => {
+          this.log('error', 'Error in messageCallback', safeErrorDetails(err))
+          this.removeNonGeneralHandle(requestId)
+          this.clearActiveCertificateRequest(requestId)
+          return res.status(500).json({
+            status: 'error',
+            code: 'ERR_INTERNAL_SERVER_ERROR',
+            description: 'Authentication processing failed.'
+          })
         })
-      })
     }
   }
 
@@ -921,21 +924,24 @@ export class ExpressTransport implements Transport {
 
     if (this.messageCallback) {
       this.log('debug', 'Invoking stored messageCallback for general message')
-      this.messageCallback(message).catch(err => {
-        this.clearActiveGeneralRequest(expectedRequestId)
-        const msg = err instanceof Error ? err.message : String(err)
-        const isAuthError = /nonce|signature|session|auth version/i.test(msg)
-        this.log('error', 'Error in messageCallback (general message)', {
-          ...safeErrorDetails(err),
-          isAuthError
+      const messageCallback = this.messageCallback
+      void Promise.resolve()
+        .then(async () => await messageCallback(message))
+        .catch(err => {
+          this.clearActiveGeneralRequest(expectedRequestId)
+          const msg = err instanceof Error ? err.message : String(err)
+          const isAuthError = /nonce|signature|session|auth version/i.test(msg)
+          this.log('error', 'Error in messageCallback (general message)', {
+            ...safeErrorDetails(err),
+            isAuthError
+          })
+          const statusCode = isAuthError ? 401 : 500
+          const code = isAuthError ? 'ERR_AUTH_FAILED' : 'ERR_INTERNAL_SERVER_ERROR'
+          const description = isAuthError
+            ? 'Authentication failed.'
+            : 'Authentication processing failed.'
+          return res.status(statusCode).json({ status: 'error', code, description })
         })
-        const statusCode = isAuthError ? 401 : 500
-        const code = isAuthError ? 'ERR_AUTH_FAILED' : 'ERR_INTERNAL_SERVER_ERROR'
-        const description = isAuthError
-          ? 'Authentication failed.'
-          : 'Authentication processing failed.'
-        return res.status(statusCode).json({ status: 'error', code, description })
-      })
     }
   }
 

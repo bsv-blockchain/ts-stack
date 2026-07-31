@@ -34,7 +34,11 @@ const clientWallet = new ProtoWallet('client-private-key-hex')
 
 // Wrap the normal Socket.IO client with AuthSocketClient
 const socket = AuthSocketClient('http://localhost:3000', {
-  wallet: clientWallet
+  wallet: clientWallet,
+  onError: (error, context) => {
+    // Context identifies the phase and event without copying the remote payload.
+    console.error(context.phase, context.eventName, error)
+  }
 })
 
 // Standard Socket.IO usage
@@ -47,7 +51,7 @@ socket.on('connect', () => {
   })
 })
 
-socket.on('chatMessage', (msg) => {
+socket.on('chatMessage', msg => {
   console.log('Server says:', msg)
 })
 
@@ -60,6 +64,19 @@ socket.on('disconnect', () => {
 2. Interact with `.on(...)`, `.emit(...)` as normal.
 3. Behind the scenes, each message is signed with your client wallet key and verified by the server. Inbound messages are also verified.
 
+### Failure isolation and resource limits
+
+Authentication frames and application callbacks are contained inside the
+client connection. If a server sends a frame that fails BRC-103 processing, or
+an event callback throws or rejects, the client disconnects without creating
+an unhandled promise rejection. The optional `onError(error, context)` hook is
+also isolated if it throws or rejects, and its context does not include remote
+payloads or wallet material.
+
+The client processes at most 32 authentication messages concurrently by
+default. Set `maxPendingAuthMessages` to a positive safe integer to choose a
+different bound; a server that exceeds it is disconnected.
+
 ### How It Works (Briefly)
 
 - `AuthSocketClient` creates an internal BRC-103 `Peer` that handles:
@@ -70,11 +87,14 @@ socket.on('disconnect', () => {
 ## Detailed Explanations
 
 ### SocketClientTransport
+
 - Implements the **BRC-103** `Transport` interface on the client side.
 - Relies on the underlying `socket.io-client` for raw message passing via the `'authMessage'` channel.
 - The BRC-103 `Peer` calls this transport to send and receive raw BRC-103 frames.
+- Rejected or synchronous authentication failures are contained before they can become unhandled rejections.
 
 ### AuthSocketClient
+
 - A function that returns a proxy-like client socket.
 - Inside, it:
   1. Creates a real `io(url, managerOptions)` from `socket.io-client`.

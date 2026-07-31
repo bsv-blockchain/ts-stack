@@ -3,6 +3,40 @@ import { ServerOptions, Server as IoServer, Socket as IoSocket } from 'socket.io
 import { WalletInterface, Peer, SessionManager, AsyncSessionManager } from '@bsv/sdk'
 import { SocketServerTransport } from './SocketServerTransport.js'
 
+export type AuthSocketErrorPhase = 'authentication' | 'application' | 'connection' | 'send'
+
+export interface AuthSocketErrorContext {
+  phase: AuthSocketErrorPhase
+  socketId?: string
+  eventName?: string
+}
+
+export type AuthSocketErrorHandler = (
+  error: unknown,
+  context: AuthSocketErrorContext
+) => void | Promise<void>
+
+export function decodeAuthSocketEventPayload(payload: number[]): { eventName: string; data: any } {
+  try {
+    const str = Buffer.from(payload).toString('utf8')
+    const decoded: unknown = JSON.parse(str)
+    if (
+      decoded === null ||
+      typeof decoded !== 'object' ||
+      Array.isArray(decoded) ||
+      typeof (decoded as { eventName?: unknown }).eventName !== 'string'
+    ) {
+      return { eventName: '_unknown', data: null }
+    }
+    return {
+      eventName: (decoded as { eventName: string }).eventName,
+      data: (decoded as { data?: unknown }).data
+    }
+  } catch {
+    return { eventName: '_unknown', data: null }
+  }
+}
+
 export interface AuthSocketServerOptions extends Partial<ServerOptions> {
   wallet: WalletInterface // The server's wallet for signing
   requestedCertificates?: any // e.g. RequestedCertificateSet
@@ -11,6 +45,10 @@ export interface AuthSocketServerOptions extends Partial<ServerOptions> {
    * a shared database when more than one server replica handles connections.
    */
   sessionManager?: SessionManager | AsyncSessionManager
+  /** Maximum authentication messages processed concurrently by each socket. Defaults to 32. */
+  maxPendingAuthMessages?: number
+  /** Receives contained transport and application errors without exposing remote payloads. */
+  onError?: AuthSocketErrorHandler
 }
 
 interface PeerInfo {
@@ -45,7 +83,7 @@ export class AuthSocketServer {
    * for that connection to skip re-handshaking.
    */
   private readonly peers = new Map<string, PeerInfo>()
-  private readonly connectionCallbacks: Array<(socket: AuthSocket) => void> = []
+  private readonly connectionCallbacks: Array<(socket: AuthSocket) => void | Promise<void>> = []
   private closePromise?: Promise<void>
 
   /**
@@ -56,11 +94,24 @@ export class AuthSocketServer {
     httpServer: HttpServer,
     private readonly options: AuthSocketServerOptions
   ) {
-    this.realIo = new IoServer(httpServer, options)
+    const {
+      wallet: _wallet,
+      requestedCertificates: _requestedCertificates,
+      sessionManager: _sessionManager,
+      maxPendingAuthMessages: _maxPendingAuthMessages,
+      onError: _onError,
+      ...serverOptions
+    } = options
+    this.realIo = new IoServer(httpServer, serverOptions)
 
     // Listen for new connections
     this.realIo.on('connection', (socket: IoSocket) => {
-      this.handleNewConnection(socket)
+      try {
+        this.handleNewConnection(socket)
+      } catch (error) {
+        this.reportError(error, { phase: 'connection', socketId: socket.id })
+        this.disconnectSafely(socket)
+      }
     })
   }
 
@@ -68,12 +119,12 @@ export class AuthSocketServer {
    * A direct pass-through to `io.on('connection', cb)`,
    * but the callback is invoked with an AuthSocket instead.
    */
-  public on(eventName: 'connection', callback: (socket: AuthSocket) => void): void
-  public on(eventName: string, callback: (data: any) => void): void
-  public on(eventName: string, callback: (data: any) => void): void {
+  public on(eventName: 'connection', callback: (socket: AuthSocket) => void | Promise<void>): void
+  public on(eventName: string, callback: (data: any) => void | Promise<void>): void
+  public on(eventName: string, callback: (data: any) => void | Promise<void>): void {
     // We only override the 'connection' event. For other events, pass them through
     if (eventName === 'connection') {
-      this.connectionCallbacks.push(callback as (socket: AuthSocket) => void)
+      this.connectionCallbacks.push(callback as (socket: AuthSocket) => void | Promise<void>)
     } else {
       this.realIo.on(eventName, callback)
     }
@@ -86,11 +137,16 @@ export class AuthSocketServer {
    * authenticated peer. We'll embed eventName + data in the payload.
    */
   public emit(eventName: string, data: any) {
+    let payload: number[]
+    try {
+      payload = this.encodeEventPayload(eventName, data)
+    } catch (error) {
+      this.reportError(error, { phase: 'send', eventName })
+      return
+    }
     this.peers.forEach(({ peer, identityKey }) => {
-      const payload = this.encodeEventPayload(eventName, data)
       peer.toPeer(payload, identityKey).catch(err => {
-        // log or handle error
-        console.error(err)
+        this.reportError(err, { phase: 'send', eventName })
       })
     })
   }
@@ -107,12 +163,18 @@ export class AuthSocketServer {
    */
   public emitToIdentity(identityKey: string, eventName: string, data: any): number {
     let selected = 0
+    let payload: number[]
+    try {
+      payload = this.encodeEventPayload(eventName, data)
+    } catch (error) {
+      this.reportError(error, { phase: 'send', eventName })
+      return selected
+    }
     this.peers.forEach(({ peer, identityKey: authenticatedIdentityKey }) => {
       if (authenticatedIdentityKey !== identityKey) return
       selected += 1
-      const payload = this.encodeEventPayload(eventName, data)
       peer.toPeer(payload, authenticatedIdentityKey).catch(err => {
-        console.error(err)
+        this.reportError(err, { phase: 'send', eventName })
       })
     })
     return selected
@@ -138,8 +200,13 @@ export class AuthSocketServer {
   //   return this.realIo
   // }
 
-  private async handleNewConnection(socket: IoSocket) {
-    const transport = new SocketServerTransport(socket)
+  private handleNewConnection(socket: IoSocket): void {
+    const transport = new SocketServerTransport(socket, {
+      maxPendingMessages: this.options.maxPendingAuthMessages,
+      onError: error => {
+        this.reportError(error, { phase: 'authentication', socketId: socket.id })
+      }
+    })
 
     // Create a new Peer for this client
     const peer = new Peer(
@@ -149,13 +216,20 @@ export class AuthSocketServer {
       this.options.sessionManager
     )
 
-    const authSocket = new AuthSocket(socket, peer, (sockId, identityKey) => {
-      // Callback: once the AuthSocket learns identityKey from a 'general' message, store it
-      const info = this.peers.get(sockId)
-      if (info) {
-        info.identityKey = identityKey
+    const authSocket = new AuthSocket(
+      socket,
+      peer,
+      (sockId, identityKey) => {
+        // Callback: once the AuthSocket learns identityKey from a 'general' message, store it
+        const info = this.peers.get(sockId)
+        if (info) {
+          info.identityKey = identityKey
+        }
+      },
+      (error, context) => {
+        this.reportError(error, context)
       }
-    })
+    )
 
     this.peers.set(socket.id, { peer, authSocket, identityKey: undefined })
 
@@ -165,12 +239,33 @@ export class AuthSocketServer {
     })
 
     // Fire any onConnection callbacks
-    this.connectionCallbacks.forEach(cb => cb(authSocket))
+    void (async () => {
+      for (const callback of this.connectionCallbacks) {
+        await callback(authSocket)
+      }
+    })().catch(error => {
+      this.reportError(error, { phase: 'connection', socketId: socket.id })
+      this.disconnectSafely(socket)
+    })
   }
 
   private encodeEventPayload(eventName: string, data: any): number[] {
     const obj = { eventName, data }
     return Array.from(Buffer.from(JSON.stringify(obj), 'utf8'))
+  }
+
+  private reportError(error: unknown, context: AuthSocketErrorContext): void {
+    void Promise.resolve()
+      .then(async () => await this.options.onError?.(error, context))
+      .catch(() => {})
+  }
+
+  private disconnectSafely(socket: IoSocket): void {
+    try {
+      socket.disconnect(true)
+    } catch {
+      // The original failure is already contained and reported.
+    }
   }
 }
 
@@ -180,7 +275,8 @@ export class AuthSocketServer {
  */
 export class AuthSocket {
   // We store event callbacks for re-dispatch
-  private readonly eventCallbacks: Map<string, Array<(data: any) => void>> = new Map()
+  private readonly eventCallbacks: Map<string, Array<(data: any) => void | Promise<void>>> =
+    new Map()
 
   /**
    * Current known identity key of the server, if discovered
@@ -196,22 +292,33 @@ export class AuthSocket {
      * A function the server passes in so we can
      * notify it once we discover the peer's identity key.
      */
-    private readonly onIdentityKeyDiscovered: (socketId: string, identityKey: string) => void
+    private readonly onIdentityKeyDiscovered: (socketId: string, identityKey: string) => void,
+    private readonly onError: AuthSocketErrorHandler = () => {}
   ) {
     // Listen for 'general' messages from the Peer
-    this.peer.listenForGeneralMessages((senderPublicKey, payload) => {
-      // Capture the newly discovered identity key if not known yet
-      if (!this.peerIdentityKey) {
-        this.peerIdentityKey = senderPublicKey
-        this.onIdentityKeyDiscovered(this.ioSocket.id, senderPublicKey)
-      }
+    this.peer.listenForGeneralMessages(async (senderPublicKey, payload) => {
+      let eventName: string | undefined
+      try {
+        // Capture the newly discovered identity key if not known yet
+        if (!this.peerIdentityKey) {
+          this.peerIdentityKey = senderPublicKey
+          this.onIdentityKeyDiscovered(this.ioSocket.id, senderPublicKey)
+        }
 
-      // The payload is a number[] representing JSON for { eventName, data }
-      const { eventName, data } = this.decodeEventPayload(payload)
-      const cbs = this.eventCallbacks.get(eventName)
-      if (!cbs) return
-      for (const cb of cbs) {
-        cb(data)
+        // The payload is a number[] representing JSON for { eventName, data }
+        const decoded = this.decodeEventPayload(payload)
+        eventName = decoded.eventName
+        const cbs = this.eventCallbacks.get(eventName)
+        if (!cbs) return
+        for (const cb of cbs) {
+          const result = cb(decoded.data)
+          if (result != null && typeof (result as PromiseLike<void>).then === 'function') {
+            await result
+          }
+        }
+      } catch (error) {
+        this.reportError(error, { phase: 'application', socketId: this.id, eventName })
+        this.disconnectSafely()
       }
     })
   }
@@ -219,7 +326,7 @@ export class AuthSocket {
   /**
    * Register a callback for an event name, just like `socket.on(...)`.
    */
-  public on(eventName: string, callback: (data: any) => void) {
+  public on(eventName: string, callback: (data: any) => void | Promise<void>) {
     const arr = this.eventCallbacks.get(eventName) || []
     arr.push(callback)
     this.eventCallbacks.set(eventName, arr)
@@ -263,11 +370,20 @@ export class AuthSocket {
   }
 
   private decodeEventPayload(payload: number[]): { eventName: string; data: any } {
+    return decodeAuthSocketEventPayload(payload)
+  }
+
+  private reportError(error: unknown, context: AuthSocketErrorContext): void {
+    void Promise.resolve()
+      .then(async () => await this.onError(error, context))
+      .catch(() => {})
+  }
+
+  private disconnectSafely(): void {
     try {
-      const str = Buffer.from(payload).toString('utf8')
-      return JSON.parse(str)
+      this.ioSocket.disconnect(true)
     } catch {
-      return { eventName: '_unknown', data: null }
+      // The original failure is already contained and reported.
     }
   }
 }

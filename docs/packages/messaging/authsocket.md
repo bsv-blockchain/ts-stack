@@ -3,10 +3,10 @@ id: pkg-authsocket
 title: '@bsv/authsocket'
 kind: package
 domain: messaging
-version: '2.1.4'
+version: '2.1.5'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-07-31'
+last_verified: '2026-07-31'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/authsocket'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket'
@@ -60,6 +60,8 @@ server.listen(3000)
 - **Message signing** — Every message auto-signed with server wallet; every inbound message verified
 - **Automatic re-dispatch** — Special `'authMessage'` channel for BRC-103 frames; user code sees normal Socket.IO events
 - **Graceful lifecycle** — Idempotent `close()` disconnects clients and closes the attached HTTP server
+- **Failure isolation** — Authentication and callback failures disconnect only the offending socket
+- **Bounded ingress** — Per-socket authentication concurrency defaults to 32 and is configurable
 
 ## Common patterns
 
@@ -99,6 +101,23 @@ process.once('SIGTERM', () => {
 
 `close()` is idempotent. Socket.IO disconnects active clients before closing
 the HTTP server supplied to `AuthSocketServer`.
+
+### Failure reporting and authentication bounds
+
+```typescript
+const io = new AuthSocketServer(server, {
+  wallet,
+  maxPendingAuthMessages: 32,
+  onError: (error, context) => {
+    console.error(context.phase, context.socketId, error)
+  }
+})
+```
+
+Authentication, connection, and application callback failures are contained
+and disconnect only the affected socket. The error context identifies the
+phase and socket without including remote payloads or wallet material. An
+`onError` handler that throws or rejects is also contained.
 
 ### Receiving authenticated messages
 

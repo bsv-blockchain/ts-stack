@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-26",
-  "reviewBy": "2026-08-26",
+  "lastReviewed": "2026-07-31",
+  "reviewBy": "2026-08-31",
   "owner": "ts-stack-maintainers",
   "tool": {
     "package": "@stryker-mutator/core",
@@ -114,6 +114,26 @@
       "risk": "critical",
       "boundary": "Untrusted overlay-advertised Message Box network destinations",
       "minimumScore": 81,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "authsocket-server-boundary",
+      "manifest": "packages/messaging/authsocket/package.json",
+      "propertyTest": "packages/messaging/authsocket/src/__tests__/eventPayload.property.test.ts",
+      "risk": "critical",
+      "boundary": "Server-side BRC-103 Socket.IO authentication and authenticated event payload ingress",
+      "minimumScore": 89,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
+      "id": "authsocket-client-boundary",
+      "manifest": "packages/messaging/authsocket-client/package.json",
+      "propertyTest": "packages/messaging/authsocket-client/src/__tests__/eventPayload.property.test.ts",
+      "risk": "critical",
+      "boundary": "Client-side BRC-103 Socket.IO authentication and authenticated event payload ingress",
+      "minimumScore": 87,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
     },

@@ -300,6 +300,25 @@ describe('ExpressTransport hardening', () => {
       code: 'ERR_INTERNAL_SERVER_ERROR',
       description: 'Authentication processing failed.'
     })
+
+    const synchronousFailure = new ExpressTransport()
+    synchronousFailure.peer = peerMock()
+    await synchronousFailure.onData((() => {
+      throw new Error('synchronous private detail')
+    }) as never)
+    const synchronousResponse = responseMock()
+    await synchronousFailure.handleIncomingRequest(
+      validHandshakeRequest(),
+      synchronousResponse,
+      jest.fn()
+    )
+    await flushPromises()
+    expect(synchronousResponse.status).toHaveBeenCalledWith(500)
+    expect(synchronousResponse.json).toHaveBeenCalledWith({
+      status: 'error',
+      code: 'ERR_INTERNAL_SERVER_ERROR',
+      description: 'Authentication processing failed.'
+    })
   })
 
   it('clears a certificate listener before awaiting its callback and continues once', async () => {

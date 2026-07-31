@@ -168,6 +168,46 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/host.ts'],
       ...jestTarget('jest.config.ts', ['<rootDir>/src/__tests/host*.test.ts'], { esm: true })
     },
+    'authsocket-server-boundary': {
+      packageDirectory: 'packages/messaging/authsocket',
+      manifest: 'packages/messaging/authsocket/package.json',
+      propertyTest: 'packages/messaging/authsocket/src/__tests__/eventPayload.property.test.ts',
+      mutate: [
+        'src/SocketServerTransport.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/messaging/authsocket',
+          'src/AuthSocketServer.ts',
+          'export function decodeAuthSocketEventPayload(',
+          'export interface AuthSocketServerOptions'
+        )
+      ],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests__/eventPayload.property.test.ts',
+        '<rootDir>/src/__tests__/SocketServerTransport.test.ts',
+        '<rootDir>/test/SocketServerTransport.integration.test.ts'
+      ])
+    },
+    'authsocket-client-boundary': {
+      packageDirectory: 'packages/messaging/authsocket-client',
+      manifest: 'packages/messaging/authsocket-client/package.json',
+      propertyTest:
+        'packages/messaging/authsocket-client/src/__tests__/eventPayload.property.test.ts',
+      mutate: [
+        'src/SocketClientTransport.ts',
+        sourceLineRange(
+          repositoryRoot,
+          'packages/messaging/authsocket-client',
+          'src/AuthSocketClient.ts',
+          'export function decodeAuthSocketEventPayload(',
+          'export interface AuthSocketClientOptions'
+        )
+      ],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests__/eventPayload.property.test.ts',
+        '<rootDir>/src/__tests__/SocketClientTransport.test.ts'
+      ])
+    },
     'wallet-pairing': {
       packageDirectory: 'packages/wallet/ts-wallet-relay',
       manifest: 'packages/wallet/ts-wallet-relay/package.json',

@@ -41,12 +41,12 @@ export class Peer {
   certificatesToRequest: RequestedCertificateSet
   private readonly onGeneralMessageReceivedCallbacks: Map<
   number,
-  (senderPublicKey: string, payload: number[]) => void
+  (senderPublicKey: string, payload: number[]) => void | Promise<void>
   > = new Map()
 
   private readonly onCertificatesReceivedCallbacks: Map<
   number,
-  (senderPublicKey: string, certs: VerifiableCertificate[]) => void
+  (senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>
   > = new Map()
 
   private readonly onCertificateRequestReceivedCallbacks: Map<
@@ -54,7 +54,7 @@ export class Peer {
   (
     senderPublicKey: string,
     requestedCertificates: RequestedCertificateSet
-  ) => void
+  ) => void | Promise<void>
   > = new Map()
 
   private readonly onInitialResponseReceivedCallbacks: Map<
@@ -292,11 +292,11 @@ export class Peer {
   /**
    * Registers a callback to listen for general messages from peers.
    *
-   * @param {(senderPublicKey: string, payload: number[]) => void} callback - The function to call when a general message is received.
+   * @param {(senderPublicKey: string, payload: number[]) => void | Promise<void>} callback - The function to call when a general message is received.
    * @returns {number} The ID of the callback listener.
    */
   listenForGeneralMessages (
-    callback: (senderPublicKey: string, payload: number[]) => void
+    callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>
   ): number {
     const callbackID = this.callbackIdCounter++
     this.onGeneralMessageReceivedCallbacks.set(callbackID, callback)
@@ -315,11 +315,11 @@ export class Peer {
   /**
    * Registers a callback to listen for certificates received from peers.
    *
-   * @param {(senderPublicKey: string, certs: VerifiableCertificate[]) => void} callback - The function to call when certificates are received.
+   * @param {(senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>} callback - The function to call when certificates are received.
    * @returns {number} The ID of the callback listener.
    */
   listenForCertificatesReceived (
-    callback: (senderPublicKey: string, certs: VerifiableCertificate[]) => void
+    callback: (senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>
   ): number {
     const callbackID = this.callbackIdCounter++
     this.onCertificatesReceivedCallbacks.set(callbackID, callback)
@@ -338,14 +338,14 @@ export class Peer {
   /**
    * Registers a callback to listen for certificates requested from peers.
    *
-   * @param {(requestedCertificates: RequestedCertificateSet) => void} callback - The function to call when a certificate request is received
+   * @param {(senderPublicKey: string, requestedCertificates: RequestedCertificateSet) => void | Promise<void>} callback - The function to call when a certificate request is received
    * @returns {number} The ID of the callback listener.
    */
   listenForCertificatesRequested (
     callback: (
       senderPublicKey: string,
       requestedCertificates: RequestedCertificateSet
-    ) => void
+    ) => void | Promise<void>
   ): number {
     const callbackID = this.callbackIdCounter++
     this.onCertificateRequestReceivedCallbacks.set(callbackID, callback)
@@ -469,6 +469,9 @@ export class Peer {
    * @returns {Promise<void>}
    */
   private async handleIncomingMessage (message: AuthMessage): Promise<void> {
+    if (message == null || typeof message !== 'object' || Array.isArray(message)) {
+      throw new Error('Invalid authentication message.')
+    }
     if (typeof message.version !== 'string' || message.version !== AUTH_VERSION) {
       throw new Error(
         `Invalid or unsupported message auth version! Received: ${message.version}, expected: ${AUTH_VERSION}`
@@ -539,9 +542,12 @@ export class Peer {
       message.requestedCertificates.certifiers.length > 0
     ) {
       if (this.onCertificateRequestReceivedCallbacks.size > 0) {
-        this.onCertificateRequestReceivedCallbacks.forEach(cb => {
-          cb(message.identityKey, message.requestedCertificates as RequestedCertificateSet)
-        })
+        for (const callback of this.onCertificateRequestReceivedCallbacks.values()) {
+          await callback(
+            message.identityKey,
+            message.requestedCertificates as RequestedCertificateSet
+          )
+        }
       } else {
         certificatesToInclude = await getVerifiableCertificates(
           this.wallet,
@@ -659,9 +665,9 @@ export class Peer {
       this.resolveCertificateValidation(peerSession.sessionNonce)
     }
 
-    this.onCertificatesReceivedCallbacks.forEach(cb =>
-      cb(message.identityKey, message.certificates as VerifiableCertificate[])
-    )
+    for (const callback of this.onCertificatesReceivedCallbacks.values()) {
+      await callback(message.identityKey, message.certificates as VerifiableCertificate[])
+    }
   }
 
   private releaseInitialResponseWaiters(peerSession: PeerSession): void {
@@ -681,9 +687,12 @@ export class Peer {
       return
     }
     if (this.onCertificateRequestReceivedCallbacks.size > 0) {
-      this.onCertificateRequestReceivedCallbacks.forEach(cb => {
-        cb(message.identityKey, message.requestedCertificates as RequestedCertificateSet)
-      })
+      for (const callback of this.onCertificateRequestReceivedCallbacks.values()) {
+        await callback(
+          message.identityKey,
+          message.requestedCertificates as RequestedCertificateSet
+        )
+      }
       return
     }
     const verifiableCertificates = await getVerifiableCertificates(
@@ -750,9 +759,12 @@ export class Peer {
     ) {
       if (this.onCertificateRequestReceivedCallbacks.size > 0) {
         // Let the application handle it
-        this.onCertificateRequestReceivedCallbacks.forEach(cb => {
-          cb(message.identityKey, message.requestedCertificates as RequestedCertificateSet)
-        })
+        for (const callback of this.onCertificateRequestReceivedCallbacks.values()) {
+          await callback(
+            message.identityKey,
+            message.requestedCertificates as RequestedCertificateSet
+          )
+        }
       } else {
         // Attempt auto
         const verifiableCertificates = await getVerifiableCertificates(
@@ -862,9 +874,9 @@ export class Peer {
     }
 
     // Notify any listeners
-    this.onCertificatesReceivedCallbacks.forEach(cb => {
-      cb(message.identityKey, message.certificates ?? [])
-    })
+    for (const callback of this.onCertificatesReceivedCallbacks.values()) {
+      await callback(message.identityKey, message.certificates ?? [])
+    }
   }
 
   /**
@@ -958,9 +970,9 @@ export class Peer {
     this.lastInteractedWithPeer = message.identityKey
 
     // Dispatch callbacks
-    this.onGeneralMessageReceivedCallbacks.forEach(cb => {
-      cb(message.identityKey, message.payload ?? [])
-    })
+    for (const callback of this.onGeneralMessageReceivedCallbacks.values()) {
+      await callback(message.identityKey, message.payload ?? [])
+    }
   }
 
   /**

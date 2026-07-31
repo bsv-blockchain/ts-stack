@@ -27,16 +27,16 @@ const walletManualSuiteInventory = JSON.parse(
 test('current required, manual, live, resource, and conformance tests are governed', () => {
   const result = evaluateTestGovernance({
     policy,
-    today: '2026-07-26'
+    today: '2026-07-31'
   })
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 26)
-  assert.equal(result.summary.propertyPackages, 26)
-  assert.equal(result.summary.propertyExcludedPackages, 8)
+  assert.equal(result.summary.propertySuites, 28)
+  assert.equal(result.summary.propertyPackages, 28)
+  assert.equal(result.summary.propertyExcludedPackages, 6)
   assert.equal(result.summary.propertyClassifiedPackages, 34)
-  assert.equal(result.summary.mutationTargets, 26)
+  assert.equal(result.summary.mutationTargets, 28)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -50,7 +50,7 @@ test('every property suite must retain an exact mutation-quality target', () => 
   const result = evaluateTestGovernance({
     policy,
     mutationPolicy,
-    today: '2026-07-26'
+    today: '2026-07-31'
   })
 
   assert.match(result.errors.join('\n'), /lacks mutation validation/)
@@ -62,7 +62,7 @@ test('an unregistered required skip fails the exact inventory', () => {
   changedPolicy.requiredSkips.pop()
   const result = evaluateTestGovernance({
     policy: changedPolicy,
-    today: '2026-07-26'
+    today: '2026-07-31'
   })
 
   assert.match(result.errors.join('\n'), /has unregistered skip/)

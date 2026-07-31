@@ -295,6 +295,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 
+- Reject non-object BRC-103 messages before field access, await asynchronous
+  general-message and certificate listeners so their failures reach the owning
+  transport, and contain synchronous callback failures in the simplified HTTP
+  transport.
+
 ---
 
 ## [2.1.4] - 2026-05-26

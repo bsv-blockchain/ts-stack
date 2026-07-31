@@ -31,7 +31,8 @@ import { SocketClientTransport } from '../SocketClientTransport.js'
 
 describe('AuthSocketClient', () => {
   let socketListeners: Map<string, (...arguments_: any[]) => any>
-  let generalMessageListener: ((senderPublicKey: string, payload: number[]) => void) | undefined
+  let generalMessageListener:
+    ((senderPublicKey: string, payload: number[]) => void | Promise<void>) | undefined
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -43,14 +44,14 @@ describe('AuthSocketClient', () => {
       }
     )
     mockPeer.listenForGeneralMessages.mockImplementation(
-      (callback: (senderPublicKey: string, payload: number[]) => void) => {
+      (callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>) => {
         generalMessageListener = callback
       }
     )
     mockPeer.toPeer.mockResolvedValue(undefined)
   })
 
-  function createClient() {
+  function createClient(onError?: jest.Mock) {
     const wallet = { id: 'wallet' }
     const requestedCertificates = { certifiers: [], types: {} }
     const sessionManager = { id: 'sessions' }
@@ -60,7 +61,8 @@ describe('AuthSocketClient', () => {
       requestedCertificates,
       sessionManager: sessionManager as never,
       managerOptions,
-      originator: 'example.test' as never
+      originator: 'example.test' as never,
+      onError
     })
     return {
       client,
@@ -141,18 +143,18 @@ describe('AuthSocketClient', () => {
 
   it('reports asynchronous send failures with the event name', async () => {
     const error = new Error('send failed')
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const onError = jest.fn()
     mockPeer.toPeer.mockRejectedValue(error)
-    const { client } = createClient()
+    const { client } = createClient(onError)
 
     client.emit('failing-event', true)
-    await Promise.resolve()
+    await new Promise(resolve => setImmediate(resolve))
 
-    expect(consoleError).toHaveBeenCalledWith(
-      'BRC103IoClientSocket emit error for event "failing-event":',
-      error
-    )
-    consoleError.mockRestore()
+    expect(onError).toHaveBeenCalledWith(error, {
+      phase: 'send',
+      socketId: 'socket-id',
+      eventName: 'failing-event'
+    })
   })
 
   it('handles malformed general messages and clears identity on disconnect', () => {
@@ -167,6 +169,41 @@ describe('AuthSocketClient', () => {
     client.disconnect()
 
     expect(client.serverIdentityKey).toBeUndefined()
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([null, [], 7, 'event', {}, { eventName: 7 }])(
+    'routes a valid JSON non-envelope (%p) to the explicit unknown event',
+    value => {
+      const { client } = createClient()
+      const unknown = jest.fn()
+      client.on('_unknown', unknown)
+
+      generalMessageListener?.('server-key', Array.from(Buffer.from(JSON.stringify(value))))
+
+      expect(unknown).toHaveBeenCalledWith(undefined)
+    }
+  )
+
+  it('contains rejected application handlers and an observer that also rejects', async () => {
+    const onError = jest.fn().mockRejectedValue(new Error('observer failed'))
+    const { client } = createClient(onError)
+    const applicationFailure = new Error('application failed')
+    client.on('message', async () => await Promise.reject(applicationFailure))
+
+    await expect(
+      generalMessageListener?.(
+        'server-key',
+        Array.from(Buffer.from(JSON.stringify({ eventName: 'message', data: true })))
+      )
+    ).resolves.toBeUndefined()
+    await Promise.resolve()
+
+    expect(onError).toHaveBeenCalledWith(applicationFailure, {
+      phase: 'application',
+      socketId: 'socket-id',
+      eventName: 'message'
+    })
     expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
   })
 

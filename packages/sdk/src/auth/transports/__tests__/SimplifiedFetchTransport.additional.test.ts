@@ -847,3 +847,24 @@ describe('SimplifiedFetchTransport — isTextualContent heuristics (via send res
     expect(err.message).toContain('0x')
   })
 })
+
+describe('SimplifiedFetchTransport callback containment', () => {
+  test('contains a synchronous callback throw from an untrusted response', async () => {
+    const mockFetch: any = jest.fn().mockResolvedValue(
+      new Response('', {
+        status: 200,
+        headers: {
+          'x-bsv-auth-version': '0.1',
+          'x-bsv-auth-identity-key': 'server-key',
+          'x-bsv-auth-signature': 'aabbcc'
+        }
+      })
+    )
+    const transport = new SimplifiedFetchTransport('https://api.example.com', mockFetch)
+    await transport.onData((() => {
+      throw new Error('invalid response')
+    }) as never)
+
+    await expect(transport.send(makeGeneralMessage())).resolves.toBeUndefined()
+  })
+})
