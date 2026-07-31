@@ -35,6 +35,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
       count: ${{ steps.set.outputs.count }}
+      all-matrix: ${{ steps.set.outputs.all-matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,6 +74,7 @@ jobs:
         run: |
           owner="${OWNER,,}"
           components='[]'
+          all_components='[]'
           while IFS= read -r component; do
             name="$(jq -r '.name' <<<"$component")"
             path="$(jq -r '.path' <<<"$component")"
@@ -83,22 +85,31 @@ jobs:
             fi
             image="ghcr.io/$owner/$name"
             tag="v$version"
+            resolved="$(jq -c \
+              --argjson component "$component" \
+              --arg version "$version" \
+              --arg image "$image" \
+              --arg tag "$tag" \
+              '$component + {version:$version,image:$image,tag:$tag}' \
+              <<<"{}")"
+            all_components="$(jq -c \
+              --argjson component "$resolved" \
+              '. + [$component]' \
+              <<<"$all_components")"
             if docker manifest inspect "$image:$tag" >/dev/null 2>&1; then
               echo "skip $name@$tag: already published to $image:$tag"
               continue
             fi
             echo "queue $name@$tag -> $image:$tag"
             components="$(jq -c \
-              --argjson component "$component" \
-              --arg version "$version" \
-              --arg image "$image" \
-              --arg tag "$tag" \
-              '. + [$component + {version:$version,image:$image,tag:$tag}]' \
+              --argjson component "$resolved" \
+              '. + [$component]' \
               <<<"$components")"
           done < <(jq -c '.components[]' governance/container-images.json)
           count="$(jq 'length' <<<"$components")"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "matrix=$components" >> "$GITHUB_OUTPUT"
+          echo "all-matrix=$all_components" >> "$GITHUB_OUTPUT"
           echo "Resolved $count component(s) to release:"
           jq -r '.[] | "  - \(.name)@\(.tag)"' <<<"$components"
 
@@ -263,10 +274,79 @@ jobs:
           cosign sign --yes "$image_ref"
           cosign attest --yes --type spdxjson --predicate "$SBOM" "$image_ref"
 
-      - name: Verify digest, signature, provenance, and SBOM attestations
+  # Verify every governed version tag after the release matrix settles. This
+  # also runs when every image was already published, so failed verification
+  # can be repaired and rerun without rebuilding or mutating immutable tags.
+  verify-published:
+    name: Verify published ${{ matrix.component.name }}@${{ matrix.component.tag }}
+    needs:
+      - discover
+      - release
+    if: ${{ always() && needs.discover.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJson(needs.discover.outputs.all-matrix) }}
+    steps:
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve the published digest
+        id: published
         env:
           IMAGE: ${{ matrix.component.image }}
-          DIGEST: ${{ steps.push.outputs.digest }}
+          EXPECTED_VERSION: ${{ matrix.component.version }}
+          VERSION_TAG: ${{ matrix.component.tag }}
+        run: |
+          version_ref="$IMAGE:$VERSION_TAG"
+          inspect_output="$(docker buildx imagetools inspect "$version_ref")"
+          printf '%s\n' "$inspect_output"
+          digest="$(sed -nE \
+            's/^Digest:[[:space:]]*(sha256:[0-9a-f]{64})$/\1/p' \
+            <<<"$inspect_output" | head -1)"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Could not resolve the published digest for $version_ref."
+            exit 1
+          fi
+          image_json="$(docker buildx imagetools inspect "$IMAGE@$digest" --format '{{json .Image}}')"
+          platform="$(jq -r '.os + "/" + .architecture' <<<"$image_json")"
+          source_sha="$(jq -r '.config.Labels["org.opencontainers.image.revision"] // ""' <<<"$image_json")"
+          published_version="$(jq -r '.config.Labels["org.opencontainers.image.version"] // ""' <<<"$image_json")"
+          if [ "$platform" != "linux/amd64" ]; then
+            echo "::error::$version_ref has platform $platform instead of linux/amd64."
+            exit 1
+          fi
+          if [ "$published_version" != "$EXPECTED_VERSION" ]; then
+            echo "::error::$version_ref carries version $published_version instead of $EXPECTED_VERSION."
+            exit 1
+          fi
+          if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::$version_ref has invalid source revision $source_sha."
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "source-sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.2
+
+      - name: Verify digest, signature, provenance, and SBOM attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ matrix.component.image }}
+          DIGEST: ${{ steps.published.outputs.digest }}
         run: |
           image_ref="$IMAGE@$DIGEST"
           identity='^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/infra/v.+|heads/main)$'
@@ -275,36 +355,38 @@ jobs:
           cosign verify \
             --certificate-identity-regexp "$identity" \
             --certificate-oidc-issuer "$issuer" \
-            "$image_ref"
+            "$image_ref" >/dev/null
           cosign verify-attestation \
             --type spdxjson \
             --certificate-identity-regexp "$identity" \
             --certificate-oidc-issuer "$issuer" \
-            "$image_ref"
+            "$image_ref" >/dev/null
           gh attestation verify "oci://$image_ref" \
             --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/infra-release.yaml" \
             --source-ref "$GITHUB_REF" \
-            --deny-self-hosted-runners
+            --deny-self-hosted-runners >/dev/null
           gh attestation verify "oci://$image_ref" \
             --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/infra-release.yaml" \
             --source-ref "$GITHUB_REF" \
             --predicate-type 'https://spdx.dev/Document/v2.3' \
-            --deny-self-hosted-runners
+            --deny-self-hosted-runners >/dev/null
 
-      - name: Record release evidence
+      - name: Record verified publication evidence
         env:
           IMAGE: ${{ matrix.component.image }}
           VERSION_TAG: ${{ matrix.component.tag }}
-          DIGEST: ${{ steps.push.outputs.digest }}
+          DIGEST: ${{ steps.published.outputs.digest }}
+          PLATFORM: ${{ steps.published.outputs.platform }}
+          SOURCE_SHA: ${{ steps.published.outputs.source-sha }}
         run: |
           {
             echo "### $IMAGE:$VERSION_TAG"
             echo
             echo "- Digest: \`$DIGEST\`"
-            echo "- Source: \`$GITHUB_SHA\`"
-            echo "- Platform: \`linux/amd64\`"
+            echo "- Source: \`$SOURCE_SHA\`"
+            echo "- Platform: \`$PLATFORM\`"
             echo "- Trivy: no high/critical findings"
             echo "- SPDX SBOM artifact uploaded and attested"
             echo "- SLSA provenance and SBOM attestations published to GitHub and GHCR"
@@ -312,7 +394,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   post-release-verification:
-    needs: release
+    needs:
+      - release
+      - verify-published
+    if: ${{ always() && needs.verify-published.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     permissions:
       contents: read
       packages: read
