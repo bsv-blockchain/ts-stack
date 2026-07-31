@@ -364,6 +364,9 @@ jobs:
 
       - name: Compile documentation examples against exact package tarballs
         if: needs.scope.outputs.direct-projects != '[]'
+        env:
+          DOC_EXAMPLE_DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
+          DOC_EXAMPLE_PREBUILT_PROJECTS: ${{ needs.scope.outputs.build-projects }}
         run: pnpm docs:examples
 
       - name: Verify changed package artifacts
