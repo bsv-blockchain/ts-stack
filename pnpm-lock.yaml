@@ -821,12 +821,6 @@ importers:
 
   packages/middleware/auth-express-middleware:
     dependencies:
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
       mime-types:
         specifier: ^3.0.2
         version: 3.0.2
@@ -837,6 +831,9 @@ importers:
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -849,6 +846,9 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       fast-check:
         specifier: ^4.9.0
         version: 4.9.0

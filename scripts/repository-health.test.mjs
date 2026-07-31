@@ -101,6 +101,11 @@ test('published declaration dependencies are explicit and backed by runtime modu
         project.declarationDependencies[0] === '@types/express'
     )
   )
+  const authExpress = discoverWorkspaceProjects().find(
+    project => project.manifest.name === '@bsv/auth-express-middleware'
+  ).manifest
+  assert.equal(authExpress.dependencies?.['@types/express'], undefined)
+  assert.equal(authExpress.peerDependencies?.['@types/express'], '>=4.17.0 <6')
 
   const invalidProjects = structuredClone(projects)
   invalidProjects.projects.find(
@@ -114,6 +119,8 @@ test('published declaration dependencies are explicit and backed by runtime modu
   const invalidDiscovered = structuredClone(discoverWorkspaceProjects())
   delete invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail').manifest
     .dependencies['@types/express']
+  delete invalidDiscovered.find(project => project.manifest.name === '@bsv/paymail').manifest
+    .peerDependencies?.['@types/express']
   assert.match(
     validateProjectRegistry(projects, invalidDiscovered).join('\n'),
     /must publish declaration dependency @types\/express/

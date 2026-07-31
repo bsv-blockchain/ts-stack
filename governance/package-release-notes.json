@@ -35,8 +35,8 @@
       "name": "@bsv/auth-express-middleware",
       "publishedVersion": "2.1.2",
       "releaseType": "patch",
-      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries, including containment of both synchronous and asynchronous BRC-103 callback failures.",
-      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained, while authentication callback failures now produce a controlled HTTP error."
+      "summary": "Standardizes package quality and strengthens authenticated Express session, edge-policy, and error-handling boundaries, including containment of both synchronous and asynchronous BRC-103 callback failures, and restores one shared Express 4/5 runtime and type graph for consumers.",
+      "migration": "No consumer migration is required; existing public CORS defaults and middleware APIs are retained, authentication callback failures now produce a controlled HTTP error, and Express 4 and 5 applications use their own peer-provided Express installation."
     },
     {
       "name": "@bsv/authsocket",

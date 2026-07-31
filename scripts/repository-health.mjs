@@ -471,7 +471,11 @@ function validateProjectManifest(project, actual) {
   }
   errors.push(...validateConsumerProfileContracts(project, actual, prefix))
   for (const dependency of project.declarationDependencies ?? []) {
-    if (!Object.hasOwn(actual.manifest.dependencies ?? {}, dependency)) {
+    const publishedDependencies = {
+      ...actual.manifest.dependencies,
+      ...actual.manifest.peerDependencies
+    }
+    if (!Object.hasOwn(publishedDependencies, dependency)) {
       errors.push(`${prefix} must publish declaration dependency ${dependency}`)
     }
     const runtimePackage = runtimePackageForTypes(dependency)
