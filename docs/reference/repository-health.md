@@ -215,12 +215,15 @@ checks:
    unreviewed security hotspots, including findings reclassified as accepted
    or false-positive.
 
-Affected package changes also select their matching mutation targets. The
-parallel mutation lane restores the shared workspace build, executes only the
-focused property and regression tests for each selected implementation
-boundary, retains its JSON report, and feeds the required merge gate. SDK,
-toolchain, CI, and governance changes deliberately fan out to the full target
-registry. A separate scheduled workflow validates all targets weekly.
+Changed implementation, property, regression, configuration, and policy inputs
+select their exact mutation targets. The parallel mutation lane restores the
+shared workspace build, executes only the focused property and regression tests
+for each selected implementation boundary, retains its JSON report, and feeds
+the required merge gate. Only root mutation tooling changes deliberately fan
+out to the full target registry. Selector and scoring changes are exercised by
+the zero-install repository contract instead of spending the same mutation
+matrix merely to test which matrix was selected. A separate scheduled workflow
+validates all targets weekly.
 
 The job writes a rule-by-rule and project-by-project report to the GitHub Actions
 step summary and feeds the required `merge-gate`. Known findings stay visible

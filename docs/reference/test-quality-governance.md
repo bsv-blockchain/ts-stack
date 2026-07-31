@@ -172,15 +172,20 @@ property when a survivor identifies a concrete boundary. Narrow a mutation
 scope only to the implementation contract described by the registered
 property; never exclude product code merely to raise the score.
 
-Pull requests run the targets owned by changed packages. Changes to the SDK,
-root toolchain, mutation governance, or CI fan out to all 25 targets. The
-independent `Mutation quality` workflow runs the full matrix every Sunday and
-can run one exact target manually. Targets execute in parallel, reuse one
-workspace build, and preserve machine-readable reports for 30 days. Mutation
-runs use the policy's fixed 300-case fast-check seed by default so the dry run
-and every mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
-`FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit
-replay or deeper local investigation.
+Pull requests run targets whose registered implementation, property,
+regression, configuration, or policy inputs changed. Lockfile changes select
+only targets owned by importers whose dependency snapshots changed. Root
+mutation engine, workspace toolchain, or scheduled full-matrix workflow changes
+fan out to all targets; selector, scoring, unrelated SDK, CI, or governance
+edits do not. Selector and score evaluation are covered by the zero-install
+repository contract. The independent `Mutation quality` workflow runs the full
+matrix every Sunday and can run one exact target manually. Targets execute
+in parallel, reuse one workspace build, cancel unfinished siblings after a
+failure, and preserve machine-readable reports for 30 days. Mutation runs use
+the policy's fixed 300-case fast-check seed by default so the dry run and every
+mutant see the same generated campaign. `FAST_CHECK_NUM_RUNS`,
+`FAST_CHECK_SEED`, and `FAST_CHECK_PATH` remain available for an explicit replay
+or deeper local investigation.
 
 List and run targets locally:
 

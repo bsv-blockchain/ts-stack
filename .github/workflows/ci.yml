@@ -66,6 +66,70 @@ jobs:
           --format text
           --summary-file "$GITHUB_STEP_SUMMARY"
 
+  scope:
+    name: Select affected work
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      direct-projects: ${{ steps.scope.outputs.direct-projects }}
+      affected-projects: ${{ steps.scope.outputs.affected-projects }}
+      build-projects: ${{ steps.scope.outputs.build-projects }}
+      mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
+      infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
+      docs: ${{ steps.scope.outputs.docs }}
+      conformance: ${{ steps.scope.outputs.conformance }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+
+      - name: Resolve package, mutation, documentation, conformance, and image scope
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          BASE_SHA="$PR_BASE_SHA"
+          if [ -z "$BASE_SHA" ]; then BASE_SHA="$PUSH_BASE_SHA"; fi
+          if [ -n "$BASE_SHA" ] &&
+             [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ] &&
+             git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            SCOPE=$(node scripts/ci-affected-scope.mjs --base "$BASE_SHA" --head "$HEAD_SHA")
+            git diff --name-only "$BASE_SHA"..."$HEAD_SHA" > .ci-changed-files.txt
+            MUTATION_TARGETS=$(node scripts/mutation-testing.mjs \
+              --affected-file .ci-changed-files.txt \
+              --base "$BASE_SHA")
+          else
+            SCOPE=$(node scripts/ci-affected-scope.mjs --all)
+            MUTATION_TARGETS=$(node scripts/mutation-testing.mjs --list | \
+              jq -R -s -c 'split("\n") | map(select(length > 0))')
+          fi
+
+          echo "direct-projects=$(jq -c '.directProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "affected-projects=$(jq -c '.affectedProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "build-projects=$(jq -c '.buildProjects' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "infra-matrix=$(jq -c '.infraMatrix' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "docs=$(jq -r '.docs' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "conformance=$(jq -r '.conformance' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
+          echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
+
+          {
+            echo '### Affected scope'
+            echo
+            echo "- Direct test packages: $(jq -c '[.directProjects[].name]' <<<"$SCOPE")"
+            echo "- Compatibility packages: $(jq -c '[.affectedProjects[].name]' <<<"$SCOPE")"
+            echo "- Mutation targets: $MUTATION_TARGETS"
+            echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   sonar-zero-findings:
     name: Quality gate — zero new Sonar findings
     if: github.event_name == 'pull_request'
@@ -90,19 +154,26 @@ jobs:
 
   prepare:
     name: Build, lint, and policy
+    needs:
+      - repository-health
+      - scope
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      filter: ${{ steps.scope.outputs.filter }}
+      direct-projects: ${{ needs.scope.outputs.direct-projects }}
+      affected-projects: ${{ needs.scope.outputs.affected-projects }}
+      build-projects: ${{ needs.scope.outputs.build-projects }}
       standard-packages: ${{ steps.scope.outputs.standard-packages }}
+      dependent-test-packages: ${{ steps.scope.outputs.dependent-test-packages }}
+      dependent-test-matrix: ${{ steps.scope.outputs.dependent-test-matrix }}
       coverage-other-packages: ${{ steps.scope.outputs.coverage-other-packages }}
       coverage-other-matrix: ${{ steps.scope.outputs.coverage-other-matrix }}
       browser-packages: ${{ steps.scope.outputs.browser-packages }}
       browser-matrix: ${{ steps.scope.outputs.browser-matrix }}
       coverage-required: ${{ steps.scope.outputs.coverage-required }}
-      mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
+      mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
@@ -148,48 +219,39 @@ jobs:
         run: node scripts/check-sdk-peer.mjs
 
       - name: Determine changed scope
-        # PRs normally test changed packages plus dependents. Changes to the CI
-        # orchestration, root toolchain, or coverage configuration intentionally
-        # exercise the complete workspace so those changes validate themselves.
+        # Coverage suites run only for directly changed package importers.
+        # Regression/type compatibility expands through dependents; builds also
+        # include their prerequisites.
+        # The preceding repository-health dependency prevents expensive work
+        # from starting behind a predictable policy or PR-evidence failure.
         id: scope
+        env:
+          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
+          AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
-            if echo "$CHANGED" | grep -Eq '^(package.json|pnpm-lock.yaml|pnpm-workspace.yaml|tsconfig.base.json|codecov.yml|sonar-project.properties|\.sonarcloud\.properties|\.github/workflows/(ci|ci-performance|property-tests|mutation-tests|release)\.(yml|yaml)|governance/(npm-package-supply-chain\.json|repository-health|test-quality|mutation-testing)/|scripts/(check-browser-package|check-package-artifact|check-wallet-toolbox-platform|ci-performance|package-release-artifacts|repository-health|run-ci-tests|run-prebuilt-package-script|normalize-lcov-paths|run-governed-test|sonar-pr-gate|test-governance|mutation-testing|typescript-toolchain|sync-service-(rate-limit|edge)-policy|lib/workspace-packages)\.(mjs|test\.mjs)$)'; then
-              FILTER=""
-            else
-              FILTER="...[${BASE_SHA}]"
-            fi
-          else
-            FILTER=""
-            BEFORE_SHA="${{ github.event.before }}"
-            if [ -z "$BEFORE_SHA" ] ||
-               [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] ||
-               ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
-              CHANGED=$(git ls-files)
-            else
-              CHANGED=$(git diff --name-only "$BEFORE_SHA"...HEAD)
-            fi
-          fi
+          DIRECT=$(jq -r '.[].name' <<<"$DIRECT_PROJECTS")
+          printf '%s\n' "$DIRECT_PROJECTS" > .ci-direct-packages.json
+          printf '%s\n' "$AFFECTED_PROJECTS" > .ci-affected-packages.json
+          DEPENDENT_PROJECTS=$(jq -n -c \
+            --argjson affected "$AFFECTED_PROJECTS" \
+            --argjson direct "$DIRECT_PROJECTS" \
+            '$direct | map(.name) as $directNames | $affected | map(select(.name as $name | ($directNames | index($name) | not)))')
+          printf '%s\n' "$DEPENDENT_PROJECTS" > .ci-dependent-packages.json
 
-          printf '%s\n' "$CHANGED" > .ci-changed-files.txt
-          echo "filter=$FILTER" >> "$GITHUB_OUTPUT"
-          MUTATION_TARGETS=$(node scripts/mutation-testing.mjs \
-            --affected-file .ci-changed-files.txt)
-          echo "mutation-targets=$MUTATION_TARGETS" >> "$GITHUB_OUTPUT"
-          if [ -n "$FILTER" ]; then
-            PROJECTS=$(pnpm -r --filter "$FILTER" list --depth -1 --json)
-          else
-            PROJECTS=$(pnpm -r list --depth -1 --json)
-          fi
-          AFFECTED=$(jq -r '.[].name' <<<"$PROJECTS")
-          printf '%s\n' "$PROJECTS" > .ci-affected-packages.json
+          DEPENDENT_TEST_PACKAGES=$(node scripts/run-ci-tests.mjs \
+            --projects-json .ci-dependent-packages.json \
+            --mode test)
+          echo "dependent-test-packages=$DEPENDENT_TEST_PACKAGES" >> "$GITHUB_OUTPUT"
+          DEPENDENT_TEST_MATRIX=$(jq -c \
+            'if length > 12 then {include:[{shard:1,total:4},{shard:2,total:4},{shard:3,total:4},{shard:4,total:4}]} elif length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
+            <<<"$DEPENDENT_TEST_PACKAGES")
+          echo "dependent-test-matrix=$DEPENDENT_TEST_MATRIX" >> "$GITHUB_OUTPUT"
+
           STANDARD_PACKAGES=$(node scripts/run-ci-tests.mjs \
-            --projects-json .ci-affected-packages.json)
+            --projects-json .ci-direct-packages.json)
           echo "standard-packages=$STANDARD_PACKAGES" >> "$GITHUB_OUTPUT"
           COVERAGE_OTHER_PACKAGES=$(node scripts/run-ci-tests.mjs \
-            --projects-json .ci-affected-packages.json \
+            --projects-json .ci-direct-packages.json \
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
           COVERAGE_OTHER_MATRIX=$(jq -c \
@@ -207,7 +269,7 @@ jobs:
 
           COVERAGE_REQUIRED=false
           if [ "$COVERAGE_OTHER_PACKAGES" != "[]" ] ||
-             grep -Eq '^(@bsv/did|@bsv/sdk|@bsv/verifast|@bsv/wallet-toolbox)$' <<<"$AFFECTED"; then
+             grep -Eq '^(@bsv/did|@bsv/sdk|@bsv/verifast|@bsv/wallet-toolbox)$' <<<"$DIRECT"; then
             COVERAGE_REQUIRED=true
           fi
           echo "coverage-required=$COVERAGE_REQUIRED" >> "$GITHUB_OUTPUT"
@@ -221,7 +283,7 @@ jobs:
             "verifast:@bsv/verifast"; do
             key="${entry%%:*}"
             package="${entry#*:}"
-            if grep -Fxq "$package" <<<"$AFFECTED"; then
+            if grep -Fxq "$package" <<<"$DIRECT"; then
               echo "$key=true" >> "$GITHUB_OUTPUT"
             else
               echo "$key=false" >> "$GITHUB_OUTPUT"
@@ -229,34 +291,50 @@ jobs:
           done
 
       - name: Build workspace
-        # Build the full graph once. Parallel test jobs restore these outputs,
-        # avoiding repeated prerequisite builds while retaining a clean,
-        # frozen install in every isolation boundary.
-        # The docs site is built by its parallel validation job.
-        # Exclude: workspace root, docs site, and example-paymail.
+        env:
+          BUILD_PROJECTS: ${{ needs.scope.outputs.build-projects }}
         run: |
-          pnpm -r \
-            --filter '!@bsv/ts-stack' \
-            --filter '!docs-site' \
-            --filter '!example-paymail' \
-            run build
+          filters=()
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
+            jq -r '.[].name | select(. != "docs-site" and . != "example-paymail")' <<<"$BUILD_PROJECTS"
+          )
+          if [ "${#filters[@]}" -eq 0 ]; then
+            echo "No package build is affected."
+          else
+            pnpm -r --if-present "${filters[@]}" run build
+          fi
 
       - name: Typecheck workspace
-        # Build outputs exist before this step, so package declarations resolve
-        # exactly as they do for downstream consumers. The recursive contract
-        # catches cross-package nominal-type drift that isolated builds can miss.
-        run: pnpm typecheck
+        env:
+          AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
+        run: |
+          filters=()
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
+            jq -r '.[].name | select(. != "docs-site" and . != "example-paymail")' <<<"$AFFECTED_PROJECTS"
+          )
+          if [ "${#filters[@]}" -eq 0 ]; then
+            echo "No package typecheck is affected."
+          else
+            pnpm -r --if-present "${filters[@]}" run typecheck
+          fi
 
       - name: Compile documentation examples against exact package tarballs
+        if: needs.scope.outputs.direct-projects != '[]'
         run: pnpm docs:examples
 
       - name: Verify changed package artifacts
         env:
-          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
+          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
         run: |
-          EXTRA=""
-          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
-          pnpm -r --if-present --filter '!@bsv/ts-stack' $EXTRA run pack:check
+          filters=()
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
+            jq -r '.[].name' <<<"$DIRECT_PROJECTS"
+          )
+          if [ "${#filters[@]}" -eq 0 ]; then
+            echo "No changed package artifact requires verification."
+          else
+            pnpm -r --if-present "${filters[@]}" run pack:check
+          fi
 
       - name: Dry-run the npm artifact supply-chain boundary
         run: |
@@ -275,17 +353,16 @@ jobs:
 
       - name: Check repository and changed-package formatting
         env:
-          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
+          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
         run: |
-          EXTRA=""
-          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
           pnpm format:root
-          pnpm -r --if-present \
-            --filter '!@bsv/ts-stack' \
-            --filter '!docs-site' \
-            --filter '!@bsv/conformance-runner' \
-            --filter '!@bsv/conformance-runner-ts' \
-            $EXTRA run format:check
+          filters=()
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
+            jq -r '.[].name | select(. != "docs-site" and . != "@bsv/conformance-runner" and . != "@bsv/conformance-runner-ts")' <<<"$DIRECT_PROJECTS"
+          )
+          if [ "${#filters[@]}" -gt 0 ]; then
+            pnpm -r --if-present "${filters[@]}" run format:check
+          fi
 
       - name: Archive build outputs
         run: |
@@ -313,7 +390,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 6
       matrix:
         target: ${{ fromJSON(needs.prepare.outputs.mutation-targets) }}
@@ -405,6 +482,69 @@ jobs:
           done
           pnpm -r "${filters[@]}" run test
 
+  dependent-tests:
+    name: Tests / affected dependents (${{ matrix.shard }}/${{ matrix.total }})
+    if: needs.prepare.outputs.dependent-test-packages != '[]'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.prepare.outputs.dependent-test-matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Restore the immutable MongoDB test binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/mongodb-binaries
+          key: mongodb-memory-server-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Run affected dependent regressions without regenerating coverage
+        env:
+          DEPENDENT_TEST_PACKAGES: ${{ needs.prepare.outputs.dependent-test-packages }}
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+          PREBUILT_PACKAGE_OUTPUTS: '1'
+        run: |
+          packages=()
+          index=0
+          while IFS= read -r package; do
+            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
+              packages+=("$package")
+            fi
+            index=$((index + 1))
+          done < <(jq -r '.[]' <<<"$DEPENDENT_TEST_PACKAGES")
+
+          if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/wallet-toolbox'; then
+            pnpm --filter @bsv/wallet-toolbox rebuild better-sqlite3
+          fi
+          if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/overlay-topics'; then
+            pnpm --filter @bsv/overlay-topics exec node --input-type=module -e \
+              "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
+          fi
+
+          filters=()
+          echo "Affected dependent test shard ${{ matrix.shard }}/${{ matrix.total }}:"
+          for package in "${packages[@]}"; do
+            echo "  - $package"
+            filters+=(--filter "$package")
+          done
+          if [ "${#filters[@]}" -gt 0 ]; then
+            pnpm -r --no-sort "${filters[@]}" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --script test
+          fi
+
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
     if: needs.prepare.outputs.browser-packages != '[]'
@@ -413,7 +553,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix: ${{ fromJSON(needs.prepare.outputs.browser-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -616,7 +756,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         shard: [1, 2, 3, 4]
     steps:
@@ -759,7 +899,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix: ${{ fromJSON(needs.prepare.outputs.coverage-other-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -913,6 +1053,7 @@ jobs:
     needs:
       - prepare
       - standard-tests
+      - dependent-tests
       - browser-packages
       - coverage-upload
       - wallet-browser-platform
@@ -924,6 +1065,7 @@ jobs:
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           TEST_RESULT: ${{ needs.standard-tests.result }}
+          DEPENDENT_TEST_RESULT: ${{ needs.dependent-tests.result }}
           PACKAGE_BROWSER_RESULT: ${{ needs.browser-packages.result }}
           COVERAGE_RESULT: ${{ needs.coverage-upload.result }}
           BROWSER_RESULT: ${{ needs.wallet-browser-platform.result }}
@@ -931,62 +1073,31 @@ jobs:
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
                 ( "$TEST_RESULT" != "success" && "$TEST_RESULT" != "skipped" ) ||
+                ( "$DEPENDENT_TEST_RESULT" != "success" && "$DEPENDENT_TEST_RESULT" != "skipped" ) ||
                 ( "$PACKAGE_BROWSER_RESULT" != "success" && "$PACKAGE_BROWSER_RESULT" != "skipped" ) ||
                 ( "$COVERAGE_RESULT" != "success" && "$COVERAGE_RESULT" != "skipped" ) ||
                 ( "$BROWSER_RESULT" != "success" && "$BROWSER_RESULT" != "skipped" ) ||
                 ( "$MOBILE_RESULT" != "success" && "$MOBILE_RESULT" != "skipped" ) ]]; then
-            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT tests=$TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
+            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT direct-tests=$TEST_RESULT dependent-tests=$DEPENDENT_TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
             exit 1
           fi
 
   infra-scope:
     name: Detect affected infrastructure
+    needs:
+      - repository-health
+      - scope
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: {}
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      matrix: ${{ needs.scope.outputs.infra-matrix }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Build affected component matrix
-        id: matrix
+      - name: Confirm dependency-aware component selection
+        env:
+          INFRA_MATRIX: ${{ needs.scope.outputs.infra-matrix }}
         run: |
-          COMPONENTS='[
-            {"component":"chaintracks-server","native-modules":"better-sqlite3"},
-            {"component":"message-box-server","native-modules":"better-sqlite3"},
-            {"component":"overlay-server","native-modules":""},
-            {"component":"uhrp-server-basic","native-modules":""},
-            {"component":"uhrp-server-cloud-bucket","native-modules":"better-sqlite3"},
-            {"component":"uhrp-server-cloud-bucket/notifier","native-modules":""},
-            {"component":"wab","native-modules":"better-sqlite3 sqlite3"},
-            {"component":"wallet-infra","native-modules":"better-sqlite3"}
-          ]'
-
-          if [ "${{ github.event_name }}" = "push" ]; then
-            SELECTED=$(jq -c 'map(. + {run:true, display:.component})' <<<"$COMPONENTS")
-          else
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            if git diff --quiet "$BASE_SHA"...HEAD -- .github/workflows/ci.yml; then
-              SELECTED='[]'
-              while IFS= read -r row; do
-                component=$(jq -r '.component' <<<"$row")
-                if ! git diff --quiet "$BASE_SHA"...HEAD -- "infra/$component/"; then
-                  SELECTED=$(jq -c --argjson row "$row" '. + [$row + {run:true, display:$row.component}]' <<<"$SELECTED")
-                fi
-              done < <(jq -c '.[]' <<<"$COMPONENTS")
-            else
-              SELECTED=$(jq -c 'map(. + {run:true, display:.component})' <<<"$COMPONENTS")
-            fi
-          fi
-
-          if [ "$(jq 'length' <<<"$SELECTED")" -eq 0 ]; then
-            SELECTED='[{"component":"_none","native-modules":"","run":false,"display":"no changes"}]'
-          fi
-
-          jq -cn --argjson include "$SELECTED" '{include:$include}' |
-            sed 's/^/matrix=/' >> "$GITHUB_OUTPUT"
+          jq -e '.include | length > 0' <<<"$INFRA_MATRIX" >/dev/null
+          echo "Selected infrastructure: $(jq -c '[.include[].display]' <<<"$INFRA_MATRIX")"
 
   infra:
     name: Infra / ${{ matrix.display }}
@@ -995,7 +1106,7 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix: ${{ fromJson(needs.infra-scope.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1071,10 +1182,13 @@ jobs:
 
   docs-validate:
     name: Docs Site Validation
+    needs:
+      - repository-health
+      - scope
     runs-on: ubuntu-latest
     # Run on every PR (cheap and protects the docs site) and on pushes that touch docs
     # The build step inside will fail fast on frontmatter or link problems before they reach production
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: needs.scope.outputs.docs == 'true'
     permissions:
       contents: read
     steps:
@@ -1113,6 +1227,10 @@ jobs:
 
   conformance:
     name: Conformance Vectors
+    needs:
+      - repository-health
+      - scope
+    if: needs.scope.outputs.conformance == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1201,8 +1319,8 @@ jobs:
                 "$BUILD_RESULT" != "success" ||
                 "$MUTATION_RESULT" != "success" ||
                 "$INFRA_RESULT" != "success" ||
-                "$DOCS_RESULT" != "success" ||
-                "$CONFORMANCE_RESULT" != "success" ]]; then
+                ( "$DOCS_RESULT" != "success" && "$DOCS_RESULT" != "skipped" ) ||
+                ( "$CONFORMANCE_RESULT" != "success" && "$CONFORMANCE_RESULT" != "skipped" ) ]]; then
             echo "::error::Required CI failed: health=$HEALTH_RESULT build=$BUILD_RESULT mutation=$MUTATION_RESULT infra=$INFRA_RESULT docs=$DOCS_RESULT conformance=$CONFORMANCE_RESULT"
             exit 1
           fi

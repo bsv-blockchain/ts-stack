@@ -436,6 +436,11 @@ test('CI and release typecheck the built cross-package declaration graph', () =>
 
     assert.notEqual(buildIndex, -1, `${file} must retain its workspace build`)
     assert.ok(typecheckIndex > buildIndex, `${file} must typecheck after building package outputs`)
-    assert.match(source.slice(typecheckIndex), /run: pnpm typecheck/)
+    if (file === 'ci.yml') {
+      assert.match(source.slice(typecheckIndex), /AFFECTED_PROJECTS:/)
+      assert.match(source.slice(typecheckIndex), /pnpm -r --if-present.*run typecheck/)
+    } else {
+      assert.match(source.slice(typecheckIndex), /run: pnpm typecheck/)
+    }
   }
 })

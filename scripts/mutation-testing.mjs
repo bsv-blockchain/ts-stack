@@ -1,29 +1,22 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { changedLockfileImporters } from './ci-affected-scope.mjs'
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CONFIG_PATH = path.join(REPOSITORY_ROOT, 'governance/mutation-testing/stryker.config.mjs')
 const POLICY_PATH = path.join(REPOSITORY_ROOT, 'governance/mutation-testing/policy.json')
 const CONTROL_PATH_PREFIXES = [
-  '.github/workflows/ci.yml',
   '.github/workflows/mutation-tests.yml',
-  'governance/mutation-testing/',
-  'governance/test-quality/',
-  'scripts/mutation-testing.mjs',
-  'scripts/mutation-testing.test.mjs'
+  'governance/mutation-testing/stryker.config.mjs'
 ]
-const CONTROL_PATHS = new Set([
-  'package.json',
-  'pnpm-lock.yaml',
-  'pnpm-workspace.yaml',
-  'tsconfig.base.json'
-])
+const CONTROL_PATHS = new Set(['package.json', 'pnpm-workspace.yaml', 'tsconfig.base.json'])
 
 function normalized(value) {
   return value.split(path.sep).join('/').replace(/^\.\//, '')
@@ -44,23 +37,110 @@ export function calculateMutationMetrics(mutants) {
   }
 }
 
-export function selectAffectedMutationTargets(targets, changedFiles) {
+function globPattern(pattern) {
+  let expression = '^'
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index]
+    if (character === '*' && pattern[index + 1] === '*') {
+      expression += '.*'
+      index += 1
+    } else if (character === '*') expression += '[^/]*'
+    else if (character === '?') expression += '[^/]'
+    else expression += character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+  return new RegExp(`${expression}$`)
+}
+
+function targetInputPatterns(target) {
+  const packageDirectory = normalized(target.packageDirectory)
+  const patterns = []
+  for (const mutate of target.mutate ?? []) {
+    patterns.push(`${packageDirectory}/${mutate.replace(/:\d+(?:-\d+)?$/, '')}`)
+  }
+  if (typeof target.propertyTest === 'string') patterns.push(normalized(target.propertyTest))
+  const jest = target.runnerOptions?.jest
+  const vitest = target.runnerOptions?.vitest
+  const configFile = jest?.configFile ?? vitest?.configFile
+  if (typeof configFile === 'string') patterns.push(`${packageDirectory}/${configFile}`)
+  for (const match of jest?.config?.testMatch ?? []) {
+    patterns.push(`${packageDirectory}/${match.replace(/^<rootDir>\//, '')}`)
+  }
+  return patterns.map(globPattern)
+}
+
+function packageWideTarget(target) {
+  return (
+    target.runnerOptions?.jest?.config?.testMatch === undefined &&
+    target.runnerOptions?.vitest?.related !== true
+  )
+}
+
+export function selectAffectedMutationTargets(
+  targets,
+  changedFiles,
+  { changedTargetIds = [], changedImporters = [] } = {}
+) {
   const files = changedFiles.map(normalized).filter(Boolean)
   const globalChange = files.some(
     file =>
       CONTROL_PATHS.has(file) ||
       CONTROL_PATH_PREFIXES.some(prefix =>
         prefix.endsWith('/') ? file.startsWith(prefix) : file === prefix
-      ) ||
-      file.startsWith('packages/sdk/')
+      )
   )
   if (globalChange) return Object.keys(targets)
 
   return Object.entries(targets)
-    .filter(([, target]) =>
-      files.some(file => file.startsWith(`${normalized(target.packageDirectory)}/`))
-    )
+    .filter(([id, target]) => {
+      if (
+        changedTargetIds.includes(id) ||
+        changedImporters.includes(normalized(target.packageDirectory))
+      ) {
+        return true
+      }
+      const patterns = targetInputPatterns(target)
+      if (files.some(file => patterns.some(pattern => pattern.test(file)))) return true
+      if (!packageWideTarget(target)) return false
+      const prefix = `${normalized(target.packageDirectory)}/`
+      return files.some(
+        file =>
+          file.startsWith(prefix) &&
+          file !== normalized(target.manifest) &&
+          !file.endsWith('.md') &&
+          !file.includes('/docs/')
+      )
+    })
     .map(([id]) => id)
+}
+
+function changedPolicyTargets(base) {
+  const currentPolicy = readPolicy()
+  if (currentPolicy === undefined) return []
+  const basePolicy = JSON.parse(
+    execFileSync('git', ['show', `${base}:governance/mutation-testing/policy.json`], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8'
+    })
+  )
+  const currentById = new Map(currentPolicy.targets.map(target => [target.id, target]))
+  const baseById = new Map(basePolicy.targets.map(target => [target.id, target]))
+  return [...new Set([...currentById.keys(), ...baseById.keys()])].filter(
+    id => JSON.stringify(currentById.get(id)) !== JSON.stringify(baseById.get(id))
+  )
+}
+
+async function changedConfiguredTargets(base, currentTargets) {
+  const source = execFileSync('git', ['show', `${base}:governance/mutation-testing/targets.mjs`], {
+    cwd: REPOSITORY_ROOT,
+    encoding: 'utf8'
+  })
+  const module = await import(
+    `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
+  )
+  const baseTargets = module.buildMutationTargets(REPOSITORY_ROOT)
+  return [...new Set([...Object.keys(currentTargets), ...Object.keys(baseTargets)])].filter(
+    id => JSON.stringify(currentTargets[id]) !== JSON.stringify(baseTargets[id])
+  )
 }
 
 function readPolicy() {
@@ -144,7 +224,7 @@ async function runTarget(targetName, target, policy) {
 }
 
 export function parseArguments(arguments_) {
-  const result = { all: false, list: false, targets: [], affectedFile: undefined }
+  const result = { all: false, list: false, targets: [], affectedFile: undefined, base: undefined }
   for (let index = 0; index < arguments_.length; index++) {
     const argument = arguments_[index]
     if (argument === '--all') result.all = true
@@ -161,6 +241,12 @@ export function parseArguments(arguments_) {
         throw new Error('--affected-file requires a path')
       }
       result.affectedFile = affectedFile
+    } else if (argument === '--base') {
+      const base = arguments_[++index]
+      if (base === undefined || base.startsWith('--')) {
+        throw new Error('--base requires an exact revision')
+      }
+      result.base = base
     } else throw new Error(`Unknown argument ${argument}`)
   }
   const modes = [
@@ -170,6 +256,9 @@ export function parseArguments(arguments_) {
     result.affectedFile !== undefined
   ].filter(Boolean).length
   if (modes > 1) throw new Error('Select exactly one mutation command mode')
+  if (result.base !== undefined && result.affectedFile === undefined) {
+    throw new Error('--base is valid only with --affected-file')
+  }
   return result
 }
 
@@ -183,7 +272,33 @@ async function main() {
   }
   if (options.affectedFile !== undefined) {
     const changedFiles = fs.readFileSync(options.affectedFile, 'utf8').split(/\r?\n/)
-    console.log(JSON.stringify(selectAffectedMutationTargets(targets, changedFiles)))
+    let changedTargetIds = []
+    let changedImporters = []
+    if (options.base !== undefined) {
+      if (changedFiles.includes('governance/mutation-testing/policy.json')) {
+        changedTargetIds.push(...changedPolicyTargets(options.base))
+      }
+      if (changedFiles.includes('governance/mutation-testing/targets.mjs')) {
+        changedTargetIds.push(...(await changedConfiguredTargets(options.base, targets)))
+      }
+      if (changedFiles.includes('pnpm-lock.yaml')) {
+        changedImporters = changedLockfileImporters(
+          execFileSync('git', ['show', `${options.base}:pnpm-lock.yaml`], {
+            cwd: REPOSITORY_ROOT,
+            encoding: 'utf8'
+          }),
+          fs.readFileSync(path.join(REPOSITORY_ROOT, 'pnpm-lock.yaml'), 'utf8')
+        )
+      }
+    }
+    console.log(
+      JSON.stringify(
+        selectAffectedMutationTargets(targets, changedFiles, {
+          changedTargetIds: [...new Set(changedTargetIds)],
+          changedImporters
+        })
+      )
+    )
     return
   }
 

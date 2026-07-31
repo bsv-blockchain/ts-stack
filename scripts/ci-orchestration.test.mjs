@@ -28,10 +28,13 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
   assert.match(workflow, /name: browser-composition-wallet/)
   assert.match(workflow, /run-prebuilt-package-script\.mjs" \\\n\s+--script test:browser/)
   assert.match(workflow, /run-prebuilt-package-script\.mjs" \\\n\s+--script test:coverage/)
+  assert.match(workflow, /^  dependent-tests:$/m)
+  assert.match(workflow, /run-prebuilt-package-script\.mjs" \\\n\s+--script test/)
   assert.doesNotMatch(workflow, /@bsv\/sdk run test:coverage/)
   assert.doesNotMatch(workflow, /@bsv\/verifast run test:coverage/)
   assert.doesNotMatch(workflow, /pnpm -r --no-sort "\$\{filters\[@\]\}" run test:coverage/)
   assert.match(workflow, /^      - browser-packages$/m)
+  assert.match(workflow, /^      - dependent-tests$/m)
   assert.match(
     workflow,
     /\( "\$PACKAGE_BROWSER_RESULT" != "success" && "\$PACKAGE_BROWSER_RESULT" != "skipped" \)/
@@ -42,6 +45,7 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
   const workflow = readFileSync(CI_PATH, 'utf8')
 
   assert.match(workflow, /^    if: needs\.prepare\.outputs\.standard-packages != '\[\]'$/m)
+  assert.match(workflow, /^    if: needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m)
   assert.match(workflow, /^    if: needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m)
   assert.match(
     workflow,
@@ -51,5 +55,5 @@ test('CI skips empty duplicate lanes without weakening the aggregate gate', () =
   assert.match(workflow, /needs\.prepare\.outputs\.coverage-required == 'true'/)
   assert.match(workflow, /\( "\$TEST_RESULT" != "success" && "\$TEST_RESULT" != "skipped" \)/)
   assert.match(workflow, /grep -Fxq '@bsv\/overlay-topics'/)
-  assert.equal(workflow.match(/mongodb-memory-server binary cache warmed/g)?.length, 1)
+  assert.equal(workflow.match(/mongodb-memory-server binary cache warmed/g)?.length, 2)
 })

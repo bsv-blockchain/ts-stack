@@ -59,12 +59,14 @@ dependency graph.
 
 ## Pull request gates
 
-The infrastructure CI matrix builds all registered images on GitHub's
-Linux/amd64 runners and scans each resulting image with Trivy. Any high or
-critical OS or library vulnerability, including one without an upstream fix,
-blocks the merge. A finding must be fixed or entered in the repository's
-time-bounded exception registry with an owner, evidence, review date, and
-objective removal condition.
+The infrastructure CI matrix builds and scans only images whose build contexts
+changed. Shared image-governance or runtime-contract changes expand to every
+registered consumer, while application packages and CI orchestration alone do
+not build unrelated images. GitHub's Linux/amd64 runners scan every selected
+image with Trivy. Any high or critical OS or library vulnerability, including
+one without an upstream fix, blocks the merge. A finding must be fixed or
+entered in the repository's time-bounded exception registry with an owner,
+evidence, review date, and objective removal condition.
 
 All base-image and deployment references use a readable version tag plus a
 content digest. Dependabot proposes reviewed Docker refreshes alongside the

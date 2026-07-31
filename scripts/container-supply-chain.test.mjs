@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
+import { RUNTIME_COMPONENTS } from './ci-affected-scope.mjs'
 import { OCI_LICENSE_REFERENCE } from './package-license-policy.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
 
@@ -220,9 +221,13 @@ test('hosted CI exercises every governed image through the complete runtime cont
   assert.match(runtimeContract, /minimal-transaction/)
   assert.match(runtimeContract, /graceful-shutdown/)
   assert.match(runtimeContract, /access-control-allow-origin/)
-  for (const component of registry.components) {
-    assert.match(workflow, new RegExp(`name: ${component.name}(?:\\s|$)`))
-  }
+  assert.match(workflow, /ci-affected-scope\.mjs/)
+  assert.match(workflow, /if: needs\.scope\.outputs\.has-runtime == 'true'/)
+  assert.match(workflow, /matrix: \$\{\{ fromJSON\(needs\.scope\.outputs\.matrix\) \}\}/)
+  assert.deepEqual(
+    RUNTIME_COMPONENTS.map(component => component.name).sort(),
+    registry.components.map(component => component.name).sort()
+  )
 })
 
 test('Docker refreshes and OpenSSF posture checks remain automated', () => {
