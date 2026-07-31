@@ -134,67 +134,10 @@ export class AuthFetch {
           const parsedUrl = new URL(url)
           const baseURL = parsedUrl.origin
 
-          // Create a new transport for this base url if needed
-          let peerToUse: AuthPeer
-          if (this.peers[baseURL] === undefined) {
-            // Create a peer for the request
-            const newTransport = new SimplifiedFetchTransport(baseURL)
-            const newPeer = new Peer(
-              this.wallet,
-              newTransport,
-              this.requestedCertificates,
-              this.sessionManager,
-              undefined,
-              this.originator
-            )
-            await newPeer.ready
-            peerToUse = {
-              peer: newPeer,
-              pendingCertificateRequests: []
-            }
-            this.peers[baseURL] = peerToUse
-            this.peers[baseURL].peer.listenForCertificatesReceived(
-              (senderPublicKey: string, certs: VerifiableCertificate[]) => {
-                this.certificatesReceived.push(...certs)
-              }
-            )
-            this.peers[baseURL].peer.listenForCertificatesRequested((async (
-              verifier: string,
-              requestedCertificates: RequestedCertificateSet
-            ) => {
-              try {
-                this.peers[baseURL].pendingCertificateRequests.push(true)
-                const certificatesToInclude = await getVerifiableCertificates(
-                  this.wallet,
-                  requestedCertificates,
-                  verifier,
-                  this.originator
-                )
-                if (certificatesToInclude.length > 0) {
-                  await this.peers[baseURL].peer.sendCertificateResponse(
-                    verifier,
-                    certificatesToInclude
-                  )
-                }
-              } finally {
-                // Give the backend 500 ms to process the certificates we just sent, before releasing the queue entry
-                await this.wait(500)
-                this.peers[baseURL].pendingCertificateRequests.shift()
-              }
-            }) as Function)
-          } else {
-            // Check if there's a session associated with this baseURL
-            if (this.peers[baseURL].supportsMutualAuth === false) {
-              // Use standard fetch if mutual authentication is not supported
-              try {
-                const response = await this.handleFetchAndValidate(url, config, this.peers[baseURL])
-                resolve(response)
-              } catch (error) {
-                reject(error)
-              }
-              return
-            }
-            peerToUse = this.peers[baseURL]
+          const peerToUse = await this.getOrCreatePeer(baseURL)
+          if (peerToUse.supportsMutualAuth === false) {
+            resolve(await this.handleFetchAndValidate(url, config, peerToUse))
+            return
           }
 
           // Serialize the simplified fetch request.
@@ -261,32 +204,12 @@ export class AuthFetch {
             await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
           } catch (error) {
             cleanup()
-            const isStaleSession =
-              error instanceof Error &&
-              (error.message.includes('Session not found for nonce') ||
-                (error.message.includes('without valid BSV authentication') &&
-                  peerToUse.identityKey != null &&
-                  (error as any).details?.status === 401))
-            if (isStaleSession) {
-              // Stale session: server no longer recognises the session nonce
-              // (e.g. after a server restart). Clear the cached peer so a fresh
-              // handshake is performed on retry.
-              delete this.peers[baseURL]
-              config.retryCounter ??= 3
-              const response = await this.fetch(url, config)
-              resolveRequest(response)
-              return
-            }
-            if (error instanceof Error && error.message.includes('HTTP server failed to authenticate')) {
-              try {
-                const response = await this.handleFetchAndValidate(url, config, peerToUse)
-                resolveRequest(response)
-                return
-              } catch (fetchError) {
-                rejectRequest(fetchError)
-              }
-            } else {
-              rejectRequest(error)
+            try {
+              resolveRequest(
+                await this.recoverAuthenticatedSend(error, baseURL, url, config, peerToUse)
+              )
+            } catch (recoveryError) {
+              rejectRequest(recoveryError)
             }
           }
         } catch (error) {
@@ -301,6 +224,81 @@ export class AuthFetch {
     }
 
     return response
+  }
+
+  private async getOrCreatePeer(baseURL: string): Promise<AuthPeer> {
+    const existingPeer = this.peers[baseURL]
+    if (existingPeer !== undefined) return existingPeer
+
+    const newPeer = new Peer(
+      this.wallet,
+      new SimplifiedFetchTransport(baseURL),
+      this.requestedCertificates,
+      this.sessionManager,
+      undefined,
+      this.originator
+    )
+    await newPeer.ready
+    const peerState: AuthPeer = {
+      peer: newPeer,
+      pendingCertificateRequests: []
+    }
+    this.peers[baseURL] = peerState
+    newPeer.listenForCertificatesReceived(
+      (_senderPublicKey: string, certs: VerifiableCertificate[]) => {
+        this.certificatesReceived.push(...certs)
+      }
+    )
+    newPeer.listenForCertificatesRequested((async (
+      verifier: string,
+      requestedCertificates: RequestedCertificateSet
+    ) => {
+      try {
+        peerState.pendingCertificateRequests.push(true)
+        const certificatesToInclude = await getVerifiableCertificates(
+          this.wallet,
+          requestedCertificates,
+          verifier,
+          this.originator
+        )
+        if (certificatesToInclude.length > 0) {
+          await newPeer.sendCertificateResponse(verifier, certificatesToInclude)
+        }
+      } finally {
+        // Give the backend 500 ms to process the certificates we just sent, before releasing the queue entry.
+        await this.wait(500)
+        peerState.pendingCertificateRequests.shift()
+      }
+    }) as Function)
+    return peerState
+  }
+
+  private isStaleSessionError(error: unknown, peerToUse: AuthPeer): boolean {
+    return (
+      error instanceof Error &&
+      (error.message.includes('Session not found for nonce') ||
+        (error.message.includes('without valid BSV authentication') &&
+          peerToUse.identityKey != null &&
+          (error as any).details?.status === 401))
+    )
+  }
+
+  private async recoverAuthenticatedSend(
+    error: unknown,
+    baseURL: string,
+    url: string,
+    config: SimplifiedFetchRequestOptions,
+    peerToUse: AuthPeer
+  ): Promise<Response> {
+    if (this.isStaleSessionError(error, peerToUse)) {
+      delete this.peers[baseURL]
+      config.retryCounter ??= 3
+      return await this.fetch(url, config)
+    }
+    if (error instanceof Error && error.message.includes('HTTP server failed to authenticate')) {
+      return await this.handleFetchAndValidate(url, config, peerToUse)
+    }
+    throw error
   }
 
   private parseAuthenticatedResponse(

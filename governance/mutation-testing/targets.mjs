@@ -114,6 +114,13 @@ export function buildMutationTargets(repositoryRoot) {
           repositoryRoot,
           'packages/sdk',
           'src/auth/clients/AuthFetch.ts',
+          'private isStaleSessionError(',
+          'private parseAuthenticatedResponse('
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/auth/clients/AuthFetch.ts',
           'private parseAuthenticatedResponse(',
           'Request Certificates from a Peer'
         ),
