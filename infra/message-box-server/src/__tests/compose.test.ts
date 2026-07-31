@@ -17,7 +17,8 @@ describe('compose API', () => {
     const knexConfig = { client: 'mysql2', connection: {}, useNullAsDefault: true }
     const knex = (knexLib as any).default?.(knexConfig) ?? (knexLib as any)(knexConfig)
     const wallet = {
-      getPublicKey: async () => ({ publicKey: '02' + '11'.repeat(32) })
+      getPublicKey: async () => ({ publicKey: '02' + '11'.repeat(32) }),
+      internalizeAction: async () => ({ accepted: true })
     } as any
     const app = createMessageBoxApp()
     const ctx = createMessageBoxContext({
@@ -38,7 +39,8 @@ describe('compose API', () => {
     const knexConfig = { client: 'mysql2', connection: {}, useNullAsDefault: true }
     const knex = (knexLib as any).default?.(knexConfig) ?? (knexLib as any)(knexConfig)
     const wallet = {
-      getPublicKey: async () => ({ publicKey: '02' + '11'.repeat(32) })
+      getPublicKey: async () => ({ publicKey: '02' + '11'.repeat(32) }),
+      internalizeAction: async () => ({ accepted: true })
     } as any
     const app = createMessageBoxApp()
     const ctx = createMessageBoxContext({
