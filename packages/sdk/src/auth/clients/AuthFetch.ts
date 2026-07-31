@@ -78,7 +78,7 @@ const MAX_PENDING_AUTH_REQUESTS = 1000
 export class AuthFetch {
   private readonly sessionManager: SessionManager
   private readonly wallet: WalletInterface
-  private pendingRequestNonces: Set<string> = new Set()
+  private readonly pendingRequestNonces: Set<string> = new Set()
   private readonly certificatesReceived: VerifiableCertificate[] = []
   private readonly requestedCertificates?: RequestedCertificateSet
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
@@ -235,58 +235,13 @@ export class AuthFetch {
           this.pendingRequestNonces.add(requestNonceAsBase64)
           listenerId = peerToUse.peer.listenForGeneralMessages(
             (senderPublicKey: string, payload: number[]) => {
-              // Create a reader
-              const responseReader = new Utils.Reader(payload)
-              // Deserialize first 32 bytes of payload
-              const responseNonceAsBase64 = Utils.toBase64(responseReader.read(32))
-              if (responseNonceAsBase64 !== requestNonceAsBase64) {
-                return
-              }
-
-              // Save the identity key for the peer for future requests, since we have it here.
-              this.peers[baseURL].identityKey = senderPublicKey
-              this.peers[baseURL].supportsMutualAuth = true
-
-              // Status code
-              const statusCode = responseReader.readVarIntNum()
-
-              // Headers
-              const responseHeaders = {}
-              const nHeaders = responseReader.readVarIntNum()
-              if (nHeaders > 0) {
-                for (let i = 0; i < nHeaders; i++) {
-                  const nHeaderKeyBytes = responseReader.readVarIntNum()
-                  const headerKeyBytes = responseReader.read(nHeaderKeyBytes)
-                  const headerKey = Utils.toUTF8(headerKeyBytes)
-                  const nHeaderValueBytes = responseReader.readVarIntNum()
-                  const headerValueBytes = responseReader.read(nHeaderValueBytes)
-                  const headerValue = Utils.toUTF8(headerValueBytes)
-                  responseHeaders[headerKey] = headerValue
-                }
-              }
-
-              // Add back the server identity key header
-              responseHeaders['x-bsv-auth-identity-key'] = senderPublicKey
-
-              // Body
-              let responseBody
-              const responseBodyBytes = responseReader.readVarIntNum()
-              if (responseBodyBytes > 0) {
-                responseBody = responseReader.read(responseBodyBytes)
-              }
-
-              // Create the Response object
-              const responseValue = new Response(
-                responseBody ? new Uint8Array(responseBody) : null,
-                {
-                  status: statusCode,
-                  statusText: `${statusCode}`,
-                  headers: new Headers(responseHeaders)
-                }
+              const responseValue = this.parseAuthenticatedResponse(
+                baseURL,
+                requestNonceAsBase64,
+                senderPublicKey,
+                payload
               )
-
-              // Resolve or reject the correct request with the response data
-              resolveRequest(responseValue)
+              if (responseValue !== undefined) resolveRequest(responseValue)
             }
           )
           responseTimeout = setTimeout(() => {
@@ -346,6 +301,43 @@ export class AuthFetch {
     }
 
     return response
+  }
+
+  private parseAuthenticatedResponse(
+    baseURL: string,
+    requestNonceAsBase64: string,
+    senderPublicKey: string,
+    payload: number[]
+  ): Response | undefined {
+    const responseReader = new Utils.Reader(payload)
+    const responseNonceAsBase64 = Utils.toBase64(responseReader.read(32))
+    if (responseNonceAsBase64 !== requestNonceAsBase64) return undefined
+
+    const peerState = this.peers[baseURL]
+    if (peerState !== undefined) {
+      peerState.identityKey = senderPublicKey
+      peerState.supportsMutualAuth = true
+    }
+
+    const statusCode = responseReader.readVarIntNum()
+    const responseHeaders: Record<string, string> = {}
+    const nHeaders = responseReader.readVarIntNum()
+    for (let i = 0; i < nHeaders; i++) {
+      const nHeaderKeyBytes = responseReader.readVarIntNum()
+      const headerKey = Utils.toUTF8(responseReader.read(nHeaderKeyBytes))
+      const nHeaderValueBytes = responseReader.readVarIntNum()
+      responseHeaders[headerKey] = Utils.toUTF8(responseReader.read(nHeaderValueBytes))
+    }
+    responseHeaders['x-bsv-auth-identity-key'] = senderPublicKey
+
+    const responseBodyBytes = responseReader.readVarIntNum()
+    const responseBody =
+      responseBodyBytes > 0 ? new Uint8Array(responseReader.read(responseBodyBytes)) : null
+    return new Response(responseBody, {
+      status: statusCode,
+      statusText: `${statusCode}`,
+      headers: new Headers(responseHeaders)
+    })
   }
 
   /**

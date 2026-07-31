@@ -94,7 +94,7 @@ export function buildMutationTargets(repositoryRoot) {
           'packages/sdk',
           'src/auth/clients/AuthFetch.ts',
           'if (this.pendingRequestNonces.size >= MAX_PENDING_AUTH_REQUESTS)',
-          '// Create a reader'
+          'responseTimeout = setTimeout('
         ),
         sourceLineRange(
           repositoryRoot,
@@ -109,6 +109,13 @@ export function buildMutationTargets(repositoryRoot) {
           'src/auth/clients/AuthFetch.ts',
           'if (peerToUse.pendingCertificateRequests.length > 0)',
           '// Check if server requires payment to access the requested route'
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/sdk',
+          'src/auth/clients/AuthFetch.ts',
+          'private parseAuthenticatedResponse(',
+          'Request Certificates from a Peer'
         ),
         sourceLineRange(
           repositoryRoot,
