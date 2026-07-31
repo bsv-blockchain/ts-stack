@@ -176,6 +176,16 @@ test('host framework extensions share the consumer runtime and declaration graph
     validateProjectRegistry(projects, unsafePathDiscovered).join('\n'),
     /must test its allowlisted package name with clean Express 4 and 5 host consumers in pack:check/
   )
+
+  const hiddenDevelopmentDependency = structuredClone(discoverWorkspaceProjects())
+  const walletRelayWithoutExpressTypes = hiddenDevelopmentDependency.find(
+    project => project.manifest.name === '@bsv/wallet-relay'
+  )
+  delete walletRelayWithoutExpressTypes.manifest.devDependencies['@types/express']
+  assert.match(
+    validateProjectRegistry(projects, hiddenDevelopmentDependency).join('\n'),
+    /must install host framework declarations @types\/express as a development dependency for clean package QA/
+  )
 })
 
 test('every public package declares supported runtime and canonical support metadata', () => {

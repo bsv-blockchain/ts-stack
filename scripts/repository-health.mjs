@@ -510,6 +510,11 @@ function validatePeerOwnership(manifest, dependency, description, prefix) {
   if (Object.hasOwn(manifest.dependencies ?? {}, dependency)) {
     errors.push(`${prefix} must not install ${description} ${dependency} as a dependency`)
   }
+  if (!Object.hasOwn(manifest.devDependencies ?? {}, dependency)) {
+    errors.push(
+      `${prefix} must install ${description} ${dependency} as a development dependency for clean package QA`
+    )
+  }
   return errors
 }
 
