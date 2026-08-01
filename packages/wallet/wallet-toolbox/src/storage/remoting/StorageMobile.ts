@@ -1,5 +1,4 @@
 import { WalletInterface } from '@bsv/sdk'
-import { formatTraceparent } from '../../utility/traceContext'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
 import {
   BINARY_ENCODING,
@@ -55,16 +54,13 @@ export class StorageClient extends StorageClientBase {
       const response = await this.traceRpcStep(
         'wallet.storage.http',
         rpcSpan,
-        async httpSpan =>
+        async () =>
           await this.authClient.fetch(this.endpointUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
-              ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {}),
-              ...(httpSpan == null || formatTraceparent(httpSpan.context) == null
-                ? {}
-                : { traceparent: formatTraceparent(httpSpan.context)! })
+              ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {})
             },
             body: requestBody
           }),
