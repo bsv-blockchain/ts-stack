@@ -89,7 +89,7 @@ spec:
                 secretKeyRef:
                   name: overlay-secrets
                   key: admin-token
-          image: ghcr.io/bsv-blockchain/overlay-server:v2.1.18@sha256:11e6c1ba404fec9c4ad300e5c3e0e21dce3f1ceddbba733c7ecce57801645fa9
+          image: ghcr.io/bsv-blockchain/overlay-server:v2.1.25@sha256:5b65ea38b23dadb0fbbc4d69c203c8370ceb7dd5d56dda656d5121ee729c06f7
           imagePullPolicy: IfNotPresent
           name: overlay
           lifecycle:

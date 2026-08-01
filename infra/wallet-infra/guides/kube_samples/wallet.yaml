@@ -50,7 +50,7 @@ spec:
               app: wallet-infra
       containers:
         - name: wallet-infra
-          image: ghcr.io/bsv-blockchain/wallet-infra:v2.0.13@sha256:373b7a1011ac5e822a8221cc01d50754458c0675413df2013206f6a5ea45a412
+          image: ghcr.io/bsv-blockchain/wallet-infra:v2.0.21@sha256:32b2aeb68670469cbf9abf784310dd19079a0ca83ee6d313bf40b848920b1c67
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:
