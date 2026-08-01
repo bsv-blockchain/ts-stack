@@ -1,12 +1,16 @@
 import type { TelemetryEvent, WalletInterface } from '@bsv/sdk'
 import { StorageClient } from '../StorageClient'
+import { StorageClient as StorageMobile } from '../StorageMobile'
 
 describe('StorageClient telemetry', () => {
-  it('propagates traceparent and records serialization, HTTP, read, and parse phases', async () => {
+  it.each([
+    ['browser and Node', StorageClient],
+    ['mobile', StorageMobile]
+  ])('keeps %s trace correlation local without changing authenticated request headers', async (_name, Client) => {
     const events: TelemetryEvent[] = []
     let nextSpanId = 1
     let requestInit: RequestInit | undefined
-    const client = new StorageClient({} as WalletInterface, 'https://storage.example.test/rpc', {
+    const client = new Client({} as WalletInterface, 'https://storage.example.test/rpc', {
       telemetry: {
         sink: {
           capture: event => events.push(event)
@@ -15,6 +19,7 @@ describe('StorageClient telemetry', () => {
         spanIdFactory: () => (nextSpanId++).toString(16).padStart(16, '0')
       }
     })
+    const realAuthClient = Reflect.get(client, 'authClient')
     Reflect.set(client, 'authClient', {
       fetch: jest.fn(async (_url: string, init: RequestInit) => {
         requestInit = init
@@ -37,9 +42,10 @@ describe('StorageClient telemetry', () => {
     expect(result).toEqual({ available: true })
     const requestHeaders = requestInit?.headers
     expect(requestHeaders).toBeDefined()
-    expect((requestHeaders as Record<string, string>).traceparent).toMatch(
-      /^00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-[0-9a-f]{16}-01$/
-    )
+    expect((requestHeaders as Record<string, string>).traceparent).toBeUndefined()
+    expect(() =>
+      Reflect.get(realAuthClient, 'includedRequestHeaders').call(realAuthClient, requestHeaders)
+    ).not.toThrow()
     const byName = new Map(events.map(event => [event.name, event]))
     expect(
       [

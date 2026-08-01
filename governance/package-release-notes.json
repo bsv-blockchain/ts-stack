@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, explicit manual-suite governance, safe operator/example tooling, redacted diagnostic summaries across wallet, monitor, provider, action-batch, storage, proof, and Chaintracks paths, and canonical root contribution guidance.",
-      "migration": "No consumer migration is required; persisted schemas, provider behavior, transaction construction, monitor behavior, and the 2.x wallet and storage interfaces remain compatible."
+      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, safe telemetry, and restores remote-storage compatibility by retaining trace correlation locally instead of adding unsupported AuthFetch headers.",
+      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, persisted schemas, provider behavior, and the 2.x wallet and storage interfaces remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox client candidate with transport, validation, storage, provider, dependency, package, declaration, test, operator-procedure hardening, and the synchronized contributor-policy release boundary.",
-      "migration": "No consumer migration is required; client entry points and remote storage contracts remain compatible."
+      "summary": "Carries the lockstep Wallet Toolbox browser candidate with safe local trace correlation and no unsupported authenticated request headers.",
+      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, browser entry points, and remote storage contracts remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with platform, React Native preset, transport, storage, provider, package, declaration, test, operator-procedure hardening, and the synchronized contributor-policy release boundary.",
-      "migration": "No consumer migration is required; React Native and mobile bridge contracts remain compatible."
+      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with safe local trace correlation and no unsupported authenticated request headers.",
+      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, React Native, mobile bridge, and remote storage contracts remain unchanged."
     },
     {
       "name": "create-bsv-app",

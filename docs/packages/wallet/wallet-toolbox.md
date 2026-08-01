@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.4.20'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '2.4.21'
+last_updated: '2026-07-31'
+last_verified: '2026-07-31'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,10 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+Opt-in remote-storage timing spans retain trace and parent-span correlation in
+the telemetry sink without adding headers to authenticated requests. BRC-103,
+BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.
 
 ## Install
 

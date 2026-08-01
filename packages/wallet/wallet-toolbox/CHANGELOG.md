@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Keep remote-storage trace correlation inside the telemetry sink instead of
+  adding unsupported headers to AuthFetch requests. BRC-103/104, AuthFetch,
+  Auth Express Middleware, AuthSocket, JSON-RPC, and storage wire behavior are
+  unchanged.
 - Point Wallet Toolbox contributors and AI agents to the canonical stack-level
   contribution and quality policy; keep client and mobile candidate versions
   in release lockstep without changing runtime behavior.
