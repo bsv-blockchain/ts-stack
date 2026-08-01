@@ -10,7 +10,12 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- (Include new features or significant user-visible enhancements here.)
+
+- `tm_uora_dpp` / `ls_uora_dpp`: admission and lookup for UORA attestation
+  anchors (`uora-anchor-v2`), keyed on the `did:key` of the party that made the
+  claim. Anchors name their anchoring service in the output and lock to its
+  BRC-42 child, so an instance attributes one with nothing configured. Additive:
+  no existing topic, export, schema or behaviour changes.
 
 ### Changed
 

@@ -83,6 +83,20 @@ export type { SupplyChainRecord } from './supplychain/types.js'
 export { default as SupplyChainTopicManager } from './supplychain/SupplyChainTopicManager.js'
 export { default as createSupplyChainLookupService } from './supplychain/SupplyChainLookupService.js'
 
+// uoradpp
+export type { UoraDppRecord, UoraDppQuery } from './uoradpp/types.js'
+export {
+  UORA_ANCHOR_PREFIX,
+  UORA_ANCHOR_PROTOCOL,
+  didKeyFromIdentityKey,
+  expectedLockingKey,
+  identityKeyFromDidKey,
+  readUoraAnchor
+} from './uoradpp/anchorFormat.js'
+export type { UoraAnchor } from './uoradpp/anchorFormat.js'
+export { default as UoraDppTopicManager } from './uoradpp/UoraDppTopicManager.js'
+export { default as createUoraDppLookupService } from './uoradpp/UoraDppLookupService.js'
+
 // uhrp
 export type { UHRPRecord } from './uhrp/types.js'
 export { default as UHRPTopicManager } from './uhrp/UHRPTopicManager.js'
