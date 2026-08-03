@@ -76,13 +76,13 @@ the separately released and verified image digest.
 
 | Service | Package | Manifest version | Node engine | Runtime targets | Release | Source |
 | --- | --- | --- | --- | --- | --- | --- |
-| BSV Chaintracks Server | `chaintracks-server` | `1.0.15` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
-| BSV Message Box Server | `@bsv/messagebox-server` | `1.1.22` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
-| BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.25` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
-| BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.18` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
-| BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.20` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
-| Wallet Authentication Backend | `@bsv/wab-server` | `1.4.19` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
-| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.21` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
+| BSV Chaintracks Server | `chaintracks-server` | `1.0.16` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
+| BSV Message Box Server | `@bsv/messagebox-server` | `1.1.23` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
+| BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.26` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
+| BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.19` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
+| BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.21` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
+| Wallet Authentication Backend | `@bsv/wab-server` | `1.4.20` | `>=24 <25` | node, linux/amd64 | ghcr-and-aws-marketplace-keyless | [infra/wab](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wab) |
+| BSV Wallet Infrastructure | `@bsv/wallet-infra` | `2.0.22` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/wallet-infra](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra) |
 
 ## Governed project and release inventory
 
