@@ -11,6 +11,7 @@ import { Db } from 'mongodb'
 import { readUoraAnchor } from './anchorFormat.js'
 import { UoraDppQuery } from './types.js'
 import { UoraDppStorage } from './UoraDppStorage.js'
+import docs from './UoraDppLookupDocs.md.js'
 
 const TOPIC = 'tm_uora_dpp'
 const SERVICE = 'ls_uora_dpp'
@@ -115,19 +116,7 @@ export class UoraDppLookupService implements LookupService {
   }
 
   async getDocumentation(): Promise<string> {
-    return [
-      'UORA DPP Lookup Service: attestation anchors, keyed on the issuing party.',
-      '',
-      'Query with at least one of issuer (a did:key), issuerKey (the same key as',
-      'hex), subject (a product passport id), attestationId or digest. uoraType',
-      'and anchoredBy narrow any of those and cannot select on their own. All',
-      'are exact matches; limit and skip page the answer and limit is capped.',
-      '',
-      'Answers are anchor outputs, so a caller verifies them against the chain',
-      'rather than trusting this index. The attestations themselves are never on',
-      'chain: fetch one from the issuing registry and check its canonical digest',
-      "against the anchor's."
-    ].join('\n')
+    return docs
   }
 
   async getMetaData(): Promise<{
