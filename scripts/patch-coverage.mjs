@@ -20,7 +20,25 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // Benchmark orchestration and type-only IndexedDB schema declarations have
   // no executable statements for Jest/Istanbul to instrument.
   /packages\/sdk\/scripts\/run-benchmarks\.js$/,
-  /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/
+  /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/,
+  // A `*.md.ts` module is one exported template literal, which is a convention
+  // this repository already keeps in thirteen files across four packages and
+  // none of which holds a statement. Matched by shape rather than by path,
+  // because the shape is what makes it uninstrumentable and the next package to
+  // add one should not have to discover this.
+  /\.md\.ts$/,
+  // A barrel of `export ... from` compiles to re-export bindings and no
+  // statements, and a module of `interface` and `type` emits nothing at all, so
+  // neither reaches LCOV however thoroughly it is imported. Adding a test that
+  // loads the barrel does not change that, which is worth recording because it
+  // is the obvious first thing to try.
+  //
+  // Listed by exact path, not as `index.ts` and `types.ts`, because those names
+  // do carry statements elsewhere: `packages/helpers/create-bsv-app/src/index.ts`
+  // is a CLI that reads `process.argv` and branches on it, and excluding it by
+  // shape would quietly drop real code out of this gate.
+  /packages\/overlays\/topics\/src\/index\.ts$/,
+  /packages\/overlays\/topics\/src\/uoradpp\/types\.ts$/
 ]
 
 function normalizedPath(value) {

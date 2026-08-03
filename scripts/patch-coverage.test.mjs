@@ -101,3 +101,29 @@ diff --git a/packages/helpers/example/src/index.ts b/packages/helpers/example/sr
 
   assert.deepEqual([...changed.keys()], ['packages/helpers/example/src/index.ts'])
 })
+
+test('patch coverage ignores documentation modules and named barrels, but not every index', () => {
+  const changed =
+    changedLinesFromDiff(`diff --git a/packages/overlays/topics/src/uoradpp/UoraDppTopicDocs.md.ts b/packages/overlays/topics/src/uoradpp/UoraDppTopicDocs.md.ts
++++ b/packages/overlays/topics/src/uoradpp/UoraDppTopicDocs.md.ts
+@@ -0,0 +1,24 @@
+diff --git a/packages/overlays/overlay-express/src/generalGuide.md.ts b/packages/overlays/overlay-express/src/generalGuide.md.ts
++++ b/packages/overlays/overlay-express/src/generalGuide.md.ts
+@@ -0,0 +1,57 @@
+diff --git a/packages/overlays/topics/src/index.ts b/packages/overlays/topics/src/index.ts
++++ b/packages/overlays/topics/src/index.ts
+@@ -0,0 +1,8 @@
+diff --git a/packages/overlays/topics/src/uoradpp/types.ts b/packages/overlays/topics/src/uoradpp/types.ts
++++ b/packages/overlays/topics/src/uoradpp/types.ts
+@@ -0,0 +1,58 @@
+diff --git a/packages/helpers/create-bsv-app/src/index.ts b/packages/helpers/create-bsv-app/src/index.ts
++++ b/packages/helpers/create-bsv-app/src/index.ts
+@@ -0,0 +1,40 @@
+`)
+
+  // The last one is the point of this test. `create-bsv-app`'s entry point is a
+  // CLI that reads `process.argv` and branches on it, so excluding barrels by
+  // the name `index.ts` rather than by path would drop real code out of this
+  // gate without anybody noticing.
+  assert.deepEqual([...changed.keys()], ['packages/helpers/create-bsv-app/src/index.ts'])
+})
