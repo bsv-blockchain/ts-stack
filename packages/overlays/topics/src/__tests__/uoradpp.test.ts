@@ -7,10 +7,12 @@
  * locking to the BRC-42 child of the key it names, under counterparty `anyone`
  * so a third party can reproduce the derivation.
  *
- * A second one worth reading is `does not reuse a fields array`. `PushDrop.lock`
- * appends the signature to the array it is handed, so a caller that builds
- * fields once and locks twice signs the previous signature and writes an output
- * nothing can read.
+ * The other one to read is `is refused by the signature check`, under `the
+ * boundary between the subject and the type`. It pins the defect that made this
+ * format a v3: a signature over the fields run together fixes the bytes and not
+ * where any field ends, so two adjacent fields whose boundary nothing else pins
+ * can be re-cut by anyone holding the output. Those vectors come from the shared
+ * fixture, so all three implementations refuse the same bytes.
  */
 
 import { MongoMemoryServer } from 'mongodb-memory-server'
@@ -31,6 +33,8 @@ import createUoraDppLookupService, {
   UoraDppLookupService
 } from '../uoradpp/UoraDppLookupService.js'
 import {
+  anchorSigningPreimage,
+  assertAnchorSignature,
   didKeyFromIdentityKey,
   expectedLockingKey,
   identityKeyFromDidKey,
@@ -38,6 +42,7 @@ import {
   UORA_ANCHOR_PREFIX,
   UORA_ANCHOR_PROTOCOL
 } from '../uoradpp/anchorFormat.js'
+import { ANCHOR_V3_FIXTURE } from '../uoradpp/__tests__/anchor-v3-fixture.js'
 
 const mongoMemoryServerOptions = { instance: { launchTimeout: 60000 } }
 
@@ -80,7 +85,7 @@ function claim(overrides: Partial<Claim> = {}): Claim {
   }
 }
 
-/** A fresh array every call: PushDrop.lock pushes the signature into it. */
+/** A fresh array every call, so nothing a caller does can be seen by the next. */
 function fieldsFor(one: Claim): number[][] {
   return [
     UORA_ANCHOR_PREFIX,
@@ -93,17 +98,31 @@ function fieldsFor(one: Claim): number[][] {
   ].map(value => Utils.toArray(value, 'utf8'))
 }
 
+/**
+ * Builds an anchor the way a writer must: sign the length-prefixed preimage,
+ * then lock with `includeSignature: false` and the signature already among the
+ * fields. `PushDrop.lock`'s own signature covers `fields.flat()`, which does not
+ * commit to where a field ends, and using it is what made v2 re-cuttable.
+ */
 async function anchorScript(
   one: Claim = claim(),
   wallet: WalletInterface = serviceWallet,
   keyId = one.attestationId
 ): Promise<LockingScript> {
+  const fields = fieldsFor(one)
+  const { signature } = await wallet.createSignature({
+    data: anchorSigningPreimage(fields),
+    protocolID: UORA_ANCHOR_PROTOCOL,
+    keyID: keyId,
+    counterparty: 'anyone'
+  })
   return await new PushDrop(wallet).lock(
-    fieldsFor(one),
+    [...fields, signature],
     UORA_ANCHOR_PROTOCOL,
     keyId,
     'anyone',
-    true
+    true,
+    false
   )
 }
 
@@ -418,5 +437,92 @@ describe('UoraDppLookupService', () => {
   it('describes itself', async () => {
     expect(await service.getMetaData()).toMatchObject({ name: 'UORA DPP Lookup Service' })
     expect(await service.getDocumentation()).toContain('did:key')
+  })
+})
+
+describe('the shared fixture, which is the contract with the writer', () => {
+  const F = ANCHOR_V3_FIXTURE
+  const manager = new UoraDppTopicManager()
+  const script = (): LockingScript => LockingScript.fromHex(F.lockingScript)
+
+  /*
+   * The same constant is committed in the writer's repository and in the app's,
+   * because none of the three can import the others: this reader is meant to
+   * drop into a shared overlay instance that has never heard of the service that
+   * writes anchors. Byte-identity is the whole of the agreement. If the format
+   * moves on one side and not the others, one of these suites goes red.
+   */
+  it('reads the anchor the writer pinned', () => {
+    const { anchor } = readUoraAnchor(script())
+    expect(anchor.digest).toBe(F.digest)
+    expect(anchor.attestationId).toBe(F.attestationId)
+    expect(anchor.issuer).toBe(F.issuerDid)
+    expect(anchor.subject).toBe(F.subject)
+    expect(anchor.uoraType).toBe(F.uoraType)
+    expect(anchor.anchoredBy).toBe(F.anchoredBy)
+  })
+
+  it('accepts a signature this repository cannot produce', async () => {
+    // Nothing here holds the writer's key. The signature in the fixture was
+    // made in the other repository, so this passing is a real agreement between
+    // two implementations rather than one implementation agreeing with itself.
+    const { anchor, fields } = readUoraAnchor(script())
+    await expect(
+      assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+    ).resolves.toBeUndefined()
+  })
+
+  it('admits it', async () => {
+    const admitted = await manager.identifyAdmissibleOutputs(txWith(script()).toBEEF(), [])
+    expect(admitted.outputsToAdmit).toEqual([0])
+  })
+})
+
+describe('the boundary between the subject and the type', () => {
+  const F = ANCHOR_V3_FIXTURE
+  const manager = new UoraDppTopicManager()
+
+  /*
+   * The forgery v2 admitted, and the only reason this format has a v3.
+   *
+   * Each entry is the pinned output with that one boundary re-cut and the
+   * signature bytes copied across untouched. It is not ordinary tampering: no
+   * field content changes and no signature byte changes, only where one field is
+   * said to stop and the next to start. v2 signed the fields run together, so it
+   * could not see the difference and accepted every one. The v2 anchor on
+   * mainnet reads 63 ways.
+   */
+  it('changes no content and no signature, only where a field ends', () => {
+    const genuine = readUoraAnchor(LockingScript.fromHex(F.lockingScript))
+    expect(F.boundaryShifted.length).toBeGreaterThan(0)
+    for (const hex of F.boundaryShifted) {
+      const { fields } = PushDrop.decode(LockingScript.fromHex(hex))
+      expect(fields.slice(0, -1).flat()).toEqual(genuine.fields.slice(0, -1).flat())
+      expect(fields.at(-1)).toEqual(genuine.fields.at(-1))
+      expect(fields[4]).not.toEqual(genuine.fields[4])
+    }
+  })
+
+  it('is refused by the signature check', async () => {
+    for (const hex of F.boundaryShifted) {
+      const { anchor, fields } = readUoraAnchor(LockingScript.fromHex(hex))
+      // It still reads as well formed: the re-cut leaves the four fields that
+      // `readUoraAnchor` pins exactly where they were, which is why the locking
+      // key still derives and why this check has to be the one that catches it.
+      expect(anchor.anchoredBy).toBe(F.anchoredBy)
+      await expect(
+        assertAnchorSignature(fields, anchor.anchoredBy, anchor.attestationId)
+      ).rejects.toThrow(/not signed by the anchoring service/)
+    }
+  })
+
+  it('is not admitted', async () => {
+    for (const hex of F.boundaryShifted) {
+      const admitted = await manager.identifyAdmissibleOutputs(
+        txWith(LockingScript.fromHex(hex)).toBEEF(),
+        []
+      )
+      expect(admitted.outputsToAdmit).toEqual([])
+    }
   })
 })

@@ -2,15 +2,21 @@ import { CachedKeyDeriver, LockingScript, ProtoWallet, PublicKey, PushDrop, Util
 import type { WalletProtocol } from '@bsv/sdk'
 
 /**
- * Reading and validating a `uora-anchor-v2` output.
+ * Reading and validating a `uora-anchor-v3` output.
  *
  * The format is specified independently of this implementation; this file is a
  * reader for it, written so the topic manager and the lookup service cannot
  * disagree about what an anchor is.
+ *
+ * v2 is not read here, and deliberately so. Its signature covered the field
+ * bytes run together, which fixes the total string and not where any field
+ * ends, so the boundary between the subject and the type could be re-cut by
+ * anyone holding the output while the signature still verified. v3 changes only
+ * the preimage. See `anchorSigningPreimage`.
  */
 
 /** Marks the output as this format and versions the field layout. */
-export const UORA_ANCHOR_PREFIX = 'uora-anchor-v2'
+export const UORA_ANCHOR_PREFIX = 'uora-anchor-v3'
 
 /**
  * The BRC-42 child the output is locked under, with the attestation id as key
@@ -22,14 +28,15 @@ export const UORA_ANCHOR_PREFIX = 'uora-anchor-v2'
  * private half. That is what makes an anchor attributable to a named service by
  * anybody, rather than only by the service itself.
  *
- * The key id being the attestation id rather than a constant means every anchor
- * locks to a different key, so anchors by one service are not linkable to each
- * other by inspection, while each remains linkable to that service by anyone
- * who asks. That trade is deliberate.
+ * The key id is the attestation id rather than a constant, so every anchor locks
+ * to a different key. That does not hide which service wrote them: field 6
+ * carries the anchoring service's identity key in the clear, so grouping a
+ * service's anchors is trivial by reading it. What the per-anchor key id buys is
+ * that the locking keys themselves share no visible structure.
  */
-export const UORA_ANCHOR_PROTOCOL: WalletProtocol = [1, 'uora anchor v2']
+export const UORA_ANCHOR_PROTOCOL: WalletProtocol = [1, 'uora anchor v3']
 
-/** Fields before the signature `PushDrop.lock` appends. */
+/** Fields before the appended signature. */
 export const UORA_ANCHOR_FIELD_COUNT = 7
 
 /**
@@ -169,8 +176,14 @@ export function readUoraAnchor(lockingScript: LockingScript): {
   /*
    * The attribution check, and it is part of being well formed rather than a
    * policy on top of it. An output naming an anchoring service its locking key
-   * cannot derive from is claiming something untrue about itself. Producing one
-   * that passes needs that service's private key, which is the entire proof.
+   * cannot derive from is claiming something untrue about itself.
+   *
+   * This check on its own proves nothing about authorship: counterparty
+   * `anyone` is what makes the derivation reproducible, so anybody can compute
+   * this key and lock an output to it. What needs the service's private key is
+   * the signature, checked separately in `assertAnchorSignature`. Reading this
+   * check as the proof is the mistake that let v2 through: it holds on a re-cut
+   * anchor, because the two fields it pins are the two the re-cut leaves alone.
    */
   if (expectedLockingKey(anchoredBy, attestationId) !== lockingPublicKey.toString()) {
     throw new Error('the locking key is not derived from the anchoring service named in field 6')
@@ -184,7 +197,37 @@ export function readUoraAnchor(lockingScript: LockingScript): {
 }
 
 /**
- * The appended signature, checked against the service the output names.
+ * The bytes a v3 signature covers: every field preceded by its own length, so
+ * the boundaries between fields are part of what is signed.
+ *
+ * v2 signed the fields run together, with nothing between them. That fixes the
+ * total byte string and not where one field ends and the next begins. Four of
+ * the seven boundaries are pinned anyway: the prefix is a fixed literal, the
+ * digest is exactly 64 hex characters, and the attestation id and the anchoring
+ * key are both fixed by the locking-key derivation. The subject and the type are
+ * neither, and they are adjacent, so any holder of an anchor could re-cut that
+ * one boundary into a different subject and type, copy the signature verbatim,
+ * and pass every check this file made. The one v2 anchor on mainnet admits 63
+ * such readings of itself.
+ *
+ * Length prefixes close it: any other split is different bytes, so the signature
+ * no longer verifies. This is deliberately not `PushDrop.lock`'s built-in
+ * signature, which signs `fields.flat()` and has no option to commit to
+ * boundaries; a writer signs this preimage and appends it as the last field.
+ */
+export function anchorSigningPreimage(fields: number[][]): number[] {
+  const writer = new Utils.Writer()
+  for (const field of fields) {
+    writer.writeVarIntNum(field.length)
+    writer.write(field)
+  }
+  return writer.toArray()
+}
+
+/**
+ * The appended signature, checked against the service the output names. This is
+ * the step that needs the anchoring service's private key, and so the only one
+ * that proves who wrote the anchor.
  *
  * Separate from `readUoraAnchor` because it is the only asynchronous step and
  * the only one the lookup service does not need: by the time an output is being
@@ -197,12 +240,21 @@ export async function assertAnchorSignature(
 ): Promise<void> {
   const signature = fields.at(-1)
   if (signature === undefined) throw new Error('the anchor carries no signature')
-  const { valid } = await new ProtoWallet('anyone').verifySignature({
-    data: fields.slice(0, -1).flat(),
-    signature,
-    counterparty: anchoredBy,
-    protocolID: UORA_ANCHOR_PROTOCOL,
-    keyID: attestationId
-  })
+  // `verifySignature` throws on a bad signature rather than returning a verdict,
+  // so the failure has to be caught to become this format's own error. Left
+  // uncaught, the branch below was unreachable and a reader saw the wallet's
+  // wording instead of a reason that names the anchor.
+  let valid = false
+  try {
+    ;({ valid } = await new ProtoWallet('anyone').verifySignature({
+      data: anchorSigningPreimage(fields.slice(0, -1)),
+      signature,
+      counterparty: anchoredBy,
+      protocolID: UORA_ANCHOR_PROTOCOL,
+      keyID: attestationId
+    }))
+  } catch {
+    valid = false
+  }
   if (!valid) throw new Error('the anchor fields were not signed by the anchoring service')
 }

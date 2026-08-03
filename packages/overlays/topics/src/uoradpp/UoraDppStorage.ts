@@ -26,6 +26,9 @@ export class UoraDppStorage {
   private async ensureIndexes(): Promise<void> {
     this.indexInit ??= (async () => {
       await this.records.createIndex({ issuer: 1, createdAt: 1 }, { name: 'issuerIndex' })
+      // `issuerKey` selects on its own, so it needs its own index. Without one
+      // every lookup by identity key was a collection scan and a sort.
+      await this.records.createIndex({ issuerKey: 1, createdAt: 1 }, { name: 'issuerKeyIndex' })
       await this.records.createIndex({ subject: 1, createdAt: 1 }, { name: 'subjectIndex' })
       await this.records.createIndex({ attestationId: 1 }, { name: 'attestationIdIndex' })
       await this.records.createIndex({ digest: 1 }, { name: 'digestIndex' })
@@ -34,7 +37,14 @@ export class UoraDppStorage {
         { txid: 1, outputIndex: 1 },
         { name: 'outpointIndex', unique: true }
       )
-    })()
+    })().catch(error => {
+      // A failed build must not be remembered as a finished one. Leaving the
+      // rejected promise in place made one unlucky moment disable the
+      // collection's reads and writes for the life of the process; clearing it
+      // lets the next caller try again.
+      this.indexInit = undefined
+      throw error
+    })
     return await this.indexInit
   }
 

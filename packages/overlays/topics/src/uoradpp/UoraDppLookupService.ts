@@ -93,12 +93,20 @@ export class UoraDppLookupService implements LookupService {
 
     // `uoraType` and `anchoredBy` narrow but cannot select: either alone is
     // every anchor of a common type, which is a table scan wearing a query.
+    //
+    // Tested the same way the storage layer uses them, which is a non-empty
+    // string, rather than merely being present. Testing for presence let
+    // `{ issuer: '' }` through: it satisfied the guard, then the storage layer
+    // dropped it for not being a usable string, and what reached Mongo was an
+    // empty filter. The caller got the table scan this guard exists to refuse,
+    // and could page the whole collection with `skip`.
+    const selects = (value: unknown): boolean => typeof value === 'string' && value !== ''
     const selective =
-      query.issuer !== undefined ||
-      query.issuerKey !== undefined ||
-      query.subject !== undefined ||
-      query.attestationId !== undefined ||
-      query.digest !== undefined
+      selects(query.issuer) ||
+      selects(query.issuerKey) ||
+      selects(query.subject) ||
+      selects(query.attestationId) ||
+      selects(query.digest)
     if (!selective) {
       throw new Error('Query must provide issuer, issuerKey, subject, attestationId or digest')
     }
