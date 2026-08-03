@@ -32,6 +32,7 @@ import UoraDppTopicManager from '../uoradpp/UoraDppTopicManager.js'
 import createUoraDppLookupService, {
   UoraDppLookupService
 } from '../uoradpp/UoraDppLookupService.js'
+import { UoraDppStorage } from '../uoradpp/UoraDppStorage.js'
 import {
   anchorSigningPreimage,
   assertAnchorSignature,
@@ -524,5 +525,148 @@ describe('the boundary between the subject and the type', () => {
       )
       expect(admitted.outputsToAdmit).toEqual([])
     }
+  })
+})
+
+describe('what readUoraAnchor refuses', () => {
+  const manager = new UoraDppTopicManager()
+
+  it('refuses an output that is not this many fields', async () => {
+    // Two fields and no signature. The count is checked before anything is
+    // read, because a short output has no field 6 to attribute it by and
+    // guessing which fields are missing is how a reader invents an anchor.
+    const script = await new PushDrop(serviceWallet).lock(
+      [Utils.toArray(UORA_ANCHOR_PREFIX, 'utf8'), Utils.toArray('a'.repeat(64), 'utf8')],
+      UORA_ANCHOR_PROTOCOL,
+      `${CELL}/state-1`,
+      'anyone',
+      true,
+      false
+    )
+    expect(() => readUoraAnchor(script)).toThrow(/fields and a signature/)
+    const result = await manager.identifyAdmissibleOutputs(txWith(script).toBEEF(), [])
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('refuses an anchoring service that is not a canonical compressed key', async () => {
+    // Right shape, not a point on the curve. `canonicalKey` round-trips the hex
+    // through `PublicKey` rather than pattern-matching it, so this is refused
+    // for being unusable rather than for looking wrong.
+    const script = await anchorScript(claim({ anchoredBy: `02${'ff'.repeat(32)}` }))
+    expect(() => readUoraAnchor(script)).toThrow(/canonical compressed key/)
+  })
+})
+
+describe('UoraDppLookupService, at its edges', () => {
+  it('refuses a negative skip as well as a negative limit', async () => {
+    const service = createUoraDppLookupService({
+      collection: () => ({}) as never
+    } as unknown as Db)
+    await expect(
+      service.lookup({
+        service: 'ls_uora_dpp',
+        query: { issuer: MAKER, skip: -1 }
+      } as LookupQuestion)
+    ).rejects.toThrow(/Skip must be a non-negative number/)
+  })
+
+  it('refuses an anchoring service that is not hex at all', async () => {
+    // `canonicalKey` round-trips through `PublicKey`, which throws rather than
+    // returning something falsy for input that is not a key. The refusal has to
+    // survive that, or an unparseable field reaches the derivation check and
+    // fails there with a message about the wrong thing.
+    const script = await anchorScript(claim({ anchoredBy: 'not-a-key' }))
+    expect(() => readUoraAnchor(script)).toThrow(/canonical compressed key/)
+  })
+
+  it('forgets a record the overlay stops retaining, and only for its own topic', async () => {
+    const deleted: Array<[string, number]> = []
+    const db = {
+      collection: () =>
+        ({
+          createIndex: async () => 'ok',
+          deleteOne: async (filter: { txid: string; outputIndex: number }) => {
+            deleted.push([filter.txid, filter.outputIndex])
+            return {}
+          }
+        }) as never
+    } as unknown as Db
+    const service = createUoraDppLookupService(db)
+
+    await service.outputNoLongerRetainedInHistory('f'.repeat(64), 0, 'tm_something_else')
+    expect(deleted).toEqual([])
+
+    await service.outputNoLongerRetainedInHistory('f'.repeat(64), 0, 'tm_uora_dpp')
+    expect(deleted).toEqual([['f'.repeat(64), 0]])
+  })
+
+  it('reports a failure to index rather than throwing at the overlay', async () => {
+    // The engine has already admitted the output by the time this is called, so
+    // throwing here would fail a submission the topic manager accepted. An
+    // unreadable output is logged and skipped instead.
+    const errors: unknown[] = []
+    const original = console.error
+    console.error = (...args: unknown[]): void => {
+      errors.push(args)
+    }
+    try {
+      const service = createUoraDppLookupService({
+        collection: () => ({}) as never
+      } as unknown as Db)
+      await service.outputAdmittedByTopic({
+        mode: 'locking-script',
+        topic: 'tm_uora_dpp',
+        txid: 'e'.repeat(64),
+        outputIndex: 0,
+        satoshis: 1,
+        lockingScript: p2pkhOutput()
+      } as OutputAdmittedByTopic)
+      expect(errors.length).toBe(1)
+    } finally {
+      console.error = original
+    }
+  })
+})
+
+describe('UoraDppStorage, when Mongo will not build an index', () => {
+  /*
+   * The lazy build is memoised so it happens once. Memoising the *failure* was
+   * the bug: a rejected promise left in place made one unlucky moment disable
+   * the collection's reads and writes for the life of the process, with every
+   * later caller awaiting the same rejection.
+   */
+  function dbThatFailsIndexes(failures: number): { db: Db; calls: () => number } {
+    let attempts = 0
+    const collection = {
+      createIndex: async () => {
+        attempts += 1
+        if (attempts <= failures) throw new Error('index build refused')
+        return 'ok'
+      },
+      updateOne: async () => ({}),
+      deleteOne: async () => ({}),
+      find: () => ({
+        sort: () => ({
+          skip: () => ({ limit: () => ({ project: () => ({ toArray: async () => [] }) }) })
+        })
+      })
+    }
+    return {
+      db: { collection: () => collection } as unknown as Db,
+      calls: () => attempts
+    }
+  }
+
+  it('does not remember a failed build, so the next caller tries again', async () => {
+    const { db, calls } = dbThatFailsIndexes(1)
+    const storage = new UoraDppStorage(db)
+
+    await expect(storage.find({ issuer: MAKER })).rejects.toThrow(/index build refused/)
+    expect(calls()).toBe(1)
+
+    // The retry is the whole point: had the rejection been kept, this would
+    // reject with the same error without touching Mongo again.
+    await expect(storage.find({ issuer: MAKER })).resolves.toEqual([])
+    expect(calls()).toBeGreaterThan(1)
   })
 })
