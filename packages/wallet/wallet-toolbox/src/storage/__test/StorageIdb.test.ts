@@ -6,6 +6,8 @@ import { StorageIdb } from '../StorageIdb'
 import { StorageProvider, StorageProviderOptions } from '../StorageProvider'
 import { TableOutput, TableOutputBasket, TableTransaction, TableUser } from '../schema/tables'
 import { TableActionBatch } from '../schema/tables/TableActionBatch'
+import { StorageIdbSchema } from '../schema/StorageIdbSchema'
+import { openDB } from 'idb'
 import 'fake-indexeddb/auto'
 
 describe('StorageIdb tests', () => {
@@ -18,8 +20,82 @@ describe('StorageIdb tests', () => {
     try {
       const r = await storage.migrate(`storageIdbTest-${Date.now()}`, '42'.repeat(32))
       const db = storage.db
-      expect(r).toBe('2')
+      expect(r).toBe('3')
       expect(db).toBeTruthy()
+      expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('userId_basketId')).toBe(true)
+      expect(db?.transaction('outputs').objectStore('outputs').indexNames.contains('txid_vout_userId')).toBe(true)
+      expect(db?.transaction('certificates').objectStore('certificates')
+        .indexNames.contains('userId_basketId')).toBe(false)
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('upgrades a version 2 outputs store with the funding compound index', async () => {
+    const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions('main')
+    const storage = new StorageIdb(options)
+    storage.dbName = `storageIdbUpgrade-${randomUUID()}`
+    const legacy = await openDB<StorageIdbSchema>(storage.dbName, 2, {
+      upgrade (db) {
+        const outputs = db.createObjectStore('outputs', { keyPath: 'outputId', autoIncrement: true })
+        outputs.createIndex('userId', 'userId')
+        outputs.createIndex('transactionId', 'transactionId')
+        outputs.createIndex('basketId', 'basketId')
+        outputs.createIndex('spentBy', 'spentBy')
+        outputs.createIndex('transactionId_vout_userId', ['transactionId', 'vout', 'userId'], { unique: true })
+      }
+    })
+    legacy.close()
+
+    try {
+      const upgraded = await storage.initDB('version 2 upgrade test', '42'.repeat(32))
+      expect(upgraded.version).toBe(3)
+      expect(upgraded.transaction('outputs').objectStore('outputs')
+        .indexNames.contains('userId_basketId')).toBe(true)
+      expect(upgraded.transaction('outputs').objectStore('outputs')
+        .indexNames.contains('txid_vout_userId')).toBe(true)
+      upgraded.close()
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('funding candidates exclude invalid source statuses and active batch reservations', async () => {
+    const storage = await makeStorage()
+    try {
+      const userId = await insertUser(storage)
+      const basketId = await insertBasket(storage, userId)
+      const availableTxId = await insertTransaction(storage, userId, {
+        status: 'completed', txid: '11'.repeat(32)
+      })
+      const reservedTxId = await insertTransaction(storage, userId, {
+        status: 'completed', txid: '12'.repeat(32)
+      })
+      const failedTxId = await insertTransaction(storage, userId, {
+        status: 'failed', txid: '13'.repeat(32)
+      })
+      const availableOutputId = await insertOutput(storage, userId, availableTxId, basketId, {
+        txid: '11'.repeat(32), satoshis: 100
+      })
+      const reservedOutputId = await insertOutput(storage, userId, reservedTxId, basketId, {
+        txid: '12'.repeat(32), satoshis: 200
+      })
+      await insertOutput(storage, userId, failedTxId, basketId, {
+        txid: '13'.repeat(32), satoshis: 300
+      })
+      const batch = makeActionBatch(userId, 'funding-candidate-reservation')
+      await storage.insertActionBatch(batch)
+      const now = new Date()
+      await storage.reserveActionBatchOutputs([{
+        actionBatchId: batch.actionBatchId,
+        outputId: reservedOutputId,
+        created_at: now,
+        updated_at: now
+      }])
+
+      const available = await storage.findAvailableManagedChangeInputs(userId, basketId, true)
+      expect(available.map(output => output.outputId)).toEqual([availableOutputId])
+      await expect(storage.countChangeInputs(userId, basketId, true)).resolves.toBe(1)
     } finally {
       await resetStorage(storage)
     }

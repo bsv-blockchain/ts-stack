@@ -376,6 +376,8 @@ export function upgradeCommissions (db: IDBPDatabase<StorageIdbSchema>): void {
 export function upgradeOutputs (db: IDBPDatabase<StorageIdbSchema>): void {
   const store = db.createObjectStore('outputs', { keyPath: 'outputId', autoIncrement: true })
   store.createIndex('userId', 'userId')
+  store.createIndex('userId_basketId', ['userId', 'basketId'])
+  store.createIndex('txid_vout_userId', ['txid', 'vout', 'userId'], { unique: true })
   store.createIndex('transactionId', 'transactionId')
   store.createIndex('basketId', 'basketId')
   store.createIndex('spentBy', 'spentBy')

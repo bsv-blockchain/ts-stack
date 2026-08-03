@@ -203,10 +203,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 2, {
-      upgrade(db) {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 3, {
+      upgrade(db, _oldVersion, _newVersion, transaction) {
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
+        const outputs = transaction.objectStore('outputs')
+        if (!outputs.indexNames.contains('userId_basketId')) {
+          outputs.createIndex('userId_basketId', ['userId', 'basketId'])
+        }
+        if (!outputs.indexNames.contains('txid_vout_userId')) {
+          outputs.createIndex('txid_vout_userId', ['txid', 'vout', 'userId'], { unique: true })
+        }
         if (!db.objectStoreNames.contains('settings')) {
           if (storageName == null || storageName === '' || storageIdentityKey == null || storageIdentityKey === '') {
             throw new WERR_INVALID_OPERATION('migrate must be called before first access')
@@ -415,11 +422,73 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       txStatus,
       noScript: true
     }
-    let count = 0
+    const outputIds: number[] = []
     await this.filterOutputs(args, r => {
-      if (isAutoSpendableChangeOutput(r)) count++
+      if (isAutoSpendableChangeOutput(r)) outputIds.push(r.outputId)
     })
-    return count
+    const reserved = await this.findReservedActionBatchOutputIds(outputIds)
+    return outputIds.length - reserved.length
+  }
+
+  override async findTransactionStatusesByIds(
+    userId: number,
+    transactionIds: number[],
+    trx?: TrxToken
+  ): Promise<Map<number, TransactionStatus>> {
+    const statuses = new Map<number, TransactionStatus>()
+    if (transactionIds.length === 0) return statuses
+    const dbTrx = this.toDbTrx(['transactions'], 'readonly', trx)
+    const store = dbTrx.objectStore('transactions')
+    for (const transactionId of new Set(transactionIds)) {
+      const transaction = await store.get(transactionId)
+      if (transaction?.userId === userId) statuses.set(transactionId, transaction.status)
+    }
+    if (trx == null) await dbTrx.done
+    return statuses
+  }
+
+  private async findOutputsByOutpointsInternal(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken,
+    noScript = false
+  ): Promise<Record<string, TableOutput>> {
+    const byOutpoint: Record<string, TableOutput> = {}
+    if (outpoints.length === 0) return byOutpoint
+    const dbTrx = this.toDbTrx(
+      noScript ? ['outputs'] : ['outputs', 'proven_txs', 'proven_tx_reqs'],
+      'readonly',
+      trx
+    )
+    const index = dbTrx.objectStore('outputs').index('txid_vout_userId')
+    const unique = [...new Map(outpoints.map(outpoint => [`${outpoint.txid}.${outpoint.vout}`, outpoint])).values()]
+    const rows = await Promise.all(unique.map(async outpoint =>
+      await index.get([outpoint.txid, outpoint.vout, userId])
+    ))
+    for (const row of rows) {
+      if (row == null) continue
+      if (!noScript) await this.validateOutputScript(row, dbTrx)
+      byOutpoint[`${String(row.txid)}.${row.vout}`] = this.validateEntity(row)
+    }
+    if (trx == null) await dbTrx.done
+    return byOutpoint
+  }
+
+  override async findOutputsByOutpoints(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    return await this.findOutputsByOutpointsInternal(userId, outpoints, trx)
+  }
+
+  override async findOutputsByOutpointsForUpdate(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx: TrxToken,
+    noScript = false
+  ): Promise<Record<string, TableOutput>> {
+    return await this.findOutputsByOutpointsInternal(userId, outpoints, trx, noScript)
   }
 
   async findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
@@ -1546,6 +1615,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           .index('transactionId_vout_userId')
           .openCursor([partial.transactionId, partial.vout, partial.userId], direction)
       }
+      if (partial?.txid != null && partial.txid !== '' && partial?.vout !== undefined) {
+        return store
+          .index('txid_vout_userId')
+          .openCursor([partial.txid, partial.vout, partial.userId], direction)
+      }
+      if (partial?.basketId !== undefined) {
+        return store.index('userId_basketId').openCursor([partial.userId, partial.basketId], direction)
+      }
       return store.index('userId').openCursor(partial.userId, direction)
     }
     if (partial?.transactionId !== undefined)
@@ -1574,6 +1651,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending === true ? 'prev' : 'next'
     const store = dbTrx.objectStore('outputs')
+    let validTransactionIds: Set<number> | undefined
+    if (args.txStatus != null) {
+      validTransactionIds = new Set<number>()
+      const transactions = dbTrx.objectStore('transactions')
+      for (const status of args.txStatus) {
+        const index = args.partial.userId === undefined
+          ? transactions.index('status')
+          : transactions.index('status_userId')
+        const key = args.partial.userId === undefined ? status : [status, args.partial.userId]
+        for (const transactionId of await index.getAllKeys(key)) validTransactionIds.add(Number(transactionId))
+      }
+    }
     const cursor = await this.openOutputsCursor(store, args.partial, direction)
     await scanCursor<TableOutput>(
       cursor,
@@ -1582,14 +1671,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.limit,
       async r => {
         if (!matchesOutputPartial(r, args.partial)) return false
-        if (args.txStatus !== undefined) {
-          const txCount = await this.countTransactions({
-            partial: { transactionId: r.transactionId },
-            status: args.txStatus,
-            trx: dbTrx
-          })
-          if (txCount === 0) return false
-        }
+        if (validTransactionIds != null && !validTransactionIds.has(r.transactionId)) return false
         if (
           tagIds != null &&
           tagIds.length > 0 &&

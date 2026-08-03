@@ -85,6 +85,38 @@ See [In-memory action batch planning](./docs/action-batch-planning.md) for
 capability-negotiated `noSend` planning, compact manifests, compressed binary
 pack transport, atomic commit, compatibility behavior, and retained benchmarks.
 
+### `createAction` performance telemetry
+
+With the optional SDK telemetry sink enabled, legacy `createAction` reports
+bounded-cardinality spans for input validation, record/output persistence,
+funding candidate selection, fee-aware planning, atomic input claiming, input
+assembly, proof fetch, BEEF merge, and final trim/serialization.
+Only counts, byte sizes, fee totals, retry counts, and durations are reported;
+transaction IDs, scripts, payloads, keys, and identities are not attributes.
+
+The planner uses the same exact / least-over / largest-under selection policy
+as the historical allocator, but proves economic sufficiency before writing a
+transaction and claims every selected input in one database transaction. Knex
+storage automatically adds a composite funding-selection index on migration;
+IndexedDB schema version 3 adds corresponding user/basket and outpoint indexes
+and resolves transaction-status eligibility in one indexed pass.
+
+The retained fragmented-funding benchmark is runnable with:
+
+```bash
+pnpm bench:create-action-funding
+```
+
+Against unmodified commit `c212b5ee7`, a representative 102-input SQLite plan
+fell from 622 queries, 102 database transactions, and 107.3 ms to 17 queries,
+one transaction, and 8.8 ms. Query and transaction counts remain flat when the
+selected input count grows; networked database deployments should benefit most.
+
+Trace context remains local to the telemetry carrier and sink. Wallet Toolbox
+does not add telemetry headers to AuthFetch, so BRC-103/104, Auth Express
+Middleware, AuthSocket, JSON-RPC, and mixed-version remote storage behavior are
+unchanged.
+
 The codebase has detailed JSDoc annotations throughout — these will surface inline in editors like VS Code.
 
 ### Horizontal Storage scaling

@@ -230,6 +230,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Cache BEEF dependency-sort results until transaction or proof state changes,
+  so repeated wallet known-txid preparation is proportional to the returned
+  list instead of re-running the complete topological sort. BEEF ordering,
+  validation results, and serialized bytes are unchanged.
 - Point SDK contributors and AI agents to the canonical stack-level
   contribution and quality policy without changing package behavior.
 - Harden UTF-8, binary JSON, secret-redaction, cryptographic compatibility, and

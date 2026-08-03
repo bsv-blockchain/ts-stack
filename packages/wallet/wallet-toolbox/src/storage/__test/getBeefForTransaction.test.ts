@@ -89,6 +89,24 @@ describe('getBeefForTransaction tests', () => {
     expect(fresh.findTxid(txid)).toBeDefined()
   })
 
+  test('does not index an entire known-txid history for a single known root', async () => {
+    const storage = new ProtoStorage('main')
+    const txid = '12'.repeat(32)
+    const knownTxids = Array.from({ length: 10_000 }, (_, index) => index.toString(16).padStart(64, '0'))
+    knownTxids.push(txid)
+    Object.defineProperty(knownTxids, Symbol.iterator, {
+      value: () => { throw new Error('the common single-root path must not iterate the full history') }
+    })
+
+    const beef = await storage.getBeefForTransaction(txid, {
+      ignoreStorage: true,
+      ignoreServices: true,
+      knownTxids
+    })
+
+    expect(beef.findTxid(txid)?.isTxidOnly).toBe(true)
+  })
+
   test('uses storage BEEF and forwards proof-validation policy', async () => {
     const storage = new ProtoStorage('main')
     const txid = '22'.repeat(32)

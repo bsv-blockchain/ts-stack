@@ -1,5 +1,23 @@
 # Performance Benchmarks
 
+## Repeated BEEF dependency sorting (August 2026)
+
+Wallet transaction creation can ask the same unchanged BEEF for its dependency
+order more than once while preparing known transaction IDs, merging proofs, and
+serializing the final result. The mutation-aware sort cache retains the public
+ordering while avoiding another complete graph partition and topological sort.
+
+```bash
+BEEF_SORT_TXS=20000 node benchmarks/beef-sort-cache-bench.js
+```
+
+Against unmodified commit `c212b5ee7`, seven same-host samples on Apple Silicon
+with Node.js v24.18.0 produced a 235.86 ms median for 50 unchanged sorts. The
+optimized build took 9.72 ms after validating directly reachable dependency
+state, a 24.3x improvement. The cold sort remained about
+7–8 ms; transaction or proof mutation invalidates the cache, and callers receive
+new result arrays so consumer mutation cannot alter the cached order.
+
 ## Transaction and BEEF pipeline (July 2026)
 
 The transaction pipeline benchmark uses built ESM artifacts and is intentionally runnable against another build through `SDK_DIST_ROOT`. Measurements below were taken on the same Apple Silicon host with Node.js v25.9.0. Each comparison uses identical generated transactions and benchmark code.

@@ -521,6 +521,35 @@ describe('Beef tests', () => {
     }
   })
 
+  test('sortTxs reuses an immutable result until BEEF contents change', () => {
+    const beef = new Beef()
+    beef.mergeTxidOnly('11'.repeat(32))
+    const partition = jest.spyOn(beef as any, 'partitionTxs')
+
+    const first = beef.sortTxs()
+    first.valid.length = 0
+    const second = beef.sortTxs()
+
+    expect(partition).toHaveBeenCalledTimes(1)
+    expect(second.valid).toEqual(['11'.repeat(32)])
+
+    beef.mergeTxidOnly('22'.repeat(32))
+    expect(beef.sortTxs().valid).toEqual(['11'.repeat(32), '22'.repeat(32)])
+    expect(partition).toHaveBeenCalledTimes(2)
+  })
+
+  test('sortTxs invalidates its cache after directly reachable dependency state changes', () => {
+    const beef = new Beef()
+    beef.mergeTxidOnly('11'.repeat(32))
+    beef.sortTxs()
+
+    beef.txs.push(BeefTx.fromTxid('22'.repeat(32)))
+    expect(beef.sortTxs().valid).toEqual(['11'.repeat(32), '22'.repeat(32)])
+
+    beef.txs[0].inputTxids.push('33'.repeat(32))
+    expect(beef.sortTxs().missingInputs).toContain('33'.repeat(32))
+  })
+
   test('10_deserialize beef with extra leaves', async () => {
     const b58Beef = b58Beef10
     const beef = Beef.fromBinary(fromBase58(b58Beef))

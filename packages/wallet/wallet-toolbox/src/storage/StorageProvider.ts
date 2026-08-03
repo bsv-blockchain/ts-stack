@@ -108,6 +108,7 @@ import {
   putActionBatchBlob as putBatchBlob,
   putActionBatchPack as putBatchPack
 } from './methods/actionBatchBlobs'
+import { availableManagedChange } from './methods/availableManagedChange'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -156,6 +157,42 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     excludeSending: boolean,
     transactionId: number
   ): Promise<TableOutput | undefined>
+
+  /** Mark a planned set of change inputs spent within the caller's transaction. */
+  async markChangeInputsSpent(outputIds: number[], transactionId: number, trx: TrxToken): Promise<number> {
+    let updated = 0
+    const current = await this.findOutputsByIds(outputIds, trx)
+    for (const outputId of outputIds) {
+      const output = current[outputId]
+      if (output == null || !output.spendable || output.spentBy != null) continue
+      updated += await this.updateOutput(outputId, { spendable: false, spentBy: transactionId }, trx)
+    }
+    return updated
+  }
+
+  /** Return unreserved wallet-managed outputs eligible for automatic funding. */
+  async findAvailableManagedChangeInputs(
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<TableOutput[]> {
+    return await availableManagedChange(this, userId, basketId, excludeSending, trx)
+  }
+
+  /** Read the current status of a set of source transactions without loading raw transaction bytes. */
+  async findTransactionStatusesByIds(
+    userId: number,
+    transactionIds: number[],
+    trx?: TrxToken
+  ): Promise<Map<number, TransactionStatus>> {
+    const statuses = new Map<number, TransactionStatus>()
+    for (const transactionId of new Set(transactionIds)) {
+      const transaction = await this.findTransactionById(transactionId, trx, true)
+      if (transaction?.userId === userId) statuses.set(transactionId, transaction.status)
+    }
+    return statuses
+  }
 
   abstract getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx>
   abstract getRawTxOfKnownValidTransaction(
@@ -321,9 +358,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async findOutputsByOutpointsForUpdate(
     userId: number,
     outpoints: Array<{ txid: string; vout: number }>,
-    trx: TrxToken
+    trx: TrxToken,
+    noScript = false
   ): Promise<Record<string, TableOutput>> {
-    return await this.findOutputsByOutpoints(userId, outpoints, trx)
+    const byOutpoint = await this.findOutputsByOutpoints(userId, outpoints, trx)
+    // Backends that cannot skip hydration remain correct; optimized backends may
+    // use noScript to keep raw-transaction I/O outside the write lock.
+    void noScript
+    return byOutpoint
   }
 
   async findOrInsertOutputBasketsBulk(

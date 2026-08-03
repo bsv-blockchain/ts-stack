@@ -55,6 +55,13 @@ const BENCHMARKS = [
     commands: [
       { script: 'benchmarks/atomic-beef-bench.js', args: [] }
     ]
+  },
+  {
+    id: 'beef-sort-cache',
+    label: 'BEEF Sort Cache',
+    commands: [
+      { script: 'benchmarks/beef-sort-cache-bench.js', args: [] }
+    ]
   }
 ]
 

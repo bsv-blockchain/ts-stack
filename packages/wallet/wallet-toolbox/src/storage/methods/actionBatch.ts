@@ -125,24 +125,6 @@ export async function cleanupExpiredActionBatches (storage: StorageProvider): Pr
   return released
 }
 
-async function availableManagedChange (
-  storage: StorageProvider,
-  userId: number,
-  basketId: number,
-  excludeSending: boolean,
-  trx?: TrxToken
-): Promise<TableOutput[]> {
-  const statuses: TransactionStatus[] = ['completed', 'unproven']
-  if (!excludeSending) statuses.push('sending')
-  const outputs = (await storage.findOutputs({
-    partial: { userId, basketId, spendable: true },
-    txStatus: statuses,
-    trx
-  })).filter(isAutoSpendableChangeOutput)
-  const reserved = new Set(await storage.findReservedActionBatchOutputIds(outputs.map(o => o.outputId), trx))
-  return outputs.filter(output => output.spentBy == null && !reserved.has(output.outputId))
-}
-
 function sourceOutputFromBeef (
   beef: Beef,
   outpoint: { txid: string, vout: number }
@@ -386,8 +368,8 @@ export async function beginActionBatch (
   )
   const noSendChange = await resolveNoSendChangeOutputs(storage, userId, args.firstAction)
   const fixedOutputIds = new Set([...explicit.outputs, ...noSendChange.outputs].map(output => output.outputId))
-  const available = (await availableManagedChange(
-    storage, userId, changeBasket.basketId, !args.firstAction.isDelayed
+  const available = (await storage.findAvailableManagedChangeInputs(
+    userId, changeBasket.basketId, !args.firstAction.isDelayed
   )).filter(output => !fixedOutputIds.has(output.outputId))
   const target = estimateFirstActionTarget(
     storage,
@@ -448,7 +430,7 @@ export async function extendActionBatch (
   const batch = requireLiveBatch(await storage.findActionBatch(userId, args.batchId))
   const basket = verifyOne(await storage.findOutputBaskets({ partial: { userId, name: 'default' } }))
   const alreadyReserved = await storage.findActionBatchOutputIds(batch.actionBatchId)
-  const available = await availableManagedChange(storage, userId, basket.basketId, false)
+  const available = await storage.findAvailableManagedChangeInputs(userId, basket.basketId, false)
   if (!Number.isSafeInteger(args.requestedOutputs) || args.requestedOutputs < 0) {
     throw new WERR_INVALID_PARAMETER('requestedOutputs', 'non-negative safe integer')
   }

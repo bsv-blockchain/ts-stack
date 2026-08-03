@@ -36,7 +36,12 @@ export async function getBeefForTransaction(
     beef = new Beef()
   }
 
-  const knownTxids = new Set(options.knownTxids ?? [])
+  // Most createAction proof requests resolve a single, already-proven root.
+  // Building a Set for a wallet's entire known-txid history made that common
+  // path O(history) before storage did any useful work. Use array membership
+  // for the first few lookups and promote to a Set only for a broad ancestor
+  // traversal where the construction cost is recovered.
+  const hasKnownTxid = makeKnownTxidLookup(options.knownTxids ?? [])
   const scheduled = new Set<string>([txid])
   let frontier: Array<{ txid: string; depth: number }> = [{ txid, depth: 0 }]
   const requestedConcurrency = options.maxConcurrency ?? 8
@@ -49,7 +54,7 @@ export async function getBeefForTransaction(
     const resolved = await mapWithConcurrency(
       current,
       concurrency,
-      async item => await resolveBeefForTransaction(storage, item.txid, options, knownTxids, item.depth)
+      async item => await resolveBeefForTransaction(storage, item.txid, options, hasKnownTxid, item.depth)
     )
 
     const next: Array<{ txid: string; depth: number }> = []
@@ -67,6 +72,20 @@ export async function getBeefForTransaction(
   }
 
   return beef
+}
+
+function makeKnownTxidLookup (knownTxids: string[]): (txid: string) => boolean {
+  let lookups = 0
+  let indexed: Set<string> | undefined
+  return txid => {
+    lookups++
+    if (indexed != null) return indexed.has(txid)
+    if (knownTxids.length > 64 && lookups > 4) {
+      indexed = new Set(knownTxids)
+      return indexed.has(txid)
+    }
+    return knownTxids.includes(txid)
+  }
 }
 
 async function mapWithConcurrency<T, R>(
@@ -155,7 +174,7 @@ async function resolveBeefForTransaction(
   storage: StorageProvider,
   txid: string,
   options: StorageGetBeefOptions,
-  knownTxids: Set<string>,
+  hasKnownTxid: (txid: string) => boolean,
   recursionDepth: number
 ): Promise<{ beef: Beef; dependencies: string[] }> {
   const maxDepth = storage.maxRecursionDepth
@@ -165,7 +184,7 @@ async function resolveBeefForTransaction(
 
   const beef = new Beef()
 
-  if (knownTxids.has(txid)) {
+  if (hasKnownTxid(txid)) {
     // This txid is one of the txids the caller claims to already know are valid...
     beef.mergeTxidOnly(txid)
     return { beef, dependencies: [] }
