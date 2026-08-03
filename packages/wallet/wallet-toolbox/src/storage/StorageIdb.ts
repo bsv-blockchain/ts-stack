@@ -1632,6 +1632,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return store.openCursor(null, direction)
   }
 
+  private async eligibleOutputTransactionIds(
+    args: FindOutputsArgs,
+    dbTrx: IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'>
+  ): Promise<Set<number> | undefined> {
+    if (args.txStatus == null) return undefined
+    const validTransactionIds = new Set<number>()
+    const transactions = dbTrx.objectStore('transactions')
+    for (const status of args.txStatus) {
+      const index = args.partial.userId === undefined
+        ? transactions.index('status')
+        : transactions.index('status_userId')
+      const key = args.partial.userId === undefined ? status : [status, args.partial.userId]
+      for (const transactionId of await index.getAllKeys(key)) validTransactionIds.add(Number(transactionId))
+    }
+    return validTransactionIds
+  }
+
   async filterOutputs(
     args: FindOutputsArgs,
     filtered: (v: TableOutput) => void,
@@ -1651,18 +1668,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending === true ? 'prev' : 'next'
     const store = dbTrx.objectStore('outputs')
-    let validTransactionIds: Set<number> | undefined
-    if (args.txStatus != null) {
-      validTransactionIds = new Set<number>()
-      const transactions = dbTrx.objectStore('transactions')
-      for (const status of args.txStatus) {
-        const index = args.partial.userId === undefined
-          ? transactions.index('status')
-          : transactions.index('status_userId')
-        const key = args.partial.userId === undefined ? status : [status, args.partial.userId]
-        for (const transactionId of await index.getAllKeys(key)) validTransactionIds.add(Number(transactionId))
-      }
-    }
+    const validTransactionIds = await this.eligibleOutputTransactionIds(args, dbTrx)
     const cursor = await this.openOutputsCursor(store, args.partial, direction)
     await scanCursor<TableOutput>(
       cursor,

@@ -161,14 +161,7 @@ async function createActionCore(
 
   const initialFundingPlan = await prepareFundingPlan(
     storage,
-    userId,
-    vargs,
-    xinputs,
-    xoutputs,
-    changeBasket,
-    noSendChangeIn,
-    feeModel,
-    parent
+    { userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, parent }
   )
   logger?.log(`planned funding from ${initialFundingPlan.availableChangeCount} change inputs`)
 
@@ -930,6 +923,17 @@ interface PreparedFundingPlan {
   availableChangeCount: number
 }
 
+interface FundingPlanContext {
+  userId: number
+  vargs: Validation.ValidCreateActionArgs
+  xinputs: XValidCreateActionInput[]
+  xoutputs: XValidCreateActionOutput[]
+  changeBasket: TableOutputBasket
+  noSendChangeIn: TableOutput[]
+  feeModel: StorageFeeModel
+  parent?: TelemetrySpan
+}
+
 type FundingClaim =
   | {
     outputs: TableOutput[]
@@ -994,15 +998,9 @@ function makeFundingParams (
 
 async function prepareFundingPlan (
   storage: StorageProvider,
-  userId: number,
-  vargs: Validation.ValidCreateActionArgs,
-  xinputs: XValidCreateActionInput[],
-  xoutputs: XValidCreateActionOutput[],
-  changeBasket: TableOutputBasket,
-  noSendChangeIn: TableOutput[],
-  feeModel: StorageFeeModel,
-  parent?: TelemetrySpan
+  context: FundingPlanContext
 ): Promise<PreparedFundingPlan> {
+  const { userId, vargs, xinputs, xoutputs, changeBasket, noSendChangeIn, feeModel, parent } = context
   const excludeSending = !vargs.isDelayed
   const candidates = await traceStorageStep(
     storage,
@@ -1115,12 +1113,11 @@ async function claimFundingPlan (
       const currentStatus = current == null ? undefined : transactionStatuses.get(current.transactionId)
       const validTransaction = currentStatus != null && statuses.includes(currentStatus)
       if (
-        current == null ||
-        current.outputId !== planned.outputId ||
-        current.satoshis !== planned.satoshis ||
-        current.basketId !== basketId ||
+        current?.outputId !== planned.outputId ||
+        current?.satoshis !== planned.satoshis ||
+        current?.basketId !== basketId ||
         !isAutoSpendableChangeOutput(current) ||
-        reserved.has(current.outputId) ||
+        reserved.has(current?.outputId ?? -1) ||
         validTransaction !== true
       ) {
         return { conflict: noSendIds.has(planned.outputId) ? 'noSendChange' : 'candidate' } as const
@@ -1250,14 +1247,16 @@ async function fundNewTransactionSdk(
         retryCount++
         plan = await prepareFundingPlan(
           storage,
-          userId,
-          vargs,
-          ctx.xinputs,
-          ctx.xoutputs,
-          ctx.changeBasket,
-          ctx.noSendChangeIn,
-          ctx.feeModel,
-          parent
+          {
+            userId,
+            vargs,
+            xinputs: ctx.xinputs,
+            xoutputs: ctx.xoutputs,
+            changeBasket: ctx.changeBasket,
+            noSendChangeIn: ctx.noSendChangeIn,
+            feeModel: ctx.feeModel,
+            parent
+          }
         )
       }
       throw new WERR_INVALID_OPERATION('wallet funding changed repeatedly during action planning; retry createAction')

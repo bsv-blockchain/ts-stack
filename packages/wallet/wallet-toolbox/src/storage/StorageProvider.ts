@@ -359,13 +359,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     userId: number,
     outpoints: Array<{ txid: string; vout: number }>,
     trx: TrxToken,
-    noScript = false
+    _noScript = false
   ): Promise<Record<string, TableOutput>> {
-    const byOutpoint = await this.findOutputsByOutpoints(userId, outpoints, trx)
     // Backends that cannot skip hydration remain correct; optimized backends may
-    // use noScript to keep raw-transaction I/O outside the write lock.
-    void noScript
-    return byOutpoint
+    // use _noScript to keep raw-transaction I/O outside the write lock.
+    return await this.findOutputsByOutpoints(userId, outpoints, trx)
   }
 
   async findOrInsertOutputBasketsBulk(
