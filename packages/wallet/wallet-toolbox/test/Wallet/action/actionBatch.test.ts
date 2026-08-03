@@ -318,6 +318,7 @@ describe('in-memory action batch workspace', () => {
     const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
     const legacyProcess = jest.spyOn(ctx.storage, 'processAction')
     const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+    ctx.wallet.autoKnownTxids = true
     ctx.wallet.randomVals = randomVals
     const created = await ctx.wallet.createAction({
       ...actionArgs(),
@@ -339,6 +340,8 @@ describe('in-memory action batch workspace', () => {
     expect(commit).toHaveBeenCalledTimes(1)
     expect(commit.mock.calls[0][0].actions[0].plan.inputs.every(input => input.sourceTransaction == null)).toBe(true)
     expect(events.some(event => event.name === 'wallet.create_action' && event.spanStatus === 'ok')).toBe(true)
+    expect(events.some(event => event.name === 'wallet.create_action.prepare_known_txids' && event.spanStatus === 'ok'))
+      .toBe(true)
     expect(events.some(event => event.name === 'wallet.sign_action' && event.spanStatus === 'ok')).toBe(true)
     expect(events.some(event => event.name === 'wallet.crypto.transaction_sign')).toBe(true)
   })

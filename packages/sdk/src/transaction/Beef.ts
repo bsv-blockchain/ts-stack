@@ -43,6 +43,22 @@ interface BeefBumpSerializationState {
   levels: BeefBumpLevelSerializationState[]
 }
 
+interface BeefSortResult {
+  missingInputs: string[]
+  notValid: string[]
+  valid: string[]
+  withMissingInputs: string[]
+  txidOnly: string[]
+}
+
+interface BeefSortTxState {
+  ref: BeefTx
+  txid: string
+  bumpIndex?: number
+  isTxidOnly: boolean
+  inputTxids: string[]
+}
+
 /*
  * BEEF standard: BRC-62: Background Evaluation Extended Format (BEEF) Transactions
  * https://github.com/bsv-blockchain/BRCs/blob/master/transactions/0062.md
@@ -118,6 +134,8 @@ export class Beef {
   private bumpState?: BeefBumpSerializationState[]
 
   private needsSort: boolean = true
+  private sortResultCache?: BeefSortResult
+  private sortTxState?: BeefSortTxState[]
 
   constructor(version: number = BEEF_V2) {
     this.version = version
@@ -235,6 +253,9 @@ export class Beef {
     }
     if (!this.bumpStateMatches()) {
       this.invalidateSerializationCaches()
+      this.sortResultCache = undefined
+      this.sortTxState = undefined
+      this.needsSort = true
       this.invalidateBumpIndexes()
       this.captureBumpState()
     }
@@ -256,6 +277,8 @@ export class Beef {
 
   private markMutated(requiresSort: boolean = true): void {
     this.invalidateSerializationCaches()
+    this.sortResultCache = undefined
+    this.sortTxState = undefined
     if (requiresSort) {
       this.needsSort = true
     }
@@ -274,6 +297,8 @@ export class Beef {
     for (const tx of this.txs) changed = tx.syncRawTxFromTransaction() || changed
     if (changed) {
       this.invalidateSerializationCaches()
+      this.sortResultCache = undefined
+      this.sortTxState = undefined
       this.needsSort = true
       this.rebuildTxIndexes()
     }
@@ -1154,6 +1179,12 @@ export class Beef {
     txidOnly: string[]
   } {
     this.synchronizeNestedTransactionMutations()
+    this.synchronizeNestedBumpMutations()
+    if (this.sortResultCache != null && this.sortTxStateMatches()) {
+      return this.cloneSortResult(this.sortResultCache)
+    }
+    this.sortResultCache = undefined
+    this.sortTxState = undefined
     // Hashtable of valid txids (with proof or all inputs chain to proof)
     const validTxids: Record<string, boolean> = {}
 
@@ -1184,12 +1215,54 @@ export class Beef {
     this.invalidateSerializationCaches()
     this.rebuildTxIndexes()
 
-    return {
+    const sortResult: BeefSortResult = {
       missingInputs: Object.keys(missingInputs),
       notValid: txsNotValid.map(tx => tx.txid),
       valid: Object.keys(validTxids),
       withMissingInputs: txsMissingInputs.map(tx => tx.txid),
       txidOnly: txidOnly.map(tx => tx.txid)
+    }
+    this.sortResultCache = sortResult
+    this.captureSortTxState()
+    return this.cloneSortResult(sortResult)
+  }
+
+  private captureSortTxState(): void {
+    this.sortTxState = this.txs.map(tx => ({
+      ref: tx,
+      txid: tx.txid,
+      bumpIndex: tx.bumpIndex,
+      isTxidOnly: tx.isTxidOnly,
+      inputTxids: [...tx.inputTxids]
+    }))
+  }
+
+  private sortTxStateMatches(): boolean {
+    if (this.sortTxState?.length !== this.txs.length) return false
+    for (let index = 0; index < this.txs.length; index++) {
+      const tx = this.txs[index]
+      const state = this.sortTxState[index]
+      if (
+        state.ref !== tx ||
+        state.txid !== tx.txid ||
+        state.bumpIndex !== tx.bumpIndex ||
+        state.isTxidOnly !== tx.isTxidOnly ||
+        state.inputTxids.length !== tx.inputTxids.length
+      ) return false
+      for (let inputIndex = 0; inputIndex < tx.inputTxids.length; inputIndex++) {
+        if (state.inputTxids[inputIndex] !== tx.inputTxids[inputIndex]) return false
+      }
+    }
+    return true
+  }
+
+  private cloneSortResult(result: BeefSortResult): BeefSortResult {
+    return {
+      missingInputs: [...result.missingInputs],
+      notValid: [...result.notValid],
+      valid: [...result.valid],
+      withMissingInputs: [...result.withMissingInputs],
+      txidOnly: [...result.txidOnly]
     }
   }
 
@@ -1364,6 +1437,8 @@ export class Beef {
     c.bumpIndexByKey = undefined
     c.bumpIndexByTxid = undefined
     c.needsSort = this.needsSort
+    c.sortResultCache = this.sortResultCache == null ? undefined : this.cloneSortResult(this.sortResultCache)
+    if (c.sortResultCache != null) c.captureSortTxState()
     c.hexCache = this.hexCache
     c.rawBytesCache = this.rawBytesCache
     if (c.rawBytesCache != null) c.captureSerializationState()

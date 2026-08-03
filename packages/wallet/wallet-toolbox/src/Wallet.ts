@@ -961,7 +961,23 @@ export class Wallet implements WalletInterface, ProtoWallet {
       args.options ??= {}
       args.options.trustSelf ||= this.trustSelf
       if (this.autoKnownTxids && args.options.knownTxids == null) {
-        args.options.knownTxids = this.getKnownTxids(args.options.knownTxids)
+        if (this.telemetry.enabled) {
+          args.options.knownTxids = this.telemetry.withSpan(
+            'wallet.create_action.prepare_known_txids',
+            {
+              component: 'wallet-toolbox',
+              carrier: args,
+              attributes: { 'beef.tx_count': this.beef.txs.length }
+            },
+            span => {
+              const knownTxids = this.getKnownTxids(args.options?.knownTxids)
+              span.end({ attributes: { 'beef.known_txid_count': knownTxids.length } })
+              return knownTxids
+            }
+          )
+        } else {
+          args.options.knownTxids = this.getKnownTxids(args.options.knownTxids)
+        }
       }
 
       const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateCreateActionArgs, logger)

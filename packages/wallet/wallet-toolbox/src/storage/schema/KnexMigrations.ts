@@ -8,6 +8,7 @@ import { WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
 
 export const AUTH_SESSION_MIGRATION = '2026-07-14-001 add shared auth sessions'
 export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor created index'
+export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -107,6 +108,25 @@ export class KnexMigrations implements MigrationSource<string> {
       async down (knex) {
         await knex.schema.alterTable('monitor_events', table => {
           table.dropIndex('created_at', 'idx_monitor_events_created_at')
+        })
+      }
+    }
+
+    migrations[CREATE_ACTION_FUNDING_INDEX_MIGRATION] = {
+      async up (knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.index(
+            ['userId', 'basketId', 'spendable', 'spentBy', 'satoshis', 'outputId'],
+            'idx_outputs_funding_selection'
+          )
+        })
+      },
+      async down (knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.dropIndex(
+            ['userId', 'basketId', 'spendable', 'spentBy', 'satoshis', 'outputId'],
+            'idx_outputs_funding_selection'
+          )
         })
       }
     }

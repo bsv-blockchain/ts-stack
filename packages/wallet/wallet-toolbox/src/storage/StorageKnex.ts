@@ -1408,9 +1408,48 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereNot('o.derivationPrefix', '')
       .whereNotNull('o.derivationSuffix')
       .whereNot('o.derivationSuffix', '')
+      .whereNotExists(function () {
+        void this.select(1)
+          .from('action_batch_outputs as abo')
+          .whereRaw('abo.outputId = o.outputId')
+      })
       .whereIn('t.status', status)
     const count = await this.getCount(q)
     return count
+  }
+
+  override async findAvailableManagedChangeInputs (
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<TableOutput[]> {
+    const statuses: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) statuses.push('sending')
+    const rows = await this.toDb(trx)<TableOutput>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({
+        'o.userId': userId,
+        'o.basketId': basketId,
+        'o.spendable': true,
+        'o.type': managedChangeOutputFields.type,
+        'o.change': managedChangeOutputFields.change,
+        'o.providedBy': managedChangeOutputFields.providedBy,
+        'o.purpose': managedChangeOutputFields.purpose
+      })
+      .whereNull('o.spentBy')
+      .whereNotNull('o.derivationPrefix')
+      .whereNot('o.derivationPrefix', '')
+      .whereNotNull('o.derivationSuffix')
+      .whereNot('o.derivationSuffix', '')
+      .whereNotExists(function () {
+        void this.select(1)
+          .from('action_batch_outputs as abo')
+          .whereRaw('abo.outputId = o.outputId')
+      })
+      .whereIn('t.status', statuses)
+      .select(outputColumnsWithoutLockingScript.map(column => `o.${column}`))
+    return this.validateEntities(rows, undefined, ['spendable', 'change'])
   }
 
   override async findOutputsByIds (outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
@@ -1455,7 +1494,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async findOutputsByOutpointsForUpdate (
     userId: number,
     outpoints: Array<{ txid: string, vout: number }>,
-    trx: TrxToken
+    trx: TrxToken,
+    noScript = false
   ): Promise<Record<string, TableOutput>> {
     const byOutpoint: Record<string, TableOutput> = {}
     if (outpoints.length < 1) return byOutpoint
@@ -1468,10 +1508,25 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .forUpdate()
     const filteredRows = rows.filter(r => outpointSet.has(`${String(r.txid)}.${String(r.vout)}`))
     for (const row of this.validateEntities(filteredRows, undefined, ['spendable', 'change'])) {
-      await this.validateOutputScript(row, trx)
+      if (!noScript) await this.validateOutputScript(row, trx)
       byOutpoint[`${String(row.txid)}.${String(row.vout)}`] = row
     }
     return byOutpoint
+  }
+
+  override async findTransactionStatusesByIds (
+    userId: number,
+    transactionIds: number[],
+    trx?: TrxToken
+  ): Promise<Map<number, TransactionStatus>> {
+    const statuses = new Map<number, TransactionStatus>()
+    if (transactionIds.length === 0) return statuses
+    const rows = await this.toDb(trx)<Pick<TableTransaction, 'transactionId' | 'status'>>('transactions')
+      .where('userId', userId)
+      .whereIn('transactionId', [...new Set(transactionIds)])
+      .select('transactionId', 'status')
+    for (const row of rows) statuses.set(row.transactionId, row.status)
+    return statuses
   }
 
   override async findOrInsertOutputBasketsBulk (
@@ -1641,6 +1696,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     })
 
     return r
+  }
+
+  override async markChangeInputsSpent (outputIds: number[], transactionId: number, trx: TrxToken): Promise<number> {
+    if (outputIds.length === 0) return 0
+    return await this.toDb(trx)<TableOutput>('outputs')
+      .whereIn('outputId', outputIds)
+      .where('spendable', true)
+      .whereNull('spentBy')
+      .update({ spendable: false, spentBy: transactionId })
   }
 
   /** Convert null→undefined and Buffer→number[] on a retrieved entity in-place. */

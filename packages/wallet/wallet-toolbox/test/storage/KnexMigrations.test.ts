@@ -1,6 +1,7 @@
 import { _tu } from '../utils/TestUtilsWalletStorage'
 import {
   AUTH_SESSION_MIGRATION,
+  CREATE_ACTION_FUNDING_INDEX_MIGRATION,
   KnexMigrations,
   MONITOR_CREATED_AT_INDEX_MIGRATION,
   StorageKnex,
@@ -165,6 +166,42 @@ describe('KnexMigrations tests', () => {
       await monitorMigration.down?.(knex)
       await authMigration.down?.(knex)
       await expect(knex.schema.hasTable('auth_sessions')).resolves.toBe(false)
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('5 creates and uses the createAction funding selection index', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratefundingindex.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+
+    try {
+      await knex.schema.createTable('outputs', table => {
+        table.increments('outputId')
+        table.integer('userId').notNullable()
+        table.integer('basketId').notNullable()
+        table.boolean('spendable').notNullable()
+        table.integer('spentBy').nullable()
+        table.bigInteger('satoshis').notNullable()
+      })
+      const source = new KnexMigrations('test', 'funding index test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration(CREATE_ACTION_FUNDING_INDEX_MIGRATION)
+      await migration.up(knex)
+
+      await expect(knex('sqlite_master')
+        .where({ type: 'index', name: 'idx_outputs_funding_selection' })
+        .first()).resolves.toBeDefined()
+      const plan = await knex.raw(
+        'EXPLAIN QUERY PLAN SELECT outputId FROM outputs ' +
+        'WHERE userId = ? AND basketId = ? AND spendable = ? AND spentBy IS NULL',
+        [1, 1, true]
+      ) as Array<{ detail: string }>
+      expect(plan.some(step => step.detail.includes('idx_outputs_funding_selection'))).toBe(true)
+
+      await migration.down?.(knex)
+      await expect(knex('sqlite_master')
+        .where({ type: 'index', name: 'idx_outputs_funding_selection' })
+        .first()).resolves.toBeUndefined()
     } finally {
       await knex.destroy()
     }

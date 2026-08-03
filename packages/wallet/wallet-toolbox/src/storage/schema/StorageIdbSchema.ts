@@ -77,6 +77,8 @@ export interface StorageIdbSchema {
     value: TableOutput
     indexes: {
       userId: number
+      userId_basketId: [number, number]
+      txid_vout_userId: [string, number, number]
       transactionId: number
       basketId: number
       spentBy: string

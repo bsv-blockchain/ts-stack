@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-31",
+  "lastReviewed": "2026-08-02",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -147,8 +147,8 @@
       "name": "@bsv/sdk",
       "publishedVersion": "2.2.0",
       "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, behavior-preserving maintainability remediation across cryptographic, transaction, remittance, lookup, script-interpreter, broadcaster, and wallet-wire paths, and hardens BRC-103 message, handshake, response, async listener, timeout, and pending-request boundaries.",
-      "migration": "The 2.x wire encodings and supported imports are unchanged. Peer listeners may continue returning void and may now return Promise<void>; rejected or malformed authenticated HTTP responses reject and clean up the owning request, and pending authenticated responses now time out after 30 seconds."
+      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, and caches unchanged BEEF dependency-sort results so repeated wallet known-txid preparation avoids a full topological sort.",
+      "migration": "No consumer migration is required. BEEF ordering, validation results, serialized bytes, SDK 2.x wire encodings, BRC-103/104 behavior, and supported imports are unchanged."
     },
     {
       "name": "@bsv/simple",
@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Adds atomic action-batch transport, storage and proof resilience, security hardening, compatible runtime dependency maintenance, strict package contracts, broad maintainability remediation, safe telemetry, and restores remote-storage compatibility by retaining trace correlation locally instead of adding unsupported AuthFetch headers.",
-      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, persisted schemas, provider behavior, and the 2.x wallet and storage interfaces remain unchanged."
+      "summary": "Adds fee-aware read-only legacy createAction planning, one-transaction funding claims, exact reservation filtering, Knex and IndexedDB funding indexes, faster known-txid and proof handling, and privacy-safe timings for every material funding and BEEF phase.",
+      "migration": "No consumer migration is required. SQLite/MySQL and IndexedDB indexes are added by the existing migration paths; wallet data and results, BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, provider calls, and wallet wire behavior are unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox browser candidate with safe local trace correlation and no unsupported authenticated request headers.",
-      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, browser entry points, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep browser build with read-only funding planning, atomic claims, IndexedDB funding indexes, BEEF-history caching, and expanded privacy-safe createAction timings.",
+      "migration": "No consumer migration is required; IndexedDB upgrades automatically, and BRC-103/104, AuthFetch, browser entry points, JSON-RPC, and remote storage contracts remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.4.4",
       "releaseType": "patch",
-      "summary": "Carries the lockstep Wallet Toolbox mobile candidate with safe local trace correlation and no unsupported authenticated request headers.",
-      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, React Native, mobile bridge, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep mobile build with read-only funding planning, atomic claims, faster BEEF-history handling, and expanded privacy-safe createAction timings.",
+      "migration": "No consumer migration is required; BRC-103/104, AuthFetch, React Native, the mobile bridge, JSON-RPC, and remote storage contracts remain unchanged."
     },
     {
       "name": "create-bsv-app",

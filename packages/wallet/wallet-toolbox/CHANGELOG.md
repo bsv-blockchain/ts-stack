@@ -6,6 +6,15 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Plan legacy `createAction` funding against the exact unreserved managed-change
+  set before persistence, claim the selected inputs atomically in one storage
+  transaction, and fail economically impossible fragmented wallets before
+  inserting a transaction row. Add targeted Knex and IndexedDB indexes and
+  remove IndexedDB's per-output transaction-status lookup.
+- Avoid building full known-txid indexes on the common single-proof path and
+  report privacy-safe createAction candidate, funding, proof-fetch, BEEF merge,
+  trim, serialization, and known-history timings. BRC-103/104, AuthFetch, Auth
+  Express Middleware, AuthSocket, JSON-RPC, and wallet wire behavior are unchanged.
 - Keep remote-storage trace correlation inside the telemetry sink instead of
   adding unsupported headers to AuthFetch requests. BRC-103/104, AuthFetch,
   Auth Express Middleware, AuthSocket, JSON-RPC, and storage wire behavior are
