@@ -621,7 +621,7 @@ describe('UoraDppLookupService, at its edges', () => {
         satoshis: 1,
         lockingScript: p2pkhOutput()
       } as OutputAdmittedByTopic)
-      expect(errors.length).toBe(1)
+      expect(errors).toHaveLength(1)
     } finally {
       console.error = original
     }
