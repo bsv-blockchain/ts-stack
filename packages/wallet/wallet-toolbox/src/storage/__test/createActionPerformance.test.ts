@@ -1,6 +1,7 @@
 import { TelemetryEvent, Validation } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup } from '../../../test/utils/TestUtilsWalletStorage'
 import { StorageKnex } from '../StorageKnex'
+import { StorageProvider } from '../StorageProvider'
 import { TableOutput, TableOutputBasket, TableTransaction } from '../schema/tables'
 import { managedChangeOutputFields } from '../methods/managedChange'
 
@@ -136,6 +137,52 @@ describe('createAction funding performance', () => {
     const serialized = JSON.stringify(events)
     expect(serialized).not.toContain(ctx.identityKey)
     expect(serialized).not.toContain('lockingScript')
+  })
+
+  test('keeps fallback storage-provider batch methods guarded and user-scoped', async () => {
+    await replaceFundingCandidates(2, 1_000)
+    const basket = (await ctx.activeStorage.findOutputBaskets({
+      partial: { userId: ctx.userId, name: 'default' }
+    }))[0] as TableOutputBasket
+    const candidates = await StorageProvider.prototype.findAvailableManagedChangeInputs.call(
+      ctx.activeStorage,
+      ctx.userId,
+      basket.basketId,
+      true
+    )
+    expect(candidates).toHaveLength(2)
+
+    const transactionId = candidates[0].transactionId
+    const statuses = await StorageProvider.prototype.findTransactionStatusesByIds.call(
+      ctx.activeStorage,
+      ctx.userId,
+      [transactionId, transactionId, 999_999]
+    )
+    expect(statuses.get(transactionId)).toBe('completed')
+    await expect(StorageProvider.prototype.findTransactionStatusesByIds.call(
+      ctx.activeStorage,
+      ctx.userId + 1,
+      [transactionId]
+    )).resolves.toEqual(new Map())
+
+    await ctx.activeStorage.updateOutput(candidates[1].outputId, { spendable: false })
+    const updated = await ctx.activeStorage.transaction(async trx =>
+      await StorageProvider.prototype.markChangeInputsSpent.call(
+        ctx.activeStorage,
+        [candidates[0].outputId, candidates[1].outputId, 999_999],
+        transactionId,
+        trx
+      )
+    )
+    expect(updated).toBe(1)
+    await expect(ctx.activeStorage.transaction(async trx =>
+      await StorageProvider.prototype.markChangeInputsSpent.call(
+        ctx.activeStorage,
+        [candidates[0].outputId],
+        transactionId,
+        trx
+      )
+    )).resolves.toBe(0)
   })
 
   function actionArgs (satoshis: number, returnTXIDOnly = true): Validation.ValidCreateActionArgs {

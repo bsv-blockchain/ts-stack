@@ -101,6 +101,42 @@ describe('StorageIdb tests', () => {
     }
   })
 
+  test('batches user-scoped transaction statuses and indexed outpoint reads', async () => {
+    const storage = await makeStorage()
+    try {
+      const userId = await insertUser(storage)
+      const otherUserId = await insertUser(storage, '03'.repeat(33))
+      const basketId = await insertBasket(storage, userId)
+      const txid = '14'.repeat(32)
+      const transactionId = await insertTransaction(storage, userId, { status: 'completed', txid })
+      const otherTransactionId = await insertTransaction(storage, otherUserId, {
+        status: 'unproven', txid: '15'.repeat(32)
+      })
+      const outputId = await insertOutput(storage, userId, transactionId, basketId, { txid, satoshis: 400 })
+
+      await expect(storage.findTransactionStatusesByIds(userId, [])).resolves.toEqual(new Map())
+      const statuses = await storage.findTransactionStatusesByIds(
+        userId,
+        [transactionId, transactionId, otherTransactionId, 999_999]
+      )
+      expect([...statuses.entries()]).toEqual([[transactionId, 'completed']])
+      await expect(storage.findOutputsByOutpoints(userId, [])).resolves.toEqual({})
+
+      const outpoint = { txid, vout: 0 }
+      const found = await storage.findOutputsByOutpoints(userId, [outpoint, outpoint, { txid: 'ff'.repeat(32), vout: 1 }])
+      expect(found[`${txid}.0`]?.outputId).toBe(outputId)
+
+      await storage.transaction(async trx => {
+        const inTransactionStatuses = await storage.findTransactionStatusesByIds(userId, [transactionId], trx)
+        expect(inTransactionStatuses.get(transactionId)).toBe('completed')
+        const locked = await storage.findOutputsByOutpointsForUpdate(userId, [outpoint], trx, true)
+        expect(locked[`${txid}.0`]?.outputId).toBe(outputId)
+      })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
   test('reviewStatus releases outputs reserved by failed transactions', async () => {
     const storage = await makeStorage()
     try {

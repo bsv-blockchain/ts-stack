@@ -77,13 +77,22 @@ test('patch coverage fails closed when a changed production file is absent from 
   })
 })
 
-test('patch coverage ignores build and test configuration, which is never instrumented', () => {
+test('patch coverage ignores non-instrumented configuration, benchmarks, and type-only schemas', () => {
   const changed =
     changedLinesFromDiff(`diff --git a/packages/helpers/example/jest.config.cjs b/packages/helpers/example/jest.config.cjs
 +++ b/packages/helpers/example/jest.config.cjs
 @@ -0,0 +1,24 @@
 diff --git a/packages/helpers/example/vitest.config.ts b/packages/helpers/example/vitest.config.ts
 +++ b/packages/helpers/example/vitest.config.ts
+@@ -0,0 +1,12 @@
+diff --git a/packages/sdk/benchmarks/example.js b/packages/sdk/benchmarks/example.js
++++ b/packages/sdk/benchmarks/example.js
+@@ -0,0 +1,12 @@
+diff --git a/packages/sdk/scripts/run-benchmarks.js b/packages/sdk/scripts/run-benchmarks.js
++++ b/packages/sdk/scripts/run-benchmarks.js
+@@ -0,0 +1,12 @@
+diff --git a/packages/wallet/wallet-toolbox/src/storage/schema/StorageIdbSchema.ts b/packages/wallet/wallet-toolbox/src/storage/schema/StorageIdbSchema.ts
++++ b/packages/wallet/wallet-toolbox/src/storage/schema/StorageIdbSchema.ts
 @@ -0,0 +1,12 @@
 diff --git a/packages/helpers/example/src/index.ts b/packages/helpers/example/src/index.ts
 +++ b/packages/helpers/example/src/index.ts

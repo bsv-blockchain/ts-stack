@@ -11,11 +11,16 @@ export const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const EXCLUDED_SOURCE_PATTERNS = [
   /(?:^|\/)__tests__(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
+  /(?:^|\/)benchmarks?(?:\/|$)/,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,
   // Build and test configuration is never instrumented, so requiring it in
   // LCOV is unsatisfiable: a package that adds or edits jest.config.cjs,
   // vitest.config.ts or similar could never clear this gate.
-  /(?:^|\/)[^/]*\.config\.[cm]?[jt]s$/
+  /(?:^|\/)[^/]*\.config\.[cm]?[jt]s$/,
+  // Benchmark orchestration and type-only IndexedDB schema declarations have
+  // no executable statements for Jest/Istanbul to instrument.
+  /packages\/sdk\/scripts\/run-benchmarks\.js$/,
+  /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/
 ]
 
 function normalizedPath(value) {
