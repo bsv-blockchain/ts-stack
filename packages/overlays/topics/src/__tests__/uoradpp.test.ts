@@ -165,9 +165,7 @@ describe('UoraDppTopicManager', () => {
   it('reproduces the locking key from the service key the output names', async () => {
     const { anchor, lockingPublicKey } = readUoraAnchor(await anchorScript())
     expect(anchor.anchoredBy).toBe(SERVICE_KEY)
-    expect(lockingPublicKey.toString()).toBe(
-      expectedLockingKey(SERVICE_KEY, `${CELL}/state-1`)
-    )
+    expect(lockingPublicKey.toString()).toBe(expectedLockingKey(SERVICE_KEY, `${CELL}/state-1`))
   })
 
   it('refuses an anchor naming a service its locking key cannot come from', async () => {
@@ -275,7 +273,7 @@ describe('UoraDppTopicManager', () => {
       'anyone',
       true
     )
-    expect(fields.length).toBe(before + 1)
+    expect(fields).toHaveLength(before + 1)
   })
 
   it('describes itself', async () => {
@@ -352,12 +350,12 @@ describe('UoraDppLookupService', () => {
 
   it('finds one attestation, and answers a digest held in hand', async () => {
     expect(await ask({ attestationId: 'att-2' })).toEqual(['b'.repeat(64)])
-    expect((await ask({ digest: 'a'.repeat(64) })).length).toBe(3)
+    expect(await ask({ digest: 'a'.repeat(64) })).toHaveLength(3)
   })
 
   it('narrows by type and by anchoring service, and refuses to select on either', async () => {
     expect(await ask({ subject: CELL, uoraType: 'Disposition' })).toEqual(['c'.repeat(64)])
-    expect((await ask({ issuer: MAKER, anchoredBy: SERVICE_KEY })).length).toBe(2)
+    expect(await ask({ issuer: MAKER, anchoredBy: SERVICE_KEY })).toHaveLength(2)
     await expect(
       service.lookup({ service: 'ls_uora_dpp', query: { uoraType: 'Origin' } } as LookupQuestion)
     ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
@@ -373,8 +371,8 @@ describe('UoraDppLookupService', () => {
   })
 
   it('pages, and caps what a caller can ask for', async () => {
-    expect((await ask({ issuer: MAKER, limit: 1 })).length).toBe(1)
-    expect((await ask({ issuer: MAKER, skip: 1 })).length).toBe(1)
+    expect(await ask({ issuer: MAKER, limit: 1 })).toHaveLength(1)
+    expect(await ask({ issuer: MAKER, skip: 1 })).toHaveLength(1)
     await expect(
       service.lookup({
         service: 'ls_uora_dpp',
@@ -406,7 +404,7 @@ describe('UoraDppLookupService', () => {
       outputIndex: 0,
       spendingTxid: 'd'.repeat(64)
     })
-    expect((await ask({ issuer: MAKER })).length).toBe(2)
+    expect(await ask({ issuer: MAKER })).toHaveLength(2)
 
     await service.outputEvicted('a'.repeat(64), 0)
     expect(await ask({ issuer: MAKER })).toEqual(['b'.repeat(64)])
@@ -414,7 +412,7 @@ describe('UoraDppLookupService', () => {
 
   it('stores one record per outpoint however often it arrives', async () => {
     await admit(claim({ attestationId: 'att-1', issuer: MAKER, subject: CELL }), 'a'.repeat(64))
-    expect((await ask({ issuer: MAKER })).length).toBe(2)
+    expect(await ask({ issuer: MAKER })).toHaveLength(2)
   })
 
   it('describes itself', async () => {

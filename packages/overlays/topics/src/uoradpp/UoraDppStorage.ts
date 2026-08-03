@@ -24,19 +24,17 @@ export class UoraDppStorage {
   }
 
   private async ensureIndexes(): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
-        await this.records.createIndex({ issuer: 1, createdAt: 1 }, { name: 'issuerIndex' })
-        await this.records.createIndex({ subject: 1, createdAt: 1 }, { name: 'subjectIndex' })
-        await this.records.createIndex({ attestationId: 1 }, { name: 'attestationIdIndex' })
-        await this.records.createIndex({ digest: 1 }, { name: 'digestIndex' })
-        await this.records.createIndex({ anchoredBy: 1, createdAt: 1 }, { name: 'anchoredByIndex' })
-        await this.records.createIndex(
-          { txid: 1, outputIndex: 1 },
-          { name: 'outpointIndex', unique: true }
-        )
-      })()
-    }
+    this.indexInit ??= (async () => {
+      await this.records.createIndex({ issuer: 1, createdAt: 1 }, { name: 'issuerIndex' })
+      await this.records.createIndex({ subject: 1, createdAt: 1 }, { name: 'subjectIndex' })
+      await this.records.createIndex({ attestationId: 1 }, { name: 'attestationIdIndex' })
+      await this.records.createIndex({ digest: 1 }, { name: 'digestIndex' })
+      await this.records.createIndex({ anchoredBy: 1, createdAt: 1 }, { name: 'anchoredByIndex' })
+      await this.records.createIndex(
+        { txid: 1, outputIndex: 1 },
+        { name: 'outpointIndex', unique: true }
+      )
+    })()
     return await this.indexInit
   }
 

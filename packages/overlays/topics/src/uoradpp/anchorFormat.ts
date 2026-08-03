@@ -151,7 +151,7 @@ export function readUoraAnchor(lockingScript: LockingScript): {
   }
 
   const parts = fields.slice(0, UORA_ANCHOR_FIELD_COUNT).map(field => text(field))
-  if (parts.some(part => part === undefined)) throw new Error('a field is empty or not UTF-8')
+  if (parts.includes(undefined)) throw new Error('a field is empty or not UTF-8')
   const [prefix, digest, attestationId, issuer, subject, uoraType, anchoredBy] = parts as string[]
 
   if (prefix !== UORA_ANCHOR_PREFIX) throw new Error(`not an anchor output (prefix "${prefix}")`)
