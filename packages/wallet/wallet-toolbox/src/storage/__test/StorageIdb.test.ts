@@ -4,7 +4,14 @@ import { Setup } from '../../Setup'
 import { SetupClient } from '../../SetupClient'
 import { StorageIdb } from '../StorageIdb'
 import { StorageProvider, StorageProviderOptions } from '../StorageProvider'
-import { TableOutput, TableOutputBasket, TableTransaction, TableUser } from '../schema/tables'
+import {
+  TableOutput,
+  TableOutputBasket,
+  TableProvenTx,
+  TableProvenTxReq,
+  TableTransaction,
+  TableUser
+} from '../schema/tables'
 import { TableActionBatch } from '../schema/tables/TableActionBatch'
 import { StorageIdbSchema } from '../schema/StorageIdbSchema'
 import { openDB } from 'idb'
@@ -131,6 +138,69 @@ describe('StorageIdb tests', () => {
         expect(inTransactionStatuses.get(transactionId)).toBe('completed')
         const locked = await storage.findOutputsByOutpointsForUpdate(userId, [outpoint], trx, true)
         expect(locked[`${txid}.0`]?.outputId).toBe(outputId)
+      })
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('batch-loads proven, usable raw, and missing transaction records', async () => {
+    const storage = await makeStorage()
+    try {
+      const now = new Date()
+      const provenTxid = '16'.repeat(32)
+      const rawTxid = '17'.repeat(32)
+      const rawWithoutBeefTxid = '18'.repeat(32)
+      const unusableTxid = '19'.repeat(32)
+      const proven: TableProvenTx = {
+        provenTxId: 0,
+        txid: provenTxid,
+        height: 900_000,
+        index: 0,
+        merklePath: [1, 2, 3],
+        rawTx: [4, 5, 6],
+        blockHash: '20'.repeat(32),
+        merkleRoot: '21'.repeat(32),
+        created_at: now,
+        updated_at: now
+      }
+      const request = (txid: string, status: TableProvenTxReq['status'], inputBEEF?: number[]): TableProvenTxReq => ({
+        provenTxReqId: 0,
+        txid,
+        status,
+        attempts: 0,
+        notified: false,
+        history: '{}',
+        notify: '{}',
+        rawTx: [7, 8, 9],
+        inputBEEF,
+        created_at: now,
+        updated_at: now
+      })
+      await storage.insertProvenTx(proven)
+      await storage.insertProvenTxReq(request(rawTxid, 'nosend', [10, 11]))
+      await storage.insertProvenTxReq(request(rawWithoutBeefTxid, 'unmined'))
+      await storage.insertProvenTxReq(request(unusableTxid, 'invalid', [12]))
+
+      await expect(storage.getProvenOrRawTxs([])).resolves.toEqual(new Map())
+      const result = await storage.getProvenOrRawTxs([
+        provenTxid,
+        rawTxid,
+        rawWithoutBeefTxid,
+        unusableTxid,
+        'ff'.repeat(32),
+        provenTxid
+      ])
+
+      expect(result.get(provenTxid)?.proven?.txid).toBe(provenTxid)
+      expect(result.get(rawTxid)).toEqual({ proven: undefined, rawTx: [7, 8, 9], inputBEEF: [10, 11] })
+      expect(result.get(rawWithoutBeefTxid)).toEqual({ proven: undefined, rawTx: [7, 8, 9], inputBEEF: undefined })
+      expect(result.get(unusableTxid)).toEqual({ proven: undefined, rawTx: undefined, inputBEEF: undefined })
+      expect(result.get('ff'.repeat(32))).toEqual({ proven: undefined, rawTx: undefined, inputBEEF: undefined })
+
+      await storage.transaction(async trx => {
+        const inTransaction = await storage.getProvenOrRawTxs([provenTxid], trx)
+        expect(inTransaction.get(provenTxid)?.proven?.txid).toBe(provenTxid)
       })
     } finally {
       await resetStorage(storage)

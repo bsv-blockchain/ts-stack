@@ -26,6 +26,59 @@ export function selectCanonicalChange<T extends CanonicalFundingCandidate> (
     .sort((a, b) => b.satoshis - a.satoshis || b.outputId - a.outputId)[0]
 }
 
+/**
+ * Stateful form of the canonical selector for allocating many inputs from one
+ * candidate set. It preserves exact / least-over / largest-under ordering but
+ * sorts once instead of filtering and sorting the full set per input.
+ */
+export class CanonicalChangeSelector<T extends CanonicalFundingCandidate> {
+  private readonly sorted: T[]
+  private readonly allocated = new Set<number>()
+
+  constructor (outputs: readonly T[]) {
+    this.sorted = [...outputs].sort((a, b) => a.satoshis - b.satoshis || a.outputId - b.outputId)
+  }
+
+  take (targetSatoshis: number, exactSatoshis?: number): T | undefined {
+    if (exactSatoshis !== undefined) {
+      for (let index = this.lowerBound(exactSatoshis); index < this.sorted.length; index++) {
+        const output = this.sorted[index]
+        if (output.satoshis !== exactSatoshis) break
+        if (!this.allocated.has(output.outputId)) return this.allocate(output)
+      }
+    }
+    for (let index = this.lowerBound(targetSatoshis); index < this.sorted.length; index++) {
+      const output = this.sorted[index]
+      if (!this.allocated.has(output.outputId)) return this.allocate(output)
+    }
+    for (let index = this.lowerBound(targetSatoshis) - 1; index >= 0; index--) {
+      const output = this.sorted[index]
+      if (!this.allocated.has(output.outputId)) return this.allocate(output)
+    }
+    return undefined
+  }
+
+  release (outputId: number): void {
+    this.allocated.delete(outputId)
+  }
+
+  private allocate (output: T): T {
+    this.allocated.add(output.outputId)
+    return output
+  }
+
+  private lowerBound (satoshis: number): number {
+    let low = 0
+    let high = this.sorted.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (this.sorted[middle].satoshis < satoshis) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+}
+
 export function repeatableRandom (randomVals?: number[]): () => number {
   const values = [...(randomVals ?? [])]
   return () => {

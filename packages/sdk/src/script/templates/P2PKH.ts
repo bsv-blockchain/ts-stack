@@ -10,7 +10,6 @@ import { sha256 } from '../../primitives/Hash.js'
 import Script from '../Script.js'
 import { computeSignatureScope, resolveSourceDetails, formatPreimage } from './SignatureUtils.js'
 import Signature from '../../primitives/Signature.js'
-import PublicKey from '../../primitives/PublicKey.js'
 import {
   readyAsyncCryptoBackend,
   validateAsyncCryptoBytes
@@ -95,12 +94,16 @@ export default class P2PKH implements ScriptTemplate {
 
         const preimageHash = sha256(preimage)
         const signingBackend = readyAsyncCryptoBackend('signDigest')
+        const publicKeyBackend = readyAsyncCryptoBackend('publicKeyFromPrivate')
+        const privateKeyBytes = signingBackend === undefined && publicKeyBackend === undefined
+          ? undefined
+          : Uint8Array.from(privateKey.toArray('be', 32))
         const rawSignature = signingBackend === undefined
           ? privateKey.sign(preimageHash)
           : Signature.fromDER(Array.from(validateAsyncCryptoBytes(
             'signDigest',
             await signingBackend.signDigest(
-              Uint8Array.from(privateKey.toArray('be', 32)),
+              privateKeyBytes!,
               // PrivateKey.sign hashes its argument before ECDSA signing.
               // Preserve that historical double-SHA256 contract when passing a
               // digest to a backend that signs the supplied bytes directly.
@@ -113,16 +116,9 @@ export default class P2PKH implements ScriptTemplate {
           signatureScope
         )
         const sigForScript = sig.toChecksigFormat()
-        const publicKeyBackend = readyAsyncCryptoBackend('publicKeyFromPrivate')
         const pubkeyForScript = publicKeyBackend === undefined
           ? privateKey.toPublicKey().encode(true) as number[]
-          : PublicKey.fromDER(Array.from(validateAsyncCryptoBytes(
-            'publicKeyFromPrivate',
-            await publicKeyBackend.publicKeyFromPrivate(
-              Uint8Array.from(privateKey.toArray('be', 32))
-            ),
-            33
-          ))).encode(true) as number[]
+          : Array.from(validateCompressedPublicKey(await publicKeyBackend.publicKeyFromPrivate(privateKeyBytes!)))
         return new UnlockingScript([
           { op: sigForScript.length, data: sigForScript },
           { op: pubkeyForScript.length, data: pubkeyForScript }
@@ -135,4 +131,12 @@ export default class P2PKH implements ScriptTemplate {
       }
     }
   }
+}
+
+function validateCompressedPublicKey (value: Uint8Array): Uint8Array {
+  const bytes = validateAsyncCryptoBytes('publicKeyFromPrivate', value, 33)
+  if (bytes[0] !== 0x02 && bytes[0] !== 0x03) {
+    throw new Error('publicKeyFromPrivate returned an invalid compressed public key')
+  }
+  return bytes
 }

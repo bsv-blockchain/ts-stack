@@ -4,7 +4,8 @@ import {
   Transaction as BsvTransaction,
   SendWithResult,
   SendWithResultStatus,
-  WalletLoggerInterface
+  WalletLoggerInterface,
+  TelemetrySpan
 } from '@bsv/sdk'
 import { aggregateActionResults } from '../../utility/aggregateResults'
 import { StorageProvider } from '../StorageProvider'
@@ -31,7 +32,6 @@ import { ProvenTxReqStatus, TransactionStatus } from '../../sdk/types'
 import { parseTxScriptOffsets, TxScriptOffsets } from '../../utility/parseTxScriptOffsets'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { TableOutput } from '../schema/tables/TableOutput'
-import { TableCommission } from '../schema/tables/TableCommission'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 import { WalletError } from '../../sdk/WalletError'
 import { classifyReqStatus } from '../storageProviderHelpers'
@@ -40,6 +40,33 @@ export async function processAction(
   storage: StorageProvider,
   auth: AuthId,
   args: StorageProcessActionArgs
+): Promise<StorageProcessActionResults> {
+  if (!storage.telemetry.enabled) return await processActionCore(storage, auth, args)
+  return await storage.telemetry.withSpan(
+    'wallet.storage.process_action',
+    {
+      component: 'wallet-storage',
+      carrier: args,
+      attributes: {
+        'action.is_new_transaction': args.isNewTx,
+        'action.is_no_send': args.isNoSend,
+        'action.is_delayed': args.isDelayed,
+        'action.send_with_count': args.sendWith.length
+      }
+    },
+    async span => {
+      const result = await processActionCore(storage, auth, args, span)
+      span.end({ attributes: { 'action.send_result_count': result.sendWithResults?.length ?? 0 } })
+      return result
+    }
+  )
+}
+
+async function processActionCore(
+  storage: StorageProvider,
+  auth: AuthId,
+  args: StorageProcessActionArgs,
+  parent?: TelemetrySpan
 ): Promise<StorageProcessActionResults> {
   const logger = args.logger
   logger?.group('storage processAction')
@@ -53,9 +80,19 @@ export async function processAction(
   const txidsOfReqsToShareWithWorld: string[] = [...args.sendWith]
 
   if (args.isNewTx) {
-    const vargs = await validateCommitNewTxToStorageArgs(storage, userId, args)
+    const vargs = await traceProcessStep(
+      storage,
+      'wallet.storage.process_action.validate',
+      parent,
+      async () => await validateCommitNewTxToStorageArgs(storage, userId, args)
+    )
     logger?.log('validated new tx updates to storage')
-    ;({ req } = await commitNewTxToStorage(storage, userId, vargs))
+    ;({ req } = await traceProcessStep(
+      storage,
+      'wallet.storage.process_action.commit',
+      parent,
+      async () => await commitNewTxToStorage(storage, userId, vargs)
+    ))
     logger?.log('committed new tx updates to storage ')
     if (!req) throw new WERR_INTERNAL()
     // Add the new txid to sendWith unless there are no others to send and the noSend option is set.
@@ -67,13 +104,18 @@ export async function processAction(
     }
   }
 
-  const { swr, ndr } = await shareReqsWithWorld(
+  const { swr, ndr } = await traceProcessStep(
     storage,
-    userId,
-    txidsOfReqsToShareWithWorld,
-    args.isDelayed,
-    undefined,
-    logger
+    'wallet.storage.process_action.share',
+    parent,
+    async () => await shareReqsWithWorld(
+      storage,
+      userId,
+      txidsOfReqsToShareWithWorld,
+      args.isDelayed,
+      undefined,
+      logger
+    )
   )
 
   r.sendWithResults = swr
@@ -82,6 +124,20 @@ export async function processAction(
   logger?.groupEnd()
 
   return r
+}
+
+async function traceProcessStep<T>(
+  storage: StorageProvider,
+  name: string,
+  parent: TelemetrySpan | undefined,
+  callback: () => Promise<T>
+): Promise<T> {
+  if (parent == null) return await callback()
+  return await storage.telemetry.withSpan(
+    name,
+    { component: 'wallet-storage', parent: parent.context },
+    callback
+  )
 }
 
 export interface GetReqsAndBeefDetail {
@@ -315,10 +371,7 @@ interface ValidCommitNewTxToStorageArgs {
   txScriptOffsets: TxScriptOffsets
   transactionId: number
   transaction: TableTransaction
-  inputOutputs: TableOutput[]
   outputOutputs: TableOutput[]
-  commission: TableCommission | undefined
-  beef: Beef
 
   req: EntityProvenTxReq
   outputUpdates: Array<{ id: number; update: Partial<TableOutput> }>
@@ -358,21 +411,22 @@ async function validateCommitNewTxToStorageArgs(
   )
   if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
   if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
-  const beef = Beef.fromBinary(asArray(transaction.inputBEEF))
-  // Could check beef validates transaction inputs...
   // Transaction must have unsigned or unprocessed status
   if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed') {
     throw new WERR_INVALID_OPERATION(`invalid transaction status ${transaction.status}`)
   }
   const transactionId = verifyId(transaction.transactionId)
-  const outputOutputs = await storage.findOutputs({
-    partial: { userId, transactionId }
-  })
-  const inputOutputs = await storage.findOutputs({
-    partial: { userId, spentBy: transactionId }
-  })
+  // These reads are independent once the planned transaction is resolved.
+  // Running them together removes two network-database round trips from every
+  // successful remote-storage commit.
+  const [outputOutputs, commissionRows] = await Promise.all([
+    storage.findOutputs({ partial: { userId, transactionId } }),
+    storage.commissionSatoshis > 0
+      ? storage.findCommissions({ partial: { transactionId, userId } })
+      : Promise.resolve([])
+  ])
 
-  const commission = verifyOneOrNone(await storage.findCommissions({ partial: { transactionId, userId } }))
+  const commission = verifyOneOrNone(commissionRows)
   if (storage.commissionSatoshis > 0) {
     // A commission is required...
     if (commission == null) throw new WERR_INTERNAL()
@@ -414,10 +468,7 @@ async function validateCommitNewTxToStorageArgs(
     txScriptOffsets,
     transactionId,
     transaction,
-    inputOutputs,
     outputOutputs,
-    commission,
-    beef,
     req,
     outputUpdates: [],
     // update txid, status in transactions table and drop rawTransaction value

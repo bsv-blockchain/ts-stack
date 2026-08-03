@@ -21,7 +21,7 @@ describe('KnexMigrations tests', () => {
     knexs.push(knexSQLite)
 
     if (env.runMySQL) {
-      const knexMySQL = _tu.createLocalMySQL('migratetest')
+      const knexMySQL = _tu.createLocalMySQL(process.env.MYSQL_MIGRATION_TEST_DATABASE ?? 'migratetest')
       knexs.push(knexMySQL)
     }
   })
@@ -48,13 +48,11 @@ describe('KnexMigrations tests', () => {
       }
       const count = Object.keys(config.migrationSource.migrations).length
       for (let i = 0; i < count; i++) {
-        try {
-          const r = await knex.migrate.down(config)
-          expect(r).toBeTruthy()
-        } catch {
-          break
-        }
+        if (await knex.migrate.currentVersion(config) === 'none') break
+        const r = await knex.migrate.down(config)
+        expect(r).toBeTruthy()
       }
+      expect(await knex.migrate.currentVersion(config)).toBe('none')
     }
     done0 = true
   })
@@ -205,5 +203,94 @@ describe('KnexMigrations tests', () => {
     } finally {
       await knex.destroy()
     }
+  })
+
+  test.each([
+    {
+      migrationName: '2026-02-27-001 add listOutputs path indexes',
+      supportIndex: 'outputs_userid_foreign',
+      addedIndexes: [
+        'idx_tx_labels_map_tx_deleted',
+        'idx_output_tags_map_output_deleted_tag',
+        'idx_outputs_user_basket_spendable_outputid',
+        'idx_outputs_user_spendable_outputid'
+      ]
+    },
+    {
+      migrationName: '2026-02-27-002 add createAction path indexes',
+      supportIndex: 'outputs_spentby_foreign',
+      addedIndexes: [
+        'idx_outputs_spentby',
+        'idx_outputs_user_basket_spendable_satoshis'
+      ]
+    }
+  ])('6 restores the MySQL support index before rolling back $migrationName', async ({
+    migrationName,
+    supportIndex,
+    addedIndexes
+  }) => {
+    const index = jest.fn()
+    const dropIndex = jest.fn()
+    const table = { index, dropIndex }
+    const raw = jest.fn()
+      .mockResolvedValueOnce([[{ database_type: 'MySQL' }]])
+      .mockResolvedValueOnce([[]])
+    const alterTable = jest.fn(async (
+      _tableName: string,
+      callback: (tableBuilder: typeof table) => void
+    ) => { callback(table) })
+    const knex = { raw, schema: { alterTable } } as unknown as Knex
+    const source = new KnexMigrations('test', 'MySQL rollback test', '1'.repeat(64), 1000)
+    const migration = await source.getMigration(migrationName)
+
+    await migration.down?.(knex)
+
+    expect(index).toHaveBeenCalledWith(expect.any(Array), supportIndex)
+    expect(dropIndex.mock.calls.map(call => call[1])).toEqual(addedIndexes)
+  })
+
+  test.each([
+    '2026-02-27-001 add listOutputs path indexes',
+    '2026-02-27-002 add createAction path indexes'
+  ])('7 preserves an existing MySQL foreign-key support index while rolling back %s', async migrationName => {
+    const index = jest.fn()
+    const dropIndex = jest.fn()
+    const table = { index, dropIndex }
+    const raw = jest.fn()
+      .mockResolvedValueOnce([[{ database_type: 'MySQL' }]])
+      .mockResolvedValueOnce([[{ Key_name: 'existing_support_index' }]])
+    const alterTable = jest.fn(async (
+      _tableName: string,
+      callback: (tableBuilder: typeof table) => void
+    ) => { callback(table) })
+    const knex = { raw, schema: { alterTable } } as unknown as Knex
+    const source = new KnexMigrations('test', 'MySQL rollback test', '1'.repeat(64), 1000)
+    const migration = await source.getMigration(migrationName)
+
+    await migration.down?.(knex)
+
+    expect(index).not.toHaveBeenCalled()
+    expect(dropIndex).toHaveBeenCalled()
+  })
+
+  test.each([
+    '2026-02-27-001 add listOutputs path indexes',
+    '2026-02-27-002 add createAction path indexes'
+  ])('8 rolls back %s without MySQL support-index repair on SQLite', async migrationName => {
+    const dropIndex = jest.fn()
+    const raw = jest.fn(async () => await Promise.reject(
+      Object.assign(new Error('SQLite does not implement VERSION()'), { code: 'SQLITE_ERROR' })
+    ))
+    const alterTable = jest.fn(async (
+      _tableName: string,
+      callback: (tableBuilder: { dropIndex: typeof dropIndex }) => void
+    ) => { callback({ dropIndex }) })
+    const knex = { raw, schema: { alterTable } } as unknown as Knex
+    const source = new KnexMigrations('test', 'SQLite rollback test', '1'.repeat(64), 1000)
+    const migration = await source.getMigration(migrationName)
+
+    await migration.down?.(knex)
+
+    expect(dropIndex).toHaveBeenCalled()
   })
 })

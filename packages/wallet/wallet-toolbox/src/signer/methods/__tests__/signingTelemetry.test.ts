@@ -54,4 +54,48 @@ describe('signing telemetry', () => {
     await expect(completeSignedTransaction(prior, {}, wallet)).resolves.toBe(prior.tx)
     expect(sign).toHaveBeenCalledTimes(2)
   })
+
+  it('computes the invariant client change key pair once for every managed input', async () => {
+    const getClientChangeKeyPair = jest.fn(() => ({
+      privateKey: '01'.padStart(64, '0'),
+      publicKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+    }))
+    const derivePrivateKey = jest.fn(() => ({
+      toHex: () => '02'.padStart(64, '0')
+    }))
+    const inputs = [{}, {}, {}]
+    const prior = {
+      args: { inputs: [] },
+      pdi: inputs.map((_, vin) => ({
+        vin,
+        derivationPrefix: 'prefix',
+        derivationSuffix: `suffix-${vin}`,
+        sourceSatoshis: 1000,
+        lockingScript: '76a914000000000000000000000000000000000000000088ac'
+      })),
+      tx: { inputs, sign: jest.fn(async () => undefined) }
+    } as any
+    const events: TelemetryEvent[] = []
+    const wallet = {
+      getClientChangeKeyPair,
+      keyDeriver: {
+        rootKey: { toHex: () => '01'.padStart(64, '0') },
+        derivePrivateKey
+      },
+      telemetry: new Telemetry({ sink: { capture: event => events.push(event) } })
+    } as any
+
+    await expect(completeSignedTransaction(prior, {}, wallet)).resolves.toBe(prior.tx)
+
+    expect(getClientChangeKeyPair).toHaveBeenCalledTimes(1)
+    expect(derivePrivateKey).toHaveBeenCalledTimes(3)
+    expect(inputs.every(input => input.unlockingScriptTemplate != null)).toBe(true)
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'wallet.crypto.prepare_unlocking_templates',
+        spanStatus: 'ok',
+        attributes: { 'crypto.managed_input_count': 3 }
+      })
+    ]))
+  })
 })

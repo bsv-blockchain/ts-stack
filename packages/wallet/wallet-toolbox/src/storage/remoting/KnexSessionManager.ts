@@ -4,10 +4,18 @@ import { TableAuthSession, tableAuthSessionToPeerSession } from '../schema/table
 
 export const AUTH_SESSION_TABLE = 'auth_sessions'
 export const DEFAULT_AUTH_SESSION_TTL_MS = 24 * 60 * 60 * 1000
+export const DEFAULT_AUTH_SESSION_TOUCH_INTERVAL_MS = 60 * 1000
+type NullableBoolean = boolean | number | null | undefined
 
 export interface KnexSessionManagerOptions {
   /** Session lifetime since its most recent authenticated use. Default: 24 hours. */
   ttlMs?: number
+  /**
+   * Maximum time that an authenticated, timestamp-only session update may be
+   * coalesced. Authentication and certificate state changes are always written
+   * immediately. Default: 1 minute (or one quarter of ttlMs when shorter).
+   */
+  touchIntervalMs?: number
   /** Testable clock source. Defaults to `Date.now`. */
   now?: () => number
 }
@@ -22,37 +30,47 @@ export interface KnexSessionManagerOptions {
  */
 export class KnexSessionManager implements AsyncSessionManager {
   private readonly ttlMs: number
+  private readonly touchIntervalMs: number
   private readonly now: () => number
+  /** Rows associated with session objects returned by this manager. */
+  private readonly persistedRows = new WeakMap<PeerSession, TableAuthSession>()
 
   constructor (private readonly knex: Knex, options: KnexSessionManagerOptions = {}) {
     this.ttlMs = options.ttlMs ?? DEFAULT_AUTH_SESSION_TTL_MS
+    this.touchIntervalMs = options.touchIntervalMs ?? Math.min(
+      DEFAULT_AUTH_SESSION_TOUCH_INTERVAL_MS,
+      Math.max(1, Math.floor(this.ttlMs / 4))
+    )
     this.now = options.now ?? Date.now
 
     if (!Number.isSafeInteger(this.ttlMs) || this.ttlMs <= 0) {
       throw new TypeError('KnexSessionManager ttlMs must be a positive safe integer.')
     }
+    if (!Number.isSafeInteger(this.touchIntervalMs) || this.touchIntervalMs < 0) {
+      throw new TypeError('KnexSessionManager touchIntervalMs must be a non-negative safe integer.')
+    }
   }
 
   async addSession (session: PeerSession): Promise<void> {
-    await this.persistSession(session)
+    await this.persistSession(session, false)
   }
 
   async updateSession (session: PeerSession): Promise<void> {
-    await this.persistSession(session)
+    await this.persistSession(session, true)
   }
 
   async getSession (identifier: string): Promise<PeerSession | undefined> {
     const byNonce = await this.activeSessions()
       .where({ sessionNonce: identifier })
       .first()
-    if (byNonce != null) return tableAuthSessionToPeerSession(byNonce)
+    if (byNonce != null) return this.sessionForRow(byNonce)
 
     const byIdentity = await this.activeSessions()
       .where({ peerIdentityKey: identifier })
       .orderBy('lastUpdate', 'desc')
       .orderBy('sessionNonce', 'desc')
       .first()
-    return byIdentity == null ? undefined : tableAuthSessionToPeerSession(byIdentity)
+    return byIdentity == null ? undefined : this.sessionForRow(byIdentity)
   }
 
   async removeSession (session: PeerSession): Promise<void> {
@@ -103,17 +121,16 @@ export class KnexSessionManager implements AsyncSessionManager {
       .where('expiresAt', '>', this.now())
   }
 
-  private async persistSession (session: PeerSession): Promise<void> {
-    if (typeof session.sessionNonce !== 'string' || session.sessionNonce.length === 0) {
-      throw new TypeError('Invalid session: sessionNonce is required to persist a session.')
-    }
-    if (!Number.isSafeInteger(session.lastUpdate) || session.lastUpdate < 0) {
-      throw new TypeError('Invalid session: lastUpdate must be a non-negative safe integer.')
-    }
-
+  private async persistSession (session: PeerSession, coalesceTouch: boolean): Promise<void> {
+    this.validatePersistentSession(session)
     const row = this.toTableAuthSession(session)
+    if (coalesceTouch && this.canCoalesceTouch(session, row)) return
+
     const updated = await this.updateIfCurrentOrNewer(row)
-    if (updated > 0) return
+    if (updated > 0) {
+      this.persistedRows.set(session, row)
+      return
+    }
 
     // A zero-row update can mean either that this write is stale or that the
     // database reports no changed rows for an idempotent update. Avoid an
@@ -125,19 +142,62 @@ export class KnexSessionManager implements AsyncSessionManager {
     if (existing != null) {
       // A concurrent insert may have appeared after the first update. Retry if
       // our state is still current enough to advance or merge that new row.
-      if (existing.lastUpdate <= row.lastUpdate) await this.updateIfCurrentOrNewer(row)
+      if (existing.lastUpdate <= row.lastUpdate) {
+        const retried = await this.updateIfCurrentOrNewer(row)
+        if (retried > 0) this.persistedRows.set(session, row)
+      }
       return
     }
 
     try {
       await this.knex<TableAuthSession>(AUTH_SESSION_TABLE).insert(row)
+      this.persistedRows.set(session, row)
     } catch (error: unknown) {
       // Another replica may have inserted this nonce between our update and
       // insert. Retry only known duplicate-key races; preserve every other
       // database failure for the caller.
       if (!isDuplicateKeyError(error)) throw error
-      await this.updateIfCurrentOrNewer(row)
+      const retried = await this.updateIfCurrentOrNewer(row)
+      if (retried > 0) this.persistedRows.set(session, row)
     }
+  }
+
+  private validatePersistentSession (session: PeerSession): void {
+    if (typeof session.sessionNonce !== 'string' || session.sessionNonce.length === 0) {
+      throw new TypeError('Invalid session: sessionNonce is required to persist a session.')
+    }
+    if (!Number.isSafeInteger(session.lastUpdate) || session.lastUpdate < 0) {
+      throw new TypeError('Invalid session: lastUpdate must be a non-negative safe integer.')
+    }
+  }
+
+  /**
+   * Coalesce only the routine last-used write performed after an authenticated
+   * general message. The WeakMap proves that this exact session object came
+   * from a durable row read (or successful write) by this manager. Every
+   * authentication/certificate transition and every unrecognized object still
+   * takes the monotonic database path.
+   */
+  private canCoalesceTouch (session: PeerSession, row: TableAuthSession): boolean {
+    if (this.touchIntervalMs === 0 || row.isAuthenticated !== true) return false
+    const persisted = this.persistedRows.get(session)
+    if (!persisted?.isAuthenticated) return false
+
+    const persistedLastUpdate = Number(persisted.lastUpdate)
+    const elapsed = Number(row.lastUpdate) - persistedLastUpdate
+    if (elapsed < 0 || elapsed >= this.touchIntervalMs) return false
+    if (Number(persisted.expiresAt) - this.now() <= this.touchIntervalMs) return false
+
+    return nullableEqual(row.peerNonce, persisted.peerNonce) &&
+      nullableEqual(row.peerIdentityKey, persisted.peerIdentityKey) &&
+      nullableBooleanEqual(row.certificatesRequired, persisted.certificatesRequired) &&
+      nullableBooleanEqual(row.certificatesValidated, persisted.certificatesValidated)
+  }
+
+  private sessionForRow (row: TableAuthSession): PeerSession {
+    const session = tableAuthSessionToPeerSession(row)
+    this.persistedRows.set(session, { ...row })
+    return session
   }
 
   private async updateIfCurrentOrNewer (row: TableAuthSession): Promise<number> {
@@ -164,7 +224,7 @@ export class KnexSessionManager implements AsyncSessionManager {
       })
   }
 
-  private mergeNullableBoolean (column: string, value: boolean | number | null | undefined): Knex.Raw {
+  private mergeNullableBoolean (column: string, value: NullableBoolean): Knex.Raw {
     let incoming: 0 | 1 | null
     if (value == null) {
       incoming = null
@@ -210,6 +270,18 @@ function applyNullableMatch (
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     query.where(column, value)
   }
+}
+
+function nullableEqual (left: string | null | undefined, right: string | null | undefined): boolean {
+  return (left ?? null) === (right ?? null)
+}
+
+function nullableBooleanEqual (
+  left: boolean | number | null | undefined,
+  right: boolean | number | null | undefined
+): boolean {
+  if (left == null || right == null) return left == null && right == null
+  return Boolean(left) === Boolean(right)
 }
 
 function isDuplicateKeyError (error: unknown): boolean {

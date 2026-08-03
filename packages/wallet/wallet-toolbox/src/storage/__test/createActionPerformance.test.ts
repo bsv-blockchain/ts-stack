@@ -29,7 +29,7 @@ describe('createAction funding performance', () => {
     }
     ctx.activeStorage.knex.on('query', countTransactions)
     const markSpent = jest.spyOn(ctx.activeStorage, 'markChangeInputsSpent')
-    const readStatuses = jest.spyOn(ctx.activeStorage, 'findTransactionStatusesByIds')
+    const lockEligible = jest.spyOn(ctx.activeStorage, 'findFundingOutputsForUpdate')
     try {
       const result = await ctx.activeStorage.createAction(
         { userId: ctx.userId },
@@ -39,26 +39,25 @@ describe('createAction funding performance', () => {
       expect(result.inputs.length).toBeGreaterThan(4)
       expect(markSpent).toHaveBeenCalledTimes(1)
       expect(markSpent.mock.calls[0][0]).toHaveLength(result.inputs.length)
-      expect(readStatuses).toHaveBeenCalledTimes(1)
-      expect(readStatuses.mock.calls[0][1]).toHaveLength(1)
+      expect(lockEligible).toHaveBeenCalledTimes(1)
+      expect(lockEligible.mock.calls[0][1]).toHaveLength(result.inputs.length)
       expect(databaseTransactions).toBe(1)
     } finally {
       ctx.activeStorage.knex.off('query', countTransactions)
     }
   })
 
-  test('hydrates offloaded funding scripts once per source and outside the locked lookup', async () => {
+  test('hydrates offloaded funding scripts once per source through the claim transaction', async () => {
     await replaceFundingCandidates(20, 1_000, true)
-    const lockedLookup = jest.spyOn(ctx.activeStorage, 'findOutputsByOutpointsForUpdate')
+    const lockedLookup = jest.spyOn(ctx.activeStorage, 'findFundingOutputsForUpdate')
     const getRawTx = jest.spyOn(ctx.activeStorage, 'getRawTxOfKnownValidTransaction')
 
     const result = await ctx.activeStorage.createAction({ userId: ctx.userId }, actionArgs(5_000))
 
     expect(result.inputs.length).toBeGreaterThan(4)
     expect(lockedLookup).toHaveBeenCalledTimes(1)
-    expect(lockedLookup.mock.calls[0][3]).toBe(true)
     expect(getRawTx).toHaveBeenCalledTimes(1)
-    expect(getRawTx.mock.calls[0]).toEqual([expect.any(String)])
+    expect(getRawTx.mock.calls[0]).toEqual([expect.any(String), undefined, undefined, expect.anything()])
   })
 
   test('rolls back a concurrent bulk-claim conflict before replanning', async () => {

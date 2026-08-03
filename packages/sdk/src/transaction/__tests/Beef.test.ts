@@ -4,6 +4,7 @@ import { Beef, BEEF_V1, BEEF_V2 } from '../../transaction/Beef'
 import Transaction from '../../transaction/Transaction'
 import { fromBase58 } from '../../primitives/utils'
 import Script from '../../script/Script'
+import MerklePath from '../../transaction/MerklePath'
 
 // The following imports allow full type checking by the VsCode editor, but tests will fail to run:
 /*
@@ -169,6 +170,97 @@ describe('Beef tests', () => {
     beef.mergeTxidOnly('d0ae03111611f04a4c6e45a0a93f62f69c5594b64b369c0262289695feb2f991')
     expect(beef.isValid(undefined)).toBe(false)
     expect(beef.isValid(true)).toBe(true)
+  })
+
+  test('mergeProvenTxs is byte-equivalent to sequential proven merges', () => {
+    const transactions = Array.from({ length: 64 }, (_, index) => {
+      const transaction = new Transaction()
+      transaction.addInput({
+        sourceTXID: '00'.repeat(32),
+        sourceOutputIndex: 0xffffffff,
+        unlockingScript: Script.fromHex(`04${index.toString(16).padStart(8, '0')}`),
+        sequence: 0xffffffff
+      })
+      transaction.addOutput({ satoshis: index + 1, lockingScript: Script.fromHex('51') })
+      return transaction
+    })
+    const sameBlockTxids = transactions.slice(0, 4).map(transaction => transaction.id('hex'))
+    const entries = transactions.map((transaction, index) => {
+      const txid = transaction.id('hex')
+      const merklePath = index < sameBlockTxids.length
+        ? new MerklePath(900_000, [sameBlockTxids.map((hash, offset) => ({
+          offset,
+          hash,
+          txid: offset === index
+        }))])
+        : new MerklePath(900_000 + index, [[{ offset: 0, hash: txid, txid: true }]])
+      return { rawTx: transaction.toBinary(), merklePath }
+    })
+    const sequential = new Beef()
+    for (const entry of entries) {
+      sequential.mergeRawTx(entry.rawTx)
+      sequential.mergeBump(entry.merklePath)
+    }
+    const batched = new Beef()
+    const merged = batched.mergeProvenTxs(entries)
+
+    expect(merged.map(tx => tx.txid)).toEqual(sequential.txs.map(tx => tx.txid))
+    expect(batched.toHex()).toBe(sequential.toHex())
+    expect(batched.isValid()).toBe(true)
+  })
+
+  test('mergeProvenTxs validates deferred same-block paths once as a compound proof', () => {
+    const transactions = Array.from({ length: 8 }, (_, index) => {
+      const transaction = new Transaction()
+      transaction.addInput({
+        sourceTXID: '00'.repeat(32),
+        sourceOutputIndex: 0xffffffff,
+        unlockingScript: Script.fromHex(`04${(100 + index).toString(16).padStart(8, '0')}`),
+        sequence: 0xffffffff
+      })
+      transaction.addOutput({ satoshis: index + 1, lockingScript: Script.fromHex('51') })
+      return transaction
+    })
+    const txids = transactions.map(transaction => transaction.id('hex'))
+    const fullPath = new MerklePath(900_100, [
+      txids.map((hash, offset) => ({ offset, hash, txid: true }))
+    ])
+    const merkleRoot = fullPath.computeRoot()
+    const binaries = txids.map(txid => fullPath.extract([txid]).toBinary())
+
+    const sequential = new Beef()
+    for (let index = 0; index < transactions.length; index++) {
+      sequential.mergeRawTx(transactions[index].toBinary())
+      sequential.mergeBump(MerklePath.fromBinary(binaries[index]))
+    }
+
+    const batched = new Beef()
+    batched.mergeProvenTxs(transactions.map((transaction, index) => ({
+      rawTx: transaction.toBinary(),
+      merklePath: MerklePath.fromBinary(binaries[index], true, false),
+      merkleRoot
+    })))
+
+    expect(batched.toHex()).toBe(sequential.toHex())
+    expect(batched.isValid()).toBe(true)
+
+    const corrupt = binaries.map(binary => MerklePath.fromBinary(binary, true, false))
+    const conflicting = corrupt[1].path.flat().find(leaf => leaf.txid !== true && leaf.hash != null)
+    expect(conflicting).toBeDefined()
+    conflicting!.hash = 'ff'.repeat(32)
+    expect(() => new Beef().mergeProvenTxs(transactions.map((transaction, index) => ({
+      rawTx: transaction.toBinary(),
+      merklePath: corrupt[index],
+      merkleRoot
+    })))).toThrow('Mismatched roots')
+
+    const mismatchedLength = binaries.map(binary => MerklePath.fromBinary(binary, true, false))
+    mismatchedLength[1].path.push([])
+    expect(() => new Beef().mergeProvenTxs(transactions.map((transaction, index) => ({
+      rawTx: transaction.toBinary(),
+      merklePath: mismatchedLength[index],
+      merkleRoot
+    })))).toThrow('Mismatched roots')
   })
 
   test('findTransactionForSigning returns undefined without transaction bytes', () => {

@@ -93,15 +93,23 @@ async function createActionCore(
     logger?.log('completed signed transaction')
 
     r.txid = prior.tx.id('hex')
-    const beef = new Beef()
-    if (prior.dcr.inputBeef != null) {
-      const inputBeef =
-        prior.dcr.inputBeef instanceof Uint8Array
-          ? Beef.fromBinaryView(prior.dcr.inputBeef)
-          : Beef.fromBinary(prior.dcr.inputBeef)
-      beef.mergeBeef(inputBeef)
-    }
-    beef.mergeTransaction(prior.tx)
+    const beef = await traceActionStep(
+      wallet,
+      'wallet.create_action.assemble_result_beef',
+      parent,
+      () => {
+        const result = new Beef()
+        if (prior!.dcr.inputBeef != null) {
+          const inputBeef =
+            prior!.dcr.inputBeef instanceof Uint8Array
+              ? Beef.fromBinaryView(prior!.dcr.inputBeef)
+              : Beef.fromBinary(prior!.dcr.inputBeef)
+          result.mergeBeef(inputBeef)
+        }
+        result.mergeTransaction(prior!.tx)
+        return result
+      }
+    )
     logger?.log('merged beef')
 
     await traceActionStep(
@@ -115,7 +123,14 @@ async function createActionCore(
     r.noSendChange = prior.dcr.noSendChangeOutputVouts?.map(vout => `${r.txid}.${vout}`)
     beef.atomicTxid = r.txid
     setResultBeef(r, beef)
-    if (!vargs.options.returnTXIDOnly) r.tx = beef.toUint8ArrayAtomic(r.txid)
+    if (!vargs.options.returnTXIDOnly) {
+      r.tx = await traceActionStep(
+        wallet,
+        'wallet.create_action.serialize_result_beef',
+        parent,
+        () => beef.toUint8ArrayAtomic(r.txid!)
+      )
+    }
   }
 
   const { sendWithResults, notDelayedResults } = await traceActionStep(

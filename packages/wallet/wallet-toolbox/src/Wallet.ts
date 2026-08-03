@@ -109,6 +109,27 @@ import { getResultBeef } from './signer/methods/resultBeef'
 import type { ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { ActionBatchController, ActionBatchMode } from './signer/actionBatch/ActionBatchWorkspace'
 
+function prepareKnownTxidsForCreateAction(wallet: Wallet, args: CreateActionArgs): void {
+  if (!wallet.autoKnownTxids || args.options?.knownTxids != null) return
+  if (!wallet.telemetry.enabled) {
+    args.options!.knownTxids = wallet.getKnownTxids(args.options?.knownTxids)
+    return
+  }
+  args.options!.knownTxids = wallet.telemetry.withSpan(
+    'wallet.create_action.prepare_known_txids',
+    {
+      component: 'wallet-toolbox',
+      carrier: args,
+      attributes: { 'beef.tx_count': wallet.beef.txs.length }
+    },
+    span => {
+      const knownTxids = wallet.getKnownTxids(args.options?.knownTxids)
+      span.end({ attributes: { 'beef.known_txid_count': knownTxids.length } })
+      return knownTxids
+    }
+  )
+}
+
 /**
  * The preferred means of constructing a `Wallet` is with a `WalletArgs` instance.
  */
@@ -915,6 +936,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.returnTxidOnly) return beef
     const b = parsedBeef ?? Beef.fromBinary(beef)
     if (!b.atomicTxid) throw new WERR_INTERNAL()
+    const hasUnknownTxidOnly = b.txs.some(btx => btx.isTxidOnly && !knownTxids?.includes(btx.txid))
+    if (!hasUnknownTxidOnly) return beef
     return this.verifyReturnedTxidOnly(b, knownTxids).toBinaryAtomic(b.atomicTxid)
   }
 
@@ -960,25 +983,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
       args.options ??= {}
       args.options.trustSelf ||= this.trustSelf
-      if (this.autoKnownTxids && args.options.knownTxids == null) {
-        if (this.telemetry.enabled) {
-          args.options.knownTxids = this.telemetry.withSpan(
-            'wallet.create_action.prepare_known_txids',
-            {
-              component: 'wallet-toolbox',
-              carrier: args,
-              attributes: { 'beef.tx_count': this.beef.txs.length }
-            },
-            span => {
-              const knownTxids = this.getKnownTxids(args.options?.knownTxids)
-              span.end({ attributes: { 'beef.known_txid_count': knownTxids.length } })
-              return knownTxids
-            }
-          )
-        } else {
-          args.options.knownTxids = this.getKnownTxids(args.options.knownTxids)
-        }
-      }
+      prepareKnownTxidsForCreateAction(this, args)
 
       const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateCreateActionArgs, logger)
       logger?.log('validated args')
@@ -992,10 +997,40 @@ export class Wallet implements WalletInterface, ProtoWallet {
       logger?.log('action created')
 
       const resultBeef = getResultBeef(r)
-      if (r.tx != null) this.beef.mergeBeefFromParty(this.storageParty, resultBeef ?? r.tx)
+      if (r.tx != null) {
+        const merge = (): void => this.beef.mergeBeefFromParty(this.storageParty, resultBeef ?? r.tx!)
+        if (this.telemetry.enabled) {
+          this.telemetry.withSpan(
+            'wallet.create_action.merge_result_beef',
+            {
+              component: 'wallet-toolbox',
+              carrier: args,
+              attributes: {
+                'beef.retained_tx_count_before': this.beef.txs.length,
+                'beef.result_byte_count': r.tx.length
+              }
+            },
+            merge
+          )
+        } else {
+          merge()
+        }
+      }
 
       if (r.tx != null) {
-        r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, args.options?.knownTxids, resultBeef)
+        const verify = (): AtomicBEEF =>
+          this.verifyReturnedTxidOnlyAtomicBEEF(r.tx!, args.options?.knownTxids, resultBeef)
+        r.tx = this.telemetry.enabled
+          ? this.telemetry.withSpan(
+              'wallet.create_action.verify_result_beef',
+              {
+                component: 'wallet-toolbox',
+                carrier: args,
+                attributes: { 'beef.result_byte_count': r.tx.length }
+              },
+              verify
+            )
+          : verify()
         logger?.log('verify returned AtomicBEEF')
       }
 

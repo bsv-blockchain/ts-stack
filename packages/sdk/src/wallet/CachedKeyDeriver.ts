@@ -1,5 +1,5 @@
 import { Point, PrivateKey, PublicKey, SymmetricKey } from '../primitives/index.js'
-import { Counterparty, KeyDeriver, KeyDeriverApi } from './KeyDeriver.js'
+import { Counterparty, KeyDeriver, KeyDeriverApi, PrivateKeyDerivation } from './KeyDeriver.js'
 import { WalletProtocol } from './Wallet.interfaces.js'
 
 type CachedKeyValue = PublicKey | PrivateKey | SymmetricKey | Point | number[]
@@ -137,6 +137,38 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       this.cacheSet(cacheKey, result)
       return result
     }
+  }
+
+  derivePrivateKeys(derivations: readonly PrivateKeyDerivation[]): PrivateKey[] {
+    const results: PrivateKey[] = []
+    const missing: PrivateKeyDerivation[] = []
+    const missingIndexes: number[] = []
+    const missingCacheKeys: string[] = []
+    for (let index = 0; index < derivations.length; index++) {
+      const derivation = derivations[index]
+      const cacheKey = this.generateCacheKey(
+        'derivePrivateKey',
+        derivation.protocolID,
+        derivation.keyID,
+        derivation.counterparty
+      )
+      const cached = this.cacheGet(cacheKey)
+      if (cached instanceof PrivateKey) {
+        results[index] = cached
+      } else {
+        missing.push(derivation)
+        missingIndexes.push(index)
+        missingCacheKeys.push(cacheKey)
+      }
+    }
+    if (missing.length > 0) {
+      const derived = this.keyDeriver.derivePrivateKeys(missing)
+      for (let index = 0; index < derived.length; index++) {
+        results[missingIndexes[index]] = derived[index]
+        this.cacheSet(missingCacheKeys[index], derived[index])
+      }
+    }
+    return results
   }
 
   /**

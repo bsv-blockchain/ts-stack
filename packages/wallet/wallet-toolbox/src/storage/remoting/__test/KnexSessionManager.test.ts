@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Knex, knex as makeKnex } from 'knex'
 import { AUTH_SESSION_MIGRATION, KnexMigrations } from '../../schema/KnexMigrations'
-import { KnexSessionManager } from '../KnexSessionManager'
+import { AUTH_SESSION_TABLE, KnexSessionManager } from '../KnexSessionManager'
 
 describe('KnexSessionManager', () => {
   let folder: string
@@ -136,8 +136,111 @@ describe('KnexSessionManager', () => {
     await expect(managerB.pruneExpiredSessions()).resolves.toBe(1)
   })
 
+  it('coalesces only recent timestamp touches for a row-backed authenticated session', async () => {
+    await managerA.addSession(makeSession({
+      isAuthenticated: true,
+      lastUpdate: 1_000
+    }))
+    const session = await managerB.getSession('session-nonce')
+    expect(session).toBeDefined()
+
+    now = 1_010
+    session!.lastUpdate = now
+    await managerB.updateSession(session!)
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
+      .resolves.toMatchObject({ lastUpdate: 1_000, expiresAt: 1_100 })
+
+    // The test TTL gives the default touch window a 25 ms boundary. Reaching
+    // that boundary refreshes the durable timestamp and expiration.
+    now = 1_025
+    session!.lastUpdate = now
+    await managerB.updateSession(session!)
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
+      .resolves.toMatchObject({ lastUpdate: 1_025, expiresAt: 1_125 })
+  })
+
+  it('persists security-state transitions and supports exact timestamp persistence', async () => {
+    await managerA.addSession(makeSession({
+      isAuthenticated: true,
+      certificatesRequired: true,
+      certificatesValidated: false
+    }))
+    const session = await managerB.getSession('session-nonce')
+    expect(session).toBeDefined()
+
+    now = 1_005
+    session!.lastUpdate = now
+    session!.certificatesValidated = true
+    await managerB.updateSession(session!)
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
+      .resolves.toMatchObject({ lastUpdate: 1_005, certificatesValidated: 1 })
+
+    const exactManager = new KnexSessionManager(knexB, {
+      ttlMs: 100,
+      touchIntervalMs: 0,
+      now: () => now
+    })
+    const exactSession = await exactManager.getSession('session-nonce')
+    expect(exactSession).toBeDefined()
+    now = 1_006
+    exactSession!.lastUpdate = now
+    await exactManager.updateSession(exactSession!)
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
+      .resolves.toMatchObject({ lastUpdate: 1_006, expiresAt: 1_106 })
+  })
+
+  it('retries a current session update after a concurrent insert becomes visible', async () => {
+    const session = makeSession()
+    await managerA.addSession(session)
+    const update = jest.spyOn(managerA as any, 'updateIfCurrentOrNewer')
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1)
+
+    await managerA.addSession(session)
+
+    expect(update).toHaveBeenCalledTimes(2)
+
+    update.mockClear()
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+    await managerA.addSession(session)
+    expect(update).toHaveBeenCalledTimes(2)
+  })
+
+  it('recovers from a duplicate-key insert race and preserves other insert failures', async () => {
+    const duplicateInsert = jest.fn(async () => await Promise.reject(
+      Object.assign(new Error('duplicate'), { code: 'ER_DUP_ENTRY' })
+    ))
+    const failingInsert = jest.fn(async () => await Promise.reject(new Error('database unavailable')))
+    const makeKnex = (insert: jest.Mock): Knex => {
+      const first = jest.fn(async () => undefined)
+      const where = jest.fn(() => ({ first }))
+      return jest.fn(() => ({ where, insert })) as unknown as Knex
+    }
+
+    const duplicateManager = new KnexSessionManager(makeKnex(duplicateInsert))
+    const duplicateUpdate = jest.spyOn(duplicateManager as any, 'updateIfCurrentOrNewer')
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1)
+    await duplicateManager.addSession(makeSession())
+    expect(duplicateUpdate).toHaveBeenCalledTimes(2)
+
+    const unchangedManager = new KnexSessionManager(makeKnex(duplicateInsert))
+    const unchangedUpdate = jest.spyOn(unchangedManager as any, 'updateIfCurrentOrNewer')
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+    await unchangedManager.addSession(makeSession())
+    expect(unchangedUpdate).toHaveBeenCalledTimes(2)
+
+    const failingManager = new KnexSessionManager(makeKnex(failingInsert))
+    jest.spyOn(failingManager as any, 'updateIfCurrentOrNewer').mockResolvedValueOnce(0)
+    await expect(failingManager.addSession(makeSession())).rejects.toThrow('database unavailable')
+  })
+
   it('rejects invalid options and session records', async () => {
     expect(() => new KnexSessionManager(knexA, { ttlMs: 0 })).toThrow('ttlMs')
+    expect(() => new KnexSessionManager(knexA, { touchIntervalMs: -1 })).toThrow('touchIntervalMs')
+    expect(() => new KnexSessionManager(knexA, { touchIntervalMs: 1.5 })).toThrow('touchIntervalMs')
     await expect(managerA.addSession(makeSession({ sessionNonce: undefined }))).rejects.toThrow('sessionNonce')
     await expect(managerA.addSession(makeSession({ lastUpdate: Number.NaN }))).rejects.toThrow('lastUpdate')
     await expect(managerA.addSession(makeSession({ lastUpdate: Number.MAX_SAFE_INTEGER }))).rejects.toThrow('safe integer')

@@ -3,7 +3,7 @@ import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { validateStorageFeeModel } from '../StorageProvider'
-import { transactionSize } from './utils'
+import { transactionInputSize, transactionOutputSize, transactionSize, varUintSize } from './utils'
 /**
  * An output of this satoshis amount will be adjusted to the largest fundable amount.
  */
@@ -254,21 +254,32 @@ async function generateChangeSdkCore(
 
     const fixedInputs = params.fixedInputs
     const fixedOutputs = params.fixedOutputs
+    const fixedFunding = fixedInputs.reduce((sum, input) => sum + input.satoshis, 0)
+    let fixedSpending = fixedOutputs.reduce((sum, output) => sum + output.satoshis, 0)
+    const fixedInputSize = fixedInputs.reduce(
+      (sum, input) => sum + transactionInputSize(input.unlockingScriptLength),
+      0
+    )
+    const fixedOutputSize = fixedOutputs.reduce(
+      (sum, output) => sum + transactionOutputSize(output.lockingScriptLength),
+      0
+    )
+    const changeInputSize = transactionInputSize(params.changeUnlockingScriptLength)
+    const changeOutputSize = transactionOutputSize(params.changeLockingScriptLength)
+    let allocatedFunding = 0
 
     /**
      * @returns sum of transaction fixedInputs satoshis and fundingInputs satoshis
      */
     const funding = (): number => {
-      return (
-        fixedInputs.reduce((a, e) => a + e.satoshis, 0) + r.allocatedChangeInputs.reduce((a, e) => a + e.satoshis, 0)
-      )
+      return fixedFunding + allocatedFunding
     }
 
     /**
      * @returns sum of transaction fixedOutputs satoshis
      */
     const spending = (): number => {
-      return fixedOutputs.reduce((a, e) => a + e.satoshis, 0)
+      return fixedSpending
     }
 
     /**
@@ -281,22 +292,16 @@ async function generateChangeSdkCore(
     const fee = (): number => funding() - spending() - change()
 
     const size = (addedChangeInputs?: number, addedChangeOutputs?: number): number => {
-      const inputScriptLengths = [
-        ...fixedInputs.map(x => x.unlockingScriptLength),
-        ...Array.from(
-          { length: r.allocatedChangeInputs.length + (addedChangeInputs || 0) },
-          () => params.changeUnlockingScriptLength
-        )
-      ]
-      const outputScriptLengths = [
-        ...fixedOutputs.map(x => x.lockingScriptLength),
-        ...Array.from(
-          { length: r.changeOutputs.length + (addedChangeOutputs || 0) },
-          () => params.changeLockingScriptLength
-        )
-      ]
-      const size = transactionSize(inputScriptLengths, outputScriptLengths)
-      return size
+      const inputCount = fixedInputs.length + r.allocatedChangeInputs.length + (addedChangeInputs || 0)
+      const outputCount = fixedOutputs.length + r.changeOutputs.length + (addedChangeOutputs || 0)
+      return 4 +
+        varUintSize(inputCount) +
+        fixedInputSize +
+        (r.allocatedChangeInputs.length + (addedChangeInputs || 0)) * changeInputSize +
+        varUintSize(outputCount) +
+        fixedOutputSize +
+        (r.changeOutputs.length + (addedChangeOutputs || 0)) * changeOutputSize +
+        4
     }
 
     /**
@@ -349,6 +354,7 @@ async function generateChangeSdkCore(
       while (r.allocatedChangeInputs.length > 0) {
         const i = r.allocatedChangeInputs.pop()
         if (i != null) {
+          allocatedFunding -= i.satoshis
           await releaseChangeInput(i.outputId)
         }
       }
@@ -409,6 +415,7 @@ async function generateChangeSdkCore(
         }
 
         r.allocatedChangeInputs.push(allocatedChangeInput)
+        allocatedFunding += allocatedChangeInput.satoshis
         maybeAddChangeOutput(ao)
         return true
       }
@@ -439,6 +446,7 @@ async function generateChangeSdkCore(
         // resulting in pointless churn of change outputs.
         // And remove change inputs that funded only a single change output (along with that output)...
         removeChurnPairs(r.allocatedChangeInputs, r.changeOutputs)
+        allocatedFunding = r.allocatedChangeInputs.reduce((sum, input) => sum + input.satoshis, 0)
         // and try again...
       }
     }
@@ -451,7 +459,9 @@ async function generateChangeSdkCore(
     if (feeExcess() < 0 && vgcpr.hasMaxPossibleOutput !== undefined) {
       // Reduce the fixed output with satoshis of maxPossibleSatoshis to what will just fund the transaction...
       if (fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis !== maxPossibleSatoshis) throw new WERR_INTERNAL()
-      fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis += feeExcess()
+      const adjustment = feeExcess()
+      fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis += adjustment
+      fixedSpending += adjustment
       r.maxPossibleSatoshisAdjustment = {
         fixedOutputIndex: vgcpr.hasMaxPossibleOutput,
         satoshis: fixedOutputs[vgcpr.hasMaxPossibleOutput].satoshis

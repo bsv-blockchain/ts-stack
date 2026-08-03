@@ -6,6 +6,29 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Collapse fragmented `createAction` storage work into one atomic write
+  transaction, batch proof retrieval and compound-proof validation, overlap
+  independent proof reads with persistence, bulk-insert untagged outputs, and
+  batch canonical P2PKH verification. The retained 153-input authenticated
+  remote PXC workload is below 500 ms at p95.
+- Reuse parsed root and counterparty keys and one BRC-42 shared secret per
+  counterparty while signing managed BRC-29 inputs, keep funding selection and
+  transaction-size accounting linear, and avoid redundant BEEF validation,
+  unused process reads, and unconditional commission reads on the successful
+  path. Generated scripts, signatures, fees, input ordering, BEEF bytes, and
+  error diagnostics remain equivalence-tested.
+- Add bounded-cardinality spans for proof decode/merge, persistence, signing,
+  verification, result assembly, serialization, and server-side processing.
+  No telemetry header or protocol field is added; BRC-103/104, AuthFetch, Auth
+  Express Middleware, AuthSocket, JSON-RPC, and wallet wire behavior are unchanged.
+- Coalesce only recent timestamp-only touches for already-authenticated shared
+  Knex sessions, while immediately persisting every authentication and
+  certificate transition. This removes a synchronous replicated PXC write from
+  the normal RPC path; exact per-request persistence remains available with
+  `touchIntervalMs: 0`.
+- Make expired action-batch reservations non-blocking in indexed queries and
+  repair MySQL rollback support indexes. Existing databases migrate through the
+  normal Knex path, and full PXC down-to-empty/re-upgrade is regression-tested.
 - Plan legacy `createAction` funding against the exact unreserved managed-change
   set before persistence, claim the selected inputs atomically in one storage
   transaction, and fail economically impossible fragmented wallets before

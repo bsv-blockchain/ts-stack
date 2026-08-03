@@ -105,12 +105,26 @@ The retained fragmented-funding benchmark is runnable with:
 
 ```bash
 pnpm bench:create-action-funding
+pnpm bench:create-action-beef
 ```
 
 Against unmodified commit `c212b5ee7`, a representative 102-input SQLite plan
 fell from 622 queries, 102 database transactions, and 107.3 ms to 17 queries,
 one transaction, and 8.8 ms. Query and transaction counts remain flat when the
 selected input count grows; networked database deployments should benefit most.
+
+The proof-bearing benchmark also exercises the authenticated remote wallet,
+real BRC-103 storage RPC, BRC-29 signing, packed WASM digest verification, and
+24-level proofs grouped by block. On the PXC staging topology, 20 independent
+153-input samples measured 376.0 ms p50 and 461.6 ms p95; the corresponding
+direct storage cohort measured 99.3 ms p50 and 137.4 ms p95. A normal one-input
+authenticated cohort measured 78.6 ms p50 and 105.6 ms p95. All 3,080 signature
+verdicts passed. A selective production-shaped database copy with 110 fragmented
+inputs measured 75.5 ms p50 and 155.4 ms p95 for direct storage. The benchmark
+captures client, server HTTP, authentication, RPC, storage, signing,
+verification, and serialization spans and retains gates of 100 ms p50 / 150 ms
+p95 for the normal cohort and 500 ms p95 for the 153-input cohort. These are
+regression gates, not universal hardware guarantees.
 
 Trace context remains local to the telemetry carrier and sink. Wallet Toolbox
 does not add telemetry headers to AuthFetch, so BRC-103/104, Auth Express
@@ -133,7 +147,9 @@ await storage.migrate(storageName, storageIdentityKey)
 await storage.makeAvailable()
 
 const sessionManager = new KnexSessionManager(storage.knex, {
-  ttlMs: 24 * 60 * 60 * 1000
+  ttlMs: 24 * 60 * 60 * 1000,
+  // Optional. Set to 0 when every authenticated use must update the row.
+  touchIntervalMs: 60 * 1000
 })
 
 const server = new StorageServer(storage, {
@@ -157,6 +173,13 @@ const server = new StorageServer(storage, {
 })
 server.start()
 ```
+
+Shared Knex sessions immediately persist authentication, nonce, identity, and
+certificate-state transitions. For an already-authenticated row, the default
+manager coalesces only timestamp-only usage touches for up to one minute. This
+avoids a synchronous replicated write on every RPC while keeping durable expiry
+within a bounded minute of the most recent use. Use `touchIntervalMs: 0` to
+retain exact per-request timestamp persistence.
 
 Both stages return HTTP 429 with `ERR_RATE_LIMITED`. For multi-process or
 multi-replica deployments, configure a shared `express-rate-limit` store in

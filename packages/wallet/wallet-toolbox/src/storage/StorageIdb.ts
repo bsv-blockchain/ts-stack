@@ -131,6 +131,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return true
   }
 
+  protected override requiresActionBatchCleanupBeforeCreateAction(): boolean {
+    return false
+  }
+
   /**
    * This method must be called at least once before any other method accesses the database,
    * and each time the schema may have updated.
@@ -329,6 +333,37 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
 
     return r
+  }
+
+  override async getProvenOrRawTxs(txids: string[], trx?: TrxToken): Promise<Map<string, ProvenOrRawTx>> {
+    const results = new Map<string, ProvenOrRawTx>()
+    const unique = [...new Set(txids)]
+    if (unique.length === 0) return results
+
+    const dbTrx = this.toDbTrx(['proven_txs', 'proven_tx_reqs'], 'readonly', trx)
+    const provenIndex = dbTrx.objectStore('proven_txs').index('txid')
+    const requestIndex = dbTrx.objectStore('proven_tx_reqs').index('txid')
+    const usableStatuses = new Set(['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'])
+    await Promise.all(unique.map(async txid => {
+      const proven = await provenIndex.get(txid) as TableProvenTx | undefined
+      if (proven != null) {
+        results.set(txid, { proven: this.validateEntity(proven), rawTx: undefined, inputBEEF: undefined })
+        return
+      }
+      const request = await requestIndex.get(txid) as TableProvenTxReq | undefined
+      if (request != null && usableStatuses.has(request.status)) {
+        const validated = this.validateEntity(request)
+        results.set(txid, {
+          proven: undefined,
+          rawTx: Array.from(validated.rawTx),
+          inputBEEF: validated.inputBEEF == null ? undefined : Array.from(validated.inputBEEF)
+        })
+        return
+      }
+      results.set(txid, { proven: undefined, rawTx: undefined, inputBEEF: undefined })
+    }))
+    if (trx == null) await dbTrx.done
+    return results
   }
 
   async getRawTxOfKnownValidTransaction(
@@ -700,6 +735,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.limit,
       async r => {
         if (!matchesProvenTxPartial(r, args.partial)) return false
+        if (args.txids != null && args.txids.length > 0 && !args.txids.includes(r.txid)) return false
         if (userId !== undefined) {
           const txCount = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: dbTrx })
           if (txCount === 0) return false
@@ -1297,11 +1333,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   override async findReservedActionBatchOutputIds(outputIds: number[], trx?: TrxToken): Promise<number[]> {
-    const tx = this.toDbTrx(['action_batch_outputs'], 'readonly', trx)
+    const tx = this.toDbTrx(['action_batch_outputs', 'action_batches'], 'readonly', trx)
     const store = tx.objectStore('action_batch_outputs')
+    const batchStore = tx.objectStore('action_batches')
     if (store.get == null) throw new WERR_INTERNAL('IndexedDB action_batch_outputs store does not support get')
     const reserved: number[] = []
-    for (const outputId of outputIds) if ((await store.get(outputId)) != null) reserved.push(outputId)
+    const now = Date.now()
+    for (const outputId of outputIds) {
+      const reservation = await store.get(outputId)
+      if (reservation == null) continue
+      const batch = await batchStore.get(reservation.actionBatchId)
+      if (
+        batch != null &&
+        (batch.status === 'active' || batch.status === 'prepared') &&
+        batch.expiresAt.getTime() > now &&
+        batch.hardExpiresAt.getTime() > now
+      ) reserved.push(outputId)
+    }
     if (trx == null) await tx.done
     return reserved
   }

@@ -4,11 +4,14 @@ import {
   ListOutputsResult,
   MerklePath,
   Script,
+  Telemetry,
+  TelemetryEvent,
   Transaction,
   Utils,
   Validation
 } from '@bsv/sdk'
 import { StorageAdminStats, StorageProvider } from '../StorageProvider'
+import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 import { Chain } from '../../sdk/types'
 import { Services } from '../../services/Services'
 import { BlockHeader, GetMerklePathResult, GetRawTxResult } from '../../sdk/WalletServices.interfaces'
@@ -137,6 +140,307 @@ describe('getBeefForTransaction tests', () => {
       chainTracker,
       true
     )
+  })
+
+  test('batch-loads same-block proven roots with sequentially equivalent BEEF bytes', async () => {
+    const storage = new ProtoStorage('main')
+    const transactions = Array.from({ length: 8 }, (_, index) => {
+      const tx = new Transaction()
+      tx.addInput({
+        sourceTXID: '00'.repeat(32),
+        sourceOutputIndex: 0xffffffff,
+        unlockingScript: Script.fromHex(`04${(500 + index).toString(16).padStart(8, '0')}`)
+      })
+      tx.addOutput({ satoshis: index + 1, lockingScript: Script.fromASM('OP_TRUE') })
+      return tx
+    })
+    const txids = transactions.map(transaction => transaction.id('hex'))
+    const compound = new MerklePath(900_200, [
+      txids.map((hash, offset) => ({ offset, hash, txid: true }))
+    ])
+    const merkleRoot = compound.computeRoot(txids[0])
+    const proven = new Map<string, ProvenOrRawTx>(transactions.map((transaction, index) => {
+      const now = new Date()
+      return [txids[index], {
+        proven: {
+          provenTxId: index + 1,
+          txid: txids[index],
+          height: compound.blockHeight,
+          index,
+          merklePath: compound.extract([txids[index]]).toBinary(),
+          rawTx: transaction.toBinary(),
+          blockHash: '11'.repeat(32),
+          merkleRoot,
+          created_at: now,
+          updated_at: now
+        }
+      }]
+    }))
+    const batchRead = jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async requested =>
+      new Map(requested.map(txid => [txid, proven.get(txid)!]))
+    )
+
+    const actual = await storage.getBeefForTransactions(txids, {
+      ignoreStorage: false,
+      ignoreServices: true
+    })
+    const expected = new Beef()
+    for (let index = 0; index < transactions.length; index++) {
+      expected.mergeRawTx(transactions[index].toBinary())
+      expected.mergeBump(compound.extract([txids[index]]))
+    }
+
+    expect(batchRead).toHaveBeenCalledTimes(1)
+    expect(batchRead).toHaveBeenCalledWith(txids)
+    expect(actual.toBinary()).toEqual(expected.toBinary())
+    expect(actual.isValid()).toBe(true)
+  })
+
+  test('reports proof decode and merge failures on their batch spans', async () => {
+    const events: TelemetryEvent[] = []
+    const storage = new ProtoStorage('main')
+    Object.defineProperty(storage, 'telemetry', {
+      value: new Telemetry({ sink: { capture: event => events.push(event) } })
+    })
+    const now = new Date()
+    const invalidTxid = '29'.repeat(32)
+    const invalidProven: TableProvenTx = {
+      provenTxId: 29,
+      txid: invalidTxid,
+      height: 900_250,
+      index: 0,
+      merklePath: [255],
+      rawTx: [1],
+      blockHash: '2a'.repeat(32),
+      merkleRoot: '2b'.repeat(32),
+      created_at: now,
+      updated_at: now
+    }
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValueOnce(
+      new Map([[invalidTxid, { proven: invalidProven }]])
+    )
+    const decodeFailure = jest.spyOn(EntityProvenTx.prototype, 'getMerklePath')
+      .mockImplementationOnce(() => { throw new Error('forced proof decode failure') })
+
+    await expect(storage.getBeefForTransactions([invalidTxid], {
+      ignoreStorage: false,
+      ignoreServices: true
+    })).rejects.toThrow('forced proof decode failure')
+    decodeFailure.mockRestore()
+
+    const transaction = new Transaction()
+    transaction.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
+    const txid = transaction.id('hex')
+    const path = new MerklePath(900_251, [[{ offset: 0, hash: txid, txid: true }]])
+    const proven: TableProvenTx = {
+      provenTxId: 30,
+      txid,
+      height: path.blockHeight,
+      index: 0,
+      merklePath: path.toBinary(),
+      rawTx: transaction.toBinary(),
+      blockHash: '2c'.repeat(32),
+      merkleRoot: path.computeRoot(txid),
+      created_at: now,
+      updated_at: now
+    }
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValueOnce(
+      new Map([[txid, { proven }]])
+    )
+    const target = new Beef()
+    jest.spyOn(target, 'mergeProvenTxs').mockImplementation(() => {
+      throw new Error('forced batch merge failure')
+    })
+
+    await expect(storage.getBeefForTransactions([txid], {
+      ignoreStorage: false,
+      ignoreServices: true,
+      mergeToBeef: target
+    })).rejects.toThrow('forced batch merge failure')
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'wallet.storage.beef.decode_proven_batch', spanStatus: 'error' }),
+      expect.objectContaining({ name: 'wallet.storage.beef.merge_proven_batch', spanStatus: 'error' })
+    ]))
+  })
+
+  test('preserves merge targets and routes proof-policy options through the single-root lane', async () => {
+    const storage = new ProtoStorage('main')
+    const roots = ['31'.repeat(32), '32'.repeat(32)]
+    const existing = new Beef()
+    existing.mergeTxidOnly(roots[0])
+
+    await expect(storage.getBeefForTransactions([], {
+      ignoreStorage: false,
+      ignoreServices: true,
+      mergeToBeef: existing
+    })).resolves.toBe(existing)
+
+    const serialized = existing.toBinary()
+    const mergedSerialized = await storage.getBeefForTransactions(roots, {
+      ignoreStorage: true,
+      ignoreServices: true,
+      knownTxids: roots,
+      mergeToBeef: serialized,
+      maxConcurrency: 0
+    })
+    expect(mergedSerialized).not.toBe(existing)
+    expect(roots.every(txid => mergedSerialized.findTxid(txid) != null)).toBe(true)
+
+    const policies: StorageGetBeefOptions[] = [
+      { ignoreStorage: false, ignoreServices: true, knownTxids: roots, minProofLevel: 0 },
+      {
+        ignoreStorage: false,
+        ignoreServices: true,
+        knownTxids: roots,
+        chainTracker: {
+          isValidRootForHeight: async () => true,
+          currentHeight: async () => 900_000
+        },
+        maxConcurrency: Number.POSITIVE_INFINITY
+      },
+      { ignoreStorage: false, ignoreServices: true, knownTxids: roots, skipInvalidProofs: true }
+    ]
+    for (const options of policies) {
+      const beef = await storage.getBeefForTransactions(roots, options)
+      expect(roots.every(txid => beef.findTxid(txid)?.isTxidOnly === true)).toBe(true)
+    }
+  })
+
+  test('promotes broad known-txid lookups and enforces batch recursion depth', async () => {
+    const storage = new ProtoStorage('main')
+    const roots = Array.from({ length: 5 }, (_, index) => (100 + index).toString(16).padStart(64, '0'))
+    const knownTxids = Array.from({ length: 65 }, (_, index) => index.toString(16).padStart(64, '0'))
+    knownTxids.push(...roots)
+
+    const known = await storage.getBeefForTransactions(roots, {
+      ignoreStorage: false,
+      ignoreServices: true,
+      knownTxids
+    })
+    expect(roots.every(txid => known.findTxid(txid)?.isTxidOnly === true)).toBe(true)
+
+    const unresolvedSource = '33'.repeat(32)
+    const root = new Transaction()
+    root.addInput({
+      sourceTXID: unresolvedSource,
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_TRUE')
+    })
+    root.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
+    storage.maxRecursionDepth = 1
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async txids => new Map(
+      txids.map(txid => [txid, txid === root.id('hex') ? { rawTx: root.toBinary() } : {}])
+    ))
+
+    await expect(storage.getBeefForTransactions([root.id('hex')], {
+      ignoreStorage: false,
+      ignoreServices: true
+    })).rejects.toThrow('Maximum BEEF depth exceeded')
+  })
+
+  test('assembles mixed proven and raw storage records and preserves trustSelf semantics', async () => {
+    const storage = new ProtoStorage('main')
+    const provenTransaction = new Transaction()
+    provenTransaction.addOutput({ satoshis: 2, lockingScript: Script.fromASM('OP_TRUE') })
+    const provenTxid = provenTransaction.id('hex')
+    const path = new MerklePath(900_300, [[{ offset: 0, hash: provenTxid, txid: true }]])
+    const now = new Date()
+    const proven: TableProvenTx = {
+      provenTxId: 1,
+      txid: provenTxid,
+      height: path.blockHeight,
+      index: 0,
+      merklePath: path.toBinary(),
+      rawTx: provenTransaction.toBinary(),
+      blockHash: '34'.repeat(32),
+      merkleRoot: path.computeRoot(provenTxid),
+      created_at: now,
+      updated_at: now
+    }
+    const rawTransaction = new Transaction()
+    rawTransaction.addOutput({ satoshis: 3, lockingScript: Script.fromASM('OP_TRUE') })
+    const rawTxid = rawTransaction.id('hex')
+    const inputBEEF = new Beef()
+    inputBEEF.mergeTxidOnly('35'.repeat(32))
+    const stored = new Map<string, ProvenOrRawTx>([
+      [provenTxid, { proven }],
+      [rawTxid, { rawTx: rawTransaction.toBinary(), inputBEEF: inputBEEF.toBinary() }]
+    ])
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async txids => new Map(
+      txids.map(txid => [txid, stored.get(txid) ?? {}])
+    ))
+
+    const assembled = await storage.getBeefForTransactions([provenTxid, rawTxid], {
+      ignoreStorage: false,
+      ignoreServices: true
+    })
+    expect(assembled.findTxid(provenTxid)?.tx).toBeDefined()
+    expect(assembled.findTxid(rawTxid)?.tx).toBeDefined()
+    expect(assembled.findTxid('35'.repeat(32))?.isTxidOnly).toBe(true)
+
+    const trusted = await storage.getBeefForTransactions([provenTxid, rawTxid], {
+      ignoreStorage: false,
+      ignoreServices: true,
+      trustSelf: 'known'
+    })
+    expect(trusted.findTxid(provenTxid)?.isTxidOnly).toBe(true)
+    expect(trusted.findTxid(rawTxid)?.isTxidOnly).toBe(true)
+
+    await expect(storage.getBeefForTransactions(['36'.repeat(32)], {
+      ignoreStorage: false,
+      ignoreServices: true
+    })).rejects.toThrow('valid transaction on chain main')
+  })
+
+  test('falls back to services for missing roots and to sequential proof merging for older SDK peers', async () => {
+    const storage = new ProtoStorage('main')
+    const serviceTransaction = new Transaction()
+    serviceTransaction.addOutput({ satoshis: 4, lockingScript: Script.fromASM('OP_TRUE') })
+    const serviceTxid = serviceTransaction.id('hex')
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValue(new Map())
+    storage.getServices().getRawTx = jest.fn(async txid => ({
+      txid,
+      rawTx: serviceTransaction.toBinary(),
+      name: 'mock'
+    }))
+    storage.getServices().getMerklePath = jest.fn(async () => ({ name: 'mock' }))
+
+    const fromServices = await storage.getBeefForTransactions([serviceTxid], {
+      ignoreStorage: false,
+      ignoreServices: false,
+      ignoreNewProven: true
+    })
+    expect(fromServices.findTxid(serviceTxid)?.tx).toBeDefined()
+
+    const provenTransaction = new Transaction()
+    provenTransaction.addOutput({ satoshis: 5, lockingScript: Script.fromASM('OP_TRUE') })
+    const provenTxid = provenTransaction.id('hex')
+    const path = new MerklePath(900_400, [[{ offset: 0, hash: provenTxid, txid: true }]])
+    const now = new Date()
+    const proven: TableProvenTx = {
+      provenTxId: 2,
+      txid: provenTxid,
+      height: path.blockHeight,
+      index: 0,
+      merklePath: path.toBinary(),
+      rawTx: provenTransaction.toBinary(),
+      blockHash: '37'.repeat(32),
+      merkleRoot: path.computeRoot(provenTxid),
+      created_at: now,
+      updated_at: now
+    }
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValue(new Map([[provenTxid, { proven }]]))
+    const legacyTarget = new Beef()
+    Object.defineProperty(legacyTarget, 'mergeProvenTxs', { value: undefined })
+
+    const legacy = await storage.getBeefForTransactions([provenTxid], {
+      ignoreStorage: false,
+      ignoreServices: true,
+      mergeToBeef: legacyTarget
+    })
+    expect(legacy).toBe(legacyTarget)
+    expect(legacy.findTxid(provenTxid)?.tx).toBeDefined()
+    expect(legacy.isValid()).toBe(true)
   })
 
   test('0 ProtoStorage.getBeefForTxid', async () => {

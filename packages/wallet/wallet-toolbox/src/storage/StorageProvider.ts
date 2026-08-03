@@ -22,7 +22,7 @@ import {
   mergeInputBeefs,
   notifyTransactionsOfProof
 } from './storageProviderHelpers'
-import { getBeefForTransaction } from './methods/getBeefForTransaction'
+import { getBeefForTransaction, getBeefForTransactions } from './methods/getBeefForTransaction'
 import { GetReqsAndBeefDetail, GetReqsAndBeefResult, processAction } from './methods/processAction'
 import { attemptToPostReqsToNetwork, PostReqsToNetworkResult } from './methods/attemptToPostReqsToNetwork'
 import { listCertificates } from './methods/listCertificates'
@@ -108,7 +108,7 @@ import {
   putActionBatchBlob as putBatchBlob,
   putActionBatchPack as putBatchPack
 } from './methods/actionBatchBlobs'
-import { availableManagedChange } from './methods/availableManagedChange'
+import { availableManagedChange, ManagedChangeInputCandidate } from './methods/availableManagedChange'
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -170,6 +170,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return updated
   }
 
+  /**
+   * Insert outputs that do not need their generated ids returned to the
+   * caller. Engines with a multi-row insert override this common-path helper;
+   * the fallback preserves existing storage implementations unchanged.
+   */
+  async insertOutputs(outputs: TableOutput[], trx?: TrxToken): Promise<void> {
+    for (const output of outputs) await this.insertOutput(output, trx)
+  }
+
   /** Return unreserved wallet-managed outputs eligible for automatic funding. */
   async findAvailableManagedChangeInputs(
     userId: number,
@@ -178,6 +187,23 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx?: TrxToken
   ): Promise<TableOutput[]> {
     return await availableManagedChange(this, userId, basketId, excludeSending, trx)
+  }
+
+  /** Read only the fields needed by the in-memory funding planner. */
+  async findAvailableManagedChangeInputCandidates(
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<ManagedChangeInputCandidate[]> {
+    return (await this.findAvailableManagedChangeInputs(userId, basketId, excludeSending, trx))
+      .map(({ outputId, transactionId, satoshis, txid, vout }) => ({
+        outputId,
+        transactionId,
+        satoshis,
+        txid,
+        vout
+      }))
   }
 
   /** Read the current status of a set of source transactions without loading raw transaction bytes. */
@@ -194,7 +220,52 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return statuses
   }
 
+  /**
+   * Lock and return the selected funding rows whose source transaction and
+   * action-batch reservation state still permit allocation.
+   */
+  async findFundingOutputsForUpdate(
+    userId: number,
+    outputIds: number[],
+    statuses: TransactionStatus[],
+    trx: TrxToken
+  ): Promise<Record<number, TableOutput>> {
+    const rows = await this.findOutputsByIds(outputIds, trx)
+    const reserved = new Set(await this.findReservedActionBatchOutputIds(outputIds, trx))
+    const transactionIds = [...new Set(Object.values(rows).map(output => output.transactionId))]
+    const transactionStatuses = await this.findTransactionStatusesByIds(userId, transactionIds, trx)
+    const eligible: Record<number, TableOutput> = {}
+    for (const output of Object.values(rows)) {
+      if (
+        output.userId === userId &&
+        !reserved.has(output.outputId) &&
+        statuses.includes(transactionStatuses.get(output.transactionId) as TransactionStatus)
+      ) eligible[output.outputId] = output
+    }
+    return eligible
+  }
+
   abstract getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx>
+
+  /**
+   * Resolve several transaction proofs in one storage operation when the
+   * backend supports it. The default preserves compatibility for custom
+   * providers; SQL and IndexedDB providers override this hot path.
+   */
+  async getProvenOrRawTxs(txids: string[], trx?: TrxToken): Promise<Map<string, ProvenOrRawTx>> {
+    const results = new Map<string, ProvenOrRawTx>()
+    const unique = [...new Set(txids)]
+    let cursor = 0
+    await Promise.all(
+      Array.from({ length: Math.min(8, unique.length) }, async () => {
+        while (cursor < unique.length) {
+          const txid = unique[cursor++]
+          results.set(txid, await this.getProvenOrRawTx(txid, trx))
+        }
+      })
+    )
+    return results
+  }
   abstract getRawTxOfKnownValidTransaction(
     txid?: string,
     offset?: number,
@@ -283,6 +354,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   protected supportsActionBatchPersistence(): boolean {
     return false
+  }
+
+  /** Custom providers may require physical expiry cleanup before reservations are queried. */
+  protected requiresActionBatchCleanupBeforeCreateAction(): boolean {
+    return true
   }
 
   async beginActionBatch(auth: AuthId, args: BeginActionBatchArgs): Promise<BeginActionBatchResult> {
@@ -844,7 +920,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (auth.userId == null) throw new WERR_UNAUTHORIZED()
-    if (this.supportsActionBatchPersistence()) await cleanupExpiredActionBatches(this)
+    if (this.supportsActionBatchPersistence() && this.requiresActionBatchCleanupBeforeCreateAction()) {
+      await cleanupExpiredActionBatches(this)
+    }
     return await createAction(this, auth, args)
   }
 
@@ -1007,6 +1085,10 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async getBeefForTransaction(txid: string, options: StorageGetBeefOptions): Promise<Beef> {
     const beef = await getBeefForTransaction(this, txid, options)
     return beef
+  }
+
+  async getBeefForTransactions(txids: string[], options: StorageGetBeefOptions): Promise<Beef> {
+    return await getBeefForTransactions(this, txids, options)
   }
 
   async findMonitorEventById(id: number, trx?: TrxToken): Promise<TableMonitorEvent | undefined> {

@@ -4,6 +4,17 @@ import { ProvenOrRawTx, StorageGetBeefOptions } from '../../sdk/WalletStorage.in
 import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 import { WERR_INVALID_MERKLE_ROOT, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
+interface BeefFrontierItem {
+  txid: string
+  depth: number
+}
+
+interface ProvenBeefEntry {
+  rawTx: number[]
+  merklePath: ReturnType<EntityProvenTx['getMerklePath']>
+  merkleRoot: string
+}
+
 /**
  * Creates a `Beef` to support the validity of a transaction identified by its `txid`.
  *
@@ -27,14 +38,7 @@ export async function getBeefForTransaction(
   txid: string,
   options: StorageGetBeefOptions
 ): Promise<Beef> {
-  let beef: Beef
-  if (options.mergeToBeef instanceof Beef) {
-    beef = options.mergeToBeef
-  } else if (options.mergeToBeef != null) {
-    beef = Beef.fromBinary(options.mergeToBeef)
-  } else {
-    beef = new Beef()
-  }
+  const beef = mergeTarget(options)
 
   // Most createAction proof requests resolve a single, already-proven root.
   // Building a Set for a wallet's entire known-txid history made that common
@@ -44,10 +48,7 @@ export async function getBeefForTransaction(
   const hasKnownTxid = makeKnownTxidLookup(options.knownTxids ?? [])
   const scheduled = new Set<string>([txid])
   let frontier: Array<{ txid: string; depth: number }> = [{ txid, depth: 0 }]
-  const requestedConcurrency = options.maxConcurrency ?? 8
-  const concurrency = Number.isFinite(requestedConcurrency)
-    ? Math.max(1, Math.min(32, Math.floor(requestedConcurrency)))
-    : 8
+  const concurrency = normalizeConcurrency(options.maxConcurrency)
 
   while (frontier.length > 0) {
     const current = frontier.filter(item => beef.findTxid(item.txid) == null)
@@ -74,6 +75,253 @@ export async function getBeefForTransaction(
   return beef
 }
 
+/**
+ * Build one aggregate BEEF for several roots while resolving each storage
+ * frontier as a set. This avoids one proof query per funding input on the
+ * createAction success path. Complex proof-level and chain-tracker policies
+ * retain the established single-root implementation.
+ */
+export async function getBeefForTransactions(
+  storage: StorageProvider,
+  txids: string[],
+  options: StorageGetBeefOptions
+): Promise<Beef> {
+  const beef = mergeTarget(options)
+  const roots = [...new Set(txids)]
+  if (roots.length === 0) return beef
+  if (requiresSingleRootPolicy(options)) return await mergeSingleRootFragments(storage, roots, options, beef)
+
+  const hasKnownTxid = makeKnownTxidLookup(options.knownTxids ?? [])
+  const scheduled = new Set<string>(roots)
+  let frontier: BeefFrontierItem[] = roots.map(txid => ({ txid, depth: 0 }))
+
+  while (frontier.length > 0) {
+    const unresolved = collectUnresolvedFrontier(storage, frontier, beef, hasKnownTxid)
+    if (unresolved.length === 0) break
+
+    const stored = await storage.getProvenOrRawTxs(unresolved.map(item => item.txid))
+    const allProven = options.trustSelf !== 'known' && unresolved.every(item => stored.get(item.txid)?.proven != null)
+    if (allProven) {
+      mergeAllProven(storage, beef, unresolved, stored)
+      break
+    }
+
+    const [next, missing] = mergeStoredFrontier(beef, unresolved, stored, options, scheduled)
+    await mergeMissingFragments(storage, beef, missing, options)
+    frontier = next
+  }
+
+  return beef
+}
+
+function mergeTarget(options: StorageGetBeefOptions): Beef {
+  if (options.mergeToBeef instanceof Beef) return options.mergeToBeef
+  if (options.mergeToBeef != null) return Beef.fromBinary(options.mergeToBeef)
+  return new Beef()
+}
+
+function requiresSingleRootPolicy(options: StorageGetBeefOptions): boolean {
+  return options.ignoreStorage === true ||
+    options.minProofLevel !== undefined ||
+    options.chainTracker != null ||
+    options.skipInvalidProofs === true
+}
+
+async function mergeSingleRootFragments(
+  storage: StorageProvider,
+  roots: string[],
+  options: StorageGetBeefOptions,
+  beef: Beef
+): Promise<Beef> {
+  const fragments = await mapWithConcurrency(
+    roots.filter(txid => beef.findTxid(txid) == null),
+    normalizeConcurrency(options.maxConcurrency),
+    async txid => await getBeefForTransaction(storage, txid, { ...options, mergeToBeef: undefined })
+  )
+  for (const fragment of fragments) beef.mergeBeef(fragment)
+  return beef
+}
+
+function collectUnresolvedFrontier(
+  storage: StorageProvider,
+  frontier: BeefFrontierItem[],
+  beef: Beef,
+  hasKnownTxid: (txid: string) => boolean
+): BeefFrontierItem[] {
+  const unresolved: BeefFrontierItem[] = []
+  for (const item of frontier) {
+    if (beef.findTxid(item.txid) != null) continue
+    if (storage.maxRecursionDepth && storage.maxRecursionDepth <= item.depth) {
+      throw new WERR_INVALID_OPERATION(`Maximum BEEF depth exceeded. Limit is ${storage.maxRecursionDepth}`)
+    }
+    if (hasKnownTxid(item.txid)) beef.mergeTxidOnly(item.txid)
+    else unresolved.push(item)
+  }
+  return unresolved
+}
+
+function decodeProvenEntries(
+  storage: StorageProvider,
+  unresolved: BeefFrontierItem[],
+  stored: Map<string, ProvenOrRawTx>
+): ProvenBeefEntry[] {
+  const span = storage.telemetry.enabled
+    ? storage.telemetry.startSpan('wallet.storage.beef.decode_proven_batch', {
+      component: 'wallet-storage',
+      attributes: { 'beef.proven_tx_count': unresolved.length }
+    })
+    : undefined
+  try {
+    const entries = unresolved.map(item => {
+      const proven = stored.get(item.txid)!.proven!
+      return {
+        rawTx: proven.rawTx,
+        merklePath: new EntityProvenTx(proven).getMerklePath(false),
+        merkleRoot: proven.merkleRoot
+      }
+    })
+    span?.end({ attributes: { 'beef.decoded_proof_count': entries.length } })
+    return entries
+  } catch (error) {
+    span?.end({ status: 'error', error })
+    throw error
+  }
+}
+
+function mergeAllProven(
+  storage: StorageProvider,
+  beef: Beef,
+  unresolved: BeefFrontierItem[],
+  stored: Map<string, ProvenOrRawTx>
+): void {
+  const entries = decodeProvenEntries(storage, unresolved, stored)
+  const span = storage.telemetry.enabled
+    ? storage.telemetry.startSpan('wallet.storage.beef.merge_proven_batch', {
+      component: 'wallet-storage',
+      attributes: { 'beef.proven_tx_count': entries.length }
+    })
+    : undefined
+  try {
+    mergeProvenEntries(beef, entries, unresolved, stored)
+    span?.end({
+      attributes: {
+        'beef.merged_tx_count': entries.length,
+        'beef.result_tx_count': beef.txs.length,
+        'beef.result_bump_count': beef.bumps.length
+      }
+    })
+  } catch (error) {
+    span?.end({ status: 'error', error })
+    throw error
+  }
+}
+
+function mergeProvenEntries(
+  beef: Beef,
+  entries: ProvenBeefEntry[],
+  unresolved: BeefFrontierItem[],
+  stored: Map<string, ProvenOrRawTx>
+): void {
+  if (typeof beef.mergeProvenTxs === 'function') {
+    beef.mergeProvenTxs(entries)
+    return
+  }
+  // Runtime compatibility for applications that intentionally retain an older
+  // compatible SDK peer. Current peers use the bulk lane; older peers retain
+  // the established validated sequential behavior.
+  for (const item of unresolved) {
+    const proven = stored.get(item.txid)!.proven!
+    beef.mergeRawTx(proven.rawTx)
+    beef.mergeBump(new EntityProvenTx(proven).getMerklePath())
+  }
+}
+
+function mergeStoredFrontier(
+  beef: Beef,
+  unresolved: BeefFrontierItem[],
+  stored: Map<string, ProvenOrRawTx>,
+  options: StorageGetBeefOptions,
+  scheduled: Set<string>
+): [next: BeefFrontierItem[], missing: BeefFrontierItem[]] {
+  const next: BeefFrontierItem[] = []
+  const missing: BeefFrontierItem[] = []
+  for (const item of unresolved) {
+    const result = stored.get(item.txid)
+    if (result?.proven != null) mergeStoredProven(beef, item, result, options)
+    else if (result?.rawTx != null) mergeStoredRaw(beef, item, result, options, scheduled, next)
+    else missing.push(item)
+  }
+  return [next, missing]
+}
+
+function mergeStoredProven(
+  beef: Beef,
+  item: BeefFrontierItem,
+  result: ProvenOrRawTx,
+  options: StorageGetBeefOptions
+): void {
+  if (options.trustSelf === 'known') {
+    beef.mergeTxidOnly(item.txid)
+    return
+  }
+  const proven = result.proven!
+  beef.mergeRawTx(proven.rawTx)
+  beef.mergeBump(new EntityProvenTx(proven).getMerklePath())
+}
+
+function mergeStoredRaw(
+  beef: Beef,
+  item: BeefFrontierItem,
+  result: ProvenOrRawTx,
+  options: StorageGetBeefOptions,
+  scheduled: Set<string>,
+  next: BeefFrontierItem[]
+): void {
+  if (options.trustSelf === 'known') {
+    beef.mergeTxidOnly(item.txid)
+    return
+  }
+  const transaction = beef.mergeRawTx(result.rawTx!)
+  if (result.inputBEEF != null) beef.mergeBeef(result.inputBEEF)
+  appendNewDependencies(transaction.inputTxids, item.depth + 1, beef, scheduled, next)
+}
+
+function appendNewDependencies(
+  dependencies: string[],
+  depth: number,
+  beef: Beef,
+  scheduled: Set<string>,
+  next: BeefFrontierItem[]
+): void {
+  for (const txid of dependencies) {
+    if (scheduled.has(txid) || beef.findTxid(txid) != null) continue
+    scheduled.add(txid)
+    next.push({ txid, depth })
+  }
+}
+
+async function mergeMissingFragments(
+  storage: StorageProvider,
+  beef: Beef,
+  missing: BeefFrontierItem[],
+  options: StorageGetBeefOptions
+): Promise<void> {
+  if (missing.length === 0) return
+  if (options.ignoreServices === true) {
+    throw new WERR_INVALID_PARAMETER(`txid ${missing[0].txid}`, `valid transaction on chain ${storage.chain}`)
+  }
+  const fragments = await mapWithConcurrency(
+    missing,
+    normalizeConcurrency(options.maxConcurrency),
+    async item => await getBeefForTransaction(storage, item.txid, {
+      ...options,
+      ignoreStorage: true,
+      mergeToBeef: undefined
+    })
+  )
+  for (const fragment of fragments) beef.mergeBeef(fragment)
+}
+
 function makeKnownTxidLookup (knownTxids: string[]): (txid: string) => boolean {
   let lookups = 0
   let indexed: Set<string> | undefined
@@ -86,6 +334,12 @@ function makeKnownTxidLookup (knownTxids: string[]): (txid: string) => boolean {
     }
     return knownTxids.includes(txid)
   }
+}
+
+function normalizeConcurrency(value: number | undefined = 8): number {
+  return Number.isFinite(value)
+    ? Math.max(1, Math.min(32, Math.floor(value)))
+    : 8
 }
 
 async function mapWithConcurrency<T, R>(

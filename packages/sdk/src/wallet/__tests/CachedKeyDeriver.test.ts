@@ -141,6 +141,34 @@ describe('CachedKeyDeriver', () => {
     })
   })
 
+  describe('derivePrivateKeys', () => {
+    it('derives only cache misses and preserves request order', () => {
+      const protocolID: [1, string] = [1, 'testprotocol']
+      const first = { protocolID, keyID: 'one', counterparty: 'anyone' as const }
+      const second = { protocolID, keyID: 'two', counterparty: 'anyone' as const }
+      const firstKey = new PrivateKey(11)
+      const secondKey = new PrivateKey(12)
+      const thirdKey = new PrivateKey(13)
+      mockKeyDeriver.derivePrivateKeys = jest.fn()
+        .mockReturnValueOnce([firstKey, secondKey])
+        .mockReturnValueOnce([thirdKey])
+
+      const initial = cachedKeyDeriver.derivePrivateKeys([first, second])
+      expect(initial[0]).toBe(firstKey)
+      expect(initial[1]).toBe(secondKey)
+      const reordered = cachedKeyDeriver.derivePrivateKeys([second, first])
+      expect(reordered[0]).toBe(secondKey)
+      expect(reordered[1]).toBe(firstKey)
+      expect(mockKeyDeriver.derivePrivateKeys).toHaveBeenCalledTimes(1)
+
+      const third = { protocolID, keyID: 'three', counterparty: 'anyone' as const }
+      const partiallyCached = cachedKeyDeriver.derivePrivateKeys([first, third])
+      expect(partiallyCached[0]).toBe(firstKey)
+      expect(partiallyCached[1]).toBe(thirdKey)
+      expect(mockKeyDeriver.derivePrivateKeys).toHaveBeenLastCalledWith([third])
+    })
+  })
+
   describe('deriveSymmetricKey', () => {
     it('should call deriveSymmetricKey on KeyDeriver and cache the result', () => {
       const protocolID: [2, string] = [2, 'testprotocol']

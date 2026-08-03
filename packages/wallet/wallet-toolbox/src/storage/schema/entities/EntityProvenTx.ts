@@ -87,12 +87,17 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   /**
    * @returns desirialized `MerklePath` object, value is cached.
    */
-  getMerklePath(): MerklePath {
-    this._mp ??= MerklePath.fromBinary(this.api.merklePath)
-    return this._mp
+  getMerklePath(validateRoots: boolean = true): MerklePath {
+    if (validateRoots) {
+      this._mp ??= MerklePath.fromBinary(this.api.merklePath)
+      return this._mp
+    }
+    this._mpUnchecked ??= MerklePath.fromBinary(this.api.merklePath, true, false)
+    return this._mpUnchecked
   }
 
   _mp?: MerklePath
+  _mpUnchecked?: MerklePath
 
   get provenTxId() {
     return this.api.provenTxId

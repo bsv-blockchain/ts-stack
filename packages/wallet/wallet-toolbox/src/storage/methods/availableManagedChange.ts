@@ -4,6 +4,11 @@ import type { StorageProvider } from '../StorageProvider'
 import type { TableOutput } from '../schema/tables/TableOutput'
 import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './managedChange'
 
+export type ManagedChangeInputCandidate = Pick<
+  TableOutput,
+  'outputId' | 'transactionId' | 'satoshis' | 'txid' | 'vout'
+>
+
 /**
  * Return the exact set of wallet-managed outputs currently eligible for
  * automatic funding. Keeping this predicate shared prevents the planner,
