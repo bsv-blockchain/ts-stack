@@ -214,6 +214,7 @@ describe('getBeefForTransaction tests', () => {
     const ps = new ProtoStorage('main')
     ps.maxRecursionDepth = 3
     ps.gbo.maxConcurrency = 4
+    ps.gbo.knownTxids = Array.from({ length: 65 }, (_, index) => (10_000 + index).toString(16).padStart(64, '0'))
 
     const rawByTxid = new Map<string, number[]>()
     const sources: Transaction[] = []
