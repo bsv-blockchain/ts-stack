@@ -4,6 +4,9 @@
 
 A set of ready-to-run configuration examples for stand-alone Overlay nodes built with [`@bsv/overlay-express`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express). Use these examples to spin-up your own overlay infrastructure for distributed applications on Bitcoin SV.
 
+Resource profiles and the custom-lookup safety contract are documented in
+[Service Resource Profiles](../../docs/reference/service-resource-profiles.md).
+
 ---
 
 ## Table of Contents

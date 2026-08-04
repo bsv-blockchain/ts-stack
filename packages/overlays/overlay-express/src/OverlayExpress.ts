@@ -41,6 +41,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
 import { BanService } from './BanService.js'
 import { BanAwareLookupWrapper } from './BanAwareLookupWrapper.js'
+import { ResourceBoundedLookupWrapper } from './ResourceBoundedLookupWrapper.js'
 import { BanAwareTopicManager } from './BanAwareTopicManager.js'
 import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoveryStorage.js'
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
@@ -55,7 +56,12 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  initialDoubleSlashCompatibility,
+  profileValue,
   readBodyLimitBytes,
+  readResourceLimit,
+  readResourceProfile,
+  responseSizeLimit,
   securityHeaders,
   type HttpServerPolicyDefaults,
   type SecurityHeadersOptions
@@ -75,14 +81,14 @@ interface Migration {
  * Allows running migrations defined in code rather than files.
  */
 class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
-  constructor (private readonly migrations: Migration[]) { }
+  constructor(private readonly migrations: Migration[]) {}
 
   /**
    * Gets the list of migrations.
    * @param loadExtensions - Array of file extensions to filter by (not used here)
    * @returns Promise resolving to the array of migrations
    */
-  async getMigrations (_loadExtensions: readonly string[]): Promise<Migration[]> {
+  async getMigrations(_loadExtensions: readonly string[]): Promise<Migration[]> {
     return this.migrations
   }
 
@@ -91,8 +97,10 @@ class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
    * @param migration - The migration object
    * @returns The name of the migration
    */
-  getMigrationName (migration: Migration): string {
-    return typeof migration.name === 'string' ? migration.name : `Migration at index ${this.migrations.indexOf(migration)}`
+  getMigrationName(migration: Migration): string {
+    return typeof migration.name === 'string'
+      ? migration.name
+      : `Migration at index ${this.migrations.indexOf(migration)}`
   }
 
   /**
@@ -100,7 +108,7 @@ class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
    * @param migration - The migration object
    * @returns Promise resolving to the migration object
    */
-  async getMigration (migration: Migration): Promise<Knex.Knex.Migration> {
+  async getMigration(migration: Migration): Promise<Knex.Knex.Migration> {
     return await Promise.resolve(migration)
   }
 }
@@ -129,6 +137,8 @@ export interface EngineConfig {
   reorgStreamUrl?: string
   reorgScanDepth?: number
   unprovenMaintenanceIntervalMs?: number
+  /** Maximum lookup formulas hydrated by the engine. Use -1 to opt out. */
+  maxLookupResults?: number
 }
 
 export type HealthStatus = 'ok' | 'degraded' | 'error'
@@ -143,7 +153,10 @@ export interface HealthCheckResult {
   durationMs: number
 }
 
-export type HealthCheckHandler = () => Promise<Omit<HealthCheckResult, 'name' | 'scope' | 'critical' | 'durationMs'> | void> | Omit<HealthCheckResult, 'name' | 'scope' | 'critical' | 'durationMs'> | void
+export type HealthCheckHandler = () =>
+  | Promise<Omit<HealthCheckResult, 'name' | 'scope' | 'critical' | 'durationMs'> | void>
+  | Omit<HealthCheckResult, 'name' | 'scope' | 'critical' | 'durationMs'>
+  | void
 
 export interface HealthCheckDefinition {
   name: string
@@ -186,11 +199,14 @@ export interface EdgePolicyConfig {
   securityHeaders: SecurityHeadersOptions
 }
 
-export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<{
-  blockHeight: number
-  blockHash: string
-  merkleRoot?: string
-} | undefined>
+export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<
+  | {
+      blockHeight: number
+      blockHash: string
+      merkleRoot?: string
+    }
+  | undefined
+>
 
 interface BASMCapableEngine extends Engine {
   provideTopicAnchorTip: (topic: string) => Promise<any>
@@ -200,56 +216,67 @@ interface BASMCapableEngine extends Engine {
   provideRawTransactions: (txids: string[]) => Promise<any>
   startBASMSync: () => Promise<any>
   advanceTopicAnchorChains: (toHeight?: number) => Promise<void>
-  evictUnprovenTransactions: (options?: { topic?: string, thresholdBlocks?: number }) => Promise<any>
+  evictUnprovenTransactions: (options?: {
+    topic?: string
+    thresholdBlocks?: number
+  }) => Promise<any>
   refreshUnprovenTransactionProofs: (options: {
     topic?: string
     thresholdBlocks?: number
-    proofProvider: (txid: string) => Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined>
+    proofProvider: (
+      txid: string
+    ) => Promise<{ merklePath: MerklePath; blockHeight?: number } | undefined>
   }) => Promise<any>
   maintainUnprovenTransactions: (options: {
     topic?: string
     thresholdBlocks?: number
-    proofProvider: (txid: string) => Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined>
+    proofProvider: (
+      txid: string
+    ) => Promise<{ merklePath: MerklePath; blockHeight?: number } | undefined>
   }) => Promise<any>
-  evictAppliedTransaction: (txid: string, options?: { topic?: string, reason?: string }) => Promise<any>
+  evictAppliedTransaction: (
+    txid: string,
+    options?: { topic?: string; reason?: string }
+  ) => Promise<any>
   handleReorg: (input: ReorgHandlerInput) => Promise<any>
   revalidateRecentAnchors: (depth?: number) => Promise<any>
 }
 
 class PublicRequestError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'PublicRequestError'
   }
 }
 
-function publicErrorMessage (
+function publicErrorMessage(
   error: unknown,
   fallback: string = 'Request could not be processed'
 ): string {
   return error instanceof PublicRequestError ? error.message : fallback
 }
 
-function secretMatches (provided: string, expected: string): boolean {
+function secretMatches(provided: string, expected: string): boolean {
   const providedDigest = createHash('sha256').update(provided, 'utf8').digest()
   const expectedDigest = createHash('sha256').update(expected, 'utf8').digest()
   return timingSafeEqual(providedDigest, expectedDigest)
 }
 
-function parseTopicsHeader (header: string): string[] {
+function parseTopicsHeader(header: string): string[] {
   const value = header.trim()
   let parsed: unknown
   try {
-    parsed = value.startsWith('[')
-      ? JSON.parse(value)
-      : value.split(',').map(topic => topic.trim())
+    parsed = value.startsWith('[') ? JSON.parse(value) : value.split(',').map(topic => topic.trim())
   } catch {
     throw new PublicRequestError(
       'Invalid x-topics header: expected a comma-separated list or JSON string array'
     )
   }
 
-  if (!Array.isArray(parsed) || parsed.some(topic => typeof topic !== 'string' || topic.length === 0)) {
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some(topic => typeof topic !== 'string' || topic.length === 0)
+  ) {
     throw new PublicRequestError(
       'Invalid x-topics header: expected a comma-separated list or JSON string array'
     )
@@ -374,12 +401,16 @@ export default class OverlayExpress {
     hostDownRevokeScore: number
     autoBanOnRemoval: boolean
     allowPrivateHosts: boolean
+    batchSize?: number
+    maxReportResults?: number
   } = {
-      requestTimeoutMs: 10000, // 10 seconds
-      hostDownRevokeScore: 3,
-      autoBanOnRemoval: true,
-      allowPrivateHosts: false
-    }
+    requestTimeoutMs: 10000, // 10 seconds
+    hostDownRevokeScore: 3,
+    autoBanOnRemoval: true,
+    allowPrivateHosts: false,
+    batchSize: undefined,
+    maxReportResults: undefined
+  }
 
   // Ban service for persistent domain/outpoint blocking
   banService?: BanService
@@ -426,7 +457,8 @@ export default class OverlayExpress {
       maxRequestsPerSocket: 1_000
     },
     securityHeaders: {
-      contentSecurityPolicy: "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://bsvblockchain.org; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+      contentSecurityPolicy:
+        "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://bsvblockchain.org; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     }
   }
 
@@ -438,7 +470,7 @@ export default class OverlayExpress {
    * @param adminToken - Optional. An administrative Bearer token used to protect admin routes.
    *                     If not provided, a random token will be generated at runtime.
    */
-  constructor (
+  constructor(
     public name: string,
     public privateKey: string,
     public advertisableFQDN: string,
@@ -452,7 +484,7 @@ export default class OverlayExpress {
   /**
    * Returns the current admin token in case you need to programmatically retrieve or display it.
    */
-  getAdminToken (): string {
+  getAdminToken(): string {
     return this.adminToken
   }
 
@@ -460,7 +492,7 @@ export default class OverlayExpress {
    * Configures the port on which the server will listen.
    * @param port - The port number
    */
-  configurePort (port: number): void {
+  configurePort(port: number): void {
     this.port = port
     this.logger.log(chalk.blue(`Server port set to ${port}`))
   }
@@ -469,7 +501,7 @@ export default class OverlayExpress {
    * Configures the web user interface
    * @param config - Web UI configuration options
    */
-  configureWebUI (config: UIConfig): void {
+  configureWebUI(config: UIConfig): void {
     this.webUIConfig = config
     this.logger.log(chalk.blue('Web UI has been configured.'))
   }
@@ -481,8 +513,10 @@ export default class OverlayExpress {
    *   - hostDownRevokeScore: Number of consecutive failures before deleting output (default: 3)
    *   - autoBanOnRemoval: Whether to auto-ban domains when removed by janitor (default: true)
    *   - allowPrivateHosts: Permit private/HTTP targets for isolated local development (default: false)
+   *   - batchSize: Mongo scan batch size; -1 uses the driver default
+   *   - maxReportResults: Maximum retained result details; -1 retains all
    */
-  configureJanitor (config: Partial<typeof this.janitorConfig>): void {
+  configureJanitor(config: Partial<typeof this.janitorConfig>): void {
     this.janitorConfig = {
       ...this.janitorConfig,
       ...config
@@ -493,7 +527,7 @@ export default class OverlayExpress {
   /**
    * Configures health-report behavior.
    */
-  configureHealth (config: Partial<HealthConfig>): void {
+  configureHealth(config: Partial<HealthConfig>): void {
     this.healthConfig = {
       ...this.healthConfig,
       ...config
@@ -506,10 +540,12 @@ export default class OverlayExpress {
    * Public cross-origin access is the default; pass allowedOrigins or set
    * OVERLAY_CORS_MODE=allowlist to restrict browser callers.
    */
-  configureEdgePolicy (config: Partial<Omit<EdgePolicyConfig, 'http' | 'securityHeaders'>> & {
-    http?: Partial<HttpServerPolicyDefaults>
-    securityHeaders?: SecurityHeadersOptions
-  }): void {
+  configureEdgePolicy(
+    config: Partial<Omit<EdgePolicyConfig, 'http' | 'securityHeaders'>> & {
+      http?: Partial<HttpServerPolicyDefaults>
+      securityHeaders?: SecurityHeadersOptions
+    }
+  ): void {
     const { http, securityHeaders: headerConfig, ...topLevel } = config
     const definedTopLevel = Object.fromEntries(
       Object.entries(topLevel).filter(([, value]) => value !== undefined)
@@ -538,7 +574,7 @@ export default class OverlayExpress {
   /**
    * Registers an application-specific health check.
    */
-  registerHealthCheck (definition: HealthCheckDefinition): void {
+  registerHealthCheck(definition: HealthCheckDefinition): void {
     this.healthChecks = this.healthChecks.filter(check => check.name !== definition.name)
     this.healthChecks.push({
       scope: 'ready',
@@ -555,7 +591,7 @@ export default class OverlayExpress {
    *
    * @param identityKey - The hex-encoded public key of the admin
    */
-  configureAdminIdentityKey (identityKey: string): void {
+  configureAdminIdentityKey(identityKey: string): void {
     this.adminIdentityKey = identityKey
     this.logger.log(chalk.blue('Admin identity key has been configured.'))
   }
@@ -565,7 +601,7 @@ export default class OverlayExpress {
    * middleware. Horizontally scaled services should supply a shared
    * AsyncSessionManager rather than use the default process-local store.
    */
-  configureAuthSessionManager (sessionManager: SessionManager | AsyncSessionManager): void {
+  configureAuthSessionManager(sessionManager: SessionManager | AsyncSessionManager): void {
     this.authSessionManager = sessionManager
     this.logger.log(chalk.blue('BSV authentication session manager has been configured.'))
   }
@@ -574,7 +610,7 @@ export default class OverlayExpress {
    * Configures the logger to be used by the server.
    * @param logger - A logger object (e.g., console)
    */
-  configureLogger (logger: typeof console): void {
+  configureLogger(logger: typeof console): void {
     this.logger = logger
     this.logger.log(chalk.blue('Logger has been configured.'))
   }
@@ -584,7 +620,7 @@ export default class OverlayExpress {
    * By default, it re-initializes chainTracker as a WhatsOnChain for that network.
    * @param network - The network ('main' or 'test')
    */
-  configureNetwork (network: 'main' | 'test'): void {
+  configureNetwork(network: 'main' | 'test'): void {
     this.network = network
     this.chainTracker = new WhatsOnChain(this.network)
     this.logger.log(chalk.blue(`Network set to ${network}`))
@@ -595,7 +631,9 @@ export default class OverlayExpress {
    * If 'scripts only' is used, it implies no full SPV chain tracking in the Engine.
    * @param chainTracker - An instance of ChainTracker or 'scripts only'
    */
-  configureChainTracker (chainTracker: ChainTracker | 'scripts only' = new WhatsOnChain(this.network)): void {
+  configureChainTracker(
+    chainTracker: ChainTracker | 'scripts only' = new WhatsOnChain(this.network)
+  ): void {
     this.chainTracker = chainTracker
     this.logger.log(chalk.blue('ChainTracker has been configured.'))
   }
@@ -604,7 +642,7 @@ export default class OverlayExpress {
    * Configures the ARC API key.
    * @param apiKey - The ARC API key
    */
-  configureArcApiKey (apiKey: string): void {
+  configureArcApiKey(apiKey: string): void {
     this.arcApiKey = apiKey
     this.logger.log(chalk.blue('ARC API key has been configured.'))
   }
@@ -613,7 +651,7 @@ export default class OverlayExpress {
    * Configures the ARC callback token expected by /arc-ingest.
    * @param token - The token ARC should present when posting callback notifications.
    */
-  configureArcCallbackToken (token: string): void {
+  configureArcCallbackToken(token: string): void {
     this.arcCallbackToken = token
     this.logger.log(chalk.blue('ARC callback token has been configured.'))
   }
@@ -621,11 +659,14 @@ export default class OverlayExpress {
   /**
    * Configures Arcade for first-choice transaction propagation and proof lookup.
    */
-  configureArcade (url: string, config: {
-    apiKey?: string
-    deploymentId?: string
-    chaintracksApiPrefix?: string
-  } = {}): void {
+  configureArcade(
+    url: string,
+    config: {
+      apiKey?: string
+      deploymentId?: string
+      chaintracksApiPrefix?: string
+    } = {}
+  ): void {
     this.arcadeUrl = url
     this.arcadeApiKey = config.apiKey
     this.arcadeDeploymentId = config.deploymentId
@@ -639,11 +680,14 @@ export default class OverlayExpress {
    * Configures a go-chaintracks compatible service for header validation and
    * BASM reorg streaming. Arcade exposes this at `/chaintracks/v2`.
    */
-  configureChaintracks (url: string, config: {
-    apiPrefix?: string
-    reorgStream?: boolean
-    scanDepth?: number
-  } = {}): void {
+  configureChaintracks(
+    url: string,
+    config: {
+      apiPrefix?: string
+      reorgStream?: boolean
+      scanDepth?: number
+    } = {}
+  ): void {
     const apiPrefix = config.apiPrefix ?? '/chaintracks/v2'
     const client = new ChaintracksProvider(url, { apiPrefix })
     this.configureChainTracker(client)
@@ -667,7 +711,7 @@ export default class OverlayExpress {
    * This is a broad toggle that can be overridden or customized through syncConfiguration.
    * @param enable - true to enable, false to disable
    */
-  configureEnableGASPSync (enable: boolean): void {
+  configureEnableGASPSync(enable: boolean): void {
     this.enableGASPSync = enable
     this.logger.log(chalk.blue(`GASP synchronization ${enable ? 'enabled' : 'disabled'}.`))
   }
@@ -676,7 +720,7 @@ export default class OverlayExpress {
    * Enables or disables BRC-136 BASM synchronization.
    * BASM is opt-in because it requires direct proofs and block hash resolution.
    */
-  configureEnableBASMSync (enable: boolean): void {
+  configureEnableBASMSync(enable: boolean): void {
     this.enableBASMSync = enable
     this.logger.log(chalk.blue(`BASM synchronization ${enable ? 'enabled' : 'disabled'}.`))
   }
@@ -684,7 +728,7 @@ export default class OverlayExpress {
   /**
    * Configures the block header resolver used to derive BASM block hashes.
    */
-  configureTopicAnchorHeaderResolver (resolver: TopicAnchorHeaderResolver): void {
+  configureTopicAnchorHeaderResolver(resolver: TopicAnchorHeaderResolver): void {
     this.topicAnchorHeaderResolver = resolver
     this.logger.log(chalk.blue('BASM topic anchor header resolver has been configured.'))
   }
@@ -695,7 +739,7 @@ export default class OverlayExpress {
    * @param url - The reorg stream URL, e.g. `https://arcade.example/v2/reorg/stream`.
    * @param scanDepth - Optional revalidation-sweep depth in blocks (default 3).
    */
-  configureReorgStream (url: string, scanDepth?: number): void {
+  configureReorgStream(url: string, scanDepth?: number): void {
     this.reorgStreamUrl = url
     if (scanDepth !== undefined) {
       this.reorgScanDepth = scanDepth
@@ -706,7 +750,7 @@ export default class OverlayExpress {
   /**
    * Configures the opt-in unproven state eviction threshold.
    */
-  configureUnprovenEviction (config: { thresholdBlocks?: number }): void {
+  configureUnprovenEviction(config: { thresholdBlocks?: number }): void {
     if (config.thresholdBlocks !== undefined) {
       this.unprovenEvictionBlocks = config.thresholdBlocks
     }
@@ -717,7 +761,7 @@ export default class OverlayExpress {
    * Configures periodic unproven maintenance. Each run first tries configured
    * proof providers, then evicts rows that are still unproven past the threshold.
    */
-  configureUnprovenMaintenance (config: { intervalMs?: number, thresholdBlocks?: number }): void {
+  configureUnprovenMaintenance(config: { intervalMs?: number; thresholdBlocks?: number }): void {
     if (config.intervalMs !== undefined) {
       this.unprovenMaintenanceIntervalMs = config.intervalMs
     }
@@ -731,7 +775,7 @@ export default class OverlayExpress {
    * Configures how often the BASM anchor chain is extended with empty anchors to
    * follow the chain tip. Set to 0 to disable periodic polling.
    */
-  configureBASMBlockPollInterval (intervalMs: number): void {
+  configureBASMBlockPollInterval(intervalMs: number): void {
     this.basmBlockPollIntervalMs = intervalMs
     this.logger.log(chalk.blue(`BASM block poll interval set to ${intervalMs}ms.`))
   }
@@ -740,7 +784,7 @@ export default class OverlayExpress {
    * Enables or disables verbose request logging.
    * @param enable - true to enable, false to disable
    */
-  configureVerboseRequestLogging (enable: boolean): void {
+  configureVerboseRequestLogging(enable: boolean): void {
     this.verboseRequestLogging = enable
     this.logger.log(chalk.blue(`Verbose request logging ${enable ? 'enabled' : 'disabled'}.`))
   }
@@ -749,7 +793,7 @@ export default class OverlayExpress {
    * Configure Knex (SQL) database connection.
    * @param config - Knex configuration object, or a MySQL connection string loaded from configuration.
    */
-  async configureKnex (config: Knex.Knex.Config | string): Promise<void> {
+  async configureKnex(config: Knex.Knex.Config | string): Promise<void> {
     if (typeof config === 'string') {
       config = {
         client: 'mysql2',
@@ -765,7 +809,7 @@ export default class OverlayExpress {
    * Also initializes the BanService for persistent ban tracking.
    * @param connectionString - MongoDB connection string
    */
-  async configureMongo (connectionString: string): Promise<void> {
+  async configureMongo(connectionString: string): Promise<void> {
     const mongoClient = new MongoClient(connectionString)
     await mongoClient.connect()
     this.mongoClient = mongoClient
@@ -784,7 +828,7 @@ export default class OverlayExpress {
    * @param name - The name of the Topic Manager
    * @param manager - An instance of TopicManager
    */
-  configureTopicManager (name: string, manager: TopicManager): void {
+  configureTopicManager(name: string, manager: TopicManager): void {
     this.managers[name] = manager
     this.logger.log(chalk.blue(`Configured topic manager ${name}`))
   }
@@ -794,7 +838,7 @@ export default class OverlayExpress {
    * @param name - The name of the Lookup Service
    * @param service - An instance of LookupService
    */
-  configureLookupService (name: string, service: LookupService): void {
+  configureLookupService(name: string, service: LookupService): void {
     this.services[name] = service
     this.logger.log(chalk.blue(`Configured lookup service ${name}`))
   }
@@ -804,9 +848,9 @@ export default class OverlayExpress {
    * @param name - The name of the Lookup Service
    * @param serviceFactory - A factory function that creates a LookupService instance using Knex
    */
-  configureLookupServiceWithKnex (
+  configureLookupServiceWithKnex(
     name: string,
-    serviceFactory: (knex: Knex.Knex) => { service: LookupService, migrations: Migration[] }
+    serviceFactory: (knex: Knex.Knex) => { service: LookupService; migrations: Migration[] }
   ): void {
     const knex = this.ensureKnex()
     const factoryResult = serviceFactory(knex)
@@ -820,7 +864,10 @@ export default class OverlayExpress {
    * @param name - The name of the Lookup Service
    * @param serviceFactory - A factory function that creates a LookupService instance using MongoDB
    */
-  configureLookupServiceWithMongo (name: string, serviceFactory: (mongoDb: Db) => LookupService): void {
+  configureLookupServiceWithMongo(
+    name: string,
+    serviceFactory: (mongoDb: Db) => LookupService
+  ): void {
     const mongoDb = this.ensureMongo()
     this.services[name] = serviceFactory(mongoDb)
     this.logger.log(chalk.blue(`Configured lookup service ${name} with MongoDB`))
@@ -840,7 +887,7 @@ export default class OverlayExpress {
    * These fields will be respected when we finally build/configure the Engine
    * in the `configureEngine()` method below.
    */
-  configureEngineParams (params: EngineConfig): void {
+  configureEngineParams(params: EngineConfig): void {
     this.engineConfig = {
       ...this.engineConfig,
       ...params
@@ -859,8 +906,20 @@ export default class OverlayExpress {
    *
    * @param autoConfigureShipSlap - Whether to auto-configure SHIP and SLAP services (default: true)
    */
-  async configureEngine (autoConfigureShipSlap = true): Promise<void> {
+  async configureEngine(autoConfigureShipSlap = true): Promise<void> {
     const knex = this.ensureKnex()
+    const maxLookupResults =
+      this.engineConfig.maxLookupResults ??
+      readResourceLimit(
+        this.edgePolicyConfig.environmentPrefix,
+        'MAX_LOOKUP_RESULTS',
+        profileValue(readResourceProfile(this.edgePolicyConfig.environmentPrefix), {
+          small: 500,
+          standard: 1000,
+          highThroughput: 5000
+        }),
+        1_000_000
+      )
 
     if (autoConfigureShipSlap) {
       const mongoDb = this.ensureMongo()
@@ -875,15 +934,23 @@ export default class OverlayExpress {
       this.configureTopicManager('tm_ship', new DiscoveryServices.SHIPTopicManager())
       this.configureTopicManager('tm_slap', new DiscoveryServices.SLAPTopicManager())
 
-      const shipStorageForLookup = this.banService === undefined
-        ? shipStorage
-        : new BanAwareSHIPStorage(shipStorage, this.banService, this.logger)
-      const slapStorageForLookup = this.banService === undefined
-        ? slapStorage
-        : new BanAwareSLAPStorage(slapStorage, this.banService, this.logger)
+      const shipStorageForLookup =
+        this.banService === undefined
+          ? shipStorage
+          : new BanAwareSHIPStorage(shipStorage, this.banService, this.logger)
+      const slapStorageForLookup =
+        this.banService === undefined
+          ? slapStorage
+          : new BanAwareSLAPStorage(slapStorage, this.banService, this.logger)
 
-      this.services.ls_ship = new DiscoveryServices.SHIPLookupService(shipStorageForLookup as any)
-      this.services.ls_slap = new DiscoveryServices.SLAPLookupService(slapStorageForLookup as any)
+      this.services.ls_ship = new ResourceBoundedLookupWrapper(
+        new DiscoveryServices.SHIPLookupService(shipStorageForLookup as any),
+        maxLookupResults
+      )
+      this.services.ls_slap = new ResourceBoundedLookupWrapper(
+        new DiscoveryServices.SLAPLookupService(slapStorageForLookup as any),
+        maxLookupResults
+      )
       this.logger.log(chalk.blue('Configured lookup service ls_ship with MongoDB'))
       this.logger.log(chalk.blue('Configured lookup service ls_slap with MongoDB'))
     }
@@ -919,7 +986,8 @@ export default class OverlayExpress {
       this.engineConfig.suppressDefaultSyncAdvertisements ?? true,
       this.buildTopicAnchorHeaderResolver(),
       this.engineConfig.enableBASMSync ?? this.enableBASMSync,
-      this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks
+      this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks,
+      maxLookupResults
     )
 
     this.initServerWallet()
@@ -927,26 +995,36 @@ export default class OverlayExpress {
   }
 
   /** Wrap SHIP/SLAP managers and services with ban-aware filters if BanService is configured. */
-  private wrapBanAwareServices (): void {
+  private wrapBanAwareServices(): void {
     if (this.banService === undefined) return
     for (const key of ['tm_ship', 'tm_slap'] as const) {
       if (this.managers[key] !== undefined) {
         const label = key === 'tm_ship' ? 'SHIP' : 'SLAP'
-        this.managers[key] = new BanAwareTopicManager(this.managers[key], this.banService, label, this.logger)
+        this.managers[key] = new BanAwareTopicManager(
+          this.managers[key],
+          this.banService,
+          label,
+          this.logger
+        )
         this.logger.log(chalk.blue(`${label} topic manager wrapped with ban-aware filter.`))
       }
     }
     for (const key of ['ls_ship', 'ls_slap'] as const) {
       if (this.services[key] !== undefined) {
         const label = key === 'ls_ship' ? 'SHIP' : 'SLAP'
-        this.services[key] = new BanAwareLookupWrapper(this.services[key], this.banService, label, this.logger)
+        this.services[key] = new BanAwareLookupWrapper(
+          this.services[key],
+          this.banService,
+          label,
+          this.logger
+        )
         this.logger.log(chalk.blue(`${label} lookup service wrapped with ban-aware filter.`))
       }
     }
   }
 
   /** Build the sync config based on enableGASPSync and engineConfig. */
-  private buildSyncConfig (): SyncConfigurationMap {
+  private buildSyncConfig(): SyncConfigurationMap {
     if (this.enableGASPSync) {
       return this.engineConfig.syncConfiguration ?? {}
     }
@@ -958,7 +1036,7 @@ export default class OverlayExpress {
   }
 
   /** Build the configured transaction propagation provider chain. */
-  private buildBroadcaster (): Broadcaster | undefined {
+  private buildBroadcaster(): Broadcaster | undefined {
     const providers: NamedBroadcaster[] = []
     const callbackUrl = `https://${this.advertisableFQDN}/arc-ingest`
 
@@ -994,7 +1072,7 @@ export default class OverlayExpress {
     return new ProviderChainBroadcaster(providers)
   }
 
-  private ensureArcadeProvider (): ArcadeProvider | undefined {
+  private ensureArcadeProvider(): ArcadeProvider | undefined {
     if (this.arcadeProvider !== undefined) return this.arcadeProvider
     if (typeof this.arcadeUrl !== 'string' || this.arcadeUrl.length === 0) return undefined
     this.arcadeProvider = new ArcadeProvider(this.arcadeUrl, {
@@ -1006,7 +1084,7 @@ export default class OverlayExpress {
     return this.arcadeProvider
   }
 
-  private async fetchArcadeProof (txid: string): Promise<ArcadeMerkleProof | undefined> {
+  private async fetchArcadeProof(txid: string): Promise<ArcadeMerkleProof | undefined> {
     const provider = this.ensureArcadeProvider()
     if (provider === undefined) return undefined
     const proof = await provider.fetchMerkleProof(txid)
@@ -1021,7 +1099,9 @@ export default class OverlayExpress {
     }
     const valid = await chainTracker.isValidRootForHeight(proof.merkleRoot, blockHeight)
     if (!valid) {
-      throw new Error(`Arcade proof for ${txid} did not match the chain tracker at height ${blockHeight}`)
+      throw new Error(
+        `Arcade proof for ${txid} did not match the chain tracker at height ${blockHeight}`
+      )
     }
     return {
       ...proof,
@@ -1029,7 +1109,9 @@ export default class OverlayExpress {
     }
   }
 
-  private async fetchConfiguredMerkleProof (txid: string): Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined> {
+  private async fetchConfiguredMerkleProof(
+    txid: string
+  ): Promise<{ merklePath: MerklePath; blockHeight?: number } | undefined> {
     const proof = await this.fetchArcadeProof(txid)
     if (proof === undefined) return undefined
     return {
@@ -1039,21 +1121,26 @@ export default class OverlayExpress {
   }
 
   /** Build the BASM block header resolver. */
-  private buildTopicAnchorHeaderResolver (): TopicAnchorHeaderResolver | undefined {
+  private buildTopicAnchorHeaderResolver(): TopicAnchorHeaderResolver | undefined {
     const configured = this.engineConfig.topicAnchorHeaderResolver ?? this.topicAnchorHeaderResolver
     if (configured !== undefined) {
       return configured
     }
 
     return async (blockHeight: number) => {
-      const response = await fetch(`https://api.whatsonchain.com/v1/bsv/${this.network}/block/${blockHeight}/header`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      })
+      const response = await fetch(
+        `https://api.whatsonchain.com/v1/bsv/${this.network}/block/${blockHeight}/header`,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        }
+      )
       if (!response.ok) {
-        throw new Error(`WhatsOnChain header lookup failed for height ${blockHeight}: ${response.status}`)
+        throw new Error(
+          `WhatsOnChain header lookup failed for height ${blockHeight}: ${response.status}`
+        )
       }
-      const header = await response.json() as { hash?: string, merkleroot?: string }
+      const header = (await response.json()) as { hash?: string; merkleroot?: string }
       if (typeof header.hash !== 'string') {
         throw new TypeError(`WhatsOnChain did not return a block hash for height ${blockHeight}`)
       }
@@ -1066,17 +1153,18 @@ export default class OverlayExpress {
   }
 
   /** Resolve the SLAP trackers from config or network defaults. */
-  private resolveSlapTrackers (): string[] | undefined {
+  private resolveSlapTrackers(): string[] | undefined {
     if (Array.isArray(this.engineConfig.slapTrackers)) return this.engineConfig.slapTrackers
     return this.network === 'test' ? DEFAULT_TESTNET_SLAP_TRACKERS : DEFAULT_SLAP_TRACKERS
   }
 
   /** Build the WalletAdvertiser (or use user-provided one). */
-  private async buildAdvertiser (): Promise<Advertiser | undefined> {
+  private async buildAdvertiser(): Promise<Advertiser | undefined> {
     if (this.engineConfig.advertiser !== undefined) return this.engineConfig.advertiser
-    const storageBase = this.network === 'test'
-      ? 'https://staging-storage.babbage.systems'
-      : 'https://storage.babbage.systems'
+    const storageBase =
+      this.network === 'test'
+        ? 'https://staging-storage.babbage.systems'
+        : 'https://storage.babbage.systems'
     try {
       return new DiscoveryServices.WalletAdvertiser(
         this.network,
@@ -1085,13 +1173,15 @@ export default class OverlayExpress {
         `https://${this.advertisableFQDN}`
       )
     } catch (e) {
-      this.logger.log(`Advertiser not initialized for FQDN ${this.advertisableFQDN} - SHIP and SLAP will be disabled. Reason: ${e}`)
+      this.logger.log(
+        `Advertiser not initialized for FQDN ${this.advertisableFQDN} - SHIP and SLAP will be disabled. Reason: ${e}`
+      )
       return undefined
     }
   }
 
   /** Initialize the server wallet for BSV mutual authentication. */
-  private initServerWallet (): void {
+  private initServerWallet(): void {
     try {
       const keyDeriver = new KeyDeriver(new PrivateKey(this.privateKey, 'hex'))
       const storageManager = new WalletStorageManager(keyDeriver.identityKey)
@@ -1101,7 +1191,11 @@ export default class OverlayExpress {
       this.adminIdentityKey ??= keyDeriver.identityKey
       this.logger.log(chalk.blue('Server wallet initialized for BSV mutual authentication.'))
     } catch (e) {
-      this.logger.log(chalk.yellow(`Server wallet could not be initialized. BSV auth will not be available. Reason: ${e}`))
+      this.logger.log(
+        chalk.yellow(
+          `Server wallet could not be initialized. BSV auth will not be available. Reason: ${e}`
+        )
+      )
     }
   }
 
@@ -1109,9 +1203,11 @@ export default class OverlayExpress {
    * Ensures that Knex is configured and returns it.
    * @throws Error if Knex is not configured
    */
-  private ensureKnex (): Knex.Knex {
+  private ensureKnex(): Knex.Knex {
     if (this.knex === undefined) {
-      throw new TypeError('You must configure your SQL database with the .configureKnex() method first!')
+      throw new TypeError(
+        'You must configure your SQL database with the .configureKnex() method first!'
+      )
     }
     return this.knex
   }
@@ -1120,9 +1216,11 @@ export default class OverlayExpress {
    * Ensures that MongoDB is configured and returns it.
    * @throws Error if MongoDB is not configured
    */
-  private ensureMongo (): Db {
+  private ensureMongo(): Db {
     if (this.mongoDb === undefined) {
-      throw new TypeError('You must configure your MongoDB connection with the .configureMongo() method first!')
+      throw new TypeError(
+        'You must configure your MongoDB connection with the .configureMongo() method first!'
+      )
     }
     return this.mongoDb
   }
@@ -1131,9 +1229,11 @@ export default class OverlayExpress {
    * Ensures that the Overlay Engine is configured and returns it.
    * @throws Error if the Engine is not configured
    */
-  private ensureEngine (): Engine {
+  private ensureEngine(): Engine {
     if (this.engine === undefined) {
-      throw new TypeError('You must configure your Overlay Services engine with the .configureEngine() method first!')
+      throw new TypeError(
+        'You must configure your Overlay Services engine with the .configureEngine() method first!'
+      )
     }
     return this.engine
   }
@@ -1141,8 +1241,10 @@ export default class OverlayExpress {
   /**
    * Creates a JanitorService instance with current configuration.
    */
-  private createJanitor (): JanitorService {
+  private createJanitor(): JanitorService {
     const mongoDb = this.ensureMongo()
+    const prefix = this.edgePolicyConfig.environmentPrefix
+    const profile = readResourceProfile(prefix)
     return new JanitorService({
       mongoDb,
       logger: this.logger,
@@ -1150,12 +1252,32 @@ export default class OverlayExpress {
       hostDownRevokeScore: this.janitorConfig.hostDownRevokeScore,
       banService: this.banService,
       autoBanOnRemoval: this.janitorConfig.autoBanOnRemoval,
-      allowPrivateHosts: this.janitorConfig.allowPrivateHosts
+      allowPrivateHosts: this.janitorConfig.allowPrivateHosts,
+      batchSize:
+        this.janitorConfig.batchSize ??
+        readResourceLimit(
+          prefix,
+          'JANITOR_BATCH_SIZE',
+          profileValue(profile, { small: 100, standard: 250, highThroughput: 1000 }),
+          100_000
+        ),
+      maxReportResults:
+        this.janitorConfig.maxReportResults ??
+        readResourceLimit(
+          prefix,
+          'JANITOR_MAX_REPORT_RESULTS',
+          profileValue(profile, { small: 500, standard: 1000, highThroughput: 5000 }),
+          1_000_000
+        )
     })
   }
 
   /** Ban a domain and remove all its SHIP/SLAP records from MongoDB. */
-  private async handleBanDomain (res: express.Response, value: string, reason?: string): Promise<express.Response> {
+  private async handleBanDomain(
+    res: express.Response,
+    value: string,
+    reason?: string
+  ): Promise<express.Response> {
     await this.banService!.banDomain(value, reason)
     const db = this.ensureMongo()
     const [shipDeleted, slapDeleted] = await Promise.all([
@@ -1169,10 +1291,17 @@ export default class OverlayExpress {
   }
 
   /** Parse outpoint string, ban it, and evict it from all lookup services. */
-  private async handleBanOutpoint (res: express.Response, engine: Engine, value: string, reason?: string): Promise<express.Response> {
+  private async handleBanOutpoint(
+    res: express.Response,
+    engine: Engine,
+    value: string,
+    reason?: string
+  ): Promise<express.Response> {
     const dotIndex = value.lastIndexOf('.')
     if (dotIndex === -1) {
-      return res.status(400).json({ status: 'error', message: 'Outpoint format must be "txid.outputIndex"' })
+      return res
+        .status(400)
+        .json({ status: 'error', message: 'Outpoint format must be "txid.outputIndex"' })
     }
     const txid = value.substring(0, dotIndex)
     const outputIndex = Number.parseInt(value.substring(dotIndex + 1))
@@ -1188,19 +1317,31 @@ export default class OverlayExpress {
   }
 
   /** Evict an output from a specific service or all services (silent per-service errors). */
-  private async evictFromServices (engine: Engine, txid: string, outputIndex: number, service?: string): Promise<void> {
+  private async evictFromServices(
+    engine: Engine,
+    txid: string,
+    outputIndex: number,
+    service?: string
+  ): Promise<void> {
     if (typeof service === 'string') {
       const svc = engine.lookupServices[service]
       if (svc !== undefined) await svc.outputEvicted(txid, outputIndex)
       return
     }
     for (const svc of Object.values(engine.lookupServices)) {
-      try { await svc.outputEvicted(txid, outputIndex) } catch { /* best-effort */ }
+      try {
+        await svc.outputEvicted(txid, outputIndex)
+      } catch {
+        /* best-effort */
+      }
     }
   }
 
   /** Look up the domain of an outpoint from SHIP or SLAP records. */
-  private async lookupDomainForOutpoint (txid: string, outputIndex: number): Promise<string | undefined> {
+  private async lookupDomainForOutpoint(
+    txid: string,
+    outputIndex: number
+  ): Promise<string | undefined> {
     const db = this.ensureMongo()
     const [shipRecord, slapRecord] = await Promise.all([
       db.collection('shipRecords').findOne({ txid, outputIndex }),
@@ -1210,7 +1351,7 @@ export default class OverlayExpress {
   }
 
   /** Ban a domain and delete all SHIP/SLAP records for it. */
-  private async banDomainAndRemoveRecords (domain: string, reason: string): Promise<void> {
+  private async banDomainAndRemoveRecords(domain: string, reason: string): Promise<void> {
     await this.banService!.banDomain(domain, reason)
     const db = this.ensureMongo()
     await Promise.all([
@@ -1219,8 +1360,10 @@ export default class OverlayExpress {
     ])
   }
 
-  private async runHealthCheck (
-    definition: Required<Pick<HealthCheckDefinition, 'name' | 'scope' | 'critical'>> & { handler: HealthCheckHandler }
+  private async runHealthCheck(
+    definition: Required<Pick<HealthCheckDefinition, 'name' | 'scope' | 'critical'>> & {
+      handler: HealthCheckHandler
+    }
   ): Promise<HealthCheckResult> {
     const startedAt = Date.now()
     let timeout: ReturnType<typeof setTimeout> | undefined
@@ -1268,8 +1411,12 @@ export default class OverlayExpress {
     }
   }
 
-  private async collectHealthReport (mode: 'live' | 'ready' | 'full'): Promise<HealthReport> {
-    const definitions: Array<Required<Pick<HealthCheckDefinition, 'name' | 'scope' | 'critical'>> & { handler: HealthCheckHandler }> = [
+  private async collectHealthReport(mode: 'live' | 'ready' | 'full'): Promise<HealthReport> {
+    const definitions: Array<
+      Required<Pick<HealthCheckDefinition, 'name' | 'scope' | 'critical'>> & {
+        handler: HealthCheckHandler
+      }
+    > = [
       {
         name: 'process',
         scope: 'live',
@@ -1346,7 +1493,7 @@ export default class OverlayExpress {
       })
     }
 
-    const filteredDefinitions = definitions.filter((definition) => {
+    const filteredDefinitions = definitions.filter(definition => {
       if (mode === 'full') {
         return true
       }
@@ -1354,7 +1501,9 @@ export default class OverlayExpress {
       return definition.scope === mode
     })
 
-    const checks = await Promise.all(filteredDefinitions.map(async definition => await this.runHealthCheck(definition)))
+    const checks = await Promise.all(
+      filteredDefinitions.map(async definition => await this.runHealthCheck(definition))
+    )
     const liveChecks = checks.filter(check => check.scope === 'live')
     const readyChecks = checks.filter(check => check.scope === 'ready')
     const live = liveChecks.every(check => !check.critical || check.status === 'ok')
@@ -1367,9 +1516,10 @@ export default class OverlayExpress {
       status = 'degraded'
     }
 
-    const context = typeof this.healthConfig.contextProvider === 'function'
-      ? await this.healthConfig.contextProvider()
-      : undefined
+    const context =
+      typeof this.healthConfig.contextProvider === 'function'
+        ? await this.healthConfig.contextProvider()
+        : undefined
 
     const report: HealthReport = {
       status,
@@ -1401,21 +1551,25 @@ export default class OverlayExpress {
   /**
    * Renders a request or response body for verbose logging, truncating overly long payloads.
    */
-  private formatBodyForLog (body: any, okPrefix: string): string {
+  private formatBodyForLog(body: any, okPrefix: string): string {
     if (Buffer.isBuffer(body)) {
       return chalk.green(`${okPrefix} binary body (${serializeLogValue(body.byteLength)} bytes)`)
     }
     if (typeof body === 'string') {
-      return chalk.green(`${okPrefix} string body (${serializeLogValue(Buffer.byteLength(body, 'utf8'))} bytes)`)
+      return chalk.green(
+        `${okPrefix} string body (${serializeLogValue(Buffer.byteLength(body, 'utf8'))} bytes)`
+      )
     }
     if (body != null && typeof body === 'object') {
       const keys = Array.isArray(body) ? body.length : Object.keys(body).length
-      return chalk.green(`${okPrefix} structured body (${serializeLogValue(keys)} top-level item(s))`)
+      return chalk.green(
+        `${okPrefix} structured body (${serializeLogValue(keys)} top-level item(s))`
+      )
     }
     return chalk.green(`${okPrefix} type=${serializeLogValue(typeof body)}`)
   }
 
-  private redactHeadersForLog (headers: Record<string, any>): Record<string, any> {
+  private redactHeadersForLog(headers: Record<string, any>): Record<string, any> {
     const sensitiveHeader = /authorization|cookie|token|secret|payment|signature|nonce/i
     return Object.fromEntries(
       Object.entries(headers).map(([name, value]) => [
@@ -1499,13 +1653,19 @@ export default class OverlayExpress {
   /**
    * Installs middleware that verbosely logs incoming requests and outgoing responses.
    */
-  private setupVerboseRequestLogging (): void {
+  private setupVerboseRequestLogging(): void {
     this.app.use((req, res, next) => {
       const startTime = Date.now()
 
       // Log incoming request details
-      this.logger.log(chalk.magenta.bold(`Incoming Request: method=${serializeLogValue(req.method)} url=${serializeLogValue(req.originalUrl)}`))
-      this.logger.log(chalk.cyan(`Headers: ${serializeLogValue(this.redactHeadersForLog(req.headers))}`))
+      this.logger.log(
+        chalk.magenta.bold(
+          `Incoming Request: method=${serializeLogValue(req.method)} url=${serializeLogValue(req.originalUrl)}`
+        )
+      )
+      this.logger.log(
+        chalk.cyan(`Headers: ${serializeLogValue(this.redactHeadersForLog(req.headers))}`)
+      )
 
       // Handle request body
       if (req.body != null && Object.keys(req.body).length > 0) {
@@ -1529,7 +1689,11 @@ export default class OverlayExpress {
             `Outgoing Response: method=${serializeLogValue(req.method)} url=${serializeLogValue(req.originalUrl)} status=${serializeLogValue(res.statusCode)} durationMs=${serializeLogValue(duration)}`
           )
         )
-        this.logger.log(chalk.cyan(`Response Headers: ${serializeLogValue(this.redactHeadersForLog(res.getHeaders()))}`))
+        this.logger.log(
+          chalk.cyan(
+            `Response Headers: ${serializeLogValue(this.redactHeadersForLog(res.getHeaders()))}`
+          )
+        )
 
         // Handle response body
         if (responseBody != null) {
@@ -1545,41 +1709,139 @@ export default class OverlayExpress {
    * Starts the Express server.
    * Sets up routes and begins listening on the configured port.
    */
-  async start (): Promise<void> {
+  async start(): Promise<void> {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
     this.startTime = new Date()
 
     const edgePolicy = this.edgePolicyConfig
-    this.app.disable('x-powered-by')
-    this.app.use(securityHeaders({
-      environmentPrefix: edgePolicy.environmentPrefix,
-      ...edgePolicy.securityHeaders
-    }))
-    this.app.use(corsPolicy({
-      environmentPrefix: edgePolicy.environmentPrefix,
-      allowedOrigins: edgePolicy.allowedOrigins,
-      methods: ['GET', 'POST', 'OPTIONS']
-    }))
-    this.app.use(concurrencyLimit(
+    const resourceProfile = readResourceProfile(edgePolicy.environmentPrefix)
+    const maxResponseBytes = readResourceLimit(
       edgePolicy.environmentPrefix,
-      edgePolicy.maxConcurrentRequests
-    ))
-    this.app.use(bodyParser.json({
-      limit: readBodyLimitBytes(
-        `${edgePolicy.environmentPrefix}_JSON`,
-        edgePolicy.jsonBodyLimitBytes
-      ),
-      type: 'application/json'
-    }))
-    this.app.use(bodyParser.raw({
-      limit: readBodyLimitBytes(
-        `${edgePolicy.environmentPrefix}_BINARY`,
-        edgePolicy.binaryBodyLimitBytes
-      ),
-      type: 'application/octet-stream'
-    }))
+      'MAX_RESPONSE_BYTES',
+      profileValue(resourceProfile, {
+        small: 4 * 1024 * 1024,
+        standard: 8 * 1024 * 1024,
+        highThroughput: 32 * 1024 * 1024
+      }),
+      512 * 1024 * 1024
+    )
+    const maxBasmTxids = readResourceLimit(
+      edgePolicy.environmentPrefix,
+      'MAX_BASM_TXIDS',
+      profileValue(resourceProfile, { small: 500, standard: 1000, highThroughput: 5000 }),
+      1_000_000
+    )
+    const maxBasmAnchorRange = readResourceLimit(
+      edgePolicy.environmentPrefix,
+      'MAX_BASM_ANCHOR_RANGE',
+      profileValue(resourceProfile, { small: 500, standard: 1000, highThroughput: 5000 }),
+      1_000_000
+    )
+    const adminListDefaultLimit = readResourceLimit(
+      edgePolicy.environmentPrefix,
+      'ADMIN_LIST_DEFAULT_LIMIT',
+      profileValue(resourceProfile, { small: 25, standard: 50, highThroughput: 100 }),
+      1_000_000
+    )
+    const adminListMaxLimit = readResourceLimit(
+      edgePolicy.environmentPrefix,
+      'ADMIN_LIST_MAX_LIMIT',
+      profileValue(resourceProfile, { small: 100, standard: 200, highThroughput: 1000 }),
+      1_000_000
+    )
+    const adminListMaxOffset = readResourceLimit(
+      edgePolicy.environmentPrefix,
+      'ADMIN_LIST_MAX_OFFSET',
+      profileValue(resourceProfile, {
+        small: 10_000,
+        standard: 100_000,
+        highThroughput: 1_000_000
+      }),
+      100_000_000
+    )
+    if (
+      adminListDefaultLimit !== -1 &&
+      adminListMaxLimit !== -1 &&
+      adminListDefaultLimit > adminListMaxLimit
+    ) {
+      throw new TypeError(
+        'OVERLAY_ADMIN_LIST_DEFAULT_LIMIT cannot exceed OVERLAY_ADMIN_LIST_MAX_LIMIT'
+      )
+    }
+    const parseAdminPage = (
+      rawPageValue: unknown,
+      rawLimitValue: unknown
+    ): { page: number; limit: number; skip: number } => {
+      const rawPage = Number.parseInt(typeof rawPageValue === 'string' ? rawPageValue : '', 10)
+      const requestedPage = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+      const rawLimitText =
+        typeof rawLimitValue === 'string' ? rawLimitValue.trim().toLowerCase() : ''
+      const parsedLimit =
+        rawLimitText === '-1' || rawLimitText === 'unlimited'
+          ? -1
+          : Number.parseInt(rawLimitText, 10)
+      const requestedLimit =
+        rawLimitText.length === 0 || Number.isNaN(parsedLimit) ? adminListDefaultLimit : parsedLimit
+      if (requestedLimit !== -1 && (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1)) {
+        throw new TypeError('limit must be a positive integer, -1, or unlimited')
+      }
+      const limit =
+        adminListMaxLimit === -1
+          ? requestedLimit
+          : requestedLimit === -1
+            ? adminListMaxLimit
+            : Math.min(requestedLimit, adminListMaxLimit)
+      const page = limit === -1 ? 1 : requestedPage
+      const skip = limit === -1 ? 0 : (page - 1) * limit
+      if (!Number.isSafeInteger(skip) || (adminListMaxOffset !== -1 && skip > adminListMaxOffset)) {
+        throw new TypeError('requested page exceeds the configured maximum offset')
+      }
+      return { page, limit, skip }
+    }
+    this.app.disable('x-powered-by')
+    this.app.use(initialDoubleSlashCompatibility)
+    this.app.use(
+      securityHeaders({
+        environmentPrefix: edgePolicy.environmentPrefix,
+        ...edgePolicy.securityHeaders
+      })
+    )
+    this.app.use(
+      corsPolicy({
+        environmentPrefix: edgePolicy.environmentPrefix,
+        allowedOrigins: edgePolicy.allowedOrigins,
+        methods: ['GET', 'POST', 'OPTIONS']
+      })
+    )
+    this.app.use(
+      concurrencyLimit(
+        edgePolicy.environmentPrefix,
+        edgePolicy.maxConcurrentRequests === 200
+          ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
+          : edgePolicy.maxConcurrentRequests
+      )
+    )
+    this.app.use(
+      bodyParser.json({
+        limit: readBodyLimitBytes(
+          `${edgePolicy.environmentPrefix}_JSON`,
+          edgePolicy.jsonBodyLimitBytes
+        ),
+        type: 'application/json'
+      })
+    )
+    this.app.use(
+      bodyParser.raw({
+        limit: readBodyLimitBytes(
+          `${edgePolicy.environmentPrefix}_BINARY`,
+          edgePolicy.binaryBodyLimitBytes
+        ),
+        type: 'application/octet-stream'
+      })
+    )
     this.app.use(bodyParserErrorHandler)
+    this.app.use(responseSizeLimit(edgePolicy.environmentPrefix, maxResponseBytes))
 
     if (this.verboseRequestLogging) {
       this.setupVerboseRequestLogging()
@@ -1588,18 +1850,20 @@ export default class OverlayExpress {
     // Serve a static documentation site or user interface
     this.app.get('/', (req, res) => {
       res.set('content-type', 'text/html')
-      res.send(makeUserInterface({
-        ...this.webUIConfig,
-        adminIdentityKey: this.adminIdentityKey
-      }))
+      res.send(
+        makeUserInterface({
+          ...this.webUIConfig,
+          adminIdentityKey: this.adminIdentityKey
+        })
+      )
     })
 
     // Serve health check endpoints
     this.app.get('/health/live', (_, res) => {
-      ; (async () => {
+      ;(async () => {
         const report = await this.collectHealthReport('live')
         return res.status(report.live ? 200 : 503).json(report)
-      })().catch((error) => {
+      })().catch(error => {
         this.logger.error({ operation: 'overlay.health_live', error })
         res.status(500).json({
           status: 'error',
@@ -1608,11 +1872,22 @@ export default class OverlayExpress {
       })
     })
 
+    // Compatibility alias used by Kubernetes probes and existing deployments.
+    this.app.get('/healthz', (_, res) => {
+      ;(async () => {
+        const report = await this.collectHealthReport('live')
+        return res.status(report.live ? 200 : 503).json(report)
+      })().catch(error => {
+        this.logger.error({ operation: 'overlay.healthz', error })
+        res.status(500).json({ status: 'error', message: 'Health report unavailable' })
+      })
+    })
+
     this.app.get('/health/ready', (_, res) => {
-      ; (async () => {
+      ;(async () => {
         const report = await this.collectHealthReport('ready')
         return res.status(report.ready ? 200 : 503).json(report)
-      })().catch((error) => {
+      })().catch(error => {
         this.logger.error({ operation: 'overlay.health_ready', error })
         res.status(500).json({
           status: 'error',
@@ -1622,10 +1897,10 @@ export default class OverlayExpress {
     })
 
     this.app.get('/health', (_, res) => {
-      ; (async () => {
+      ;(async () => {
         const report = await this.collectHealthReport('full')
         return res.status(report.ready ? 200 : 503).json(report)
-      })().catch((error) => {
+      })().catch(error => {
         this.logger.error({ operation: 'overlay.health_full', error })
         res.status(500).json({
           status: 'error',
@@ -1636,7 +1911,7 @@ export default class OverlayExpress {
 
     // List hosted topic managers and lookup services
     this.app.get('/listTopicManagers', (_, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const result = await engine.listTopicManagers()
           return res.status(200).json(result)
@@ -1655,7 +1930,7 @@ export default class OverlayExpress {
     })
 
     this.app.get('/listLookupServiceProviders', (_, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const result = await engine.listLookupServiceProviders()
           return res.status(200).json(result)
@@ -1675,7 +1950,7 @@ export default class OverlayExpress {
 
     // Host documentation for the services
     this.app.get('/getDocumentationForTopicManager', (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const manager = req.query.manager as string
           const result = await engine.getDocumentationForTopicManager(manager)
@@ -1696,7 +1971,7 @@ export default class OverlayExpress {
     })
 
     this.app.get('/getDocumentationForLookupServiceProvider', (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const lookupService = req.query.lookupService as string
           const result = await engine.getDocumentationForLookupServiceProvider(lookupService)
@@ -1718,7 +1993,7 @@ export default class OverlayExpress {
 
     // Submit transactions and facilitate lookup requests
     this.app.post('/submit', (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           // Parse out the topics and construct the tagged BEEF
           const topicsHeader = req.headers['x-topics']
@@ -1747,10 +2022,15 @@ export default class OverlayExpress {
 
           // Using a callback function, we can return once the STEAK is ready
           let responseSent = false
-          const steak = await engine.submit(taggedBEEF, (steak: STEAK) => {
-            responseSent = true
-            return res.status(200).json(steak)
-          }, 'current-tx', offChainValues)
+          const steak = await engine.submit(
+            taggedBEEF,
+            (steak: STEAK) => {
+              responseSent = true
+              return res.status(200).json(steak)
+            },
+            'current-tx',
+            offChainValues
+          )
           if (!responseSent) {
             res.status(200).json(steak)
           }
@@ -1770,14 +2050,14 @@ export default class OverlayExpress {
     })
 
     this.app.post('/lookup', (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           // Check for aggregation header to determine response format
           const aggregationHeader = req.headers['x-aggregation']
           const shouldReturnBinary = aggregationHeader === 'yes'
 
           // Validate request body structure
-          const lookupRequest = req.body as { service: string, query: unknown }
+          const lookupRequest = req.body as { service: string; query: unknown }
           if (typeof lookupRequest.service !== 'string' || lookupRequest.query === undefined) {
             return res.status(400).json({
               status: 'error',
@@ -1809,7 +2089,7 @@ export default class OverlayExpress {
             // Write outputIndex
             writer.writeVarIntNum(output.outputIndex)
             // Write context length and data
-            if ((output.context != null) && output.context.length > 0) {
+            if (output.context != null && output.context.length > 0) {
               writer.writeVarIntNum(output.context.length)
               writer.write(output.context)
             } else {
@@ -1844,11 +2124,13 @@ export default class OverlayExpress {
       (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
     ) {
       this.app.post('/arc-ingest', (req, res) => {
-        ; (async () => {
+        ;(async () => {
           try {
             return await this.processArcIngest(engine, req, res)
           } catch (error) {
-            this.logger.error(chalk.red(`Error in /arc-ingest: error=${serializeErrorForLog(error)}`))
+            this.logger.error(
+              chalk.red(`Error in /arc-ingest: error=${serializeErrorForLog(error)}`)
+            )
             return res.status(400).json({
               status: 'error',
               message: publicErrorMessage(error)
@@ -1862,13 +2144,15 @@ export default class OverlayExpress {
         })
       })
     } else {
-      this.logger.warn(chalk.yellow('Disabling ARC/Arcade ingest because no provider was configured.'))
+      this.logger.warn(
+        chalk.yellow('Disabling ARC/Arcade ingest because no provider was configured.')
+      )
     }
 
     // GASP sync routes if enabled
     if (this.enableGASPSync) {
       this.app.post('/requestSyncResponse', (req, res) => {
-        ; (async () => {
+        ;(async () => {
           try {
             const topic = req.headers['x-bsv-topic'] as string
             const response = await engine.provideForeignSyncResponse(req.body, topic)
@@ -1889,7 +2173,7 @@ export default class OverlayExpress {
       })
 
       this.app.post('/requestForeignGASPNode', (req, res) => {
-        ; (async () => {
+        ;(async () => {
           try {
             const { graphID, txid, outputIndex } = req.body
             const response = await engine.provideForeignGASPNode(graphID, txid, outputIndex)
@@ -1934,36 +2218,55 @@ export default class OverlayExpress {
       handler: (req: express.Request) => Promise<unknown>,
       ...middleware: express.RequestHandler[]
     ): void => {
-      this.app.post(path, ...(middleware as any[]), (req: express.Request, res: express.Response) => {
-        ; (async () => {
-          try {
-            return res.status(200).json(await handler(req))
-          } catch (error) {
-            console.error(chalk.red(`Error in ${path}:`), error)
-            return res.status(400).json({
-              status: 'error',
-              message: publicErrorMessage(error)
-            })
-          }
-        })().catch(() => {
-          res.status(500).json({ status: 'error', message: 'Unexpected error' })
-        })
-      })
+      this.app.post(
+        path,
+        ...(middleware as any[]),
+        (req: express.Request, res: express.Response) => {
+          ;(async () => {
+            try {
+              return res.status(200).json(await handler(req))
+            } catch (error) {
+              console.error(chalk.red(`Error in ${path}:`), error)
+              return res.status(400).json({
+                status: 'error',
+                message: publicErrorMessage(error)
+              })
+            }
+          })().catch(() => {
+            res.status(500).json({ status: 'error', message: 'Unexpected error' })
+          })
+        }
+      )
     }
 
     const requireTxids = (value: unknown): string[] => {
       if (!Array.isArray(value) || !value.every(txid => typeof txid === 'string')) {
         throw new PublicRequestError('txids must be an array of strings')
       }
+      if (maxBasmTxids !== -1 && value.length > maxBasmTxids) {
+        throw new PublicRequestError(`txids must contain at most ${maxBasmTxids} entries`)
+      }
       return value
     }
 
-    registerJsonRoute('/requestTopicAnchorTip', async req =>
-      await basmEngine.provideTopicAnchorTip(readBasmTopic(req)))
+    registerJsonRoute(
+      '/requestTopicAnchorTip',
+      async req => await basmEngine.provideTopicAnchorTip(readBasmTopic(req))
+    )
 
     registerJsonRoute('/requestTopicAnchorRange', async req => {
       const { fromHeight, toHeight } = req.body
-      return await basmEngine.provideTopicAnchorRange(readBasmTopic(req), Number(fromHeight), Number(toHeight))
+      const from = Number(fromHeight)
+      const to = Number(toHeight)
+      if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from) {
+        throw new PublicRequestError('fromHeight and toHeight must define a valid ascending range')
+      }
+      if (maxBasmAnchorRange !== -1 && to - from + 1 > maxBasmAnchorRange) {
+        throw new PublicRequestError(
+          `topic anchor range must contain at most ${maxBasmAnchorRange} blocks`
+        )
+      }
+      return await basmEngine.provideTopicAnchorRange(readBasmTopic(req), from, to)
     })
 
     registerJsonRoute('/requestAdmittedList', async req => {
@@ -1978,11 +2281,17 @@ export default class OverlayExpress {
     registerJsonRoute('/requestCompoundMerklePath', async req => {
       const topic = readBasmTopic(req)
       const { blockHeight, txids } = req.body
-      return await basmEngine.provideCompoundMerklePath(topic, Number(blockHeight), requireTxids(txids))
+      return await basmEngine.provideCompoundMerklePath(
+        topic,
+        Number(blockHeight),
+        requireTxids(txids)
+      )
     })
 
-    registerJsonRoute('/requestRawTransactions', async req =>
-      await basmEngine.provideRawTransactions(requireTxids(req.body.txids)))
+    registerJsonRoute(
+      '/requestRawTransactions',
+      async req => await basmEngine.provideRawTransactions(requireTxids(req.body.txids))
+    )
 
     /**
      * ============== ADMIN ROUTES ==============
@@ -2012,7 +2321,11 @@ export default class OverlayExpress {
      * 1. Bearer token (Authorization: Bearer <token>) - for cron jobs, scripts, and fallback
      * 2. BSV mutual auth - if req.auth.identityKey matches the admin identity key
      */
-    const checkAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+    const checkAdminAuth = (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ): void => {
       // Method 1: BSV mutual authentication (identity key match)
       const authReq = req as unknown as AuthRequest
       if (
@@ -2038,7 +2351,12 @@ export default class OverlayExpress {
         return
       }
 
-      res.status(401).json({ status: 'error', message: 'Unauthorized: Provide a Bearer token or authenticate with your wallet' })
+      res
+        .status(401)
+        .json({
+          status: 'error',
+          message: 'Unauthorized: Provide a Bearer token or authenticate with your wallet'
+        })
     }
 
     /**
@@ -2058,7 +2376,7 @@ export default class OverlayExpress {
      * Admin route: Get server statistics and overview.
      */
     this.app.get('/admin/stats', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const db = this.ensureMongo()
 
@@ -2102,17 +2420,13 @@ export default class OverlayExpress {
      * Admin route: List all SHIP records with full details.
      */
     this.app.get('/admin/ship-records', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const db = this.ensureMongo()
           const collection = db.collection('shipRecords')
 
           const search = typeof req.query.search === 'string' ? req.query.search : undefined
-          const rawPage = Number.parseInt(req.query.page as string, 10)
-          const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
-          const rawLimit = Number.parseInt(req.query.limit as string, 10)
-          const limit = Math.min(200, Math.max(1, Number.isNaN(rawLimit) ? 50 : rawLimit))
-          const skip = (page - 1) * limit
+          const { page, limit, skip } = parseAdminPage(req.query.page, req.query.limit)
 
           const query: any = {}
           if (typeof search === 'string' && search.length > 0) {
@@ -2125,13 +2439,23 @@ export default class OverlayExpress {
           }
 
           const [records, total] = await Promise.all([
-            collection.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).toArray(),
+            (() => {
+              let cursor = collection.find(query).sort({ createdAt: -1 }).skip(skip)
+              if (limit !== -1) cursor = cursor.limit(limit)
+              return cursor.toArray()
+            })(),
             collection.countDocuments(query)
           ])
 
           return res.status(200).json({
             status: 'success',
-            data: { records, total, page, limit, pages: Math.ceil(total / limit) }
+            data: {
+              records,
+              total,
+              page,
+              limit,
+              pages: limit === -1 ? 1 : Math.ceil(total / limit)
+            }
           })
         } catch (error) {
           return res.status(400).json({
@@ -2148,17 +2472,13 @@ export default class OverlayExpress {
      * Admin route: List all SLAP records with full details.
      */
     this.app.get('/admin/slap-records', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const db = this.ensureMongo()
           const collection = db.collection('slapRecords')
 
           const search = typeof req.query.search === 'string' ? req.query.search : undefined
-          const rawPage = Number.parseInt(req.query.page as string, 10)
-          const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
-          const rawLimit = Number.parseInt(req.query.limit as string, 10)
-          const limit = Math.min(200, Math.max(1, Number.isNaN(rawLimit) ? 50 : rawLimit))
-          const skip = (page - 1) * limit
+          const { page, limit, skip } = parseAdminPage(req.query.page, req.query.limit)
 
           const query: any = {}
           if (typeof search === 'string' && search.length > 0) {
@@ -2171,13 +2491,23 @@ export default class OverlayExpress {
           }
 
           const [records, total] = await Promise.all([
-            collection.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).toArray(),
+            (() => {
+              let cursor = collection.find(query).sort({ createdAt: -1 }).skip(skip)
+              if (limit !== -1) cursor = cursor.limit(limit)
+              return cursor.toArray()
+            })(),
             collection.countDocuments(query)
           ])
 
           return res.status(200).json({
             status: 'success',
-            data: { records, total, page, limit, pages: Math.ceil(total / limit) }
+            data: {
+              records,
+              total,
+              page,
+              limit,
+              pages: limit === -1 ? 1 : Math.ceil(total / limit)
+            }
           })
         } catch (error) {
           return res.status(400).json({
@@ -2194,7 +2524,7 @@ export default class OverlayExpress {
      * Admin route: Check health of a specific URL.
      */
     this.app.post('/admin/health-check', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const url = req.body?.url
           if (typeof url !== 'string' || url.length === 0) {
@@ -2218,15 +2548,22 @@ export default class OverlayExpress {
      * Admin route: Ban a domain or outpoint.
      */
     this.app.post('/admin/ban', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           if (this.banService === undefined) {
-            return res.status(400).json({ status: 'error', message: 'Ban service not available (MongoDB not configured)' })
+            return res
+              .status(400)
+              .json({
+                status: 'error',
+                message: 'Ban service not available (MongoDB not configured)'
+              })
           }
 
           const { type, value, reason } = req.body
           if (type !== 'domain' && type !== 'outpoint') {
-            return res.status(400).json({ status: 'error', message: 'type must be "domain" or "outpoint"' })
+            return res
+              .status(400)
+              .json({ status: 'error', message: 'type must be "domain" or "outpoint"' })
           }
           if (typeof value !== 'string' || value.length === 0) {
             return res.status(400).json({ status: 'error', message: 'value is required' })
@@ -2251,21 +2588,25 @@ export default class OverlayExpress {
      * Admin route: Remove a ban.
      */
     this.app.post('/admin/unban', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           if (this.banService === undefined) {
             return res.status(400).json({ status: 'error', message: 'Ban service not available' })
           }
-          const { type, value } = req.body as { type: unknown, value: unknown }
+          const { type, value } = req.body as { type: unknown; value: unknown }
           if (type !== 'domain' && type !== 'outpoint') {
-            return res.status(400).json({ status: 'error', message: 'type must be "domain" or "outpoint"' })
+            return res
+              .status(400)
+              .json({ status: 'error', message: 'type must be "domain" or "outpoint"' })
           }
           if (typeof value !== 'string' || value.length === 0) {
             return res.status(400).json({ status: 'error', message: 'value is required' })
           }
 
           await this.banService.removeBan(type, value)
-          return res.status(200).json({ status: 'success', message: `${type} "${String(value)}" unbanned.` })
+          return res
+            .status(200)
+            .json({ status: 'success', message: `${type} "${String(value)}" unbanned.` })
         } catch (error) {
           return res.status(400).json({
             status: 'error',
@@ -2281,15 +2622,16 @@ export default class OverlayExpress {
      * Admin route: List all bans.
      */
     this.app.get('/admin/bans', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           if (this.banService === undefined) {
             return res.status(200).json({ status: 'success', data: { bans: [] } })
           }
           const type = req.query.type as 'domain' | 'outpoint' | undefined
           const validType = type === 'domain' || type === 'outpoint' ? type : undefined
-          const bans = await this.banService.listBans(validType)
-          return res.status(200).json({ status: 'success', data: { bans } })
+          const { page, limit, skip } = parseAdminPage(req.query.page, req.query.limit)
+          const bans = await this.banService.listBans(validType, limit, skip)
+          return res.status(200).json({ status: 'success', data: { bans, page, limit } })
         } catch (error) {
           return res.status(400).json({
             status: 'error',
@@ -2305,11 +2647,16 @@ export default class OverlayExpress {
      * Admin route: Remove a token by outpoint, optionally banning the domain.
      */
     this.app.post('/admin/remove-token', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const { txid, outputIndex, service, ban, banDomain: shouldBanDomain } = req.body
           if (typeof txid !== 'string' || typeof outputIndex !== 'number') {
-            return res.status(400).json({ status: 'error', message: 'txid (string) and outputIndex (number) are required' })
+            return res
+              .status(400)
+              .json({
+                status: 'error',
+                message: 'txid (string) and outputIndex (number) are required'
+              })
           }
 
           // Look up domain before eviction if needed for banning
@@ -2321,17 +2668,30 @@ export default class OverlayExpress {
           await this.evictFromServices(engine, txid, outputIndex, service)
 
           if (ban === true && this.banService !== undefined) {
-            await this.banService.banOutpoint(txid, outputIndex, 'Manually removed by admin', removedDomain)
+            await this.banService.banOutpoint(
+              txid,
+              outputIndex,
+              'Manually removed by admin',
+              removedDomain
+            )
           }
 
-          if (shouldBanDomain === true && typeof removedDomain === 'string' && this.banService !== undefined) {
-            await this.banDomainAndRemoveRecords(removedDomain, 'Domain banned by admin via token removal')
+          if (
+            shouldBanDomain === true &&
+            typeof removedDomain === 'string' &&
+            this.banService !== undefined
+          ) {
+            await this.banDomainAndRemoveRecords(
+              removedDomain,
+              'Domain banned by admin via token removal'
+            )
           }
 
           const banMsg = ban === true ? ' Outpoint banned.' : ''
-          const domainMsg = shouldBanDomain === true && typeof removedDomain === 'string'
-            ? ` Domain "${removedDomain}" banned.`
-            : ''
+          const domainMsg =
+            shouldBanDomain === true && typeof removedDomain === 'string'
+              ? ` Domain "${removedDomain}" banned.`
+              : ''
           return res.status(200).json({
             status: 'success',
             message: `Token ${txid}.${outputIndex} removed.${banMsg}${domainMsg}`
@@ -2351,10 +2711,12 @@ export default class OverlayExpress {
      * Admin route to manually sync advertisements, calling `engine.syncAdvertisements()`.
      */
     this.app.post('/admin/syncAdvertisements', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           await engine.syncAdvertisements()
-          return res.status(200).json({ status: 'success', message: 'Advertisements synced successfully' })
+          return res
+            .status(200)
+            .json({ status: 'success', message: 'Advertisements synced successfully' })
         } catch (error) {
           console.error(chalk.red('Error in /admin/syncAdvertisements:'), error)
           return res.status(400).json({
@@ -2374,10 +2736,12 @@ export default class OverlayExpress {
      * Admin route to manually start GASP sync, calling `engine.startGASPSync()`.
      */
     this.app.post('/admin/startGASPSync', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           await engine.startGASPSync()
-          return res.status(200).json({ status: 'success', message: 'GASP sync started and completed' })
+          return res
+            .status(200)
+            .json({ status: 'success', message: 'GASP sync started and completed' })
         } catch (error) {
           console.error(chalk.red('Error in /admin/startGASPSync:'), error)
           return res.status(400).json({
@@ -2396,58 +2760,74 @@ export default class OverlayExpress {
     /**
      * Admin route to manually start BASM sync, calling `engine.startBASMSync()`.
      */
-    registerJsonRoute('/admin/startBASMSync', async () => {
-      const report = await basmEngine.startBASMSync()
-      return { status: 'success', message: 'BASM sync started and completed', data: report }
-    }, checkAdminAuth as any)
+    registerJsonRoute(
+      '/admin/startBASMSync',
+      async () => {
+        const report = await basmEngine.startBASMSync()
+        return { status: 'success', message: 'BASM sync started and completed', data: report }
+      },
+      checkAdminAuth as any
+    )
 
     /**
      * Admin route to evict expired unproven topic transactions.
      */
-    registerJsonRoute('/admin/evictUnproven', async req => {
-      const { topic, thresholdBlocks } = req.body ?? {}
-      const report = await basmEngine.evictUnprovenTransactions({
-        topic: typeof topic === 'string' ? topic : undefined,
-        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
-      })
-      this.logger.log({ operation: 'overlay.unproven_eviction', outcome: 'ok', report })
-      return { status: 'success', message: 'Unproven eviction completed', data: report }
-    }, checkAdminAuth as any)
+    registerJsonRoute(
+      '/admin/evictUnproven',
+      async req => {
+        const { topic, thresholdBlocks } = req.body ?? {}
+        const report = await basmEngine.evictUnprovenTransactions({
+          topic: typeof topic === 'string' ? topic : undefined,
+          thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
+        })
+        this.logger.log({ operation: 'overlay.unproven_eviction', outcome: 'ok', report })
+        return { status: 'success', message: 'Unproven eviction completed', data: report }
+      },
+      checkAdminAuth as any
+    )
 
     /**
      * Admin route to refresh proofs for expired unproven topic transactions
      * using the configured proof providers.
      */
-    registerJsonRoute('/admin/refreshUnprovenProofs', async req => {
-      const { topic, thresholdBlocks } = req.body ?? {}
-      const report = await basmEngine.refreshUnprovenTransactionProofs({
-        topic: typeof topic === 'string' ? topic : undefined,
-        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
-        proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
-      })
-      this.logger.log({ operation: 'overlay.unproven_proof_refresh', outcome: 'ok', report })
-      return { status: 'success', message: 'Unproven proof refresh completed', data: report }
-    }, checkAdminAuth as any)
+    registerJsonRoute(
+      '/admin/refreshUnprovenProofs',
+      async req => {
+        const { topic, thresholdBlocks } = req.body ?? {}
+        const report = await basmEngine.refreshUnprovenTransactionProofs({
+          topic: typeof topic === 'string' ? topic : undefined,
+          thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
+          proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
+        })
+        this.logger.log({ operation: 'overlay.unproven_proof_refresh', outcome: 'ok', report })
+        return { status: 'success', message: 'Unproven proof refresh completed', data: report }
+      },
+      checkAdminAuth as any
+    )
 
     /**
      * Admin route to refresh proofs first, then evict rows that remain unproven.
      */
-    registerJsonRoute('/admin/maintainUnproven', async req => {
-      const { topic, thresholdBlocks } = req.body ?? {}
-      const report = await basmEngine.maintainUnprovenTransactions({
-        topic: typeof topic === 'string' ? topic : undefined,
-        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
-        proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
-      })
-      this.logger.log({ operation: 'overlay.unproven_maintenance', outcome: 'ok', report })
-      return { status: 'success', message: 'Unproven maintenance completed', data: report }
-    }, checkAdminAuth as any)
+    registerJsonRoute(
+      '/admin/maintainUnproven',
+      async req => {
+        const { topic, thresholdBlocks } = req.body ?? {}
+        const report = await basmEngine.maintainUnprovenTransactions({
+          topic: typeof topic === 'string' ? topic : undefined,
+          thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
+          proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
+        })
+        this.logger.log({ operation: 'overlay.unproven_maintenance', outcome: 'ok', report })
+        return { status: 'success', message: 'Unproven maintenance completed', data: report }
+      },
+      checkAdminAuth as any
+    )
 
     /**
      * Admin route to evict an outpoint, either from all services or a specific one.
      */
     this.app.post('/admin/evictOutpoint', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           if (typeof req.body.service === 'string') {
             const service = engine.lookupServices[req.body.service]
@@ -2482,11 +2862,13 @@ export default class OverlayExpress {
      * Admin route to run the janitor service with enhanced reporting.
      */
     this.app.post('/admin/janitor', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
+      ;(async () => {
         try {
           const janitor = this.createJanitor()
           const report: JanitorReport = await janitor.run()
-          return res.status(200).json({ status: 'success', message: 'Janitor run completed', data: report })
+          return res
+            .status(200)
+            .json({ status: 'success', message: 'Janitor run completed', data: report })
         } catch (error) {
           console.error(chalk.red('Error in /admin/janitor:'), error)
           return res.status(400).json({
@@ -2524,13 +2906,11 @@ export default class OverlayExpress {
     // Start listening on the configured port
     this.server = this.app.listen(this.port, () => {
       this.isListening = true
-      this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
+      this.logger.log(
+        chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`)
+      )
     })
-    configureHttpServer(
-      this.server,
-      edgePolicy.environmentPrefix,
-      edgePolicy.http
-    )
+    configureHttpServer(this.server, edgePolicy.environmentPrefix, edgePolicy.http)
   }
 
   /**
@@ -2539,12 +2919,12 @@ export default class OverlayExpress {
    * The operation is idempotent so multiple signal handlers or embedding
    * runtimes can share shutdown ownership safely.
    */
-  async close (): Promise<void> {
+  async close(): Promise<void> {
     this.closePromise ??= this.closeResources()
     await this.closePromise
   }
 
-  private async closeResources (): Promise<void> {
+  private async closeResources(): Promise<void> {
     this.isListening = false
 
     if (this.basmBlockPollTimer !== undefined) {
@@ -2560,14 +2940,15 @@ export default class OverlayExpress {
 
     const server = this.server
     this.server = undefined
-    const closeServer = server === undefined
-      ? Promise.resolve()
-      : new Promise<void>((resolve, reject) => {
-          server.close(error => {
-            if (error !== undefined) reject(error)
-            else resolve()
+    const closeServer =
+      server === undefined
+        ? Promise.resolve()
+        : new Promise<void>((resolve, reject) => {
+            server.close(error => {
+              if (error !== undefined) reject(error)
+              else resolve()
+            })
           })
-        })
 
     await closeServer
     await Promise.all([
@@ -2583,7 +2964,7 @@ export default class OverlayExpress {
    * Runs the post-listen startup work: advertiser init, advertisement sync,
    * and the optional GASP/BASM background syncs.
    */
-  private async runStartupSync (): Promise<void> {
+  private async runStartupSync(): Promise<void> {
     // The legacy Ninja advertiser has a setLookupEngine method.
     if (this.engine?.advertiser instanceof DiscoveryServices.WalletAdvertiser) {
       this.logger.log(
@@ -2613,7 +2994,7 @@ export default class OverlayExpress {
   }
 
   /** Attempt a GASP sync at startup when enabled. */
-  private async runGaspStartupSync (): Promise<void> {
+  private async runGaspStartupSync(): Promise<void> {
     if (!this.enableGASPSync) {
       this.logger.log(chalk.yellow(`${this.name} will not sync because GASP has been disabled.`))
       return
@@ -2628,7 +3009,7 @@ export default class OverlayExpress {
   }
 
   /** Attempt a BASM sync at startup when enabled, then begin tip-following. */
-  private async runBasmStartupSync (): Promise<void> {
+  private async runBasmStartupSync(): Promise<void> {
     if (!(this.enableBASMSync || this.engineConfig.enableBASMSync === true)) {
       return
     }
@@ -2648,7 +3029,7 @@ export default class OverlayExpress {
   }
 
   /** Poll for new blocks to advance anchor chains and detect reorgs. */
-  private startBASMBlockPolling (): void {
+  private startBASMBlockPolling(): void {
     if (this.basmBlockPollIntervalMs <= 0) {
       return
     }
@@ -2662,7 +3043,7 @@ export default class OverlayExpress {
   }
 
   /** Real-time reorg reconciliation via the go-chaintracks (Arcade) reorg SSE. */
-  private startBASMReorgStream (): void {
+  private startBASMReorgStream(): void {
     const reorgStreamUrl = this.engineConfig.reorgStreamUrl ?? this.reorgStreamUrl
     const reorgScanDepth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
     if (reorgStreamUrl === undefined || reorgStreamUrl === '') {
@@ -2671,8 +3052,12 @@ export default class OverlayExpress {
     const basmEngine = this.engine as BASMCapableEngine | undefined
     this.reorgAdapter = new ReorgSseAdapter({
       url: reorgStreamUrl,
-      onReorg: async input => { await basmEngine?.handleReorg(input) },
-      onConnect: async () => { await basmEngine?.revalidateRecentAnchors(reorgScanDepth) },
+      onReorg: async input => {
+        await basmEngine?.handleReorg(input)
+      },
+      onConnect: async () => {
+        await basmEngine?.revalidateRecentAnchors(reorgScanDepth)
+      },
       logger: this.logger
     })
     this.reorgAdapter.start()
@@ -2680,7 +3065,7 @@ export default class OverlayExpress {
   }
 
   /** Extend every topic's BASM anchor chain to the current chain tip. */
-  private async advanceBASMAnchorChains (): Promise<void> {
+  private async advanceBASMAnchorChains(): Promise<void> {
     try {
       await (this.engine as BASMCapableEngine | undefined)?.advanceTopicAnchorChains()
     } catch (e) {
@@ -2689,7 +3074,7 @@ export default class OverlayExpress {
   }
 
   /** Revalidate recent BASM anchors against the chain tracker, reconciling any reorg. */
-  private async revalidateBASMAnchors (): Promise<void> {
+  private async revalidateBASMAnchors(): Promise<void> {
     try {
       const depth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
       await (this.engine as BASMCapableEngine | undefined)?.revalidateRecentAnchors(depth)
@@ -2698,14 +3083,18 @@ export default class OverlayExpress {
     }
   }
 
-  private startUnprovenMaintenance (): void {
-    const intervalMs = this.engineConfig.unprovenMaintenanceIntervalMs ?? this.unprovenMaintenanceIntervalMs
+  private startUnprovenMaintenance(): void {
+    const intervalMs =
+      this.engineConfig.unprovenMaintenanceIntervalMs ?? this.unprovenMaintenanceIntervalMs
     if (intervalMs <= 0) return
     const run = (): void => {
       void (async () => {
         try {
-          const report = await (this.engine as BASMCapableEngine | undefined)?.maintainUnprovenTransactions({
-            thresholdBlocks: this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks,
+          const report = await (
+            this.engine as BASMCapableEngine | undefined
+          )?.maintainUnprovenTransactions({
+            thresholdBlocks:
+              this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks,
             proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
           })
           this.logger.log(chalk.green('Unproven transaction maintenance complete'), report)

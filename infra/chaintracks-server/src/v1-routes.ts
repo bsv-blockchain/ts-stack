@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express'
 import { Chaintracks, Services } from '@bsv/wallet-toolbox'
 import { log } from './logger'
+import { parseHeaderRange } from './resourceLimits'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -153,15 +154,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
   // GET /getHeaders - Get multiple headers as hex string
   router.get('/getHeaders', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.query.height as string, 10)
-      const count = Number.parseInt(req.query.count as string, 10)
-
-      if (Number.isNaN(height) || height < 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
-      }
-      if (Number.isNaN(count) || count <= 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
-      }
+      const { height, count } = parseHeaderRange(req.query as Record<string, unknown>)
 
       const currentHeight = await chaintracks.currentHeight()
       if (height < currentHeight - 100) {
@@ -190,6 +183,9 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(hexString))
     } catch (err) {
+      if (err instanceof RangeError) {
+        return res.status(400).json(error('ERR_INVALID_PARAMS', err.message))
+      }
       log.error({ operation: 'v1.get_headers', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }

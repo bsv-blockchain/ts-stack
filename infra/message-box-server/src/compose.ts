@@ -21,7 +21,13 @@ import { Logger } from './utils/logger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
 import type { MessageBoxContext } from './context.js'
 import { authenticatedIdentityKey, rateLimitOptions } from './security/rateLimitPolicy.js'
-import { readCorsOriginSetting, readBodyLimitBytes } from './security/edgePolicy.js'
+import {
+  readCorsOriginSetting,
+  readBodyLimitBytes,
+  responseSizeLimit
+} from './security/edgePolicy.js'
+import { readMessageBoxResourceConfig } from './config/resources.js'
+import { readMessageBoxPricingConfig } from './config/pricing.js'
 import {
   authenticatedWebSocketIdentity,
   isIdentityOwnedRoom,
@@ -52,9 +58,7 @@ type ClosableAuthSocketServer = AuthSocketServer & {
 
 type DisconnectableAuthSocket = Pick<AuthSocket, 'ioSocket'>
 
-export function disconnectAuthenticatedSockets(
-  sockets: Iterable<DisconnectableAuthSocket>
-): void {
+export function disconnectAuthenticatedSockets(sockets: Iterable<DisconnectableAuthSocket>): void {
   for (const socket of sockets) {
     socket.ioSocket.disconnect(true)
   }
@@ -102,10 +106,12 @@ export function registerMessageBoxPreAuthRoutes(
 /** Payment middleware (after auth) + postAuth route handlers. */
 export function registerMessageBoxPostAuthRoutes(
   router: MessageBoxRouter,
-  ctx: Pick<MessageBoxContext, 'wallet' | 'calculateRequestPrice'>,
+  ctx: Pick<MessageBoxContext, 'wallet' | 'calculateRequestPrice' | 'paymentReplayStore'>,
   routingPrefix: string = '',
   authenticatedRateLimitOptions: Partial<RateLimitOptions> = {}
 ): void {
+  const resources = readMessageBoxResourceConfig()
+  router.use(responseSizeLimit('MESSAGE_BOX', resources.listMaxResponseBytes))
   router.use(
     rateLimit(
       rateLimitOptions(
@@ -123,7 +129,8 @@ export function registerMessageBoxPostAuthRoutes(
     createPaymentMiddleware({
       wallet: ctx.wallet,
       calculateRequestPrice: async req =>
-        await Promise.resolve(ctx.calculateRequestPrice(req as unknown as ExpressRequest))
+        await Promise.resolve(ctx.calculateRequestPrice(req as unknown as ExpressRequest)),
+      replayStore: ctx.paymentReplayStore
     })
   )
 
@@ -159,6 +166,7 @@ export function attachMessageBoxWebSockets(
 
   const io = new AuthSocketServer(httpServer, {
     wallet: ctx.wallet,
+    sessionManager: ctx.sessionManager,
     maxHttpBufferSize: readBodyLimitBytes('MESSAGE_BOX_WEBSOCKET', 1024 * 1024),
     cors: {
       origin: readCorsOriginSetting('MESSAGE_BOX'),
@@ -169,9 +177,14 @@ export function attachMessageBoxWebSockets(
   // Map to store authenticated identity keys
   const authenticatedSockets = new Map<string, string>()
   const connectedSockets = new Map<string, AuthSocket>()
+  const resources = readMessageBoxResourceConfig()
+  const pricing = readMessageBoxPricingConfig()
   webSocketState.set(io, { authenticatedSockets, connectedSockets })
 
   io.on('connection', socket => {
+    let activeSendEvents = 0
+    let sendRateWindowStartedAt = Date.now()
+    let sendEventsInWindow = 0
     connectedSockets.set(socket.id, socket)
     Logger.log('[WEBSOCKET] New connection established.')
 
@@ -248,7 +261,34 @@ export function attachMessageBoxWebSockets(
           return
         }
 
-        Logger.log(`[WEBSOCKET] Processing sendMessage for room: ${roomId}`)
+        if (
+          resources.webSocketMaxConcurrentSends !== -1 &&
+          activeSendEvents >= resources.webSocketMaxConcurrentSends
+        ) {
+          await socket.emit('messageFailed', {
+            reason: 'Too many concurrent WebSocket sends',
+            code: 'ERR_WEBSOCKET_CONCURRENCY_LIMIT'
+          })
+          return
+        }
+
+        const now = Date.now()
+        if (now - sendRateWindowStartedAt >= 60_000) {
+          sendRateWindowStartedAt = now
+          sendEventsInWindow = 0
+        }
+        if (
+          resources.webSocketSendRateLimit !== -1 &&
+          sendEventsInWindow >= resources.webSocketSendRateLimit
+        ) {
+          await socket.emit('messageFailed', {
+            reason: 'WebSocket send rate limit exceeded',
+            code: 'ERR_WEBSOCKET_RATE_LIMITED'
+          })
+          return
+        }
+        sendEventsInWindow += 1
+        activeSendEvents += 1
 
         try {
           if (typeof roomId !== 'string' || roomId.trim() === '') {
@@ -284,10 +324,23 @@ export function attachMessageBoxWebSockets(
             return
           }
 
+          Logger.log(`[WEBSOCKET] Processing sendMessage for room: ${roomId}`)
+
+          // BRC-105 payments are authenticated HTTP exchanges. Refuse the
+          // legacy write event when monetization is enabled so current clients
+          // immediately exercise their existing AuthFetch fallback instead of
+          // bypassing the payment middleware.
+          if (pricing.enabled) {
+            await socket.emit(`sendMessageAck-${roomId}`, {
+              status: 'error',
+              code: 'ERR_PAYMENT_REQUIRES_AUTHFETCH'
+            })
+            return
+          }
+
           // Reuse the HTTP route's complete validation, recipient-permission,
-          // fee, payment, duplicate, and persistence policy. WebSocket sends
-          // that require payment return an error so the client can use its
-          // existing authenticated HTTP fallback.
+          // duplicate, quota, and persistence policy. Paid deployments are
+          // routed through AuthFetch above rather than this legacy event.
           let routeStatus = 200
           let routeBody: any
           const routeResponse = {
@@ -328,7 +381,15 @@ export function attachMessageBoxWebSockets(
             messageId: message.messageId
           })
 
-          const recipientSockets = recipientSocketIds(authenticatedSockets, message.recipient)
+          const recipientSocketIdsForMessage = recipientSocketIds(
+            authenticatedSockets,
+            message.recipient
+          )
+          const boundedRecipientSocketIds =
+            resources.webSocketMaxRecipientConnections === -1
+              ? recipientSocketIdsForMessage
+              : recipientSocketIdsForMessage.slice(0, resources.webSocketMaxRecipientConnections)
+          const recipientSockets = boundedRecipientSocketIds
             .map(socketId => connectedSockets.get(socketId))
             .filter(recipientSocket => recipientSocket != null)
           await Promise.all(
@@ -347,6 +408,8 @@ export function attachMessageBoxWebSockets(
         } catch (error) {
           Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler:', error)
           await socket.emit('messageFailed', { reason: 'Unexpected error occurred' })
+        } finally {
+          activeSendEvents -= 1
         }
       }
     )

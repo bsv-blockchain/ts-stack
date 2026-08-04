@@ -1,5 +1,8 @@
 # UHRP Storage Server – Deployment Guide
 
+See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
+for list, retention, response, connection, and provider-scaling guidance.
+
 This guide walks you through deploying **UHRP Storage Server** on Google Cloud Platform (GCP) with continuous delivery via GitHub Actions. When you finish, you’ll have:
 
 -   A single‑region **Cloud Storage bucket** that stores all UHRP data.

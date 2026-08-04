@@ -20,6 +20,9 @@ export const createServiceHealth = (): ServiceHealth => {
       app.get('/health', (_req: Request, res: Response) => {
         res.status(200).json({ status: 'ok', live: true })
       })
+      app.get('/healthz', (_req: Request, res: Response) => {
+        res.status(200).json({ status: 'ok', live: true })
+      })
       app.get('/ready', (_req: Request, res: Response) => {
         res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'starting', ready })
       })

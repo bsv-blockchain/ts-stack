@@ -23,7 +23,11 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  initialDoubleSlashCompatibility,
+  profileValue,
   readBodyLimitBytes,
+  readResourceProfile,
+  responseSizeLimit,
   securityHeaders
 } from './security/edgePolicy'
 
@@ -269,19 +273,35 @@ async function main() {
 
   // Create Express app with both v1 and v2 routes
   const app = express.default()
+  const resourceProfile = readResourceProfile('CHAINTRACKS')
   app.disable('x-powered-by')
+  app.use(initialDoubleSlashCompatibility)
   app.use(securityHeaders({ environmentPrefix: 'CHAINTRACKS' }))
   app.use(corsPolicy({
     environmentPrefix: 'CHAINTRACKS',
     methods: ['GET', 'POST', 'OPTIONS']
   }))
-  app.use(concurrencyLimit('CHAINTRACKS', 200))
+  app.use(concurrencyLimit('CHAINTRACKS', profileValue(resourceProfile, {
+    small: 32,
+    standard: 64,
+    highThroughput: 256
+  })))
 
   // Body parser for POST requests
   app.use(bodyParser.json({
     limit: readBodyLimitBytes('CHAINTRACKS', 256 * 1024)
   }))
   app.use(bodyParserErrorHandler)
+  app.use(responseSizeLimit('CHAINTRACKS', profileValue(resourceProfile, {
+    small: 1024 * 1024,
+    standard: 4 * 1024 * 1024,
+    highThroughput: 32 * 1024 * 1024
+  })))
+
+  app.get('/healthz', (_req: express.Request, res: express.Response) => {
+    res.setHeader('Cache-Control', 'no-store')
+    res.status(200).json({ status: 'ok', profile: resourceProfile })
+  })
 
   // Root endpoint
   app.get('/', (_req: express.Request, res: express.Response) => {

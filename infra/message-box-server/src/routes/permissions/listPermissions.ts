@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { Logger } from '../../utils/logger.js'
 import { runtimeDeps } from '../../runtimeDeps.js'
+import { readMessageBoxResourceConfig } from '../../config/resources.js'
 
 export const MAX_PERMISSION_PAGE_SIZE = 100
 export const MAX_PERMISSION_OFFSET = 100_000
@@ -124,24 +125,44 @@ export default {
       // Parse and validate query parameters
       const { messageBox, limit: limitStr, offset: offsetStr, createdAtOrder } = req.query
 
-      const limit = limitStr != null ? Number(limitStr) : MAX_PERMISSION_PAGE_SIZE
+      const resources = readMessageBoxResourceConfig()
+      const limit =
+        limitStr != null
+          ? Number(limitStr)
+          : resources.permissionListDefaultLimit === -1
+            ? Number.MAX_SAFE_INTEGER
+            : resources.permissionListDefaultLimit
       const offset = offsetStr != null ? Number(offsetStr) : 0
       const sortOrder = createdAtOrder ?? 'desc'
 
       // Validate pagination parameters
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PERMISSION_PAGE_SIZE) {
+      if (
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        (resources.permissionListMaxLimit !== -1 && limit > resources.permissionListMaxLimit)
+      ) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_LIMIT',
-          description: `limit must be an integer between 1 and ${MAX_PERMISSION_PAGE_SIZE}.`
+          description:
+            resources.permissionListMaxLimit === -1
+              ? 'limit must be a positive safe integer.'
+              : `limit must be an integer between 1 and ${resources.permissionListMaxLimit}.`
         })
       }
 
-      if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_PERMISSION_OFFSET) {
+      if (
+        !Number.isSafeInteger(offset) ||
+        offset < 0 ||
+        (resources.permissionListMaxOffset !== -1 && offset > resources.permissionListMaxOffset)
+      ) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_OFFSET',
-          description: `offset must be an integer between 0 and ${MAX_PERMISSION_OFFSET}.`
+          description:
+            resources.permissionListMaxOffset === -1
+              ? 'offset must be a non-negative safe integer.'
+              : `offset must be an integer between 0 and ${resources.permissionListMaxOffset}.`
         })
       }
 

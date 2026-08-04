@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wab-server",
   "private": true,
-  "version": "1.4.20",
+  "version": "1.4.21",
   "overrides": {
     "brace-expansion": "5.0.8",
     "gaxios": "7.3.0"

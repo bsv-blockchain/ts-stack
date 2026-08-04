@@ -116,7 +116,10 @@ describe('ExpressTransport hardening', () => {
     [{ requestTimeoutMs: 0 }, 'requestTimeoutMs'],
     [{ requestTimeoutMs: 1.5 }, 'requestTimeoutMs'],
     [{ maxPendingRequests: 0 }, 'maxPendingRequests'],
-    [{ maxPendingRequests: Number.MAX_SAFE_INTEGER + 1 }, 'maxPendingRequests']
+    [{ maxPendingRequests: Number.MAX_SAFE_INTEGER + 1 }, 'maxPendingRequests'],
+    [{ maxResponseBytes: 0 }, 'maxResponseBytes'],
+    [{ maxResponseBytes: -2 }, 'maxResponseBytes'],
+    [{ maxResponseBytes: Number.MAX_SAFE_INTEGER + 1 }, 'maxResponseBytes']
   ])('rejects invalid transport limits', (limits, expected) => {
     expect(() => new ExpressTransport(false, undefined, undefined, limits)).toThrow(expected)
   })
@@ -534,6 +537,36 @@ describe('ExpressTransport hardening', () => {
     expect(originalSet).toHaveBeenCalledWith('x-bsv-result', '7')
     expect(originalSend).toHaveBeenCalledWith(Buffer.from('{"ok":true}'))
     expect(transport.openGeneralHandles.has(REQUEST_ID)).toBe(false)
+  })
+
+  it('replaces an oversized authenticated response before signing', async () => {
+    const peer = peerMock()
+    const transport = new ExpressTransport(false, undefined, undefined, {
+      maxResponseBytes: 64
+    })
+    transport.peer = peer
+    const res = responseMock()
+
+    ;(transport as any).setupAuthenticatedResponse(
+      validGeneralRequest(),
+      res,
+      jest.fn(),
+      IDENTITY_KEY,
+      REQUEST_ID
+    )
+
+    res.json({ value: 'x'.repeat(1_024) })
+    await flushPromises()
+
+    const expectedBody = Utils.toArray(
+      JSON.stringify({
+        status: 'error',
+        code: 'ERR_RESPONSE_TOO_LARGE',
+        description: 'The requested response exceeds the configured service limit.'
+      }),
+      'utf8'
+    )
+    expect(peer.toPeer).toHaveBeenCalledWith(responsePayload(413, {}, expectedBody), SESSION_NONCE)
   })
 
   it('buffers and signs an authenticated text response with its inferred content type', async () => {

@@ -35,6 +35,14 @@ import {
   shouldUseFCMDelivery
 } from '../utils/messagePermissions.js'
 import { runtimeDeps, getWallet } from '../runtimeDeps.js'
+import {
+  messageExpiresAt,
+  readMessageBoxResourceConfig,
+  type MessageBoxResourceConfig
+} from '../config/resources.js'
+import { readMessageBoxPricingConfig } from '../config/pricing.js'
+import type { Knex } from 'knex'
+import { mapWithConcurrency } from '../utils/boundedConcurrency.js'
 
 // Type definition for the incoming message format
 export interface Message {
@@ -143,21 +151,30 @@ function validateMessageBox(message: Message): RouteResult<string> {
   return routeValue(boxType)
 }
 
-function validateMessageBody(message: Message): RouteResult<void> {
+function validateMessageBody(
+  message: Message,
+  resourceConfig: MessageBoxResourceConfig
+): RouteResult<void> {
   if (typeof message.body !== 'string' || message.body.trim() === '') {
     return routeFailure(400, 'ERR_INVALID_MESSAGE_BODY', 'Invalid message body.')
   }
-  if (Buffer.byteLength(message.body, 'utf8') > MAX_MESSAGE_BODY_BYTES) {
+  if (
+    resourceConfig.maxMessageBodyBytes !== -1 &&
+    Buffer.byteLength(message.body, 'utf8') > resourceConfig.maxMessageBodyBytes
+  ) {
     return routeFailure(
       413,
       'ERR_MESSAGE_BODY_TOO_LARGE',
-      `Message bodies must not exceed ${MAX_MESSAGE_BODY_BYTES} bytes.`
+      `Message bodies must not exceed ${resourceConfig.maxMessageBodyBytes} bytes.`
     )
   }
   return routeValue(undefined)
 }
 
-function normalizeRecipients(message: Message): RouteResult<string[]> {
+function normalizeRecipients(
+  message: Message,
+  resourceConfig: MessageBoxResourceConfig
+): RouteResult<string[]> {
   const recipientsRaw: unknown = message.recipients ?? message.recipient
   if (recipientsRaw == null) {
     return routeFailure(
@@ -167,11 +184,16 @@ function normalizeRecipients(message: Message): RouteResult<string[]> {
     )
   }
   const recipients = Array.isArray(recipientsRaw) ? recipientsRaw : [recipientsRaw]
-  if (recipients.length === 0 || recipients.length > MAX_MESSAGE_RECIPIENTS) {
+  if (
+    recipients.length === 0 ||
+    (resourceConfig.maxRecipients !== -1 && recipients.length > resourceConfig.maxRecipients)
+  ) {
     return routeFailure(
       400,
       'ERR_TOO_MANY_RECIPIENTS',
-      `A message may include at most ${MAX_MESSAGE_RECIPIENTS} recipients.`
+      resourceConfig.maxRecipients === -1
+        ? 'A message must include at least one recipient.'
+        : `A message may include at most ${resourceConfig.maxRecipients} recipients.`
     )
   }
   return routeValue(recipients.map(recipient => String(recipient).trim()))
@@ -234,9 +256,10 @@ function validateMessage(message: Message | undefined): RouteResult<ValidatedMes
   }
   const box = validateMessageBox(message)
   if (isRouteFailure(box)) return box
-  const body = validateMessageBody(message)
+  const resourceConfig = readMessageBoxResourceConfig()
+  const body = validateMessageBody(message, resourceConfig)
   if (isRouteFailure(body)) return body
-  const recipients = normalizeRecipients(message)
+  const recipients = normalizeRecipients(message, resourceConfig)
   if (isRouteFailure(recipients)) return recipients
   const messageIds = normalizeMessageIds(message, recipients.value)
   if (isRouteFailure(messageIds)) return messageIds
@@ -249,23 +272,6 @@ function validateMessage(message: Message | undefined): RouteResult<ValidatedMes
     messageIds: messageIds.value,
     messageIdByRecipient: messageIdByRecipient.value
   })
-}
-
-async function ensureMessageBoxes(recipients: string[], boxType: string): Promise<void> {
-  for (const recipient of recipients) {
-    const existing = await runtimeDeps
-      .knex('messageBox')
-      .where({ identityKey: recipient, type: boxType })
-      .first()
-    if (existing == null) {
-      await runtimeDeps.knex('messageBox').insert({
-        identityKey: recipient,
-        type: boxType,
-        created_at: new Date(),
-        updated_at: new Date()
-      })
-    }
-  }
 }
 
 async function evaluateRecipientFees(
@@ -449,48 +455,127 @@ function hasErrorCode(error: unknown, code: string): boolean {
   return error != null && typeof error === 'object' && 'code' in error && error.code === code
 }
 
-async function storeMessage(
+function isDuplicateDatabaseError(error: unknown): boolean {
+  return (
+    hasErrorCode(error, 'ER_DUP_ENTRY') ||
+    hasErrorCode(error, 'SQLITE_CONSTRAINT_PRIMARYKEY') ||
+    hasErrorCode(error, 'SQLITE_CONSTRAINT_UNIQUE')
+  )
+}
+
+class RouteFailureError extends Error {
+  constructor(readonly failure: RouteFailure) {
+    super(String(failure.payload.description ?? failure.payload.code ?? 'Route failure'))
+  }
+}
+
+interface StoredMessageRow {
+  messageId: string
+  messageBoxId: number
+  sender: string
+  recipient: string
+  body: string
+  bodyBytes: number
+  created_at: Date
+  updated_at: Date
+  expires_at: Date | null
+}
+
+interface ResourceUsage {
+  messageCount: number
+  bodyBytes: number
+}
+
+function numericAggregate(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'bigint') return Number(value)
+  if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value)
+  return 0
+}
+
+function activeMessages(query: Knex.QueryBuilder, now: Date): Knex.QueryBuilder {
+  return query.where(builder => {
+    builder.whereNull('expires_at').orWhere('expires_at', '>', now)
+  })
+}
+
+async function resourceUsage(
+  transaction: Knex.Transaction,
+  column: 'sender' | 'recipient',
+  identityKey: string,
+  now: Date
+): Promise<ResourceUsage> {
+  const byteFunction = transaction.client.config.client.includes('sqlite')
+    ? 'LENGTH(??)'
+    : 'OCTET_LENGTH(??)'
+  const result = await activeMessages(transaction('messages').where(column, identityKey), now)
+    .count<{ message_count: string | number }[]>({ message_count: '*' })
+    .select(transaction.raw(`COALESCE(SUM(${byteFunction}), 0) AS ??`, ['body', 'body_bytes']))
+    .first()
+  return {
+    messageCount: numericAggregate(result?.message_count),
+    bodyBytes: numericAggregate((result as Record<string, unknown> | undefined)?.body_bytes)
+  }
+}
+
+function enforceQuota(
+  usage: ResourceUsage,
+  additions: ResourceUsage,
+  maxMessages: number,
+  maxBytes: number,
+  code: string,
+  description: string
+): void {
+  if (maxMessages !== -1 && usage.messageCount + additions.messageCount > maxMessages) {
+    throw new RouteFailureError(
+      routeFailure(429, code, description, {
+        resource: 'messages',
+        limit: maxMessages
+      })
+    )
+  }
+  if (maxBytes !== -1 && usage.bodyBytes + additions.bodyBytes > maxBytes) {
+    throw new RouteFailureError(
+      routeFailure(429, code, description, {
+        resource: 'bytes',
+        limit: maxBytes
+      })
+    )
+  }
+}
+
+async function acquireResourceLocks(
+  transaction: Knex.Transaction,
+  identities: string[],
+  now: Date
+): Promise<void> {
+  const keys = [...new Set(identities)].sort()
+  await transaction('message_resource_locks')
+    .insert(keys.map(identity_key => ({ identity_key, updated_at: now })))
+    .onConflict('identity_key')
+    .ignore()
+  // Stable ordering prevents deadlocks when multi-recipient requests overlap.
+  await transaction('message_resource_locks')
+    .whereIn('identity_key', keys)
+    .orderBy('identity_key', 'asc')
+    .select('identity_key')
+    .forUpdate()
+}
+
+function buildStoredBody(
   validated: ValidatedMessage,
   recipient: string,
-  messageId: string,
-  senderKey: string,
   payment: Payment | undefined,
   recipientOutputs: RecipientOutputs
-): Promise<RouteFailure | undefined> {
-  const messageBox = await runtimeDeps
-    .knex('messageBox')
-    .where({ identityKey: recipient, type: validated.boxType })
-    .select('messageBoxId')
-    .first()
+): string {
   const recipientPayment =
     recipientOutputs.has(recipient) && payment != null
       ? { ...payment, outputs: recipientOutputs.get(recipient)! }
       : undefined
-  const storedBody = {
+  return JSON.stringify({
     message: validated.message.body,
     ...(recipientPayment != null ? { payment: recipientPayment } : {})
-  }
-  try {
-    await runtimeDeps
-      .knex('messages')
-      .insert({
-        messageId,
-        messageBoxId: messageBox?.messageBoxId ?? null,
-        sender: senderKey,
-        recipient,
-        body: JSON.stringify(storedBody),
-        created_at: new Date(),
-        updated_at: new Date()
-      })
-      .onConflict('messageId')
-      .ignore()
-    return undefined
-  } catch (error) {
-    if (hasErrorCode(error, 'ER_DUP_ENTRY')) {
-      return routeFailure(400, 'ERR_DUPLICATE_MESSAGE', 'Duplicate message.')
-    }
-    throw error
-  }
+  })
 }
 
 async function notifyRecipient(
@@ -513,29 +598,107 @@ async function storeMessages(
   payment: Payment | undefined,
   recipientOutputs: RecipientOutputs
 ): Promise<RouteResult<Array<{ recipient: string; messageId: string }>>> {
-  const results: Array<{ recipient: string; messageId: string }> = []
-  for (const recipient of validated.recipients) {
-    const messageId = validated.messageIdByRecipient.get(recipient)
-    if (messageId == null || messageId === '') {
-      return routeFailure(
-        400,
-        'ERR_INVALID_MESSAGEID',
-        `Missing messageId for recipient ${recipient}`
+  const resourceConfig = readMessageBoxResourceConfig()
+  const now = new Date()
+  const expiresAt = messageExpiresAt(resourceConfig, now)
+
+  try {
+    const rows = await runtimeDeps.knex.transaction(async transaction => {
+      await acquireResourceLocks(transaction, [senderKey, ...validated.recipients], now)
+
+      await transaction('messageBox')
+        .insert(
+          validated.recipients.map(identityKey => ({
+            identityKey,
+            type: validated.boxType,
+            created_at: now,
+            updated_at: now
+          }))
+        )
+        .onConflict(['type', 'identityKey'])
+        .ignore()
+
+      const messageBoxes = await transaction('messageBox')
+        .whereIn('identityKey', validated.recipients)
+        .where('type', validated.boxType)
+        .select('identityKey', 'messageBoxId')
+      const messageBoxIds = new Map<string, number>(
+        messageBoxes.map(row => [String(row.identityKey), Number(row.messageBoxId)])
       )
-    }
-    const failure = await storeMessage(
-      validated,
-      recipient,
-      messageId,
-      senderKey,
-      payment,
-      recipientOutputs
+
+      const storedRows: StoredMessageRow[] = validated.recipients.map(recipient => {
+        const messageId = validated.messageIdByRecipient.get(recipient)
+        const messageBoxId = messageBoxIds.get(recipient)
+        if (messageId == null || messageId === '' || messageBoxId == null) {
+          throw new RouteFailureError(
+            routeFailure(400, 'ERR_INVALID_MESSAGEID', `Missing message data for ${recipient}`)
+          )
+        }
+        const body = buildStoredBody(validated, recipient, payment, recipientOutputs)
+        return {
+          messageId,
+          messageBoxId,
+          sender: senderKey,
+          recipient,
+          body,
+          bodyBytes: Buffer.byteLength(body, 'utf8'),
+          created_at: now,
+          updated_at: now,
+          expires_at: expiresAt
+        }
+      })
+
+      const senderUsage = await resourceUsage(transaction, 'sender', senderKey, now)
+      enforceQuota(
+        senderUsage,
+        {
+          messageCount: storedRows.length,
+          bodyBytes: storedRows.reduce((total, row) => total + row.bodyBytes, 0)
+        },
+        resourceConfig.maxSenderMessages,
+        resourceConfig.maxSenderBytes,
+        'ERR_SENDER_QUOTA_EXCEEDED',
+        'The sender storage quota has been reached. Retry after messages expire.'
+      )
+
+      for (const recipient of validated.recipients) {
+        const recipientRows = storedRows.filter(row => row.recipient === recipient)
+        const usage = await resourceUsage(transaction, 'recipient', recipient, now)
+        enforceQuota(
+          usage,
+          {
+            messageCount: recipientRows.length,
+            bodyBytes: recipientRows.reduce((total, row) => total + row.bodyBytes, 0)
+          },
+          resourceConfig.maxInboxMessages,
+          resourceConfig.maxInboxBytes,
+          'ERR_INBOX_QUOTA_EXCEEDED',
+          'The recipient inbox storage quota has been reached. Retry after messages are acknowledged or expire.'
+        )
+      }
+
+      await transaction('messages').insert(
+        storedRows.map(({ bodyBytes: _bodyBytes, ...row }) => row)
+      )
+      return storedRows
+    })
+
+    const results = rows.map(({ recipient, messageId }) => ({ recipient, messageId }))
+    await mapWithConcurrency(
+      results,
+      resourceConfig.notificationRecipientConcurrency,
+      async ({ recipient, messageId }) => {
+        await notifyRecipient(recipient, messageId, validated.boxType)
+      }
     )
-    if (failure != null) return failure
-    results.push({ recipient, messageId })
-    await notifyRecipient(recipient, messageId, validated.boxType)
+    return routeValue(results)
+  } catch (error) {
+    if (error instanceof RouteFailureError) return error.failure
+    if (isDuplicateDatabaseError(error)) {
+      return routeFailure(400, 'ERR_DUPLICATE_MESSAGE', 'Duplicate message.')
+    }
+    throw error
   }
-  return routeValue(results)
 }
 
 function sendFailure(res: Response, failure: RouteFailure): Response {
@@ -667,8 +830,11 @@ export default {
 
       const validated = validateMessage(message)
       if (isRouteFailure(validated)) return sendFailure(res, validated)
-      await ensureMessageBoxes(validated.value.recipients, validated.value.boxType)
-      const deliveryFee = await getServerDeliveryFee(validated.value.boxType)
+      // BRC-105 pricing replaces the legacy server-delivery output. Recipient
+      // permission fees remain independent and are still honored.
+      const deliveryFee = readMessageBoxPricingConfig().enabled
+        ? 0
+        : await getServerDeliveryFee(validated.value.boxType)
       const feeRows = await evaluateRecipientFees(
         validated.value.recipients,
         senderKey,

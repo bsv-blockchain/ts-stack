@@ -43,6 +43,27 @@ await messages.acknowledgeMessage({
 })
 ```
 
+`listMessages()` preserves its historical fetch-all behavior by following
+bounded server pages. Limit aggregate client memory when appropriate:
+
+```ts
+const firstTwoPages = await messages.listMessages({
+  messageBox: 'general_inbox',
+  pageSize: 250,
+  maxPages: 2
+})
+
+const nextThousand = await messages.listMessages({
+  messageBox: 'general_inbox',
+  offset: 1000,
+  limit: 1000
+})
+```
+
+The client uses AuthFetch for BRC-105 challenges. It intentionally does not add
+a second Message Box-specific cost-approval mechanism because BRC-100 wallet
+permissions already govern payment authorization.
+
 Explicit `init()` is optional. Public methods initialize the wallet identity
 when needed:
 

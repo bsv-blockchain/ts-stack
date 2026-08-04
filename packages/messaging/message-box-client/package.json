@@ -1,6 +1,6 @@
 {
   "name": "@bsv/message-box-client",
-  "version": "2.2.6",
+  "version": "2.3.0",
   "sideEffects": false,
   "engines": {
     "node": ">=22"

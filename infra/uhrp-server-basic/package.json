@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-lite",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "overrides": {
     "brace-expansion": "5.0.8",
     "gaxios": "7.3.0"

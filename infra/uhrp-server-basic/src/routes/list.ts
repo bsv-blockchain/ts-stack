@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { getWallet } from '../utils/walletSingleton'
 import { Utils } from '@bsv/sdk'
 import { log } from '../logger'
+import { normalizeUhrpPagination } from '../resourceLimits'
 
 interface ListRequest extends Request {
   auth: {
@@ -43,7 +44,10 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
 
     const wallet = await getWallet()
 
-    const { limit = 200, offset = 0 } = req.body
+    const { limit, offset } = normalizeUhrpPagination(
+      req.body?.limit ?? req.query.limit,
+      req.body?.offset ?? req.query.offset
+    )
 
     const { outputs } = await wallet.listOutputs({
       basket: 'uhrp advertisements',
@@ -84,6 +88,9 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
       uploads: result
     })
   } catch (error) {
+    if (error instanceof RangeError) {
+      return res.status(400).json({ status: 'error', code: 'ERR_INVALID_PAGINATION', description: error.message })
+    }
     log.error({ operation: 'list.handle', outcome: 'error', err: error }, 'Error listing advertisements')
     return res.status(500).json({
       status: 'error',

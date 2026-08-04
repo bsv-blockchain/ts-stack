@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "overrides": {
     "brace-expansion": "5.0.8",
     "gaxios": "7.3.0",

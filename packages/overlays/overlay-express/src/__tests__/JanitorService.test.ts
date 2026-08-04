@@ -108,6 +108,37 @@ describe('JanitorService', () => {
 
       expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('completed'))
     })
+
+    it('should process every streamed record while bounding retained report details', async () => {
+      const outputs = Array.from({ length: 5 }, (_, index) => ({
+        _id: String(index),
+        txid: `tx-${index}`,
+        outputIndex: index,
+        domain: 'invalid host',
+        down: 0
+      }))
+      mockCollection.find.mockReturnValue({
+        batchSize: jest.fn().mockReturnThis(),
+        async * [Symbol.asyncIterator] () {
+          for (const output of outputs) yield output
+        }
+      })
+
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger,
+        batchSize: 2,
+        maxReportResults: 2
+      })
+
+      const report = await janitor.run()
+
+      expect(report.summary.totalChecked).toBe(10)
+      expect(report.shipResults).toHaveLength(2)
+      expect(report.slapResults).toHaveLength(2)
+      expect(report.resultsTruncated).toBe(true)
+      expect(mockCollection.updateOne).toHaveBeenCalledTimes(10)
+    })
   })
 
   describe('output processing', () => {

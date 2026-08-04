@@ -3,8 +3,8 @@ id: service-operations
 title: 'Service Operations Contract'
 kind: reference
 version: '2.0.0'
-last_updated: '2026-07-29'
-last_verified: '2026-07-29'
+last_updated: '2026-08-04'
+last_verified: '2026-08-04'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, operations, observability, slo, recovery]
@@ -26,15 +26,15 @@ and CSP remains an independent document/UI policy rather than API authorization.
 
 ## Runtime endpoints and lifecycle
 
-| Service                    | Port contract                                            | Liveness       | Readiness       | Lifecycle   | Operations                                                                                                     |
-| -------------------------- | -------------------------------------------------------- | -------------- | --------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
-| `chaintracks-server`       | PORT (default 3011; CDN is port + 1)                     | `/getInfo`     | `/getInfo`      | implemented | [guide](../infrastructure/chaintracks-server.md)                                                               |
-| `message-box-server`       | PORT, then HTTP_PORT (default 8080)                      | `/health`      | `/ready`        | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/message-box-server/DEPLOYING.md)            |
-| `overlay-server`           | 8080                                                     | `/health/live` | `/health/ready` | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/overlay-server/deploy/README.md)            |
-| `uhrp-server-basic`        | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-basic.md)                                                                |
-| `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/health`      | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
-| `wab`                      | PORT (default 8080)                                      | `/info`        | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
-| `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/`            | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
+| Service                    | Port contract                                            | Liveness   | Readiness       | Lifecycle   | Operations                                                                                                     |
+| -------------------------- | -------------------------------------------------------- | ---------- | --------------- | ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `chaintracks-server`       | PORT (default 3011; CDN is port + 1)                     | `/healthz` | `/getInfo`      | implemented | [guide](../infrastructure/chaintracks-server.md)                                                               |
+| `message-box-server`       | PORT, then HTTP_PORT (default 8080)                      | `/healthz` | `/ready`        | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/message-box-server/DEPLOYING.md)            |
+| `overlay-server`           | 8080                                                     | `/healthz` | `/health/ready` | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/overlay-server/deploy/README.md)            |
+| `uhrp-server-basic`        | HTTP_PORT (default 8080)                                 | `/healthz` | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-basic.md)                                                                |
+| `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/healthz` | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
+| `wab`                      | PORT (default 8080)                                      | `/healthz` | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
+| `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/healthz` | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
 
 Health endpoints are public and non-sensitive. They do not replace protocol
 authentication, administrative authorization, rate limits, or dependency-aware

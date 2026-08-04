@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express'
 import { Chaintracks } from '@bsv/wallet-toolbox'
 import { log } from './logger'
+import { parseHeaderRange } from './resourceLimits'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -133,15 +134,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/headers?height=N&count=M - Get multiple headers as binary
   router.get('/headers', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.query.height as string, 10)
-      const count = Number.parseInt(req.query.count as string, 10)
-
-      if (Number.isNaN(height) || height < 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
-      }
-      if (Number.isNaN(count) || count <= 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
-      }
+      const { height, count } = parseHeaderRange(req.query as Record<string, unknown>)
 
       const currentHeight = await chaintracks.currentHeight()
       if (height < currentHeight - 100) {
@@ -161,6 +154,9 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('Content-Type', 'application/octet-stream')
       res.send(Buffer.concat(buffers))
     } catch (err) {
+      if (err instanceof RangeError) {
+        return res.status(400).json(error('ERR_INVALID_PARAMS', err.message))
+      }
       log.error({ operation: 'v2.get_headers', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
@@ -246,15 +242,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/headers.bin?height=N&count=M - Get multiple headers as binary (80 bytes each)
   router.get('/headers.bin', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.query.height as string, 10)
-      const count = Number.parseInt(req.query.count as string, 10)
-
-      if (Number.isNaN(height) || height < 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
-      }
-      if (Number.isNaN(count) || count <= 0) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
-      }
+      const { height, count } = parseHeaderRange(req.query as Record<string, unknown>)
 
       const currentHeight = await chaintracks.currentHeight()
       if (height < currentHeight - 100) {
@@ -278,6 +266,9 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Header-Count', String(headerCount))
       res.send(Buffer.concat(buffers))
     } catch (err) {
+      if (err instanceof RangeError) {
+        return res.status(400).json(error('ERR_INVALID_PARAMS', err.message))
+      }
       log.error({ operation: 'v2.get_headers_bin', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }

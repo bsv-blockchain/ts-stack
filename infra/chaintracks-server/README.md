@@ -2,6 +2,9 @@
 
 A production-ready TypeScript Express server wrapping `ChaintracksService` from `@bsv/wallet-toolbox`, featuring a built-in **Bulk Headers CDN** for hosting and serving blockchain headers to other servers.
 
+Resource profiles, limits, memory evidence, and scaling guidance are documented
+in [Service Resource Profiles](../../docs/reference/service-resource-profiles.md).
+
 ## 🚀 Quick Start
 
 ### Docker (Recommended)

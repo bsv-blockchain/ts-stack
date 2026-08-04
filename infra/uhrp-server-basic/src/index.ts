@@ -23,7 +23,12 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  initialDoubleSlashCompatibility,
+  profileValue,
   readBodyLimitBytes,
+  readResourceLimit,
+  readResourceProfile,
+  responseSizeLimit,
   securityHeaders
 } from './security/edgePolicy'
 import { createServiceHealth } from './serviceHealth'
@@ -50,15 +55,21 @@ const authenticatedRateLimit = rateLimit(rateLimitOptions(
 ))
 
 const app = express()
+const resourceProfile = readResourceProfile('UHRP')
 const serviceHealth = createServiceHealth()
 app.disable('x-powered-by')
 configureTrustProxy(app)
+app.use(initialDoubleSlashCompatibility)
 app.use(securityHeaders({ environmentPrefix: 'UHRP' }))
 app.use(corsPolicy({
   environmentPrefix: 'UHRP',
   methods: ['GET', 'PUT', 'POST', 'OPTIONS']
 }))
-app.use(concurrencyLimit('UHRP', 100))
+app.use(concurrencyLimit('UHRP', profileValue(resourceProfile, {
+  small: 16,
+  standard: 64,
+  highThroughput: 250
+})))
 serviceHealth.register(app)
 app.use(preAuthRateLimit)
 // Add CDN MIME type middleware before static middleware
@@ -69,6 +80,16 @@ app.use(bodyparser.json({
   type: 'application/json'
 }))
 app.use(bodyParserErrorHandler)
+const maxResponseBytes = readResourceLimit(
+  'UHRP',
+  'MAX_RESPONSE_BYTES',
+  profileValue(resourceProfile, {
+    small: 1024 * 1024,
+    standard: 4 * 1024 * 1024,
+    highThroughput: 16 * 1024 * 1024
+  })
+)
+app.use(responseSizeLimit('UHRP', maxResponseBytes))
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   log.info({ operation: 'request.in', method: req.method, path: req.path }, 'Incoming request')
@@ -152,6 +173,9 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     })
 
     app.use(authMiddleware);
+    // Re-apply after auth response interception so signed responses remain
+    // bounded with every compatible auth-middleware release.
+    app.use(responseSizeLimit('UHRP', maxResponseBytes))
     app.use(authenticatedRateLimit)
     app.use(paymentMiddleware)
 

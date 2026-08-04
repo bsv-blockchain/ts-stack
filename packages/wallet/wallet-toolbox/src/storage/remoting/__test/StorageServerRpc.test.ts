@@ -328,6 +328,49 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
+  test('defaults and bounds direct RPC list limits before storage dispatch', async () => {
+    const server = makeServer(
+      {},
+      {
+        defaultRpcListLimit: 100,
+        maxRpcListLimit: 1_000
+      }
+    )
+    const listParams: any[] = [{ identityKey: 'alice' }, {}]
+    await invoke(server, 'enforceRpcRequestBudgets', 'listActions', listParams)
+    expect(listParams[1].limit).toBe(100)
+
+    const findParams: any[] = [{ identityKey: 'alice' }, { partial: {} }]
+    await invoke(server, 'enforceRpcRequestBudgets', 'findOutputsAuth', findParams)
+    expect(findParams[1].paged).toEqual({ limit: 100 })
+
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'listOutputs', [{ identityKey: 'alice' }, { limit: 1_001 }])
+    ).rejects.toThrow('must not exceed 1000')
+  })
+
+  test('bounds nested request arrays and serialized RPC responses', async () => {
+    const server = makeServer(
+      { getSettings: jest.fn(() => ({ value: 'x'.repeat(1_000) })) },
+      { maxRpcArrayItems: 2, maxRpcResponseBytes: 128 }
+    )
+    await expect(invoke(server, 'enforceRpcRequestBudgets', 'getSettings', [[1, 2, 3]])).rejects.toThrow(
+      'must not exceed 2 items'
+    )
+
+    const captured = makeResponse()
+    await invoke(
+      server,
+      'handleRpcRequest',
+      makeRequest({ jsonrpc: '2.0', method: 'getSettings', params: [], id: 11 }),
+      captured.response
+    )
+    expect(captured.statusCode).toBe(413)
+    expect(captured.body).toMatchObject({
+      error: { code: -32005 }
+    })
+  })
+
   test('rejects an RPC request without a valid authenticated identity', async () => {
     const server = makeServer()
     const body = {

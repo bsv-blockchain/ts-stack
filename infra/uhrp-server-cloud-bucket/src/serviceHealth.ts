@@ -19,6 +19,7 @@ class CloudServiceHealth implements ServiceHealth {
 
   public readonly register = (app: Express): void => {
     app.get('/health', this.reportLiveness)
+    app.get('/healthz', this.reportLiveness)
     app.get('/ready', this.reportReadiness)
   }
 

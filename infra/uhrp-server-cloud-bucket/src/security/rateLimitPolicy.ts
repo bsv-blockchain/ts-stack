@@ -29,6 +29,16 @@ export function readBoundedInteger (
   return parsed
 }
 
+function readRateLimit (name: string, fallback: number): number {
+  const value = process.env[name]
+  if (value == null || value.trim() === '') return fallback
+  const normalized = value.trim().toLowerCase()
+  // express-rate-limit has no disabled sentinel. A safe-integer ceiling is
+  // effectively unlimited while preserving a numeric value for its internals.
+  if (normalized === '-1' || normalized === 'unlimited') return Number.MAX_SAFE_INTEGER
+  return readBoundedInteger(name, fallback, MAX_RATE_LIMIT)
+}
+
 export function rateLimitOptions (
   prefix: string,
   defaults: RateLimitDefaults,
@@ -36,7 +46,7 @@ export function rateLimitOptions (
 ): Partial<Options> {
   return {
     windowMs: readBoundedInteger(`${prefix}_WINDOW_MS`, defaults.windowMs, MAX_RATE_LIMIT_WINDOW_MS),
-    limit: readBoundedInteger(`${prefix}_MAX`, defaults.limit, MAX_RATE_LIMIT),
+    limit: readRateLimit(`${prefix}_MAX`, defaults.limit),
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     handler: (_req: Request, res: Response) => {

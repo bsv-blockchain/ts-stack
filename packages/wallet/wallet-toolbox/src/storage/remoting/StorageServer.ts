@@ -16,6 +16,7 @@ import {
 import express, { Request, Response } from 'express'
 import { AuthMiddlewareOptions, AuthRequest, createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import type { PaymentReplayStore } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
@@ -39,7 +40,11 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  initialDoubleSlashCompatibility,
+  profileValue,
   readBodyLimitBytes,
+  readResourceLimit,
+  readResourceProfile,
   securityHeaders,
   type HttpServerPolicyDefaults,
   type SecurityHeadersOptions
@@ -125,6 +130,20 @@ const actionBatchRpcMethods = new Set([
   'renewActionBatch'
 ])
 
+const topLevelLimitArgument = new Map<string, number>([
+  ['listActions', 1],
+  ['listCertificates', 1],
+  ['listOutputs', 1]
+])
+
+const pagedLimitArgument = new Map<string, number>([
+  ['findCertificatesAuth', 1],
+  ['findOutputBaskets', 1],
+  ['findOutputBasketsAuth', 1],
+  ['findOutputsAuth', 1],
+  ['findProvenTxReqs', 0]
+])
+
 interface RpcDispatchResult {
   found: boolean
   result?: unknown
@@ -175,7 +194,7 @@ export interface WalletStorageServerOptions {
   trustProxy?: TrustProxySetting
   /** Exact browser origins allowed to call this server. Omit for public CORS. */
   allowedOrigins?: string[]
-  /** Per-process in-flight request ceiling. Defaults to 200. */
+  /** Per-process in-flight request ceiling. Defaults to the selected resource profile (24 in standard). */
   maxConcurrentRequests?: number
   /** Node HTTP timeout/connection policy overrides. */
   http?: Partial<HttpServerPolicyDefaults>
@@ -190,6 +209,16 @@ export interface WalletStorageServerOptions {
    * authorization, storage dispatch, and response formulation.
    */
   telemetry?: TelemetryConfig
+  /** Default item limit inserted for list/find RPC calls that omit one. Default: 1,000. */
+  defaultRpcListLimit?: number
+  /** Largest caller-selected list/find item limit. Use -1 to disable this operator ceiling. */
+  maxRpcListLimit?: number
+  /** Maximum elements in any decoded request array. Use -1 only for trusted callers. */
+  maxRpcArrayItems?: number
+  /** Maximum serialized JSON-RPC response bytes. Use -1 to disable. */
+  maxRpcResponseBytes?: number
+  /** Durable BRC-105 replay claims for monetized multi-replica deployments. */
+  paymentReplayStore?: PaymentReplayStore
 }
 
 export class StorageServer {
@@ -212,6 +241,11 @@ export class StorageServer {
   private readonly logRpcRequests: boolean
   private readonly telemetry: Telemetry
   private readonly telemetryConfig?: TelemetryConfig
+  private readonly defaultRpcListLimit: number
+  private readonly maxRpcListLimit: number
+  private readonly maxRpcArrayItems: number
+  private readonly maxRpcResponseBytes: number
+  private readonly paymentReplayStore?: PaymentReplayStore
 
   constructor(storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
@@ -226,7 +260,14 @@ export class StorageServer {
     this.preAuthRateLimitOptions = options.preAuthRateLimit
     this.trustProxy = options.trustProxy
     this.allowedOrigins = options.allowedOrigins
-    this.maxConcurrentRequests = options.maxConcurrentRequests ?? 200
+    const profile = readResourceProfile('WALLET_STORAGE')
+    this.maxConcurrentRequests =
+      options.maxConcurrentRequests ??
+      readResourceLimit(
+        'WALLET_STORAGE',
+        'MAX_CONCURRENT_REQUESTS',
+        profileValue(profile, { small: 8, standard: 24, highThroughput: 96 })
+      )
     this.httpPolicy = {
       requestTimeoutMs: 2 * 60 * 1000,
       headersTimeoutMs: 15_000,
@@ -239,6 +280,46 @@ export class StorageServer {
     this.logRpcRequests = options.logRpcRequests ?? true
     this.telemetryConfig = options.telemetry
     this.telemetry = new Telemetry(options.telemetry)
+    this.paymentReplayStore = options.paymentReplayStore
+    this.defaultRpcListLimit =
+      options.defaultRpcListLimit ??
+      readResourceLimit(
+        'WALLET_STORAGE',
+        'RPC_DEFAULT_LIST_LIMIT',
+        profileValue(profile, { small: 500, standard: 1_000, highThroughput: 1_000 })
+      )
+    this.maxRpcListLimit =
+      options.maxRpcListLimit ??
+      readResourceLimit(
+        'WALLET_STORAGE',
+        'RPC_MAX_LIST_LIMIT',
+        profileValue(profile, { small: 500, standard: 1_000, highThroughput: 5_000 })
+      )
+    this.maxRpcArrayItems =
+      options.maxRpcArrayItems ??
+      readResourceLimit(
+        'WALLET_STORAGE',
+        'RPC_MAX_ARRAY_ITEMS',
+        profileValue(profile, { small: 250_000, standard: 1_000_000, highThroughput: 4_000_000 })
+      )
+    this.maxRpcResponseBytes =
+      options.maxRpcResponseBytes ??
+      readResourceLimit(
+        'WALLET_STORAGE',
+        'RPC_MAX_RESPONSE_BYTES',
+        profileValue(profile, {
+          small: 4 * 1024 * 1024,
+          standard: 8 * 1024 * 1024,
+          highThroughput: 32 * 1024 * 1024
+        })
+      )
+    if (
+      this.defaultRpcListLimit !== -1 &&
+      this.maxRpcListLimit !== -1 &&
+      this.defaultRpcListLimit > this.maxRpcListLimit
+    ) {
+      throw new RangeError('defaultRpcListLimit must not exceed maxRpcListLimit')
+    }
 
     const legacyLogShortReqs = (options as unknown as Record<string, unknown>)['logShortReqs']
     if (legacyLogShortReqs) {
@@ -279,6 +360,7 @@ export class StorageServer {
   private setupRoutes(): void {
     configureTrustProxy(this.app, this.trustProxy)
     this.app.disable('x-powered-by')
+    this.app.use(initialDoubleSlashCompatibility)
     this.app.use(
       securityHeaders({
         environmentPrefix: 'WALLET_STORAGE',
@@ -315,7 +397,14 @@ export class StorageServer {
     this.app.set('json escape', true)
     this.app.use(
       express.json({
-        limit: readBodyLimitBytes('WALLET_STORAGE_JSON', 30 * 1024 * 1024)
+        limit: readBodyLimitBytes(
+          'WALLET_STORAGE_JSON',
+          profileValue(readResourceProfile('WALLET_STORAGE'), {
+            small: 2 * 1024 * 1024,
+            standard: 8 * 1024 * 1024,
+            highThroughput: 32 * 1024 * 1024
+          })
+        )
       })
     )
     // Authentication must see the exact binary body bytes, so parse octet
@@ -333,6 +422,11 @@ export class StorageServer {
       res.send('User-agent: *\nDisallow: /')
     })
 
+    this.app.get('/healthz', (_req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-store')
+      res.status(200).json({ status: 'ok' })
+    })
+
     this.app.get('/', (req: Request, res: Response) => {
       res.type('text/plain')
       res.send(`BRC-100 ${this.wallet.chain}Net Storage Provider.`)
@@ -340,6 +434,7 @@ export class StorageServer {
 
     const options: AuthMiddlewareOptions = {
       wallet: this.wallet as WalletInterface,
+      transportLimits: { maxResponseBytes: this.maxRpcResponseBytes },
       ...(this.telemetryConfig == null ? {} : { telemetry: this.telemetryConfig })
     }
     if (this.sessionManager != null) options.sessionManager = this.sessionManager
@@ -358,7 +453,8 @@ export class StorageServer {
       this.app.use(
         createPaymentMiddleware({
           wallet: this.wallet,
-          calculateRequestPrice: this.calculateRequestPrice || (() => 100)
+          calculateRequestPrice: this.calculateRequestPrice || (() => 100),
+          replayStore: this.paymentReplayStore
         })
       )
     }
@@ -439,12 +535,13 @@ export class StorageServer {
 
     const { jsonrpc, method, id } = req.body
     const params = (requestUsesBinary ? decodeBinaryJsonValue(req.body.params) : req.body.params) as any[]
-    if (jsonrpc !== '2.0' || !method || typeof method !== 'string') {
+    if (jsonrpc !== '2.0' || !method || typeof method !== 'string' || !Array.isArray(params)) {
       return this.sendRpc(res, useBinary, { error: { code: -32600, message: 'Invalid Request' } }, 400)
     }
 
     const logObj = this.createRpcLog(req, method, id, params)
     try {
+      this.enforceRpcRequestBudgets(method, params)
       const dispatch = await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
       if (!dispatch.found) {
         return this.sendRpc(
@@ -499,9 +596,93 @@ export class StorageServer {
 
   private sendRpc(res: Response, useBinary: boolean, payload: unknown, status: number = 200): Response {
     res.set('X-Content-Type-Options', 'nosniff')
+    const serialized = stringifyJsonRpc(payload, useBinary)
+    if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
+      return res.status(413).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32005,
+          message: 'The requested response exceeds the configured service limit.'
+        },
+        id: (payload as { id?: unknown } | null)?.id
+      })
+    }
     // Normalize with the negotiated binary replacer, then let Express emit
     // the JSON response through its escaping-aware JSON sink.
-    return res.status(status).json(JSON.parse(stringifyJsonRpc(payload, useBinary)))
+    return res.status(status).json(JSON.parse(serialized))
+  }
+
+  private enforceRpcRequestBudgets(method: string, params: any[]): void {
+    if (this.maxRpcArrayItems !== -1) {
+      const pending: Array<{ value: unknown; depth: number }> = [{ value: params, depth: 0 }]
+      const seen = new Set<object>()
+      while (pending.length > 0) {
+        const current = pending.pop()!
+        if (current.depth > 64) throw new RangeError('RPC parameter nesting exceeds 64 levels')
+        if (current.value == null || typeof current.value !== 'object') continue
+        if (seen.has(current.value)) continue
+        seen.add(current.value)
+        if (Array.isArray(current.value) && current.value.length > this.maxRpcArrayItems) {
+          throw new RangeError(`RPC arrays must not exceed ${this.maxRpcArrayItems} items`)
+        }
+        for (const value of Object.values(current.value)) {
+          pending.push({ value, depth: current.depth + 1 })
+        }
+      }
+    }
+
+    const topLevelIndex = topLevelLimitArgument.get(method)
+    if (topLevelIndex != null) {
+      const args = this.objectArgument(params, topLevelIndex)
+      args.limit = this.normalizedRpcLimit(args.limit)
+    }
+    const pagedIndex = pagedLimitArgument.get(method)
+    if (pagedIndex != null) {
+      const args = this.objectArgument(params, pagedIndex)
+      const paged = args.paged == null ? {} : args.paged
+      if (typeof paged !== 'object' || Array.isArray(paged)) {
+        throw new TypeError('paged must be an object')
+      }
+      paged.limit = this.normalizedRpcLimit(paged.limit)
+      args.paged = paged
+    }
+    if (method === 'getSyncChunk') {
+      const args = this.objectArgument(params, 0)
+      args.maxItems = this.normalizedRpcLimit(args.maxItems)
+      if (
+        this.maxRpcResponseBytes !== -1 &&
+        (!Number.isSafeInteger(args.maxRoughSize) || args.maxRoughSize > this.maxRpcResponseBytes)
+      ) {
+        args.maxRoughSize = this.maxRpcResponseBytes
+      }
+    }
+  }
+
+  private objectArgument(params: any[], index: number): Record<string, any> {
+    const value = params[index]
+    if (value == null) {
+      const created: Record<string, any> = {}
+      params[index] = created
+      return created
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError(`RPC parameter ${index} must be an object`)
+    }
+    return value
+  }
+
+  private normalizedRpcLimit(value: unknown): number {
+    if (value == null) {
+      return this.defaultRpcListLimit === -1 ? Number.MAX_SAFE_INTEGER : this.defaultRpcListLimit
+    }
+    if (!Number.isSafeInteger(value) || Number(value) < 1) {
+      throw new RangeError('RPC list limits must be positive safe integers')
+    }
+    const limit = Number(value)
+    if (this.maxRpcListLimit !== -1 && limit > this.maxRpcListLimit) {
+      throw new RangeError(`RPC list limits must not exceed ${this.maxRpcListLimit}`)
+    }
+    return limit
   }
 
   private sendRpcError(res: Response, useBinary: boolean, id: unknown, error: unknown): Response {

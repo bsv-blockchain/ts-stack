@@ -121,6 +121,25 @@ describe('BSV Overlay Services Engine', () => {
     }
   })
 
+  it('rejects oversized lookup formulas before hydrating their outputs', async () => {
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: 0, history: 0 },
+      { txid: exampleTXID, outputIndex: 0, history: 0 }
+    ])
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+    engine.maxLookupResults = 1
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'Lookup returned 2 results; maximum is 1'
+    )
+    expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
   afterEach(() => {
     jest.restoreAllMocks()
   })

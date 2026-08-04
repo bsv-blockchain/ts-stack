@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.4.22",
+  "version": "2.5.0",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {

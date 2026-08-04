@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "lastReviewed": "2026-07-29",
+  "lastReviewed": "2026-08-04",
   "owner": "ts-stack-maintainers",
   "policy": {
     "publicEdge": {
@@ -85,7 +85,7 @@
       "path": "infra/chaintracks-server",
       "envExample": "infra/chaintracks-server/.env.example",
       "port": "PORT (default 3011; CDN is port + 1)",
-      "livenessPath": "/getInfo",
+      "livenessPath": "/healthz",
       "readinessPath": "/getInfo",
       "configuration": {
         "required": ["CHAIN"],
@@ -138,7 +138,7 @@
       "path": "infra/message-box-server",
       "envExample": "infra/message-box-server/.env.example",
       "port": "PORT, then HTTP_PORT (default 8080)",
-      "livenessPath": "/health",
+      "livenessPath": "/healthz",
       "readinessPath": "/ready",
       "configuration": {
         "required": ["SERVER_PRIVATE_KEY", "WALLET_STORAGE_URL"],
@@ -199,7 +199,7 @@
       "path": "infra/overlay-server",
       "envExample": "infra/overlay-server/.env.example",
       "port": "8080",
-      "livenessPath": "/health/live",
+      "livenessPath": "/healthz",
       "readinessPath": "/health/ready",
       "configuration": {
         "required": [
@@ -277,7 +277,7 @@
       "path": "infra/uhrp-server-basic",
       "envExample": "infra/uhrp-server-basic/.env.example",
       "port": "HTTP_PORT (default 8080)",
-      "livenessPath": "/health",
+      "livenessPath": "/healthz",
       "readinessPath": "/ready",
       "configuration": {
         "required": ["BSV_NETWORK", "SERVER_PRIVATE_KEY", "WALLET_STORAGE_URL"],
@@ -323,7 +323,7 @@
       "path": "infra/uhrp-server-cloud-bucket",
       "envExample": "infra/uhrp-server-cloud-bucket/secrets/.env.example",
       "port": "HTTP_PORT (default 8080)",
-      "livenessPath": "/health",
+      "livenessPath": "/healthz",
       "readinessPath": "/ready",
       "configuration": {
         "required": [
@@ -381,7 +381,7 @@
       "path": "infra/wab",
       "envExample": "infra/wab/.env.example",
       "port": "PORT (default 8080)",
-      "livenessPath": "/info",
+      "livenessPath": "/healthz",
       "readinessPath": "/info",
       "configuration": {
         "required": [
@@ -450,7 +450,7 @@
       "path": "infra/wallet-infra",
       "envExample": "infra/wallet-infra/.env.example",
       "port": "HTTP_PORT (default 8081; samples set 8080 without nginx)",
-      "livenessPath": "/",
+      "livenessPath": "/healthz",
       "readinessPath": "/",
       "configuration": {
         "required": ["BSV_NETWORK", "KNEX_DB_CONNECTION", "SERVER_PRIVATE_KEY"],

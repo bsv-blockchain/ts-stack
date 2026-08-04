@@ -13,6 +13,7 @@ import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { Logger } from '../utils/logger.js'
 import { runtimeDeps } from '../runtimeDeps.js'
+import { readMessageBoxResourceConfig } from '../config/resources.js'
 
 export const MAX_ACKNOWLEDGMENT_IDS = 1_000
 export const MAX_MESSAGE_ID_BYTES = 256
@@ -120,6 +121,7 @@ export default {
         Array.isArray(messageIds) ? messageIds.length : 0,
         'message(s)'
       )
+      const maxAcknowledgmentIds = readMessageBoxResourceConfig().maxAcknowledgmentIds
 
       // Validate request: must be a non-empty array of strings
       if (messageIds == null || (Array.isArray(messageIds) && messageIds.length === 0)) {
@@ -132,7 +134,7 @@ export default {
 
       if (
         !Array.isArray(messageIds) ||
-        messageIds.length > MAX_ACKNOWLEDGMENT_IDS ||
+        (maxAcknowledgmentIds !== -1 && messageIds.length > maxAcknowledgmentIds) ||
         messageIds.some(
           id =>
             typeof id !== 'string' ||
@@ -144,7 +146,7 @@ export default {
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_ID',
           description:
-            `Message IDs must be a non-empty array of at most ${MAX_ACKNOWLEDGMENT_IDS} ` +
+            `Message IDs must be a non-empty array${maxAcknowledgmentIds === -1 ? '' : ` of at most ${maxAcknowledgmentIds}`} ` +
             `non-empty strings no longer than ${MAX_MESSAGE_ID_BYTES} bytes each.`
         })
       }

@@ -198,9 +198,8 @@ components:
           type: string
           description: |
             Target room. Format: `<recipientKey>-<messageBoxType>`.
-            The server extracts the `messageBoxType` by splitting on `-` and
-            taking the second part; it uses the authenticated sender key from
-            `authenticatedSockets`.
+            The server removes the exact recipient-key prefix and uses the
+            authenticated sender key from `authenticatedSockets`.
         message:
           type: object
           required: [messageId, recipient, body]
@@ -217,15 +216,18 @@ components:
     WsSendMessageAckPayload:
       type: object
       description: |
-        Acknowledgement emitted by the server on `sendMessageAck-{roomId}` after
-        a successful `sendMessage`. Note: the event name is dynamic and includes
-        the room ID used in the originating request.
-      required: [status, messageId]
+        Acknowledgement emitted by the server on `sendMessageAck-{roomId}`. A
+        successful write includes `messageId`. An error includes `code`; paid
+        servers use `ERR_PAYMENT_REQUIRES_AUTHFETCH` so compatible clients retry
+        the send through the BRC-105 AuthFetch HTTP path.
+      required: [status]
       properties:
         status:
           type: string
-          enum: [success]
+          enum: [success, error]
         messageId:
+          type: string
+        code:
           type: string
 
     WsSendMessageBroadcastPayload:
@@ -385,7 +387,10 @@ channels:
   sendMessage:
     address: sendMessage
     description: |
-      Client sends a message to a recipient via WebSocket. The server:
+      Client sends a message to a recipient via WebSocket when operator
+      monetization is disabled. Paid servers return an error acknowledgement
+      that instructs current clients to use their AuthFetch HTTP fallback. The
+      unpriced WebSocket path:
       1. Validates the sender is authenticated.
       2. Validates `roomId` and `message`.
       3. Creates the message box if it does not exist.
@@ -401,9 +406,10 @@ channels:
   sendMessageAck:
     address: "sendMessageAck-{roomId}"
     description: |
-      Per-room acknowledgement emitted to the sender only after the message
-      is stored. The event name is `sendMessageAck-<roomId>` where `roomId`
-      matches the value in the originating `sendMessage` payload.
+      Per-room acknowledgement emitted to the sender after the message is
+      stored or when the request must fall back to AuthFetch. The event name is
+      `sendMessageAck-<roomId>` where `roomId` matches the value in the
+      originating `sendMessage` payload.
     parameters:
       roomId:
         description: The room ID from the originating sendMessage request.

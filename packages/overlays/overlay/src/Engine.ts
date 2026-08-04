@@ -136,6 +136,7 @@ export class Engine {
    * @param {TopicAnchorHeaderResolver} topicAnchorHeaderResolver - Resolves block hashes for BASM anchors.
    * @param {boolean} basmSyncEnabled - Whether BASM sync should run automatically.
    * @param {number} unprovenEvictionBlocks - Default block age for opt-in unproven state eviction.
+   * @param {number} maxLookupResults - Maximum lookup formulas hydrated per request. Use -1 to opt out.
    */
   constructor(
     public managers: { [key: string]: TopicManager },
@@ -156,8 +157,12 @@ export class Engine {
     public suppressDefaultSyncAdvertisements = true,
     public topicAnchorHeaderResolver?: TopicAnchorHeaderResolver,
     public basmSyncEnabled = false,
-    public unprovenEvictionBlocks = 144
+    public unprovenEvictionBlocks = 144,
+    public maxLookupResults = 1000
   ) {
+    if (maxLookupResults !== -1 && (!Number.isSafeInteger(maxLookupResults) || maxLookupResults < 1)) {
+      throw new TypeError('maxLookupResults must be -1 or a positive safe integer')
+    }
     // To encourage synchronization of overlay services, the SHIP sync strategy is used by default for all overlay topics, except for 'tm_ship' and 'tm_slap'.
     // For these two topics, any existing trackers are combined with the provided shipTrackers and slapTrackers omitting any duplicates.
     this.syncConfiguration ??= {}
@@ -1137,6 +1142,11 @@ export class Engine {
     if (lookupService === undefined || lookupService === null) throw new Error(`Lookup service not found for provider: ${lookupQuestion.service}`)
 
     const lookupResult = await lookupService.lookup(lookupQuestion)
+    if (this.maxLookupResults !== -1 && lookupResult.length > this.maxLookupResults) {
+      throw new RangeError(
+        `Lookup returned ${lookupResult.length} results; maximum is ${this.maxLookupResults}`
+      )
+    }
     const hydrationContext = this.createUTXOHistoryHydrationContext()
     await this.preloadOutputsWithBEEF(
       lookupResult.map(({ txid, outputIndex }) => ({ txid, outputIndex })),

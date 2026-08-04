@@ -1176,6 +1176,7 @@ describe('OverlayExpress', () => {
       expect(getSpy.mock.calls.find(call => call[0] === '/health')).toBeDefined()
       expect(getSpy.mock.calls.find(call => call[0] === '/health/live')).toBeDefined()
       expect(getSpy.mock.calls.find(call => call[0] === '/health/ready')).toBeDefined()
+      expect(getSpy.mock.calls.find(call => call[0] === '/healthz')).toBeDefined()
     })
 
     it('should return detailed readiness health', async () => {

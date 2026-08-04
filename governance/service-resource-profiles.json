@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "lastVerified": "2026-08-04",
+  "measurement": {
+    "node": "24.18.0",
+    "duplicationFactor": 3,
+    "description": "Representative page retained as object graph, JSON text, and authenticated transport bytes. The benchmark is a capacity model, not a substitute for a database-backed soak test."
+  },
+  "profiles": {
+    "small": { "minimumMemoryMiB": 512, "recommendedVcpu": 0.5 },
+    "standard": { "minimumMemoryMiB": 1024, "recommendedVcpu": 1 },
+    "high-throughput": { "minimumMemoryMiB": 8192, "recommendedVcpu": 4 }
+  },
+  "services": {
+    "chaintracks": {
+      "environmentPrefix": "CHAINTRACKS",
+      "representativeItemBytes": 160,
+      "values": {
+        "small": {
+          "defaultItems": 250,
+          "maxItems": 500,
+          "maxResponseBytes": 1048576,
+          "concurrency": 32
+        },
+        "standard": {
+          "defaultItems": 1000,
+          "maxItems": 1000,
+          "maxResponseBytes": 4194304,
+          "concurrency": 64
+        },
+        "high-throughput": {
+          "defaultItems": 5000,
+          "maxItems": 5000,
+          "maxResponseBytes": 33554432,
+          "concurrency": 256
+        }
+      }
+    },
+    "message-box": {
+      "environmentPrefix": "MESSAGE_BOX",
+      "representativeItemBytes": 2048,
+      "values": {
+        "small": {
+          "defaultItems": 250,
+          "maxItems": 500,
+          "maxResponseBytes": 4194304,
+          "concurrency": 8
+        },
+        "standard": {
+          "defaultItems": 1000,
+          "maxItems": 1000,
+          "maxResponseBytes": 8388608,
+          "concurrency": 24
+        },
+        "high-throughput": {
+          "defaultItems": 1000,
+          "maxItems": 5000,
+          "maxResponseBytes": 33554432,
+          "concurrency": 96
+        }
+      }
+    },
+    "overlay": {
+      "environmentPrefix": "OVERLAY",
+      "representativeItemBytes": 4096,
+      "values": {
+        "small": {
+          "defaultItems": 500,
+          "maxItems": 500,
+          "maxResponseBytes": 4194304,
+          "concurrency": 8
+        },
+        "standard": {
+          "defaultItems": 1000,
+          "maxItems": 1000,
+          "maxResponseBytes": 8388608,
+          "concurrency": 24
+        },
+        "high-throughput": {
+          "defaultItems": 5000,
+          "maxItems": 5000,
+          "maxResponseBytes": 33554432,
+          "concurrency": 96
+        }
+      }
+    },
+    "uhrp-basic": {
+      "environmentPrefix": "UHRP",
+      "representativeItemBytes": 1024,
+      "values": {
+        "small": {
+          "defaultItems": 100,
+          "maxItems": 500,
+          "maxResponseBytes": 1048576,
+          "concurrency": 16
+        },
+        "standard": {
+          "defaultItems": 200,
+          "maxItems": 1000,
+          "maxResponseBytes": 4194304,
+          "concurrency": 64
+        },
+        "high-throughput": {
+          "defaultItems": 1000,
+          "maxItems": 5000,
+          "maxResponseBytes": 16777216,
+          "concurrency": 250
+        }
+      }
+    },
+    "uhrp-cloud-bucket": {
+      "environmentPrefix": "UHRP",
+      "representativeItemBytes": 1024,
+      "values": {
+        "small": {
+          "defaultItems": 100,
+          "maxItems": 500,
+          "maxResponseBytes": 1048576,
+          "concurrency": 16
+        },
+        "standard": {
+          "defaultItems": 200,
+          "maxItems": 1000,
+          "maxResponseBytes": 4194304,
+          "concurrency": 64
+        },
+        "high-throughput": {
+          "defaultItems": 1000,
+          "maxItems": 5000,
+          "maxResponseBytes": 16777216,
+          "concurrency": 250
+        }
+      }
+    },
+    "wab": {
+      "environmentPrefix": "WAB",
+      "representativeItemBytes": 2048,
+      "values": {
+        "small": {
+          "defaultItems": 1,
+          "maxItems": 1,
+          "maxResponseBytes": 1048576,
+          "concurrency": 64
+        },
+        "standard": {
+          "defaultItems": 1,
+          "maxItems": 1,
+          "maxResponseBytes": 2097152,
+          "concurrency": 128
+        },
+        "high-throughput": {
+          "defaultItems": 1,
+          "maxItems": 1,
+          "maxResponseBytes": 8388608,
+          "concurrency": 256
+        }
+      }
+    },
+    "wallet-storage": {
+      "environmentPrefix": "WALLET_STORAGE",
+      "representativeItemBytes": 4096,
+      "values": {
+        "small": {
+          "defaultItems": 500,
+          "maxItems": 500,
+          "maxResponseBytes": 4194304,
+          "concurrency": 8
+        },
+        "standard": {
+          "defaultItems": 1000,
+          "maxItems": 1000,
+          "maxResponseBytes": 8388608,
+          "concurrency": 24
+        },
+        "high-throughput": {
+          "defaultItems": 1000,
+          "maxItems": 5000,
+          "maxResponseBytes": 33554432,
+          "concurrency": 96
+        }
+      }
+    }
+  }
+}

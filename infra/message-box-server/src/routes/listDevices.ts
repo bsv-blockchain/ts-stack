@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { runtimeDeps } from '../runtimeDeps.js'
+import { readMessageBoxResourceConfig } from '../config/resources.js'
 
 export const MAX_DEVICE_PAGE_SIZE = 100
 export const MAX_DEVICE_OFFSET = 100_000
@@ -42,22 +43,42 @@ export default {
         })
       }
 
+      const resources = readMessageBoxResourceConfig()
       const limitValue = req.query?.limit
       const offsetValue = req.query?.offset
-      const limit = limitValue == null ? MAX_DEVICE_PAGE_SIZE : Number(limitValue)
+      const limit =
+        limitValue == null
+          ? resources.deviceListDefaultLimit === -1
+            ? Number.MAX_SAFE_INTEGER
+            : resources.deviceListDefaultLimit
+          : Number(limitValue)
       const offset = offsetValue == null ? 0 : Number(offsetValue)
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_DEVICE_PAGE_SIZE) {
+      if (
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        (resources.deviceListMaxLimit !== -1 && limit > resources.deviceListMaxLimit)
+      ) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_LIMIT',
-          description: `limit must be an integer between 1 and ${MAX_DEVICE_PAGE_SIZE}.`
+          description:
+            resources.deviceListMaxLimit === -1
+              ? 'limit must be a positive safe integer.'
+              : `limit must be an integer between 1 and ${resources.deviceListMaxLimit}.`
         })
       }
-      if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_DEVICE_OFFSET) {
+      if (
+        !Number.isSafeInteger(offset) ||
+        offset < 0 ||
+        (resources.deviceListMaxOffset !== -1 && offset > resources.deviceListMaxOffset)
+      ) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_OFFSET',
-          description: `offset must be an integer between 0 and ${MAX_DEVICE_OFFSET}.`
+          description:
+            resources.deviceListMaxOffset === -1
+              ? 'offset must be a non-negative safe integer.'
+              : `offset must be an integer between 0 and ${resources.deviceListMaxOffset}.`
         })
       }
 

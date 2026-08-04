@@ -250,6 +250,21 @@ describe('BanService', () => {
 
       expect(mockCollection.find).toHaveBeenCalledWith({ type: 'outpoint' })
     })
+
+    it('should apply bounded pagination to MongoDB', async () => {
+      const toArray = jest.fn<any>().mockResolvedValue([])
+      const limit = jest.fn<any>().mockReturnValue({ toArray, limit: jest.fn(), skip: jest.fn() })
+      const skip = jest.fn<any>().mockReturnValue({ limit, toArray, skip: jest.fn() })
+      mockCollection.find.mockReturnValue({
+        sort: jest.fn<any>().mockReturnValue({ skip, limit, toArray })
+      })
+
+      await banService.listBans('domain', 25, 50)
+
+      expect(skip).toHaveBeenCalledWith(50)
+      expect(limit).toHaveBeenCalledWith(25)
+      expect(toArray).toHaveBeenCalled()
+    })
   })
 
   describe('removeBan', () => {

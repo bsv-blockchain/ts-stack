@@ -118,6 +118,16 @@ export interface ListMessagesParams {
   messageBox: string
   host?: string
   acceptPayments?: boolean
+  /** Starting message offset. `skip` is an equivalent compatibility alias. */
+  offset?: number
+  /** Compatibility alias for `offset`; both values must match when supplied together. */
+  skip?: number
+  /** Maximum total messages accumulated by this call. Omit to retain fetch-all behavior. */
+  limit?: number
+  /** Per-request server page size. Omit to use the server operator's configured default. */
+  pageSize?: number
+  /** Optional pagination safety ceiling. Defaults to -1 to preserve fetch-all compatibility. */
+  maxPages?: number
 }
 
 /**

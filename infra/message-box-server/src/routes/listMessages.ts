@@ -13,6 +13,7 @@ import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { log } from '../utils/logger.js'
 import { runtimeDeps } from '../runtimeDeps.js'
+import { listQueryBatchSize, readMessageBoxResourceConfig } from '../config/resources.js'
 
 export const MAX_LIST_MESSAGE_BOX_BYTES = 128
 export const MAX_LIST_MESSAGES_PAGE_SIZE = 1_000
@@ -28,6 +29,7 @@ interface ListMessagesRequest extends AuthRequest {
     messageBox?: string
     limit?: number
     offset?: number
+    skip?: number
   }
 }
 
@@ -52,6 +54,18 @@ interface ListMessagesRequest extends AuthRequest {
  *               messageBox:
  *                 type: string
  *                 description: The name of the messageBox to retrieve messages from
+ *               limit:
+ *                 type: integer
+ *                 minimum: 1
+ *                 default: 1000
+ *               offset:
+ *                 type: integer
+ *                 minimum: 0
+ *                 default: 0
+ *               skip:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Compatibility alias for offset
  *     responses:
  *       200:
  *         description: Successfully retrieved messages (can be empty)
@@ -80,6 +94,14 @@ interface ListMessagesRequest extends AuthRequest {
  *                       updatedAt:
  *                         type: string
  *                         format: date-time
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
+ *                 nextOffset:
+ *                   type: integer
+ *                 hasMore:
+ *                   type: boolean
  *       400:
  *         description: Invalid or missing messageBox name
  *       500:
@@ -174,20 +196,48 @@ export default {
         })
       }
 
-      const limit = req.body.limit ?? MAX_LIST_MESSAGES_PAGE_SIZE
-      const offset = req.body.offset ?? 0
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_MESSAGES_PAGE_SIZE) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_LIMIT',
-          description: `limit must be an integer between 1 and ${MAX_LIST_MESSAGES_PAGE_SIZE}.`
-        })
-      }
-      if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_LIST_MESSAGES_OFFSET) {
+      const resourceConfig = readMessageBoxResourceConfig()
+      const configuredDefault =
+        resourceConfig.listDefaultLimit === -1
+          ? Number.MAX_SAFE_INTEGER
+          : resourceConfig.listDefaultLimit
+      const limit = req.body.limit ?? configuredDefault
+      const offset = req.body.offset ?? req.body.skip ?? 0
+      if (req.body.offset != null && req.body.skip != null && req.body.offset !== req.body.skip) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_OFFSET',
-          description: `offset must be an integer between 0 and ${MAX_LIST_MESSAGES_OFFSET}.`
+          description: 'offset and skip must match when both are provided.'
+        })
+      }
+      if (
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        (resourceConfig.listMaxLimit !== -1 && limit > resourceConfig.listMaxLimit)
+      ) {
+        const maximum =
+          resourceConfig.listMaxLimit === -1
+            ? 'the JavaScript safe-integer maximum'
+            : String(resourceConfig.listMaxLimit)
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_LIMIT',
+          description: `limit must be an integer between 1 and ${maximum}.`
+        })
+      }
+      if (
+        !Number.isSafeInteger(offset) ||
+        offset < 0 ||
+        (resourceConfig.listMaxOffset !== -1 && offset > resourceConfig.listMaxOffset)
+      ) {
+        const maximum =
+          resourceConfig.listMaxOffset === -1
+            ? 'the JavaScript safe-integer maximum'
+            : String(resourceConfig.listMaxOffset)
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_OFFSET',
+          description: `offset must be an integer between 0 and ${maximum}.`
         })
       }
 
@@ -207,34 +257,75 @@ export default {
           messages: [],
           limit,
           offset,
+          nextOffset: offset,
           hasMore: false
         })
       }
 
-      // Retrieve one bounded, deterministic page.
-      const messageRows = await runtimeDeps
-        .knex('messages')
-        .where({
-          recipient: identityKey,
-          messageBoxId: messageBoxRecord.messageBoxId
-        })
-        .select('messageId', 'body', 'sender', 'created_at', 'updated_at')
-        .orderBy('created_at', 'asc')
-        .orderBy('messageId', 'asc')
-        .limit(limit + 1)
-        .offset(offset)
+      // Retrieve bounded chunks. Deriving the chunk size from the configured
+      // message and response ceilings prevents one query from materializing a
+      // full item-count page of maximum-size bodies.
+      const formattedMessages: Array<Record<string, unknown>> = []
+      const batchSize = listQueryBatchSize(resourceConfig)
+      let queryOffset = offset
+      let hasMore = false
+      let encodedBytes = 256
 
-      const hasMore = messageRows.length > limit
-      const messages = messageRows.slice(0, limit)
+      // Read one additional row in a final bounded query so `hasMore` remains
+      // correct even when the byte-derived database batch divides the page
+      // limit exactly.
+      while (formattedMessages.length <= limit) {
+        const remaining = limit - formattedMessages.length
+        const take = Math.max(1, Math.min(batchSize, remaining + 1))
+        const messageRows = await runtimeDeps
+          .knex('messages')
+          .where({
+            recipient: identityKey,
+            messageBoxId: messageBoxRecord.messageBoxId
+          })
+          .where(function () {
+            this.whereNull('expires_at').orWhere('expires_at', '>', new Date())
+          })
+          .select('messageId', 'body', 'sender', 'created_at', 'updated_at')
+          .orderBy('created_at', 'asc')
+          .orderBy('messageId', 'asc')
+          .limit(take)
+          .offset(queryOffset)
 
-      // Normalize all message bodies to strings and convert to camelCase
-      const formattedMessages = messages.map(message => ({
-        messageId: message.messageId,
-        body: typeof message.body === 'string' ? message.body : JSON.stringify(message.body),
-        sender: message.sender,
-        createdAt: message.created_at,
-        updatedAt: message.updated_at
-      }))
+        if (messageRows.length === 0) break
+        for (const message of messageRows) {
+          if (formattedMessages.length >= limit) {
+            hasMore = true
+            break
+          }
+          const formatted = {
+            messageId: message.messageId,
+            body: typeof message.body === 'string' ? message.body : JSON.stringify(message.body),
+            sender: message.sender,
+            createdAt: message.created_at,
+            updatedAt: message.updated_at
+          }
+          const itemBytes = Buffer.byteLength(JSON.stringify(formatted), 'utf8') + 1
+          if (
+            resourceConfig.listMaxResponseBytes !== -1 &&
+            encodedBytes + itemBytes > resourceConfig.listMaxResponseBytes
+          ) {
+            if (formattedMessages.length === 0) {
+              return res.status(413).json({
+                status: 'error',
+                code: 'ERR_MESSAGE_RESPONSE_TOO_LARGE',
+                description: 'The oldest message exceeds the configured listing response budget.'
+              })
+            }
+            hasMore = true
+            break
+          }
+          formattedMessages.push(formatted)
+          encodedBytes += itemBytes
+          queryOffset += 1
+        }
+        if (hasMore || messageRows.length < take) break
+      }
 
       // Return a list of matching messages
       return res.status(200).json({
@@ -242,6 +333,7 @@ export default {
         messages: formattedMessages,
         limit,
         offset,
+        nextOffset: offset + formattedMessages.length,
         hasMore
       })
     } catch (e) {
