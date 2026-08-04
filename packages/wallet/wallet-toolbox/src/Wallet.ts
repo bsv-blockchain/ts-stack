@@ -225,10 +225,9 @@ export interface WalletArgs {
    */
   makeLogger?: MakeWalletLogger
   /**
-   * Internal Wallet Toolbox optimization policy. `legacy` (the default)
-   * durably persists each action before returning; `auto` explicitly opts into
-   * negotiating the optional in-memory action-batch storage capability. This
-   * does not change the BRC-100 wallet interface.
+   * Internal Wallet Toolbox optimization policy. `auto` (the default)
+   * negotiates the optional action-batch storage capability; `legacy` always
+   * uses per-action storage. This does not change the BRC-100 wallet interface.
    */
   actionBatchMode?: ActionBatchMode
   /**
@@ -349,7 +348,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     this.identityKey = this.keyDeriver.identityKey
 
     this.pendingSignActions = {}
-    this.actionBatch = new ActionBatchController(this, args.actionBatchMode ?? 'legacy')
+    this.actionBatch = new ActionBatchController(this, args.actionBatchMode ?? 'auto')
     this.scriptVerifier = args.scriptVerifier
 
     this.userParty = `user ${this.getClientChangeKeyPair().publicKey}`

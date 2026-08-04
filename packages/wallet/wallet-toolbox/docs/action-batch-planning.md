@@ -8,10 +8,7 @@ before.
 
 ## Negotiation and compatibility
 
-`WalletArgs.actionBatchMode` accepts `legacy` (the default) or `auto`. The default
-preserves the durable per-action `noSend` behavior expected by existing callers.
-Applications that explicitly select `auto` opt into holding intermediate `noSend`
-actions in memory until a later `sendWith` commits the batch atomically. In `auto`
+`WalletArgs.actionBatchMode` accepts `auto` (the default) or `legacy`. In `auto`
 mode, the wallet asks its active storage provider for capabilities once. A provider
 advertising `actionBatch: { version: 1, ...limits }` enables local planning. A
 provider without that capability uses the existing persistence flow before any
@@ -183,10 +180,9 @@ store through `WalletStorageServerOptions.rateLimit`.
 ## Rollout and measurement roadmap
 
 The compatibility boundary permits a server-first rollout: deploy schema and
-provider support, then explicitly deploy selected clients with
-`actionBatchMode: 'auto'`. Old clients ignore the capability; new clients fall
-back against old providers. Operators can omit the option or use
-`actionBatchMode: 'legacy'` to retain durable per-action persistence.
+provider support, then deploy clients in `auto` mode. Old clients ignore the
+capability; new clients fall back against old providers. Operators can use
+`actionBatchMode: 'legacy'` for controlled comparisons.
 
 The retained benchmark is the performance regression gate:
 

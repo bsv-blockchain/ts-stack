@@ -116,8 +116,7 @@ async function measureActual (
   scriptBytes = 1024
 ): Promise<ActualResult> {
   const ctx: TestWalletNoSetup = await _tu.createLegacyWalletSQLiteCopy(
-    `actionBatchBench-${mode}-${actions}-${scriptBytes}`,
-    mode === 'batch' ? 'auto' : 'legacy'
+    `actionBatchBench-${mode}-${actions}-${scriptBytes}`
   )
   const wallet = mode === 'batch'
     ? ctx.wallet

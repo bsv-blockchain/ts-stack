@@ -34,8 +34,7 @@ describe('StorageClient tests', () => {
     client = await _tu.createTestWalletWithStorageClient({
       rootKeyHex: server.setup.rootKey.toHex(),
       endpointUrl: 'http://localhost:8042',
-      chain: server.setup.chain,
-      actionBatchMode: 'auto'
+      chain: server.setup.chain
     })
     attacker = await _tu.createTestWalletWithStorageClient({
       rootKeyHex: '2'.repeat(64),
