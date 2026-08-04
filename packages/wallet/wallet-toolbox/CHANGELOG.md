@@ -34,6 +34,21 @@ attention to changes that materially alter behavior or extend functionality.
 - Make expired action-batch reservations non-blocking in indexed queries and
   repair MySQL rollback support indexes. Existing databases migrate through the
   normal Knex path, and full PXC down-to-empty/re-upgrade is regression-tested.
+- Make UMP account lookup resilient to stale SLAP advertisements and partial
+  overlay failure. One verified matching token establishes an existing account;
+  otherwise one clean empty response establishes a new account. Malformed,
+  rejected, empty, and unavailable peers cannot veto a verified token, and
+  malformed or unavailable peers cannot veto a clean empty response. Lookups
+  with no usable response remain errors; WAB existing-account continuity still
+  prevents replacement-wallet onboarding.
+- Resolve competing verified UMP tokens on on-chain proof. A candidate spent
+  anywhere in another candidate's BEEF ancestry is superseded (evidence merged
+  across hosts serving different depths; ancestry walked iteratively so deep
+  update chains cannot exhaust the stack). Forked candidates resolve only when
+  exactly one provably consumed a same-identity predecessor token, which
+  requires the account's keys; anything less decisive stays an error so a
+  wrong token can never be chosen silently. Resolved conflicts report a
+  `supersededTokens` count in lookup telemetry.
 - Plan legacy `createAction` funding against the exact unreserved managed-change
   set before persistence, claim the selected inputs atomically in one storage
   transaction, and fail economically impossible fragmented wallets before
@@ -225,6 +240,7 @@ attention to changes that materially alter behavior or extend functionality.
 
 - audit fix
  
+
 ## wallet-toolbox 2.1.14
 
 - fix update timestamp on all updated currencies

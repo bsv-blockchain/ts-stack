@@ -20,6 +20,9 @@ It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
+Browser authentication accepts one verified matching UMP token as an existing
+account. When no token verifies, one clean empty overlay response establishes a
+new account even if other hosts fail or return malformed records.
 
 ## Install
 

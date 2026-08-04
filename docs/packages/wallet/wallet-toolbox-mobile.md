@@ -20,6 +20,9 @@ Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
+Mobile authentication accepts one verified matching UMP token as an existing
+account. When no token verifies, one clean empty overlay response establishes a
+new account even if other hosts fail or return malformed records.
 
 ## Install
 

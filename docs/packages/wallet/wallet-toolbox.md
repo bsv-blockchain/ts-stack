@@ -23,6 +23,12 @@ Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests. BRC-103,
 BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.
 
+UMP account lookup accepts one verified matching token as an existing account.
+When no token verifies, one clean empty overlay response establishes a new
+account even if other hosts fail or return malformed records. Multiple distinct
+verified tokens and lookups with no usable response remain errors; WAB
+existing-account continuity still prevents replacement-wallet onboarding.
+
 ## Install
 
 ```bash
