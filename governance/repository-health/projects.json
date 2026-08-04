@@ -744,6 +744,7 @@
     {
       "path": "packages/wallet/wallet-toolbox/client",
       "name": "@bsv/wallet-toolbox-client",
+      "sourceRoots": ["packages/wallet/wallet-toolbox/src"],
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "browser-library",
@@ -755,6 +756,7 @@
     {
       "path": "packages/wallet/wallet-toolbox/mobile",
       "name": "@bsv/wallet-toolbox-mobile",
+      "sourceRoots": ["packages/wallet/wallet-toolbox/src"],
       "owner": "ts-stack-maintainers",
       "area": "wallet",
       "profile": "react-native-library",
