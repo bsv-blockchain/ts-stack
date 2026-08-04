@@ -17,9 +17,10 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // LCOV is unsatisfiable: a package that adds or edits jest.config.cjs,
   // vitest.config.ts or similar could never clear this gate.
   /(?:^|\/)[^/]*\.config\.[cm]?[jt]s$/,
-  // Benchmark orchestration and type-only IndexedDB schema declarations have
-  // no executable statements for Jest/Istanbul to instrument.
+  // Benchmark orchestration and type-only declarations have no executable
+  // statements for Jest/Istanbul to instrument.
   /packages\/sdk\/scripts\/run-benchmarks\.js$/,
+  /\.interfaces\.[cm]?[jt]sx?$/,
   /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/
 ]
 

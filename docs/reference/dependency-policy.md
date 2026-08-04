@@ -3,8 +3,8 @@ id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+last_updated: '2026-08-04'
+last_verified: '2026-08-04'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -121,10 +121,10 @@ unresolvable public declarations.
 
 The root workspace carries two narrow audited dependency overrides:
 
-- Jest 30.4.2 still constrains its reporting and coverage graph to minimatch
-  releases that require `brace-expansion` 1.x/2.x, while
-  GHSA-mh99-v99m-4gvg is fixed only in `brace-expansion` 5.0.8. The workspace
-  substitutes 5.0.8 until Jest adopts minimatch 10.2.5 or newer.
+- Jest 30.4.2 still constrains parts of its reporting and coverage graph to
+  minimatch releases with older `brace-expansion` ranges. The follow-up
+  GHSA-rgw5-rvv9-x895 requires `brace-expansion` 5.0.9, so the workspace
+  substitutes 5.0.9 until every supported path resolves it natively.
 - Stryker 9.6.1's current `typed-rest-client@2.3.1` dependency pins vulnerable
   `qs@6.15.1` exactly. A parent-scoped substitution selects 6.15.3 until
   upstream accepts 6.15.2 or newer. This replaces a fragile lock-only
@@ -139,13 +139,14 @@ frozen graph stayed clean without it. The machine-readable registry now maps
 every remaining selector and exact value to its exception. CI rejects a new,
 changed, stale, expired, unowned, or upstream-unlinked override.
 
-Wave 38 repeated the removal rehearsal by regenerating every standalone lock
+Wave 39 repeated the removal rehearsal by regenerating every standalone lock
 without its `gaxios`, `uuid`, and `brace-expansion` substitutions and checking
 the natural dependency graph. It also rechecked the root Jest/minimatch,
-typed-rest-client/qs, and isolated Redocly closures. All 19 remaining
-selectors still prevent a reproduced vulnerable resolution or preserve the
-governed reproducible generator, so none can be removed safely yet. The
-method, result, count, and next rehearsal are enforced in
+typed-rest-client/qs, and isolated Redocly closures, then refreshed affected
+locks for the current `brace-expansion`, `fast-uri`, `ip-address`, and
+`socket.io-parser` advisories. All 19 remaining selectors still prevent a
+reproduced vulnerable resolution or preserve the governed reproducible
+generator, so none can be removed safely yet. The method, result, count, and next rehearsal are enforced in
 `governance/dependency-release-policy.json`.
 
 The independently locked OpenAPI generator also carries a narrow Redocly

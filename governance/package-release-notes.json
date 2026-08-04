@@ -145,10 +145,10 @@
     },
     {
       "name": "@bsv/sdk",
-      "publishedVersion": "2.2.0",
-      "releaseType": "patch",
-      "summary": "Accumulates security and correctness hardening, transaction and action-batch performance work, strict package contracts, safer text and telemetry handling, and caches unchanged BEEF dependency-sort results so repeated wallet known-txid preparation avoids a full topological sort.",
-      "migration": "No consumer migration is required. BEEF ordering, validation results, serialized bytes, SDK 2.x wire encodings, BRC-103/104 behavior, and supported imports are unchanged."
+      "publishedVersion": "2.2.18",
+      "releaseType": "minor",
+      "summary": "Adds batched proven-transaction BEEF assembly and deferred-then-compound Merkle proof validation, reuses shared proof hashes and BRC-42 counterparty secrets, and accelerates optional-backend P2PKH public-key emission.",
+      "migration": "No consumer migration is required. The new APIs are additive; BEEF ordering and bytes, proof validity, signatures, synchronous signing, SDK 2.x wire encodings, BRC-103/104 behavior, and supported imports are unchanged."
     },
     {
       "name": "@bsv/simple",
@@ -194,24 +194,24 @@
     },
     {
       "name": "@bsv/wallet-toolbox",
-      "publishedVersion": "2.4.4",
+      "publishedVersion": "2.4.22",
       "releaseType": "minor",
-      "summary": "Adds resource-profile-aware Wallet Storage RPC pagination, array and response budgets, bounded authenticated response capture, durable payment replay support, double-slash compatibility, and shared auth/payment schema migrations.",
-      "migration": "List/find RPC calls that omit a limit now receive the profile default (1,000 in standard), and larger caller limits are rejected above the operator maximum. Existing calls and storage data remain compatible; migrations add auth_sessions and payment_replays automatically."
+      "summary": "Adds resource-profile-aware Wallet Storage RPC pagination, array and response budgets, bounded authenticated response capture, durable payment replay and session schemas, and double-slash compatibility, while making fragmented createAction atomic and set-based, batching proof reads, validation, and output writes, coalescing session touches, and adding privacy-safe phase timings.",
+      "migration": "List/find RPC calls that omit a limit now receive the profile default (1,000 in standard), and larger caller limits are rejected above the operator maximum. Existing calls and storage data remain compatible; migrations add auth_sessions, payment_replays, and createAction indexes automatically. Storage-provider additions retain backward-compatible fallbacks, and wallet results, BRC-103/104, AuthFetch, AuthSocket, JSON-RPC, provider calls, and wallet wire behavior remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
-      "publishedVersion": "2.4.4",
+      "publishedVersion": "2.4.22",
       "releaseType": "minor",
-      "summary": "Carries the lockstep Wallet Toolbox build and declarations for the bounded remote-storage contract and shared schema version.",
-      "migration": "No browser consumer migration is required; remote storage callers may provide explicit list limits when they need a value other than the operator profile default."
+      "summary": "Carries the lockstep browser build with the bounded remote-storage contract, batched proof assembly, linear funding and signing work, canonical P2PKH verification, expired-reservation filtering, and privacy-safe createAction timings.",
+      "migration": "No browser consumer migration is required. Remote storage callers may provide explicit list limits when they need a value other than the operator profile default; older compatible SDK peers retain the validated sequential proof fallback, IndexedDB upgrades automatically, and BRC-103/104, AuthFetch, browser entry points, JSON-RPC, and remote storage wire behavior remain compatible."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
-      "publishedVersion": "2.4.4",
+      "publishedVersion": "2.4.22",
       "releaseType": "minor",
-      "summary": "Carries the lockstep Wallet Toolbox mobile build and declarations for the bounded remote-storage contract and shared schema version.",
-      "migration": "No mobile consumer migration is required; remote storage callers may provide explicit list limits when they need a value other than the operator profile default."
+      "summary": "Carries the lockstep mobile build with the bounded remote-storage contract, batched proof assembly, linear funding and signing work, canonical P2PKH verification, expired-reservation filtering, and privacy-safe createAction timings.",
+      "migration": "No mobile consumer migration is required. Remote storage callers may provide explicit list limits when they need a value other than the operator profile default; older compatible SDK peers retain the validated sequential proof fallback, and BRC-103/104, AuthFetch, React Native, the mobile bridge, JSON-RPC, and remote storage wire behavior remain compatible."
     },
     {
       "name": "create-bsv-app",
