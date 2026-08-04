@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
 version: '2.5.0'
-last_updated: '2026-07-31'
-last_verified: '2026-07-31'
+last_updated: '2026-08-04'
+last_verified: '2026-08-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -20,6 +20,9 @@ It includes the BRC-100 wallet, signer, services, IndexedDB storage, and remote
 storage client without Node-only Knex, SQLite, MySQL, or filesystem adapters.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
+Browser authentication accepts one verified matching UMP token as an existing
+account. When no token verifies, one clean empty overlay response establishes a
+new account even if other hosts fail or return malformed records.
 
 ## Install
 

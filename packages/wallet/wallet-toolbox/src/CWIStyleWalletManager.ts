@@ -522,7 +522,7 @@ export interface UMPTokenInteractor {
    *
    * @param hash The hash of the presentation key.
    * @returns The UMP token if found; otherwise, undefined.
-   * @throws Implementations should throw when absence cannot be established authoritatively.
+   * @throws Implementations should throw when no verified token or clean empty response is available.
    */
   findByPresentationKeyHash: (hash: number[]) => Promise<UMPToken | undefined>
 
@@ -532,7 +532,7 @@ export interface UMPTokenInteractor {
    *
    * @param hash The hash of the recovery key.
    * @returns The UMP token if found; otherwise, undefined.
-   * @throws Implementations should throw when absence cannot be established authoritatively.
+   * @throws Implementations should throw when no verified token or clean empty response is available.
    */
   findByRecoveryKeyHash: (hash: number[]) => Promise<UMPToken | undefined>
 
@@ -569,7 +569,7 @@ export type UMPTokenLookupFailureReason =
   'lookup-unavailable' | 'lookup-incomplete' | 'token-malformed' | 'token-ambiguous'
 
 /**
- * Raised when UMP absence cannot be established authoritatively.
+ * Raised when a UMP lookup yields neither a verified token nor a clean empty response.
  *
  * Callers must offer retry/recovery rather than treating this error as a new
  * account. Diagnostics contain counts only and never hashes, keys, or tokens.
@@ -689,70 +689,39 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     }
 
     const diagnostics = this.toLookupDiagnostics(resolution)
-    if (resolution.answer.outputs.length === 0) {
-      const authoritative =
-        resolution.progress.isFinal &&
-        resolution.progress.hostCount > 0 &&
-        resolution.progress.completedHosts === resolution.progress.hostCount &&
-        resolution.progress.successfulHosts === resolution.progress.hostCount &&
-        resolution.progress.emptyHosts === resolution.progress.hostCount &&
-        resolution.progress.failedHosts === 0 &&
-        resolution.progress.rejectedHosts === 0 &&
-        resolution.progress.freeformHosts === 0
-
-      if (!authoritative) {
-        this.captureLookupFailure(lookupKind, 'lookup-incomplete', diagnostics, startedAt)
-        throw new UMPTokenLookupError('lookup-incomplete', diagnostics)
-      }
-
-      this.telemetry.capture({
-        name: 'wallet-toolbox.ump.lookup.completed',
-        component: 'wallet-toolbox.ump',
-        severity: 'info',
-        correlationId: diagnostics.correlationId,
-        attributes: {
-          lookupKind,
-          result: 'not-found',
-          durationMs: Date.now() - startedAt,
-          ...this.lookupDiagnosticAttributes(diagnostics)
-        }
-      })
-      return undefined
-    }
-
     const tokens = this.parseLookupAnswers(resolution.answer)
     const expectedHash =
       question.query[lookupKind === 'presentation' ? 'presentationHash' : 'recoveryHash'].toLowerCase()
-    const everyOutputValidAndMatching =
-      tokens.length === resolution.answer.outputs.length &&
-      tokens.every(
-        token =>
-          Utils.toHex(lookupKind === 'presentation' ? token.presentationHash : token.recoveryHash).toLowerCase() ===
-          expectedHash
-      )
-    if (!everyOutputValidAndMatching || tokens.length === 0) {
-      this.captureLookupFailure(lookupKind, 'token-malformed', diagnostics, startedAt)
-      throw new UMPTokenLookupError('token-malformed', diagnostics)
-    }
-    if (tokens.length !== 1) {
+    const matchingTokens = tokens.filter(
+      token =>
+        Utils.toHex(lookupKind === 'presentation' ? token.presentationHash : token.recoveryHash).toLowerCase() ===
+        expectedHash
+    )
+
+    // A verified token is positive account-existence evidence. Empty, malformed,
+    // rejected, or unavailable peers cannot override it. The resolver de-duplicates
+    // identical outputs, so multiple matching tokens represent distinct records.
+    if (matchingTokens.length > 1) {
       const reason = 'token-ambiguous'
       this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
       throw new UMPTokenLookupError(reason, diagnostics)
     }
+    if (matchingTokens.length === 1) {
+      this.captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt)
+      return matchingTokens[0]
+    }
 
-    this.telemetry.capture({
-      name: 'wallet-toolbox.ump.lookup.completed',
-      component: 'wallet-toolbox.ump',
-      severity: 'info',
-      correlationId: diagnostics.correlationId,
-      attributes: {
-        lookupKind,
-        result: 'found',
-        durationMs: Date.now() - startedAt,
-        ...this.lookupDiagnosticAttributes(diagnostics)
-      }
-    })
-    return tokens[0]
+    // A clean empty response is sufficient negative evidence once no verified
+    // token exists. Malformed outputs and failed peers are ignored so they cannot
+    // deny onboarding by advertising corrupt data or remaining unavailable.
+    if (resolution.progress.emptyHosts > 0) {
+      this.captureLookupCompleted(lookupKind, 'not-found', diagnostics, startedAt)
+      return undefined
+    }
+
+    const reason = resolution.answer.outputs.length > 0 ? 'token-malformed' : 'lookup-incomplete'
+    this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
+    throw new UMPTokenLookupError(reason, diagnostics)
   }
 
   private emptyLookupDiagnostics(correlationId?: string): UMPTokenLookupDiagnostics {
@@ -795,6 +764,26 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
       freeformHosts: diagnostics.freeformHosts,
       outputCount: diagnostics.outputCount
     }
+  }
+
+  private captureLookupCompleted(
+    lookupKind: 'presentation' | 'recovery',
+    result: 'found' | 'not-found',
+    diagnostics: UMPTokenLookupDiagnostics,
+    startedAt: number
+  ): void {
+    this.telemetry.capture({
+      name: 'wallet-toolbox.ump.lookup.completed',
+      component: 'wallet-toolbox.ump',
+      severity: 'info',
+      correlationId: diagnostics.correlationId,
+      attributes: {
+        lookupKind,
+        result,
+        durationMs: Date.now() - startedAt,
+        ...this.lookupDiagnosticAttributes(diagnostics)
+      }
+    })
   }
 
   private captureLookupFailure(
@@ -1128,16 +1117,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     }
     if (resolution.answer.outputs.length === 0) {
       const p = resolution.progress
-      const authoritative =
-        p.isFinal &&
-        p.hostCount > 0 &&
-        p.completedHosts === p.hostCount &&
-        p.successfulHosts === p.hostCount &&
-        p.emptyHosts === p.hostCount &&
-        p.failedHosts === 0 &&
-        p.rejectedHosts === 0 &&
-        p.freeformHosts === 0
-      if (!authoritative) {
+      if (p.emptyHosts === 0) {
         const diagnostics = this.toLookupDiagnostics(resolution)
         this.captureLookupFailure('outpoint', 'lookup-incomplete', diagnostics, startedAt)
         throw new UMPTokenLookupError('lookup-incomplete', diagnostics)

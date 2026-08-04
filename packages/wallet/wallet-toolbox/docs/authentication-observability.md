@@ -58,20 +58,22 @@ not affect authentication or wallet behavior.
 `authenticationFlow` starts as `unknown`. A password cannot create a wallet
 until account lookup has completed.
 
-An empty UMP answer means `new-user` only when every selected overlay host
-settled successfully and returned an empty output list. Timeout, host failure,
-malformed response, semantic rejection, or a malformed UMP token raises
-`UMPTokenLookupError`. Multiple distinct valid UMP tokens are also treated as
-ambiguous instead of choosing one by response order. Applications should
-present retry and account-recovery options for these errors, never a
-new-password prompt.
+UMP account lookup prefers usable evidence over peer unanimity. Exactly one
+verified token matching the requested presentation or recovery hash means
+`existing-user`, regardless of empty, malformed, rejected, or unavailable peer
+responses. When no token verifies, one host's valid empty output list is enough
+to mean `new-user`; malformed and unavailable peers cannot veto that result.
+Multiple distinct verified UMP tokens remain ambiguous, and a lookup with
+neither a verified token nor a clean empty response raises
+`UMPTokenLookupError`. Applications should present retry and account-recovery
+options for these errors, never a new-password prompt.
 
 WAB completion uses an explicit `accountStatus` or `existingUser` response when
 available. For older WAB servers it derives the status from the established
 protocol: a new account returns the temporary presentation key, while an
 existing account returns its stored key. If WAB identifies an existing account
-but UMP authoritatively appears absent, `WABAccountContinuityError` prevents
-new-wallet creation.
+but UMP lookup returns no verified token, `WABAccountContinuityError` prevents
+new-wallet creation even when an overlay host returned a clean empty result.
 
 Temporary WAB authentication state expires after ten minutes by default and is
 cleared when authentication is cancelled, completed, or destroyed.

@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
 version: '2.5.0'
-last_updated: '2026-07-31'
-last_verified: '2026-07-31'
+last_updated: '2026-08-04'
+last_verified: '2026-08-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -20,6 +20,9 @@ Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests.
+Mobile authentication accepts one verified matching UMP token as an existing
+account. When no token verifies, one clean empty overlay response establishes a
+new account even if other hosts fail or return malformed records.
 
 ## Install
 
