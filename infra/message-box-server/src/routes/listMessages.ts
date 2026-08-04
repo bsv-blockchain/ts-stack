@@ -13,7 +13,11 @@ import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { log } from '../utils/logger.js'
 import { runtimeDeps } from '../runtimeDeps.js'
-import { listQueryBatchSize, readMessageBoxResourceConfig } from '../config/resources.js'
+import {
+  listQueryBatchSize,
+  readMessageBoxResourceConfig,
+  type MessageBoxResourceConfig
+} from '../config/resources.js'
 
 export const MAX_LIST_MESSAGE_BOX_BYTES = 128
 export const MAX_LIST_MESSAGES_PAGE_SIZE = 1_000
@@ -30,6 +34,185 @@ interface ListMessagesRequest extends AuthRequest {
     limit?: number
     offset?: number
     skip?: number
+  }
+}
+
+interface RouteFailure {
+  statusCode: number
+  code: string
+  description: string
+}
+
+interface ListPagination {
+  limit: number
+  offset: number
+}
+
+interface MessagePage extends ListPagination {
+  messages: Array<Record<string, unknown>>
+  nextOffset: number
+  hasMore: boolean
+}
+
+interface PageAccumulator {
+  messages: Array<Record<string, unknown>>
+  encodedBytes: number
+  queryOffset: number
+}
+
+function routeFailure(statusCode: number, code: string, description: string): RouteFailure {
+  return { statusCode, code, description }
+}
+
+function isRouteFailure(value: unknown): value is RouteFailure {
+  return typeof value === 'object' && value != null && 'statusCode' in value
+}
+
+function normalizeMessageBoxName(value: unknown): string | RouteFailure {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) {
+    return routeFailure(
+      400,
+      'ERR_MESSAGEBOX_REQUIRED',
+      'Please provide the name of a valid MessageBox!'
+    )
+  }
+  if (typeof value !== 'string') {
+    return routeFailure(400, 'ERR_INVALID_MESSAGEBOX', 'MessageBox name must be a string!')
+  }
+  const normalized = value.trim()
+  if (Buffer.byteLength(normalized, 'utf8') > MAX_LIST_MESSAGE_BOX_BYTES) {
+    return routeFailure(
+      400,
+      'ERR_INVALID_MESSAGEBOX',
+      `MessageBox names must not exceed ${MAX_LIST_MESSAGE_BOX_BYTES} bytes.`
+    )
+  }
+  return normalized
+}
+
+function isBoundedInteger(value: number, minimum: number, maximum: number): boolean {
+  return Number.isSafeInteger(value) && value >= minimum && (maximum === -1 || value <= maximum)
+}
+
+function parseListPagination(
+  body: ListMessagesRequest['body'],
+  resources: MessageBoxResourceConfig
+): ListPagination | RouteFailure {
+  if (body.offset != null && body.skip != null && body.offset !== body.skip) {
+    return routeFailure(
+      400,
+      'ERR_INVALID_OFFSET',
+      'offset and skip must match when both are provided.'
+    )
+  }
+  const configuredDefault =
+    resources.listDefaultLimit === -1 ? Number.MAX_SAFE_INTEGER : resources.listDefaultLimit
+  const limit = body.limit ?? configuredDefault
+  const offset = body.offset ?? body.skip ?? 0
+  if (!isBoundedInteger(limit, 1, resources.listMaxLimit)) {
+    const maximum =
+      resources.listMaxLimit === -1
+        ? 'the JavaScript safe-integer maximum'
+        : String(resources.listMaxLimit)
+    return routeFailure(
+      400,
+      'ERR_INVALID_LIMIT',
+      `limit must be an integer between 1 and ${maximum}.`
+    )
+  }
+  if (!isBoundedInteger(offset, 0, resources.listMaxOffset)) {
+    const maximum =
+      resources.listMaxOffset === -1
+        ? 'the JavaScript safe-integer maximum'
+        : String(resources.listMaxOffset)
+    return routeFailure(
+      400,
+      'ERR_INVALID_OFFSET',
+      `offset must be an integer between 0 and ${maximum}.`
+    )
+  }
+  return { limit, offset }
+}
+
+function appendMessage(
+  accumulator: PageAccumulator,
+  message: Record<string, unknown>,
+  maxResponseBytes: number
+): 'added' | 'full' | 'oversized' {
+  const formatted = {
+    messageId: message.messageId,
+    body: typeof message.body === 'string' ? message.body : JSON.stringify(message.body),
+    sender: message.sender,
+    createdAt: message.created_at,
+    updatedAt: message.updated_at
+  }
+  const itemBytes = Buffer.byteLength(JSON.stringify(formatted), 'utf8') + 1
+  if (maxResponseBytes !== -1 && accumulator.encodedBytes + itemBytes > maxResponseBytes) {
+    return accumulator.messages.length === 0 ? 'oversized' : 'full'
+  }
+  accumulator.messages.push(formatted)
+  accumulator.encodedBytes += itemBytes
+  accumulator.queryOffset += 1
+  return 'added'
+}
+
+async function readMessagePage(
+  identityKey: string,
+  messageBoxId: number,
+  pagination: ListPagination,
+  resources: MessageBoxResourceConfig
+): Promise<MessagePage | RouteFailure> {
+  const accumulator: PageAccumulator = {
+    messages: [],
+    encodedBytes: 256,
+    queryOffset: pagination.offset
+  }
+  const batchSize = listQueryBatchSize(resources)
+  let hasMore = false
+
+  while (accumulator.messages.length <= pagination.limit) {
+    const remaining = pagination.limit - accumulator.messages.length
+    const take = Math.max(1, Math.min(batchSize, remaining + 1))
+    const messageRows = await runtimeDeps
+      .knex('messages')
+      .where({ recipient: identityKey, messageBoxId })
+      .where(function () {
+        this.whereNull('expires_at').orWhere('expires_at', '>', new Date())
+      })
+      .select('messageId', 'body', 'sender', 'created_at', 'updated_at')
+      .orderBy('created_at', 'asc')
+      .orderBy('messageId', 'asc')
+      .limit(take)
+      .offset(accumulator.queryOffset)
+
+    if (messageRows.length === 0) break
+    for (const message of messageRows) {
+      if (accumulator.messages.length >= pagination.limit) {
+        hasMore = true
+        break
+      }
+      const outcome = appendMessage(accumulator, message, resources.listMaxResponseBytes)
+      if (outcome === 'oversized') {
+        return routeFailure(
+          413,
+          'ERR_MESSAGE_RESPONSE_TOO_LARGE',
+          'The oldest message exceeds the configured listing response budget.'
+        )
+      }
+      if (outcome === 'full') {
+        hasMore = true
+        break
+      }
+    }
+    if (hasMore || messageRows.length < take) break
+  }
+
+  return {
+    messages: accumulator.messages,
+    limit: pagination.limit,
+    offset: pagination.offset,
+    nextOffset: accumulator.queryOffset,
+    hasMore
   }
 }
 
@@ -159,9 +342,7 @@ export default {
    */
   func: async (req: ListMessagesRequest, res: Response): Promise<Response> => {
     try {
-      const { messageBox } = req.body
       const identityKey = req.auth?.identityKey
-
       if (identityKey == null || identityKey.trim() === '') {
         return res.status(401).json({
           status: 'error',
@@ -170,78 +351,24 @@ export default {
         })
       }
 
-      // Validate a messageBox is provided and is a string
-      if (messageBox == null || (typeof messageBox === 'string' && messageBox.trim() === '')) {
-        return res.status(400).json({
+      const normalizedMessageBox = normalizeMessageBoxName(req.body.messageBox)
+      if (isRouteFailure(normalizedMessageBox)) {
+        return res.status(normalizedMessageBox.statusCode).json({
           status: 'error',
-          code: 'ERR_MESSAGEBOX_REQUIRED',
-          description: 'Please provide the name of a valid MessageBox!'
+          code: normalizedMessageBox.code,
+          description: normalizedMessageBox.description
         })
       }
-
-      if (typeof messageBox !== 'string') {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_MESSAGEBOX',
-          description: 'MessageBox name must be a string!'
-        })
-      }
-
-      const normalizedMessageBox = messageBox.trim()
-      if (Buffer.byteLength(normalizedMessageBox, 'utf8') > MAX_LIST_MESSAGE_BOX_BYTES) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_MESSAGEBOX',
-          description: `MessageBox names must not exceed ${MAX_LIST_MESSAGE_BOX_BYTES} bytes.`
-        })
-      }
-
       const resourceConfig = readMessageBoxResourceConfig()
-      const configuredDefault =
-        resourceConfig.listDefaultLimit === -1
-          ? Number.MAX_SAFE_INTEGER
-          : resourceConfig.listDefaultLimit
-      const limit = req.body.limit ?? configuredDefault
-      const offset = req.body.offset ?? req.body.skip ?? 0
-      if (req.body.offset != null && req.body.skip != null && req.body.offset !== req.body.skip) {
-        return res.status(400).json({
+      const pagination = parseListPagination(req.body, resourceConfig)
+      if (isRouteFailure(pagination)) {
+        return res.status(pagination.statusCode).json({
           status: 'error',
-          code: 'ERR_INVALID_OFFSET',
-          description: 'offset and skip must match when both are provided.'
-        })
-      }
-      if (
-        !Number.isSafeInteger(limit) ||
-        limit < 1 ||
-        (resourceConfig.listMaxLimit !== -1 && limit > resourceConfig.listMaxLimit)
-      ) {
-        const maximum =
-          resourceConfig.listMaxLimit === -1
-            ? 'the JavaScript safe-integer maximum'
-            : String(resourceConfig.listMaxLimit)
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_LIMIT',
-          description: `limit must be an integer between 1 and ${maximum}.`
-        })
-      }
-      if (
-        !Number.isSafeInteger(offset) ||
-        offset < 0 ||
-        (resourceConfig.listMaxOffset !== -1 && offset > resourceConfig.listMaxOffset)
-      ) {
-        const maximum =
-          resourceConfig.listMaxOffset === -1
-            ? 'the JavaScript safe-integer maximum'
-            : String(resourceConfig.listMaxOffset)
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_OFFSET',
-          description: `offset must be an integer between 0 and ${maximum}.`
+          code: pagination.code,
+          description: pagination.description
         })
       }
 
-      // Find the messageBox ID for this user
       const [messageBoxRecord] = await runtimeDeps
         .knex('messageBox')
         .where({
@@ -250,92 +377,30 @@ export default {
         })
         .select('messageBoxId')
 
-      // Return empty array if no messageBox was found
       if (messageBoxRecord === undefined) {
         return res.status(200).json({
           status: 'success',
           messages: [],
-          limit,
-          offset,
-          nextOffset: offset,
+          ...pagination,
+          nextOffset: pagination.offset,
           hasMore: false
         })
       }
 
-      // Retrieve bounded chunks. Deriving the chunk size from the configured
-      // message and response ceilings prevents one query from materializing a
-      // full item-count page of maximum-size bodies.
-      const formattedMessages: Array<Record<string, unknown>> = []
-      const batchSize = listQueryBatchSize(resourceConfig)
-      let queryOffset = offset
-      let hasMore = false
-      let encodedBytes = 256
-
-      // Read one additional row in a final bounded query so `hasMore` remains
-      // correct even when the byte-derived database batch divides the page
-      // limit exactly.
-      while (formattedMessages.length <= limit) {
-        const remaining = limit - formattedMessages.length
-        const take = Math.max(1, Math.min(batchSize, remaining + 1))
-        const messageRows = await runtimeDeps
-          .knex('messages')
-          .where({
-            recipient: identityKey,
-            messageBoxId: messageBoxRecord.messageBoxId
-          })
-          .where(function () {
-            this.whereNull('expires_at').orWhere('expires_at', '>', new Date())
-          })
-          .select('messageId', 'body', 'sender', 'created_at', 'updated_at')
-          .orderBy('created_at', 'asc')
-          .orderBy('messageId', 'asc')
-          .limit(take)
-          .offset(queryOffset)
-
-        if (messageRows.length === 0) break
-        for (const message of messageRows) {
-          if (formattedMessages.length >= limit) {
-            hasMore = true
-            break
-          }
-          const formatted = {
-            messageId: message.messageId,
-            body: typeof message.body === 'string' ? message.body : JSON.stringify(message.body),
-            sender: message.sender,
-            createdAt: message.created_at,
-            updatedAt: message.updated_at
-          }
-          const itemBytes = Buffer.byteLength(JSON.stringify(formatted), 'utf8') + 1
-          if (
-            resourceConfig.listMaxResponseBytes !== -1 &&
-            encodedBytes + itemBytes > resourceConfig.listMaxResponseBytes
-          ) {
-            if (formattedMessages.length === 0) {
-              return res.status(413).json({
-                status: 'error',
-                code: 'ERR_MESSAGE_RESPONSE_TOO_LARGE',
-                description: 'The oldest message exceeds the configured listing response budget.'
-              })
-            }
-            hasMore = true
-            break
-          }
-          formattedMessages.push(formatted)
-          encodedBytes += itemBytes
-          queryOffset += 1
-        }
-        if (hasMore || messageRows.length < take) break
+      const page = await readMessagePage(
+        identityKey,
+        messageBoxRecord.messageBoxId,
+        pagination,
+        resourceConfig
+      )
+      if (isRouteFailure(page)) {
+        return res.status(page.statusCode).json({
+          status: 'error',
+          code: page.code,
+          description: page.description
+        })
       }
-
-      // Return a list of matching messages
-      return res.status(200).json({
-        status: 'success',
-        messages: formattedMessages,
-        limit,
-        offset,
-        nextOffset: offset + formattedMessages.length,
-        hasMore
-      })
+      return res.status(200).json({ status: 'success', ...page })
     } catch (e) {
       log.error({ operation: 'messages.list', outcome: 'error', err: e }, 'Failed to list messages')
       return res.status(500).json({

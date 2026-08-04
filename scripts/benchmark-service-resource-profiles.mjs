@@ -89,9 +89,8 @@ function runParent() {
   }
   const failedCaps = results.filter(result => !result.withinResponseCap)
   if (failedCaps.length > 0) {
-    throw new Error(
-      `representative pages exceed response caps: ${failedCaps.map(r => `${r.service}/${r.profile}`).join(', ')}`
-    )
+    const failedProfiles = failedCaps.map(r => `${r.service}/${r.profile}`).join(', ')
+    throw new Error(`representative pages exceed response caps: ${failedProfiles}`)
   }
   const report = {
     generatedAt: new Date().toISOString(),

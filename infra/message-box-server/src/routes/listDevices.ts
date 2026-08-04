@@ -46,12 +46,13 @@ export default {
       const resources = readMessageBoxResourceConfig()
       const limitValue = req.query?.limit
       const offsetValue = req.query?.offset
-      const limit =
-        limitValue == null
-          ? resources.deviceListDefaultLimit === -1
+      let limit = Number(limitValue)
+      if (limitValue == null) {
+        limit =
+          resources.deviceListDefaultLimit === -1
             ? Number.MAX_SAFE_INTEGER
             : resources.deviceListDefaultLimit
-          : Number(limitValue)
+      }
       const offset = offsetValue == null ? 0 : Number(offsetValue)
       if (
         !Number.isSafeInteger(limit) ||

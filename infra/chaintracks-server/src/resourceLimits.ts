@@ -1,8 +1,4 @@
-import {
-  profileValue,
-  readResourceLimit,
-  readResourceProfile
-} from './security/edgePolicy'
+import { profileValue, readResourceLimit, readResourceProfile } from './security/edgePolicy'
 
 export interface HeaderRange {
   height: number
@@ -27,11 +23,14 @@ export function parseHeaderRange(query: Record<string, unknown>): HeaderRange {
     configuredMaximum !== -1 &&
     configuredDefault > configuredMaximum
   ) {
-    throw new Error('CHAINTRACKS_HEADERS_DEFAULT_LIMIT must not exceed CHAINTRACKS_HEADERS_MAX_LIMIT')
+    throw new Error(
+      'CHAINTRACKS_HEADERS_DEFAULT_LIMIT must not exceed CHAINTRACKS_HEADERS_MAX_LIMIT'
+    )
   }
-  const count = query.count == null
-    ? configuredDefault === -1 ? Number.MAX_SAFE_INTEGER : configuredDefault
-    : Number(query.count)
+  let count = Number(query.count)
+  if (query.count == null) {
+    count = configuredDefault === -1 ? Number.MAX_SAFE_INTEGER : configuredDefault
+  }
   if (!Number.isSafeInteger(height) || height < 0) {
     throw new RangeError('Invalid or missing height parameter')
   }

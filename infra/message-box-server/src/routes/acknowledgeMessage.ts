@@ -142,11 +142,12 @@ export default {
             Buffer.byteLength(id, 'utf8') > MAX_MESSAGE_ID_BYTES
         )
       ) {
+        const maximumIds = maxAcknowledgmentIds === -1 ? '' : ` of at most ${maxAcknowledgmentIds}`
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_ID',
           description:
-            `Message IDs must be a non-empty array${maxAcknowledgmentIds === -1 ? '' : ` of at most ${maxAcknowledgmentIds}`} ` +
+            `Message IDs must be a non-empty array${maximumIds} ` +
             `non-empty strings no longer than ${MAX_MESSAGE_ID_BYTES} bytes each.`
         })
       }

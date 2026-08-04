@@ -1758,11 +1758,7 @@ export class MessageBoxClient {
       throw new Error('MessageBox cannot be empty')
     }
 
-    let hosts: string[] = host != null ? [normalizeMessageBoxHost(host)] : []
-    if (hosts.length === 0) {
-      const advertisedHosts = await this.queryAdvertisements(await this.getIdentityKey())
-      hosts = Array.from(new Set([this.host, ...advertisedHosts.map(h => h.host)]))
-    }
+    const hosts = await this.resolveMessageHosts(host)
 
     // Query each host in parallel
     const fetchFromHost = async (host: string): Promise<PeerMessage[]> => {
@@ -1832,6 +1828,14 @@ export class MessageBoxClient {
     messages.sort((a, b) => Number((b as any).timestamp ?? 0) - Number((a as any).timestamp ?? 0))
 
     return messages
+  }
+
+  private async resolveMessageHosts(host?: string): Promise<string[]> {
+    if (host != null) return [normalizeMessageBoxHost(host)]
+    const advertisedHosts = await this.queryAdvertisements(await this.getIdentityKey())
+    return Array.from(
+      new Set([this.host, ...advertisedHosts.map(advertisement => advertisement.host)])
+    )
   }
 
   /**
@@ -1926,32 +1930,8 @@ export class MessageBoxClient {
     messageBox: string,
     options: Pick<ListMessagesParams, 'offset' | 'skip' | 'limit' | 'pageSize' | 'maxPages'> = {}
   ): Promise<PeerMessage[]> {
-    if (options.offset != null && options.skip != null && options.offset !== options.skip) {
-      throw new RangeError('offset and skip must match when both are provided')
-    }
-    const startingOffset = options.offset ?? options.skip ?? 0
-    const totalLimit = options.limit
-    const requestedPageSize = options.pageSize
-    // Historical callers rely on this convenience method fetching the whole
-    // inbox. Each server response is now bounded, while callers that need an
-    // aggregate ceiling can opt into maxPages, limit, or pageSize.
-    const maximumPages = options.maxPages ?? -1
-    for (const [name, value, allowUnlimited] of [
-      ['offset', startingOffset, false],
-      ['limit', totalLimit, false],
-      ['pageSize', requestedPageSize, false],
-      ['maxPages', maximumPages, true]
-    ] as const) {
-      if (value == null) continue
-      if (
-        !Number.isSafeInteger(value) ||
-        (allowUnlimited ? value !== -1 && value < 1 : value < (name === 'offset' ? 0 : 1))
-      ) {
-        throw new RangeError(
-          `${name} must be ${allowUnlimited ? '-1 or ' : ''}a ${name === 'offset' ? 'non-negative' : 'positive'} safe integer`
-        )
-      }
-    }
+    const { startingOffset, totalLimit, requestedPageSize, maximumPages } =
+      this.normalizeMessagePageOptions(options)
     const messages: PeerMessage[] = []
     let offset = startingOffset
     let page = 0
@@ -1959,29 +1939,13 @@ export class MessageBoxClient {
     while (maximumPages === -1 || page < maximumPages) {
       const remaining = totalLimit == null ? undefined : totalLimit - messages.length
       if (remaining != null && remaining <= 0) return messages
-      const limit =
-        requestedPageSize == null
-          ? remaining
-          : remaining == null
-            ? requestedPageSize
-            : Math.min(requestedPageSize, remaining)
-      const body: Record<string, unknown> = { messageBox, offset }
-      if (limit != null) body.limit = limit
-      const res = await this.authFetch.fetch(messageBoxEndpoint(host, '/listMessages'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-
-      const data = await res.json()
-      if (data.status === 'error') {
-        throw new Error(data.description ?? 'Unknown server error')
-      }
-      if (!Array.isArray(data.messages)) {
-        throw new TypeError('Message Box server returned an invalid messages payload')
-      }
-      const pageMessages = data.messages as PeerMessage[]
+      const pageLimit = this.messagePageLimit(requestedPageSize, remaining)
+      const { data, pageMessages } = await this.fetchMessagePage(
+        host,
+        messageBox,
+        offset,
+        pageLimit
+      )
       const accepted = remaining == null ? pageMessages : pageMessages.slice(0, remaining)
       messages.push(...accepted)
 
@@ -1989,19 +1953,7 @@ export class MessageBoxClient {
       // pagination metadata and may ignore limit/offset. Only continue when a
       // pagination-aware server explicitly advertises another page.
       if (data.hasMore !== true) return messages
-      const nextOffset = Number(data.nextOffset)
-      if (Number.isSafeInteger(nextOffset) && nextOffset > offset) {
-        offset = nextOffset
-      } else {
-        const serverLimit = Number(data.limit)
-        const advance =
-          pageMessages.length > 0
-            ? pageMessages.length
-            : Number.isSafeInteger(serverLimit) && serverLimit > 0
-              ? serverLimit
-              : (requestedPageSize ?? 1_000)
-        offset += advance
-      }
+      offset = this.nextMessagePageOffset(data, pageMessages.length, offset, requestedPageSize)
       page += 1
     }
 
@@ -2009,6 +1961,92 @@ export class MessageBoxClient {
       `Message Box pagination exceeded ${maximumPages} pages; ` +
         'acknowledge messages, raise maxPages, or set an application-level limit.'
     )
+  }
+
+  private normalizeMessagePageOptions(
+    options: Pick<ListMessagesParams, 'offset' | 'skip' | 'limit' | 'pageSize' | 'maxPages'>
+  ): {
+    startingOffset: number
+    totalLimit?: number
+    requestedPageSize?: number
+    maximumPages: number
+  } {
+    if (options.offset != null && options.skip != null && options.offset !== options.skip) {
+      throw new RangeError('offset and skip must match when both are provided')
+    }
+    const startingOffset = options.offset ?? options.skip ?? 0
+    const maximumPages = options.maxPages ?? -1
+    this.assertMessagePageOption('offset', startingOffset, 0)
+    this.assertMessagePageOption('limit', options.limit, 1)
+    this.assertMessagePageOption('pageSize', options.pageSize, 1)
+    this.assertMessagePageOption('maxPages', maximumPages, 1, true)
+    return {
+      startingOffset,
+      totalLimit: options.limit,
+      requestedPageSize: options.pageSize,
+      maximumPages
+    }
+  }
+
+  private assertMessagePageOption(
+    name: string,
+    value: number | undefined,
+    minimum: number,
+    allowUnlimited: boolean = false
+  ): void {
+    if (value == null) return
+    const unlimited = allowUnlimited && value === -1
+    if (Number.isSafeInteger(value) && (unlimited || value >= minimum)) return
+    const unlimitedPrefix = allowUnlimited ? '-1 or ' : ''
+    const sign = minimum === 0 ? 'non-negative' : 'positive'
+    throw new RangeError(`${name} must be ${unlimitedPrefix}a ${sign} safe integer`)
+  }
+
+  private messagePageLimit(
+    requestedPageSize: number | undefined,
+    remaining: number | undefined
+  ): number | undefined {
+    if (requestedPageSize == null) return remaining
+    if (remaining == null) return requestedPageSize
+    return Math.min(requestedPageSize, remaining)
+  }
+
+  private async fetchMessagePage(
+    host: string,
+    messageBox: string,
+    offset: number,
+    limit: number | undefined
+  ): Promise<{ data: any; pageMessages: PeerMessage[] }> {
+    const body: Record<string, unknown> = { messageBox, offset }
+    if (limit != null) body.limit = limit
+    const response = await this.authFetch.fetch(messageBoxEndpoint(host, '/listMessages'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
+
+    const data = await response.json()
+    if (data.status === 'error') throw new Error(data.description ?? 'Unknown server error')
+    if (!Array.isArray(data.messages)) {
+      throw new TypeError('Message Box server returned an invalid messages payload')
+    }
+    return { data, pageMessages: data.messages as PeerMessage[] }
+  }
+
+  private nextMessagePageOffset(
+    data: any,
+    pageMessageCount: number,
+    currentOffset: number,
+    requestedPageSize: number | undefined
+  ): number {
+    const nextOffset = Number(data.nextOffset)
+    if (Number.isSafeInteger(nextOffset) && nextOffset > currentOffset) return nextOffset
+    if (pageMessageCount > 0) return currentOffset + pageMessageCount
+
+    const serverLimit = Number(data.limit)
+    if (Number.isSafeInteger(serverLimit) && serverLimit > 0) return currentOffset + serverLimit
+    return currentOffset + (requestedPageSize ?? 1_000)
   }
 
   /**

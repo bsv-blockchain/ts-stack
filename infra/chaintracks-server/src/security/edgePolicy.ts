@@ -480,6 +480,15 @@ export function initialDoubleSlashCompatibility(
   next()
 }
 
+function responseChunkByteLength(chunk: unknown, encoding: unknown): number {
+  if (typeof chunk === 'string') {
+    const bufferEncoding = typeof encoding === 'string' ? (encoding as BufferEncoding) : 'utf8'
+    return Buffer.byteLength(chunk, bufferEncoding)
+  }
+  if (Buffer.isBuffer(chunk) || chunk instanceof Uint8Array) return chunk.byteLength
+  return Buffer.byteLength(JSON.stringify(chunk) ?? '', 'utf8')
+}
+
 /**
  * Bounds materialized JSON/text/binary Express responses before downstream
  * authentication middleware signs or serializes them again. Streaming
@@ -545,15 +554,7 @@ export function responseSizeLimit(
       }
       if (rejected) return res
       if (chunk != null) {
-        const byteLength =
-          typeof chunk === 'string'
-            ? Buffer.byteLength(
-                chunk,
-                typeof encoding === 'string' ? (encoding as BufferEncoding) : 'utf8'
-              )
-            : Buffer.isBuffer(chunk) || chunk instanceof Uint8Array
-              ? chunk.byteLength
-              : Buffer.byteLength(String(chunk), 'utf8')
+        const byteLength = responseChunkByteLength(chunk, encoding)
         if (tooLarge(byteLength)) return reject()
       }
       return originalEnd(

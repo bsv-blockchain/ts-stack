@@ -613,23 +613,7 @@ export class StorageServer {
   }
 
   private enforceRpcRequestBudgets(method: string, params: any[]): void {
-    if (this.maxRpcArrayItems !== -1) {
-      const pending: Array<{ value: unknown; depth: number }> = [{ value: params, depth: 0 }]
-      const seen = new Set<object>()
-      while (pending.length > 0) {
-        const current = pending.pop()!
-        if (current.depth > 64) throw new RangeError('RPC parameter nesting exceeds 64 levels')
-        if (current.value == null || typeof current.value !== 'object') continue
-        if (seen.has(current.value)) continue
-        seen.add(current.value)
-        if (Array.isArray(current.value) && current.value.length > this.maxRpcArrayItems) {
-          throw new RangeError(`RPC arrays must not exceed ${this.maxRpcArrayItems} items`)
-        }
-        for (const value of Object.values(current.value)) {
-          pending.push({ value, depth: current.depth + 1 })
-        }
-      }
-    }
+    this.enforceRpcArrayBudget(params)
 
     const topLevelIndex = topLevelLimitArgument.get(method)
     if (topLevelIndex != null) {
@@ -639,7 +623,7 @@ export class StorageServer {
     const pagedIndex = pagedLimitArgument.get(method)
     if (pagedIndex != null) {
       const args = this.objectArgument(params, pagedIndex)
-      const paged = args.paged == null ? {} : args.paged
+      const paged = args.paged ?? {}
       if (typeof paged !== 'object' || Array.isArray(paged)) {
         throw new TypeError('paged must be an object')
       }
@@ -654,6 +638,26 @@ export class StorageServer {
         (!Number.isSafeInteger(args.maxRoughSize) || args.maxRoughSize > this.maxRpcResponseBytes)
       ) {
         args.maxRoughSize = this.maxRpcResponseBytes
+      }
+    }
+  }
+
+  private enforceRpcArrayBudget(params: any[]): void {
+    if (this.maxRpcArrayItems === -1) return
+
+    const pending: Array<{ value: unknown; depth: number }> = [{ value: params, depth: 0 }]
+    const seen = new Set<object>()
+    while (pending.length > 0) {
+      const current = pending.pop()!
+      if (current.depth > 64) throw new RangeError('RPC parameter nesting exceeds 64 levels')
+      if (current.value == null || typeof current.value !== 'object') continue
+      if (seen.has(current.value)) continue
+      seen.add(current.value)
+      if (Array.isArray(current.value) && current.value.length > this.maxRpcArrayItems) {
+        throw new RangeError(`RPC arrays must not exceed ${this.maxRpcArrayItems} items`)
+      }
+      for (const value of Object.values(current.value)) {
+        pending.push({ value, depth: current.depth + 1 })
       }
     }
   }

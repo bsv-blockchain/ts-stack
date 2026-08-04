@@ -11,7 +11,9 @@ export async function mapWithConcurrency<T, R>(
     throw new RangeError('concurrency must be -1 or a positive safe integer')
   }
   if (items.length === 0) return []
-  if (concurrency === -1) return await Promise.all(items.map(worker))
+  if (concurrency === -1) {
+    return await Promise.all(items.map(async (item, index) => await worker(item, index)))
+  }
 
   const results = Array.from({ length: items.length }, () => undefined as R)
   let nextIndex = 0

@@ -58,6 +58,31 @@ type ClosableAuthSocketServer = AuthSocketServer & {
 
 type DisconnectableAuthSocket = Pick<AuthSocket, 'ioSocket'>
 
+function validateWebSocketMessage(
+  roomId: unknown,
+  message: unknown
+): { reason: string; logValue?: unknown } | null {
+  if (typeof roomId !== 'string' || roomId.trim() === '') {
+    return { reason: 'Invalid room ID', logValue: roomId }
+  }
+  if (typeof message !== 'object' || message == null) {
+    return { reason: 'Invalid message object', logValue: message }
+  }
+  const candidate = message as { body?: unknown; recipient?: unknown }
+  if (typeof candidate.body !== 'string' || candidate.body.trim() === '') {
+    return { reason: 'Invalid message body' }
+  }
+  if (typeof candidate.recipient !== 'string') {
+    return { reason: 'Invalid recipient identity key' }
+  }
+  try {
+    PublicKey.fromString(candidate.recipient)
+  } catch {
+    return { reason: 'Invalid recipient identity key' }
+  }
+  return null
+}
+
 export function disconnectAuthenticatedSockets(sockets: Iterable<DisconnectableAuthSocket>): void {
   for (const socket of sockets) {
     socket.ioSocket.disconnect(true)
@@ -291,28 +316,13 @@ export function attachMessageBoxWebSockets(
         activeSendEvents += 1
 
         try {
-          if (typeof roomId !== 'string' || roomId.trim() === '') {
-            Logger.error('[WEBSOCKET ERROR] Invalid roomId:', roomId)
-            await socket.emit('messageFailed', { reason: 'Invalid room ID' })
-            return
-          }
-
-          if (typeof message !== 'object' || message == null) {
-            Logger.error('[WEBSOCKET ERROR] Invalid message object:', message)
-            await socket.emit('messageFailed', { reason: 'Invalid message object' })
-            return
-          }
-
-          if (typeof message.body !== 'string' || message.body.trim() === '') {
-            Logger.error('[WEBSOCKET ERROR] Invalid message body.')
-            await socket.emit('messageFailed', { reason: 'Invalid message body' })
-            return
-          }
-
-          try {
-            PublicKey.fromString(message.recipient)
-          } catch {
-            await socket.emit('messageFailed', { reason: 'Invalid recipient identity key' })
+          const validationFailure = validateWebSocketMessage(roomId, message)
+          if (validationFailure != null) {
+            Logger.error('[WEBSOCKET ERROR] Rejected invalid sendMessage event:', {
+              reason: validationFailure.reason,
+              value: validationFailure.logValue
+            })
+            await socket.emit('messageFailed', { reason: validationFailure.reason })
             return
           }
 

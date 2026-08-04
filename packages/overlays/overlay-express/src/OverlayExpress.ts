@@ -1786,12 +1786,11 @@ export default class OverlayExpress {
       if (requestedLimit !== -1 && (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1)) {
         throw new TypeError('limit must be a positive integer, -1, or unlimited')
       }
-      const limit =
-        adminListMaxLimit === -1
-          ? requestedLimit
-          : requestedLimit === -1
-            ? adminListMaxLimit
-            : Math.min(requestedLimit, adminListMaxLimit)
+      let limit = requestedLimit
+      if (adminListMaxLimit !== -1) {
+        limit =
+          requestedLimit === -1 ? adminListMaxLimit : Math.min(requestedLimit, adminListMaxLimit)
+      }
       const page = limit === -1 ? 1 : requestedPage
       const skip = limit === -1 ? 0 : (page - 1) * limit
       if (!Number.isSafeInteger(skip) || (adminListMaxOffset !== -1 && skip > adminListMaxOffset)) {
@@ -2351,12 +2350,10 @@ export default class OverlayExpress {
         return
       }
 
-      res
-        .status(401)
-        .json({
-          status: 'error',
-          message: 'Unauthorized: Provide a Bearer token or authenticate with your wallet'
-        })
+      res.status(401).json({
+        status: 'error',
+        message: 'Unauthorized: Provide a Bearer token or authenticate with your wallet'
+      })
     }
 
     /**
@@ -2551,12 +2548,10 @@ export default class OverlayExpress {
       ;(async () => {
         try {
           if (this.banService === undefined) {
-            return res
-              .status(400)
-              .json({
-                status: 'error',
-                message: 'Ban service not available (MongoDB not configured)'
-              })
+            return res.status(400).json({
+              status: 'error',
+              message: 'Ban service not available (MongoDB not configured)'
+            })
           }
 
           const { type, value, reason } = req.body
@@ -2651,12 +2646,10 @@ export default class OverlayExpress {
         try {
           const { txid, outputIndex, service, ban, banDomain: shouldBanDomain } = req.body
           if (typeof txid !== 'string' || typeof outputIndex !== 'number') {
-            return res
-              .status(400)
-              .json({
-                status: 'error',
-                message: 'txid (string) and outputIndex (number) are required'
-              })
+            return res.status(400).json({
+              status: 'error',
+              message: 'txid (string) and outputIndex (number) are required'
+            })
           }
 
           // Look up domain before eviction if needed for banning

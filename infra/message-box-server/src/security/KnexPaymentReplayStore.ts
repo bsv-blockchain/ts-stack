@@ -1,15 +1,16 @@
 import type { PaymentReplayStore } from '@bsv/payment-express-middleware'
 import type { Knex } from 'knex'
 
+const DUPLICATE_CODES = new Set([
+  'ER_DUP_ENTRY',
+  'SQLITE_CONSTRAINT_PRIMARYKEY',
+  'SQLITE_CONSTRAINT_UNIQUE'
+])
+
 function isDuplicate(error: unknown): boolean {
   if (error == null || typeof error !== 'object') return false
-  const value = error as { code?: unknown; errno?: unknown }
-  return (
-    value.code === 'ER_DUP_ENTRY' ||
-    value.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
-    value.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
-    value.errno === 1062
-  )
+  const { code, errno } = error as { code?: unknown; errno?: unknown }
+  return (typeof code === 'string' && DUPLICATE_CODES.has(code)) || errno === 1062
 }
 
 /** Durable, replica-safe BRC-105 transaction replay claims. */

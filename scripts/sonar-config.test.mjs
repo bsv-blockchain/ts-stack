@@ -38,7 +38,7 @@ test('Sonar Automatic Analysis excludes governed generated outputs but analyzes 
     .split('\n')
     .filter(Boolean)
   const synchronizedCopies = registry.generatedArtifacts.filter(artifact =>
-    artifact.generator.startsWith('scripts/sync-service-edge-policy.mjs')
+    artifact.generator.startsWith('scripts/sync-service-')
   )
   const externallyGenerated = registry.generatedArtifacts.filter(
     artifact => !synchronizedCopies.includes(artifact)

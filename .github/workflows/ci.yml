@@ -60,6 +60,7 @@ jobs:
         run: |
           node scripts/sync-service-rate-limit-policy.mjs --check
           node scripts/sync-service-edge-policy.mjs --check
+          node scripts/sync-service-runtime-copies.mjs --check
 
       - name: Enforce inventory, exception, baseline, and contract ratchets
         run: >-

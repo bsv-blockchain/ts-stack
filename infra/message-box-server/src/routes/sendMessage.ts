@@ -465,7 +465,8 @@ function isDuplicateDatabaseError(error: unknown): boolean {
 
 class RouteFailureError extends Error {
   constructor(readonly failure: RouteFailure) {
-    super(String(failure.payload.description ?? failure.payload.code ?? 'Route failure'))
+    const detail = failure.payload.description ?? failure.payload.code
+    super(typeof detail === 'string' ? detail : 'Route failure')
   }
 }
 
@@ -549,7 +550,7 @@ async function acquireResourceLocks(
   identities: string[],
   now: Date
 ): Promise<void> {
-  const keys = [...new Set(identities)].sort()
+  const keys = [...new Set(identities)].sort((left, right) => left.localeCompare(right))
   await transaction('message_resource_locks')
     .insert(keys.map(identity_key => ({ identity_key, updated_at: now })))
     .onConflict('identity_key')

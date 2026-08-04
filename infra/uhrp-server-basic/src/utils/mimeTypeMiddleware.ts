@@ -30,6 +30,35 @@ const FILE_SIGNATURES = [
   { bytes: [0x50, 0x4b], mimeType: 'application/zip' }
 ] as const
 
+function latestAdvertisedMimeType(outputs: Array<{ tags?: string[] }>): string | null {
+  let mimeType: string | null = null
+  let maxExpiry = 0
+  for (const output of outputs) {
+    const contentTypeTag = output.tags?.find(tag => tag.startsWith('content_type_'))
+    const expiryTag = output.tags?.find(tag => tag.startsWith('expiry_time_'))
+    if (contentTypeTag == null || expiryTag == null) continue
+
+    const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+    if (expiryTime <= Date.now() / 1000 || expiryTime <= maxExpiry) continue
+    maxExpiry = expiryTime
+    mimeType = contentTypeTag.substring('content_type_'.length)
+  }
+  return mimeType
+}
+
+function cacheMimeType(cacheKey: string, mimeType: string): void {
+  if (MAX_MIME_CACHE_ENTRIES !== -1) {
+    while (mimeTypeCache.size >= MAX_MIME_CACHE_ENTRIES) {
+      const oldest = mimeTypeCache.keys().next().value
+      if (oldest == null) break
+      mimeTypeCache.delete(oldest)
+      cacheTimestamps.delete(oldest)
+    }
+  }
+  mimeTypeCache.set(cacheKey, mimeType)
+  cacheTimestamps.set(cacheKey, Date.now())
+}
+
 /**
  * Get MIME type from UHRP advertisement tags
  */
@@ -62,40 +91,10 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
       limit: 50
     })
 
-    let mimeType: string | null = null
-    let maxExpiry = 0
-
-    // Find the advertisement with the latest expiry time (most recent)
-    for (const output of outputs) {
-      if (!output.tags) continue
-
-      const contentTypeTag = output.tags.find(t => t.startsWith('content_type_'))
-      const expiryTag = output.tags.find(t => t.startsWith('expiry_time_'))
-
-      if (contentTypeTag && expiryTag) {
-        const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-
-        // Only consider non-expired advertisements
-        if (expiryTime > Date.now() / 1000 && expiryTime > maxExpiry) {
-          maxExpiry = expiryTime
-          mimeType = contentTypeTag.substring('content_type_'.length)
-        }
-      }
-    }
+    const mimeType = latestAdvertisedMimeType(outputs)
 
     // Cache the result (even if null)
-    if (mimeType) {
-      if (MAX_MIME_CACHE_ENTRIES !== -1) {
-        while (mimeTypeCache.size >= MAX_MIME_CACHE_ENTRIES) {
-          const oldest = mimeTypeCache.keys().next().value
-          if (oldest == null) break
-          mimeTypeCache.delete(oldest)
-          cacheTimestamps.delete(oldest)
-        }
-      }
-      mimeTypeCache.set(cacheKey, mimeType)
-      cacheTimestamps.set(cacheKey, Date.now())
-    }
+    if (mimeType != null) cacheMimeType(cacheKey, mimeType)
 
     return mimeType
   } catch (error) {

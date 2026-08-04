@@ -2,7 +2,10 @@ import { Response } from 'express'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { Logger } from '../../utils/logger.js'
 import { runtimeDeps } from '../../runtimeDeps.js'
-import { readMessageBoxResourceConfig } from '../../config/resources.js'
+import {
+  readMessageBoxResourceConfig,
+  type MessageBoxResourceConfig
+} from '../../config/resources.js'
 
 export const MAX_PERMISSION_PAGE_SIZE = 100
 export const MAX_PERMISSION_OFFSET = 100_000
@@ -15,6 +18,84 @@ export interface ListPermissionsRequest extends AuthRequest {
     offset?: string // Optional pagination offset
     createdAtOrder?: string // Optional sort order for created_at ('asc' | 'desc')
   }
+}
+
+interface PermissionPagination {
+  limit: number
+  offset: number
+  sortOrder: 'asc' | 'desc'
+}
+
+interface ValidationFailure {
+  code: string
+  description: string
+}
+
+function parsePermissionPagination(
+  query: ListPermissionsRequest['query'],
+  resources: MessageBoxResourceConfig
+): PermissionPagination | ValidationFailure {
+  let limit = Number(query.limit)
+  if (query.limit == null) {
+    limit =
+      resources.permissionListDefaultLimit === -1
+        ? Number.MAX_SAFE_INTEGER
+        : resources.permissionListDefaultLimit
+  }
+  const offset = query.offset == null ? 0 : Number(query.offset)
+  const sortOrder = query.createdAtOrder ?? 'desc'
+
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    (resources.permissionListMaxLimit !== -1 && limit > resources.permissionListMaxLimit)
+  ) {
+    const description =
+      resources.permissionListMaxLimit === -1
+        ? 'limit must be a positive safe integer.'
+        : `limit must be an integer between 1 and ${resources.permissionListMaxLimit}.`
+    return { code: 'ERR_INVALID_LIMIT', description }
+  }
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    (resources.permissionListMaxOffset !== -1 && offset > resources.permissionListMaxOffset)
+  ) {
+    const description =
+      resources.permissionListMaxOffset === -1
+        ? 'offset must be a non-negative safe integer.'
+        : `offset must be an integer between 0 and ${resources.permissionListMaxOffset}.`
+    return { code: 'ERR_INVALID_OFFSET', description }
+  }
+  if (sortOrder !== 'asc' && sortOrder !== 'desc') {
+    return {
+      code: 'ERR_INVALID_SORT_ORDER',
+      description: 'createdAtOrder must be asc or desc.'
+    }
+  }
+  return { limit, offset, sortOrder }
+}
+
+function normalizeMessageBoxFilter(messageBox: unknown): string | ValidationFailure | undefined {
+  if (messageBox == null) return undefined
+  if (typeof messageBox !== 'string') {
+    return {
+      code: 'ERR_INVALID_MESSAGE_BOX',
+      description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
+    }
+  }
+  const normalized = messageBox.trim()
+  if (normalized === '' || Buffer.byteLength(normalized, 'utf8') > MAX_MESSAGE_BOX_BYTES) {
+    return {
+      code: 'ERR_INVALID_MESSAGE_BOX',
+      description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
+    }
+  }
+  return normalized
+}
+
+function isValidationFailure(value: unknown): value is ValidationFailure {
+  return typeof value === 'object' && value != null && 'code' in value
 }
 
 /**
@@ -123,75 +204,29 @@ export default {
       }
 
       // Parse and validate query parameters
-      const { messageBox, limit: limitStr, offset: offsetStr, createdAtOrder } = req.query
-
+      const { messageBox } = req.query
       const resources = readMessageBoxResourceConfig()
-      const limit =
-        limitStr != null
-          ? Number(limitStr)
-          : resources.permissionListDefaultLimit === -1
-            ? Number.MAX_SAFE_INTEGER
-            : resources.permissionListDefaultLimit
-      const offset = offsetStr != null ? Number(offsetStr) : 0
-      const sortOrder = createdAtOrder ?? 'desc'
-
-      // Validate pagination parameters
-      if (
-        !Number.isSafeInteger(limit) ||
-        limit < 1 ||
-        (resources.permissionListMaxLimit !== -1 && limit > resources.permissionListMaxLimit)
-      ) {
+      const pagination = parsePermissionPagination(req.query, resources)
+      if (isValidationFailure(pagination)) {
         return res.status(400).json({
           status: 'error',
-          code: 'ERR_INVALID_LIMIT',
-          description:
-            resources.permissionListMaxLimit === -1
-              ? 'limit must be a positive safe integer.'
-              : `limit must be an integer between 1 and ${resources.permissionListMaxLimit}.`
+          ...pagination
         })
       }
-
-      if (
-        !Number.isSafeInteger(offset) ||
-        offset < 0 ||
-        (resources.permissionListMaxOffset !== -1 && offset > resources.permissionListMaxOffset)
-      ) {
+      const normalizedMessageBox = normalizeMessageBoxFilter(messageBox)
+      if (isValidationFailure(normalizedMessageBox)) {
         return res.status(400).json({
           status: 'error',
-          code: 'ERR_INVALID_OFFSET',
-          description:
-            resources.permissionListMaxOffset === -1
-              ? 'offset must be a non-negative safe integer.'
-              : `offset must be an integer between 0 and ${resources.permissionListMaxOffset}.`
+          ...normalizedMessageBox
         })
       }
-
-      if (sortOrder !== 'asc' && sortOrder !== 'desc') {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_SORT_ORDER',
-          description: 'createdAtOrder must be asc or desc.'
-        })
-      }
-
-      if (
-        messageBox != null &&
-        (typeof messageBox !== 'string' ||
-          messageBox.trim() === '' ||
-          Buffer.byteLength(messageBox.trim(), 'utf8') > MAX_MESSAGE_BOX_BYTES)
-      ) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_MESSAGE_BOX',
-          description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
-        })
-      }
+      const { limit, offset, sortOrder } = pagination
 
       // Validate identity key format
       const recipientKey = req.auth.identityKey
 
       Logger.log(
-        `[DEBUG] Listing permissions for recipient: ${recipientKey}, messageBox: ${messageBox ?? 'all'}, limit: ${limit}, offset: ${offset}, createdAtOrder: ${sortOrder}`
+        `[DEBUG] Listing permissions for recipient: ${recipientKey}, messageBox: ${normalizedMessageBox ?? 'all'}, limit: ${limit}, offset: ${offset}, createdAtOrder: ${sortOrder}`
       )
 
       // Build base query
@@ -206,8 +241,8 @@ export default {
         ])
 
       // Apply messageBox filter if provided
-      if (messageBox != null) {
-        query = query.where('message_box', messageBox.trim())
+      if (normalizedMessageBox != null) {
+        query = query.where('message_box', normalizedMessageBox)
       }
 
       // Get total count for pagination info (before applying limit/offset)

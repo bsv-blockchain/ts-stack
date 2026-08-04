@@ -121,6 +121,10 @@ describe('BSV Overlay Services Engine', () => {
     }
   })
 
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
   it('rejects oversized lookup formulas before hydrating their outputs', async () => {
     mockLookupService.lookup = jest.fn(async () => [
       { txid: exampleTXID, outputIndex: 0, history: 0 },
@@ -138,10 +142,6 @@ describe('BSV Overlay Services Engine', () => {
       'Lookup returned 2 results; maximum is 1'
     )
     expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
-  })
-
-  afterEach(() => {
-    jest.restoreAllMocks()
   })
 
   it('engine.syncAdvertisements should return void when invalid hostingURL is provided', async () => {
