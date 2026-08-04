@@ -633,6 +633,8 @@ export interface operations {
                     limit?: number;
                     /** @default 0 */
                     offset?: number;
+                    /** @description Compatibility alias for offset; both must match if supplied together. */
+                    skip?: number;
                 };
             };
         };
@@ -649,6 +651,8 @@ export interface operations {
                         messages: components["schemas"]["StoredMessage"][];
                         limit: number;
                         offset: number;
+                        /** @description Offset for the next page; unchanged when the result is empty. */
+                        nextOffset: number;
                         hasMore: boolean;
                     };
                 };
