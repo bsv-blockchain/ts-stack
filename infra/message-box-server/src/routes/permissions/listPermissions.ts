@@ -210,14 +210,16 @@ export default {
       if (isValidationFailure(pagination)) {
         return res.status(400).json({
           status: 'error',
-          ...pagination
+          code: pagination.code,
+          description: pagination.description
         })
       }
       const normalizedMessageBox = normalizeMessageBoxFilter(messageBox)
       if (isValidationFailure(normalizedMessageBox)) {
         return res.status(400).json({
           status: 'error',
-          ...normalizedMessageBox
+          code: normalizedMessageBox.code,
+          description: normalizedMessageBox.description
         })
       }
       const { limit, offset, sortOrder } = pagination

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PrivateKey, Utils } from '@bsv/sdk'
 import { createAuthMiddleware, ExpressTransport } from '../index'
 import { MockWallet } from './MockWallet'
@@ -77,6 +80,19 @@ function peerMock(overrides: Record<string, unknown> = {}): any {
     stopListeningForCertificatesReceived: jest.fn(),
     toPeer: jest.fn().mockResolvedValue(undefined),
     ...overrides
+  }
+}
+
+function peerWithSignedResponse(): { peer: any; signed: Promise<void> } {
+  let resolveSigned!: () => void
+  const signed = new Promise<void>(resolve => {
+    resolveSigned = resolve
+  })
+  return {
+    peer: peerMock({
+      toPeer: jest.fn().mockImplementation(async () => resolveSigned())
+    }),
+    signed
   }
 }
 
@@ -567,6 +583,130 @@ describe('ExpressTransport hardening', () => {
       'utf8'
     )
     expect(peer.toPeer).toHaveBeenCalledWith(responsePayload(413, {}, expectedBody), SESSION_NONCE)
+  })
+
+  it.each([false, true])(
+    'reads and signs an authenticated file within the response limit (unlimited: %s)',
+    async unlimited => {
+      const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+      const filePath = join(temporaryDirectory, 'response.bin')
+      const contents = Buffer.from('bounded authenticated file')
+      writeFileSync(filePath, contents)
+      const { peer, signed } = peerWithSignedResponse()
+      const transport = new ExpressTransport(false, undefined, undefined, {
+        maxResponseBytes: unlimited ? -1 : contents.length
+      })
+      transport.peer = peer
+      const res = responseMock()
+
+      try {
+        ;(transport as any).setupAuthenticatedResponse(
+          validGeneralRequest(),
+          res,
+          jest.fn(),
+          IDENTITY_KEY,
+          REQUEST_ID
+        )
+        res.sendFile(filePath)
+        await signed
+
+        expect(peer.toPeer).toHaveBeenCalledWith(
+          responsePayload(200, {}, Array.from(contents)),
+          SESSION_NONCE
+        )
+      } finally {
+        rmSync(temporaryDirectory, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('stops an authenticated file read at the response limit and signs a 413', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+    const filePath = join(temporaryDirectory, 'oversized.bin')
+    writeFileSync(filePath, Buffer.alloc(65, 7))
+    const { peer, signed } = peerWithSignedResponse()
+    const transport = new ExpressTransport(false, undefined, undefined, {
+      maxResponseBytes: 64
+    })
+    transport.peer = peer
+    const res = responseMock()
+
+    try {
+      ;(transport as any).setupAuthenticatedResponse(
+        validGeneralRequest(),
+        res,
+        jest.fn(),
+        IDENTITY_KEY,
+        REQUEST_ID
+      )
+      res.sendFile(filePath)
+      await signed
+
+      const expectedBody = Utils.toArray(
+        JSON.stringify({
+          status: 'error',
+          code: 'ERR_RESPONSE_TOO_LARGE',
+          description: 'The requested response exceeds the configured service limit.'
+        }),
+        'utf8'
+      )
+      expect(peer.toPeer).toHaveBeenCalledWith(
+        responsePayload(413, {}, expectedBody),
+        SESSION_NONCE
+      )
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('signs a 500 when an authenticated response file cannot be read', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+    const filePath = join(temporaryDirectory, 'missing.bin')
+    const { peer, signed } = peerWithSignedResponse()
+    const transport = new ExpressTransport()
+    transport.peer = peer
+    const res = responseMock()
+
+    try {
+      ;(transport as any).setupAuthenticatedResponse(
+        validGeneralRequest(),
+        res,
+        jest.fn(),
+        IDENTITY_KEY,
+        REQUEST_ID
+      )
+      res.sendFile(filePath)
+      await signed
+
+      expect(peer.toPeer).toHaveBeenCalledWith(responsePayload(500, {}), SESSION_NONCE)
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('forwards authenticated response file errors to the sendFile callback overload', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'auth-express-file-'))
+    const filePath = join(temporaryDirectory, 'missing.bin')
+    const transport = new ExpressTransport()
+    const peer = peerMock()
+    transport.peer = peer
+    const res = responseMock()
+
+    try {
+      ;(transport as any).setupAuthenticatedResponse(
+        validGeneralRequest(),
+        res,
+        jest.fn(),
+        IDENTITY_KEY,
+        REQUEST_ID
+      )
+      const callbackError = new Promise<Error>(resolve => res.sendFile(filePath, resolve))
+
+      await expect(callbackError).resolves.toHaveProperty('name', 'Error')
+      expect(peer.toPeer).not.toHaveBeenCalled()
+    } finally {
+      rmSync(temporaryDirectory, { recursive: true, force: true })
+    }
   })
 
   it('buffers and signs an authenticated text response with its inferred content type', async () => {

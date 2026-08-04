@@ -67,15 +67,20 @@ app.use(
     logLevel: 'error',
     transportLimits: {
       requestTimeoutMs: 30_000,
-      maxPendingRequests: 1_000
+      maxPendingRequests: 1_000,
+      maxResponseBytes: 8 * 1024 * 1024
     }
   })
 )
 ```
 
 `transportLimits` bounds pending handshakes, verification listeners,
-certificate waits, and response-signing state. Malformed requests are rejected
-before state allocation. At capacity, the middleware fails closed with `503`.
+certificate waits, and response-signing state. `maxResponseBytes` also bounds
+files passed to `res.sendFile`; oversized application responses fail closed
+with a signed `413`. The default is 8 MiB. Operators may set it to `-1` only
+when the embedding service enforces an equivalent response budget. Malformed
+requests are rejected before state allocation. At capacity, the middleware
+fails closed with `503`.
 
 The exact `/.well-known/auth` endpoint remains public because it establishes
 the session. Similar path prefixes receive normal auth treatment.
@@ -138,7 +143,8 @@ CORS. CSP is primarily a document policy and is not a substitute for API CORS.
 - Use HTTPS; mutual authentication does not encrypt all HTTP data.
 - Parse bodies before auth so signed and routed values match.
 - Install one auth wrapper per request path.
-- Keep finite timeouts/capacity and alert on `408` and `503`.
+- Keep finite timeouts/response sizes/capacity and alert on `408`, `413`, and
+  `503`.
 - Keep authentication separate from application authorization.
 - Do not log raw headers, signatures, certificates, bodies, or wallet objects.
 - Public errors are stable and omit internal exception text.

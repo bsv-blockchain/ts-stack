@@ -246,6 +246,37 @@ function safeErrorDetails(error: unknown): Record<string, unknown> {
   return error instanceof Error ? { errorName: error.name } : { errorType: typeof error }
 }
 
+class ResponseFileTooLargeError extends Error {
+  constructor() {
+    super('The response file exceeds the configured service limit.')
+    this.name = 'ResponseFileTooLargeError'
+  }
+}
+
+type BoundedFileReadResult = { ok: true; data: Buffer } | { ok: false; error: Error }
+
+function readFileWithinLimit(
+  path: string,
+  maxBytes: number,
+  callback: (result: BoundedFileReadResult) => void
+): void {
+  const stream = fs.createReadStream(path)
+  const chunks: Buffer[] = []
+  let totalBytes = 0
+
+  stream.on('data', (buffer: Buffer) => {
+    if (maxBytes !== -1 && totalBytes + buffer.length > maxBytes) {
+      stream.destroy()
+      callback({ ok: false, error: new ResponseFileTooLargeError() })
+      return
+    }
+    totalBytes += buffer.length
+    chunks.push(buffer)
+  })
+  stream.once('error', error => callback({ ok: false, error }))
+  stream.once('end', () => callback({ ok: true, data: Buffer.concat(chunks, totalBytes) }))
+}
+
 /**
  * ResponseWriterWrapper buffers response data until signing is complete.
  * This pattern matches the Go implementation for cleaner response handling.
@@ -1121,36 +1152,35 @@ export class ExpressTransport implements Transport {
     }
 
     ;(res as any).__sendFile = res.sendFile
-    ;(res as any).sendFile = (path: string, options?: any, callback?: Function) => {
-      fs.stat(path, (statError, stat) => {
-        if (statError) {
-          this.log('error', 'Error reading file metadata in sendFile', {
-            errorName: statError.name
+    ;(res as any).sendFile = (
+      path: string,
+      optionsOrCallback?: unknown,
+      callback?: (error: Error) => void
+    ) => {
+      const errorCallback =
+        typeof optionsOrCallback === 'function'
+          ? (optionsOrCallback as (error: Error) => void)
+          : callback
+      readFileWithinLimit(path, this.limits.maxResponseBytes, result => {
+        if (!result.ok) {
+          if (result.error instanceof ResponseFileTooLargeError) {
+            wrapper.rejectTooLarge()
+            buildAndSendResponse()
+            return
+          }
+          this.log('error', 'Error reading file in sendFile', {
+            errorName: result.error.name
           })
-          if (callback) return callback(statError)
+          if (errorCallback != null) return errorCallback(result.error)
           wrapper.status(500)
           buildAndSendResponse()
           return
         }
-        if (wrapper.exceedsLimit(stat.size)) {
-          wrapper.rejectTooLarge()
-          buildAndSendResponse()
-          return
-        }
-        fs.readFile(path, (err, data) => {
-          if (err) {
-            this.log('error', 'Error reading file in sendFile', { errorName: err.name })
-            if (callback) return callback(err)
-            wrapper.status(500)
-            buildAndSendResponse()
-            return
-          }
 
-          const mimeType = mime.lookup(path) || 'application/octet-stream'
-          wrapper.set('Content-Type', mimeType)
-          wrapper.send(Array.from(data))
-          buildAndSendResponse()
-        })
+        const mimeType = mime.lookup(path) || 'application/octet-stream'
+        wrapper.set('Content-Type', mimeType)
+        wrapper.send(result.data)
+        buildAndSendResponse()
       })
     }
   }
