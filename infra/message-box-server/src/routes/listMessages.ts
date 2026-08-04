@@ -156,6 +156,27 @@ function appendMessage(
   return 'added'
 }
 
+function appendMessageRows(
+  accumulator: PageAccumulator,
+  messageRows: Array<Record<string, unknown>>,
+  pagination: ListPagination,
+  maxResponseBytes: number
+): boolean | RouteFailure {
+  for (const message of messageRows) {
+    if (accumulator.messages.length >= pagination.limit) return true
+    const outcome = appendMessage(accumulator, message, maxResponseBytes)
+    if (outcome === 'oversized') {
+      return routeFailure(
+        413,
+        'ERR_MESSAGE_RESPONSE_TOO_LARGE',
+        'The oldest message exceeds the configured listing response budget.'
+      )
+    }
+    if (outcome === 'full') return true
+  }
+  return false
+}
+
 async function readMessagePage(
   identityKey: string,
   messageBoxId: number,
@@ -186,24 +207,14 @@ async function readMessagePage(
       .offset(accumulator.queryOffset)
 
     if (messageRows.length === 0) break
-    for (const message of messageRows) {
-      if (accumulator.messages.length >= pagination.limit) {
-        hasMore = true
-        break
-      }
-      const outcome = appendMessage(accumulator, message, resources.listMaxResponseBytes)
-      if (outcome === 'oversized') {
-        return routeFailure(
-          413,
-          'ERR_MESSAGE_RESPONSE_TOO_LARGE',
-          'The oldest message exceeds the configured listing response budget.'
-        )
-      }
-      if (outcome === 'full') {
-        hasMore = true
-        break
-      }
-    }
+    const appendResult = appendMessageRows(
+      accumulator,
+      messageRows,
+      pagination,
+      resources.listMaxResponseBytes
+    )
+    if (isRouteFailure(appendResult)) return appendResult
+    hasMore = appendResult
     if (hasMore || messageRows.length < take) break
   }
 
