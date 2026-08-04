@@ -820,7 +820,7 @@ export abstract class TestUtilsWalletStorage {
   //if (await _tu.fileExists(walletFile))
   static async createLegacyWalletSQLiteCopy(
     databaseName: string,
-    actionBatchMode: 'auto' | 'legacy' = 'auto'
+    actionBatchMode: 'auto' | 'legacy' = 'legacy'
   ): Promise<TestWalletNoSetup> {
     const walletFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const walletKnex = _tu.createLocalSQLite(walletFile)
@@ -829,7 +829,7 @@ export abstract class TestUtilsWalletStorage {
 
   static async createLegacyWalletMySQLCopy(
     databaseName: string,
-    actionBatchMode: 'auto' | 'legacy' = 'auto'
+    actionBatchMode: 'auto' | 'legacy' = 'legacy'
   ): Promise<TestWalletNoSetup> {
     const walletKnex = _tu.createLocalMySQL(databaseName)
     return await _tu.createLegacyWalletCopy(databaseName, walletKnex, undefined, actionBatchMode)
@@ -866,7 +866,7 @@ export abstract class TestUtilsWalletStorage {
     databaseName: string,
     walletKnex: Knex<any, any[]>,
     tryCopyToPath?: string,
-    actionBatchMode: 'auto' | 'legacy' = 'auto'
+    actionBatchMode: 'auto' | 'legacy' = 'legacy'
   ): Promise<TestWalletNoSetup> {
     const readerFile = await _tu.existingDataFile(`walletLegacyTestData.sqlite`)
     let useReader = true

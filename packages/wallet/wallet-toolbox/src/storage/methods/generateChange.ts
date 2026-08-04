@@ -482,8 +482,11 @@ async function generateChangeSdkCore(
      * If needed, seek funding to avoid overspending on fees without a change output to recapture it.
      */
     if (r.changeOutputs.length === 0 && feeExcessNow > 0) {
+      const minimumChange = Math.max(dustFloor, params.changeFirstSatoshis)
+      const totalSatoshisNeeded = spending() + feeTarget(0, 1) + minimumChange
+      const moreSatoshisNeeded = Math.max(1, totalSatoshisNeeded - funding())
       await releaseAllocatedChangeInputs()
-      throw new WERR_INSUFFICIENT_FUNDS(spending() + feeTarget(), params.changeFirstSatoshis)
+      throw new WERR_INSUFFICIENT_FUNDS(totalSatoshisNeeded, moreSatoshisNeeded)
     }
 
     /**

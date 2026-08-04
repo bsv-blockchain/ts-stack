@@ -70,7 +70,7 @@ describe('in-memory action batch workspace', () => {
   let ctx: TestWalletNoSetup
 
   beforeEach(async () => {
-    ctx = await _tu.createLegacyWalletSQLiteCopy(expect.getState().currentTestName ?? 'actionBatch')
+    ctx = await _tu.createLegacyWalletSQLiteCopy(expect.getState().currentTestName ?? 'actionBatch', 'auto')
     _tu.mockPostServicesAsSuccess([ctx])
     jest.spyOn(ctx.services, 'getChainTracker').mockResolvedValue({ isValidRootForHeight: async () => true } as any)
     jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
@@ -78,6 +78,58 @@ describe('in-memory action batch workspace', () => {
 
   afterEach(async () => {
     await ctx.wallet.destroy()
+  })
+
+  test('default mode durably persists standalone noSend actions for later sendWith', async () => {
+    // Recreate the wallet without selecting an action-batch mode. Existing
+    // callers rely on a successful noSend returning only after its transaction
+    // and reference are durable in storage.
+    ctx.wallet = new Wallet({
+      chain: ctx.chain,
+      keyDeriver: ctx.keyDeriver,
+      storage: ctx.storage,
+      services: ctx.services,
+      monitor: ctx.monitor
+    })
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+
+    const staged = await ctx.wallet.createAction(actionArgs())
+
+    expect(begin).not.toHaveBeenCalled()
+    const stored = await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: staged.txid },
+      noRawTx: true
+    })
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toEqual(expect.objectContaining({
+      status: 'nosend',
+      reference: expect.any(String)
+    }))
+
+    const sent = await ctx.wallet.createAction({
+      description: 'Send the durable noSend action',
+      options: { sendWith: [staged.txid!] }
+    })
+    expect(sent.sendWithResults).toContainEqual(expect.objectContaining({ txid: staged.txid }))
+  })
+
+  test('persisted noSend actions listed by txid can be aborted without exposing an internal reference', async () => {
+    const legacyCtx = await _tu.createLegacyWalletSQLiteCopy('actionBatchAbortListedNoSend', 'legacy')
+    try {
+      _tu.mockPostServicesAsSuccess([legacyCtx])
+      const created = await legacyCtx.wallet.createAction(actionArgs())
+      const listed = await legacyCtx.wallet.listNoSendActions({ labels: ['action batch workload'] })
+      expect(listed.actions).toContainEqual(expect.objectContaining({ txid: created.txid, status: 'nosend' }))
+
+      await expect(legacyCtx.wallet.abortAction({ reference: created.txid! })).resolves.toEqual({ aborted: true })
+      const stored = await legacyCtx.activeStorage.findTransactions({
+        partial: { userId: legacyCtx.userId, txid: created.txid },
+        noRawTx: true
+      })
+      expect(stored[0].status).toBe('failed')
+    } finally {
+      await legacyCtx.wallet.destroy()
+    }
   })
 
   test('dependent chain uses one begin, no middle storage calls, and one commit', async () => {

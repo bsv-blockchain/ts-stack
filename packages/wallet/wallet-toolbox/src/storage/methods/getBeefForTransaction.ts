@@ -51,7 +51,7 @@ export async function getBeefForTransaction(
   const concurrency = normalizeConcurrency(options.maxConcurrency)
 
   while (frontier.length > 0) {
-    const current = frontier.filter(item => beef.findTxid(item.txid) == null)
+    const current = frontier.filter(item => needsResolution(beef, item.txid, hasKnownTxid))
     const resolved = await mapWithConcurrency(
       current,
       concurrency,
@@ -63,7 +63,7 @@ export async function getBeefForTransaction(
       const result = resolved[i]
       beef.mergeBeef(result.beef)
       for (const dependency of result.dependencies) {
-        if (!scheduled.has(dependency) && beef.findTxid(dependency) == null) {
+        if (!scheduled.has(dependency) && needsResolution(beef, dependency, hasKnownTxid)) {
           scheduled.add(dependency)
           next.push({ txid: dependency, depth: current[i].depth + 1 })
         }
@@ -106,7 +106,7 @@ export async function getBeefForTransactions(
       break
     }
 
-    const [next, missing] = mergeStoredFrontier(beef, unresolved, stored, options, scheduled)
+    const [next, missing] = mergeStoredFrontier(beef, unresolved, stored, options, scheduled, hasKnownTxid)
     await mergeMissingFragments(storage, beef, missing, options)
     frontier = next
   }
@@ -150,7 +150,7 @@ function collectUnresolvedFrontier(
 ): BeefFrontierItem[] {
   const unresolved: BeefFrontierItem[] = []
   for (const item of frontier) {
-    if (beef.findTxid(item.txid) != null) continue
+    if (!needsResolution(beef, item.txid, hasKnownTxid)) continue
     if (storage.maxRecursionDepth && storage.maxRecursionDepth <= item.depth) {
       throw new WERR_INVALID_OPERATION(`Maximum BEEF depth exceeded. Limit is ${storage.maxRecursionDepth}`)
     }
@@ -241,14 +241,15 @@ function mergeStoredFrontier(
   unresolved: BeefFrontierItem[],
   stored: Map<string, ProvenOrRawTx>,
   options: StorageGetBeefOptions,
-  scheduled: Set<string>
+  scheduled: Set<string>,
+  hasKnownTxid: (txid: string) => boolean
 ): [next: BeefFrontierItem[], missing: BeefFrontierItem[]] {
   const next: BeefFrontierItem[] = []
   const missing: BeefFrontierItem[] = []
   for (const item of unresolved) {
     const result = stored.get(item.txid)
     if (result?.proven != null) mergeStoredProven(beef, item, result, options)
-    else if (result?.rawTx != null) mergeStoredRaw(beef, item, result, options, scheduled, next)
+    else if (result?.rawTx != null) mergeStoredRaw(beef, item, result, options, scheduled, next, hasKnownTxid)
     else missing.push(item)
   }
   return [next, missing]
@@ -275,7 +276,8 @@ function mergeStoredRaw(
   result: ProvenOrRawTx,
   options: StorageGetBeefOptions,
   scheduled: Set<string>,
-  next: BeefFrontierItem[]
+  next: BeefFrontierItem[],
+  hasKnownTxid: (txid: string) => boolean
 ): void {
   if (options.trustSelf === 'known') {
     beef.mergeTxidOnly(item.txid)
@@ -283,7 +285,7 @@ function mergeStoredRaw(
   }
   const transaction = beef.mergeRawTx(result.rawTx!)
   if (result.inputBEEF != null) beef.mergeBeef(result.inputBEEF)
-  appendNewDependencies(transaction.inputTxids, item.depth + 1, beef, scheduled, next)
+  appendNewDependencies(transaction.inputTxids, item.depth + 1, beef, scheduled, next, hasKnownTxid)
 }
 
 function appendNewDependencies(
@@ -291,13 +293,23 @@ function appendNewDependencies(
   depth: number,
   beef: Beef,
   scheduled: Set<string>,
-  next: BeefFrontierItem[]
+  next: BeefFrontierItem[],
+  hasKnownTxid: (txid: string) => boolean
 ): void {
   for (const txid of dependencies) {
-    if (scheduled.has(txid) || beef.findTxid(txid) != null) continue
+    if (scheduled.has(txid) || !needsResolution(beef, txid, hasKnownTxid)) continue
     scheduled.add(txid)
     next.push({ txid, depth })
   }
+}
+
+function needsResolution(
+  beef: Beef,
+  txid: string,
+  hasKnownTxid: (txid: string) => boolean
+): boolean {
+  const entry = beef.findTxid(txid)
+  return entry == null || (entry.isTxidOnly && !hasKnownTxid(txid))
 }
 
 async function mergeMissingFragments(

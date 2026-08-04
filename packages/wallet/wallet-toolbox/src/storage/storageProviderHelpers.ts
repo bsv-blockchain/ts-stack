@@ -67,8 +67,14 @@ export async function mergeInputBeefs (
   for (const input of tx.inputs) {
     const sourceTXID = input.sourceTXID ?? ''
     if (sourceTXID === '') throw new WERR_INTERNAL('req all transaction inputs must have valid sourceTXID')
-    if (beef.findTxid(sourceTXID) != null) continue
-    if ((requiredLevels == null || requiredLevels === 0) && (knownTxids?.includes(sourceTXID) === true)) {
+    const existing = beef.findTxid(sourceTXID)
+    const callerKnows = (requiredLevels == null || requiredLevels === 0) &&
+      (knownTxids?.includes(sourceTXID) === true)
+    // Stored input BEEFs can contain txid-only placeholders supplied by a
+    // different client. They are not proof for the current caller unless that
+    // caller also declared the txid known (or explicitly trusts this storage).
+    if (existing != null && (!existing.isTxidOnly || callerKnows || trustSelf === 'known')) continue
+    if (callerKnows) {
       beef.mergeTxidOnly(sourceTXID)
     } else {
       await getValidBeef(sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels)

@@ -438,7 +438,7 @@ export interface SignActionResult {
 }
 
 /**
- * @param {Base64String} reference - Reference number for the transaction to abort.
+ * @param {Base64String} reference - Reference number or transaction ID for the action to abort.
  */
 export interface AbortActionArgs {
   reference: Base64String

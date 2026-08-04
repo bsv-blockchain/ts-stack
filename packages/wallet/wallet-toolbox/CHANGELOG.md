@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Restore durable per-action `noSend` persistence as the default while keeping
+  in-memory action batches available through explicit `actionBatchMode: 'auto'`.
+  Expand inherited txid-only proof ancestors for cold clients, preserve
+  caller-declared known txids, report the actual viable-change funding
+  shortfall, and document aborting listed `noSend` actions by transaction ID.
 - Collapse fragmented `createAction` storage work into one atomic write
   transaction, batch proof retrieval and compound-proof validation, overlap
   independent proof reads with persistence, bulk-insert untagged outputs, and
@@ -96,7 +101,7 @@ attention to changes that materially alter behavior or extend functionality.
   Wallet authentication, UMP, WAB, and snapshot events now support the SDK's
   opt-in generic telemetry sink without reporting keys, snapshots, payloads,
   OTPs, or Shamir shares.
-- Add automatically negotiated, in-memory planning for dependent `noSend` workloads. Capable
+- Add opt-in, in-memory planning for dependent `noSend` workloads. Capable
   storage providers reserve funding once, perform middle action planning and signing without
   persistence round trips, and atomically commit the complete workspace on `sendWith`. Existing
   BRC-100 arguments and results are unchanged, and providers without `actionBatch: 1` retain the

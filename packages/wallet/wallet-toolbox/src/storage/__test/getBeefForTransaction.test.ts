@@ -392,6 +392,58 @@ describe('getBeefForTransaction tests', () => {
     })).rejects.toThrow('valid transaction on chain main')
   })
 
+  test('expands stored txid-only ancestors unless the current caller declares them known', async () => {
+    const storage = new ProtoStorage('main')
+    const ancestor = new Transaction()
+    ancestor.addOutput({ satoshis: 10, lockingScript: Script.fromASM('OP_TRUE') })
+    const ancestorTxid = ancestor.id('hex')
+    const root = new Transaction()
+    root.addInput({
+      sourceTXID: ancestorTxid,
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_TRUE')
+    })
+    root.addOutput({ satoshis: 9, lockingScript: Script.fromASM('OP_TRUE') })
+    const inheritedInputBeef = new Beef()
+    inheritedInputBeef.mergeTxidOnly(ancestorTxid)
+    const records = new Map<string, ProvenOrRawTx>([
+      [root.id('hex'), { rawTx: root.toBinary(), inputBEEF: inheritedInputBeef.toBinary() }],
+      [ancestorTxid, { rawTx: ancestor.toBinary() }]
+    ])
+    jest.spyOn(storage, 'getProvenOrRawTx').mockImplementation(async txid => records.get(txid) ?? {})
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async txids => new Map(
+      txids.map(txid => [txid, records.get(txid) ?? {}])
+    ))
+
+    const singleRootBeef = await storage.getBeefForTransaction(root.id('hex'), {
+      ignoreStorage: false,
+      ignoreServices: true
+    })
+    expect(singleRootBeef.findTxid(ancestorTxid)?.tx).toBeDefined()
+    expect(singleRootBeef.findTxid(ancestorTxid)?.isTxidOnly).toBe(false)
+
+    const coldClientBeef = await storage.getBeefForTransactions([root.id('hex')], {
+      ignoreStorage: false,
+      ignoreServices: true
+    })
+    expect(coldClientBeef.findTxid(ancestorTxid)?.tx).toBeDefined()
+    expect(coldClientBeef.findTxid(ancestorTxid)?.isTxidOnly).toBe(false)
+
+    const knownClientBeef = await storage.getBeefForTransactions([root.id('hex')], {
+      ignoreStorage: false,
+      ignoreServices: true,
+      knownTxids: [ancestorTxid]
+    })
+    expect(knownClientBeef.findTxid(ancestorTxid)?.isTxidOnly).toBe(true)
+
+    const knownSingleRootBeef = await storage.getBeefForTransaction(root.id('hex'), {
+      ignoreStorage: false,
+      ignoreServices: true,
+      knownTxids: [ancestorTxid]
+    })
+    expect(knownSingleRootBeef.findTxid(ancestorTxid)?.isTxidOnly).toBe(true)
+  })
+
   test('falls back to services for missing roots and to sequential proof merging for older SDK peers', async () => {
     const storage = new ProtoStorage('main')
     const serviceTransaction = new Transaction()
