@@ -5,8 +5,8 @@ kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
 version: '2.5.0'
-last_updated: '2026-07-31'
-last_verified: '2026-07-31'
+last_updated: '2026-08-04'
+last_verified: '2026-08-04'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -22,6 +22,12 @@ Use this package when you are building a wallet product, a wallet-like service, 
 Opt-in remote-storage timing spans retain trace and parent-span correlation in
 the telemetry sink without adding headers to authenticated requests. BRC-103,
 BRC-104, AuthFetch, and the storage RPC wire contract remain unchanged.
+
+UMP account lookup accepts one verified matching token as an existing account.
+When no token verifies, one clean empty overlay response establishes a new
+account even if other hosts fail or return malformed records. Multiple distinct
+verified tokens and lookups with no usable response remain errors; WAB
+existing-account continuity still prevents replacement-wallet onboarding.
 
 ## Install
 

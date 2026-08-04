@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-02",
+  "lastReviewed": "2026-08-03",
   "owner": "ts-stack-maintainers",
   "entries": [
     {
@@ -196,22 +196,22 @@
       "name": "@bsv/wallet-toolbox",
       "publishedVersion": "2.4.22",
       "releaseType": "minor",
-      "summary": "Makes the successful fragmented createAction path atomic and set-based, overlaps batched proof reads with persistence, batch-validates compound proofs and canonical P2PKH signatures, shares BRC-42 derivation work, removes unused commit reads, bulk-inserts outputs, coalesces authenticated timestamp-only Knex session touches, and adds timings for every remaining material phase.",
-      "migration": "No consumer migration is required. Storage-provider additions are backward-compatible with fallbacks, existing databases use the normal migration path, and wallet results, BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, provider calls, and wallet wire behavior are unchanged."
+      "summary": "Makes the successful fragmented createAction path atomic and set-based, overlaps batched proof reads with persistence, batch-validates compound proofs and canonical P2PKH signatures, shares BRC-42 derivation work, removes unused commit reads, bulk-inserts outputs, coalesces authenticated timestamp-only Knex session touches, adds timings for every remaining material phase, and makes UMP account lookup resilient to partial overlay failure.",
+      "migration": "No API or persistence migration is required. Storage-provider additions are backward-compatible with fallbacks and existing databases use the normal migration path. Applications may now enter new-user flow when at least one overlay host returns a clean empty result despite malformed or unavailable peers; one verified token still establishes an existing account, multiple unresolved verified tokens remain an error, and WAB existing-account continuity still blocks replacement-wallet onboarding. Wallet results, BRC-103/104, AuthFetch, Auth Express Middleware, AuthSocket, JSON-RPC, provider calls, and wallet wire behavior are otherwise unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "publishedVersion": "2.4.22",
       "releaseType": "minor",
-      "summary": "Carries the lockstep browser build with batched proof assembly, linear funding/signing work, canonical P2PKH verification, expired-reservation filtering, and complete privacy-safe createAction timings.",
-      "migration": "No consumer migration is required; older compatible SDK peers retain the validated sequential proof fallback, IndexedDB upgrades automatically, and BRC-103/104, AuthFetch, browser entry points, JSON-RPC, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep browser build with batched proof assembly, linear funding/signing work, canonical P2PKH verification, expired-reservation filtering, complete privacy-safe createAction timings, and resilient UMP account lookup.",
+      "migration": "No API or persistence migration is required. Browser wallets receive the resilient partial-host UMP lookup behavior described for @bsv/wallet-toolbox; older compatible SDK peers retain the validated sequential proof fallback, IndexedDB upgrades automatically, and BRC-103/104, AuthFetch, browser entry points, JSON-RPC, and remote storage contracts remain unchanged."
     },
     {
       "name": "@bsv/wallet-toolbox-mobile",
       "publishedVersion": "2.4.22",
       "releaseType": "minor",
-      "summary": "Carries the lockstep mobile build with batched proof assembly, linear funding/signing work, canonical P2PKH verification, expired-reservation filtering, and complete privacy-safe createAction timings.",
-      "migration": "No consumer migration is required; older compatible SDK peers retain the validated sequential proof fallback, and BRC-103/104, AuthFetch, React Native, the mobile bridge, JSON-RPC, and remote storage contracts remain unchanged."
+      "summary": "Carries the lockstep mobile build with batched proof assembly, linear funding/signing work, canonical P2PKH verification, expired-reservation filtering, complete privacy-safe createAction timings, and resilient UMP account lookup.",
+      "migration": "No API or persistence migration is required. Mobile wallets receive the resilient partial-host UMP lookup behavior described for @bsv/wallet-toolbox; older compatible SDK peers retain the validated sequential proof fallback, and BRC-103/104, AuthFetch, React Native, the mobile bridge, JSON-RPC, and remote storage contracts remain unchanged."
     },
     {
       "name": "create-bsv-app",
