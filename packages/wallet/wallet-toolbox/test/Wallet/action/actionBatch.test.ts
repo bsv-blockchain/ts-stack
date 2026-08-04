@@ -80,6 +80,67 @@ describe('in-memory action batch workspace', () => {
     await ctx.wallet.destroy()
   })
 
+  test('default mode stages noSend actions and commits them through sendWith', async () => {
+    // Recreate the wallet without selecting an action-batch mode to guard the
+    // default, automatically negotiated lifecycle introduced in #289.
+    ctx.wallet = new Wallet({
+      chain: ctx.chain,
+      keyDeriver: ctx.keyDeriver,
+      storage: ctx.storage,
+      services: ctx.services,
+      monitor: ctx.monitor
+    })
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const commit = jest.spyOn(ctx.storage, 'commitActionBatch')
+    const legacyCreate = jest.spyOn(ctx.storage, 'createAction')
+
+    const staged = await ctx.wallet.createAction(actionArgs())
+
+    expect(ctx.wallet.actionBatch.mode).toBe('auto')
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(legacyCreate).not.toHaveBeenCalled()
+    const storedBeforeCommit = await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: staged.txid },
+      noRawTx: true
+    })
+    expect(storedBeforeCommit).toHaveLength(0)
+    await expect(ctx.wallet.listNoSendActions({ labels: ['action batch workload'] })).resolves.toEqual(
+      expect.objectContaining({
+        actions: expect.arrayContaining([expect.objectContaining({ txid: staged.txid, status: 'nosend' })])
+      })
+    )
+
+    const sent = await ctx.wallet.createAction({
+      description: 'Commit and send the staged noSend action',
+      options: { sendWith: [staged.txid!] }
+    })
+    expect(sent.sendWithResults).toContainEqual(expect.objectContaining({ txid: staged.txid }))
+    expect(commit).toHaveBeenCalledTimes(1)
+    const storedAfterCommit = await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: staged.txid },
+      noRawTx: true
+    })
+    expect(storedAfterCommit).toHaveLength(1)
+    const begun = await begin.mock.results[0].value
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
+  })
+
+  test('staged noSend actions listed by txid can be aborted without exposing an internal reference', async () => {
+    const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
+    const created = await ctx.wallet.createAction(actionArgs())
+    const listed = await ctx.wallet.listNoSendActions({ labels: ['action batch workload'] })
+    expect(listed.actions).toContainEqual(expect.objectContaining({ txid: created.txid, status: 'nosend' }))
+
+    await expect(ctx.wallet.abortAction({ reference: created.txid! })).resolves.toEqual({ aborted: true })
+    const stored = await ctx.activeStorage.findTransactions({
+      partial: { userId: ctx.userId, txid: created.txid },
+      noRawTx: true
+    })
+    expect(stored).toHaveLength(0)
+    const begun = await begin.mock.results[0].value
+    expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('aborted')
+  })
+
   test('dependent chain uses one begin, no middle storage calls, and one commit', async () => {
     const begin = jest.spyOn(ctx.storage, 'beginActionBatch')
     const extend = jest.spyOn(ctx.storage, 'extendActionBatch')
@@ -340,8 +401,9 @@ describe('in-memory action batch workspace', () => {
     expect(commit).toHaveBeenCalledTimes(1)
     expect(commit.mock.calls[0][0].actions[0].plan.inputs.every(input => input.sourceTransaction == null)).toBe(true)
     expect(events.some(event => event.name === 'wallet.create_action' && event.spanStatus === 'ok')).toBe(true)
-    expect(events.some(event => event.name === 'wallet.create_action.prepare_known_txids' && event.spanStatus === 'ok'))
-      .toBe(true)
+    expect(
+      events.some(event => event.name === 'wallet.create_action.prepare_known_txids' && event.spanStatus === 'ok')
+    ).toBe(true)
     expect(events.some(event => event.name === 'wallet.sign_action' && event.spanStatus === 'ok')).toBe(true)
     expect(events.some(event => event.name === 'wallet.crypto.transaction_sign')).toBe(true)
   })

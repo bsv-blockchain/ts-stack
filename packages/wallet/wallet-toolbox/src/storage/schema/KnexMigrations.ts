@@ -234,6 +234,21 @@ export class KnexMigrations implements MigrationSource<string> {
         })
       },
       async down (knex) {
+        // MySQL may discard the automatically-created userId index once one
+        // of these wider indexes can support the foreign key. Recreate the
+        // original index before removing both wider indexes.
+        if (await determineDBType(knex) === 'MySQL') {
+          const result = await knex.raw(
+            'SHOW INDEX FROM ?? WHERE Key_name = ?',
+            ['outputs', 'outputs_userid_foreign']
+          )
+          const indexes = result[0] as unknown[]
+          if (indexes.length === 0) {
+            await knex.schema.alterTable('outputs', table => {
+              table.index(['userId'], 'outputs_userid_foreign')
+            })
+          }
+        }
         await knex.schema.alterTable('tx_labels_map', table => {
           table.dropIndex(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
         })
@@ -255,6 +270,22 @@ export class KnexMigrations implements MigrationSource<string> {
         })
       },
       async down (knex) {
+        // MySQL may discard the automatically-created index that supports the
+        // spentBy foreign key after this migration adds an equivalent named
+        // index. Restore the original support index before removing ours so a
+        // complete rollback remains possible.
+        if (await determineDBType(knex) === 'MySQL') {
+          const result = await knex.raw(
+            'SHOW INDEX FROM ?? WHERE Key_name = ?',
+            ['outputs', 'outputs_spentby_foreign']
+          )
+          const indexes = result[0] as unknown[]
+          if (indexes.length === 0) {
+            await knex.schema.alterTable('outputs', table => {
+              table.index(['spentBy'], 'outputs_spentby_foreign')
+            })
+          }
+        }
         await knex.schema.alterTable('outputs', table => {
           table.dropIndex(['spentBy'], 'idx_outputs_spentby')
           table.dropIndex(['userId', 'basketId', 'spendable', 'satoshis'], 'idx_outputs_user_basket_spendable_satoshis')

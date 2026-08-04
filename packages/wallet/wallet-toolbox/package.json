@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.4.22",
+  "version": "2.5.0",
   "sideEffects": false,
   "type": "commonjs",
   "engines": {
@@ -60,6 +60,7 @@
     "operator": "pnpm operator:build && node .operator-build/cli.js",
     "bench:action-batch": "pnpm build && jest --runInBand --runTestsByPath benchmarks/action-batch.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "bench:create-action-funding": "pnpm build && jest --runInBand --runTestsByPath benchmarks/create-action-funding.bench.test.ts --testPathIgnorePatterns=man.test.ts",
+    "bench:create-action-beef": "pnpm build && jest --runInBand --runTestsByPath benchmarks/create-action-beef.bench.test.ts --testPathIgnorePatterns=man.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/wallet-toolbox/{README.md,jest.config.cjs,package.json,tsconfig*.json}\"",
     "lint": "oxlint src test benchmarks examples operator --deny-warnings",
     "lint:ci": "pnpm lint",
@@ -91,6 +92,7 @@
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
+    "@bsv/verifast": "workspace:^",
     "@jest/globals": "^30.4.1",
     "@types/body-parser": "^1.19.6",
     "@types/cors": "^2.8.19",

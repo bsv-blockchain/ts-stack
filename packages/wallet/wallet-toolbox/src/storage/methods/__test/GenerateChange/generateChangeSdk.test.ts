@@ -204,6 +204,26 @@ describe('generateChange tests', () => {
     )
   })
 
+  test('2b reports the actual shortfall for a viable first change output', async () => {
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [{ satoshis: 100, unlockingScriptLength: 72 }],
+      fixedOutputs: [{ satoshis: 90, lockingScriptLength: 25 }],
+      changeFirstSatoshis: 10,
+      targetNetCount: undefined
+    }
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([])
+
+    try {
+      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+      throw new Error('expected WERR_INSUFFICIENT_FUNDS')
+    } catch (error) {
+      expect(error).toBeInstanceOf(sdk.WERR_INSUFFICIENT_FUNDS)
+      expect((error as sdk.WERR_INSUFFICIENT_FUNDS).moreSatoshisNeeded).toBe(1)
+      expect((error as sdk.WERR_INSUFFICIENT_FUNDS).totalSatoshisNeeded).toBe(101)
+    }
+  })
+
   test('3 allocate all', async () => {
     const params: GenerateChangeSdkParams = {
       ...defParams,

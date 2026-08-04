@@ -15,6 +15,12 @@ import { WalletProtocol, PubKeyHex } from './Wallet.interfaces.js'
 
 export type Counterparty = PublicKey | PubKeyHex
 
+export interface PrivateKeyDerivation {
+  protocolID: WalletProtocol
+  keyID: string
+  counterparty: Counterparty
+}
+
 export interface KeyDeriverApi {
   /**
    * The root key from which all other keys are derived.
@@ -53,6 +59,13 @@ export interface KeyDeriverApi {
     keyID: string,
     counterparty: Counterparty
   ) => PrivateKey
+
+  /**
+   * Derives several private keys while sharing each counterparty ECDH result.
+   * Implementations that do not provide this additive lane retain the
+   * per-key `derivePrivateKey` contract.
+   */
+  derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[]
 
   /**
    * Derives a symmetric key based on protocol ID, key ID, and counterparty.
@@ -186,6 +199,46 @@ export class KeyDeriver implements KeyDeriverApi {
       this.cacheSharedSecret,
       this.retrieveCachedSharedSecret
     )
+  }
+
+  derivePrivateKeys (derivations: readonly PrivateKeyDerivation[]): PrivateKey[] {
+    const prepared = derivations.map((derivation, index) => ({
+      index,
+      counterparty: this.normalizeCounterparty(derivation.counterparty),
+      invoiceNumber: this.computeInvoiceNumber(derivation.protocolID, derivation.keyID)
+    }))
+    const groups = new Map<string, typeof prepared>()
+    for (const derivation of prepared) {
+      const key = derivation.counterparty.toString()
+      const group = groups.get(key) ?? []
+      group.push(derivation)
+      groups.set(key, group)
+    }
+
+    const results: PrivateKey[] = []
+    for (const group of groups.values()) {
+      let sharedSecret: Point | undefined
+      for (let index = 0; index < group.length; index++) {
+        const derivation = group[index]
+        results[derivation.index] = this.rootKey.deriveChild(
+          derivation.counterparty,
+          derivation.invoiceNumber,
+          index === 0
+            ? (priv, pub, point) => {
+                sharedSecret = point
+                this.cacheSharedSecret?.(priv, pub, point)
+              }
+            : undefined,
+          index === 0
+            ? (priv, pub) => {
+                sharedSecret = this.retrieveCachedSharedSecret?.(priv, pub)
+                return sharedSecret
+              }
+            : () => sharedSecret
+        )
+      }
+    }
+    return results
   }
 
   /**
