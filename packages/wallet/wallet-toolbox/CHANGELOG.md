@@ -38,9 +38,17 @@ attention to changes that materially alter behavior or extend functionality.
   overlay failure. One verified matching token establishes an existing account;
   otherwise one clean empty response establishes a new account. Malformed,
   rejected, empty, and unavailable peers cannot veto a verified token, and
-  malformed or unavailable peers cannot veto a clean empty response. Multiple
-  distinct verified tokens and lookups with no usable response remain errors;
-  WAB existing-account continuity still prevents replacement-wallet onboarding.
+  malformed or unavailable peers cannot veto a clean empty response. Lookups
+  with no usable response remain errors; WAB existing-account continuity still
+  prevents replacement-wallet onboarding.
+- Resolve competing verified UMP tokens on on-chain proof. A candidate spent
+  anywhere in another candidate's BEEF ancestry is superseded (evidence merged
+  across hosts serving different depths; ancestry walked iteratively so deep
+  update chains cannot exhaust the stack). Forked candidates resolve only when
+  exactly one provably consumed a same-identity predecessor token, which
+  requires the account's keys; anything less decisive stays an error so a
+  wrong token can never be chosen silently. Resolved conflicts report a
+  `supersededTokens` count in lookup telemetry.
 - Plan legacy `createAction` funding against the exact unreserved managed-change
   set before persistence, claim the selected inputs atomically in one storage
   transaction, and fail economically impossible fragmented wallets before

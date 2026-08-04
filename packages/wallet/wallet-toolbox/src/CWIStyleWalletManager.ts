@@ -701,7 +701,18 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     // A verified token is positive account-existence evidence. Empty, malformed,
     // rejected, or unavailable peers cannot override it. The resolver de-duplicates
     // identical outputs, so multiple matching tokens represent distinct records.
+    // Competing records are usually stale renditions: a token update spends its
+    // predecessor's outpoint, so the newest rendition is the sole candidate not
+    // spent by another candidate's transaction history. Only unrelated (forked)
+    // tokens remain indeterminate.
     if (matchingTokens.length > 1) {
+      const newest = this.resolveNewestToken(matchingTokens, resolution.answer.outputs)
+      if (newest != null) {
+        this.captureLookupCompleted(lookupKind, 'found', diagnostics, startedAt, {
+          supersededTokens: matchingTokens.length - 1
+        })
+        return newest
+      }
       const reason = 'token-ambiguous'
       this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
       throw new UMPTokenLookupError(reason, diagnostics)
@@ -722,6 +733,123 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     const reason = resolution.answer.outputs.length > 0 ? 'token-malformed' : 'lookup-incomplete'
     this.captureLookupFailure(lookupKind, reason, diagnostics, startedAt)
     throw new UMPTokenLookupError(reason, diagnostics)
+  }
+
+  /**
+   * Picks the newest rendition among distinct verified tokens, when possible.
+   *
+   * The on-chain UMP protocol expresses token updates by consumption: the
+   * transaction creating a new rendition spends the previous rendition's
+   * outpoint (there is no rendition counter field in the current format).
+   * A candidate is therefore superseded when any other candidate's ancestry
+   * (available from its BEEF) spends the candidate's outpoint.
+   *
+   * @returns The single unsuperseded candidate, or undefined when supersession
+   * cannot be established for every stale candidate (e.g. forked tokens).
+   */
+  private resolveNewestToken(matchingTokens: UMPToken[], outputs: LookupAnswer['outputs']): UMPToken | undefined {
+    const candidates = new Map<string, UMPToken>()
+    for (const token of matchingTokens) {
+      if (token.currentOutpoint == null) return undefined
+      candidates.set(token.currentOutpoint, token)
+    }
+
+    // Hosts may serve the same token with different BEEF depth, so evidence
+    // for a candidate is merged across every copy rather than first-wins: a
+    // shallow copy must not mask the supersession proof a deeper copy carries.
+    const evidenceByCandidate = new Map<string, { txs: Transaction[]; spent: Set<string> }>()
+    for (const output of outputs) {
+      try {
+        const tx = Transaction.fromBEEF(output.beef)
+        const outpoint = `${tx.id('hex')}.${output.outputIndex}`
+        if (!candidates.has(outpoint)) continue
+        const evidence = evidenceByCandidate.get(outpoint) ?? { txs: [], spent: new Set<string>() }
+        evidence.txs.push(tx)
+        this.collectSpentOutpoints(tx, evidence.spent, new Set())
+        evidenceByCandidate.set(outpoint, evidence)
+      } catch {
+        // Malformed outputs never produced candidates; nothing to correlate.
+      }
+    }
+
+    // Without an evidence transaction for every candidate, an unexamined
+    // candidate would trivially survive — refuse to guess.
+    if (evidenceByCandidate.size !== candidates.size) return undefined
+
+    const survivors = [...candidates.keys()].filter(
+      outpoint =>
+        ![...evidenceByCandidate.entries()].some(([other, { spent }]) => other !== outpoint && spent.has(outpoint))
+    )
+    if (survivors.length === 1) return candidates.get(survivors[0])
+
+    // Forked candidates: no spend relationship connects them. Updating a token
+    // requires unlocking its predecessor, so a candidate whose transaction
+    // provably consumed a same-identity token demonstrates continuity of key
+    // control; a freshly minted competitor (funding inputs only) is the anomaly
+    // — typically a historical erroneous re-onboarding. Prefer the sole proven
+    // continuation; anything less decisive stays indeterminate.
+    const provenContinuations = survivors.filter(outpoint => {
+      const evidence = evidenceByCandidate.get(outpoint)
+      const token = candidates.get(outpoint)
+      return (
+        evidence != null && token != null && evidence.txs.some(tx => this.consumesSameIdentityToken(tx, token))
+      )
+    })
+    if (provenContinuations.length !== 1) return undefined
+    return candidates.get(provenContinuations[0])
+  }
+
+  /**
+   * Whether `tx` spends an input whose source output (available in the BEEF)
+   * decodes as a UMP token sharing the candidate's presentation or recovery
+   * hash — on-chain proof that the candidate is an update of a same-identity
+   * predecessor rather than an independently minted token.
+   */
+  private consumesSameIdentityToken(tx: Transaction, token: UMPToken): boolean {
+    const presentationHash = Utils.toHex(token.presentationHash)
+    const recoveryHash = Utils.toHex(token.recoveryHash)
+    for (const input of tx.inputs) {
+      const source = input.sourceTransaction
+      if (source == null || input.sourceOutputIndex == null) continue
+      const sourceOutput = source.outputs[input.sourceOutputIndex]
+      if (sourceOutput == null) continue
+      try {
+        const decoded = PushDrop.decode(sourceOutput.lockingScript)
+        if (decoded.fields == null) continue
+        const fields = stripVerifiedPushDropSignature(decoded.fields, decoded.lockingPublicKey)
+        if (fields.length < 11 || fields[6]?.length !== 32 || fields[7]?.length !== 32) continue
+        if (Utils.toHex(fields[6]) === presentationHash || Utils.toHex(fields[7]) === recoveryHash) {
+          return true
+        }
+      } catch {
+        continue
+      }
+    }
+    return false
+  }
+
+  /**
+   * Accumulates every outpoint spent by `tx` and by the ancestor transactions
+   * embedded in its BEEF, so supersession is detected even when intermediate
+   * renditions are absent from the lookup answer. Iterative so arbitrarily
+   * long update chains cannot exhaust the call stack.
+   */
+  private collectSpentOutpoints(tx: Transaction, spent: Set<string>, visited: Set<string>): void {
+    const pending: Transaction[] = [tx]
+    while (pending.length > 0) {
+      const current = pending.pop() as Transaction
+      const txid = current.id('hex')
+      if (visited.has(txid)) continue
+      visited.add(txid)
+      for (const input of current.inputs) {
+        const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+        if (sourceTxid == null || input.sourceOutputIndex == null) continue
+        spent.add(`${sourceTxid}.${input.sourceOutputIndex}`)
+        if (input.sourceTransaction != null) {
+          pending.push(input.sourceTransaction)
+        }
+      }
+    }
   }
 
   private emptyLookupDiagnostics(correlationId?: string): UMPTokenLookupDiagnostics {
@@ -770,7 +898,8 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     lookupKind: 'presentation' | 'recovery',
     result: 'found' | 'not-found',
     diagnostics: UMPTokenLookupDiagnostics,
-    startedAt: number
+    startedAt: number,
+    extraAttributes: Record<string, number> = {}
   ): void {
     this.telemetry.capture({
       name: 'wallet-toolbox.ump.lookup.completed',
@@ -781,7 +910,8 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         lookupKind,
         result,
         durationMs: Date.now() - startedAt,
-        ...this.lookupDiagnosticAttributes(diagnostics)
+        ...this.lookupDiagnosticAttributes(diagnostics),
+        ...extraAttributes
       }
     })
   }

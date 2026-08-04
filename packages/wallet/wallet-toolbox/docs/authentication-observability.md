@@ -63,7 +63,17 @@ verified token matching the requested presentation or recovery hash means
 `existing-user`, regardless of empty, malformed, rejected, or unavailable peer
 responses. When no token verifies, one host's valid empty output list is enough
 to mean `new-user`; malformed and unavailable peers cannot veto that result.
-Multiple distinct verified UMP tokens remain ambiguous, and a lookup with
+Multiple distinct verified UMP tokens resolve on on-chain proof alone. A token
+update spends its predecessor's outpoint, so a candidate spent anywhere in
+another candidate's transaction ancestry (walked through each candidate's BEEF,
+with evidence merged across hosts serving different depths) is superseded.
+Forked candidates with no spend relationship resolve only when exactly one of
+them provably consumed a same-identity UMP token — spending a token requires
+the account's keys, so this demonstrates continuity of control, whereas an
+independently minted competitor is typically the residue of an erroneous
+re-onboarding. A resolved conflict reports `supersededTokens` in the completed
+event. Anything less decisive — true forks, competing proven continuations, or
+candidates without examinable evidence — remains ambiguous, and a lookup with
 neither a verified token nor a clean empty response raises
 `UMPTokenLookupError`. Applications should present retry and account-recovery
 options for these errors, never a new-password prompt.
