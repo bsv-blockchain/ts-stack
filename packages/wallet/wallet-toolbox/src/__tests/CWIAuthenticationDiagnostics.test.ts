@@ -113,6 +113,32 @@ describe('CWI account lookup diagnostics', () => {
     await expect(findByOutpoint(`${'a'.repeat(64)}.0`)).resolves.toBeUndefined()
   })
 
+  it('keeps an old token outpoint indeterminate when no host responds cleanly', async () => {
+    const interactor = new OverlayUMPTokenInteractor(
+      resolverWith(async () => {
+        throw new Error('overlay unavailable')
+      })
+    )
+    const findByOutpoint = (
+      interactor as unknown as {
+        findByOutpoint: (outpoint: string) => Promise<{ beef: number[]; outputIndex: number } | undefined>
+      }
+    ).findByOutpoint.bind(interactor)
+
+    await expect(findByOutpoint(`${'a'.repeat(64)}.0`)).rejects.toMatchObject({
+      name: 'UMPTokenLookupError',
+      code: 'WERR_UMP_LOOKUP_INDETERMINATE',
+      reason: 'lookup-incomplete',
+      diagnostics: {
+        hostCount: 2,
+        successfulHosts: 0,
+        emptyHosts: 0,
+        failedHosts: 2,
+        outputCount: 0
+      }
+    } satisfies Partial<UMPTokenLookupError>)
+  })
+
   it('rejects lookup when every host fails', async () => {
     const interactor = new OverlayUMPTokenInteractor(
       resolverWith(async () => {
