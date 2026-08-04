@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-30",
+  "lastReviewed": "2026-08-04",
   "exceptions": [
     {
       "id": "scorecard-maintainer-merge-policy",
@@ -89,7 +89,7 @@
       "category": "override",
       "target": "pnpm-workspace.yaml and four standalone Jest service manifests overriding brace-expansion <=5.0.7",
       "owner": "ts-stack-maintainers",
-      "reason": "Jest 30.4.2 still constrains its reporting and coverage paths to minimatch releases that require brace-expansion 1.x/2.x, while GHSA-mh99-v99m-4gvg is fixed only in brace-expansion 5.0.8.",
+      "reason": "Jest 30.4.2 still constrains reporting and coverage paths to minimatch releases that require older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, and the follow-up GHSA-rgw5-rvv9-x895 requires 5.0.9, so the governed substitution selects the current patched release.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
@@ -99,11 +99,12 @@
         "infra/uhrp-server-cloud-bucket/package.json#overrides",
         "infra/wab/package.json#overrides",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
       "reviewBy": "2026-08-25",
-      "removeWhen": "Remove after the supported Jest dependency graph adopts minimatch 10.2.5 or newer and natively resolves brace-expansion 5.0.8 or newer."
+      "removeWhen": "Remove after the supported Jest dependency graph natively resolves brace-expansion 5.0.9 or newer across every coverage and reporting path."
     },
     {
       "id": "standalone-gaxios-advisory-override",
@@ -168,6 +169,7 @@
         "tools/codegen/node/package-lock.json",
         "https://github.com/advisories/GHSA-52cp-r559-cp3m",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
         "https://github.com/openapi-ts/openapi-typescript/blob/openapi-typescript%407.13.0/packages/openapi-typescript/package.json"
       ],
       "created": "2026-07-25",

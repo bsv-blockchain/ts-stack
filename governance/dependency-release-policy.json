@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-30",
+  "lastReviewed": "2026-08-04",
   "owner": "ts-stack-maintainers",
   "routineUpdates": {
     "dependabotConfig": ".github/dependabot.yml",
@@ -144,17 +144,17 @@
     "closeImplementationWaveAfterPublication": false
   },
   "overrideRemovalReview": {
-    "reviewedAt": "2026-07-30",
-    "method": "Regenerated each standalone npm lockfile without gaxios, uuid, or brace-expansion overrides and compared the resulting natural graph; separately rechecked the root Jest/minimatch, typed-rest-client/qs, and isolated Redocly codegen closures.",
+    "reviewedAt": "2026-08-04",
+    "method": "Regenerated each standalone npm lockfile without gaxios, uuid, or brace-expansion overrides and compared the resulting natural graph; separately rechecked the root Jest/minimatch, typed-rest-client/qs, and isolated Redocly codegen closures, then refreshed the affected locks against the current brace-expansion, fast-uri, ip-address, and socket.io-parser advisories.",
     "retainedCount": 19,
     "result": "Every remaining override still prevents a reproduced vulnerable transitive version or preserves the isolated reproducible codegen closure. No override can be removed safely in this wave.",
-    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, or Redocly dependency changes."
+    "nextReview": "Rehearse removal monthly and immediately after upstream Google client, Jest/minimatch, typed-rest-client, Redocly, AJV, express-rate-limit, or Socket.IO dependency changes."
   },
   "overrideRegistry": [
     {
       "source": "pnpm-workspace.yaml",
-      "selector": "brace-expansion@<=5.0.7",
-      "value": "5.0.8",
+      "selector": "brace-expansion@<5.0.9",
+      "value": "5.0.9",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -176,7 +176,7 @@
       "source": "tools/codegen/node/package.json",
       "selector": "minimatch@10.2.5",
       "value": {
-        "brace-expansion": "5.0.8"
+        "brace-expansion": "5.0.9"
       },
       "exceptionId": "openapi-typescript-redocly-overrides"
     },
@@ -189,7 +189,7 @@
     {
       "source": "infra/message-box-server/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.8",
+      "value": "5.0.9",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -213,7 +213,7 @@
     {
       "source": "infra/uhrp-server-basic/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.8",
+      "value": "5.0.9",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -225,7 +225,7 @@
     {
       "source": "infra/uhrp-server-cloud-bucket/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.8",
+      "value": "5.0.9",
       "exceptionId": "brace-expansion-jest-override"
     },
     {
@@ -255,7 +255,7 @@
     {
       "source": "infra/wab/package.json",
       "selector": "brace-expansion",
-      "value": "5.0.8",
+      "value": "5.0.9",
       "exceptionId": "brace-expansion-jest-override"
     },
     {

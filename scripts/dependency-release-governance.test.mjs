@@ -31,12 +31,12 @@ test('pnpm override parsing preserves scoped parent selectors', () => {
     parsePnpmOverrides(`
 minimumReleaseAge: 1440
 overrides:
-  brace-expansion@<=5.0.7: 5.0.8
+  brace-expansion@<5.0.9: 5.0.9
   'typed-rest-client@2.3.1>qs': 6.15.3
 trustPolicy: no-downgrade
 `),
     [
-      { selector: 'brace-expansion@<=5.0.7', value: '5.0.8' },
+      { selector: 'brace-expansion@<5.0.9', value: '5.0.9' },
       { selector: 'typed-rest-client@2.3.1>qs', value: '6.15.3' }
     ]
   )

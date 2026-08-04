@@ -62,7 +62,7 @@ test('workspace discovery exactly matches the 38-project registry', () => {
 })
 
 test('current repository health controls and ratchet are internally consistent', () => {
-  const result = evaluateRepositoryHealth({ today: '2026-07-30' })
+  const result = evaluateRepositoryHealth({ today: '2026-08-04' })
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.projects.length, 38)
