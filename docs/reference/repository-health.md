@@ -2,9 +2,9 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.4.0'
-last_updated: '2026-07-30'
-last_verified: '2026-07-30'
+version: '1.4.1'
+last_updated: '2026-08-04'
+last_verified: '2026-08-04'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -37,6 +37,11 @@ The profile definitions in the same file describe the scripts and package
 metadata required for Node, browser, CLI, React Native, WASM, private,
 documentation, and conformance projects. Profiles standardize the externally
 observable contract without requiring every package to use the same build tool.
+Packages that compile authored files outside their own workspace directory
+declare those paths as `sourceRoots`; CI treats a change beneath any declared
+root as a direct package change, including its dedicated browser or mobile
+consumer gates.
+
 For every public package, the control also enforces the exact supported
 Node.js 22 runtime floor, explicit public npm access, and an explicit
 tree-shaking side-effect declaration.

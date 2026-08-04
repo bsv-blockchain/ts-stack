@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-07-30",
+  "lastReviewed": "2026-08-04",
   "owner": "ts-stack-maintainers",
   "reportRetentionDays": 30,
   "growthPolicy": "Every browser consumer is measured from its exact packed dependency graph with Vite and esbuild (or the governed platform equivalent). A budget increase requires a versioned source change, composition evidence, and explicit review; generated reports preserve package/module composition for comparison.",

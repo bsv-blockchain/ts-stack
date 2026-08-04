@@ -70,6 +70,26 @@ test('current repository health controls and ratchet are internally consistent',
   assert.equal(result.findings.length, 0)
 })
 
+test('shared package source roots are explicit and repository-relative', () => {
+  const sharedSourceProjects = projects.projects.filter(project => project.sourceRoots)
+  assert.deepEqual(
+    sharedSourceProjects.map(project => [project.name, project.sourceRoots]),
+    [
+      ['@bsv/wallet-toolbox-client', ['packages/wallet/wallet-toolbox/src']],
+      ['@bsv/wallet-toolbox-mobile', ['packages/wallet/wallet-toolbox/src']]
+    ]
+  )
+
+  const invalidProjects = structuredClone(projects)
+  invalidProjects.projects.find(
+    project => project.name === '@bsv/wallet-toolbox-client'
+  ).sourceRoots = ['../wallet-toolbox/src']
+  assert.match(
+    validateProjectRegistry(invalidProjects, discoverWorkspaceProjects()).join('\n'),
+    /invalid source root/
+  )
+})
+
 test('CI performance baseline retains representative full and targeted cohorts', () => {
   const baseline = readJson(path.join(REPOSITORY_ROOT, 'governance/ci-performance-baseline.json'))
   assert.deepEqual(validateCiPerformanceBaseline(baseline), [])
