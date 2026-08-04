@@ -19,16 +19,19 @@ jest.mock('@bsv/auth-express-middleware', () => ({
 
 /** Creates a mock MongoDB Db object with a collection stub that supports BanService */
 function createMockDbValue(): Record<string, any> {
+  const cursor: Record<string, any> = {}
+  cursor.sort = jest.fn<any>().mockReturnValue(cursor)
+  cursor.skip = jest.fn<any>().mockReturnValue(cursor)
+  cursor.limit = jest.fn<any>().mockReturnValue(cursor)
+  cursor.toArray = jest.fn<any>().mockResolvedValue([{ domain: 'node.example', txid: '01' }])
   const mockCollection = {
     createIndex: jest.fn<any>().mockResolvedValue(undefined),
-    find: jest.fn<any>().mockReturnValue({
-      sort: jest.fn<any>().mockReturnValue({ toArray: jest.fn<any>().mockResolvedValue([]) }),
-      toArray: jest.fn<any>().mockResolvedValue([])
-    }),
-    findOne: jest.fn<any>().mockResolvedValue(null),
+    find: jest.fn<any>().mockReturnValue(cursor),
+    findOne: jest.fn<any>().mockResolvedValue({ domain: 'node.example' }),
     updateOne: jest.fn<any>().mockResolvedValue({}),
     deleteOne: jest.fn<any>().mockResolvedValue({}),
-    countDocuments: jest.fn<any>().mockResolvedValue(0)
+    deleteMany: jest.fn<any>().mockResolvedValue({ deletedCount: 1 }),
+    countDocuments: jest.fn<any>().mockResolvedValue(1)
   }
   return {
     collection: jest.fn<any>().mockReturnValue(mockCollection),
@@ -897,10 +900,26 @@ describe('OverlayExpress', () => {
         refreshUnprovenTransactionProofs: jest.fn().mockResolvedValue({}),
         // @ts-expect-error - Mock return values
         maintainUnprovenTransactions: jest.fn().mockResolvedValue({}),
+        provideTopicAnchorTip: jest.fn<any>().mockResolvedValue({ height: 1 }),
+        provideTopicAnchorRange: jest.fn<any>().mockResolvedValue([{ height: 1 }]),
+        provideAdmittedList: jest.fn<any>().mockResolvedValue({ txids: [] }),
+        provideCompoundMerklePath: jest.fn<any>().mockResolvedValue({ path: [] }),
+        provideRawTransactions: jest.fn<any>().mockResolvedValue({ transactions: [] }),
+        startBASMSync: jest.fn<any>().mockResolvedValue({ topics: 1 }),
+        evictUnprovenTransactions: jest.fn<any>().mockResolvedValue({ evicted: 1 }),
+        advanceTopicAnchorChains: jest.fn<any>().mockResolvedValue({ advanced: 1 }),
+        revalidateRecentAnchors: jest.fn<any>().mockResolvedValue({ revalidated: 1 }),
         evictAppliedTransaction: jest
           .fn<any>()
           .mockResolvedValue({ evictedTransactions: 1, evictedOutputs: 1 }),
-        lookupServices: {},
+        lookupServices: {
+          ls_one: {
+            outputEvicted: jest.fn<any>().mockResolvedValue(undefined)
+          },
+          ls_two: {
+            outputEvicted: jest.fn<any>().mockRejectedValue(new Error('best-effort failure'))
+          }
+        },
         advertiser: {
           // @ts-expect-error - Mock return values
           init: jest.fn().mockResolvedValue(undefined)
@@ -924,6 +943,55 @@ describe('OverlayExpress', () => {
       instance.engine = mockEngine
       instance.knex = mockKnex
     })
+
+    const flushRoute = async (): Promise<void> => {
+      await new Promise(resolve => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
+    }
+
+    const mockResponse = (): any => {
+      const res: any = {}
+      res.status = jest.fn<any>().mockReturnValue(res)
+      res.json = jest.fn<any>().mockReturnValue(res)
+      res.send = jest.fn<any>().mockReturnValue(res)
+      res.set = jest.fn<any>().mockReturnValue(res)
+      res.setHeader = jest.fn<any>().mockReturnValue(res)
+      return res
+    }
+
+    const startAndCaptureRoutes = async (): Promise<{ getSpy: any; postSpy: any }> => {
+      const getSpy = jest.spyOn(instance.app, 'get')
+      const postSpy = jest.spyOn(instance.app, 'post')
+      jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
+        callback()
+        return {} as any
+      })
+      await instance.start()
+      return { getSpy, postSpy }
+    }
+
+    const invokeCapturedRoute = async (
+      spy: any,
+      path: string,
+      request: Record<string, any> = {}
+    ): Promise<any> => {
+      const route = spy.mock.calls.find((call: any[]) => call[0] === path)
+      expect(route).toBeDefined()
+      const handler = route[route.length - 1]
+      const res = mockResponse()
+      handler(
+        {
+          headers: {},
+          query: {},
+          body: {},
+          ...request
+        },
+        res,
+        jest.fn()
+      )
+      await flushRoute()
+      return res
+    }
 
     it('should throw if engine not configured', async () => {
       const freshInstance = new OverlayExpress('Test', 'key', 'example.com')
@@ -1484,6 +1552,226 @@ describe('OverlayExpress', () => {
         })
         expect(res.status).toHaveBeenCalledWith(200)
       })
+    })
+
+    it('executes public discovery, GASP, and bounded BASM routes', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const { getSpy, postSpy } = await startAndCaptureRoutes()
+
+      expect((await invokeCapturedRoute(getSpy, '/')).send).toHaveBeenCalled()
+      expect((await invokeCapturedRoute(getSpy, '/listTopicManagers')).status).toHaveBeenCalledWith(
+        200
+      )
+      expect(
+        (await invokeCapturedRoute(getSpy, '/listLookupServiceProviders')).status
+      ).toHaveBeenCalledWith(200)
+      expect(
+        (
+          await invokeCapturedRoute(getSpy, '/getDocumentationForTopicManager', {
+            query: { manager: 'tm_test' }
+          })
+        ).send
+      ).toHaveBeenCalledWith('# Docs')
+      expect(
+        (
+          await invokeCapturedRoute(getSpy, '/getDocumentationForLookupServiceProvider', {
+            query: { lookupService: 'ls_test' }
+          })
+        ).send
+      ).toHaveBeenCalledWith('# Docs')
+
+      const lookup = await invokeCapturedRoute(postSpy, '/lookup', {
+        headers: {},
+        body: { service: 'ls_test', query: { findAll: true } }
+      })
+      expect(lookup.status).toHaveBeenCalledWith(200)
+      const invalidLookup = await invokeCapturedRoute(postSpy, '/lookup', {
+        headers: {},
+        body: { query: {} }
+      })
+      expect(invalidLookup.status).toHaveBeenCalledWith(400)
+
+      await invokeCapturedRoute(postSpy, '/requestSyncResponse', {
+        headers: { 'x-bsv-topic': 'tm_test' },
+        body: { since: 1 }
+      })
+      await invokeCapturedRoute(postSpy, '/requestForeignGASPNode', {
+        body: { graphID: 'graph', txid: '01', outputIndex: 0 }
+      })
+      expect(mockEngine.provideForeignSyncResponse).toHaveBeenCalledWith({ since: 1 }, 'tm_test')
+      expect(mockEngine.provideForeignGASPNode).toHaveBeenCalledWith('graph', '01', 0)
+
+      const topicRequest = { headers: { 'x-bsv-topic': 'tm_test' } }
+      await invokeCapturedRoute(postSpy, '/requestTopicAnchorTip', topicRequest)
+      await invokeCapturedRoute(postSpy, '/requestTopicAnchorRange', {
+        ...topicRequest,
+        body: { fromHeight: 1, toHeight: 3 }
+      })
+      await invokeCapturedRoute(postSpy, '/requestAdmittedList', {
+        ...topicRequest,
+        body: { blockHeight: 2, blockHash: 'hash' }
+      })
+      await invokeCapturedRoute(postSpy, '/requestCompoundMerklePath', {
+        ...topicRequest,
+        body: { blockHeight: 2, txids: ['01', '02'] }
+      })
+      await invokeCapturedRoute(postSpy, '/requestRawTransactions', {
+        body: { txids: ['01'] }
+      })
+      expect(mockEngine.provideTopicAnchorTip).toHaveBeenCalledWith('tm_test')
+      expect(mockEngine.provideTopicAnchorRange).toHaveBeenCalledWith('tm_test', 1, 3)
+      expect(mockEngine.provideAdmittedList).toHaveBeenCalledWith('tm_test', 2, 'hash')
+      expect(mockEngine.provideCompoundMerklePath).toHaveBeenCalledWith('tm_test', 2, ['01', '02'])
+      expect(mockEngine.provideRawTransactions).toHaveBeenCalledWith(['01'])
+
+      for (const [path, request] of [
+        ['/requestTopicAnchorTip', { headers: {} }],
+        ['/requestTopicAnchorRange', { ...topicRequest, body: { fromHeight: 4, toHeight: 3 } }],
+        ['/requestCompoundMerklePath', { ...topicRequest, body: { txids: [1] } }],
+        ['/requestRawTransactions', { body: { txids: 'not-an-array' } }]
+      ] as const) {
+        const response = await invokeCapturedRoute(postSpy, path, request)
+        expect(response.status).toHaveBeenCalledWith(400)
+      }
+
+      consoleError.mockRestore()
+    })
+
+    it('enforces admin authentication and executes bounded record and ban operations', async () => {
+      instance.configureAdminIdentityKey('admin-identity')
+      const banService = {
+        getStats: jest
+          .fn<any>()
+          .mockResolvedValue({ domainBans: 1, outpointBans: 1, totalBans: 2 }),
+        banDomain: jest.fn<any>().mockResolvedValue(undefined),
+        banOutpoint: jest.fn<any>().mockResolvedValue(undefined),
+        removeBan: jest.fn<any>().mockResolvedValue(undefined),
+        listBans: jest.fn<any>().mockResolvedValue([{ type: 'domain', value: 'node.example' }])
+      }
+      instance.banService = banService as any
+      const janitor = {
+        checkHost: jest.fn<any>().mockResolvedValue({ ok: true, responseTime: 10 }),
+        run: jest.fn<any>().mockResolvedValue({ checked: 1, removed: 0 })
+      }
+      jest.spyOn(instance as any, 'createJanitor').mockReturnValue(janitor)
+      const { getSpy, postSpy } = await startAndCaptureRoutes()
+
+      const statsRoute = getSpy.mock.calls.find((call: any[]) => call[0] === '/admin/stats')
+      expect(statsRoute).toBeDefined()
+      const checkAdminAuth = statsRoute[1]
+      const next = jest.fn()
+      checkAdminAuth({ headers: {}, auth: { identityKey: 'admin-identity' } }, mockResponse(), next)
+      checkAdminAuth(
+        { headers: { authorization: `Bearer ${instance.getAdminToken()}` } },
+        mockResponse(),
+        next
+      )
+      expect(next).toHaveBeenCalledTimes(2)
+
+      const invalidCredentials = mockResponse()
+      checkAdminAuth(
+        { headers: { authorization: 'Bearer invalid-token' } },
+        invalidCredentials,
+        next
+      )
+      expect(invalidCredentials.status).toHaveBeenCalledWith(403)
+      const missingCredentials = mockResponse()
+      checkAdminAuth({ headers: {} }, missingCredentials, next)
+      expect(missingCredentials.status).toHaveBeenCalledWith(401)
+
+      expect((await invokeCapturedRoute(getSpy, '/admin/config')).status).toHaveBeenCalledWith(200)
+      expect((await invokeCapturedRoute(getSpy, '/admin/stats')).status).toHaveBeenCalledWith(200)
+      expect(
+        (
+          await invokeCapturedRoute(getSpy, '/admin/ship-records', {
+            query: { search: 'node', page: '2', limit: '2' }
+          })
+        ).status
+      ).toHaveBeenCalledWith(200)
+      expect(
+        (
+          await invokeCapturedRoute(getSpy, '/admin/slap-records', {
+            query: { page: '1', limit: 'unlimited' }
+          })
+        ).status
+      ).toHaveBeenCalledWith(200)
+      expect(
+        (
+          await invokeCapturedRoute(postSpy, '/admin/health-check', {
+            body: { url: 'https://node.example/healthz' }
+          })
+        ).status
+      ).toHaveBeenCalledWith(200)
+
+      await invokeCapturedRoute(postSpy, '/admin/ban', {
+        body: { type: 'domain', value: 'node.example', reason: 'operator request' }
+      })
+      await invokeCapturedRoute(postSpy, '/admin/ban', {
+        body: { type: 'outpoint', value: 'abcd.2', reason: 'operator request' }
+      })
+      await invokeCapturedRoute(postSpy, '/admin/unban', {
+        body: { type: 'domain', value: 'node.example' }
+      })
+      const bans = await invokeCapturedRoute(getSpy, '/admin/bans', {
+        query: { type: 'domain', page: '1', limit: '5' }
+      })
+      expect(bans.status).toHaveBeenCalledWith(200)
+      await invokeCapturedRoute(postSpy, '/admin/remove-token', {
+        body: {
+          txid: 'abcd',
+          outputIndex: 2,
+          ban: true,
+          banDomain: true
+        }
+      })
+
+      expect(banService.banDomain).toHaveBeenCalled()
+      expect(banService.banOutpoint).toHaveBeenCalled()
+      expect(banService.removeBan).toHaveBeenCalledWith('domain', 'node.example')
+      expect(banService.listBans).toHaveBeenCalledWith('domain', 5, 0)
+      expect(mockEngine.lookupServices.ls_one.outputEvicted).toHaveBeenCalled()
+      expect(janitor.checkHost).toHaveBeenCalledWith('https://node.example/healthz')
+    })
+
+    it('executes authenticated sync, maintenance, eviction, and janitor operations', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const janitor = {
+        checkHost: jest.fn<any>().mockResolvedValue({ ok: true }),
+        run: jest.fn<any>().mockResolvedValue({ checked: 2, removed: 1 })
+      }
+      jest.spyOn(instance as any, 'createJanitor').mockReturnValue(janitor)
+      const { postSpy } = await startAndCaptureRoutes()
+
+      const successfulRoutes: Array<[string, Record<string, any>]> = [
+        ['/admin/syncAdvertisements', {}],
+        ['/admin/startGASPSync', {}],
+        ['/admin/startBASMSync', {}],
+        ['/admin/evictUnproven', { body: { topic: 'tm_test', thresholdBlocks: 12 } }],
+        ['/admin/refreshUnprovenProofs', { body: { topic: 'tm_test', thresholdBlocks: 12 } }],
+        ['/admin/maintainUnproven', { body: { topic: 'tm_test', thresholdBlocks: 12 } }],
+        ['/admin/evictOutpoint', { body: { service: 'ls_one', txid: 'abcd', outputIndex: 2 } }],
+        ['/admin/janitor', {}]
+      ]
+      for (const [path, request] of successfulRoutes) {
+        const response = await invokeCapturedRoute(postSpy, path, request)
+        expect(response.status).toHaveBeenCalledWith(200)
+      }
+
+      expect(mockEngine.syncAdvertisements).toHaveBeenCalled()
+      expect(mockEngine.startGASPSync).toHaveBeenCalled()
+      expect(mockEngine.startBASMSync).toHaveBeenCalled()
+      expect(mockEngine.evictUnprovenTransactions).toHaveBeenCalledWith({
+        topic: 'tm_test',
+        thresholdBlocks: 12
+      })
+      expect(mockEngine.refreshUnprovenTransactionProofs).toHaveBeenCalledWith(
+        expect.objectContaining({ topic: 'tm_test', thresholdBlocks: 12 })
+      )
+      expect(mockEngine.maintainUnprovenTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ topic: 'tm_test', thresholdBlocks: 12 })
+      )
+      expect(janitor.run).toHaveBeenCalled()
+      consoleError.mockRestore()
     })
 
     it('should run knex migrations on start', async () => {

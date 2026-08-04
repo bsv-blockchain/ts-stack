@@ -575,6 +575,53 @@ describe('shared service edge policy', () => {
     }
   })
 
+  it('honors explicit unlimited body, response, concurrency, and connection limits', () => {
+    process.env.TEST_MAX_BODY_BYTES = '-1'
+    expect(readBodyLimitBytes('TEST', 256)).toBe(Number.MAX_SAFE_INTEGER)
+
+    process.env.TEST_MAX_RESPONSE_BYTES = 'unlimited'
+    const responseNext = jest.fn()
+    responseSizeLimit('TEST', 256)({} as any, {} as any, responseNext)
+    expect(responseNext).toHaveBeenCalledTimes(1)
+
+    process.env.TEST_MAX_CONCURRENT_REQUESTS = '-1'
+    const concurrencyNext = jest.fn()
+    concurrencyLimit('TEST', 8)({} as any, {} as any, concurrencyNext)
+    expect(concurrencyNext).toHaveBeenCalledTimes(1)
+
+    process.env.TEST_MAX_CONNECTIONS = '-1'
+    const server = {
+      setTimeout: jest.fn()
+    } as unknown as Server
+    configureHttpServer(server, 'TEST', {
+      requestTimeoutMs: 30_000,
+      headersTimeoutMs: 10_000,
+      keepAliveTimeoutMs: 5_000,
+      socketTimeoutMs: 30_000,
+      maxRequestsPerSocket: 100,
+      maxConnections: 50
+    })
+    expect(server.maxConnections).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('rejects invalid positive HTTP server settings', () => {
+    process.env.TEST_REQUEST_TIMEOUT_MS = '0'
+    const server = {
+      setTimeout: jest.fn()
+    } as unknown as Server
+
+    expect(() =>
+      configureHttpServer(server, 'TEST', {
+        requestTimeoutMs: 30_000,
+        headersTimeoutMs: 10_000,
+        keepAliveTimeoutMs: 5_000,
+        socketTimeoutMs: 30_000,
+        maxRequestsPerSocket: 100,
+        maxConnections: 50
+      })
+    ).toThrow(/positive integer/)
+  })
+
   it('selects tested resource profiles and explicit operator limits', () => {
     expect(readResourceProfile('TEST')).toBe('standard')
     process.env.TEST_RESOURCE_PROFILE = 'high-throughput'
@@ -627,5 +674,51 @@ describe('shared service edge policy', () => {
     } finally {
       await close(server)
     }
+  })
+
+  it.each([
+    ['send', '12345', undefined],
+    ['send', Buffer.from('12345'), undefined],
+    ['send', new Uint8Array([1, 2, 3, 4, 5]), undefined],
+    ['send', { value: '12345' }, undefined],
+    ['end', '12345', 'utf8'],
+    ['end', Buffer.from('12345'), undefined],
+    ['end', new Uint8Array([1, 2, 3, 4, 5]), undefined],
+    ['end', { value: '12345' }, undefined]
+  ])('bounds every materialized %s response shape', (method, value, encoding) => {
+    process.env.TEST_MAX_RESPONSE_BYTES = '4'
+    let response: any
+    const originalEnd = jest.fn(() => response)
+    const originalSend = jest.fn((chunk: unknown) => {
+      response.end(chunk)
+      return response
+    })
+    const originalJson = jest.fn((body: unknown) => {
+      response.send(JSON.stringify(body))
+      return response
+    })
+    response = {
+      status: jest.fn(() => response),
+      json: originalJson,
+      send: originalSend,
+      end: originalEnd
+    }
+    const next = jest.fn()
+    responseSizeLimit('TEST', 256)({} as any, response, next)
+
+    if (method === 'send') response.send(value)
+    else response.end(value, encoding)
+
+    expect(response.status).toHaveBeenCalledWith(413)
+    expect(originalJson).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ERR_RESPONSE_TOO_LARGE' })
+    )
+    expect(originalSend).toHaveBeenCalled()
+    expect(originalEnd).toHaveBeenCalled()
+
+    response.json({ ignored: true })
+    response.send('ignored')
+    response.end('ignored')
+    expect(response.status).toHaveBeenCalledTimes(1)
   })
 })

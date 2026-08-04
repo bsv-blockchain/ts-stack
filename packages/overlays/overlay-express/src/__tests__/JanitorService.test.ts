@@ -67,6 +67,21 @@ describe('JanitorService', () => {
 
       expect(janitor).toBeDefined()
     })
+
+    it.each([
+      [{ batchSize: 0 }, 'batchSize'],
+      [{ batchSize: 1.5 }, 'batchSize'],
+      [{ maxReportResults: 0 }, 'maxReportResults'],
+      [{ maxReportResults: 1.5 }, 'maxReportResults']
+    ])('rejects invalid bounded configuration %o', (limits, expectedField) => {
+      expect(
+        () =>
+          new JanitorService({
+            mongoDb: mockDb,
+            ...limits
+          })
+      ).toThrow(expectedField)
+    })
   })
 
   describe('run', () => {
@@ -85,7 +100,7 @@ describe('JanitorService', () => {
     })
 
     it('should handle errors during health checks', async () => {
-      (mockDb as any).collection = jest.fn().mockImplementation(() => {
+      ;(mockDb as any).collection = jest.fn().mockImplementation(() => {
         throw new Error('Database error')
       })
 
@@ -119,7 +134,7 @@ describe('JanitorService', () => {
       }))
       mockCollection.find.mockReturnValue({
         batchSize: jest.fn().mockReturnThis(),
-        async * [Symbol.asyncIterator] () {
+        async *[Symbol.asyncIterator]() {
           for (const output of outputs) yield output
         }
       })
@@ -326,10 +341,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: 1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: 1 } })
     })
 
     it('should reject localhost by default', async () => {
@@ -464,29 +476,29 @@ describe('JanitorService', () => {
       expect(global.fetch).not.toHaveBeenCalled()
     })
 
-    it.each([
-      'https://8.8.8.8',
-      'https://[2606:4700:4700::1111]'
-    ])('allows public IP health targets %s', async target => {
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
-        ok: true,
-        headers: { get: jest.fn().mockReturnValue(null) },
-        status: 200,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
-      })
-      const janitor = new JanitorService({
-        mongoDb: mockDb,
-        logger: mockLogger
-      })
+    it.each(['https://8.8.8.8', 'https://[2606:4700:4700::1111]'])(
+      'allows public IP health targets %s',
+      async target => {
+        ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+          ok: true,
+          headers: { get: jest.fn().mockReturnValue(null) },
+          status: 200,
+          json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        })
+        const janitor = new JanitorService({
+          mongoDb: mockDb,
+          logger: mockLogger
+        })
 
-      const result = await janitor.checkHost(target)
+        const result = await janitor.checkHost(target)
 
-      expect(result.healthy).toBe(true)
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/health$/),
-        expect.objectContaining({ redirect: 'error' })
-      )
-    })
+        expect(result.healthy).toBe(true)
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringMatching(/\/health$/),
+          expect.objectContaining({ redirect: 'error' })
+        )
+      }
+    )
   })
 
   describe('health check', () => {
@@ -515,10 +527,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: -1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: -1 } })
     })
 
     it('should not decrement when already at 0', async () => {
@@ -573,10 +582,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: 1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: 1 } })
     })
 
     it('should delete output when down count reaches threshold', async () => {
@@ -633,10 +639,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: 1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: 1 } })
     })
 
     it('should handle fetch errors', async () => {
@@ -661,10 +664,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: 1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: 1 } })
     })
 
     it('should handle invalid JSON response', async () => {
@@ -692,10 +692,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: 1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: 1 } })
     })
 
     it('should verify health endpoint returns status: ok', async () => {
@@ -723,10 +720,7 @@ describe('JanitorService', () => {
 
       await janitor.run()
 
-      expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { _id: '123' },
-        { $inc: { down: 1 } }
-      )
+      expect(mockCollection.updateOne).toHaveBeenCalledWith({ _id: '123' }, { $inc: { down: 1 } })
     })
   })
 
@@ -872,10 +866,7 @@ describe('JanitorService', () => {
 
       await janitor.checkHost('example.com')
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://example.com/health',
-        expect.any(Object)
-      )
+      expect(global.fetch).toHaveBeenCalledWith('https://example.com/health', expect.any(Object))
     })
   })
 
@@ -931,6 +922,37 @@ describe('JanitorService', () => {
 
       expect(result.ship).toEqual([])
       expect(result.slap).toEqual([])
+    })
+
+    it('pushes bounded report reads into MongoDB and supports explicit unlimited reads', async () => {
+      const records = [{ txid: 'tx', outputIndex: 0, domain: 'https://node.example' }]
+      const boundedCursor: any = {
+        limit: jest.fn<any>().mockReturnThis(),
+        toArray: jest.fn<any>().mockResolvedValue(records)
+      }
+      mockCollection.find.mockReturnValue(boundedCursor)
+      const bounded = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger,
+        maxReportResults: 2
+      })
+
+      await bounded.getHealthStatus()
+      expect(boundedCursor.limit).toHaveBeenCalledWith(2)
+
+      const unlimitedCursor = {
+        toArray: jest.fn<any>().mockResolvedValue(records)
+      }
+      mockCollection.find.mockReturnValue(unlimitedCursor)
+      const unlimited = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger,
+        maxReportResults: -1
+      })
+
+      const result = await unlimited.getHealthStatus()
+      expect(result.ship).toHaveLength(1)
+      expect(result.slap).toHaveLength(1)
     })
   })
 

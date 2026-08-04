@@ -83,7 +83,9 @@ describe('BanService', () => {
     })
 
     it('should reject non-string domain (NoSQL injection prevention)', async () => {
-      await expect(banService.banDomain({ $ne: '' } as any)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.banDomain({ $ne: '' } as any)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
@@ -98,7 +100,9 @@ describe('BanService', () => {
     })
 
     it('should reject non-string domain', async () => {
-      await expect(banService.unbanDomain({ $ne: '' } as any)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.unbanDomain({ $ne: '' } as any)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
@@ -124,7 +128,9 @@ describe('BanService', () => {
     })
 
     it('should reject non-string domain', async () => {
-      await expect(banService.isDomainBanned(123 as any)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.isDomainBanned(123 as any)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
@@ -164,7 +170,9 @@ describe('BanService', () => {
     })
 
     it('should reject non-string txid', async () => {
-      await expect(banService.banOutpoint({ $ne: '' } as any, 0)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.banOutpoint({ $ne: '' } as any, 0)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
@@ -179,7 +187,9 @@ describe('BanService', () => {
     })
 
     it('should reject non-string txid', async () => {
-      await expect(banService.unbanOutpoint(42 as any, 0)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.unbanOutpoint(42 as any, 0)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
@@ -205,7 +215,9 @@ describe('BanService', () => {
     })
 
     it('should reject non-string txid', async () => {
-      await expect(banService.isOutpointBanned(null as any, 0)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.isOutpointBanned(null as any, 0)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
@@ -265,6 +277,15 @@ describe('BanService', () => {
       expect(limit).toHaveBeenCalledWith(25)
       expect(toArray).toHaveBeenCalled()
     })
+
+    it.each([
+      [0, 0],
+      [1.5, 0],
+      [10, -1],
+      [10, 1.5]
+    ])('rejects invalid pagination limit=%s skip=%s', async (limit, skip) => {
+      await expect(banService.listBans(undefined, limit, skip)).rejects.toThrow(TypeError)
+    })
   })
 
   describe('removeBan', () => {
@@ -287,11 +308,15 @@ describe('BanService', () => {
     })
 
     it('should reject non-string type (NoSQL injection prevention)', async () => {
-      await expect(banService.removeBan({ $ne: '' } as any, 'value')).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.removeBan({ $ne: '' } as any, 'value')).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
 
     it('should reject non-string value (NoSQL injection prevention)', async () => {
-      await expect(banService.removeBan('domain', { $ne: '' } as any)).rejects.toThrow('Invalid input: expected a string value')
+      await expect(banService.removeBan('domain', { $ne: '' } as any)).rejects.toThrow(
+        'Invalid input: expected a string value'
+      )
     })
   })
 
