@@ -399,6 +399,16 @@ describe('OverlayExpress', () => {
       overlayExpress.configureChainTracker('scripts only')
       expect(overlayExpress.chainTracker).toBe('scripts only')
     })
+
+    it('applies default tracker and provider configuration', () => {
+      overlayExpress.configureChainTracker()
+      overlayExpress.configureArcade('https://arcade.example')
+      overlayExpress.configureChaintracks('https://chaintracks.example')
+
+      expect(overlayExpress.chainTracker).toBeDefined()
+      expect(overlayExpress.arcadeUrl).toBe('https://arcade.example')
+      expect(overlayExpress.reorgStreamUrl).toContain('chaintracks.example')
+    })
   })
 
   describe('configureArcApiKey', () => {
@@ -1126,6 +1136,24 @@ describe('OverlayExpress', () => {
       }
     })
 
+    it('returns the callback STEAK exactly once from /submit', async () => {
+      const callbackSteak = { status: 'success', txid: 'callback-txid' }
+      mockEngine.submit.mockImplementationOnce(async (_beef: any, callback: any) => {
+        callback(callbackSteak)
+        return { status: 'success', txid: 'returned-txid' }
+      })
+      const { postSpy } = await startAndCaptureRoutes()
+
+      const response = await invokeCapturedRoute(postSpy, '/submit', {
+        headers: { 'x-topics': 'tm_callback' },
+        body: Buffer.from([1, 2, 3])
+      })
+
+      expect(response.status).toHaveBeenCalledWith(200)
+      expect(response.json).toHaveBeenCalledTimes(1)
+      expect(response.json).toHaveBeenCalledWith(callbackSteak)
+    })
+
     it('returns a clean 400 for an empty /submit body', async () => {
       const postSpy = jest.spyOn(instance.app, 'post')
       jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
@@ -1280,6 +1308,39 @@ describe('OverlayExpress', () => {
           ])
         })
       )
+    })
+
+    it('executes compatibility health probes and contains probe failures', async () => {
+      const loggerError = jest.spyOn(instance.logger, 'error').mockImplementation(() => {})
+      const { getSpy } = await startAndCaptureRoutes()
+
+      expect((await invokeCapturedRoute(getSpy, '/health/live')).status).toHaveBeenCalledWith(200)
+      expect((await invokeCapturedRoute(getSpy, '/healthz')).status).toHaveBeenCalledWith(200)
+      expect((await invokeCapturedRoute(getSpy, '/health')).status).toHaveBeenCalledWith(200)
+
+      const collectHealthReport = jest.spyOn(instance as any, 'collectHealthReport')
+      collectHealthReport.mockResolvedValueOnce({ status: 'degraded', live: false })
+      expect((await invokeCapturedRoute(getSpy, '/healthz')).status).toHaveBeenCalledWith(503)
+
+      collectHealthReport.mockRejectedValueOnce(new Error('probe failed'))
+      const failed = await invokeCapturedRoute(getSpy, '/healthz')
+      expect(failed.status).toHaveBeenCalledWith(500)
+      expect(failed.json).toHaveBeenCalledWith({
+        status: 'error',
+        message: 'Health report unavailable'
+      })
+      expect(loggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'overlay.healthz' })
+      )
+    })
+
+    it('constructs the janitor with bounded operator defaults', () => {
+      const defaultJanitor = (instance as any).createJanitor()
+      instance.configureJanitor({ batchSize: 10, maxReportResults: 20 })
+      const configuredJanitor = (instance as any).createJanitor()
+
+      expect(defaultJanitor).toBeDefined()
+      expect(configuredJanitor).toBeDefined()
     })
 
     it('should register admin routes', async () => {
@@ -1627,8 +1688,10 @@ describe('OverlayExpress', () => {
       for (const [path, request] of [
         ['/requestTopicAnchorTip', { headers: {} }],
         ['/requestTopicAnchorRange', { ...topicRequest, body: { fromHeight: 4, toHeight: 3 } }],
+        ['/requestTopicAnchorRange', { ...topicRequest, body: { fromHeight: 0, toHeight: 1000 } }],
         ['/requestCompoundMerklePath', { ...topicRequest, body: { txids: [1] } }],
-        ['/requestRawTransactions', { body: { txids: 'not-an-array' } }]
+        ['/requestRawTransactions', { body: { txids: 'not-an-array' } }],
+        ['/requestRawTransactions', { body: { txids: Array(1001).fill('01') } }]
       ] as const) {
         const response = await invokeCapturedRoute(postSpy, path, request)
         expect(response.status).toHaveBeenCalledWith(400)
@@ -1697,6 +1760,22 @@ describe('OverlayExpress', () => {
       ).toHaveBeenCalledWith(200)
       expect(
         (
+          await invokeCapturedRoute(getSpy, '/admin/ship-records', {
+            query: { page: 2, limit: 2 }
+          })
+        ).status
+      ).toHaveBeenCalledWith(200)
+
+      for (const [path, query] of [
+        ['/admin/ship-records', { page: '1', limit: '0' }],
+        ['/admin/slap-records', { page: '1000000', limit: '200' }]
+      ] as const) {
+        expect((await invokeCapturedRoute(getSpy, path, { query })).status).toHaveBeenCalledWith(
+          400
+        )
+      }
+      expect(
+        (
           await invokeCapturedRoute(postSpy, '/admin/health-check', {
             body: { url: 'https://node.example/healthz' }
           })
@@ -1725,12 +1804,62 @@ describe('OverlayExpress', () => {
         }
       })
 
+      instance.banService = undefined
+      expect(
+        (
+          await invokeCapturedRoute(postSpy, '/admin/ban', {
+            body: { type: 'domain', value: 'unavailable.example' }
+          })
+        ).status
+      ).toHaveBeenCalledWith(400)
+      instance.banService = banService as any
+      for (const [path, body] of [
+        ['/admin/ban', { type: 'invalid', value: 'node.example' }],
+        ['/admin/unban', { type: 'invalid', value: 'node.example' }],
+        ['/admin/remove-token', { txid: 42, outputIndex: 'invalid' }]
+      ] as const) {
+        expect((await invokeCapturedRoute(postSpy, path, { body })).status).toHaveBeenCalledWith(
+          400
+        )
+      }
+
       expect(banService.banDomain).toHaveBeenCalled()
       expect(banService.banOutpoint).toHaveBeenCalled()
       expect(banService.removeBan).toHaveBeenCalledWith('domain', 'node.example')
       expect(banService.listBans).toHaveBeenCalledWith('domain', 5, 0)
       expect(mockEngine.lookupServices.ls_one.outputEvicted).toHaveBeenCalled()
       expect(janitor.checkHost).toHaveBeenCalledWith('https://node.example/healthz')
+    })
+
+    it('honors operator-unlimited admin pagination without applying cursor limits', async () => {
+      const environment = {
+        OVERLAY_ADMIN_LIST_DEFAULT_LIMIT: process.env.OVERLAY_ADMIN_LIST_DEFAULT_LIMIT,
+        OVERLAY_ADMIN_LIST_MAX_LIMIT: process.env.OVERLAY_ADMIN_LIST_MAX_LIMIT,
+        OVERLAY_ADMIN_LIST_MAX_OFFSET: process.env.OVERLAY_ADMIN_LIST_MAX_OFFSET
+      }
+      process.env.OVERLAY_ADMIN_LIST_DEFAULT_LIMIT = '-1'
+      process.env.OVERLAY_ADMIN_LIST_MAX_LIMIT = '-1'
+      process.env.OVERLAY_ADMIN_LIST_MAX_OFFSET = '-1'
+      try {
+        const { getSpy } = await startAndCaptureRoutes()
+
+        for (const path of ['/admin/ship-records', '/admin/slap-records']) {
+          const response = await invokeCapturedRoute(getSpy, path, {
+            query: { page: '999', limit: 'unlimited' }
+          })
+          expect(response.status).toHaveBeenCalledWith(200)
+          expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+              data: expect.objectContaining({ page: 1, limit: -1, pages: 1 })
+            })
+          )
+        }
+      } finally {
+        for (const [key, value] of Object.entries(environment)) {
+          if (value === undefined) delete process.env[key]
+          else process.env[key] = value
+        }
+      }
     })
 
     it('executes authenticated sync, maintenance, eviction, and janitor operations', async () => {
@@ -1740,6 +1869,14 @@ describe('OverlayExpress', () => {
         run: jest.fn<any>().mockResolvedValue({ checked: 2, removed: 1 })
       }
       jest.spyOn(instance as any, 'createJanitor').mockReturnValue(janitor)
+      mockEngine.refreshUnprovenTransactionProofs.mockImplementationOnce(async (options: any) => {
+        await options.proofProvider('01')
+        return { refreshed: 1 }
+      })
+      mockEngine.maintainUnprovenTransactions.mockImplementationOnce(async (options: any) => {
+        await options.proofProvider('02')
+        return { maintained: 1 }
+      })
       const { postSpy } = await startAndCaptureRoutes()
 
       const successfulRoutes: Array<[string, Record<string, any>]> = [
