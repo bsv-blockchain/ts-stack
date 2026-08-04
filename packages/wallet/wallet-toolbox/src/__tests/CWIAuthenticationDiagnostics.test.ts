@@ -225,6 +225,7 @@ describe('CWI account lookup diagnostics', () => {
     )
 
     await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).resolves.toBe(token)
+    await expect(interactor.findByRecoveryKeyHash(Array.from({ length: 32 }).fill(1))).resolves.toBe(token)
   })
 
   it('returns not-found when malformed output is accompanied by a clean empty response', async () => {
@@ -281,10 +282,12 @@ describe('CWI account lookup diagnostics', () => {
   it('returns the newest rendition when a competing token is a spent predecessor', async () => {
     const oldTx = chainedTx()
     const newTx = chainedTx(oldTx)
+    const unrelatedTx = chainedTx()
+    unrelatedTx.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
     const oldToken = tokenAtOutpoint(3, `${oldTx.id('hex')}.0`)
     const newToken = tokenAtOutpoint(3, `${newTx.id('hex')}.0`)
     const interactor = interactorWithParsedTokens(
-      resolutionWithBeefs([oldTx.toBEEF(true), newTx.toBEEF(true)], {
+      resolutionWithBeefs([oldTx.toBEEF(true), newTx.toBEEF(true), unrelatedTx.toBEEF(true)], {
         hostCount: 2,
         successfulHosts: 2
       }),
@@ -475,6 +478,25 @@ describe('CWI account lookup diagnostics', () => {
       recoveryLength: 31
     })
     const continuation = chainedTx(predecessor)
+    const freshMint = chainedTx()
+    freshMint.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
+    const interactor = interactorWithParsedTokens(
+      resolutionWithBeefs([continuation.toBEEF(true), freshMint.toBEEF(true)], {
+        hostCount: 2,
+        successfulHosts: 2
+      }),
+      [tokenAtOutpoint(3, `${continuation.id('hex')}.0`), tokenAtOutpoint(3, `${freshMint.id('hex')}.0`)]
+    )
+
+    await expect(interactor.findByPresentationKeyHash(Array.from({ length: 32 }).fill(3))).rejects.toMatchObject({
+      name: 'UMPTokenLookupError',
+      reason: 'token-ambiguous'
+    })
+  })
+
+  it('ignores a predecessor whose locking script cannot be decoded', async () => {
+    const malformedPredecessor = chainedTx()
+    const continuation = chainedTx(malformedPredecessor)
     const freshMint = chainedTx()
     freshMint.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
     const interactor = interactorWithParsedTokens(
