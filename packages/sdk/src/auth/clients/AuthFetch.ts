@@ -27,8 +27,9 @@ interface SimplifiedFetchRequestOptions {
    * Optional wallet action labels applied to BRC-105 payment transactions
    * created for 402 responses. Use these to find payments later via
    * listActions (e.g. app-specific categories). AuthFetch always also
-   * applies `brc105 <derivationPrefix> <derivationSuffix>`, which carries
-   * the derivation pair for recovery once a payment is identified.
+   * applies `brc105 <hexPrefix> <hexSuffix>`, where prefix/suffix are the
+   * BRC-105 base64 nonces hex-encoded so wallet label lowercasing does not
+   * corrupt them. Decode hex → bytes → base64 to recover the wire values.
    */
   labels?: string[]
 }
@@ -764,7 +765,8 @@ export class AuthFetch {
 
   /**
    * Builds wallet action labels for a BRC-105 payment.
-   * Always includes `brc105 <prefix> <suffix>`; appends trimmed caller labels when provided.
+   * Always includes `brc105 <hexPrefix> <hexSuffix>` (base64 nonces hex-encoded
+   * so label lowercasing is lossless); appends trimmed caller labels when provided.
    */
   private buildPaymentActionLabels(
     config: SimplifiedFetchRequestOptions,
@@ -777,7 +779,15 @@ export class AuthFetch {
           .map(label => label.trim())
           .filter(label => label.length > 0)
       : []
-    return [`brc105 ${derivationPrefix} ${derivationSuffix}`, ...callerLabels]
+    return [
+      `brc105 ${this.base64NonceToLabelHex(derivationPrefix)} ${this.base64NonceToLabelHex(derivationSuffix)}`,
+      ...callerLabels
+    ]
+  }
+
+  /** Hex-encode a base64 BRC-105 nonce for case-stable wallet labels. */
+  private base64NonceToLabelHex(base64Nonce: string): string {
+    return Utils.toHex(Utils.toArray(base64Nonce, 'base64'))
   }
 
   private getMaxPaymentAttempts(config: SimplifiedFetchRequestOptions): number {
