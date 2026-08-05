@@ -23,6 +23,14 @@ interface SimplifiedFetchRequestOptions {
   retryCounter?: number
   paymentContext?: PaymentRetryContext
   paymentRetryAttempts?: number
+  /**
+   * Optional wallet action labels applied to BRC-105 payment transactions
+   * created for 402 responses. Use these to find payments later via
+   * listActions (e.g. app-specific categories). AuthFetch always also
+   * applies `brc105 <derivationPrefix> <derivationSuffix>`, which carries
+   * the derivation pair for recovery once a payment is identified.
+   */
+  labels?: string[]
 }
 
 interface AuthPeer {
@@ -112,7 +120,8 @@ export class AuthFetch {
    * 3) Return the final response.
    *
    * @param url - The URL to send the request to.
-   * @param config - Configuration options for the request, including method, headers, and body.
+   * @param config - Configuration options for the request, including method, headers, body,
+   *   optional payment retry controls, and optional `labels` merged onto any BRC-105 payment action.
    * @returns A promise that resolves with the server's response, structured as a Response-like object.
    *
    * @throws Will throw an error if unsupported headers are used or other validation fails.
@@ -714,6 +723,7 @@ export class AuthFetch {
     const { tx } = await this.wallet.createAction(
       {
         description: `Payment for request to ${new URL(url).origin}`,
+        labels: this.buildPaymentActionLabels(config, derivationPrefix, derivationSuffix),
         outputs: [
           {
             satoshis: satoshisRequired,
@@ -750,6 +760,24 @@ export class AuthFetch {
       errors: [],
       requestSummary: this.buildPaymentRequestSummary(url, config)
     }
+  }
+
+  /**
+   * Builds wallet action labels for a BRC-105 payment.
+   * Always includes `brc105 <prefix> <suffix>`; appends trimmed caller labels when provided.
+   */
+  private buildPaymentActionLabels(
+    config: SimplifiedFetchRequestOptions,
+    derivationPrefix: string,
+    derivationSuffix: string
+  ): string[] {
+    const callerLabels = Array.isArray(config.labels)
+      ? config.labels
+          .filter(label => typeof label === 'string')
+          .map(label => label.trim())
+          .filter(label => label.length > 0)
+      : []
+    return [`brc105 ${derivationPrefix} ${derivationSuffix}`, ...callerLabels]
   }
 
   private getMaxPaymentAttempts(config: SimplifiedFetchRequestOptions): number {

@@ -119,12 +119,35 @@ describe('AuthFetch payment handling', () => {
     expect(wallet.createAction).toHaveBeenCalledWith(
       expect.objectContaining({
         description: expect.stringContaining('https://api.example.com'),
+        labels: ['brc105 test-prefix suffix-from-test'],
         outputs: [
           expect.objectContaining({
             satoshis: 42,
             customInstructions: expect.stringContaining('remote-identity-key')
           })
         ]
+      }),
+      undefined
+    )
+  })
+
+  test('createPaymentContext merges caller labels with the brc105 payment label', async () => {
+    const wallet = createWalletStub()
+    const authFetch = new AuthFetch(wallet as any)
+
+    createNonceMock.mockResolvedValueOnce('suffix-from-test')
+
+    await (authFetch as any).createPaymentContext(
+      'https://api.example.com/resource',
+      { labels: ['1sat-name mining', '  ', '  job-payment  '] },
+      42,
+      'remote-identity-key',
+      'test-prefix'
+    )
+
+    expect(wallet.createAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: ['brc105 test-prefix suffix-from-test', '1sat-name mining', 'job-payment']
       }),
       undefined
     )
