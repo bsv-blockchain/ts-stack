@@ -142,7 +142,7 @@ describe('AuthFetch payment handling', () => {
 
     await (authFetch as any).createPaymentContext(
       'https://api.example.com/resource',
-      { labels: ['1sat-name mining', '  ', '  job-payment  '] },
+      { labels: ['1sat-name mining', 'job-payment'] },
       42,
       'remote-identity-key',
       'test-prefix'

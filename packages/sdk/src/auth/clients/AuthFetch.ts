@@ -766,19 +766,15 @@ export class AuthFetch {
   /**
    * Builds wallet action labels for a BRC-105 payment.
    * Always includes `brc105 <hexPrefix> <hexSuffix>` (base64 nonces hex-encoded
-   * so label lowercasing is lossless); appends trimmed caller labels when provided.
+   * so label lowercasing is lossless); appends caller labels when provided.
+   * Caller labels are passed through unchanged — wallet validateLabel trims/lowercases.
    */
   private buildPaymentActionLabels(
     config: SimplifiedFetchRequestOptions,
     derivationPrefix: string,
     derivationSuffix: string
   ): string[] {
-    const callerLabels = Array.isArray(config.labels)
-      ? config.labels
-          .filter(label => typeof label === 'string')
-          .map(label => label.trim())
-          .filter(label => label.length > 0)
-      : []
+    const callerLabels = Array.isArray(config.labels) ? config.labels : []
     return [
       `brc105 ${this.base64NonceToLabelHex(derivationPrefix)} ${this.base64NonceToLabelHex(derivationSuffix)}`,
       ...callerLabels
