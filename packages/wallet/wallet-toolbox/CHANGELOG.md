@@ -6,6 +6,10 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Fix credential-free Arcade/go-chaintracks bootstrap when ChainTracks bulk
+  storage is empty. A first batch is now accepted only from height zero and is
+  still checked for continuity, proof of work, file integrity, and the exact
+  configured network genesis before it becomes available.
 - Make ChainTracks credential-free by default on mainnet, testnet, and
   TerraTestNet through the public Arcade/go-chaintracks v2 HTTP and SSE APIs.
   Add explicit STN and Terra Scaling TestNet support, exact per-network genesis
